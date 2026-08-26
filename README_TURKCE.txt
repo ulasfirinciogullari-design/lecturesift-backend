@@ -29,6 +29,11 @@ Carleton College Biology 252 videosunda gerçek slayt bulunmadığı için bekle
 sonuç tam olarak 0 slayttır. Ardından gerçek slayt içeren ikinci bir dersle kayıp
 slayt testi yapılmalıdır.
 
+27 AĞUSTOS 2026 SONUCU
+224,9 saniyelik 7,3 MB gerçek Biology 252 videosu V4 slayt motorunda 7,99 saniyede
+tarandı. Tepe bellek yaklaşık 99 MB oldu ve sonuç tam olarak 0 slayt çıktı.
+V3.2'deki 9 yanlış slayt böylece bu kabul örneğinde tamamen elendi.
+
 NOT
 Render ücretsiz servisleri boşta kaldığında uyuyabilir; ilk istek daha yavaş
 başlayabilir. OPENAI_API_KEY yalnızca Render Environment alanında saklanmalıdır.

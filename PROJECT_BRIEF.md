@@ -12,6 +12,8 @@ V3.2 successfully processed a 3:45 Carleton College Biology 252 video (7.3 MB) i
 
 The known quality failure was slide detection: the no-slide video produced 22 visual candidates, 12 presentation candidates, and 9 false final slides. V4 therefore treats zero slides as the correct result when no genuine presentation is present.
 
+The V4 foundation passed this real-video gate on August 27, 2026. The 224.9-second, 7.3 MB Biology 252 sample completed visual analysis in 7.99 seconds with approximately 99 MB peak RSS and returned exactly 0 slides. The classifier now also uses the maximum skin/person concentration across horizontal frame bands, which rejects classroom audiences and picture-collage title cards without retaining full frames in memory.
+
 ## V4 foundation
 
 - Parallel audio transcription and visual scanning
@@ -28,7 +30,7 @@ The known quality failure was slide detection: the no-slide video produced 22 vi
 
 ## Acceptance gates
 
-1. The known no-slide Biology 252 sample returns exactly 0 slides.
+1. The known no-slide Biology 252 sample returns exactly 0 slides. **Passed on V4 foundation.**
 2. A genuine slide-based lecture keeps readable, unique presentation frames.
 3. A long lecture completes without memory spikes or oversized transcription uploads.
 4. Original and translated transcripts remain separately accessible.

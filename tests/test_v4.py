@@ -38,6 +38,18 @@ def synthetic_scene() -> np.ndarray:
     return frame
 
 
+def synthetic_classroom_scene() -> np.ndarray:
+    frame = np.full((720, 1280, 3), (205, 210, 212), dtype=np.uint8)
+    cv2.rectangle(frame, (380, 120), (900, 470), (235, 235, 235), -1)
+    cv2.rectangle(frame, (380, 120), (900, 470), (55, 65, 75), 8)
+    for index in range(8):
+        center = (100 + index * 150, 610 if index % 2 else 570)
+        cv2.circle(frame, center, 58, (85, 125, 185), -1)
+        cv2.rectangle(frame, (center[0] - 72, center[1] + 45), (center[0] + 72, 720), (55, 65, 95), -1)
+    cv2.line(frame, (0, 90), (1280, 90), (120, 125, 130), 8)
+    return frame
+
+
 def test_slide_layout_scores_above_natural_scene():
     slide_score, slide_metrics = presentation_score(synthetic_slide())
     scene_score, scene_metrics = presentation_score(synthetic_scene())
@@ -45,6 +57,14 @@ def test_slide_layout_scores_above_natural_scene():
     assert slide_score >= 7
     assert scene_score < slide_score
     assert scene_metrics["has_layout"] is False
+
+
+def test_classroom_people_band_is_not_a_slide():
+    slide_score, slide_metrics = presentation_score(synthetic_slide())
+    room_score, room_metrics = presentation_score(synthetic_classroom_scene())
+    assert room_metrics["skin_band_max"] >= 0.25
+    assert room_score < 7
+    assert slide_score >= 7
 
 
 def test_private_url_is_rejected():

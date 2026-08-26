@@ -32,7 +32,7 @@ def face_area_ratio(frame: np.ndarray) -> float:
     return max((fw * fh for _, _, fw, fh in faces), default=0) / area
 
 
-def skin_ratio(frame: np.ndarray) -> float:
+def skin_metrics(frame: np.ndarray) -> tuple[float, float]:
     small = _scaled(frame, 240)
     ycrcb = cv2.cvtColor(small, cv2.COLOR_BGR2YCrCb)
     mask = cv2.inRange(
@@ -40,7 +40,14 @@ def skin_ratio(frame: np.ndarray) -> float:
         np.array([0, 133, 77], dtype=np.uint8),
         np.array([255, 173, 127], dtype=np.uint8),
     )
-    return float(np.count_nonzero(mask)) / mask.size
+    overall = float(np.count_nonzero(mask)) / mask.size
+    bands = np.array_split(mask, 3, axis=0)
+    band_max = max(float(np.count_nonzero(band)) / band.size for band in bands)
+    return overall, band_max
+
+
+def skin_ratio(frame: np.ndarray) -> float:
+    return skin_metrics(frame)[0]
 
 
 def _layout_metrics(frame: np.ndarray) -> dict[str, float | int]:
@@ -98,9 +105,10 @@ def _layout_metrics(frame: np.ndarray) -> dict[str, float | int]:
 def presentation_score(frame: np.ndarray) -> tuple[int, dict]:
     metrics = _layout_metrics(frame)
     face = face_area_ratio(frame)
-    skin = skin_ratio(frame)
+    skin, skin_band_max = skin_metrics(frame)
     metrics["face_ratio"] = face
     metrics["skin_ratio"] = skin
+    metrics["skin_band_max"] = skin_band_max
 
     score = 0
     if metrics["edge_density"] >= 0.035:
@@ -127,6 +135,10 @@ def presentation_score(frame: np.ndarray) -> tuple[int, dict]:
     if skin >= 0.20:
         score -= 3
     if skin >= 0.30:
+        score -= 4
+    if skin_band_max >= 0.25:
+        score -= 6
+    if skin_band_max >= 0.40:
         score -= 4
 
     has_layout = bool(
@@ -234,7 +246,7 @@ def extract_slides(
             reasons.append("no_slide_layout")
         if metrics["face_ratio"] >= 0.035:
             reasons.append("face")
-        if metrics["skin_ratio"] >= 0.27:
+        if metrics["skin_ratio"] >= 0.27 or metrics["skin_band_max"] >= 0.25:
             reasons.append("person_or_skin")
         if score < 7:
             reasons.append("low_score")
