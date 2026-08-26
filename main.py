@@ -63,10 +63,6 @@ def hamming(a,b):
     return float(np.count_nonzero(a != b)) / len(a)
 
 def fast_scene_candidates(video_path: Path, job_id: str):
-    """
-    Pass 1: very cheap scan.
-    Samples low-res frames and keeps only meaningful scene changes or long-stable runs.
-    """
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
         raise RuntimeError("Video açılamadı.")
@@ -75,8 +71,6 @@ def fast_scene_candidates(video_path: Path, job_id: str):
     total = cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0
     duration = total / fps if fps else 0
 
-    # Adaptive sampling:
-    # <=10m: every 1.5s, <=60m: 2.5s, longer: 4s
     if duration <= 600:
         step = 1.5
     elif duration <= 3600:
@@ -90,9 +84,9 @@ def fast_scene_candidates(video_path: Path, job_id: str):
     last_kept_t = -999
     candidates = []
     t = 0.0
-
     total_steps = max(1, int(duration/step)+1)
     i = 0
+
     while t <= duration:
         cap.set(cv2.CAP_PROP_POS_MSEC, t*1000)
         ok, frame = cap.read()
@@ -109,14 +103,11 @@ def fast_scene_candidates(video_path: Path, job_id: str):
             stable_start = t
         else:
             diff = float(np.mean(cv2.absdiff(gray, prev))) / 255.0
-
-            # strong scene change
             if diff > 0.085:
                 candidates.append((t, frame.copy()))
                 last_kept_t = t
                 stable_start = t
             else:
-                # stable region: keep a representative every 12 sec max
                 if diff < 0.025:
                     if stable_start is None:
                         stable_start = t
@@ -136,12 +127,6 @@ def fast_scene_candidates(video_path: Path, job_id: str):
     return candidates, duration
 
 def presentation_score(frame):
-    """
-    V2.2 classifier:
-    - rewards flat, low-saturation, graphic/text-like frames
-    - heavily penalizes talking-head footage using face detection + skin ratio
-    - still allows title cards and true full-screen slides
-    """
     h = max(1, int(frame.shape[0]*320/frame.shape[1]))
     small = cv2.resize(frame,(320,h),interpolation=cv2.INTER_AREA)
     gray = cv2.cvtColor(small,cv2.COLOR_BGR2GRAY)
@@ -156,7 +141,6 @@ def presentation_score(frame):
     sat = float(np.mean(hsv[:,:,1]))/255.0
     val = float(np.mean(hsv[:,:,2]))/255.0
 
-    # Approximate skin-area ratio.
     ycrcb = cv2.cvtColor(small, cv2.COLOR_BGR2YCrCb)
     skin = cv2.inRange(ycrcb, np.array([0,133,77],dtype=np.uint8), np.array([255,173,127],dtype=np.uint8))
     skin_ratio = float(np.count_nonzero(skin))/skin.size
@@ -180,13 +164,11 @@ def presentation_score(frame):
     elif sat < 0.62: score += 1
     if val > 0.62: score += 1
 
-    # Strong talking-head penalties.
     if face_ratio > 0.012: score -= 5
     elif face_ratio > 0.006: score -= 3
     if skin_ratio > 0.10: score -= 3
     elif skin_ratio > 0.065: score -= 2
 
-    # Very flat title/slide cards can survive even with rich color.
     if flat_ratio > 0.72 and edge_density > 0.035:
         score += 2
 
@@ -219,7 +201,6 @@ def extract_slides_v22(video_path: Path, slides_dir: Path, job_id: str):
     filtered = []
     for idx,(t,frame) in enumerate(candidates):
         score, metrics = presentation_score(frame)
-        # conservative but not too strict
         if score >= 5:
             filtered.append({
                 "time":t,
@@ -234,7 +215,6 @@ def extract_slides_v22(video_path: Path, slides_dir: Path, job_id: str):
 
     set_progress(job_id, 53, "Tekrarlar temizleniyor")
 
-    # Group only candidate frames, not every sample.
     groups=[]
     for item in filtered:
         if not groups:
@@ -249,7 +229,6 @@ def extract_slides_v22(video_path: Path, slides_dir: Path, job_id: str):
 
     reps=[]
     for g in groups:
-        # Prefer denser, later frame for progressive builds
         best=max(g,key=lambda x:(x["fullness"],x["time"]))
         reps.append(best)
 
@@ -355,11 +334,11 @@ async def process_video(file: UploadFile=File(...), language: str="auto"):
             shutil.copy(job/fn,result/fn)
         shutil.copytree(slides_dir,result/"slides")
 
-        zip_base=job/"LectureSift_Result_V2_1"
+        zip_base=job/"LectureSift_Result_V2_2"
         shutil.make_archive(str(zip_base),"zip",root_dir=result)
 
         JOBS[job_id]={"status":"done","percent":100,"stage":"Tamamlandı","updated":time.time()}
-        response=FileResponse(str(zip_base)+".zip",media_type="application/zip",filename="LectureSift_Result_V2_1.zip")
+        response=FileResponse(str(zip_base)+".zip",media_type="application/zip",filename="LectureSift_Result_V2_2.zip")
         response.headers["X-LectureSift-Job"] = job_id
         return response
 
