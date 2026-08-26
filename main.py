@@ -1,5 +1,7 @@
 import os, uuid, shutil, subprocess, json, traceback, threading, time, re
 from pathlib import Path
+from urllib.parse import urlparse
+from typing import Optional
 
 import cv2
 import numpy as np
@@ -7,6 +9,7 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from openai import OpenAI
+import yt_dlp
 
 WORK = Path("/tmp/lecturesift")
 WORK.mkdir(parents=True, exist_ok=True)
@@ -14,7 +17,7 @@ WORK.mkdir(parents=True, exist_ok=True)
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
-app = FastAPI(title="LectureSift Backend V3")
+app = FastAPI(title="LectureSift Backend V3.1")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -34,11 +37,11 @@ def jobset(job_id, **kwargs):
 
 @app.get("/")
 def root():
-    return {"ok": True, "service": "LectureSift Backend V3"}
+    return {"ok": True, "service": "LectureSift Backend V3.1"}
 
 @app.get("/health")
 def health():
-    return {"ok": True, "openai_key": bool(OPENAI_API_KEY), "slide_engine": "v3", "study_pack": True, "async_jobs": True}
+    return {"ok": True, "openai_key": bool(OPENAI_API_KEY), "slide_engine": "v3.1", "study_pack": True, "async_jobs": True, "url_input": True}
 
 @app.get("/jobs/{job_id}")
 def get_job(job_id: str):
@@ -264,12 +267,66 @@ def process_job(job_id: str, video: Path, opts: dict):
         for fn in ["transcript.txt","result.json","summary.txt","notes.txt","quiz.json","flashcards.json","slides.json"]: shutil.copy(job/fn,out/fn)
         if slides_dir.exists(): shutil.copytree(slides_dir,out/"slides")
         zipbase=job/"LectureSift_Study_Pack"; shutil.make_archive(str(zipbase),"zip",root_dir=out)
-        jobset(job_id,status="done",percent=100,stage="done",elapsed_seconds=round(time.time()-started,1),result_path=str(zipbase)+".zip")
+        elapsed=round(time.time()-started,1)
+        jobset(job_id,status="done",percent=100,stage="done",elapsed_seconds=elapsed,result_path=str(zipbase)+".zip")
     except Exception as e:
-        print("PROCESS ERROR:",repr(e),flush=True); traceback.print_exc(); jobset(job_id,status="error",percent=0,stage="error",error=str(e)[:1000])
+        print("PROCESS ERROR:",repr(e),flush=True); traceback.print_exc()
+        jobset(job_id,status="error",percent=0,stage="error",error=str(e)[:1000])
+
+def validate_remote_url(raw: str) -> str:
+    raw=(raw or "").strip()
+    p=urlparse(raw)
+    if p.scheme not in {"http","https"} or not p.netloc:
+        raise HTTPException(400,"Invalid video URL")
+    host=(p.hostname or "").lower()
+    if host in {"localhost","127.0.0.1","0.0.0.0","::1"} or host.endswith(".local"):
+        raise HTTPException(400,"Local/private URLs are not allowed")
+    return raw
+
+def download_remote_video(url: str, job: Path) -> Path:
+    outtmpl=str(job/"remote.%(ext)s")
+    opts={
+        "outtmpl": outtmpl,
+        "format": "bv*+ba/best",
+        "merge_output_format": "mp4",
+        "noplaylist": True,
+        "quiet": True,
+        "no_warnings": True,
+        "socket_timeout": 30,
+        "retries": 2,
+        "overwrites": True,
+    }
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info=ydl.extract_info(url, download=True)
+        requested=info.get("requested_downloads") or []
+        paths=[]
+        for item in requested:
+            fp=item.get("filepath")
+            if fp: paths.append(Path(fp))
+        fp=info.get("filepath") or info.get("_filename")
+        if fp: paths.append(Path(fp))
+    candidates=[]
+    for p in job.glob("remote.*"):
+        if p.suffix.lower() in {".mp4",".mkv",".webm",".mov",".m4v"}: candidates.append(p)
+    candidates += [p for p in paths if p.exists()]
+    if not candidates:
+        raise RuntimeError("The video could not be downloaded from this URL.")
+    src=max(candidates,key=lambda x:x.stat().st_size)
+    if src.suffix.lower() != ".mp4":
+        dst=job/"remote_converted.mp4"
+        run(["ffmpeg","-y","-i",str(src),"-c:v","libx264","-c:a","aac","-movflags","+faststart",str(dst)])
+        return dst
+    return src
 
 @app.post("/jobs")
-async def create_job(file: UploadFile=File(...), source_language: str=Form("auto"), output_language: str=Form("tr"), summary_style: str=Form("standard"), quiz_count: int=Form(10), flashcard_count: int=Form(20)):
+async def create_job(
+    file: UploadFile=File(...),
+    source_language: str=Form("auto"),
+    output_language: str=Form("tr"),
+    summary_style: str=Form("standard"),
+    quiz_count: int=Form(10),
+    flashcard_count: int=Form(20),
+):
     ext=Path(file.filename or "video.mp4").suffix.lower()
     if ext not in {".mp4",".mov",".mkv",".webm",".mpeg",".mpg",".m4v"}: raise HTTPException(400,"Unsupported video format.")
     job_id=str(uuid.uuid4()); job=WORK/job_id; job.mkdir(parents=True,exist_ok=True); video=job/("input"+ext)
@@ -282,3 +339,28 @@ async def create_job(file: UploadFile=File(...), source_language: str=Form("auto
     JOBS[job_id]={"job_id":job_id,"status":"queued","percent":10,"stage":"queued","created":time.time(),"job_dir":str(job),"options":opts}
     threading.Thread(target=process_job,args=(job_id,video,opts),daemon=True).start()
     return {"job_id":job_id,"status":"queued"}
+
+@app.post("/jobs/url")
+def create_url_job(
+    video_url: str=Form(...),
+    source_language: str=Form("auto"),
+    output_language: str=Form("tr"),
+    summary_style: str=Form("standard"),
+    quiz_count: int=Form(10),
+    flashcard_count: int=Form(20),
+):
+    url=validate_remote_url(video_url)
+    job_id=str(uuid.uuid4()); job=WORK/job_id; job.mkdir(parents=True,exist_ok=True)
+    opts={"source_language":source_language,"output_language":output_language,"summary_style":summary_style,"quiz_count":max(3,min(int(quiz_count),30)),"flashcard_count":max(5,min(int(flashcard_count),60))}
+    JOBS[job_id]={"job_id":job_id,"status":"working","percent":3,"stage":"downloading_url","created":time.time(),"job_dir":str(job),"options":opts,"source_url":url}
+    def worker():
+        try:
+            jobset(job_id,percent=5,stage="downloading_url")
+            video=download_remote_video(url,job)
+            jobset(job_id,percent=10,stage="queued")
+            process_job(job_id,video,opts)
+        except Exception as e:
+            print("URL PROCESS ERROR:",repr(e),flush=True); traceback.print_exc()
+            jobset(job_id,status="error",percent=0,stage="error",error=str(e)[:1000])
+    threading.Thread(target=worker,daemon=True).start()
+    return {"job_id":job_id,"status":"working"}
