@@ -15,7 +15,7 @@ WORK.mkdir(parents=True, exist_ok=True)
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
-app = FastAPI(title="LectureSift Backend V2.1")
+app = FastAPI(title="LectureSift Backend V2.2")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -28,11 +28,11 @@ JOBS = {}
 
 @app.get("/")
 def root():
-    return {"ok": True, "service": "LectureSift Backend V2.1"}
+    return {"ok": True, "service": "LectureSift Backend V2.2"}
 
 @app.get("/health")
 def health():
-    return {"ok": True, "openai_key": bool(OPENAI_API_KEY), "slide_engine": "v2.1"}
+    return {"ok": True, "openai_key": bool(OPENAI_API_KEY), "slide_engine": "v2.2"}
 
 @app.get("/progress/{job_id}")
 def progress(job_id: str):
@@ -137,7 +137,10 @@ def fast_scene_candidates(video_path: Path, job_id: str):
 
 def presentation_score(frame):
     """
-    Cheap-ish detailed classifier for candidates only.
+    V2.2 classifier:
+    - rewards flat, low-saturation, graphic/text-like frames
+    - heavily penalizes talking-head footage using face detection + skin ratio
+    - still allows title cards and true full-screen slides
     """
     h = max(1, int(frame.shape[0]*320/frame.shape[1]))
     small = cv2.resize(frame,(320,h),interpolation=cv2.INTER_AREA)
@@ -150,20 +153,50 @@ def presentation_score(frame):
     flat_ratio = np.mean(np.abs(lap)<8)
 
     hsv = cv2.cvtColor(small,cv2.COLOR_BGR2HSV)
-    sat = np.mean(hsv[:,:,1])/255.0
+    sat = float(np.mean(hsv[:,:,1]))/255.0
+    val = float(np.mean(hsv[:,:,2]))/255.0
 
-    # center-face-ish motion/video footage tends to be colorful + less flat;
-    # slides often have larger flat regions and crisp edges/text.
+    # Approximate skin-area ratio.
+    ycrcb = cv2.cvtColor(small, cv2.COLOR_BGR2YCrCb)
+    skin = cv2.inRange(ycrcb, np.array([0,133,77],dtype=np.uint8), np.array([255,173,127],dtype=np.uint8))
+    skin_ratio = float(np.count_nonzero(skin))/skin.size
+
+    face_ratio = 0.0
+    try:
+        cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        detector = cv2.CascadeClassifier(cascade_path)
+        faces = detector.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(28,28))
+        if len(faces):
+            face_ratio = max((w*h)/(small.shape[0]*small.shape[1]) for (x,y,w,h) in faces)
+    except Exception:
+        face_ratio = 0.0
+
     score = 0
-    if edge_density > 0.03: score += 2
+    if edge_density > 0.025: score += 1
     if edge_density > 0.055: score += 1
-    if flat_ratio > 0.42: score += 2
-    if sat < 0.62: score += 1
+    if flat_ratio > 0.58: score += 3
+    elif flat_ratio > 0.48: score += 1
+    if sat < 0.45: score += 2
+    elif sat < 0.62: score += 1
+    if val > 0.62: score += 1
+
+    # Strong talking-head penalties.
+    if face_ratio > 0.012: score -= 5
+    elif face_ratio > 0.006: score -= 3
+    if skin_ratio > 0.10: score -= 3
+    elif skin_ratio > 0.065: score -= 2
+
+    # Very flat title/slide cards can survive even with rich color.
+    if flat_ratio > 0.72 and edge_density > 0.035:
+        score += 2
 
     return score, {
         "edge_density": round(float(edge_density),4),
         "flat_ratio": round(float(flat_ratio),4),
-        "saturation": round(float(sat),4)
+        "saturation": round(float(sat),4),
+        "brightness": round(float(val),4),
+        "skin_ratio": round(float(skin_ratio),4),
+        "face_ratio": round(float(face_ratio),4)
     }
 
 def fullness_score(frame):
@@ -178,7 +211,7 @@ def fullness_score(frame):
     ent = float(-(p*np.log2(p)).sum())/5.0
     return edge*2 + ent
 
-def extract_slides_v21(video_path: Path, slides_dir: Path, job_id: str):
+def extract_slides_v22(video_path: Path, slides_dir: Path, job_id: str):
     slides_dir.mkdir(parents=True, exist_ok=True)
     candidates, duration = fast_scene_candidates(video_path, job_id)
     set_progress(job_id, 38, "Slayt adayları seçiliyor")
@@ -187,7 +220,7 @@ def extract_slides_v21(video_path: Path, slides_dir: Path, job_id: str):
     for idx,(t,frame) in enumerate(candidates):
         score, metrics = presentation_score(frame)
         # conservative but not too strict
-        if score >= 4:
+        if score >= 5:
             filtered.append({
                 "time":t,
                 "frame":frame,
@@ -293,7 +326,7 @@ async def process_video(file: UploadFile=File(...), language: str="auto"):
                 out.write(chunk)
         set_progress(job_id, 8, "Video yüklendi")
 
-        slides,diagnostics=extract_slides_v21(video,slides_dir,job_id)
+        slides,diagnostics=extract_slides_v22(video,slides_dir,job_id)
         set_progress(job_id, 68, "Ses işleniyor")
 
         if has_audio_stream(video):
@@ -310,10 +343,10 @@ async def process_video(file: UploadFile=File(...), language: str="auto"):
         (job/"slides.json").write_text(json.dumps(slides,ensure_ascii=False,indent=2),encoding="utf-8")
         (job/"diagnostics.json").write_text(json.dumps(diagnostics,ensure_ascii=False,indent=2),encoding="utf-8")
         (job/"README.txt").write_text(
-            "LectureSift V2.1\n"
+            "LectureSift V2.2\n"
             f"Final slayt sayısı: {len(slides)}\n"
             f"{audio_status}\n"
-            "V2.1: iki aşamalı hızlı tarama + aday karelerde detaylı analiz.\n",
+            "V2.2: hızlı tarama + kişi/yüz eleme + sıkı sunum filtresi + tekrar temizliği.\n",
             encoding="utf-8"
         )
 
