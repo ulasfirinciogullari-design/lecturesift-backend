@@ -1,11 +1,12 @@
-"""Compatibility entrypoint for Render.
+"""Render entrypoint for LectureSift.
 
-Render may start this service with `uvicorn url_app:app`. The real application
-lives in main.py (or app/main.py in the Docker image), so expose that FastAPI
-instance without duplicating routes.
+Loads the stable application and applies the V3.2 low-memory slide engine.
 """
-
 try:
-    from app.main import app  # Docker layout: /app/app/main.py
+    import app.main as main
 except ModuleNotFoundError:
-    from main import app      # Native/root layout: /app/main.py
+    import main
+
+from lowmem_patch import apply
+
+app = apply(main)
