@@ -1,12 +1,5 @@
-"""Render entrypoint for LectureSift.
+"""Backward-compatible entrypoint kept for older Render configuration."""
 
-Loads the stable application and applies the V3.2 low-memory slide engine.
-"""
-try:
-    import app.main as main
-except ModuleNotFoundError:
-    import main
+from main import app
 
-from lowmem_patch import apply
-
-app = apply(main)
+__all__ = ["app"]

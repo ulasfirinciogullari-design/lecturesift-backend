@@ -1,1 +1,164 @@
-<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LectureSift</title><style>*{box-sizing:border-box}body{margin:0;background:#071023;color:#f5f8ff;font-family:system-ui}.w{max-width:1050px;margin:auto;padding:22px}.nav{display:flex;align-items:center}.logo{font-size:22px;font-weight:900;margin-right:auto}.logo i{color:#916bff;font-style:normal}select,input,button{font:inherit}select,input{background:#0d1b36;color:white;border:1px solid #284269;border-radius:10px;padding:11px}h1{font-size:clamp(38px,7vw,68px);line-height:1;letter-spacing:-2px;text-align:center;margin:58px 0 12px}.g{background:linear-gradient(90deg,#249cff,#9754ff);color:transparent;background-clip:text}.lead{text-align:center;color:#9eb0cf;font-size:18px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:30px 0}.card{background:#101d38;border:1px solid #284269;border-radius:18px;padding:20px}.drop{border:1px dashed #42669f;border-radius:14px;padding:22px;text-align:center}.url{width:100%;margin-top:12px}.opts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}label{display:block;color:#9eb0cf;font-size:12px;margin-bottom:5px}select{width:100%}button{border:0;border-radius:10px;padding:13px 16px;font-weight:800;cursor:pointer}.pri{width:100%;margin-top:14px;color:white;background:linear-gradient(90deg,#249cff,#9754ff)}.prog{display:none}.pct{font-size:38px;font-weight:900}.bar{height:11px;background:#172a4c;border-radius:9px;overflow:hidden;margin:12px 0}.fill{height:100%;width:0;background:linear-gradient(90deg,#249cff,#9754ff);transition:.3s}.muted{color:#9eb0cf}.res{display:none;margin-bottom:40px}.tabs{display:flex;gap:7px;flex-wrap:wrap}.tab{background:#102244;color:white;border:1px solid #284269}.tab.on{background:#2b4e91}.pane{display:none;margin-top:12px}.pane.on{display:block}.box,.item{background:#0a1730;border:1px solid #284269;border-radius:12px;padding:15px;margin:9px 0;white-space:pre-wrap;line-height:1.55}.slides{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.slides img{width:100%;border-radius:9px}@media(max-width:750px){.grid,.opts{grid-template-columns:1fr}.slides{grid-template-columns:1fr 1fr}}</style></head><body><div class="w"><div class="nav"><div class="logo">▶ Lecture<i>Sift</i></div><select id="ui"></select></div><h1>LectureSift <span class="g">Study Pack</span></h1><p class="lead">Slides · Transcript · Notes · Summary · Quiz · Flashcards</p><div class="grid"><div class="card"><div class="drop"><h3 id="t0"></h3><input id="file" type="file" accept="video/*"><div class="muted" id="fn"></div><input id="url" class="url" type="url" placeholder="https://youtube.com/..."></div><div class="opts"><div><label id="t5"></label><select id="src"></select></div><div><label id="t6"></label><select id="out"></select></div><div><label id="t7"></label><select id="style"></select></div><div><label id="t8"></label><select id="qc"><option>5</option><option selected>10</option><option>20</option><option>30</option></select></div><div><label id="t9"></label><select id="fc"><option>10</option><option selected>20</option><option>40</option><option>60</option></select></div></div><button id="go" class="pri"></button></div><div class="card"><h3>LectureSift V3.1</h3><p>🖼️ Slides</p><p>🔎 Transcript</p><p>📝 Notes & summary</p><p>☑️ Quiz</p><p>🧠 Flashcards</p><div class="prog" id="prog"><div class="pct" id="pct">0%</div><div id="stage" class="muted"></div><div id="tm" class="muted">00:00</div><div class="bar"><div class="fill" id="fill"></div></div></div></div></div><div class="card res" id="res"><h2 id="title">LectureSift</h2><button id="dl" class="pri"></button><div class="tabs"><button class="tab on" data-p="sum" id="t14"></button><button class="tab" data-p="notes" id="t15"></button><button class="tab" data-p="tr" id="t16"></button><button class="tab" data-p="slides" id="t17"></button><button class="tab" data-p="quiz">Quiz</button><button class="tab" data-p="flash">Flashcards</button></div><div class="pane on" id="p-sum"><div class="box" id="sum"></div></div><div class="pane" id="p-notes"><div id="notes"></div></div><div class="pane" id="p-tr"><div class="box" id="tr"></div></div><div class="pane" id="p-slides"><div class="slides" id="slides"></div></div><div class="pane" id="p-quiz"><div id="quiz"></div></div><div class="pane" id="p-flash"><div id="flash"></div></div></div></div><script>const API='https://lecturesift-backend.onrender.com',L={"tr":["Türkçe","Ders videosu veya bağlantı","Dosya seç","veya video bağlantısı yapıştır","Videoyu işle","Video dili","Çıktı dili","Özet biçimi","Quiz","Flashcards","Kısa","Standart","Detaylı","Sınav odaklı","Özet","Ders notları","Transkript","Slaytlar","Tüm paketi indir"],"en":["English","Lecture video or URL","Choose file","or paste video URL","Process video","Source language","Output language","Summary style","Quiz","Flashcards","Short","Standard","Detailed","Exam-focused","Summary","Notes","Transcript","Slides","Download complete pack"],"de":["Deutsch","Vorlesungsvideo oder Link","Datei wählen","oder Video-Link einfügen","Video verarbeiten","Videosprache","Ausgabesprache","Zusammenfassungsstil","Quiz","Lernkarten","Kurz","Standard","Detailliert","Prüfungsorientiert","Zusammenfassung","Notizen","Transkript","Folien","Gesamtpaket herunterladen"],"fr":["Français","Vidéo de cours ou lien","Choisir un fichier","ou coller le lien vidéo","Traiter la vidéo","Langue source","Langue de sortie","Style de résumé","Quiz","Cartes mémoire","Court","Standard","Détaillé","Examen","Résumé","Notes","Transcription","Diapositives","Télécharger le pack"],"es":["Español","Video de clase o enlace","Elegir archivo","o pegar enlace de video","Procesar video","Idioma de origen","Idioma de salida","Tipo de resumen","Quiz","Tarjetas","Corto","Estándar","Detallado","Examen","Resumen","Apuntes","Transcripción","Diapositivas","Descargar paquete"],"it":["Italiano","Video lezione o link","Scegli file","o incolla il link video","Elabora video","Lingua sorgente","Lingua output","Tipo riassunto","Quiz","Flashcard","Breve","Standard","Dettagliato","Esame","Riassunto","Appunti","Trascrizione","Slide","Scarica pacchetto"],"pt":["Português","Vídeo da aula ou link","Escolher arquivo","ou cole o link do vídeo","Processar vídeo","Idioma de origem","Idioma de saída","Estilo de resumo","Quiz","Flashcards","Curto","Padrão","Detalhado","Prova","Resumo","Notas","Transcrição","Slides","Baixar pacote"],"ru":["Русский","Видео лекции или ссылка","Выбрать файл","или вставить ссылку","Обработать видео","Язык видео","Язык результата","Тип конспекта","Тест","Карточки","Кратко","Стандарт","Подробно","К экзамену","Конспект","Заметки","Транскрипт","Слайды","Скачать пакет"],"ar":["العربية","فيديو المحاضرة أو الرابط","اختر ملفًا","أو الصق رابط الفيديو","معالجة الفيديو","لغة الفيديو","لغة الإخراج","نمط الملخص","اختبار","بطاقات","مختصر","قياسي","مفصل","للامتحان","الملخص","الملاحظات","النص","الشرائح","تنزيل الحزمة"],"zh":["中文","课程视频或链接","选择文件","或粘贴视频链接","处理视频","视频语言","输出语言","摘要类型","测验","闪卡","简短","标准","详细","考试重点","摘要","笔记","文字稿","幻灯片","下载完整包"],"ja":["日本語","講義動画またはリンク","ファイル選択","または動画URLを貼り付け","動画を処理","動画の言語","出力言語","要約形式","クイズ","カード","短い","標準","詳細","試験向け","要約","ノート","文字起こし","スライド","完全パックをダウンロード"],"ko":["한국어","강의 영상 또는 링크","파일 선택","또는 영상 URL 붙여넣기","영상 처리","영상 언어","출력 언어","요약 방식","퀴즈","플래시카드","짧게","표준","상세","시험 중심","요약","노트","전사","슬라이드","전체 패키지 다운로드"],"hi":["हिन्दी","लेक्चर वीडियो या लिंक","फ़ाइल चुनें","या वीडियो URL चिपकाएँ","वीडियो प्रोसेस करें","वीडियो भाषा","आउटपुट भाषा","सारांश प्रकार","क्विज़","फ्लैशकार्ड","छोटा","मानक","विस्तृत","परीक्षा केंद्रित","सारांश","नोट्स","ट्रांसक्रिप्ट","स्लाइड","पूरा पैक डाउनलोड करें"]};const ui=document.getElementById('ui'),src=document.getElementById('src'),out=document.getElementById('out');Object.entries(L).forEach(([k,v])=>{ui.add(new Option(v[0],k));src.add(new Option(v[0],k));out.add(new Option(v[0],k))});src.add(new Option('Auto','auto'),0);ui.value=localStorage.lsui||'tr';src.value='auto';out.value=ui.value;function lang(){const d=L[ui.value]||L.en;document.documentElement.lang=ui.value;document.documentElement.dir=ui.value==='ar'?'rtl':'ltr';['t0','x','x','x','x','t5','t6','t7','t8','t9'].forEach((id,i)=>{if(document.getElementById(id))document.getElementById(id).textContent=d[i]});go.textContent=d[4];dl.textContent=d[18];t14.textContent=d[14];t15.textContent=d[15];t16.textContent=d[16];t17.textContent=d[17];style.innerHTML='';[10,11,12,13].forEach((i,j)=>style.add(new Option(d[i],['short','standard','detailed','exam'][j])));style.value='standard';localStorage.lsui=ui.value}ui.onchange=()=>{lang();out.value=ui.value};lang();file.onchange=()=>fn.textContent=file.files[0]?.name||'';let jid=null,t0=null,poller=null;function prog(p,s){document.getElementById('prog').style.display='block';pct.textContent=Math.round(p)+'%';fill.style.width=p+'%';stage.textContent=s}function clock(){if(t0)tm.textContent=new Date(Date.now()-t0).toISOString().slice(14,19)}setInterval(clock,1000);async function poll(){const r=await fetch(`${API}/jobs/${jid}`),j=await r.json();prog(j.percent||0,j.stage||'');if(j.status==='done'){clearInterval(poller);show()}else if(j.status==='error'){clearInterval(poller);alert(j.error||'Error')}}go.onclick=async()=>{const f=file.files[0],u=url.value.trim();if(!f&&!u){file.click();return}const fd=new FormData();fd.append('source_language',src.value);fd.append('output_language',out.value);fd.append('summary_style',style.value);fd.append('quiz_count',qc.value);fd.append('flashcard_count',fc.value);t0=Date.now();if(u&&!f){fd.append('video_url',u);prog(3,'Downloading video from URL');const r=await fetch(API+'/jobs/url',{method:'POST',body:fd});if(!r.ok)return alert(await r.text());jid=(await r.json()).job_id;poller=setInterval(poll,1200);return}fd.append('file',f);prog(2,'Uploading');const x=new XMLHttpRequest();x.open('POST',API+'/jobs');x.upload.onprogress=e=>e.lengthComputable&&prog(Math.min(9,e.loaded/e.total*9),'Uploading');x.onload=()=>{if(x.status<300){jid=JSON.parse(x.responseText).job_id;poller=setInterval(poll,1200)}else alert(x.responseText)};x.send(fd)};function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}async function show(){prog(100,'Done');const d=await(await fetch(`${API}/jobs/${jid}/result`)).json();res.style.display='block';title.textContent=d.title||'LectureSift';sum.textContent=d.summary||'';tr.textContent=d.transcript||'';notes.innerHTML=(d.notes||[]).map(n=>`<div class="item"><h3>${esc(n.heading)}</h3><p>${esc(n.content)}</p><ul>${(n.bullets||[]).map(b=>`<li>${esc(b)}</li>`).join('')}</ul></div>`).join('');slides.innerHTML=(d.slides||[]).map(s=>`<div><img src="${API}/jobs/${jid}/slide/${encodeURIComponent(s.file)}"><small>${s.second}s</small></div>`).join('')||'<div class="box">No slides detected.</div>';quiz.innerHTML=(d.quiz||[]).map((q,n)=>`<div class="item"><b>${n+1}. ${esc(q.question)}</b><ul>${(q.options||[]).map(o=>`<li>${esc(o)}</li>`).join('')}</ul><small>${esc(q.explanation)}</small></div>`).join('');flash.innerHTML=(d.flashcards||[]).map(x=>`<div class="item"><b>${esc(x.front)}</b><hr><span>${esc(x.back)}</span></div>`).join('');dl.onclick=()=>location.href=`${API}/jobs/${jid}/download`;res.scrollIntoView({behavior:'smooth'})}document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));document.querySelectorAll('.pane').forEach(x=>x.classList.remove('on'));b.classList.add('on');document.getElementById('p-'+b.dataset.p).classList.add('on')});</script></body></html>
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Ders videolarını slayt, transkript, not, özet, quiz ve bilgi kartlarına dönüştür.">
+  <title>LectureSift - AI Ders Çalışma Asistanı</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+
+  <header class="topbar">
+    <a class="brand" href="#app" aria-label="LectureSift ana sayfa">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span>Lecture<span>Sift</span></span>
+    </a>
+    <div class="top-actions">
+      <span class="version-pill">V4</span>
+      <label class="language-picker">
+        <span class="sr-only">Arayüz dili</span>
+        <select id="uiLanguage"></select>
+      </label>
+    </div>
+  </header>
+
+  <main id="app" class="page-shell">
+    <section class="intro" aria-labelledby="pageTitle">
+      <div>
+        <p class="eyebrow" data-i18n="eyebrow">Yapay zekâ destekli ders çalışma alanı</p>
+        <h1 id="pageTitle" data-i18n="title">Bir ders videosundan çalışmaya hazır her şey.</h1>
+      </div>
+      <p class="intro-copy" data-i18n="subtitle">Videoyu yükle veya bağlantıyı yapıştır. LectureSift transkript, akıllı notlar, özet, slaytlar, quiz ve bilgi kartlarını tek pakette hazırlar.</p>
+    </section>
+
+    <section class="workspace" aria-label="Ders analizi">
+      <div class="panel input-panel">
+        <div class="panel-heading">
+          <div>
+            <span class="step-number">01</span>
+            <h2 data-i18n="sourceTitle">Ders kaynağını ekle</h2>
+          </div>
+          <span class="secure-note" data-i18n="secure">Güvenli işlem</span>
+        </div>
+
+        <div class="source-tabs" role="tablist" aria-label="Video kaynağı">
+          <button class="source-tab active" id="uploadTab" type="button" role="tab" aria-selected="true" aria-controls="uploadPanel" data-i18n="uploadTab">Dosya yükle</button>
+          <button class="source-tab" id="linkTab" type="button" role="tab" aria-selected="false" aria-controls="linkPanel" data-i18n="linkTab">Bağlantı kullan</button>
+        </div>
+
+        <div id="uploadPanel" class="source-panel active" role="tabpanel" aria-labelledby="uploadTab">
+          <input id="videoFile" class="file-input" type="file" accept="video/mp4,video/webm,video/quicktime,video/x-matroska">
+          <label id="dropZone" class="drop-zone" for="videoFile">
+            <span class="upload-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15.5v2.25A2.25 2.25 0 0 0 7.25 20h9.5A2.25 2.25 0 0 0 19 17.75V15.5"/></svg>
+            </span>
+            <strong data-i18n="dropTitle">Videoyu buraya bırak</strong>
+            <span data-i18n="dropText">veya cihazından seç</span>
+            <small data-i18n="fileHelp">MP4, MOV, MKV veya WebM - en fazla 1 GB</small>
+          </label>
+          <div id="selectedFile" class="selected-file" hidden>
+            <span class="file-dot"></span>
+            <div><strong id="selectedFileName"></strong><small id="selectedFileSize"></small></div>
+            <button id="removeFile" type="button" aria-label="Dosyayı kaldır">×</button>
+          </div>
+        </div>
+
+        <div id="linkPanel" class="source-panel" role="tabpanel" aria-labelledby="linkTab" hidden>
+          <label class="field-label" for="videoUrl" data-i18n="urlLabel">Video veya eğitim sayfası bağlantısı</label>
+          <div class="url-field">
+            <span aria-hidden="true">↗</span>
+            <input id="videoUrl" type="url" inputmode="url" placeholder="https://site.com/lecture/video.mp4" autocomplete="url">
+          </div>
+          <p class="field-help" data-i18n="urlHelp">Doğrudan MP4/WebM bağlantıları ve desteklenen eğitim sayfaları kabul edilir. YouTube bazı sunucularda indirmeyi kısıtlayabilir.</p>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="panel-heading compact">
+          <div><span class="step-number">02</span><h2 data-i18n="settingsTitle">Çalışma paketini ayarla</h2></div>
+        </div>
+
+        <div class="settings-grid">
+          <label class="control"><span data-i18n="sourceLanguage">Video dili</span><select id="sourceLanguage"></select></label>
+          <label class="control"><span data-i18n="outputLanguage">Çıktı dili</span><select id="outputLanguage"></select></label>
+          <label class="control"><span data-i18n="summaryStyle">Özet profili</span><select id="summaryStyle"></select></label>
+          <label class="control"><span data-i18n="quizCount">Quiz sorusu</span><select id="quizCount"><option>5</option><option selected>10</option><option>20</option><option>30</option></select></label>
+          <label class="control"><span data-i18n="cardCount">Bilgi kartı</span><select id="cardCount"><option>10</option><option selected>20</option><option>40</option><option>60</option></select></label>
+          <label class="toggle-control"><span><b data-i18n="translateTitle">Transkripti çevir</b><small data-i18n="translateHelp">Orijinali de korunur</small></span><input id="translateTranscript" type="checkbox" checked><i aria-hidden="true"></i></label>
+        </div>
+
+        <button id="analyzeButton" class="primary-button" type="button">
+          <span data-i18n="analyze">Dersi analiz et</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg>
+        </button>
+      </div>
+
+      <aside class="panel process-panel" aria-live="polite">
+        <div class="process-head">
+          <div>
+            <p class="eyebrow" data-i18n="processEyebrow">Canlı işlem merkezi</p>
+            <h2 id="processTitle" data-i18n="readyTitle">Analize hazır</h2>
+          </div>
+          <span id="elapsedTime" class="elapsed">00:00</span>
+        </div>
+
+        <div class="progress-visual">
+          <div id="progressRing" class="progress-ring" style="--progress:0deg"><span id="progressPercent">0%</span></div>
+          <div><strong id="currentStage" data-i18n="readyStage">Video bekleniyor</strong><p id="stageDetail" data-i18n="readyDetail">Kaynağı ekleyip ayarlarını seçtiğinde işlem adımlarını burada canlı göreceksin.</p></div>
+        </div>
+
+        <ol id="stageList" class="stage-list">
+          <li data-stage="url_download"><i></i><span data-i18n="stageReceive">Video alınıyor</span><b>--</b></li>
+          <li data-stage="audio"><i></i><span data-i18n="stageAudio">Ses ayrıştırılıyor</span><b>--</b></li>
+          <li data-stage="transcription"><i></i><span data-i18n="stageTranscript">Konuşma çözümleniyor</span><b>--</b></li>
+          <li data-stage="scene_scan"><i></i><span data-i18n="stageVisual">Görsel içerik taranıyor</span><b>--</b></li>
+          <li data-stage="slide_validation"><i></i><span data-i18n="stageSlides">Slaytlar doğrulanıyor</span><b>--</b></li>
+          <li data-stage="study_pack"><i></i><span data-i18n="stageStudy">Ders yapılandırılıyor</span><b>--</b></li>
+          <li data-stage="exports"><i></i><span data-i18n="stageExport">Çıktılar hazırlanıyor</span><b>--</b></li>
+        </ol>
+
+        <div class="promise-card">
+          <span aria-hidden="true">✦</span>
+          <p><strong data-i18n="promiseTitle">Tek videodan tam çalışma paketi</strong><small data-i18n="promiseText">Slaytlar, iki dilde transkript, notlar, özet, quiz, bilgi kartları ve PDF/TXT dosyaları.</small></p>
+        </div>
+      </aside>
+    </section>
+
+    <section id="results" class="results" hidden aria-labelledby="resultHeading">
+      <div class="result-header">
+        <div><p class="eyebrow" data-i18n="resultEyebrow">Ders paketi hazır</p><h2 id="resultHeading">LectureSift</h2><p id="resultMeta"></p></div>
+        <a id="downloadAll" class="download-button" href="#"><span data-i18n="downloadAll">Tüm paketi indir</span><b>ZIP</b></a>
+      </div>
+      <div class="result-tabs" role="tablist">
+        <button class="result-tab active" data-pane="summary" data-i18n="tabSummary">Özet</button>
+        <button class="result-tab" data-pane="notes" data-i18n="tabNotes">Akıllı notlar</button>
+        <button class="result-tab" data-pane="transcript" data-i18n="tabTranscript">Transkript</button>
+        <button class="result-tab" data-pane="slides" data-i18n="tabSlides">Slaytlar</button>
+        <button class="result-tab" data-pane="quiz">Quiz</button>
+        <button class="result-tab" data-pane="cards" data-i18n="tabCards">Bilgi kartları</button>
+        <button class="result-tab" data-pane="files" data-i18n="tabFiles">Dosyalar</button>
+      </div>
+      <div class="result-body">
+        <article id="pane-summary" class="result-pane active"><div id="summaryContent" class="prose"></div><div id="keyPoints" class="key-grid"></div></article>
+        <article id="pane-notes" class="result-pane"><div id="notesContent" class="notes-grid"></div></article>
+        <article id="pane-transcript" class="result-pane"><div class="transcript-tools"><button id="showTranslated" class="chip active" data-i18n="translated">Çevrilmiş</button><button id="showOriginal" class="chip" data-i18n="original">Orijinal</button></div><div id="transcriptContent" class="transcript-box"></div></article>
+        <article id="pane-slides" class="result-pane"><div id="slidesContent" class="slides-grid"></div></article>
+        <article id="pane-quiz" class="result-pane"><div id="quizStatus" class="quiz-status"></div><div id="quizContent"></div></article>
+        <article id="pane-cards" class="result-pane"><div id="cardContent"></div></article>
+        <article id="pane-files" class="result-pane"><div id="filesContent" class="files-grid"></div></article>
+      </div>
+    </section>
+  </main>
+
+  <div id="errorBox" class="error-box" hidden role="alert">
+    <button id="closeError" type="button" aria-label="Kapat">×</button>
+    <span aria-hidden="true">!</span>
+    <div><strong id="errorTitle" data-i18n="errorTitle">İşlem tamamlanamadı</strong><p id="errorMessage"></p><small id="errorCode"></small></div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

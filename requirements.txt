@@ -5,3 +5,4 @@ openai>=1.99.0
 opencv-python-headless==4.12.0.88
 numpy>=2.0,<3
 yt-dlp
+reportlab==4.4.3

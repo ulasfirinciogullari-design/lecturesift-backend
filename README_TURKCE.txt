@@ -1,47 +1,34 @@
-LECTURESIFT BACKEND V1 — TÜRKÇE
+LECTURESIFT V4 — TÜRKÇE KISA REHBER
 
-BU PAKET NE YAPIYOR?
-Gerçek video işleyen ilk prototiptir.
+LectureSift bir ders videosundan şunları üretir:
+- Orijinal ve isteğe bağlı çevrilmiş transkript
+- Yapılandırılmış ders notları ve özet
+- Gerçek sunum slaytları
+- Quiz ve bilgi kartları
+- Ayrı PDF/TXT dosyaları ve tümünü içeren ZIP paketi
 
-Video yüklenince:
-1) Videodan belirli aralıklarla görüntüler alır.
-2) Birbirine benzeyen tekrar karelerini temizlemeye çalışır.
-3) Kalan kareleri "slides" klasörüne koyar.
-4) Videonun sesini 20 dakikalık küçük parçalara böler.
-5) OpenAI gpt-4o-mini-transcribe ile konuşmayı yazıya çevirir.
-6) Sonucu ZIP olarak indirir:
-   - transcript.txt
-   - slides klasörü
-   - slides.json
+CANLI ADRESLER
+Arayüz: https://clever-horse-22b1a8.netlify.app/
+Backend: https://lecturesift-backend.onrender.com/
 
-BU HENÜZ SON ÜRÜN DEĞİLDİR.
-İlk hedef: gerçek video -> gerçek transkript + gerçek slayt çıktısını doğrulamak.
+V4'TEKİ ANA DEĞİŞİKLİKLER
+- Ses ve görüntü paralel işlenir.
+- Uzun derslerin sesi 20 dakikalık güvenli parçalara ayrılır.
+- Slayt motoru bellekte tam kare saklamaz; yalnızca zaman damgalarını tutar.
+- İnsan, sınıf ve sıradan sahneleri slayt sanmamak için yerleşim, metin,
+  yüz/ten, kalıcılık ve tekrar kontrolleri birlikte kullanılır.
+- Sonuçlar web arayüzünde açılır; PDF/TXT dosyaları tek tek veya ZIP olarak indirilir.
+- Hatalar kullanıcıya kısa bir açıklama ve LS-... destek koduyla gösterilir.
 
-KURULUMDA SANA GEREKECEKLER
-A) GitHub hesabı
-B) Render hesabı
-C) OpenAI API hesabı ve API anahtarı
+GÜVENLİ YAYIN KURALI
+main dalı canlı Netlify ve Render sürümüdür. V4, gerçek video testleri tamamlanana
+kadar ayrı bir dalda tutulmalıdır.
 
-OPENAI ANAHTARINI KİMSEYLE PAYLAŞMA.
-Bana da mesaj olarak göndermene gerek yok. Render'ın "Environment" alanına kendin yapıştıracaksın.
-
-RENDER AYARLARI
-Bu proje Docker ile hazırlanmıştır çünkü FFmpeg gerekiyor.
-Render, Dockerfile bulunan projeleri Docker Web Service olarak çalıştırabilir.
-
-Backend yayına girdikten sonra adres yaklaşık şöyle olur:
-https://lecturesift-api.onrender.com
-
-Adresin sonuna:
- /health
-ekleyince:
-{"ok":true,"openai_key":true}
-görmelisin.
-
-SONRA
-Backend adresini bana yaz.
-Ben mevcut Netlify index.html dosyanı bu backend'e bağlayan yeni sürümü hazırlayacağım.
+İLK KABUL TESTİ
+Carleton College Biology 252 videosunda gerçek slayt bulunmadığı için beklenen
+sonuç tam olarak 0 slayttır. Ardından gerçek slayt içeren ikinci bir dersle kayıp
+slayt testi yapılmalıdır.
 
 NOT
-Render ücretsiz servisleri boşta kaldığında uyuyabilir; ilk istek daha yavaş başlayabilir.
-Gerçek müşteri aşamasında ücretli sunucuya geçilir.
+Render ücretsiz servisleri boşta kaldığında uyuyabilir; ilk istek daha yavaş
+başlayabilir. OPENAI_API_KEY yalnızca Render Environment alanında saklanmalıdır.

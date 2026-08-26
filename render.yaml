@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: lecturesift-api
+    name: lecturesift-backend
     runtime: docker
     plan: free
     autoDeploy: true
