@@ -4,6 +4,10 @@ on:
   push:
     branches: [feature/complete-product-rollout]
 
+concurrency:
+  group: apply-rollout-integration-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -29,6 +33,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add frontend lecturesift/app.py lecturesift/rollout_service.py
+          git add frontend lecturesift
           git commit -m "chore: apply rollout integrations [rollout-patched]"
           git push origin HEAD:feature/complete-product-rollout
