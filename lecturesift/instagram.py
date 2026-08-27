@@ -96,3 +96,10 @@ class InstagramClient:
     def publish_media(self, container_id: str) -> dict[str, Any]:
         return self._request("POST", f"{self.account_id}/media_publish", {"creation_id": container_id})
 
+    def get_recent_media(self, limit: int = 25) -> dict[str, Any]:
+        return self._request(
+            "GET",
+            f"{self.account_id}/media",
+            {"fields": "id,caption,timestamp", "limit": str(limit)},
+        )
+
