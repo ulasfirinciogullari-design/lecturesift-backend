@@ -26,6 +26,7 @@ def test_passwordless_account_profile_and_email_change(tmp_path, monkeypatch):
     requested = store.request_code("new@example.com", "email_change", token)
     result = store.verify_code("new@example.com", requested["development_code"])
     assert result["user"]["email"] == "new@example.com"
+    assert store.me(token)["email"] == "new@example.com"
 
 
 def test_guest_trial_is_limited_and_one_time(tmp_path, monkeypatch):
