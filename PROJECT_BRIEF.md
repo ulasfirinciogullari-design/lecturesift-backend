@@ -34,6 +34,21 @@ A second real-video gate used the 4:28 University of Manchester “Flipped Class
 - Direct video and supported education-page URLs, with honest warnings about provider restrictions
 - Turkish and English product copy, with core labels for eleven additional languages
 
+## Durable background execution foundation
+
+A dedicated recovery branch now contains the production-oriented background execution architecture:
+
+- Celery job queue with late acknowledgements and worker-loss recovery
+- Render Key Value / Redis-compatible shared job state
+- Dedicated Render background worker definition
+- S3-compatible object storage for uploaded sources and generated outputs
+- Automatic fallback to the existing in-process worker when durable infrastructure is not configured
+- Output rematerialization so the existing API endpoints can serve worker-produced results
+- Atomic local job-state fallback for development
+- GitHub Actions pytest gate before deployment
+
+This foundation is intentionally not merged to `main` until CI and a focused end-to-end acceptance test pass and the required paid worker/Key Value plus object-storage credentials are explicitly provisioned.
+
 ## Acceptance gates
 
 1. The known no-slide Biology 252 sample returns exactly 0 slides. **Passed on V4 foundation.**
@@ -42,14 +57,16 @@ A second real-video gate used the 4:28 University of Manchester “Flipped Class
 4. Original and translated transcripts remain separately accessible when they differ; identical-language output is not duplicated.
 5. Every completed study job provides web results, selected PDF/Word/TXT files, and a ZIP; default ZIPs contain PDFs only.
 6. Errors are understandable without exposing stack traces or infrastructure jargon.
+7. A durable queued job survives browser disconnect and web-service restart once queue/object-storage infrastructure is activated.
 
 ## Next phases
 
-1. Calibrate V4 on the real no-slide sample and a genuine slide-heavy lecture.
-2. Add transcript timestamps and link notes/slides to the lecture timeline.
-3. Complete every V4 interface string in all thirteen languages.
-4. Add “Bu derse sor” and “Sınava hazırlan” study modes.
-5. Add accounts, usage limits, billing, privacy controls, and production analytics only after the core pipeline passes the quality gates.
+1. Pass CI and run the durable-worker end-to-end acceptance gate.
+2. Provision Render Key Value + background worker and S3/R2-compatible object storage credentials.
+3. Add transcript timestamps and link notes/slides to the lecture timeline.
+4. Complete every V4 interface string in all thirteen languages.
+5. Add “Bu derse sor” and “Sınava hazırlan” study modes.
+6. Add accounts, usage limits, billing, privacy controls, and production analytics after the core pipeline and durable execution gates pass.
 
 ## Deployment rule
 
