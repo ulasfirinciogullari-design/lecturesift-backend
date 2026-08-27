@@ -6,6 +6,7 @@ on:
       - fix/resend-smtp-fallback
     paths:
       - .github/workflows/apply-resend-smtp-fallback.yml
+      - tests/test_resend_delivery_diagnostics.py
 
 permissions:
   contents: write
