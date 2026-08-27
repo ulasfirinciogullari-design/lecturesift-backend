@@ -1,0 +1,51 @@
+name: Apply Resend email verification
+
+on:
+  push:
+    branches:
+      - feature/resend-email-verification
+    paths:
+      - .github/workflows/apply-resend-setup.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/resend-email-verification
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Apply integration patch
+        run: python scripts/apply_resend_setup.py
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run backend tests
+        run: pytest -q
+
+      - name: Validate frontend JavaScript
+        run: |
+          node --check frontend/app.js
+          node --check frontend/email-auth.js
+
+      - name: Commit validated integration
+        run: |
+          rm -f scripts/apply_resend_setup.py .github/workflows/apply-resend-setup.yml
+          git config user.name "LectureSift CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "feat: enable Resend email verification"
+          git push origin HEAD:feature/resend-email-verification
