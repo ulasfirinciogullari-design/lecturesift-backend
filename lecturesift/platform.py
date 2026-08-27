@@ -5,7 +5,6 @@ import threading
 import time
 import urllib.request
 import uuid
-from pathlib import Path
 from typing import Any
 
 from redis import Redis
@@ -144,9 +143,14 @@ class PlatformStore:
         email = _normalize_email(email)
         if "@" not in email:
             raise ValueError("Geçerli bir e-posta adresi gir.")
-        code = f"{secrets.randbelow(1000000):06d}"
         with self._lock:
             self._refresh()
+            if purpose == "email_change":
+                current = self.user_from_token(user_token)
+                existing = self._state["users"].get(email)
+                if existing and existing.get("id") != current.get("id"):
+                    raise ValueError("Bu e-posta adresi başka bir LectureSift hesabında kullanılıyor.")
+            code = f"{secrets.randbelow(1000000):06d}"
             self._state["codes"][email] = {"code": code, "purpose": purpose, "expires": _now() + 600, "user_token": user_token}
             self._flush()
         self._send_code(email, code, purpose)
@@ -164,9 +168,14 @@ class PlatformStore:
                 token = str(record.get("user_token", ""))
                 user = self.user_from_token(token)
                 old = user["email"]
+                existing = self._state["users"].get(email)
+                if existing and existing.get("id") != user.get("id"):
+                    raise ValueError("Bu e-posta adresi başka bir LectureSift hesabında kullanılıyor.")
                 user["email"] = email
                 self._state["users"].pop(old, None)
                 self._state["users"][email] = user
+                if token in self._state["sessions"]:
+                    self._state["sessions"][token]["email"] = email
                 self._state["codes"].pop(email, None)
                 self._flush()
                 return {"token": token, "user": _safe_user(user)}
@@ -284,13 +293,18 @@ class PlatformStore:
             return dict(order)
 
     def claim_instagram(self, token: str, handle: str) -> dict:
+        handle = handle.strip().lstrip("@")[:100]
+        if not handle:
+            raise ValueError("Instagram kullanıcı adını gir.")
         with self._lock:
             self._refresh()
             user = self.user_from_token(token)
             if user.get("instagram_bonus_claimed"):
                 raise ValueError("Instagram bonusu daha önce kullanılmış.")
+            if any(item.get("user_id") == user["id"] and item.get("status") == "pending_verification" for item in self._state["rewards"].values()):
+                raise ValueError("Instagram bonus talebin zaten doğrulama bekliyor.")
             reward_id = str(uuid.uuid4())
-            reward = {"id": reward_id, "user_id": user["id"], "email": user["email"], "handle": handle.strip().lstrip("@")[:100], "account": INSTAGRAM_ACCOUNT, "minutes": INSTAGRAM_BONUS_MINUTES, "status": "pending_verification", "created": _now()}
+            reward = {"id": reward_id, "user_id": user["id"], "email": user["email"], "handle": handle, "account": INSTAGRAM_ACCOUNT, "minutes": INSTAGRAM_BONUS_MINUTES, "status": "pending_verification", "created": _now()}
             self._state["rewards"][reward_id] = reward
             self._flush()
             return reward
@@ -310,6 +324,7 @@ class PlatformStore:
             if reward.get("status") == "approved":
                 return dict(reward)
             reward["status"] = "approved" if approve else "rejected"
+            reward["decided"] = _now()
             if approve:
                 user = next((u for u in self._state["users"].values() if u.get("id") == reward.get("user_id")), None)
                 if user and not user.get("instagram_bonus_claimed"):
