@@ -70,3 +70,24 @@ jobs:
             query TXT resend._domainkey.mail.lecturesift.com "$ns"
             query TXT _dmarc.lecturesift.com "$ns"
           done
+
+      - name: Verify live backend and frontend integration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo '=== Backend email health ==='
+          curl --fail --location --silent --show-error \
+            --retry 8 --retry-delay 5 --retry-all-errors --max-time 150 \
+            https://lecturesift-backend.onrender.com/billing/email/health \
+            | tee /tmp/email-health.json
+          python -m json.tool /tmp/email-health.json
+
+          echo
+          echo '=== Frontend verification module ==='
+          curl --fail --location --silent --show-error \
+            --retry 5 --retry-delay 3 --retry-all-errors --max-time 90 \
+            https://lecturesift.com/email-auth.js \
+            | tee /tmp/email-auth.js >/dev/null
+          grep -q 'Verify your email address' /tmp/email-auth.js
+          echo 'email-auth.js is live and contains the verification interface.'
