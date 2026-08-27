@@ -140,6 +140,7 @@ let jobId = null, timerStarted = null, timerHandle = null, pollHandle = null;
 let latestResult = null, cardIndex = 0, cardRevealed = false, quizScore = 0, quizAnswered = 0;
 let billingToken = localStorage.getItem("lecturesift-billing-token") || "";
 let billingAccount = null, billingCatalog = null;
+let billingCurrency = localStorage.getItem("lecturesift-currency") || "";
 
 function stringsFor(language) {
   if (language === "tr") return TR;
@@ -188,23 +189,56 @@ uiLanguage.addEventListener("change", () => { currentLanguage = uiLanguage.value
 applyLanguage();
 
 const PLAN_ORDER = ["free", "credit", "lite", "plus", "pro", "max", "business"];
+const PLAN_FALLBACK = {
+  free: ["free", 60, 10, 20, ["pdf"], ["short", "standard"], "standard", false],
+  credit: ["one_time", 180, 20, 40, ["pdf", "docx", "txt"], ["short", "standard", "detailed", "exam", "five_minute"], "standard", false],
+  lite: ["subscription", 600, 20, 40, ["pdf", "docx", "txt"], ["short", "standard", "detailed", "exam", "five_minute"], "standard", false],
+  plus: ["subscription", 2400, 30, 60, ["pdf", "docx", "txt"], ["short", "standard", "detailed", "exam", "five_minute"], "standard", true],
+  pro: ["subscription", 6000, 30, 60, ["pdf", "docx", "txt"], ["short", "standard", "detailed", "exam", "five_minute"], "priority", false],
+  max: ["subscription", 15000, 30, 60, ["pdf", "docx", "txt"], ["short", "standard", "detailed", "exam", "five_minute"], "priority", false],
+  business: ["quote", null, null, null, ["pdf", "docx", "txt"], ["short", "standard", "detailed", "exam", "five_minute"], "priority", false],
+};
+const FALLBACK_PRICES = {
+  TRY: [0,19900,34900,69900,129900,249900,null], USD: [0,500,900,1800,3300,6300,null],
+  EUR: [0,500,900,1700,3100,5900,null], GBP: [0,400,800,1500,2700,5200,null],
+};
+
+function fallbackCatalog(currency) {
+  const selected = FALLBACK_PRICES[currency] ? currency : "TRY";
+  return {selected_currency:selected, supported_currencies:Object.keys(FALLBACK_PRICES), plans:PLAN_ORDER.map((code, index) => {
+    const [kind, minutes, quiz, cards, formats, summaries, priority, featured] = PLAN_FALLBACK[code];
+    const amount = FALLBACK_PRICES[selected][index];
+    return {code, kind, minutes, priority, featured, display_price:amount == null ? null : {currency:selected, amount_minor:amount}, entitlements:{minutes, quiz_questions:quiz, flashcards:cards, export_formats:formats, summary_profiles:summaries, priority}};
+  })};
+}
 
 function planCopy(code) {
   return (PLAN_COPY[currentLanguage] || PLAN_COPY.en)[code] || PLAN_COPY.en[code] || [code, "", ""];
 }
 
-function formatTry(amountMinor) {
-  return new Intl.NumberFormat(currentLanguage === "tr" ? "tr-TR" : "en-US", {
-    style: "currency", currency: "TRY", maximumFractionDigits: 0
+function detectedCurrency() {
+  if (billingCurrency) return billingCurrency;
+  const region = (navigator.language.split("-")[1] || "").toUpperCase();
+  if (region === "TR") return "TRY";
+  if (region === "GB") return "GBP";
+  if (["DE","FR","ES","IT","NL","BE","AT","IE","PT","FI","GR","LU"].includes(region)) return "EUR";
+  return "USD";
+}
+
+function formatPrice(amountMinor, currency = detectedCurrency()) {
+  return new Intl.NumberFormat(currentLanguage === "tr" ? "tr-TR" : navigator.language, {
+    style: "currency", currency, maximumFractionDigits: 0
   }).format((amountMinor || 0) / 100);
 }
 
 function renderBillingAccount() {
-  if (!$('authForm')) return;
   const loggedIn = Boolean(billingAccount && billingToken);
-  $("authForm").hidden = loggedIn;
-  $("accountStatus").hidden = !loggedIn;
-  $("accountButton").textContent = loggedIn ? billingAccount.user.email : t("login");
+  if ($("authForm")) $("authForm").hidden = loggedIn;
+  if ($("accountStatus")) $("accountStatus").hidden = !loggedIn;
+  if ($("accountButton")) {
+    $("accountButton").textContent = loggedIn ? (billingAccount.user.first_name || billingAccount.user.email) : t("login");
+    $("accountButton").href = loggedIn ? "/account.html" : "/login.html";
+  }
   if (!loggedIn) return;
   $("accountEmail").textContent = billingAccount.user.email;
   $("accountPlan").textContent = `${t("currentPlan")}: ${planCopy(billingAccount.plan.code)[0]}`;
@@ -256,32 +290,28 @@ async function refreshBillingAccount() {
   renderBillingAccount(); renderPlans();
 }
 
-async function authenticateBilling(mode) {
-  const email = $("billingEmail").value.trim(), password = $("billingPassword").value;
-  if (!email || password.length < 10) { showError(currentLanguage === "tr" ? "Geçerli e-posta ve en az 10 karakterli parola gir." : "Enter a valid email and a password of at least 10 characters.", "LS-BILL-11"); return; }
-  try {
-    const body = await billingRequest(`/billing/${mode}`, {method:"POST", body:JSON.stringify({email, password})});
-    billingToken = body.token; billingAccount = body.account;
-    localStorage.setItem("lecturesift-billing-token", billingToken);
-    $("billingPassword").value = "";
-    renderBillingAccount(); renderPlans();
-  } catch (error) { showError(error.message, error.code || "LS-BILL-12"); }
-}
-
 function renderPlans() {
   if (!billingCatalog || !$("plansGrid")) return;
   const plans = new Map(billingCatalog.plans.map(plan => [plan.code, plan]));
   $("plansGrid").innerHTML = PLAN_ORDER.map(code => {
     const plan = plans.get(code); if (!plan) return "";
     const copy = planCopy(code), current = billingAccount?.plan?.code === code;
-    const price = plan.manual_price ? formatTry(plan.manual_price.amount_minor) : (code === "free" ? formatTry(0) : (currentLanguage === "tr" ? "Teklif" : "Quote"));
+    const fallback = PLAN_FALLBACK[code];
+    const entitlements = plan.entitlements || {
+      quiz_questions: plan.quiz_questions ?? fallback[2],
+      flashcards: plan.flashcards ?? fallback[3],
+      summary_profiles: plan.summary_profiles || fallback[5],
+      export_formats: plan.export_formats || fallback[4],
+    };
+    const priceInfo = plan.display_price || plan.manual_price;
+    const price = priceInfo ? formatPrice(priceInfo.amount_minor, priceInfo.currency || billingCatalog.selected_currency) : (code === "free" ? formatPrice(0, billingCatalog.selected_currency) : (currentLanguage === "tr" ? "Teklif" : "Quote"));
     const suffix = plan.kind === "subscription" ? t("perMonth") : (plan.kind === "one_time" ? t("oneTime") : "");
     const buttonLabel = current ? t("currentPlan") : (code === "business" ? (currentLanguage === "tr" ? "Bize ulaş" : "Contact us") : t("choosePlan"));
     return `<article class="plan-card ${plan.featured ? "featured" : ""}">
       ${plan.featured ? `<span class="plan-badge">${escapeHtml(t("popular"))}</span>` : ""}
       <h3>${escapeHtml(copy[0])}</h3><p>${escapeHtml(copy[1])}</p>
       <div class="plan-price">${escapeHtml(price)} <small>${escapeHtml(suffix)}</small></div>
-      <ul class="plan-features"><li>${escapeHtml(copy[2])}</li><li>${plan.export_enabled ? "PDF, Word, TXT" : "PDF preview"}</li><li>${plan.priority === "priority" ? (currentLanguage === "tr" ? "Öncelikli işleme" : "Priority processing") : (currentLanguage === "tr" ? "Standart işleme" : "Standard processing")}</li></ul>
+      <ul class="plan-features"><li>${escapeHtml(copy[2])}</li><li>${entitlements.quiz_questions ?? "∞"} ${currentLanguage === "tr" ? "quiz sorusu" : "quiz questions"}</li><li>${entitlements.flashcards ?? "∞"} ${currentLanguage === "tr" ? "bilgi kartı" : "flashcards"}</li><li>${escapeHtml((entitlements.summary_profiles || []).map(profile => ({short:"Hızlı",standard:"Standart",detailed:"Ayrıntılı",exam:"Sınav",five_minute:"5 dakika"}[profile] || profile)).join(", "))} ${currentLanguage === "tr" ? "özet" : "summary"}</li><li>${escapeHtml((entitlements.export_formats || []).join(", ").toUpperCase())}</li><li>${plan.priority === "priority" ? (currentLanguage === "tr" ? "Öncelikli işleme" : "Priority processing") : (currentLanguage === "tr" ? "Standart işleme" : "Standard processing")}</li></ul>
       <button class="plan-action" type="button" data-plan="${escapeHtml(code)}" ${current || code === "free" || code === "business" ? "disabled" : ""}>${escapeHtml(buttonLabel)}</button>
     </article>`;
   }).join("");
@@ -289,14 +319,15 @@ function renderPlans() {
 }
 
 async function createTransferOrder(planCode) {
-  if (!billingToken) { $("plans").scrollIntoView({behavior:"smooth"}); showError(t("loginRequired"), "LS-BILL-01"); return; }
+  if (!billingToken) { location.href = `/login.html?next=${encodeURIComponent("/#plans")}`; return; }
+  if (billingCurrency !== "TRY") { showError(currentLanguage === "tr" ? "Global kart ödemeleri PayTR etkinleştiğinde açılacak. Şimdilik havale için TRY seçebilirsin." : "Global card payments will open with the payment provider. Select TRY to use bank transfer for now.", "LS-BILL-20"); return; }
   const plan = billingCatalog.plans.find(item => item.code === planCode);
   const interval = plan?.kind === "one_time" ? "one_time" : "monthly";
   try {
     const body = await billingRequest("/billing/manual-transfer/orders", {method:"POST", body:JSON.stringify({plan_code:planCode, interval})});
     const order = body.order;
     $("transferReference").textContent = order.reference;
-    $("transferAmount").textContent = formatTry(order.amount_minor);
+    $("transferAmount").textContent = formatPrice(order.amount_minor, order.currency || "TRY");
     $("transferIban").textContent = order.bank.iban.replace(/(.{4})/g, "$1 ").trim();
     $("transferHolder").textContent = order.bank.account_holder;
     $("transferInstruction").textContent = order.instruction;
@@ -309,15 +340,27 @@ async function createTransferOrder(planCode) {
 
 async function loadBilling() {
   try {
-    billingCatalog = await fetch(`${API}/billing/plans`, {cache:"no-store"}).then(response => response.json());
+    const selected = detectedCurrency();
+    billingCatalog = await fetch(`${API}/billing/plans?currency=${encodeURIComponent(selected)}`, {cache:"no-store"}).then(response => response.json());
+    billingCurrency = billingCatalog.selected_currency || selected;
+    localStorage.setItem("lecturesift-currency", billingCurrency);
+    if ($("billingCurrency")) $("billingCurrency").value = billingCurrency;
     renderPlans(); await refreshBillingAccount();
-  } catch { showError(currentLanguage === "tr" ? "Plan bilgileri şu anda alınamıyor." : "Plan information is temporarily unavailable.", "LS-BILL-14"); }
+  } catch {
+    billingCatalog = fallbackCatalog(detectedCurrency());
+    billingCurrency = billingCatalog.selected_currency;
+    if ($("billingCurrency")) $("billingCurrency").value = billingCurrency;
+    renderPlans();
+    await refreshBillingAccount();
+  }
 }
 
-$("accountButton").onclick = () => $("plans").scrollIntoView({behavior:"smooth"});
-$("loginButton").onclick = () => authenticateBilling("login");
-$("registerButton").onclick = () => authenticateBilling("register");
-$("logoutButton").onclick = () => { billingToken = ""; billingAccount = null; localStorage.removeItem("lecturesift-billing-token"); renderBillingAccount(); renderPlans(); };
+if ($("billingCurrency")) $("billingCurrency").addEventListener("change", () => {
+  billingCurrency = $("billingCurrency").value;
+  localStorage.setItem("lecturesift-currency", billingCurrency);
+  loadBilling();
+});
+if ($("logoutButton")) $("logoutButton").onclick = () => { billingToken = ""; billingAccount = null; localStorage.removeItem("lecturesift-billing-token"); renderBillingAccount(); renderPlans(); };
 loadBilling();
 
 function setSourceMode(mode) {

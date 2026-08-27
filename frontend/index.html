@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Ders videolarını slayt, transkript, not, özet, quiz ve bilgi kartlarına dönüştür.">
   <title>LectureSift - AI Ders Çalışma Asistanı</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -16,27 +17,49 @@
       <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
       <span>Lecture<span>Sift</span></span>
     </a>
-    <div class="top-actions">
+    <nav class="top-actions" aria-label="Ana menü">
+      <a class="top-link" href="#features">Özellikler</a>
       <a class="top-link" href="#plans" data-i18n="plansNav">Planlar</a>
-      <button id="accountButton" class="account-button" type="button" data-i18n="login">Giriş</button>
+      <a class="top-link" href="/about.html">Hakkımızda</a>
+      <a class="social-link" href="https://www.instagram.com/lecturesift/" target="_blank" rel="noopener noreferrer" aria-label="LectureSift Instagram hesabı">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".8"/></svg>
+      </a>
+      <a id="accountButton" class="account-button" href="/login.html" data-i18n="login">Giriş</a>
       <span class="version-pill">V4.1</span>
       <label class="language-picker">
         <span class="sr-only">Arayüz dili</span>
         <select id="uiLanguage"></select>
       </label>
-    </div>
+    </nav>
   </header>
 
   <main id="app" class="page-shell">
-    <section class="intro" aria-labelledby="pageTitle">
-      <div>
+    <section class="intro hero" aria-labelledby="pageTitle">
+      <div class="hero-copy">
         <p class="eyebrow" data-i18n="eyebrow">Yapay zekâ destekli ders çalışma alanı</p>
         <h1 id="pageTitle" data-i18n="title">Bir ders videosundan çalışmaya hazır her şey.</h1>
+        <p class="intro-copy" data-i18n="subtitle">Videoyu yükle veya bağlantıyı yapıştır. LectureSift transkript, akıllı notlar, özet, slaytlar, quiz ve bilgi kartlarını tek pakette hazırlar.</p>
+        <div class="hero-actions"><a class="hero-primary" href="/register.html">Ücretsiz başla</a><a class="hero-secondary" href="#workspace">Nasıl çalışır?</a></div>
+        <div class="trust-row"><span>✓ 60 dakika ücretsiz</span><span>✓ 13 dil</span><span>✓ PDF, Word ve TXT</span></div>
       </div>
-      <p class="intro-copy" data-i18n="subtitle">Videoyu yükle veya bağlantıyı yapıştır. LectureSift transkript, akıllı notlar, özet, slaytlar, quiz ve bilgi kartlarını tek pakette hazırlar.</p>
+      <div class="hero-visual" aria-label="LectureSift çalışma paketi önizlemesi">
+        <div class="visual-window"><div class="visual-bar"><i></i><i></i><i></i><span>Ders paketi · Biyoloji 101</span></div><div class="visual-content"><div class="visual-menu"><b>Özet</b><span>Transkript</span><span>Quiz</span><span>Kartlar</span></div><div class="visual-summary"><small>ANA FİKİR</small><h3>Hücre enerji üretimini nasıl düzenler?</h3><p>Konunun temel kavramları, örnekleri ve sınavda çıkabilecek bağlantıları tek bir akışta.</p><div class="visual-chips"><span>20 soru</span><span>40 kart</span><span>PDF</span></div></div></div></div>
+        <div class="floating-card quiz-float"><small>QUIZ</small><strong>8 / 10</strong><span>Hazırlık skoru</span></div>
+        <div class="floating-card time-float"><small>ZAMAN</small><strong>47 dk</strong><span>tasarruf</span></div>
+      </div>
     </section>
 
-    <section class="workspace" aria-label="Ders analizi">
+    <section id="features" class="feature-band" aria-labelledby="featuresTitle">
+      <div class="section-lead"><p class="eyebrow">Videodan çalışma sistemine</p><h2 id="featuresTitle">İzlemekle kalma; anla, hatırla ve ölç.</h2><p>LectureSift dağınık ders kayıtlarını tekrar edilebilir bir öğrenme akışına dönüştürür.</p></div>
+      <div class="feature-grid">
+        <article><span>01</span><h3>Akıllı transkript</h3><p>Zaman damgalı konuşma dökümü, kaynak dili koruma ve seçtiğin dile çeviri.</p></article>
+        <article><span>02</span><h3>Özet ve notlar</h3><p>Hızlı, ayrıntılı, sınav odaklı veya beş dakikalık öğrenme profilleri.</p></article>
+        <article><span>03</span><h3>Quiz ve bilgi kartları</h3><p>İçeriğe göre üretilen sorularla bilgini ölç, kartlarla aralıklı tekrar yap.</p></article>
+        <article><span>04</span><h3>Paylaşılabilir çıktılar</h3><p>Çalışma paketini PDF, Word ve TXT olarak indir; kaynaklarını düzenli tut.</p></article>
+      </div>
+    </section>
+
+    <section id="workspace" class="workspace" aria-label="Ders analizi">
       <div class="panel input-panel">
         <div class="panel-heading">
           <div>
@@ -171,19 +194,13 @@
           <p class="eyebrow" data-i18n="plansEyebrow">Şeffaf kullanım planları</p>
           <h2 id="plansTitle" data-i18n="plansTitle">İhtiyacın kadar işle, istediğin zaman yükselt.</h2>
         </div>
-        <p data-i18n="plansSubtitle">Havale ödemeleri ödeme kontrolünden sonra etkinleştirilir. PayTR açıldığında kart ve otomatik yenileme eklenecek.</p>
+        <div class="billing-side"><p data-i18n="plansSubtitle">Havale ödemeleri ödeme kontrolünden sonra etkinleştirilir. PayTR açıldığında kart ve otomatik yenileme eklenecek.</p><label class="currency-picker"><span>Para birimi</span><select id="billingCurrency"><option value="TRY">TRY ₺</option><option value="USD">USD $</option><option value="EUR">EUR €</option><option value="GBP">GBP £</option></select></label></div>
       </div>
 
       <div id="accountPanel" class="account-panel">
-        <div id="authForm" class="auth-form">
-          <div>
-            <strong data-i18n="accountTitle">Hesabını oluştur veya giriş yap</strong>
-            <small data-i18n="accountHelp">Planın, dakikaların ve ödemelerin bu hesaba bağlanır.</small>
-          </div>
-          <input id="billingEmail" type="email" autocomplete="email" placeholder="E-posta">
-          <input id="billingPassword" type="password" autocomplete="current-password" minlength="10" placeholder="Parola (en az 10 karakter)">
-          <button id="loginButton" type="button" data-i18n="login">Giriş</button>
-          <button id="registerButton" type="button" class="secondary" data-i18n="register">Hesap oluştur</button>
+        <div id="authForm" class="account-cta">
+          <div><strong data-i18n="accountTitle">Hesabını oluştur veya giriş yap</strong><small data-i18n="accountHelp">Planın, dakikaların ve ödemelerin doğrulanmış hesabına bağlanır.</small></div>
+          <div><a class="cta-login" href="/login.html" data-i18n="login">Giriş yap</a><a class="cta-register" href="/register.html" data-i18n="register">Ücretsiz hesap oluştur</a></div>
         </div>
         <div id="accountStatus" class="account-status" hidden>
           <div><strong id="accountEmail"></strong><small id="accountPlan"></small></div>
@@ -235,6 +252,12 @@
       </div>
     </section>
   </main>
+
+  <footer class="site-footer">
+    <div class="footer-main"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>Lecture<span>Sift</span></span></a><p>Ders kaynaklarını anlaşılır, ölçülebilir ve tekrar edilebilir çalışma paketlerine dönüştür.</p><a class="footer-instagram" href="https://www.instagram.com/lecturesift/" target="_blank" rel="noopener noreferrer" aria-label="LectureSift Instagram hesabını aç"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".8"/></svg><span>@lecturesift</span></a></div>
+    <div class="footer-links"><div><strong>Ürün</strong><a href="#features">Özellikler</a><a href="#plans">Planlar</a><a href="/account.html">Hesabım</a></div><div><strong>LectureSift</strong><a href="/about.html">Hakkımızda</a><a href="/contact.html">İletişim</a><a href="/refund.html">İptal ve iade</a></div><div><strong>Yasal</strong><a href="/privacy.html">Gizlilik ve KVKK</a><a href="/terms.html">Kullanım koşulları</a><a href="/cookies.html">Çerez ve depolama</a></div></div>
+    <div class="footer-bottom"><span>© 2026 LectureSift. Tüm hakları saklıdır.</span><span>Yapay zekâ çıktıları önemli kararlar için doğrulanmalıdır.</span></div>
+  </footer>
 
   <div id="errorBox" class="error-box" hidden role="alert">
     <button id="closeError" type="button" aria-label="Kapat">×</button>

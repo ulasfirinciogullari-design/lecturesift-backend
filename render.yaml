@@ -31,6 +31,14 @@ services:
         sync: false
       - key: BILLING_SUPPORT_EMAIL
         sync: false
+      - key: EMAIL_PROVIDER
+        value: resend
+      - key: EMAIL_FROM
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: FRONTEND_BASE_URL
+        value: https://lecturesift.com
       - key: INSTAGRAM_DAILY_AUTOMATION_ENABLED
         value: true
       - key: PUBLIC_BASE_URL
