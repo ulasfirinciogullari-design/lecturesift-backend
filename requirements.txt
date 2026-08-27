@@ -14,3 +14,5 @@ psycopg[binary]==3.2.10
 celery[redis]>=5.4,<6
 redis>=5,<7
 boto3>=1.35,<2
+arabic-reshaper>=3,<4
+python-bidi>=0.6,<1
