@@ -659,7 +659,7 @@ def download(job_id: str, user: dict = Depends(_billing_user)) -> FileResponse:
     return FileResponse(
         data["result_path"],
         media_type="application/zip",
-        filename="LectureSift_Paketi_V4.1.zip",
+        filename="LectureSift_Paketi.zip",
     )
 
 
