@@ -50,5 +50,14 @@ The automated suite covers human-readable API errors, SSRF/private-URL rejection
 - `GET /jobs/{job_id}/artifact/{filename}`: individual PDF/Word/TXT/MP3/video output
 - `GET /jobs/{job_id}/download`: complete ZIP package
 - `GET /health`: deployment health and engine version
+- `GET /instagram/health`: verify the configured Instagram account connection
+- `POST /instagram/media`: create an image, Reel, or Story media container
+- `GET /instagram/media/{container_id}`: inspect container processing status
+- `POST /instagram/media/publish`: publish a ready media container
+
+Instagram credentials are read only from `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_ACCOUNT_ID`, and
+`INSTAGRAM_APP_SECRET`. Publishing routes additionally require `INSTAGRAM_ADMIN_TOKEN` as a Bearer
+token, so they remain disabled by default. Never place any of these values in source control.
 
 Transient job files are stored under `/tmp/lecturesift` and expire automatically.
+

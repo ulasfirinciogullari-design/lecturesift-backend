@@ -1,3 +1,4 @@
+import hmac
 import json
 import shutil
 import threading
@@ -6,12 +7,26 @@ import traceback
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, HttpUrl
 
-from .config import APP_VERSION, MAX_SOURCE_FILES, MAX_VIDEO_BYTES, OPENAI_API_KEY, VIDEO_EXTENSIONS, WORK_DIR
+from .config import (
+    APP_VERSION,
+    INSTAGRAM_ACCESS_TOKEN,
+    INSTAGRAM_ACCOUNT_ID,
+    INSTAGRAM_ADMIN_TOKEN,
+    INSTAGRAM_APP_SECRET,
+    INSTAGRAM_GRAPH_API_VERSION,
+    MAX_SOURCE_FILES,
+    MAX_VIDEO_BYTES,
+    OPENAI_API_KEY,
+    VIDEO_EXTENSIONS,
+    WORK_DIR,
+)
 from .errors import LectureSiftError, normalize_error
+from .instagram import InstagramAPIError, InstagramClient, InstagramConfigurationError
 from .jobs import JOBS
 from .media import download_remote_video, validate_remote_url
 from .pipeline import process_job
@@ -25,6 +40,48 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def _instagram_client() -> InstagramClient:
+    try:
+        return InstagramClient(
+            access_token=INSTAGRAM_ACCESS_TOKEN,
+            account_id=INSTAGRAM_ACCOUNT_ID,
+            app_secret=INSTAGRAM_APP_SECRET,
+            api_version=INSTAGRAM_GRAPH_API_VERSION,
+        )
+    except InstagramConfigurationError:
+        raise HTTPException(503, detail={"code": "LS-IG-01", "message": "Instagram entegrasyonu yapılandırılmamış."})
+
+
+def _instagram_admin(authorization: str | None = Header(None)) -> None:
+    if not INSTAGRAM_ADMIN_TOKEN:
+        raise HTTPException(503, detail={"code": "LS-IG-02", "message": "Instagram yayınlama uçları etkin değil."})
+    scheme, _, value = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not hmac.compare_digest(value, INSTAGRAM_ADMIN_TOKEN):
+        raise HTTPException(401, detail={"code": "LS-IG-03", "message": "Yetkisiz istek."})
+
+
+class InstagramMediaRequest(BaseModel):
+    media_url: HttpUrl
+    caption: str = ""
+    media_type: str = "IMAGE"
+    cover_url: HttpUrl | None = None
+
+
+class InstagramPublishRequest(BaseModel):
+    container_id: str
+
+
+def _instagram_error(exc: InstagramAPIError) -> None:
+    raise HTTPException(
+        exc.status_code,
+        detail={
+            "code": "LS-IG-04",
+            "message": "Instagram API isteği tamamlanamadı.",
+            "type": exc.error_type,
+        },
+    )
 
 
 def _options(
@@ -142,7 +199,65 @@ def health() -> dict:
         "output_formats": ["pdf", "docx", "txt"],
         "audio_export": True,
         "url_video_download": True,
+        "instagram_configured": all((INSTAGRAM_ACCESS_TOKEN, INSTAGRAM_ACCOUNT_ID, INSTAGRAM_APP_SECRET)),
     }
+
+
+@app.get("/instagram/health")
+def instagram_health(client: InstagramClient = Depends(_instagram_client)) -> dict:
+    try:
+        account = client.get_account()
+    except InstagramAPIError as exc:
+        _instagram_error(exc)
+    return {
+        "ok": True,
+        "connected": True,
+        "account": {key: account.get(key) for key in ("id", "username", "account_type", "media_count")},
+    }
+
+
+@app.post("/instagram/media", dependencies=[Depends(_instagram_admin)])
+def instagram_create_media(
+    payload: InstagramMediaRequest,
+    client: InstagramClient = Depends(_instagram_client),
+) -> dict:
+    media_type = payload.media_type.upper()
+    if media_type not in {"IMAGE", "REELS", "STORIES"}:
+        raise HTTPException(400, detail={"code": "LS-IG-05", "message": "Desteklenmeyen Instagram medya türü."})
+    try:
+        result = client.create_media_container(
+            media_url=str(payload.media_url),
+            caption=payload.caption,
+            media_type=media_type,
+            cover_url=str(payload.cover_url) if payload.cover_url else None,
+        )
+    except InstagramAPIError as exc:
+        _instagram_error(exc)
+    return {"ok": True, "container_id": result.get("id"), "status": "created"}
+
+
+@app.get("/instagram/media/{container_id}", dependencies=[Depends(_instagram_admin)])
+def instagram_media_status(
+    container_id: str,
+    client: InstagramClient = Depends(_instagram_client),
+) -> dict:
+    try:
+        result = client.get_container_status(container_id)
+    except InstagramAPIError as exc:
+        _instagram_error(exc)
+    return {"ok": True, "container": result}
+
+
+@app.post("/instagram/media/publish", dependencies=[Depends(_instagram_admin)])
+def instagram_publish_media(
+    payload: InstagramPublishRequest,
+    client: InstagramClient = Depends(_instagram_client),
+) -> dict:
+    try:
+        result = client.publish_media(payload.container_id)
+    except InstagramAPIError as exc:
+        _instagram_error(exc)
+    return {"ok": True, "media_id": result.get("id"), "status": "published"}
 
 
 @app.get("/jobs/{job_id}")
@@ -347,3 +462,4 @@ def create_url_job(
 
     threading.Thread(target=worker, daemon=True).start()
     return {"job_id": job_id, "status": "working", "version": APP_VERSION}
+
