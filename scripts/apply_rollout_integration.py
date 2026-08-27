@@ -57,6 +57,15 @@ def main() -> None:
         )
         write_if_changed(backend, value)
 
+    rollout_service = ROOT / "lecturesift" / "rollout_service.py"
+    if rollout_service.exists():
+        value = rollout_service.read_text(encoding="utf-8").replace(
+            '        5,\n        10,\n        ("short", "standard"),',
+            '        10,\n        20,\n        ("short", "standard"),',
+            1,
+        )
+        write_if_changed(rollout_service, value)
+
 
 if __name__ == "__main__":
     main()
