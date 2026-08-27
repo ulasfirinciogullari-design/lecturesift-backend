@@ -6,9 +6,8 @@ import os
 import time
 from pathlib import Path
 
-import cv2
-
 from .config import CELERY_BROKER_URL
+from .duration import media_duration_seconds
 from .jobs import JOBS
 from .pipeline_enhancements import install_pipeline_enhancements
 from .rollout_service import BillingError, estimate_eta_seconds, is_guest_user, record_runtime, reserve_guest_job
@@ -24,20 +23,6 @@ def _paths(value) -> list[Path]:
     if isinstance(value, Path):
         return [value]
     return [Path(item) for item in value]
-
-
-def _duration_seconds(paths: list[Path]) -> float:
-    total = 0.0
-    for path in paths:
-        capture = cv2.VideoCapture(str(path))
-        try:
-            fps = float(capture.get(cv2.CAP_PROP_FPS) or 0)
-            frames = float(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-            if fps > 0 and frames > 0:
-                total += frames / fps
-        finally:
-            capture.release()
-    return total
 
 
 def _publish_if_configured(job_id: str, job_dir: Path) -> None:
@@ -69,8 +54,8 @@ def install_durable_runtime() -> None:
         if not data:
             return
         duration = max(
-            _duration_seconds(audio_paths),
-            _duration_seconds(visual_paths) if visual_paths else 0.0,
+            media_duration_seconds(audio_paths),
+            media_duration_seconds(visual_paths) if visual_paths else 0.0,
         )
         media_minutes = max(0.1, duration / 60.0)
         size_bytes = sum(
