@@ -14,19 +14,42 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Verify deployed Resend multi-port SMTP fallback
+      - name: Check DNS, email health, and controlled registration
         shell: bash
         run: |
           set -euo pipefail
 
-          # Give Render's automatic main-branch deployment a head start before
-          # probing a change that was merged immediately before this workflow.
-          sleep 75
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq dnsutils >/dev/null
 
-          for attempt in $(seq 1 8); do
-            email="delivered+lecturesift-multiport-${GITHUB_RUN_ID}-${attempt}@resend.dev"
+          echo '=== Public DNS ==='
+          printf 'MX send.mail.lecturesift.com: '
+          dig +short MX send.mail.lecturesift.com | tr '\n' ' '; echo
+          printf 'SPF send.mail.lecturesift.com: '
+          dig +short TXT send.mail.lecturesift.com | tr '\n' ' '; echo
+          printf 'DKIM resend._domainkey.mail.lecturesift.com: '
+          dig +short TXT resend._domainkey.mail.lecturesift.com | tr '\n' ' '; echo
+          printf 'A lecturesift.com: '
+          dig +short A lecturesift.com | tr '\n' ' '; echo
+          printf 'CNAME www.lecturesift.com: '
+          dig +short CNAME www.lecturesift.com | tr '\n' ' '; echo
+
+          echo
+          echo '=== Email health ==='
+          curl --fail --location --silent --show-error \
+            --retry 3 --retry-delay 3 --retry-all-errors --max-time 180 \
+            https://lecturesift-backend.onrender.com/billing/email/health \
+            | tee /tmp/email-health.json
+          echo
+          python -m json.tool /tmp/email-health.json
+
+          echo
+          echo '=== Controlled Resend delivery ==='
+          for attempt in $(seq 1 6); do
+            email="delivered+lecturesift-check-${GITHUB_RUN_ID}-${attempt}@resend.dev"
             password="$(python -c 'import secrets; print(secrets.token_urlsafe(24))')"
-            export TEST_EMAIL="$email" TEST_PASSWORD="$password" ATTEMPT="$attempt"
+            export TEST_EMAIL="$email" TEST_PASSWORD="$password"
+
             python - <<'PY' > /tmp/register-payload.json
           import json
           import os
@@ -38,57 +61,31 @@ jobs:
           PY
 
             status="$(curl --location --silent --show-error \
+              --retry 2 --retry-delay 2 --retry-all-errors --max-time 180 \
               --output /tmp/register-response.json --write-out '%{http_code}' \
               --header 'Content-Type: application/json' \
               --data-binary @/tmp/register-payload.json \
               https://lecturesift-backend.onrender.com/billing/register)"
 
-            export HTTP_STATUS="$status"
-            echo "Attempt $attempt — HTTP $status"
+            echo "Attempt $attempt - HTTP $status"
             python -m json.tool /tmp/register-response.json || cat /tmp/register-response.json
 
-            outcome="$(python - <<'PY'
+            if [[ "$status" == "200" ]]; then
+              python - <<'PY'
           import json
-          import os
-
-          try:
-              with open('/tmp/register-response.json', encoding='utf-8') as handle:
-                  body = json.load(handle)
-          except Exception:
-              print('retry')
-              raise SystemExit
-
-          if os.environ['HTTP_STATUS'] == '200' and body.get('verification_required') is True:
-              print('success')
-              raise SystemExit
-
-          detail = body.get('detail') if isinstance(body, dict) else None
-          if isinstance(detail, dict):
-              provider_code = detail.get('provider_code')
-              legacy_codes = {'http_403', 'InternalServerError', 'forbidden_unknown'}
-              if provider_code in legacy_codes:
-                  print('retry')
-                  raise SystemExit
-              if provider_code == 'smtp_unavailable' and int(os.environ['ATTEMPT']) < 2:
-                  print('retry')
-                  raise SystemExit
-              if provider_code:
-                  print('diagnosed')
-                  raise SystemExit
-          print('retry')
+          with open('/tmp/register-response.json', encoding='utf-8') as handle:
+              body = json.load(handle)
+          assert body.get('ok') is True
+          assert body.get('verification_required') is True
+          assert body.get('email')
+          assert 'token' not in body
+          print('RESULT: verification email accepted by Resend')
           PY
-            )"
-
-            if [[ "$outcome" == "success" ]]; then
-              echo 'Controlled verification email was accepted by Resend.'
               exit 0
             fi
-            if [[ "$outcome" == "diagnosed" ]]; then
-              echo 'The deployed multi-port fallback returned the safe final diagnosis above.'
-              exit 2
-            fi
-            sleep 10
+
+            sleep 8
           done
 
-          echo 'The multi-port deployment or final provider response was not observed.'
+          echo 'RESULT: verification email was not accepted'
           exit 1
