@@ -18,6 +18,15 @@ from lecturesift.pipeline import process_job
 from lecturesift.slides import presentation_score, read_frame_at, scan_candidate_timestamps
 
 
+def billing_headers(client: TestClient) -> dict[str, str]:
+    account = client.post(
+        "/billing/register",
+        json={"email": f"upload-{uuid.uuid4()}@example.com", "password": "strong-test-password"},
+    )
+    assert account.status_code == 200
+    return {"Authorization": f"Bearer {account.json()['token']}"}
+
+
 def synthetic_slide() -> np.ndarray:
     frame = np.full((720, 1280, 3), 244, dtype=np.uint8)
     cv2.rectangle(frame, (55, 45), (1225, 675), (210, 220, 235), 3)
@@ -106,7 +115,11 @@ def test_health_and_unsupported_upload():
     health = client.get("/health")
     assert health.status_code == 200
     assert health.json()["version"] == "4.1"
-    response = client.post("/jobs", files={"file": ("notes.txt", b"not a video", "text/plain")})
+    response = client.post(
+        "/jobs",
+        files={"file": ("notes.txt", b"not a video", "text/plain")},
+        headers=billing_headers(client),
+    )
     assert response.status_code == 400
     assert response.json()["detail"]["code"] == "LS-UPLOAD-01"
 
@@ -282,6 +295,7 @@ def test_second_upload_rejects_unsupported_video_format():
             "file": ("audio.mp4", b"audio", "video/mp4"),
             "slides_file": ("slides.txt", b"not video", "text/plain"),
         },
+        headers=billing_headers(client),
     )
     assert response.status_code == 400
     assert response.json()["detail"]["code"] == "LS-UPLOAD-01"
@@ -309,6 +323,7 @@ def test_dual_source_upload_endpoint_saves_both_roles(tmp_path: Path, monkeypatc
             "slides_file": ("slides.webm", b"visual-source", "video/webm"),
         },
         data={"slides_offset_seconds": "1.5"},
+        headers=billing_headers(client),
     )
 
     assert response.status_code == 200
@@ -391,6 +406,7 @@ def test_multi_upload_preserves_user_order(tmp_path: Path, monkeypatch):
             ("files", ("first.webm", b"1", "video/webm")),
             ("files", ("second.mov", b"2", "video/quicktime")),
         ],
+        headers=billing_headers(client),
     )
     assert response.status_code == 200
     paths = captured["args"][1]

@@ -17,6 +17,8 @@
       <span>Lecture<span>Sift</span></span>
     </a>
     <div class="top-actions">
+      <a class="top-link" href="#plans" data-i18n="plansNav">Planlar</a>
+      <button id="accountButton" class="account-button" type="button" data-i18n="login">Giriş</button>
       <span class="version-pill">V4.1</span>
       <label class="language-picker">
         <span class="sr-only">Arayüz dili</span>
@@ -161,6 +163,51 @@
           <p><strong data-i18n="promiseTitle">Tek videodan tam çalışma paketi</strong><small data-i18n="promiseText">Slaytlar, iki dilde transkript, notlar, özet, quiz, bilgi kartları ve PDF/TXT dosyaları.</small></p>
         </div>
       </aside>
+    </section>
+
+    <section id="plans" class="billing-section" aria-labelledby="plansTitle">
+      <div class="billing-heading">
+        <div>
+          <p class="eyebrow" data-i18n="plansEyebrow">Şeffaf kullanım planları</p>
+          <h2 id="plansTitle" data-i18n="plansTitle">İhtiyacın kadar işle, istediğin zaman yükselt.</h2>
+        </div>
+        <p data-i18n="plansSubtitle">Havale ödemeleri ödeme kontrolünden sonra etkinleştirilir. PayTR açıldığında kart ve otomatik yenileme eklenecek.</p>
+      </div>
+
+      <div id="accountPanel" class="account-panel">
+        <div id="authForm" class="auth-form">
+          <div>
+            <strong data-i18n="accountTitle">Hesabını oluştur veya giriş yap</strong>
+            <small data-i18n="accountHelp">Planın, dakikaların ve ödemelerin bu hesaba bağlanır.</small>
+          </div>
+          <input id="billingEmail" type="email" autocomplete="email" placeholder="E-posta">
+          <input id="billingPassword" type="password" autocomplete="current-password" minlength="10" placeholder="Parola (en az 10 karakter)">
+          <button id="loginButton" type="button" data-i18n="login">Giriş</button>
+          <button id="registerButton" type="button" class="secondary" data-i18n="register">Hesap oluştur</button>
+        </div>
+        <div id="accountStatus" class="account-status" hidden>
+          <div><strong id="accountEmail"></strong><small id="accountPlan"></small></div>
+          <div><strong id="accountRemaining"></strong><small data-i18n="remainingMinutes">Kalan işlem dakikası</small></div>
+          <button id="logoutButton" type="button" data-i18n="logout">Çıkış</button>
+        </div>
+      </div>
+
+      <div id="plansGrid" class="plans-grid" aria-live="polite"></div>
+
+      <div id="transferPanel" class="transfer-panel" hidden>
+        <div class="transfer-head">
+          <div><p class="eyebrow" data-i18n="transferEyebrow">Havale bilgileri</p><h3 data-i18n="transferTitle">Siparişin oluşturuldu</h3></div>
+          <span id="transferStatus"></span>
+        </div>
+        <div class="transfer-grid">
+          <div><small data-i18n="orderReference">Sipariş referansı</small><strong id="transferReference"></strong></div>
+          <div><small data-i18n="amount">Tutar</small><strong id="transferAmount"></strong></div>
+          <div><small>IBAN</small><strong id="transferIban"></strong></div>
+          <div><small data-i18n="accountHolder">Hesap sahibi</small><strong id="transferHolder"></strong></div>
+        </div>
+        <p id="transferInstruction"></p>
+        <a id="transferSupport" href="#" data-i18n="sendReceipt">Dekontu e-postayla gönder</a>
+      </div>
     </section>
 
     <section id="results" class="results" hidden aria-labelledby="resultHeading">

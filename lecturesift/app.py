@@ -13,8 +13,22 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, HttpUrl
 
 from .billing import public_catalog, public_providers
+from .billing_service import (
+    BillingAuthenticationError,
+    BillingConfigurationError,
+    BillingError,
+    account_status,
+    approve_manual_order,
+    authenticate_session,
+    bank_transfer_available,
+    create_manual_order,
+    login_user,
+    register_user,
+    require_job_entitlement,
+)
 from .config import (
     APP_VERSION,
+    BILLING_ADMIN_TOKEN,
     INSTAGRAM_ACCESS_TOKEN,
     INSTAGRAM_ACCOUNT_ID,
     INSTAGRAM_ADMIN_TOKEN,
@@ -64,6 +78,44 @@ def _instagram_admin(authorization: str | None = Header(None)) -> None:
         raise HTTPException(401, detail={"code": "LS-IG-03", "message": "Yetkisiz istek."})
 
 
+def _billing_user(authorization: str | None = Header(None)) -> dict:
+    scheme, _, value = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not value:
+        raise HTTPException(401, detail={"code": "LS-BILL-01", "message": "Devam etmek için giriş yap."})
+    try:
+        return authenticate_session(value)
+    except BillingAuthenticationError as exc:
+        raise HTTPException(401, detail={"code": "LS-BILL-02", "message": str(exc)}) from exc
+
+
+def _billing_admin(authorization: str | None = Header(None)) -> None:
+    if not BILLING_ADMIN_TOKEN:
+        raise HTTPException(503, detail={"code": "LS-BILL-03", "message": "Ödeme onayı yönetimi etkin değil."})
+    scheme, _, value = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not hmac.compare_digest(value, BILLING_ADMIN_TOKEN):
+        raise HTTPException(401, detail={"code": "LS-BILL-04", "message": "Yetkisiz istek."})
+
+
+def _owned_job(job_id: str, user: dict) -> dict:
+    data = JOBS.get(job_id)
+    owner_id = (data or {}).get("options", {}).get("billing_user_id")
+    if not data or owner_id != user["id"]:
+        # Use the same response for missing and foreign jobs so job IDs cannot
+        # be used to discover another account's files or processing status.
+        raise HTTPException(404, detail={"code": "LS-JOB-01", "message": "İşlem kaydı bulunamadı veya süresi doldu."})
+    return data
+
+
+def _public_job(data: dict) -> dict:
+    result = data.copy()
+    for key in ("job_dir", "result_path", "technical_error"):
+        result.pop(key, None)
+    result["options"] = {
+        key: value for key, value in result.get("options", {}).items() if key != "billing_user_id"
+    }
+    return result
+
+
 class InstagramMediaRequest(BaseModel):
     media_url: HttpUrl
     caption: str = ""
@@ -73,6 +125,16 @@ class InstagramMediaRequest(BaseModel):
 
 class InstagramPublishRequest(BaseModel):
     container_id: str
+
+
+class BillingAuthRequest(BaseModel):
+    email: str
+    password: str
+
+
+class ManualOrderRequest(BaseModel):
+    plan_code: str
+    interval: str = "monthly"
 
 
 def _instagram_error(exc: InstagramAPIError) -> None:
@@ -183,7 +245,7 @@ def root() -> dict:
     return {
         "ok": True,
         "service": f"LectureSift Backend V{APP_VERSION}",
-        "frontend": "https://clever-horse-22b1a8.netlify.app/",
+        "frontend": "https://lecturesift.com/",
     }
 
 
@@ -213,6 +275,64 @@ def billing_plans() -> dict:
 @app.get("/billing/providers")
 def billing_providers() -> dict:
     return public_providers()
+
+
+@app.get("/billing/manual-transfer")
+def billing_manual_transfer_status() -> dict:
+    return {
+        "available": bank_transfer_available(),
+        "requires_account": True,
+        "activation": "manual_after_bank_confirmation",
+    }
+
+
+@app.post("/billing/register")
+def billing_register(payload: BillingAuthRequest) -> dict:
+    try:
+        result = register_user(payload.email, payload.password)
+    except BillingError as exc:
+        raise HTTPException(400, detail={"code": "LS-BILL-05", "message": str(exc)}) from exc
+    return {"ok": True, **result, "account": account_status(result["user"]["id"])}
+
+
+@app.post("/billing/login")
+def billing_login(payload: BillingAuthRequest) -> dict:
+    try:
+        result = login_user(payload.email, payload.password)
+    except BillingAuthenticationError as exc:
+        raise HTTPException(401, detail={"code": "LS-BILL-06", "message": str(exc)}) from exc
+    return {"ok": True, **result, "account": account_status(result["user"]["id"])}
+
+
+@app.get("/billing/me")
+def billing_me(user: dict = Depends(_billing_user)) -> dict:
+    return {"ok": True, "account": account_status(user["id"])}
+
+
+@app.post("/billing/manual-transfer/orders")
+def billing_create_manual_order(
+    payload: ManualOrderRequest,
+    user: dict = Depends(_billing_user),
+) -> dict:
+    try:
+        order = create_manual_order(user["id"], payload.plan_code, payload.interval)
+    except BillingConfigurationError as exc:
+        raise HTTPException(503, detail={"code": "LS-BILL-07", "message": str(exc)}) from exc
+    except BillingError as exc:
+        raise HTTPException(400, detail={"code": "LS-BILL-08", "message": str(exc)}) from exc
+    return {"ok": True, "order": order}
+
+
+@app.post(
+    "/billing/manual-transfer/orders/{reference}/approve",
+    dependencies=[Depends(_billing_admin)],
+)
+def billing_approve_manual_order(reference: str) -> dict:
+    try:
+        account = approve_manual_order(reference)
+    except BillingError as exc:
+        raise HTTPException(404, detail={"code": "LS-BILL-09", "message": str(exc)}) from exc
+    return {"ok": True, "account": account}
 
 
 @app.get("/instagram/health")
@@ -289,18 +409,13 @@ def instagram_daily_image(day: str) -> Response:
 
 
 @app.get("/jobs/{job_id}")
-def get_job(job_id: str) -> dict:
-    data = JOBS.public(job_id)
-    if not data:
-        raise HTTPException(404, detail={"code": "LS-JOB-01", "message": "İşlem kaydı bulunamadı veya süresi doldu."})
-    return data
+def get_job(job_id: str, user: dict = Depends(_billing_user)) -> dict:
+    return _public_job(_owned_job(job_id, user))
 
 
 @app.get("/jobs/{job_id}/result")
-def get_result(job_id: str) -> dict:
-    data = JOBS.get(job_id)
-    if not data:
-        raise HTTPException(404, detail={"code": "LS-JOB-01", "message": "İşlem kaydı bulunamadı veya süresi doldu."})
+def get_result(job_id: str, user: dict = Depends(_billing_user)) -> dict:
+    data = _owned_job(job_id, user)
     if data.get("status") != "done":
         raise HTTPException(409, detail={"code": "LS-JOB-02", "message": "Ders analizi henüz tamamlanmadı."})
     path = Path(data["job_dir"]) / "result.json"
@@ -310,10 +425,8 @@ def get_result(job_id: str) -> dict:
 
 
 @app.get("/jobs/{job_id}/slide/{filename}")
-def get_slide(job_id: str, filename: str) -> FileResponse:
-    data = JOBS.get(job_id)
-    if not data:
-        raise HTTPException(404, detail={"code": "LS-JOB-01", "message": "İşlem kaydı bulunamadı."})
+def get_slide(job_id: str, filename: str, user: dict = Depends(_billing_user)) -> FileResponse:
+    data = _owned_job(job_id, user)
     if Path(filename).name != filename:
         raise HTTPException(400, detail={"code": "LS-FILE-01", "message": "Geçersiz dosya adı."})
     path = Path(data["job_dir"]) / "slides" / filename
@@ -323,10 +436,8 @@ def get_slide(job_id: str, filename: str) -> FileResponse:
 
 
 @app.get("/jobs/{job_id}/artifact/{filename}")
-def get_artifact(job_id: str, filename: str) -> FileResponse:
-    data = JOBS.get(job_id)
-    if not data:
-        raise HTTPException(404, detail={"code": "LS-JOB-01", "message": "İşlem kaydı bulunamadı."})
+def get_artifact(job_id: str, filename: str, user: dict = Depends(_billing_user)) -> FileResponse:
+    data = _owned_job(job_id, user)
     if data.get("status") != "done":
         raise HTTPException(409, detail={"code": "LS-JOB-02", "message": "Ders analizi henüz tamamlanmadı."})
     if Path(filename).name != filename:
@@ -338,10 +449,8 @@ def get_artifact(job_id: str, filename: str) -> FileResponse:
 
 
 @app.get("/jobs/{job_id}/download")
-def download(job_id: str) -> FileResponse:
-    data = JOBS.get(job_id)
-    if not data:
-        raise HTTPException(404, detail={"code": "LS-JOB-01", "message": "İşlem kaydı bulunamadı."})
+def download(job_id: str, user: dict = Depends(_billing_user)) -> FileResponse:
+    data = _owned_job(job_id, user)
     if data.get("status") != "done":
         raise HTTPException(409, detail={"code": "LS-JOB-02", "message": "Ders analizi henüz tamamlanmadı."})
     return FileResponse(
@@ -368,7 +477,12 @@ async def create_job(
     slides_offset_seconds: float = Form(0),
     output_formats: str = Form("pdf"),
     job_type: str = Form("study_pack"),
+    billing_user: dict = Depends(_billing_user),
 ) -> dict:
+    try:
+        require_job_entitlement(billing_user["id"])
+    except BillingError as exc:
+        raise HTTPException(402, detail={"code": "LS-BILL-10", "message": str(exc)}) from exc
     layout = "separate" if source_layout == "separate" or slides_file or visual_files else "classic"
     if layout == "separate":
         audio_uploads = list(audio_files or ([] if file is None else [file]))
@@ -412,6 +526,7 @@ async def create_job(
         output_formats,
         job_type,
     )
+    options["billing_user_id"] = billing_user["id"]
     source_type = "upload_separate" if layout == "separate" else ("upload_multi" if len(audio_paths) > 1 else "upload")
     JOBS.create(
         job_id,
@@ -444,7 +559,12 @@ def create_url_job(
     slides_offset_seconds: float = Form(0),
     output_formats: str = Form("pdf"),
     job_type: str = Form("study_pack"),
+    billing_user: dict = Depends(_billing_user),
 ) -> dict:
+    try:
+        require_job_entitlement(billing_user["id"])
+    except BillingError as exc:
+        raise HTTPException(402, detail={"code": "LS-BILL-10", "message": str(exc)}) from exc
     try:
         url = validate_remote_url(video_url)
     except LectureSiftError as exc:
@@ -464,6 +584,7 @@ def create_url_job(
         output_formats,
         job_type,
     )
+    options["billing_user_id"] = billing_user["id"]
     JOBS.create(job_id, job_dir, options, source_type="url", source_url=url)
     JOBS.update(job_id, status="working", percent=3, stage="url_download")
 

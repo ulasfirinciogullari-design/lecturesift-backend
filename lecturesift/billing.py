@@ -17,6 +17,7 @@ class Plan:
     export_enabled: bool
     priority: str
     team_seats: int
+    try_amount_minor: int | None = None
     featured: bool = False
 
     def public(self) -> dict:
@@ -24,19 +25,26 @@ class Plan:
             **asdict(self),
             "name_key": f"billing.plan.{self.code}.name",
             "description_key": f"billing.plan.{self.code}.description",
-            "price_source": "payment_provider",
+            "price_source": "manual_bank_transfer" if self.try_amount_minor is not None else "payment_provider",
+            "manual_price": (
+                {"currency": "TRY", "amount_minor": self.try_amount_minor}
+                if self.try_amount_minor is not None
+                else None
+            ),
         }
 
 
 PLANS = (
     Plan("free", "free", 60, False, "standard", 1),
-    Plan("credit", "one_time", 180, True, "standard", 1),
-    Plan("lite", "subscription", 600, True, "standard", 1),
-    Plan("plus", "subscription", 2400, True, "standard", 1, featured=True),
-    Plan("pro", "subscription", 6000, True, "priority", 1),
-    Plan("max", "subscription", 15000, True, "priority", 1),
+    Plan("credit", "one_time", 180, True, "standard", 1, 19900),
+    Plan("lite", "subscription", 600, True, "standard", 1, 34900),
+    Plan("plus", "subscription", 2400, True, "standard", 1, 69900, featured=True),
+    Plan("pro", "subscription", 6000, True, "priority", 1, 129900),
+    Plan("max", "subscription", 15000, True, "priority", 1, 249900),
     Plan("business", "quote", None, True, "priority", 10),
 )
+
+PLAN_BY_CODE = {plan.code: plan for plan in PLANS}
 
 PROVIDERS = (
     {
