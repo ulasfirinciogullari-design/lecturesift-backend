@@ -5,11 +5,10 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-import cv2
-
 from .ai import make_study_pack, transcribe, translate_transcript
 from .billing_service import record_usage
 from .config import APP_VERSION
+from .duration import media_duration_seconds
 from .errors import normalize_error
 from .exports import build_artifacts, build_binary_artifact
 from .jobs import JOBS
@@ -32,17 +31,7 @@ def _public_options(options: dict) -> dict:
 
 
 def _source_duration_seconds(paths: list[Path]) -> float:
-    total = 0.0
-    for path in paths:
-        capture = cv2.VideoCapture(str(path))
-        try:
-            fps = float(capture.get(cv2.CAP_PROP_FPS) or 0)
-            frames = float(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-            if fps > 0 and frames > 0:
-                total += frames / fps
-        finally:
-            capture.release()
-    return total
+    return media_duration_seconds(paths)
 
 
 def _record_billing_usage(job_id: str, options: dict, paths: list[Path]) -> None:
