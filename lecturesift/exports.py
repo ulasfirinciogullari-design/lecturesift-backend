@@ -152,7 +152,7 @@ def build_artifacts(job_dir: Path, result: dict, slides_dir: Path) -> tuple[list
     smart_notes = _notes_text(result)
     documents = [
         ("Ozet", "Özet", f"{title} - Özet", [("Özet", [result.get("summary", "")])], result.get("summary", "")),
-        ("Akilli_Notlar", "Akıllı Notlar", f"{title} - Akıllı Notlar", [("Akıllı Notlar", [smart_notes])], smart_notes),
+        ("Ders_Notlari", "Akıllı Notlar", f"{title} - Akıllı Notlar", [("Akıllı Notlar", [smart_notes])], smart_notes),
         ("Transkript_Orijinal", "Orijinal Transkript", f"{title} - Orijinal Transkript", [("Transkript", [original])], original),
         ("Quiz", "Quiz", f"{title} - Quiz", [("Sorular ve Yanıtlar", [_quiz_text(result.get("quiz", []))])], _quiz_text(result.get("quiz", []))),
         ("Bilgi_Kartlari", "Bilgi Kartları", f"{title} - Bilgi Kartları", [("Bilgi Kartları", [_flashcards_text(result.get("flashcards", []))])], _flashcards_text(result.get("flashcards", []))),
