@@ -23,6 +23,8 @@ services:
         generateValue: true
       - key: RESEND_API_KEY
         sync: false
+      - key: RESEND_SENDING_DOMAIN
+        value: mail.lecturesift.com
       - key: RESEND_FROM_EMAIL
         value: LectureSift <no-reply@mail.lecturesift.com>
       - key: EMAIL_VERIFICATION_REQUIRED
