@@ -168,9 +168,17 @@ function applyLanguage() {
   const strings = stringsFor(currentLanguage);
   document.documentElement.lang = currentLanguage;
   document.documentElement.dir = currentLanguage === "ar" ? "rtl" : "ltr";
-  document.querySelectorAll("[data-i18n]").forEach(node => { const key = node.dataset.i18n; node.textContent = strings[key] || EN[key] || node.textContent; });
+  document.querySelectorAll("[data-i18n]").forEach(node => {
+    const key = node.dataset.i18n;
+    if (currentLanguage === "tr" || currentLanguage === "en") node.textContent = strings[key] || EN[key] || node.textContent;
+  });
+  const central = window.LectureSiftI18n;
   summaryStyle.innerHTML = [
-    ["short", t("summaryShort")], ["standard", t("summaryStandard")], ["detailed", t("summaryDetailed")], ["exam", t("summaryExam")], ["five_minute", t("summaryFive")]
+    ["short", central?.t("summary.short", t("summaryShort")) || t("summaryShort")],
+    ["standard", central?.t("summary.standard", t("summaryStandard")) || t("summaryStandard")],
+    ["detailed", central?.t("summary.detailed", t("summaryDetailed")) || t("summaryDetailed")],
+    ["exam", central?.t("summary.exam", t("summaryExam")) || t("summaryExam")],
+    ["five_minute", central?.t("summary.fiveMinute", t("summaryFive")) || t("summaryFive")]
   ].map(([value, label]) => `<option value="${value}">${escapeHtml(label)}</option>`).join("");
   summaryStyle.value = "standard";
   localStorage.setItem("lecturesift-ui", currentLanguage);

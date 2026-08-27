@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from lecturesift.billing import SUPPORTED_CURRENCIES
@@ -49,5 +50,49 @@ def test_required_product_and_legal_pages_exist():
         "reset-password.html",
         "verify.html",
         "account.html",
+        "admin.html",
     ):
         assert (FRONTEND / page).is_file(), page
+
+
+def test_every_page_loads_global_language_switcher_and_all_locales_exist():
+    for page in FRONTEND.glob("*.html"):
+        content = page.read_text(encoding="utf-8")
+        assert "page-i18n.js" in content, page.name
+        assert "i18n.js" in content, page.name
+    script = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    assert '"tr","en","de","fr","es","it","pt","ru","ar","zh","ja","ko","hi"' in script
+    assert "language-switcher" in script
+    assert 'document.documentElement.dir = selected === "ar" ? "rtl" : "ltr"' in script
+
+
+def test_static_page_copy_covers_every_language_without_empty_entries():
+    script = (FRONTEND / "page-i18n.js").read_text(encoding="utf-8")
+    payload = script.split("window.LECTURESIFT_PAGE_COPY=", 1)[1].rstrip(";\n")
+    catalog = json.loads(payload)
+    assert len(catalog) >= 600
+    assert all(len(translations) == 13 for translations in catalog.values())
+    assert all(all(str(value).strip() for value in translations) for translations in catalog.values())
+    assert all("LSSEP" not in str(translations) for translations in catalog.values())
+    for source in (
+        "Hakları karşılaştır",
+        "Profil bilgileri",
+        "Sipariş no",
+        "Hesap sahibi",
+        "LectureSift yönetici paneli",
+        "KVKK aydınlatma ve gizlilik metni",
+    ):
+        assert source in catalog
+
+
+def test_profile_admin_bank_and_full_comparison_interfaces_are_present():
+    account = (FRONTEND / "account.html").read_text(encoding="utf-8")
+    auth = (FRONTEND / "auth.js").read_text(encoding="utf-8")
+    plans = (FRONTEND / "plans.html").read_text(encoding="utf-8")
+    plan_script = (FRONTEND / "plans.js").read_text(encoding="utf-8")
+    admin = (FRONTEND / "admin.html").read_text(encoding="utf-8")
+    assert all(value in account for value in ("profileForm", "passwordForm", "accountBankHolder"))
+    assert "/billing/me/profile" in auth and "/billing/me/change-password" in auth
+    assert all(value in plans for value in ("compareHead", "compareBody", "publicBankHolder"))
+    assert "renderCompare" in plan_script and "/billing/manual-transfer" in plan_script
+    assert "adminTokenForm" in admin and "adminOrders" in admin

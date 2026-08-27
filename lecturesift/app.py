@@ -18,18 +18,21 @@ from .billing_service import (
     BillingConfigurationError,
     BillingError,
     account_status,
+    admin_billing_overview,
     approve_manual_order,
     authenticate_session,
-    bank_transfer_available,
     billing_database_health,
+    change_account_password,
     create_password_reset_token,
     create_verification_token,
     create_manual_order,
     login_user,
     logout_user,
+    manual_transfer_details,
     register_user,
     reset_password,
     update_account_preferences,
+    update_account_profile,
     validate_job_features,
     verify_email,
     verify_email_code,
@@ -176,6 +179,17 @@ class ManualOrderRequest(BaseModel):
 class BillingPreferencesRequest(BaseModel):
     country_code: str
     preferred_language: str
+
+
+class BillingProfileRequest(BaseModel):
+    first_name: str
+    last_name: str
+    phone: str = ""
+
+
+class BillingPasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
 
 
 def _send_verification_email(email: str, token: str, code: str) -> None:
@@ -366,11 +380,7 @@ def billing_providers() -> dict:
 
 @app.get("/billing/manual-transfer")
 def billing_manual_transfer_status() -> dict:
-    return {
-        "available": bank_transfer_available(),
-        "requires_account": True,
-        "activation": "manual_after_bank_confirmation",
-    }
+    return manual_transfer_details()
 
 
 @app.get("/billing/health")
@@ -510,6 +520,38 @@ def billing_update_preferences(
     return {"ok": True, "message": "Hesap tercihlerin kaydedildi.", "account": account}
 
 
+@app.patch("/billing/me/profile")
+def billing_update_profile(
+    payload: BillingProfileRequest,
+    user: dict = Depends(_billing_user),
+) -> dict:
+    try:
+        account = update_account_profile(
+            user["id"], payload.first_name, payload.last_name, payload.phone
+        )
+    except BillingAuthenticationError as exc:
+        raise HTTPException(401, detail={"code": "LS-BILL-06", "message": str(exc)}) from exc
+    except BillingError as exc:
+        raise HTTPException(400, detail={"code": "LS-BILL-22", "message": str(exc)}) from exc
+    return {"ok": True, "message": "Profil bilgilerin güncellendi.", "account": account}
+
+
+@app.post("/billing/me/change-password")
+def billing_change_password(
+    payload: BillingPasswordChangeRequest,
+    user: dict = Depends(_billing_user),
+) -> dict:
+    try:
+        result = change_account_password(
+            user["id"], payload.current_password, payload.new_password
+        )
+    except BillingAuthenticationError as exc:
+        raise HTTPException(401, detail={"code": "LS-BILL-23", "message": str(exc)}) from exc
+    except BillingError as exc:
+        raise HTTPException(400, detail={"code": "LS-BILL-19", "message": str(exc)}) from exc
+    return {"ok": True, "message": "Parolan güncellendi.", **result}
+
+
 @app.post("/billing/manual-transfer/orders")
 def billing_create_manual_order(
     payload: ManualOrderRequest,
@@ -536,6 +578,18 @@ def billing_approve_manual_order(reference: str) -> dict:
     except BillingError as exc:
         raise HTTPException(404, detail={"code": "LS-BILL-09", "message": str(exc)}) from exc
     return {"ok": True, "account": account}
+
+
+@app.get(
+    "/billing/admin/overview",
+    dependencies=[Depends(_billing_admin)],
+)
+def billing_admin_overview(limit: int = 100) -> dict:
+    try:
+        overview = admin_billing_overview(limit)
+    except BillingConfigurationError as exc:
+        raise HTTPException(503, detail={"code": "LS-BILL-00", "message": str(exc)}) from exc
+    return {"ok": True, **overview}
 
 
 @app.get("/instagram/health")
@@ -826,4 +880,3 @@ def create_url_job(
 
     threading.Thread(target=worker, daemon=True).start()
     return {"job_id": job_id, "status": "working", "version": APP_VERSION}
-

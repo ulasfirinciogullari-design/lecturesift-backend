@@ -1,8 +1,10 @@
 const API = "https://lecturesift-backend.onrender.com";
 const TOKEN_KEY = "lecturesift-billing-token";
 const LOCALE_DATA = window.LECTURESIFT_LOCALE_DATA || {countries: [], currencies: [], currencyForCountry: {}};
+const I18N = window.LectureSiftI18n || {language:"tr", locale:"tr-TR", languages:{tr:"Türkçe"}, t:(key, fallback)=>fallback || key};
 const page = document.body.dataset.page || "login";
 const $ = id => document.getElementById(id);
+const t = (key, fallback) => I18N.t(key, fallback);
 
 function errorMessage(body, fallback) {
   return body?.detail?.message || body?.message || fallback;
@@ -21,7 +23,7 @@ async function request(path, options = {}, token = "") {
   if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(`${API}${path}`, {...options, headers});
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(errorMessage(body, "İstek tamamlanamadı."));
+  if (!response.ok) throw new Error(errorMessage(body, t("error.request", "İstek tamamlanamadı.")));
   return body;
 }
 
@@ -42,10 +44,10 @@ function selectedCountry() {
 function populateCountrySelect(select, selected = "") {
   if (!select || !LOCALE_DATA.countries.length) return;
   let names;
-  try { names = new Intl.DisplayNames([navigator.language, "en"], {type: "region"}); } catch { names = null; }
+  try { names = new Intl.DisplayNames([I18N.language, "en"], {type: "region"}); } catch { names = null; }
   const options = LOCALE_DATA.countries
     .map(code => ({code, label: names?.of(code) || code}))
-    .sort((left, right) => left.label.localeCompare(right.label, navigator.language));
+    .sort((left, right) => left.label.localeCompare(right.label, I18N.language));
   select.replaceChildren(...options.map(item => new Option(item.label, item.code)));
   select.value = LOCALE_DATA.countries.includes(selected) ? selected : "TR";
 }
@@ -61,9 +63,9 @@ async function initRegister() {
     event.preventDefault();
     const button = $("registerSubmit");
     const password = $("password").value;
-    if (password !== $("passwordConfirm").value) return showNotice("Parolalar birbiriyle eşleşmiyor.", true);
-    if (!$("terms").checked) return showNotice("Devam etmek için kullanım ve gizlilik koşullarını kabul et.", true);
-    setBusy(button, true, "Hesap hazırlanıyor…");
+    if (password !== $("passwordConfirm").value) return showNotice(t("auth.passwordMismatch", "Parolalar birbiriyle eşleşmiyor."), true);
+    if (!$("terms").checked) return showNotice(t("auth.acceptRequired", "Devam etmek için kullanım ve gizlilik koşullarını kabul et."), true);
+    setBusy(button, true, t("auth.preparing", "Hesap hazırlanıyor…"));
     try {
       const body = await request("/billing/register", {
         method: "POST",
@@ -84,7 +86,7 @@ async function initRegister() {
       const suggestedCurrency = LOCALE_DATA.currencyForCountry[body.user.country_code];
       if (suggestedCurrency) localStorage.setItem("lecturesift-currency", suggestedCurrency);
     } catch (error) { showNotice(error.message, true); }
-    finally { setBusy(button, false, "Hesap oluştur"); }
+    finally { setBusy(button, false, t("auth.create", "Hesap oluştur")); }
   });
 }
 
@@ -93,7 +95,7 @@ async function initLogin() {
   $("loginForm").addEventListener("submit", async event => {
     event.preventDefault();
     const button = $("loginSubmit");
-    setBusy(button, true, "Giriş yapılıyor…");
+    setBusy(button, true, t("auth.signingIn", "Giriş yapılıyor…"));
     try {
       const body = await request("/billing/login", {
         method: "POST",
@@ -102,11 +104,11 @@ async function initLogin() {
       localStorage.setItem(TOKEN_KEY, body.token);
       location.replace(safeNext());
     } catch (error) { showNotice(error.message, true); }
-    finally { setBusy(button, false, "Giriş yap"); }
+    finally { setBusy(button, false, t("auth.signIn", "Giriş yap")); }
   });
   $("resendButton").addEventListener("click", async () => {
     const email = $("email").value.trim();
-    if (!email) return showNotice("Önce e-posta adresini gir.", true);
+    if (!email) return showNotice(t("auth.enterEmailFirst", "Önce e-posta adresini gir."), true);
     try {
       const body = await request("/billing/resend-verification", {method:"POST", body:JSON.stringify({email})});
       showNotice(body.message);
@@ -121,29 +123,29 @@ async function initVerify() {
   $("verifyEmail").value = email;
   const complete = body => {
     localStorage.setItem(TOKEN_KEY, body.token);
-    $("verifyTitle").textContent = "E-posta doğrulandı";
-    $("verifyText").textContent = "Hesabın etkin. LectureSift çalışma alanına geçebilirsin.";
+    $("verifyTitle").textContent = t("auth.emailVerified", "E-posta doğrulandı");
+    $("verifyText").textContent = t("auth.accountActive", "Hesabın etkin. LectureSift çalışma alanına geçebilirsin.");
     $("verifyCodeForm").hidden = true;
     $("verifyAction").hidden = false;
   };
   if (token) {
-    $("verifyText").textContent = "Güvenli bağlantın kontrol ediliyor.";
+    $("verifyText").textContent = t("auth.checkingLink", "Güvenli bağlantın kontrol ediliyor.");
     try {
       complete(await request("/billing/verify-email", {method:"POST", body:JSON.stringify({token})}));
     } catch (error) {
-      $("verifyTitle").textContent = "Bağlantı doğrulanamadı";
-      $("verifyText").textContent = "E-postandaki altı haneli kodu kullanmayı deneyebilirsin.";
+      $("verifyTitle").textContent = t("auth.linkFailed", "Bağlantı doğrulanamadı");
+      $("verifyText").textContent = t("auth.tryCode", "E-postandaki altı haneli kodu kullanmayı deneyebilirsin.");
       showNotice(error.message, true);
     }
   }
   $("verifyCodeForm").addEventListener("submit", async event => {
     event.preventDefault();
     const button = $("verifyCodeSubmit");
-    setBusy(button, true, "Doğrulanıyor…");
+    setBusy(button, true, t("auth.verifying", "Doğrulanıyor…"));
     try {
       complete(await request("/billing/verify-email-code", {method:"POST", body:JSON.stringify({email:$("verifyEmail").value.trim(), code:$("verifyCode").value.trim()})}));
     } catch (error) { showNotice(error.message, true); }
-    finally { setBusy(button, false, "Kodla doğrula"); }
+    finally { setBusy(button, false, t("auth.verifyByCode", "Kodla doğrula")); }
   });
 }
 
@@ -151,24 +153,24 @@ async function initForgot() {
   $("forgotForm").addEventListener("submit", async event => {
     event.preventDefault();
     const button = $("forgotSubmit");
-    setBusy(button, true, "Gönderiliyor…");
+    setBusy(button, true, t("auth.sending", "Gönderiliyor…"));
     try {
       const body = await request("/billing/forgot-password", {method:"POST", body:JSON.stringify({email:$("email").value.trim()})});
       showNotice(body.message);
     } catch (error) { showNotice(error.message, true); }
-    finally { setBusy(button, false, "Yenileme bağlantısı gönder"); }
+    finally { setBusy(button, false, t("auth.sendReset", "Yenileme bağlantısı gönder")); }
   });
 }
 
 async function initReset() {
   const token = new URLSearchParams(location.search).get("token") || "";
-  if (!token) showNotice("Şifre yenileme bağlantısı eksik.", true);
+  if (!token) showNotice(t("auth.resetMissing", "Şifre yenileme bağlantısı eksik."), true);
   $("resetForm").addEventListener("submit", async event => {
     event.preventDefault();
     const password = $("password").value;
-    if (password !== $("passwordConfirm").value) return showNotice("Parolalar birbiriyle eşleşmiyor.", true);
+    if (password !== $("passwordConfirm").value) return showNotice(t("auth.passwordMismatch", "Parolalar birbiriyle eşleşmiyor."), true);
     const button = $("resetSubmit");
-    setBusy(button, true, "Şifre yenileniyor…");
+    setBusy(button, true, t("auth.resetting", "Şifre yenileniyor…"));
     try {
       const body = await request("/billing/reset-password", {method:"POST", body:JSON.stringify({token, new_password:password})});
       localStorage.removeItem(TOKEN_KEY);
@@ -176,36 +178,62 @@ async function initReset() {
       showNotice(body.message);
       $("loginAfterReset").hidden = false;
     } catch (error) { showNotice(error.message, true); }
-    finally { setBusy(button, false, "Şifreyi yenile"); }
+    finally { setBusy(button, false, t("auth.resetPassword", "Şifreyi yenile")); }
   });
 }
 
 function planName(code) {
-  return ({free:"Ücretsiz",credit:"Dakika Paketi",lite:"Lite",plus:"Plus",pro:"Pro",max:"Max",business:"Business"})[code] || code;
+  return t(`plan.${code}`, code);
 }
 
 async function initAccount() {
-  const token = localStorage.getItem(TOKEN_KEY);
+  let token = localStorage.getItem(TOKEN_KEY);
   if (!token) return location.replace("/login.html?next=/account.html");
-  try {
-    const body = await request("/billing/me", {}, token);
-    const account = body.account, user = account.user;
+  let currentAccount = null;
+
+  const showFormNotice = (id, message, error = false) => {
+    const notice = $(id); notice.textContent = message; notice.classList.toggle("error", error); notice.hidden = false;
+  };
+
+  const renderOrders = account => {
+    $("ordersList").innerHTML = account.manual_orders.length ? account.manual_orders.map(order => `
+      <div class="order-row"><span><strong>${order.order_number || order.reference}</strong><br><small>${planName(order.plan_code)} · ${new Intl.DateTimeFormat(I18N.locale, {dateStyle:"medium"}).format(new Date(order.created_at))}</small></span><strong>${order.status === "paid" ? t("order.paid", "Aktif") : t("order.pending", "Kontrol bekliyor")}</strong></div>`).join("") : `<p class="empty-copy">${t("payment.noOrders", "Henüz ödeme siparişin yok.")}</p>`;
+  };
+
+  const renderAccount = account => {
+    currentAccount = account;
+    const user = account.user;
     $("accountName").textContent = user.name || user.email;
     $("accountEmail").textContent = user.email;
     $("accountPlan").textContent = planName(account.plan.code);
-    $("remainingMinutes").textContent = account.remaining_minutes == null ? "Sınırsız" : account.remaining_minutes.toLocaleString("tr-TR");
-    $("creditMinutes").textContent = `${(account.credit_minutes || 0).toLocaleString("tr-TR")} dk`;
-    $("usedMinutes").textContent = `${account.used_minutes.toLocaleString("tr-TR")} dk kullanıldı`;
+    $("remainingMinutes").textContent = account.remaining_minutes == null ? t("account.unlimited", "Sınırsız") : account.remaining_minutes.toLocaleString(I18N.locale);
+    $("creditMinutes").textContent = `${(account.credit_minutes || 0).toLocaleString(I18N.locale)} dk`;
+    $("usedMinutes").textContent = t("account.usedMinutes", "{count} dk kullanıldı").replace("{count}", account.used_minutes.toLocaleString(I18N.locale));
     const total = account.plan.minutes || 0;
     const percentage = total ? Math.min(100, Math.round(account.used_minutes / total * 100)) : 0;
     $("usageTrack").style.setProperty("--usage", `${percentage}%`);
     $("accountCountry").textContent = user.country_code || "—";
-    $("accountPhone").textContent = user.phone || "Eklenmedi";
+    $("accountPhone").textContent = user.phone || t("profile.notAdded", "Eklenmedi");
+    $("profileFirstName").value = user.first_name || "";
+    $("profileLastName").value = user.last_name || "";
+    $("profilePhone").value = user.phone || "";
     populateCountrySelect($("accountCountrySelect"), user.country_code || "TR");
-    $("preferredLanguage").value = user.preferred_language || localStorage.getItem("lecturesift-ui") || "tr";
-    $("ordersList").innerHTML = account.manual_orders.length ? account.manual_orders.map(order => `
-      <div class="order-row"><span>${order.reference}<br><small>${planName(order.plan_code)}</small></span><strong>${order.status === "paid" ? "Aktif" : "Kontrol bekliyor"}</strong></div>`).join("") : '<p class="empty-copy">Henüz ödeme siparişin yok.</p>';
+    $("preferredLanguage").replaceChildren(...Object.entries(I18N.languages).map(([code, label]) => new Option(label, code)));
+    $("preferredLanguage").value = user.preferred_language || I18N.language;
+    renderOrders(account);
     $("accountPage").hidden = false;
+  };
+
+  try {
+    const body = await request("/billing/me", {}, token);
+    renderAccount(body.account);
+    const transfer = await request("/billing/manual-transfer");
+    if (transfer.available && transfer.bank) {
+      $("accountBankIban").textContent = transfer.bank.iban.replace(/(.{4})/g, "$1 ").trim();
+      $("accountBankHolder").textContent = transfer.bank.account_holder;
+      $("accountBankName").textContent = transfer.bank.bank_name || "—";
+      $("bankDetails").hidden = false;
+    }
   } catch {
     localStorage.removeItem(TOKEN_KEY);
     location.replace("/login.html?next=/account.html");
@@ -213,7 +241,7 @@ async function initAccount() {
   $("preferencesForm").addEventListener("submit", async event => {
     event.preventDefault();
     const button = $("preferencesSubmit");
-    setBusy(button, true, "Kaydediliyor…");
+    setBusy(button, true, t("state.saving", "Kaydediliyor…"));
     try {
       const body = await request("/billing/me/preferences", {
         method:"PATCH",
@@ -223,11 +251,32 @@ async function initAccount() {
       localStorage.setItem("lecturesift-country", body.account.user.country_code);
       const suggestedCurrency = LOCALE_DATA.currencyForCountry[body.account.user.country_code];
       if (suggestedCurrency) localStorage.setItem("lecturesift-currency", suggestedCurrency);
-      $("accountCountry").textContent = body.account.user.country_code;
-      const notice = $("preferencesNotice"); notice.textContent = body.message; notice.hidden = false;
+      renderAccount(body.account);
+      showFormNotice("preferencesNotice", body.message);
+      if (I18N.language !== body.account.user.preferred_language) location.reload();
     } catch (error) {
-      const notice = $("preferencesNotice"); notice.textContent = error.message; notice.classList.add("error"); notice.hidden = false;
-    } finally { setBusy(button, false, "Tercihleri kaydet"); }
+      showFormNotice("preferencesNotice", error.message, true);
+    } finally { setBusy(button, false, t("preferences.save", "Tercihleri kaydet")); }
+  });
+  $("profileForm").addEventListener("submit", async event => {
+    event.preventDefault();
+    const button = $("profileSubmit"); setBusy(button, true, t("state.saving", "Kaydediliyor…"));
+    try {
+      const body = await request("/billing/me/profile", {method:"PATCH", body:JSON.stringify({first_name:$("profileFirstName").value.trim(), last_name:$("profileLastName").value.trim(), phone:$("profilePhone").value.trim()})}, token);
+      renderAccount(body.account); showFormNotice("profileNotice", body.message);
+    } catch (error) { showFormNotice("profileNotice", error.message, true); }
+    finally { setBusy(button, false, t("profile.save", "Profili kaydet")); }
+  });
+  $("passwordForm").addEventListener("submit", async event => {
+    event.preventDefault();
+    const next = $("newPassword").value;
+    if (next !== $("newPasswordConfirm").value) return showFormNotice("passwordNotice", t("auth.passwordMismatch", "Parolalar birbiriyle eşleşmiyor."), true);
+    const button = $("passwordSubmit"); setBusy(button, true, t("state.saving", "Kaydediliyor…"));
+    try {
+      const body = await request("/billing/me/change-password", {method:"POST", body:JSON.stringify({current_password:$("currentPassword").value, new_password:next})}, token);
+      token = body.token; localStorage.setItem(TOKEN_KEY, token); renderAccount(body.account); $("passwordForm").reset(); showFormNotice("passwordNotice", body.message);
+    } catch (error) { showFormNotice("passwordNotice", error.message, true); }
+    finally { setBusy(button, false, t("security.changePassword", "Parolayı değiştir")); }
   });
   $("logoutButton").addEventListener("click", async () => {
     try { await request("/billing/logout", {method:"POST"}, token); } catch {}

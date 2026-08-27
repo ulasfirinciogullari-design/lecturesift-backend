@@ -187,6 +187,36 @@ def test_account_country_and_language_preferences_are_saved():
     assert refreshed.json()["account"]["user"]["preferred_language"] == "de"
 
 
+def test_account_profile_and_password_can_be_updated():
+    client = TestClient(app)
+    email, token = _new_account(client)
+    profile = client.patch(
+        "/billing/me/profile",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"first_name": "Ada", "last_name": "Lovelace", "phone": "+905551112233"},
+    )
+    assert profile.status_code == 200
+    assert profile.json()["account"]["user"]["name"] == "Ada Lovelace"
+    assert profile.json()["account"]["user"]["phone"] == "+905551112233"
+
+    changed = client.post(
+        "/billing/me/change-password",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "current_password": "Strong-test-password1",
+            "new_password": "Updated-strong-password2",
+        },
+    )
+    assert changed.status_code == 200
+    new_token = changed.json()["token"]
+    assert new_token and new_token != token
+    assert client.get("/billing/me", headers={"Authorization": f"Bearer {token}"}).status_code == 401
+    assert client.get("/billing/me", headers={"Authorization": f"Bearer {new_token}"}).status_code == 200
+    assert client.post(
+        "/billing/login", json={"email": email, "password": "Updated-strong-password2"}
+    ).status_code == 200
+
+
 def test_manual_transfer_order_and_admin_approval(monkeypatch):
     client = TestClient(app)
     _, token = _new_account(client)
@@ -202,8 +232,15 @@ def test_manual_transfer_order_and_admin_approval(monkeypatch):
     )
     assert response.status_code == 200
     order = response.json()["order"]
+    assert order["order_number"] == order["reference"]
+    assert order["reference"].startswith("LS-20")
     assert order["amount_minor"] == 69900
     assert order["bank"]["iban"].startswith("TR")
+    assert order["bank"]["account_holder"] == "LectureSift Test"
+
+    public_details = client.get("/billing/manual-transfer")
+    assert public_details.status_code == 200
+    assert public_details.json()["bank"]["account_holder"] == "LectureSift Test"
 
     approval = client.post(
         f"/billing/manual-transfer/orders/{order['reference']}/approve",
@@ -219,6 +256,14 @@ def test_manual_transfer_order_and_admin_approval(monkeypatch):
     )
     assert repeated.status_code == 200
     assert repeated.json()["account"]["plan"]["code"] == "plus"
+
+    overview = client.get(
+        "/billing/admin/overview",
+        headers={"Authorization": "Bearer test-admin-token"},
+    )
+    assert overview.status_code == 200
+    assert overview.json()["counts"]["users"] >= 1
+    assert any(item["order_number"] == order["order_number"] for item in overview.json()["orders"])
 
 
 def test_job_creation_requires_account():

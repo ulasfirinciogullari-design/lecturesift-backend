@@ -211,6 +211,18 @@ def _normalize_name(value: str, label: str) -> str:
     return normalized
 
 
+def _normalize_phone(value: str) -> str | None:
+    normalized = "".join(char for char in value.strip() if char.isdigit() or char == "+")
+    if not normalized:
+        return None
+    if normalized.count("+") > 1 or ("+" in normalized and not normalized.startswith("+")):
+        raise BillingError("Geçerli bir telefon numarası gir.")
+    digit_count = sum(char.isdigit() for char in normalized)
+    if digit_count < 7 or digit_count > 15:
+        raise BillingError("Telefon numarası 7 ile 15 rakam arasında olmalı.")
+    return normalized[:32]
+
+
 def _validate_password(password: str) -> None:
     if len(password) < 10 or not any(char.isupper() for char in password) or not any(char.islower() for char in password) or not any(char.isdigit() for char in password):
         raise BillingError("Parola en az 10 karakter, bir büyük harf, bir küçük harf ve bir rakam içermeli.")
@@ -271,7 +283,7 @@ def register_user(
     _validate_password(password)
     selected_first_name = _normalize_name(first_name, "Ad")
     selected_last_name = _normalize_name(last_name, "Soyad")
-    selected_phone = "".join(char for char in phone.strip() if char.isdigit() or char == "+")[:32] or None
+    selected_phone = _normalize_phone(phone)
     selected_country = country_code.strip().upper()[:2] if len(country_code.strip()) >= 2 else "TR"
     salt = secrets.token_bytes(16)
     now = utcnow()
@@ -589,6 +601,29 @@ def _active_subscription(connection, user_id: str, now: datetime):
     ).first()
 
 
+def _public_manual_order(order) -> dict:
+    return {
+        "reference": order.reference,
+        "order_number": order.reference,
+        "plan_code": order.plan_code,
+        "interval": order.interval,
+        "amount_minor": order.amount_minor,
+        "currency": order.currency,
+        "status": order.status,
+        "created_at": order.created_at.isoformat(),
+        "updated_at": order.updated_at.isoformat(),
+        "bank": (
+            {
+                "iban": config.BILLING_BANK_IBAN,
+                "account_holder": config.BILLING_BANK_ACCOUNT_HOLDER,
+                "bank_name": config.BILLING_BANK_NAME or None,
+            }
+            if order.status == "pending" and bank_transfer_available()
+            else None
+        ),
+    }
+
+
 def account_status(user_id: str) -> dict:
     init_billing_database()
     now = utcnow()
@@ -638,18 +673,7 @@ def account_status(user_id: str) -> dict:
         "credit_minutes": credit_minutes,
         "remaining_minutes": remaining,
         "can_create_job": remaining is None or remaining > 0,
-        "manual_orders": [
-            {
-                "reference": order.reference,
-                "plan_code": order.plan_code,
-                "interval": order.interval,
-                "amount_minor": order.amount_minor,
-                "currency": order.currency,
-                "status": order.status,
-                "created_at": order.created_at.isoformat(),
-            }
-            for order in orders
-        ],
+        "manual_orders": [_public_manual_order(order) for order in orders],
     }
 
 
@@ -690,6 +714,71 @@ def update_account_preferences(user_id: str, country_code: str, preferred_langua
                 )
             )
     return account_status(user_id)
+
+
+def update_account_profile(
+    user_id: str,
+    first_name: str,
+    last_name: str,
+    phone: str = "",
+) -> dict:
+    selected_first_name = _normalize_name(first_name, "Ad")
+    selected_last_name = _normalize_name(last_name, "Soyad")
+    selected_phone = _normalize_phone(phone)
+    init_billing_database()
+    now = utcnow()
+    with ENGINE.begin() as connection:
+        profile = _profile_for(connection, user_id)
+        if not profile:
+            raise BillingAuthenticationError("Hesap bulunamadı.")
+        connection.execute(
+            update(USER_PROFILES)
+            .where(USER_PROFILES.c.user_id == user_id)
+            .values(
+                first_name=selected_first_name,
+                last_name=selected_last_name,
+                phone=selected_phone,
+                phone_verified_at=(
+                    profile.phone_verified_at if selected_phone == profile.phone else None
+                ),
+                updated_at=now,
+            )
+        )
+    return account_status(user_id)
+
+
+def change_account_password(
+    user_id: str,
+    current_password: str,
+    new_password: str,
+) -> dict:
+    _validate_password(new_password)
+    init_billing_database()
+    now = utcnow()
+    with ENGINE.begin() as connection:
+        user = connection.execute(select(USERS).where(USERS.c.id == user_id)).first()
+        profile = _profile_for(connection, user_id) if user else None
+        if not user or not profile:
+            raise BillingAuthenticationError("Hesap bulunamadı.")
+        candidate = _hash_password(current_password, bytes.fromhex(user.password_salt))
+        if not hmac.compare_digest(candidate, user.password_hash):
+            raise BillingAuthenticationError("Mevcut parola hatalı.")
+        salt = secrets.token_bytes(16)
+        next_session_version = int(profile.session_version) + 1
+        connection.execute(
+            update(USERS)
+            .where(USERS.c.id == user_id)
+            .values(password_salt=salt.hex(), password_hash=_hash_password(new_password, salt))
+        )
+        connection.execute(
+            update(USER_PROFILES)
+            .where(USER_PROFILES.c.user_id == user_id)
+            .values(session_version=next_session_version, updated_at=now)
+        )
+    return {
+        "token": issue_session(user.id, user.email, next_session_version),
+        "account": account_status(user_id),
+    }
 
 
 def require_job_entitlement(user_id: str) -> dict:
@@ -773,6 +862,25 @@ def bank_transfer_available() -> bool:
     )
 
 
+def manual_transfer_details() -> dict:
+    available = bank_transfer_available()
+    return {
+        "available": available,
+        "requires_account": True,
+        "activation": "manual_after_bank_confirmation",
+        "bank": (
+            {
+                "iban": config.BILLING_BANK_IBAN,
+                "account_holder": config.BILLING_BANK_ACCOUNT_HOLDER,
+                "bank_name": config.BILLING_BANK_NAME or None,
+            }
+            if available
+            else None
+        ),
+        "support_email": config.BILLING_SUPPORT_EMAIL or None,
+    }
+
+
 def create_manual_order(user_id: str, plan_code: str, interval: str) -> dict:
     if not bank_transfer_available():
         raise BillingConfigurationError("Havale ödeme bilgileri henüz etkinleştirilmemiş.")
@@ -783,7 +891,7 @@ def create_manual_order(user_id: str, plan_code: str, interval: str) -> dict:
     if interval not in valid_intervals:
         raise BillingError("Geçersiz ödeme dönemi.")
     amount_minor = plan.try_amount_minor * (10 if interval == "annual" else 1)
-    reference = f"LS-{utcnow():%y%m%d}-{secrets.token_hex(3).upper()}"
+    reference = f"LS-{utcnow():%Y%m%d}-{secrets.token_hex(3).upper()}"
     now = utcnow()
     init_billing_database()
     with ENGINE.begin() as connection:
@@ -802,6 +910,7 @@ def create_manual_order(user_id: str, plan_code: str, interval: str) -> dict:
         )
     return {
         "reference": reference,
+        "order_number": reference,
         "status": "pending",
         "plan_code": plan_code,
         "interval": interval,
@@ -814,6 +923,97 @@ def create_manual_order(user_id: str, plan_code: str, interval: str) -> dict:
         },
         "support_email": config.BILLING_SUPPORT_EMAIL,
         "instruction": "Havale açıklamasına yalnızca sipariş referansını yaz.",
+    }
+
+
+def admin_billing_overview(limit: int = 100) -> dict:
+    init_billing_database()
+    safe_limit = max(1, min(int(limit), 250))
+    now = utcnow()
+    with ENGINE.connect() as connection:
+        user_count = int(connection.execute(select(func.count()).select_from(USERS)).scalar_one())
+        verified_count = int(
+            connection.execute(
+                select(func.count()).select_from(USER_PROFILES).where(
+                    USER_PROFILES.c.email_verified_at.is_not(None)
+                )
+            ).scalar_one()
+        )
+        pending_count = int(
+            connection.execute(
+                select(func.count()).select_from(MANUAL_ORDERS).where(
+                    MANUAL_ORDERS.c.status == "pending"
+                )
+            ).scalar_one()
+        )
+        active_subscription_count = int(
+            connection.execute(
+                select(func.count()).select_from(SUBSCRIPTIONS).where(
+                    SUBSCRIPTIONS.c.status == "active",
+                    SUBSCRIPTIONS.c.ends_at > now,
+                )
+            ).scalar_one()
+        )
+        order_rows = connection.execute(
+            select(
+                MANUAL_ORDERS,
+                USERS.c.email.label("user_email"),
+                USER_PROFILES.c.first_name.label("first_name"),
+                USER_PROFILES.c.last_name.label("last_name"),
+            )
+            .join(USERS, USERS.c.id == MANUAL_ORDERS.c.user_id)
+            .outerjoin(USER_PROFILES, USER_PROFILES.c.user_id == USERS.c.id)
+            .order_by(MANUAL_ORDERS.c.created_at.desc())
+            .limit(safe_limit)
+        ).all()
+        user_rows = connection.execute(
+            select(
+                USERS.c.id,
+                USERS.c.email,
+                USERS.c.credit_minutes,
+                USERS.c.created_at,
+                USER_PROFILES.c.first_name,
+                USER_PROFILES.c.last_name,
+                USER_PROFILES.c.phone,
+                USER_PROFILES.c.country_code,
+                USER_PROFILES.c.email_verified_at,
+            )
+            .outerjoin(USER_PROFILES, USER_PROFILES.c.user_id == USERS.c.id)
+            .order_by(USERS.c.created_at.desc())
+            .limit(safe_limit)
+        ).all()
+    return {
+        "counts": {
+            "users": user_count,
+            "verified_users": verified_count,
+            "pending_orders": pending_count,
+            "active_subscriptions": active_subscription_count,
+        },
+        "orders": [
+            {
+                **_public_manual_order(row),
+                "user": {
+                    "email": row.user_email,
+                    "name": " ".join(
+                        part for part in (row.first_name, row.last_name) if part
+                    ),
+                },
+            }
+            for row in order_rows
+        ],
+        "users": [
+            {
+                "id": row.id,
+                "email": row.email,
+                "name": " ".join(part for part in (row.first_name, row.last_name) if part),
+                "phone": row.phone,
+                "country_code": row.country_code,
+                "email_verified": row.email_verified_at is not None,
+                "credit_minutes": int(row.credit_minutes),
+                "created_at": row.created_at.isoformat(),
+            }
+            for row in user_rows
+        ],
     }
 
 

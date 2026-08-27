@@ -5,6 +5,8 @@ const LOCALE_DATA = window.LECTURESIFT_LOCALE_DATA || {
   countries: [], currencies: ["TRY", "USD", "EUR", "GBP"], currencyForCountry: {},
 };
 const ZERO_DECIMAL_CURRENCIES = new Set(["JPY", "KRW"]);
+const PLANS_I18N = window.LectureSiftI18n || {language:"tr",locale:"tr-TR",t:(key,fallback)=>fallback || key};
+const pt = (key, fallback) => PLANS_I18N.t(key, fallback);
 const COPY = {
   free: ["Ücretsiz", "Denemek ve kısa dersler için"],
   credit: ["Dakika Paketi", "Abonelik olmadan ek kullanım"],
@@ -106,15 +108,52 @@ async function api(path, options = {}) {
   const response = await fetch(`${API}${path}`, {...options, headers, cache: "no-store"});
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw Object.assign(
-    new Error(body?.detail?.message || body?.message || "İstek tamamlanamadı."),
+    new Error(body?.detail?.message || body?.message || pt("error.request", "İstek tamamlanamadı.")),
     {code: body?.detail?.code},
   );
   return body;
 }
 
 function summaries(items = []) {
-  const names = {short: "Hızlı", standard: "Standart", detailed: "Ayrıntılı", exam: "Sınav", five_minute: "5 dakika"};
+  const names = {short: pt("summary.short", "Hızlı"), standard: pt("summary.standard", "Standart"), detailed: pt("summary.detailed", "Ayrıntılı"), exam: pt("summary.exam", "Sınav"), five_minute: pt("summary.fiveMinute", "5 dakika")};
   return items.map(item => names[item] || item).join(", ");
+}
+
+function planLabel(code) { return pt(`plan.${code}`, COPY[code]?.[0] || code); }
+
+function renderCompare() {
+  const plans = ORDER.map(code => catalog?.plans?.find(plan => plan.code === code)).filter(Boolean);
+  $("compareHead").innerHTML = `<tr><th>${esc(pt("plans.right", "Hak"))}</th>${plans.map(plan => `<th>${esc(planLabel(plan.code))}</th>`).join("")}</tr>`;
+  const yes = pt("common.yes", "Evet"), all = pt("common.all", "Tümü"), standard = pt("priority.standard", "Standart"), priority = pt("priority.priority", "Öncelikli");
+  const rows = [
+    [pt("plans.billingType", "Ödeme türü"), plan => plan.kind === "subscription" ? pt("plans.subscription", "Aylık abonelik") : plan.kind === "one_time" ? pt("plans.oneTime", "Tek ödeme") : plan.kind === "free" ? pt("plan.free", "Ücretsiz") : pt("plans.quote", "Teklif")],
+    [pt("plans.minutes", "İşleme dakikası"), plan => plan.entitlements?.minutes == null ? "∞" : Number(plan.entitlements.minutes).toLocaleString(PLANS_I18N.locale)],
+    [pt("plans.quiz", "Quiz sorusu / işlem"), plan => plan.entitlements?.quiz_questions ?? "∞"],
+    [pt("plans.cards", "Bilgi kartı / işlem"), plan => plan.entitlements?.flashcards ?? "∞"],
+    [pt("plans.summaries", "Özet profilleri"), plan => summaries(plan.entitlements?.summary_profiles || [])],
+    [pt("plans.exports", "Dosya biçimleri"), plan => (plan.entitlements?.export_formats || []).join(", ").toUpperCase()],
+    [pt("plans.priority", "İşlem önceliği"), plan => plan.priority === "priority" ? priority : standard],
+    [pt("plans.teamSeats", "Ekip kullanıcıları"), plan => plan.entitlements?.team_seats || plan.team_seats || 1],
+    [pt("plans.multiSource", "Çoklu video ve ayrı ses/slayt"), () => yes],
+    [pt("plans.languages", "Kaynak ve çıktı dilleri"), () => `13 ${pt("plans.languagesUnit", "dil")}`],
+    [pt("plans.outputs", "Transkript, not ve zaman damgası"), () => all],
+  ];
+  $("compareBody").innerHTML = rows.map(([label, value]) => `<tr><td>${esc(label)}</td>${plans.map(plan => `<td>${esc(value(plan))}</td>`).join("")}</tr>`).join("");
+}
+
+async function renderBankDetails() {
+  try {
+    const transfer = await api("/billing/manual-transfer");
+    if (!transfer.available || !transfer.bank) {
+      $("bankAvailability").textContent = pt("payment.notConfigured", "Havale bilgileri henüz etkin değil.");
+      return;
+    }
+    $("bankAvailability").textContent = pt("payment.available", "Havale ile ödeme kullanılabilir.");
+    $("publicBankIban").textContent = transfer.bank.iban.replace(/(.{4})/g, "$1 ").trim();
+    $("publicBankHolder").textContent = transfer.bank.account_holder;
+    $("publicBankName").textContent = transfer.bank.bank_name || "—";
+    $("publicBankDetails").hidden = false;
+  } catch { $("bankAvailability").textContent = pt("payment.unavailable", "Ödeme bilgileri şu anda alınamıyor."); }
 }
 
 function normalizeCatalog(remote, selected) {
@@ -147,7 +186,7 @@ function renderAccount() {
   $("accountStatus").hidden = false;
   $("accountEmail").textContent = account.user.email;
   $("accountPlan").textContent = account.plan.name || account.plan.code;
-  $("accountRemaining").textContent = account.remaining_minutes == null ? "∞" : `${account.remaining_minutes} dk`;
+  $("accountRemaining").textContent = account.remaining_minutes == null ? "∞" : `${account.remaining_minutes} ${pt("plans.minuteUnit", "dakika")}`;
 }
 
 function renderPlans() {
@@ -160,30 +199,31 @@ function renderPlans() {
     const current = account?.plan?.code === code;
     const priceText = price
       ? format(price.amount_minor, price.currency || currency)
-      : (code === "free" ? format(0, currency) : "Teklif");
-    const suffix = plan.kind === "subscription" ? "/ ay" : (plan.kind === "one_time" ? "tek ödeme" : "");
+      : (code === "free" ? format(0, currency) : pt("plans.quote", "Teklif"));
+    const suffix = plan.kind === "subscription" ? pt("plans.perMonth", "/ ay") : (plan.kind === "one_time" ? pt("plans.oneTimeShort", "tek ödeme") : "");
     const minutes = entitlements.minutes ?? plan.minutes;
     const minutesText = minutes == null
-      ? `${entitlements.team_seats || plan.team_seats || 10} kullanıcı`
-      : `${Number(minutes).toLocaleString("tr-TR")} ${plan.kind === "subscription" || plan.kind === "free" ? "dk / ay" : "dakika"}`;
+      ? `${entitlements.team_seats || plan.team_seats || 10} ${pt("plans.userUnit", "kullanıcı")}`
+      : `${Number(minutes).toLocaleString(PLANS_I18N.locale)} ${plan.kind === "subscription" || plan.kind === "free" ? pt("plans.minutesPerMonth", "dk / ay") : pt("plans.minuteUnit", "dakika")}`;
     return `<article class="plan-card ${plan.featured ? "featured" : ""}">
-      ${plan.featured ? '<span class="plan-badge">Popüler</span>' : ""}
-      <h3>${esc(COPY[code][0])}</h3><p>${esc(COPY[code][1])}</p>
+      ${plan.featured ? `<span class="plan-badge">${esc(pt("plans.popular", "Popüler"))}</span>` : ""}
+      <h3>${esc(planLabel(code))}</h3><p>${esc(pt(`plan.${code}.description`, COPY[code][1]))}</p>
       <div class="plan-price">${esc(priceText)} <small>${suffix}</small></div>
       <ul class="plan-features">
         <li>${esc(minutesText)}</li>
-        <li>${entitlements.quiz_questions ?? "∞"} quiz sorusu</li>
-        <li>${entitlements.flashcards ?? "∞"} bilgi kartı</li>
-        <li>${esc(summaries(entitlements.summary_profiles))} özet</li>
+        <li>${entitlements.quiz_questions ?? "∞"} ${esc(pt("plans.quizShort", "quiz sorusu"))}</li>
+        <li>${entitlements.flashcards ?? "∞"} ${esc(pt("plans.cardsShort", "bilgi kartı"))}</li>
+        <li>${esc(summaries(entitlements.summary_profiles))} ${esc(pt("plans.summaryShort", "özet"))}</li>
         <li>${esc((entitlements.export_formats || []).join(", ").toUpperCase())}</li>
-        <li>${plan.priority === "priority" ? "Öncelikli" : "Standart"} işleme</li>
+        <li>${esc(plan.priority === "priority" ? pt("priority.priority", "Öncelikli") : pt("priority.standard", "Standart"))} ${esc(pt("plans.processingSuffix", "işleme"))}</li>
       </ul>
-      <button class="plan-action" data-plan="${esc(code)}" ${current || code === "free" || code === "business" ? "disabled" : ""}>${current ? "Mevcut plan" : (code === "business" ? "Bize ulaş" : "Planı seç")}</button>
+      <button class="plan-action" data-plan="${esc(code)}" ${current || code === "free" || code === "business" ? "disabled" : ""}>${esc(current ? pt("plans.current", "Mevcut plan") : (code === "business" ? pt("plans.contact", "Bize ulaş") : pt("plans.select", "Planı seç")))}</button>
     </article>`;
   }).join("");
   document.querySelectorAll(".plan-action[data-plan]").forEach(button => {
     button.onclick = () => buy(button.dataset.plan);
   });
+  renderCompare();
 }
 
 async function buy(planCode) {
@@ -192,7 +232,7 @@ async function buy(planCode) {
     return;
   }
   if (currency !== "TRY") {
-    showError("Global kart ve yerel ödeme yöntemleri ödeme sağlayıcısı etkinleştiğinde açılacak. Şimdilik havale için TRY seçebilirsin.");
+    showError(pt("plans.globalPending", "Global kart ve yerel ödeme yöntemleri ödeme sağlayıcısı etkinleştiğinde açılacak. Şimdilik havale için TRY seçebilirsin."));
     return;
   }
   try {
@@ -202,7 +242,7 @@ async function buy(planCode) {
       body: JSON.stringify({plan_code: planCode, interval: plan?.kind === "one_time" ? "one_time" : "monthly"}),
     });
     const order = body.order;
-    $("transferReference").textContent = order.reference;
+    $("transferReference").textContent = order.order_number || order.reference;
     $("transferAmount").textContent = format(order.amount_minor, order.currency || "TRY");
     $("transferIban").textContent = order.bank.iban.replace(/(.{4})/g, "$1 ").trim();
     $("transferHolder").textContent = order.bank.account_holder;
@@ -224,6 +264,7 @@ async function load() {
     try { account = (await api("/billing/me")).account; } catch { account = null; }
     renderAccount();
     renderPlans();
+    await renderBankDetails();
   } catch (error) { showError(error.message, error.code); }
 }
 
