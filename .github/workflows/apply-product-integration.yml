@@ -1,0 +1,59 @@
+name: Apply product monetization integration
+
+on:
+  push:
+    branches:
+      - feature/monetization-output-storage-vision-i18n
+    paths:
+      - scripts/apply_product_integration.py
+      - .github/workflows/apply-product-integration.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-test-commit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/monetization-output-storage-vision-i18n
+          fetch-depth: 0
+
+      - name: Apply guarded integration patch
+        run: python scripts/apply_product_integration.py
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fonts-dejavu-core fonts-noto-core fonts-noto-cjk
+
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements.txt pytest
+
+      - name: Run backend tests
+        run: python -m pytest -q
+
+      - name: Validate frontend JavaScript
+        run: |
+          for file in frontend/*.js; do
+            node --check "$file"
+          done
+
+      - name: Commit validated integration
+        run: |
+          rm -f scripts/apply_product_integration.py .github/workflows/apply-product-integration.yml
+          git config user.name "LectureSift CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "feat: integrate monetization, final ZIP storage, and visual translation [skip ci]"
+          git push origin HEAD:feature/monetization-output-storage-vision-i18n
