@@ -18,7 +18,8 @@ import time
 import uuid
 from datetime import datetime, timedelta, timezone
 
-import httpx
+import resend
+from resend.exceptions import ResendError
 from fastapi import APIRouter, FastAPI, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Table, delete, select, update
@@ -209,6 +210,13 @@ def _email_copy(code: str, language: str) -> tuple[str, str, str]:
     return subject, text, body
 
 
+def _resend_status(value: object) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _send_verification_email(recipient: str, code: str, language: str, idempotency_key: str) -> str:
     if not email_delivery_available():
         raise EmailDeliveryError(
@@ -216,7 +224,7 @@ def _send_verification_email(recipient: str, code: str, language: str, idempoten
             provider_code="not_configured",
         )
     subject, text_body, html_body = _email_copy(code, language)
-    payload: dict = {
+    params: resend.Emails.SendParams = {
         "from": config.RESEND_FROM_EMAIL.strip(),
         "to": [recipient],
         "subject": subject,
@@ -224,51 +232,43 @@ def _send_verification_email(recipient: str, code: str, language: str, idempoten
         "html": html_body,
     }
     if config.BILLING_SUPPORT_EMAIL.strip():
-        payload["reply_to"] = config.BILLING_SUPPORT_EMAIL.strip()
-    headers = {
-        "Authorization": f"Bearer {config.RESEND_API_KEY.strip()}",
-        "Content-Type": "application/json",
-        "User-Agent": f"LectureSift/{config.APP_VERSION}",
-        "Idempotency-Key": idempotency_key[:256],
-    }
+        params["reply_to"] = config.BILLING_SUPPORT_EMAIL.strip()
+
+    resend.api_key = config.RESEND_API_KEY.strip()
     last_error: EmailDeliveryError | None = None
     for attempt in range(2):
         try:
-            response = httpx.post("https://api.resend.com/emails", json=payload, headers=headers, timeout=12.0)
-        except httpx.RequestError:
+            response = resend.Emails.send(
+                params,
+                {"idempotency_key": idempotency_key[:256]},
+            )
+        except ResendError as exc:
+            provider_status = _resend_status(exc.code)
+            provider_code = str(exc.error_type or "resend_error").strip()[:80]
             last_error = EmailDeliveryError(
-                "Resend ağına ulaşılamadı.",
-                provider_code="network_error",
+                "Resend isteği kabul etmedi.",
+                provider_status=provider_status,
+                provider_code=provider_code or "resend_error",
+            )
+            if (
+                attempt == 0
+                and provider_status is not None
+                and (provider_status == 429 or provider_status >= 500)
+            ):
+                time.sleep(0.4)
+                continue
+            break
+        except Exception:
+            last_error = EmailDeliveryError(
+                "Resend SDK isteği tamamlanamadı.",
+                provider_code="sdk_client_error",
             )
             if attempt == 0:
                 time.sleep(0.4)
                 continue
             break
-        if response.is_success:
-            try:
-                return str(response.json().get("id") or "accepted")
-            except (AttributeError, ValueError):
-                return "accepted"
+        return str(response.get("id") or "accepted")
 
-        provider_code: str | None = None
-        try:
-            error_body = response.json()
-            if isinstance(error_body, dict):
-                raw_code = error_body.get("name") or error_body.get("code")
-                if raw_code is not None:
-                    provider_code = str(raw_code).strip()[:80] or None
-        except ValueError:
-            pass
-        last_error = EmailDeliveryError(
-            "Resend isteği kabul etmedi.",
-            provider_status=int(response.status_code),
-            provider_code=provider_code or f"http_{response.status_code}",
-        )
-        if response.status_code == 429 or response.status_code >= 500:
-            if attempt == 0:
-                time.sleep(0.4)
-                continue
-        break
     raise last_error or EmailDeliveryError(
         "Doğrulama e-postası gönderilemedi.",
         provider_code="unknown_delivery_error",
