@@ -115,6 +115,27 @@ def test_registration_can_be_verified_with_email_code(monkeypatch):
     assert client.post("/billing/verify-email", json={"token": sent["token"]}).status_code == 400
 
 
+def test_verification_email_code_fits_narrow_mobile_clients(monkeypatch):
+    sent = {}
+    monkeypatch.setattr(
+        app_module,
+        "send_transactional_email",
+        lambda email, subject, html, text: sent.update(
+            email=email, subject=subject, html=html, text=text
+        ),
+    )
+
+    app_module._send_verification_email("learner@example.com", "safe-token", "123456")
+
+    html = sent["html"]
+    assert "table-layout:fixed" in html
+    assert "max-width:276px" in html
+    assert html.count("width:16.66%") == 6
+    assert "letter-spacing" not in html
+    assert all(f">{digit}</td>" in html for digit in "123456")
+    assert "safe-token" in html
+
+
 def test_password_reset_invalidates_existing_session():
     client = TestClient(app)
     email, old_token = _new_account(client)

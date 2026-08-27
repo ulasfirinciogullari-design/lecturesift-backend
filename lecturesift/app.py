@@ -180,13 +180,28 @@ class BillingPreferencesRequest(BaseModel):
 
 def _send_verification_email(email: str, token: str, code: str) -> None:
     link = f"{FRONTEND_BASE_URL}/verify.html?token={token}"
+    code_cells = "".join(
+        (
+            '<td style="width:16.66%;height:44px;padding:0;text-align:center;'
+            'border:1px solid #d9d5ff;border-radius:8px;background:#f6f4ff;'
+            'color:#28204f;font-family:Arial,sans-serif;font-size:24px;'
+            f'font-weight:800;line-height:44px;white-space:nowrap">{digit}</td>'
+        )
+        for digit in code
+    )
+    code_table = (
+        '<table role="presentation" aria-label="Altı haneli doğrulama kodu" '
+        'style="width:100%;max-width:276px;table-layout:fixed;border-collapse:separate;'
+        'border-spacing:4px;margin:24px 0;mso-table-lspace:0;mso-table-rspace:0">'
+        f"<tr>{code_cells}</tr></table>"
+    )
     send_transactional_email(
         email,
         "LectureSift e-posta doğrulama",
         (
             "<h1>LectureSift hesabını doğrula</h1>"
             "<p>Hesabını etkinleştirmek için bağlantıya tıkla veya doğrulama ekranına aşağıdaki kodu gir.</p>"
-            f'<p style="font-size:28px;font-weight:800;letter-spacing:6px">{code}</p>'
+            f"{code_table}"
             f'<p><a href="{link}">E-posta adresimi doğrula</a></p>'
             "<p>Kod ve bağlantı 24 saat geçerlidir. Bu hesabı sen oluşturmadıysan e-postayı yok say.</p>"
         ),

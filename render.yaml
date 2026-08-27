@@ -21,14 +21,6 @@ services:
           property: connectionString
       - key: BILLING_SESSION_SECRET
         generateValue: true
-      - key: RESEND_API_KEY
-        sync: false
-      - key: RESEND_FROM_EMAIL
-        value: LectureSift <no-reply@mail.lecturesift.com>
-      - key: EMAIL_VERIFICATION_REQUIRED
-        value: false
-      - key: EMAIL_VERIFICATION_SECRET
-        generateValue: true
       - key: BILLING_ADMIN_TOKEN
         generateValue: true
       - key: BILLING_BANK_IBAN

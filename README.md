@@ -18,19 +18,6 @@ Production services:
 
 The production deployment stays on `main`.
 
-## Email verification
-
-Production registration can require a one-time email code delivered through Resend. The verification state is stored in the billing database; codes are HMAC-hashed, expire after 10 minutes, are single-use, and are protected by resend and attempt limits. Existing accounts created before activation remain valid.
-
-Required production variables:
-
-- `RESEND_API_KEY`
-- `RESEND_FROM_EMAIL` (recommended: `LectureSift <no-reply@mail.lecturesift.com>`)
-- `EMAIL_VERIFICATION_SECRET`
-- `EMAIL_VERIFICATION_REQUIRED=true` after the sending domain is verified
-
-Optional controls are `EMAIL_VERIFICATION_TTL_SECONDS`, `EMAIL_VERIFICATION_RESEND_SECONDS`, `EMAIL_VERIFICATION_MAX_SENDS_PER_HOUR`, and `EMAIL_VERIFICATION_MAX_ATTEMPTS`. Health is available at `GET /billing/email/health`.
-
 ## Local development
 
 Requirements: Python 3.11+, FFmpeg, system DejaVu fonts, and an OpenAI API key.
