@@ -75,5 +75,23 @@ class ObjectStorage:
             "remote_file_count": len(uploaded),
         }
 
+    def materialize_job(self, job_id: str, destination: Path) -> int:
+        if not self.remote or self._client is None:
+            return 0
+        prefix = f"jobs/{job_id}/"
+        paginator = self._client.get_paginator("list_objects_v2")
+        count = 0
+        for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
+            for item in page.get("Contents", []):
+                key = item.get("Key", "")
+                if not key or "/sources/" in key:
+                    continue
+                relative = key[len(prefix):]
+                if not relative:
+                    continue
+                self.download_file(key, destination / relative)
+                count += 1
+        return count
+
 
 STORAGE = ObjectStorage()
