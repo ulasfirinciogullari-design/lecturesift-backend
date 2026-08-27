@@ -30,9 +30,16 @@ sonuç tam olarak 0 slayttır. Ardından gerçek slayt içeren ikinci bir dersle
 slayt testi yapılmalıdır.
 
 27 AĞUSTOS 2026 SONUCU
-224,9 saniyelik 7,3 MB gerçek Biology 252 videosu V4 slayt motorunda 7,99 saniyede
-tarandı. Tepe bellek yaklaşık 99 MB oldu ve sonuç tam olarak 0 slayt çıktı.
+224,9 saniyelik 7,3 MB gerçek Biology 252 videosu tek geçişli V4 slayt motorunda
+2,63 saniyede tarandı. Tepe bellek yaklaşık 81 MB oldu ve sonuç tam olarak 0
+slayt çıktı.
 V3.2'deki 9 yanlış slayt böylece bu kabul örneğinde tamamen elendi.
+
+İKİNCİ GERÇEK VİDEO TESTİ
+University of Manchester'ın 4:28'lik WebM eğitim videosu; ofis röportajı ile üç
+tam ekran veya slayt ağırlıklı eğitim karesini birlikte içeriyordu. V4 görsel
+analizi 4,25 saniyede ve yaklaşık 84 MB tepe bellekle tamamladı. Tüm konuşmacı/
+ofis kareleri elendi; 01:13, 02:42 ve 04:15'teki üç gerçek slayt korundu.
 
 NOT
 Render ücretsiz servisleri boşta kaldığında uyuyabilir; ilk istek daha yavaş

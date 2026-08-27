@@ -1,5 +1,6 @@
 from collections import Counter
 from pathlib import Path
+import subprocess
 from typing import Callable
 
 import cv2
@@ -7,6 +8,7 @@ import numpy as np
 
 
 ProgressCallback = Callable[[float, str], None]
+CandidateCallback = Callable[[float, np.ndarray], None]
 _FACE_CLASSIFIER = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 
 
@@ -109,6 +111,12 @@ def presentation_score(frame: np.ndarray) -> tuple[int, dict]:
     metrics["face_ratio"] = face
     metrics["skin_ratio"] = skin
     metrics["skin_band_max"] = skin_band_max
+    natural_scene = bool(
+        metrics["edge_density"] >= 0.145
+        and metrics["flat_ratio"] <= 0.62
+        and skin >= 0.10
+    )
+    metrics["natural_scene"] = natural_scene
 
     score = 0
     if metrics["edge_density"] >= 0.035:
@@ -140,6 +148,8 @@ def presentation_score(frame: np.ndarray) -> tuple[int, dict]:
         score -= 6
     if skin_band_max >= 0.40:
         score -= 4
+    if natural_scene:
+        score -= 8
 
     has_layout = bool(
         metrics["text_components"] >= 5
@@ -167,18 +177,38 @@ def fullness_score(frame: np.ndarray) -> float:
 
 
 def read_frame_at(video_path: Path, second: float) -> np.ndarray | None:
-    capture = cv2.VideoCapture(str(video_path))
-    if not capture.isOpened():
-        raise RuntimeError("Video could not be opened.")
-    capture.set(cv2.CAP_PROP_POS_MSEC, second * 1000)
-    ok, frame = capture.read()
-    capture.release()
-    return frame if ok else None
+    process = subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-ss",
+            f"{max(0.0, second):.3f}",
+            "-i",
+            str(video_path),
+            "-frames:v",
+            "1",
+            "-an",
+            "-sn",
+            "-dn",
+            "-f",
+            "image2pipe",
+            "-vcodec",
+            "mjpeg",
+            "pipe:1",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if process.returncode != 0 or not process.stdout:
+        return None
+    return cv2.imdecode(np.frombuffer(process.stdout, dtype=np.uint8), cv2.IMREAD_COLOR)
 
 
 def scan_candidate_timestamps(
     video_path: Path,
     progress: ProgressCallback,
+    candidate_callback: CandidateCallback | None = None,
 ) -> tuple[list[float], float]:
     capture = cv2.VideoCapture(str(video_path))
     if not capture.isOpened():
@@ -187,40 +217,83 @@ def scan_candidate_timestamps(
     fps = capture.get(cv2.CAP_PROP_FPS) or 25
     total_frames = capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0
     duration = total_frames / fps if fps else 0
+    source_width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+    source_height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+    capture.release()
+    if source_width <= 0 or source_height <= 0:
+        raise RuntimeError("Video dimensions could not be read.")
+
     step = 1.5 if duration <= 600 else (2.5 if duration <= 3600 else 4.0)
-    target_width = 144
+    target_width = 360
+    target_height = max(2, round(source_height * target_width / source_width))
+    frame_size = target_width * target_height * 3
+
+    process = subprocess.Popen(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-i",
+            str(video_path),
+            "-vf",
+            (
+                f"select=isnan(prev_selected_t)+gte(t-prev_selected_t\\,{step:.6f}),"
+                f"scale={target_width}:{target_height}:flags=area,format=bgr24"
+            ),
+            "-fps_mode",
+            "vfr",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "bgr24",
+            "pipe:1",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if process.stdout is None or process.stderr is None:
+        raise RuntimeError("Video scanner could not start.")
 
     previous = None
     last_kept = -999.0
     timestamps: list[float] = []
-    current = 0.0
     total_steps = max(1, int(duration / step) + 1)
     iteration = 0
 
-    while current <= duration:
-        capture.set(cv2.CAP_PROP_POS_MSEC, current * 1000)
-        ok, frame = capture.read()
-        if ok and frame is not None:
-            gray = cv2.cvtColor(_scaled(frame, target_width), cv2.COLOR_BGR2GRAY)
-            if previous is None:
-                timestamps.append(current)
-                last_kept = current
-            else:
-                difference = float(np.mean(cv2.absdiff(gray, previous))) / 255.0
-                if difference > 0.092:
-                    timestamps.append(current)
-                    last_kept = current
-                elif difference < 0.019 and current - last_kept >= 10.5:
-                    timestamps.append(current)
-                    last_kept = current
-            previous = gray
+    while True:
+        raw = process.stdout.read(frame_size)
+        if not raw:
+            break
+        if len(raw) != frame_size:
+            process.kill()
+            raise RuntimeError("Video scanner returned an incomplete frame.")
+        current = iteration * step
+        frame = np.frombuffer(raw, dtype=np.uint8).reshape((target_height, target_width, 3))
+        gray = cv2.cvtColor(_scaled(frame, 144), cv2.COLOR_BGR2GRAY)
+        keep = False
+        if previous is None:
+            keep = True
+        else:
+            difference = float(np.mean(cv2.absdiff(gray, previous))) / 255.0
+            if difference > 0.092:
+                keep = True
+            elif difference < 0.019 and current - last_kept >= 10.5:
+                keep = True
+        if keep:
+            timestamps.append(current)
+            last_kept = current
+            if candidate_callback:
+                candidate_callback(current, frame)
+        previous = gray
 
         iteration += 1
         if iteration % 8 == 0:
             progress(55 * iteration / total_steps, "scene_scan")
-        current += step
 
-    capture.release()
+    error_output = process.stderr.read().decode("utf-8", errors="replace")
+    return_code = process.wait()
+    if return_code != 0:
+        raise RuntimeError(error_output[-12000:] or "Video scanner failed.")
     return timestamps, duration
 
 
@@ -230,16 +303,10 @@ def extract_slides(
     progress: ProgressCallback,
 ) -> tuple[list[dict], dict]:
     slides_dir.mkdir(parents=True, exist_ok=True)
-    timestamps, duration = scan_candidate_timestamps(video_path, progress)
-    progress(58, "slide_validation")
-
     accepted: list[dict] = []
     rejection_counts: Counter[str] = Counter()
-    for index, second in enumerate(timestamps):
-        frame = read_frame_at(video_path, second)
-        if frame is None:
-            rejection_counts["unreadable"] += 1
-            continue
+
+    def validate_candidate(second: float, frame: np.ndarray) -> None:
         score, metrics = presentation_score(frame)
         reasons: list[str] = []
         if not metrics["has_layout"]:
@@ -248,6 +315,8 @@ def extract_slides(
             reasons.append("face")
         if metrics["skin_ratio"] >= 0.27 or metrics["skin_band_max"] >= 0.25:
             reasons.append("person_or_skin")
+        if metrics["natural_scene"]:
+            reasons.append("natural_scene")
         if score < 7:
             reasons.append("low_score")
 
@@ -263,9 +332,9 @@ def extract_slides(
             )
         else:
             rejection_counts.update(reasons)
-        del frame
-        if index % 4 == 0:
-            progress(58 + 24 * (index + 1) / max(1, len(timestamps)), "slide_validation")
+
+    timestamps, duration = scan_candidate_timestamps(video_path, progress, validate_candidate)
+    progress(82, "slide_validation")
 
     groups: list[list[dict]] = []
     for item in accepted:

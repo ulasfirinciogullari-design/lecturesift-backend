@@ -14,7 +14,7 @@ from lecturesift.exports import build_artifacts
 from lecturesift.jobs import JOBS
 from lecturesift.media import extract_audio_chunks, validate_remote_url
 from lecturesift.pipeline import process_job
-from lecturesift.slides import presentation_score
+from lecturesift.slides import presentation_score, read_frame_at, scan_candidate_timestamps
 
 
 def synthetic_slide() -> np.ndarray:
@@ -50,6 +50,18 @@ def synthetic_classroom_scene() -> np.ndarray:
     return frame
 
 
+def synthetic_textured_office_scene() -> np.ndarray:
+    frame = np.full((720, 1280, 3), (180, 150, 120), dtype=np.uint8)
+    for y in range(0, 720, 20):
+        cv2.line(frame, (0, y), (1280, y), (30 + y % 200, 60, 90), 3)
+    for x in range(0, 1280, 25):
+        cv2.line(frame, (x, 0), (x, 720), (60, 80 + x % 150, 120), 2)
+    for y in (100, 330, 560):
+        for x in (140, 500, 860, 1120):
+            cv2.circle(frame, (x, y), 42, (85, 125, 185), -1)
+    return frame
+
+
 def test_slide_layout_scores_above_natural_scene():
     slide_score, slide_metrics = presentation_score(synthetic_slide())
     scene_score, scene_metrics = presentation_score(synthetic_scene())
@@ -65,6 +77,12 @@ def test_classroom_people_band_is_not_a_slide():
     assert room_metrics["skin_band_max"] >= 0.25
     assert room_score < 7
     assert slide_score >= 7
+
+
+def test_textured_office_scene_is_not_a_slide():
+    room_score, room_metrics = presentation_score(synthetic_textured_office_scene())
+    assert room_metrics["natural_scene"] is True
+    assert room_score < 7
 
 
 def test_private_url_is_rejected():
@@ -191,3 +209,43 @@ def test_audio_is_prepared_in_bounded_chunks(tmp_path: Path):
     chunks = extract_audio_chunks(video, tmp_path)
     assert [path.name for path in chunks] == ["audio_000.mp3"]
     assert chunks[0].stat().st_size > 0
+
+
+def test_webm_sampling_keeps_real_timestamps(tmp_path: Path):
+    video = tmp_path / "timeline.webm"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=white:s=320x180:d=3",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=black:s=320x180:d=3",
+            "-filter_complex",
+            "[0:v][1:v]concat=n=2:v=1:a=0[v]",
+            "-map",
+            "[v]",
+            "-c:v",
+            "libvpx",
+            "-deadline",
+            "realtime",
+            "-cpu-used",
+            "8",
+            str(video),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    timestamps, duration = scan_candidate_timestamps(video, lambda *_: None)
+    before = read_frame_at(video, 1.0)
+    after = read_frame_at(video, 4.0)
+    assert duration >= 5.5
+    assert any(2.5 <= second <= 4.5 for second in timestamps)
+    assert before is not None and after is not None
+    assert float(before.mean()) > 200
+    assert float(after.mean()) < 30

@@ -39,7 +39,7 @@ pytest -q
 node --check frontend/app.js
 ```
 
-The automated suite covers human-readable API errors, SSRF/private-URL rejection, PDF/TXT/ZIP packaging, slide-vs-scene classification, classroom/person-band rejection, a no-audio natural-scene video that must return zero slides, and a short genuine slide that must be preserved.
+The automated suite covers human-readable API errors, SSRF/private-URL rejection, PDF/TXT/ZIP packaging, slide-vs-scene classification, classroom/person-band and textured-office rejection, WebM timestamp accuracy, a no-audio natural-scene video that must return zero slides, and a short genuine slide that must be preserved.
 
 ## Main API routes
 

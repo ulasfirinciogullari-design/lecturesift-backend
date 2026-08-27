@@ -12,7 +12,9 @@ V3.2 successfully processed a 3:45 Carleton College Biology 252 video (7.3 MB) i
 
 The known quality failure was slide detection: the no-slide video produced 22 visual candidates, 12 presentation candidates, and 9 false final slides. V4 therefore treats zero slides as the correct result when no genuine presentation is present.
 
-The V4 foundation passed this real-video gate on August 27, 2026. The 224.9-second, 7.3 MB Biology 252 sample completed visual analysis in 7.99 seconds with approximately 99 MB peak RSS and returned exactly 0 slides. The classifier now also uses the maximum skin/person concentration across horizontal frame bands, which rejects classroom audiences and picture-collage title cards without retaining full frames in memory.
+The V4 foundation passed this real-video gate on August 27, 2026. After the single-pass scanner optimization, the 224.9-second, 7.3 MB Biology 252 sample completed visual analysis in 2.63 seconds with approximately 81 MB peak RSS and returned exactly 0 slides. The classifier now also uses the maximum skin/person concentration across horizontal frame bands, which rejects classroom audiences and picture-collage title cards without retaining full frames in memory.
+
+A second real-video gate used the 4:28 University of Manchester “Flipped Classroom for Quantitative Methods” WebM. It mixes an office interview with three full-screen or slide-dominant educational frames. After adding single-pass format-independent FFmpeg sampling, accurate frame seeking, and textured natural-scene rejection, V4 completed visual analysis in 4.25 seconds with approximately 84 MB peak RSS. It rejected all interview/office frames and preserved exactly the three genuine slide frames at 01:13, 02:42, and 04:15.
 
 ## V4 foundation
 
@@ -31,7 +33,7 @@ The V4 foundation passed this real-video gate on August 27, 2026. The 224.9-seco
 ## Acceptance gates
 
 1. The known no-slide Biology 252 sample returns exactly 0 slides. **Passed on V4 foundation.**
-2. A genuine slide-based lecture keeps readable, unique presentation frames.
+2. A genuine slide-based lecture keeps readable, unique presentation frames. **Passed on V4 foundation.**
 3. A long lecture completes without memory spikes or oversized transcription uploads.
 4. Original and translated transcripts remain separately accessible.
 5. Every completed job provides web results, individual PDF/TXT files, and a ZIP.
