@@ -10,10 +10,13 @@ import cv2
 
 from .config import WORK_DIR
 from .jobs import JOBS
-from .pipeline import process_job
+from .pipeline_enhancements import install_pipeline_enhancements
 from .queue import celery_app
 from .rollout_service import is_guest_user, record_runtime, reserve_guest_job
 from .storage import STORAGE
+
+install_pipeline_enhancements()
+from .pipeline import process_job  # noqa: E402  (patched before binding)
 
 
 def _duration_seconds(paths: list[Path]) -> float:
@@ -61,18 +64,19 @@ def process_uploaded_job(
         JOBS.update(job_id, job_dir=str(job_dir), status="working", stage="worker_download", worker_state="downloading")
         audio_paths = _download_sources(job_id, "audio", list(audio_keys), job_dir)
         visual_paths = _download_sources(job_id, "visual", list(visual_keys or []), job_dir)
-        duration = _duration_seconds(audio_paths)
+        duration = max(_duration_seconds(audio_paths), _duration_seconds(visual_paths) if visual_paths else 0.0)
         media_minutes = max(0.1, duration / 60.0)
         user_id = str(options.get("billing_user_id", ""))
         if user_id and is_guest_user(user_id):
             reserve_guest_job(user_id, job_id, media_minutes)
 
         started = time.time()
+        source_size = sum(path.stat().st_size for path in audio_paths + visual_paths if path.exists())
         JOBS.update(
             job_id,
             worker_state="processing",
             media_minutes=round(media_minutes, 2),
-            file_size_bytes=sum(path.stat().st_size for path in audio_paths + visual_paths if path.exists()),
+            file_size_bytes=source_size,
         )
         process_job(job_id, audio_paths, options, visual_paths or None)
         finished = JOBS.get(job_id) or {}
@@ -81,7 +85,7 @@ def process_uploaded_job(
 
         remote = STORAGE.publish_job(job_id, job_dir)
         elapsed = float(finished.get("elapsed_seconds") or (time.time() - started))
-        record_runtime(job_id, media_minutes, elapsed, int(finished.get("file_size_bytes") or 0))
+        record_runtime(job_id, media_minutes, elapsed, source_size)
         JOBS.update(job_id, worker_state="done", **remote)
         return {"job_id": job_id, "status": "done", **remote}
     except Exception as exc:
