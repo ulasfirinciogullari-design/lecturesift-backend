@@ -49,6 +49,29 @@ def main() -> None:
         )
         write_if_changed(app_js, value)
 
+    rollout_js = FRONTEND / "rollout.js"
+    if rollout_js.exists():
+        value = rollout_js.read_text(encoding="utf-8")
+        value = re.sub(
+            r'    let currency = selectedCurrency\(\);\n    let label = \$\("rolloutCurrency"\);.*?    async function load\(\) \{\n      try \{\n',
+            '''    const selector = $("billingCurrency");
+    let currency = selector?.value || selectedCurrency();
+    if (!document.querySelector("#plans .rollout-guest-note")) {
+      const note = document.createElement("p");
+      note.className = "rollout-guest-note";
+      note.textContent = "Fiyatlar seçilen para biriminde gösterilir. Havale/EFT siparişi, oluşturulduğunda ekranda görünen kesin TRY tutarıyla ödenir; açıklamaya sipariş numarası yazılır.";
+      grid.insertAdjacentElement("beforebegin", note);
+    }
+    async function load() {
+      try {
+        currency = selector?.value || currency;
+''',
+            value,
+            count=1,
+            flags=re.S,
+        )
+        write_if_changed(rollout_js, value)
+
     backend = ROOT / "lecturesift" / "app.py"
     if backend.exists():
         value = backend.read_text(encoding="utf-8").replace(
