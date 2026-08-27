@@ -82,12 +82,33 @@ def main() -> None:
 
     rollout_service = ROOT / "lecturesift" / "rollout_service.py"
     if rollout_service.exists():
-        value = rollout_service.read_text(encoding="utf-8").replace(
+        value = rollout_service.read_text(encoding="utf-8")
+        value = value.replace(
             '        5,\n        10,\n        ("short", "standard"),',
             '        10,\n        20,\n        ("short", "standard"),',
             1,
         )
+        value = value.replace(
+            'Column("handle", String(100), nullable=False),',
+            'Column("handle", String(100), nullable=False, unique=True),',
+            1,
+        )
         write_if_changed(rollout_service, value)
+
+    rollout_routes = ROOT / "lecturesift" / "rollout_routes.py"
+    if rollout_routes.exists():
+        value = rollout_routes.read_text(encoding="utf-8")
+        value = value.replace(
+            '    forwarded = (request.headers.get("x-forwarded-for") or "").split(",", 1)[0].strip()\n'
+            '    remote = forwarded or (request.client.host if request.client else "unknown")\n'
+            '    user_agent = request.headers.get("user-agent", "unknown")[:300]\n'
+            '    fingerprint = hashlib.sha256(f"{device_id}|{remote}|{user_agent}".encode("utf-8")).hexdigest()\n',
+            '    user_agent = request.headers.get("user-agent", "unknown")[:300]\n'
+            '    # Keep the trial tied to this browser/device even when the user changes Wi-Fi or mobile network.\n'
+            '    fingerprint = hashlib.sha256(f"{device_id}|{user_agent}".encode("utf-8")).hexdigest()\n',
+            1,
+        )
+        write_if_changed(rollout_routes, value)
 
 
 if __name__ == "__main__":
