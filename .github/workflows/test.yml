@@ -1,0 +1,51 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      PYTHONPATH: .
+      OPENAI_API_KEY: ""
+      DATABASE_URL: sqlite:////tmp/lecturesift-ci.db
+      BILLING_SESSION_SECRET: ci-session-secret-with-sufficient-length
+      BILLING_ADMIN_TOKEN: ci-admin-secret
+      EMAIL_PROVIDER: none
+      EMAIL_FROM: ""
+      RESEND_API_KEY: ""
+      CELERY_BROKER_URL: ""
+      REDIS_URL: ""
+      S3_ENDPOINT_URL: ""
+      S3_BUCKET: ""
+      S3_ACCESS_KEY_ID: ""
+      S3_SECRET_ACCESS_KEY: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Apply deterministic rollout integrations
+        run: python scripts/apply_rollout_integration.py
+      - name: Check Python syntax
+        run: python -m compileall -q lecturesift tests
+      - name: Check frontend JavaScript syntax
+        run: |
+          for file in frontend/*.js; do
+            node --check "$file"
+          done
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt pytest pyyaml
+      - name: Validate Render blueprint YAML
+        run: python -c "import yaml; yaml.safe_load(open('render.yaml', encoding='utf-8'))"
+      - name: Run tests
+        run: pytest -q
