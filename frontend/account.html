@@ -2,21 +2,43 @@
 <html lang="tr">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="LectureSift hesap, plan, kredi ve tercih yönetimi.">
-  <title>Hesabım | LectureSift</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="./auth.css">
-<link rel="stylesheet" href="/rollout.css?v=1"></head>
+  <meta name="description" content="LectureSift hesap, plan, ödeme, kredi, ders geçmişi ve gizlilik yönetimi.">
+  <title>Hesabım | LectureSift</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./auth.css">
+  <link rel="stylesheet" href="/rollout.css?v=1">
+  <link rel="stylesheet" href="./commerce.css?v=1">
+</head>
 <body data-page="account">
   <header class="auth-topbar"><a class="brand" href="/"><span class="brand-mark"><i></i><i></i><i></i></span><span>Lecture<span>Sift</span></span></a><a class="back-link" href="/">Çalışma alanına dön</a></header>
   <main id="accountPage" class="account-layout" hidden>
     <section class="account-hero"><div><p class="eyebrow">Hesabım</p><h1 id="accountName">LectureSift</h1><p id="accountEmail"></p></div><span class="verified-pill">✓ E-posta doğrulandı</span></section>
+
     <div class="dashboard-grid">
-      <section class="dashboard-card"><h2>Kullanım ve krediler</h2><div class="metric"><div><small>Toplam kalan dakika</small><strong id="remainingMinutes">—</strong></div><small id="usedMinutes"></small></div><div id="usageTrack" class="usage-track"><i></i></div><div class="account-meta compact"><div><span>Ek kredi bakiyesi</span><strong id="creditMinutes">—</strong></div></div><div class="stack-actions"><a class="primary-action link-action" href="/plans.html">Ek dakika satın al</a><a class="secondary-action link-action" href="/plans.html">Planları karşılaştır</a></div></section>
-      <section class="dashboard-card"><h2>Plan ve hesap</h2><div class="account-meta"><div><span>Mevcut plan</span><strong id="accountPlan">—</strong></div><div><span>Ülke</span><strong id="accountCountry">—</strong></div><div><span>Telefon</span><strong id="accountPhone">—</strong></div></div></section>
+      <section class="dashboard-card"><h2>Kullanım ve krediler</h2><div class="metric"><div><small>Toplam kalan dakika</small><strong id="remainingMinutes">—</strong></div><small id="usedMinutes"></small></div><div id="usageTrack" class="usage-track"><i></i></div><div class="account-meta compact"><div><span>Ek kredi bakiyesi</span><strong id="creditMinutes">—</strong></div></div><div class="stack-actions"><a class="primary-action link-action" href="/plans.html?plan=mini">İndirme veya dakika satın al</a><a class="secondary-action link-action" href="/plans.html">Planları karşılaştır</a></div></section>
+
+      <section class="dashboard-card"><h2>Plan ve hesap</h2><div class="account-meta"><div><span>Mevcut plan</span><strong id="accountPlan">—</strong></div><div><span>Ülke</span><strong id="accountCountry">—</strong></div><div><span>Telefon</span><strong id="accountPhone">—</strong></div><div><span>Dosya indirme</span><strong id="downloadEntitlement">—</strong></div><div><span>Görsel içi çeviri</span><strong id="visualTranslationEntitlement">—</strong></div></div></section>
+
       <section class="dashboard-card"><h2>Ülke ve dil tercihleri</h2><form id="preferencesForm" class="form-grid"><label class="field"><span>Ülke</span><select id="accountCountrySelect"><option value="TR">Türkiye</option></select></label><label class="field"><span>Arayüz dili</span><select id="preferredLanguage"><option value="tr">Türkçe</option><option value="en">English</option><option value="de">Deutsch</option><option value="fr">Français</option><option value="es">Español</option><option value="it">Italiano</option><option value="pt">Português</option><option value="ru">Русский</option><option value="ar">العربية</option><option value="zh">中文</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="hi">हिन्दी</option></select></label><button id="preferencesSubmit" class="secondary-action" type="submit">Tercihleri kaydet</button></form><div id="preferencesNotice" class="notice" hidden></div></section>
-      <section class="dashboard-card"><h2>Ödeme siparişleri</h2><div id="ordersList" class="orders-list"></div></section>
+
+      <section class="dashboard-card"><h2>Havale siparişleri</h2><div id="ordersList" class="orders-list"></div></section>
+
+      <section id="subscriptionCard" class="dashboard-card" hidden><h2>Abonelik</h2><div id="subscriptionDetails" class="account-meta"></div><div class="stack-actions"><button id="subscriptionCancel" class="secondary-action danger" type="button">Dönem sonunda iptal et</button><button id="subscriptionResume" class="secondary-action" type="button" hidden>Yenilemeyi sürdür</button><a class="primary-action link-action" href="/plans.html">Planı değiştir</a></div><div id="subscriptionNotice" class="notice" hidden></div></section>
+
+      <section class="dashboard-card full"><h2>Ödemeler ve makbuzlar</h2><p class="empty-copy">Kart verileri LectureSift’te saklanmaz. Aşağıda yalnız plan, tutar, sipariş ve ödeme durumları gösterilir.</p><div id="purchaseList" class="commerce-list"></div><div id="documentList" class="commerce-list"></div></section>
+
+      <section class="dashboard-card full"><h2>Ders ve indirme geçmişi</h2><p class="empty-copy">Kalıcı depolamada yalnız tamamlanan final ZIP tutulur. Ham video/ses dosyaları işleme sonrasında silinir.</p><div id="jobHistoryList" class="commerce-list"></div></section>
+
+      <section class="dashboard-card"><h2>İade talebi</h2><form id="refundForm" class="refund-form"><label class="field"><span>Ödeme</span><select id="refundPurchase"><option value="">Uygun ödeme seç</option></select></label><label class="field"><span>Neden</span><textarea id="refundReason" minlength="10" maxlength="1000" placeholder="İade talebinin nedenini açıkla"></textarea></label><button class="secondary-action" type="submit">İade talebi oluştur</button></form><div id="refundNotice" class="notice" hidden></div><div id="refundList" class="commerce-list"></div></section>
+
       <section class="dashboard-card"><h2>Güvenlik ve destek</h2><p class="empty-copy">Parolanı düzenli olarak yenile; giriş bağlantılarını ve doğrulama kodlarını kimseyle paylaşma.</p><div class="stack-actions"><a class="secondary-action link-action" href="/forgot-password.html">Parolayı yenile</a><a class="secondary-action link-action" href="/contact.html">Destek iste</a><button id="logoutButton" class="secondary-action danger" type="button">Çıkış yap</button></div></section>
+
+      <section class="dashboard-card account-danger-zone"><h2>Hesap ve veri silme</h2><p>Silme talebi verildiğinde hesabın 7 günlük geri alma süresine girer. Yasal olarak saklanması gereken finansal kayıtlar erişimi kısıtlanarak tutulabilir; diğer hesap verileri anonimleştirilir ve kalıcı ZIP’ler silinir.</p><div class="stack-actions"><button id="scheduleDeletion" type="button">Hesabımı silmeyi planla</button><button id="cancelDeletion" class="secondary-action" type="button" hidden>Silme talebini geri al</button></div><div id="deletionNotice" class="notice" hidden></div></section>
     </div>
   </main>
-  <script src="./locale-data.js?v=2"></script><script src="./auth.js?v=4"></script>
-<script src="/rollout.js?v=1"></script></body>
+  <script src="./locale-data.js?v=2"></script>
+  <script src="./auth.js?v=4"></script>
+  <script src="/rollout.js?v=2"></script>
+  <script src="./account-commerce.js?v=1"></script>
+</body>
 </html>
