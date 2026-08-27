@@ -6,7 +6,14 @@ from pathlib import Path
 
 import boto3
 
-from .config import S3_ACCESS_KEY_ID, S3_BUCKET, S3_ENDPOINT_URL, S3_REGION, S3_SECRET_ACCESS_KEY
+from .config import (
+    S3_ACCESS_KEY_ID,
+    S3_BUCKET,
+    S3_ENDPOINT_URL,
+    S3_REGION,
+    S3_SECRET_ACCESS_KEY,
+    VIDEO_EXTENSIONS,
+)
 
 
 class ObjectStorage:
@@ -42,6 +49,14 @@ class ObjectStorage:
         self._client.download_file(self.bucket, key, str(destination))
         return destination
 
+    @staticmethod
+    def _is_source_media(path: Path, job_dir: Path, relative: str) -> bool:
+        if relative.startswith(("sources/", "slide_segments/")):
+            return True
+        if path.parent != job_dir or path.suffix.casefold() not in VIDEO_EXTENSIONS:
+            return False
+        return path.name.startswith(("part_", "audio_", "visual_", "remote."))
+
     def publish_job(self, job_id: str, job_dir: Path) -> dict:
         if not self.remote:
             return {}
@@ -50,7 +65,7 @@ class ObjectStorage:
             if not path.is_file():
                 continue
             relative = path.relative_to(job_dir).as_posix()
-            if relative.startswith("sources/") or relative.startswith("slide_segments/"):
+            if self._is_source_media(path, job_dir, relative):
                 continue
             key = f"jobs/{job_id}/{relative}"
             self.upload_file(path, key)
