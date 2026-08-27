@@ -1,5 +1,6 @@
 import os
 import tempfile
+from email.utils import parseaddr
 from pathlib import Path
 
 
@@ -23,7 +24,12 @@ BILLING_BANK_ACCOUNT_HOLDER = os.getenv("BILLING_BANK_ACCOUNT_HOLDER", "").strip
 BILLING_BANK_NAME = os.getenv("BILLING_BANK_NAME", "").strip()
 BILLING_SUPPORT_EMAIL = os.getenv("BILLING_SUPPORT_EMAIL", "").strip()
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
-RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "LectureSift <no-reply@mail.lecturesift.com>").strip()
+RESEND_SENDING_DOMAIN = os.getenv("RESEND_SENDING_DOMAIN", "mail.lecturesift.com").strip().casefold().rstrip(".")
+_DEFAULT_RESEND_FROM_EMAIL = f"LectureSift <no-reply@{RESEND_SENDING_DOMAIN}>"
+_requested_resend_from_email = os.getenv("RESEND_FROM_EMAIL", _DEFAULT_RESEND_FROM_EMAIL).strip()
+_requested_resend_address = parseaddr(_requested_resend_from_email)[1].casefold()
+RESEND_FROM_EMAIL_CORRECTED = not _requested_resend_address.endswith(f"@{RESEND_SENDING_DOMAIN}")
+RESEND_FROM_EMAIL = _DEFAULT_RESEND_FROM_EMAIL if RESEND_FROM_EMAIL_CORRECTED else _requested_resend_from_email
 EMAIL_VERIFICATION_REQUIRED = os.getenv("EMAIL_VERIFICATION_REQUIRED", "false").lower() == "true"
 EMAIL_VERIFICATION_SECRET = os.getenv("EMAIL_VERIFICATION_SECRET", "")
 EMAIL_VERIFICATION_TTL_SECONDS = max(300, int(os.getenv("EMAIL_VERIFICATION_TTL_SECONDS", "600")))
@@ -59,4 +65,3 @@ SUMMARY_STYLES = {
     "exam": "exam-focused with definitions, distinctions, likely questions, and common traps",
     "five_minute": "a five-minute learning plan with the smallest useful set of ideas",
 }
-
