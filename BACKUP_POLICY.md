@@ -16,3 +16,5 @@ Before every production release:
 - move `backup/stable` to the verified commit only after both checks pass.
 
 If a release fails, restore from `backup/stable`, then investigate the failed commit without rewriting or deleting the stable backup.
+
+Initial verified recovery point: LectureSift V4.1 (`0e1c8d29e880c1836866ba8eab33a227e402b64b`).
