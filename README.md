@@ -1,54 +1,39 @@
-# LectureSift V4.1
+# LectureSift Backend V4.1
 
-LectureSift turns ordered lecture recordings—or separate ordered audio and slide recordings—into a study workspace: transcript, optional translation, structured notes, summary, verified presentation slides, quiz, flashcards, and selectable PDF/Word/TXT files. It can also merge video audio into one MP3 or prepare a downloadable video from a supported URL.
-
-## Current architecture
-
-- `frontend/`: static Netlify interface
-- `lecturesift/app.py`: FastAPI endpoints
-- `lecturesift/pipeline.py`: parallel audio and visual processing
-- `lecturesift/slides.py`: timestamp-only, low-memory slide detection
-- `lecturesift/ai.py`: transcription, translation, and study-pack generation
-- `lecturesift/exports.py`: PDF, Word, TXT, MP3/video, and ZIP exports
-
-Production services:
-
-- Frontend: <https://clever-horse-22b1a8.netlify.app/>
-- Backend: <https://lecturesift-backend.onrender.com/>
-
-The production deployment stays on `main`.
+LectureSift turns lecture video into a complete study pack: transcript, optional translation, structured notes, summary, slides, quiz, flashcards, and exportable files.
 
 ## Local development
 
-Requirements: Python 3.11+, FFmpeg, system DejaVu fonts, and an OpenAI API key.
-
 ```bash
-python -m venv .venv
-. .venv/bin/activate
 pip install -r requirements.txt
-export OPENAI_API_KEY="..."
 uvicorn main:app --reload
 ```
 
-Open `frontend/index.html` through a static web server. The frontend currently points to the production backend; change the `API` constant in `frontend/app.js` for local API testing.
+Without durable-infrastructure environment variables, LectureSift keeps the existing in-process background execution path for local development.
 
-## Tests
+## Durable background execution
+
+Production can offload long-running lecture jobs to a dedicated Celery worker. When `CELERY_BROKER_URL` and the S3-compatible storage settings are configured, the web service uploads source media to object storage, queues the job, and the worker processes it independently of the browser connection and web process lifecycle.
+
+Required production environment variables:
+
+- `OPENAI_API_KEY`
+- `CELERY_BROKER_URL`
+- `REDIS_URL` (can use the same Render Key Value connection string)
+- `S3_ENDPOINT_URL`
+- `S3_REGION`
+- `S3_BUCKET`
+- `S3_ACCESS_KEY_ID`
+- `S3_SECRET_ACCESS_KEY`
+
+The worker should set `LECTURESIFT_WORKER=1` and start with:
 
 ```bash
-pytest -q
-node --check frontend/app.js
+celery -A lecturesift.queue.celery_app worker --loglevel=INFO --concurrency=1
 ```
 
-The automated suite covers human-readable API errors, SSRF/private-URL rejection, PDF-only default packaging, selectable Word/TXT outputs, ordered multi-source routing, separate audio/visual routing, MP3 merging, slide-vs-scene classification, WebM timestamp accuracy, and genuine-slide preservation.
+The repository's `render.yaml` defines a Render Key Value instance and a dedicated background worker. Object storage remains S3-compatible so Cloudflare R2, AWS S3, Backblaze B2 S3, or another compatible provider can be used without changing the processing pipeline.
 
-## Main API routes
+## Safety of rollout
 
-- `POST /jobs`: upload ordered `files`, or ordered `audio_files` plus `visual_files`
-- `POST /jobs/url`: submit a supported video/page URL for study-pack creation, MP3 conversion, or video download
-- `GET /jobs/{job_id}`: live progress
-- `GET /jobs/{job_id}/result`: structured result
-- `GET /jobs/{job_id}/artifact/{filename}`: individual PDF/Word/TXT/MP3/video output
-- `GET /jobs/{job_id}/download`: complete ZIP package
-- `GET /health`: deployment health and engine version
-
-Transient job files are stored under `/tmp/lecturesift` and expire automatically.
+`main` is the live deployment branch. Durable execution is being introduced behind configuration-based fallback so the current in-process path continues to work until the queue and object-storage services are provisioned. Automated pytest checks should pass before deployment.
