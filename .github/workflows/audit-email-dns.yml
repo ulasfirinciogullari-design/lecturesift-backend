@@ -1,0 +1,72 @@
+name: Audit LectureSift email DNS
+
+on:
+  push:
+    branches:
+      - ops/email-dns-audit
+    paths:
+      - .github/workflows/audit-email-dns.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install DNS tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq dnsutils
+
+      - name: Query public and authoritative DNS
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          query() {
+            local type="$1"
+            local name="$2"
+            local server="${3:-}"
+            local result
+            if [[ -n "$server" ]]; then
+              result="$(dig +time=3 +tries=1 +short "$type" "$name" "@$server" 2>/dev/null || true)"
+            else
+              result="$(dig +time=3 +tries=1 +short "$type" "$name" 2>/dev/null || true)"
+            fi
+            printf '%-7s %-55s %s\n' "$type" "$name" "${result:-<none>}"
+          }
+
+          echo '=== Recursive resolver view ==='
+          query NS lecturesift.com
+          query A lecturesift.com
+          query CNAME lecturesift.com
+          query A www.lecturesift.com
+          query CNAME www.lecturesift.com
+          query MX lecturesift.com
+          query TXT lecturesift.com
+          query TXT _dmarc.lecturesift.com
+          query MX mail.lecturesift.com
+          query TXT mail.lecturesift.com
+          query CNAME mail.lecturesift.com
+          query MX send.mail.lecturesift.com
+          query TXT send.mail.lecturesift.com
+          query TXT resend._domainkey.mail.lecturesift.com
+          query CNAME resend._domainkey.mail.lecturesift.com
+          query TXT _dmarc.mail.lecturesift.com
+          query CAA lecturesift.com
+
+          echo
+          echo '=== Authoritative nameserver views ==='
+          mapfile -t nameservers < <(dig +short NS lecturesift.com | sed 's/\.$//')
+          if [[ ${#nameservers[@]} -eq 0 ]]; then
+            echo 'No authoritative nameservers returned.'
+            exit 1
+          fi
+          for ns in "${nameservers[@]}"; do
+            echo "--- $ns ---"
+            query MX send.mail.lecturesift.com "$ns"
+            query TXT send.mail.lecturesift.com "$ns"
+            query TXT resend._domainkey.mail.lecturesift.com "$ns"
+            query TXT _dmarc.lecturesift.com "$ns"
+          done
