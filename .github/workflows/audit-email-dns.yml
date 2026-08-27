@@ -112,3 +112,42 @@ jobs:
             | tee /tmp/email-auth.js >/dev/null
           grep -q 'Verify your email address' /tmp/email-auth.js
           echo 'email-auth.js is live and contains the verification interface.'
+
+      - name: Send a controlled verification email through Resend
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test_email="delivered+lecturesift-${GITHUB_RUN_ID}@resend.dev"
+          test_password="$(python -c 'import secrets; print(secrets.token_urlsafe(24))')"
+          export TEST_EMAIL="$test_email" TEST_PASSWORD="$test_password"
+          python - <<'PY' > /tmp/register-payload.json
+          import json
+          import os
+          print(json.dumps({
+              "email": os.environ["TEST_EMAIL"],
+              "password": os.environ["TEST_PASSWORD"],
+              "language": "tr",
+          }))
+          PY
+
+          status="$(curl --location --silent --show-error \
+            --output /tmp/register-response.json --write-out '%{http_code}' \
+            --header 'Content-Type: application/json' \
+            --data-binary @/tmp/register-payload.json \
+            https://lecturesift-backend.onrender.com/billing/register)"
+          echo "Registration HTTP status: $status"
+          python -m json.tool /tmp/register-response.json
+          [[ "$status" == "200" ]]
+          python - <<'PY'
+          import json
+          import os
+
+          with open('/tmp/register-response.json', encoding='utf-8') as handle:
+              body = json.load(handle)
+          assert body.get('ok') is True
+          assert body.get('verification_required') is True
+          assert body.get('email') == os.environ['TEST_EMAIL']
+          assert 'token' not in body
+          print('Resend accepted the controlled verification email request.')
+          PY
