@@ -34,6 +34,12 @@ def test_billing_catalog_has_hybrid_plans_and_translation_keys():
     assert usd["selected_currency"] == "USD"
     assert usd_plans["plus"]["display_price"] == {"currency": "USD", "amount_minor": 1800}
 
+    jpy = TestClient(app).get("/billing/plans?currency=JPY").json()
+    jpy_plans = {plan["code"]: plan for plan in jpy["plans"]}
+    assert jpy["selected_currency"] == "JPY"
+    assert jpy_plans["plus"]["display_price"] == {"currency": "JPY", "amount_minor": 2800}
+    assert {"CAD", "AUD", "INR", "BRL", "AED", "SGD"} <= set(jpy["supported_currencies"])
+
 
 def test_billing_providers_distinguish_ready_state():
     response = TestClient(app).get("/billing/providers")

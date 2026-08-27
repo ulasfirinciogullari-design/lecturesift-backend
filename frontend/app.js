@@ -1,4 +1,8 @@
 const API = "https://lecturesift-backend.onrender.com";
+const LOCALE_DATA = window.LECTURESIFT_LOCALE_DATA || {
+  countries: [], currencies: ["TRY", "USD", "EUR", "GBP"], currencyForCountry: {},
+};
+const ZERO_DECIMAL_CURRENCIES = new Set(["JPY", "KRW"]);
 
 const LANGUAGES = {
   tr: "Türkçe", en: "English", de: "Deutsch", fr: "Français", es: "Español",
@@ -201,6 +205,15 @@ const PLAN_FALLBACK = {
 const FALLBACK_PRICES = {
   TRY: [0,19900,34900,69900,129900,249900,null], USD: [0,500,900,1800,3300,6300,null],
   EUR: [0,500,900,1700,3100,5900,null], GBP: [0,400,800,1500,2700,5200,null],
+  CAD: [0,700,1200,2500,4500,8500,null], AUD: [0,800,1400,2800,5200,9900,null],
+  NZD: [0,900,1600,3100,5700,10900,null], JPY: [0,800,1400,2800,5000,9500,null],
+  KRW: [0,7000,13000,25000,47000,89000,null], CNY: [0,3600,6500,12900,23900,45900,null],
+  INR: [0,39900,74900,149900,279900,529900,null], BRL: [0,2500,4500,8900,16900,31900,null],
+  MXN: [0,9900,17900,34900,64900,124900,null], CHF: [0,500,800,1600,3000,5700,null],
+  SEK: [0,5500,9900,19900,36900,69900,null], NOK: [0,5900,10900,21900,39900,76900,null],
+  DKK: [0,3500,6500,12900,22900,44900,null], PLN: [0,2000,3600,7200,13200,25200,null],
+  AED: [0,1900,3300,6600,12100,23100,null], SAR: [0,1900,3400,6800,12400,23600,null],
+  SGD: [0,700,1200,2400,4500,8500,null], HKD: [0,3900,7000,14000,26000,49000,null],
 };
 
 function fallbackCatalog(currency) {
@@ -217,18 +230,48 @@ function planCopy(code) {
 }
 
 function detectedCurrency() {
-  if (billingCurrency) return billingCurrency;
+  if (LOCALE_DATA.currencies.includes(billingCurrency)) return billingCurrency;
+  const savedCountry = localStorage.getItem("lecturesift-country");
   const region = (navigator.language.split("-")[1] || "").toUpperCase();
-  if (region === "TR") return "TRY";
-  if (region === "GB") return "GBP";
-  if (["DE","FR","ES","IT","NL","BE","AT","IE","PT","FI","GR","LU"].includes(region)) return "EUR";
-  return "USD";
+  return LOCALE_DATA.currencyForCountry[(savedCountry || region).toUpperCase()] || "USD";
 }
 
 function formatPrice(amountMinor, currency = detectedCurrency()) {
+  const divisor = ZERO_DECIMAL_CURRENCIES.has(currency) ? 1 : 100;
   return new Intl.NumberFormat(currentLanguage === "tr" ? "tr-TR" : navigator.language, {
-    style: "currency", currency, maximumFractionDigits: 0
-  }).format((amountMinor || 0) / 100);
+    style: "currency", currency, maximumFractionDigits: divisor === 1 ? 0 : 2
+  }).format((amountMinor || 0) / divisor);
+}
+
+function currencyLabel(code) {
+  try {
+    const parts = new Intl.NumberFormat(navigator.language, {style:"currency", currency:code}).formatToParts(0);
+    return `${code} ${parts.find(part => part.type === "currency")?.value || code}`;
+  } catch { return code; }
+}
+
+function populateBillingCurrencies() {
+  if (!$("billingCurrency")) return;
+  const selected = detectedCurrency();
+  $("billingCurrency").replaceChildren(...LOCALE_DATA.currencies.map(code => new Option(currencyLabel(code), code)));
+  $("billingCurrency").value = selected;
+}
+
+function normalizeBillingCatalog(remote, selected) {
+  const fallback = fallbackCatalog(selected);
+  const remotePlans = new Map((remote?.plans || []).map(plan => [plan.code, plan]));
+  return {
+    ...(remote || {}), selected_currency:selected, supported_currencies:LOCALE_DATA.currencies,
+    plans:fallback.plans.map(fallbackPlan => {
+      const plan = remotePlans.get(fallbackPlan.code) || {};
+      const remotePrice = plan.display_price;
+      return {
+        ...fallbackPlan, ...plan,
+        display_price:remotePrice?.currency === selected ? remotePrice : fallbackPlan.display_price,
+        entitlements:{...fallbackPlan.entitlements, ...(plan.entitlements || {})},
+      };
+    }),
+  };
 }
 
 function renderBillingAccount() {
@@ -341,8 +384,9 @@ async function createTransferOrder(planCode) {
 async function loadBilling() {
   try {
     const selected = detectedCurrency();
-    billingCatalog = await fetch(`${API}/billing/plans?currency=${encodeURIComponent(selected)}`, {cache:"no-store"}).then(response => response.json());
-    billingCurrency = billingCatalog.selected_currency || selected;
+    const remoteCatalog = await fetch(`${API}/billing/plans?currency=${encodeURIComponent(selected)}`, {cache:"no-store"}).then(response => response.json());
+    billingCatalog = normalizeBillingCatalog(remoteCatalog, selected);
+    billingCurrency = selected;
     localStorage.setItem("lecturesift-currency", billingCurrency);
     if ($("billingCurrency")) $("billingCurrency").value = billingCurrency;
     renderPlans(); await refreshBillingAccount();
@@ -360,6 +404,7 @@ if ($("billingCurrency")) $("billingCurrency").addEventListener("change", () => 
   localStorage.setItem("lecturesift-currency", billingCurrency);
   loadBilling();
 });
+populateBillingCurrencies();
 if ($("logoutButton")) $("logoutButton").onclick = () => { billingToken = ""; billingAccount = null; localStorage.removeItem("lecturesift-billing-token"); renderBillingAccount(); renderPlans(); };
 loadBilling();
 

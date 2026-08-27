@@ -1,5 +1,6 @@
 const API = "https://lecturesift-backend.onrender.com";
 const TOKEN_KEY = "lecturesift-billing-token";
+const LOCALE_DATA = window.LECTURESIFT_LOCALE_DATA || {countries: [], currencies: [], currencyForCountry: {}};
 const page = document.body.dataset.page || "login";
 const $ = id => document.getElementById(id);
 
@@ -32,8 +33,21 @@ function setBusy(button, busy, label) {
 }
 
 function selectedCountry() {
+  const saved = localStorage.getItem("lecturesift-country");
+  if (saved?.length === 2) return saved.toUpperCase();
   const localeCountry = (navigator.language.split("-")[1] || "").toUpperCase();
   return localeCountry.length === 2 ? localeCountry : (Intl.DateTimeFormat().resolvedOptions().timeZone === "Europe/Istanbul" ? "TR" : "US");
+}
+
+function populateCountrySelect(select, selected = "") {
+  if (!select || !LOCALE_DATA.countries.length) return;
+  let names;
+  try { names = new Intl.DisplayNames([navigator.language, "en"], {type: "region"}); } catch { names = null; }
+  const options = LOCALE_DATA.countries
+    .map(code => ({code, label: names?.of(code) || code}))
+    .sort((left, right) => left.label.localeCompare(right.label, navigator.language));
+  select.replaceChildren(...options.map(item => new Option(item.label, item.code)));
+  select.value = LOCALE_DATA.countries.includes(selected) ? selected : "TR";
 }
 
 function safeNext() {
@@ -42,7 +56,7 @@ function safeNext() {
 }
 
 async function initRegister() {
-  $("countryCode").value = selectedCountry();
+  populateCountrySelect($("countryCode"), selectedCountry());
   $("registerForm").addEventListener("submit", async event => {
     event.preventDefault();
     const button = $("registerSubmit");
@@ -66,6 +80,9 @@ async function initRegister() {
       $("successBox").hidden = false;
       $("successEmail").textContent = body.user.email;
       $("enterCodeLink").href = `/verify.html?email=${encodeURIComponent(body.user.email)}`;
+      localStorage.setItem("lecturesift-country", body.user.country_code);
+      const suggestedCurrency = LOCALE_DATA.currencyForCountry[body.user.country_code];
+      if (suggestedCurrency) localStorage.setItem("lecturesift-currency", suggestedCurrency);
     } catch (error) { showNotice(error.message, true); }
     finally { setBusy(button, false, "Hesap oluştur"); }
   });
@@ -184,7 +201,7 @@ async function initAccount() {
     $("usageTrack").style.setProperty("--usage", `${percentage}%`);
     $("accountCountry").textContent = user.country_code || "—";
     $("accountPhone").textContent = user.phone || "Eklenmedi";
-    $("accountCountrySelect").value = user.country_code || "TR";
+    populateCountrySelect($("accountCountrySelect"), user.country_code || "TR");
     $("preferredLanguage").value = user.preferred_language || localStorage.getItem("lecturesift-ui") || "tr";
     $("ordersList").innerHTML = account.manual_orders.length ? account.manual_orders.map(order => `
       <div class="order-row"><span>${order.reference}<br><small>${planName(order.plan_code)}</small></span><strong>${order.status === "paid" ? "Aktif" : "Kontrol bekliyor"}</strong></div>`).join("") : '<p class="empty-copy">Henüz ödeme siparişin yok.</p>';
@@ -204,6 +221,8 @@ async function initAccount() {
       }, token);
       localStorage.setItem("lecturesift-ui", body.account.user.preferred_language);
       localStorage.setItem("lecturesift-country", body.account.user.country_code);
+      const suggestedCurrency = LOCALE_DATA.currencyForCountry[body.account.user.country_code];
+      if (suggestedCurrency) localStorage.setItem("lecturesift-currency", suggestedCurrency);
       $("accountCountry").textContent = body.account.user.country_code;
       const notice = $("preferencesNotice"); notice.textContent = body.message; notice.hidden = false;
     } catch (error) {
