@@ -29,8 +29,10 @@ from .billing_service import (
     logout_user,
     register_user,
     reset_password,
+    update_account_preferences,
     validate_job_features,
     verify_email,
+    verify_email_code,
 )
 from .config import (
     APP_VERSION,
@@ -157,6 +159,11 @@ class BillingTokenRequest(BaseModel):
     token: str
 
 
+class BillingVerificationCodeRequest(BaseModel):
+    email: str
+    code: str
+
+
 class BillingPasswordResetRequest(BillingTokenRequest):
     new_password: str
 
@@ -166,18 +173,24 @@ class ManualOrderRequest(BaseModel):
     interval: str = "monthly"
 
 
-def _send_verification_email(email: str, token: str) -> None:
+class BillingPreferencesRequest(BaseModel):
+    country_code: str
+    preferred_language: str
+
+
+def _send_verification_email(email: str, token: str, code: str) -> None:
     link = f"{FRONTEND_BASE_URL}/verify.html?token={token}"
     send_transactional_email(
         email,
         "LectureSift e-posta doğrulama",
         (
             "<h1>LectureSift hesabını doğrula</h1>"
-            "<p>Hesabını etkinleştirmek için aşağıdaki güvenli bağlantıyı kullan.</p>"
+            "<p>Hesabını etkinleştirmek için bağlantıya tıkla veya doğrulama ekranına aşağıdaki kodu gir.</p>"
+            f'<p style="font-size:28px;font-weight:800;letter-spacing:6px">{code}</p>'
             f'<p><a href="{link}">E-posta adresimi doğrula</a></p>'
-            "<p>Bu bağlantı 24 saat geçerlidir.</p>"
+            "<p>Kod ve bağlantı 24 saat geçerlidir. Bu hesabı sen oluşturmadıysan e-postayı yok say.</p>"
         ),
-        f"LectureSift hesabını doğrula: {link}\nBu bağlantı 24 saat geçerlidir.",
+        f"LectureSift doğrulama kodun: {code}\nDoğrulama bağlantın: {link}\nKod ve bağlantı 24 saat geçerlidir.",
     )
 
 
@@ -370,7 +383,11 @@ def billing_register(payload: BillingRegisterRequest) -> dict:
             payload.phone,
             payload.country_code,
         )
-        _send_verification_email(result["user"]["email"], result.pop("verification_token"))
+        _send_verification_email(
+            result["user"]["email"],
+            result.pop("verification_token"),
+            result.pop("verification_code"),
+        )
     except BillingConfigurationError as exc:
         raise HTTPException(503, detail={"code": "LS-BILL-00", "message": str(exc)}) from exc
     except EmailDeliveryError as exc:
@@ -380,7 +397,7 @@ def billing_register(payload: BillingRegisterRequest) -> dict:
     return {
         "ok": True,
         "verification_required": True,
-        "message": "Doğrulama bağlantısını e-posta adresine gönderdik.",
+        "message": "Doğrulama kodunu ve bağlantısını e-posta adresine gönderdik.",
         "user": result["user"],
     }
 
@@ -394,6 +411,15 @@ def billing_verify_email(payload: BillingTokenRequest) -> dict:
     return {"ok": True, **result, "account": account_status(result["user"]["id"])}
 
 
+@app.post("/billing/verify-email-code")
+def billing_verify_email_code(payload: BillingVerificationCodeRequest) -> dict:
+    try:
+        result = verify_email_code(payload.email, payload.code)
+    except BillingAuthenticationError as exc:
+        raise HTTPException(400, detail={"code": "LS-BILL-17", "message": str(exc)}) from exc
+    return {"ok": True, **result, "account": account_status(result["user"]["id"])}
+
+
 @app.post("/billing/resend-verification")
 def billing_resend_verification(payload: BillingEmailRequest) -> dict:
     if not email_delivery_configured():
@@ -401,10 +427,10 @@ def billing_resend_verification(payload: BillingEmailRequest) -> dict:
     try:
         result = create_verification_token(payload.email)
         if result:
-            _send_verification_email(result["email"], result["token"])
+            _send_verification_email(result["email"], result["token"], result["code"])
     except EmailDeliveryError as exc:
         raise HTTPException(503, detail={"code": "LS-BILL-16", "message": str(exc)}) from exc
-    return {"ok": True, "message": "Hesap uygunsa doğrulama bağlantısı gönderildi."}
+    return {"ok": True, "message": "Hesap uygunsa doğrulama kodu ve bağlantısı gönderildi."}
 
 
 @app.post("/billing/forgot-password")
@@ -451,6 +477,22 @@ def billing_logout(user: dict = Depends(_billing_user)) -> dict:
 @app.get("/billing/me")
 def billing_me(user: dict = Depends(_billing_user)) -> dict:
     return {"ok": True, "account": account_status(user["id"])}
+
+
+@app.patch("/billing/me/preferences")
+def billing_update_preferences(
+    payload: BillingPreferencesRequest,
+    user: dict = Depends(_billing_user),
+) -> dict:
+    try:
+        account = update_account_preferences(
+            user["id"], payload.country_code, payload.preferred_language
+        )
+    except BillingAuthenticationError as exc:
+        raise HTTPException(401, detail={"code": "LS-BILL-06", "message": str(exc)}) from exc
+    except BillingError as exc:
+        raise HTTPException(400, detail={"code": "LS-BILL-21", "message": str(exc)}) from exc
+    return {"ok": True, "message": "Hesap tercihlerin kaydedildi.", "account": account}
 
 
 @app.post("/billing/manual-transfer/orders")

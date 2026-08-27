@@ -10,6 +10,7 @@ from lecturesift.billing_service import (
     register_user,
     reset_password,
     verify_email,
+    verify_email_code,
 )
 from lecturesift.jobs import JOBS
 
@@ -66,7 +67,7 @@ def test_registration_requires_email_verification(monkeypatch):
     client = TestClient(app)
     sent = {}
     monkeypatch.setattr(app_module, "email_delivery_configured", lambda: True)
-    monkeypatch.setattr(app_module, "_send_verification_email", lambda email, token: sent.update(email=email, token=token))
+    monkeypatch.setattr(app_module, "_send_verification_email", lambda email, token, code: sent.update(email=email, token=token, code=code))
     email = f"verify-{uuid.uuid4()}@example.com"
     response = client.post(
         "/billing/register",
@@ -88,6 +89,30 @@ def test_registration_requires_email_verification(monkeypatch):
     assert verified.status_code == 200
     assert verified.json()["account"]["user"]["name"] == "Ada Lovelace"
     assert verified.json()["account"]["user"]["email_verified"] is True
+
+
+def test_registration_can_be_verified_with_email_code(monkeypatch):
+    client = TestClient(app)
+    sent = {}
+    monkeypatch.setattr(app_module, "email_delivery_configured", lambda: True)
+    monkeypatch.setattr(app_module, "_send_verification_email", lambda email, token, code: sent.update(email=email, token=token, code=code))
+    email = f"code-{uuid.uuid4()}@example.com"
+    response = client.post(
+        "/billing/register",
+        json={
+            "email": email,
+            "password": "Strong-test-password1",
+            "first_name": "Grace",
+            "last_name": "Hopper",
+            "country_code": "US",
+        },
+    )
+    assert response.status_code == 200
+    assert len(sent["code"]) == 6 and sent["code"].isdigit()
+    verified = client.post("/billing/verify-email-code", json={"email": email, "code": sent["code"]})
+    assert verified.status_code == 200
+    assert verified.json()["account"]["user"]["email_verified"] is True
+    assert client.post("/billing/verify-email", json={"token": sent["token"]}).status_code == 400
 
 
 def test_password_reset_invalidates_existing_session():
@@ -117,6 +142,22 @@ def test_account_session_starts_on_free_plan():
     assert account["user"]["email"] == email
     assert account["plan"]["code"] == "free"
     assert account["remaining_minutes"] == 60
+
+
+def test_account_country_and_language_preferences_are_saved():
+    client = TestClient(app)
+    _, token = _new_account(client)
+    response = client.patch(
+        "/billing/me/preferences",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"country_code": "DE", "preferred_language": "de"},
+    )
+    assert response.status_code == 200
+    user = response.json()["account"]["user"]
+    assert user["country_code"] == "DE"
+    assert user["preferred_language"] == "de"
+    refreshed = client.get("/billing/me", headers={"Authorization": f"Bearer {token}"})
+    assert refreshed.json()["account"]["user"]["preferred_language"] == "de"
 
 
 def test_manual_transfer_order_and_admin_approval(monkeypatch):

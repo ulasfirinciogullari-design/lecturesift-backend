@@ -90,6 +90,14 @@ USER_PROFILES = Table(
     Column("updated_at", DateTime(timezone=True), nullable=False),
 )
 
+USER_PREFERENCES = Table(
+    "billing_user_preferences",
+    METADATA,
+    Column("user_id", String(36), ForeignKey("billing_users.id"), primary_key=True),
+    Column("preferred_language", String(8), nullable=False, default="tr"),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+)
+
 AUTH_TOKENS = Table(
     "billing_auth_tokens",
     METADATA,
@@ -177,7 +185,7 @@ def _profile_for(connection, user_id: str):
     ).first()
 
 
-def _public_user(row, profile=None) -> dict:
+def _public_user(row, profile=None, preference=None) -> dict:
     # Accounts created before verification was introduced have no profile row;
     # keep those existing accounts usable and treat them as verified.
     first_name = profile.first_name if profile else ""
@@ -192,6 +200,7 @@ def _public_user(row, profile=None) -> dict:
         "country_code": profile.country_code if profile else None,
         "email_verified": profile.email_verified_at is not None if profile else True,
         "phone_verified": profile.phone_verified_at is not None if profile else False,
+        "preferred_language": preference.preferred_language if preference else "tr",
     }
 
 
@@ -211,6 +220,25 @@ def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+def _store_auth_token(
+    connection,
+    user_id: str,
+    purpose: str,
+    token: str,
+    expires_at: datetime,
+) -> None:
+    connection.execute(
+        AUTH_TOKENS.insert().values(
+            token_hash=_token_hash(token),
+            user_id=user_id,
+            purpose=purpose,
+            expires_at=expires_at,
+            consumed_at=None,
+            created_at=utcnow(),
+        )
+    )
+
+
 def _create_auth_token(connection, user_id: str, purpose: str, ttl: timedelta) -> tuple[str, datetime]:
     now = utcnow()
     connection.execute(
@@ -224,16 +252,7 @@ def _create_auth_token(connection, user_id: str, purpose: str, ttl: timedelta) -
     )
     token = secrets.token_urlsafe(32)
     expires_at = now + ttl
-    connection.execute(
-        AUTH_TOKENS.insert().values(
-            token_hash=_token_hash(token),
-            user_id=user_id,
-            purpose=purpose,
-            expires_at=expires_at,
-            consumed_at=None,
-            created_at=now,
-        )
-    )
+    _store_auth_token(connection, user_id, purpose, token, expires_at)
     return token, expires_at
 
 
@@ -284,6 +303,14 @@ def register_user(
             verification_token, expires_at = _create_auth_token(
                 connection, values["id"], "verify_email", timedelta(hours=24)
             )
+            verification_code = f"{secrets.randbelow(1_000_000):06d}"
+            _store_auth_token(
+                connection,
+                values["id"],
+                "verify_email_code",
+                verification_code,
+                expires_at,
+            )
     except IntegrityError as exc:
         raise BillingError("Bu e-posta adresiyle daha önce hesap oluşturulmuş.") from exc
     user = {
@@ -297,7 +324,12 @@ def register_user(
         "email_verified": False,
         "phone_verified": False,
     }
-    return {"user": user, "verification_token": verification_token, "expires_at": expires_at}
+    return {
+        "user": user,
+        "verification_token": verification_token,
+        "verification_code": verification_code,
+        "expires_at": expires_at,
+    }
 
 
 def login_user(email: str, password: str) -> dict:
@@ -395,7 +427,11 @@ def verify_email(token: str) -> dict:
             raise BillingAuthenticationError("Doğrulama bağlantısı geçersiz veya süresi dolmuş.")
         connection.execute(
             update(AUTH_TOKENS)
-            .where(AUTH_TOKENS.c.token_hash == auth_token.token_hash)
+            .where(
+                AUTH_TOKENS.c.user_id == auth_token.user_id,
+                AUTH_TOKENS.c.purpose.in_(("verify_email", "verify_email_code")),
+                AUTH_TOKENS.c.consumed_at.is_(None),
+            )
             .values(consumed_at=now)
         )
         connection.execute(
@@ -413,6 +449,52 @@ def verify_email(token: str) -> dict:
     }
 
 
+def verify_email_code(email: str, code: str) -> dict:
+    init_billing_database()
+    normalized = email.strip().casefold()
+    normalized_code = "".join(char for char in code if char.isdigit())
+    if len(normalized_code) != 6:
+        raise BillingAuthenticationError("Altı haneli doğrulama kodunu gir.")
+    now = utcnow()
+    with ENGINE.begin() as connection:
+        user = connection.execute(select(USERS).where(USERS.c.email == normalized)).first()
+        auth_token = (
+            connection.execute(
+                select(AUTH_TOKENS).where(
+                    AUTH_TOKENS.c.user_id == user.id,
+                    AUTH_TOKENS.c.token_hash == _token_hash(normalized_code),
+                    AUTH_TOKENS.c.purpose == "verify_email_code",
+                )
+            ).first()
+            if user
+            else None
+        )
+        if not user or not auth_token or auth_token.consumed_at is not None or _token_is_expired(auth_token.expires_at):
+            raise BillingAuthenticationError("Doğrulama kodu geçersiz veya süresi dolmuş.")
+        profile = _profile_for(connection, user.id)
+        if not profile or profile.email_verified_at is not None:
+            raise BillingAuthenticationError("Bu e-posta adresi zaten doğrulanmış.")
+        connection.execute(
+            update(AUTH_TOKENS)
+            .where(
+                AUTH_TOKENS.c.user_id == user.id,
+                AUTH_TOKENS.c.purpose.in_(("verify_email", "verify_email_code")),
+                AUTH_TOKENS.c.consumed_at.is_(None),
+            )
+            .values(consumed_at=now)
+        )
+        connection.execute(
+            update(USER_PROFILES)
+            .where(USER_PROFILES.c.user_id == user.id)
+            .values(email_verified_at=now, updated_at=now)
+        )
+        profile = _profile_for(connection, user.id)
+    return {
+        "user": _public_user(user, profile),
+        "token": issue_session(user.id, user.email, int(profile.session_version)),
+    }
+
+
 def create_verification_token(email: str) -> dict | None:
     init_billing_database()
     normalized = email.strip().casefold()
@@ -424,7 +506,18 @@ def create_verification_token(email: str) -> dict | None:
         if not profile or profile.email_verified_at is not None:
             return None
         token, expires_at = _create_auth_token(connection, user.id, "verify_email", timedelta(hours=24))
-    return {"email": user.email, "token": token, "expires_at": expires_at}
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        connection.execute(
+            update(AUTH_TOKENS)
+            .where(
+                AUTH_TOKENS.c.user_id == user.id,
+                AUTH_TOKENS.c.purpose == "verify_email_code",
+                AUTH_TOKENS.c.consumed_at.is_(None),
+            )
+            .values(consumed_at=utcnow())
+        )
+        _store_auth_token(connection, user.id, "verify_email_code", code, expires_at)
+    return {"email": user.email, "token": token, "code": code, "expires_at": expires_at}
 
 
 def create_password_reset_token(email: str) -> dict | None:
@@ -505,6 +598,9 @@ def account_status(user_id: str) -> dict:
         if not user:
             raise BillingAuthenticationError("Hesap bulunamadı.")
         profile = _profile_for(connection, user_id)
+        preference = connection.execute(
+            select(USER_PREFERENCES).where(USER_PREFERENCES.c.user_id == user_id)
+        ).first()
         subscription = _active_subscription(connection, user_id, now)
         plan_code = subscription.plan_code if subscription else "free"
         plan = PLAN_BY_CODE[plan_code]
@@ -526,7 +622,7 @@ def account_status(user_id: str) -> dict:
     credit_minutes = int(user.credit_minutes)
     remaining = None if base_remaining is None else base_remaining + credit_minutes
     return {
-        "user": _public_user(user, profile),
+        "user": _public_user(user, profile, preference),
         "plan": plan.public(),
         "subscription": (
             {
@@ -555,6 +651,45 @@ def account_status(user_id: str) -> dict:
             for order in orders
         ],
     }
+
+
+def update_account_preferences(user_id: str, country_code: str, preferred_language: str) -> dict:
+    country = country_code.strip().upper()
+    language = preferred_language.strip().lower().replace("_", "-")
+    supported_languages = {"tr", "en", "de", "fr", "es", "it", "pt", "ru", "ar", "zh", "ja", "ko", "hi"}
+    if len(country) != 2 or not country.isalpha():
+        raise BillingError("Geçerli bir ülke seç.")
+    if language not in supported_languages:
+        raise BillingError("Seçilen arayüz dili desteklenmiyor.")
+    init_billing_database()
+    now = utcnow()
+    with ENGINE.begin() as connection:
+        profile = _profile_for(connection, user_id)
+        if not profile:
+            raise BillingAuthenticationError("Hesap bulunamadı.")
+        connection.execute(
+            update(USER_PROFILES)
+            .where(USER_PROFILES.c.user_id == user_id)
+            .values(country_code=country, updated_at=now)
+        )
+        preference = connection.execute(
+            select(USER_PREFERENCES).where(USER_PREFERENCES.c.user_id == user_id)
+        ).first()
+        if preference:
+            connection.execute(
+                update(USER_PREFERENCES)
+                .where(USER_PREFERENCES.c.user_id == user_id)
+                .values(preferred_language=language, updated_at=now)
+            )
+        else:
+            connection.execute(
+                USER_PREFERENCES.insert().values(
+                    user_id=user_id,
+                    preferred_language=language,
+                    updated_at=now,
+                )
+            )
+    return account_status(user_id)
 
 
 def require_job_entitlement(user_id: str) -> dict:

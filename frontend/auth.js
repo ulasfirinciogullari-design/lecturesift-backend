@@ -65,6 +65,7 @@ async function initRegister() {
       $("registerForm").hidden = true;
       $("successBox").hidden = false;
       $("successEmail").textContent = body.user.email;
+      $("enterCodeLink").href = `/verify.html?email=${encodeURIComponent(body.user.email)}`;
     } catch (error) { showNotice(error.message, true); }
     finally { setBusy(button, false, "Hesap oluştur"); }
   });
@@ -97,18 +98,36 @@ async function initLogin() {
 }
 
 async function initVerify() {
-  const token = new URLSearchParams(location.search).get("token") || "";
-  if (!token) return showNotice("Doğrulama bağlantısı eksik.", true);
-  try {
-    const body = await request("/billing/verify-email", {method:"POST", body:JSON.stringify({token})});
+  const params = new URLSearchParams(location.search);
+  const token = params.get("token") || "";
+  const email = params.get("email") || "";
+  $("verifyEmail").value = email;
+  const complete = body => {
     localStorage.setItem(TOKEN_KEY, body.token);
     $("verifyTitle").textContent = "E-posta doğrulandı";
     $("verifyText").textContent = "Hesabın etkin. LectureSift çalışma alanına geçebilirsin.";
+    $("verifyCodeForm").hidden = true;
     $("verifyAction").hidden = false;
-  } catch (error) {
-    $("verifyTitle").textContent = "Doğrulama tamamlanamadı";
-    showNotice(error.message, true);
+  };
+  if (token) {
+    $("verifyText").textContent = "Güvenli bağlantın kontrol ediliyor.";
+    try {
+      complete(await request("/billing/verify-email", {method:"POST", body:JSON.stringify({token})}));
+    } catch (error) {
+      $("verifyTitle").textContent = "Bağlantı doğrulanamadı";
+      $("verifyText").textContent = "E-postandaki altı haneli kodu kullanmayı deneyebilirsin.";
+      showNotice(error.message, true);
+    }
   }
+  $("verifyCodeForm").addEventListener("submit", async event => {
+    event.preventDefault();
+    const button = $("verifyCodeSubmit");
+    setBusy(button, true, "Doğrulanıyor…");
+    try {
+      complete(await request("/billing/verify-email-code", {method:"POST", body:JSON.stringify({email:$("verifyEmail").value.trim(), code:$("verifyCode").value.trim()})}));
+    } catch (error) { showNotice(error.message, true); }
+    finally { setBusy(button, false, "Kodla doğrula"); }
+  });
 }
 
 async function initForgot() {
@@ -158,12 +177,15 @@ async function initAccount() {
     $("accountEmail").textContent = user.email;
     $("accountPlan").textContent = planName(account.plan.code);
     $("remainingMinutes").textContent = account.remaining_minutes == null ? "Sınırsız" : account.remaining_minutes.toLocaleString("tr-TR");
+    $("creditMinutes").textContent = `${(account.credit_minutes || 0).toLocaleString("tr-TR")} dk`;
     $("usedMinutes").textContent = `${account.used_minutes.toLocaleString("tr-TR")} dk kullanıldı`;
     const total = account.plan.minutes || 0;
     const percentage = total ? Math.min(100, Math.round(account.used_minutes / total * 100)) : 0;
     $("usageTrack").style.setProperty("--usage", `${percentage}%`);
     $("accountCountry").textContent = user.country_code || "—";
     $("accountPhone").textContent = user.phone || "Eklenmedi";
+    $("accountCountrySelect").value = user.country_code || "TR";
+    $("preferredLanguage").value = user.preferred_language || localStorage.getItem("lecturesift-ui") || "tr";
     $("ordersList").innerHTML = account.manual_orders.length ? account.manual_orders.map(order => `
       <div class="order-row"><span>${order.reference}<br><small>${planName(order.plan_code)}</small></span><strong>${order.status === "paid" ? "Aktif" : "Kontrol bekliyor"}</strong></div>`).join("") : '<p class="empty-copy">Henüz ödeme siparişin yok.</p>';
     $("accountPage").hidden = false;
@@ -171,6 +193,23 @@ async function initAccount() {
     localStorage.removeItem(TOKEN_KEY);
     location.replace("/login.html?next=/account.html");
   }
+  $("preferencesForm").addEventListener("submit", async event => {
+    event.preventDefault();
+    const button = $("preferencesSubmit");
+    setBusy(button, true, "Kaydediliyor…");
+    try {
+      const body = await request("/billing/me/preferences", {
+        method:"PATCH",
+        body:JSON.stringify({country_code:$("accountCountrySelect").value, preferred_language:$("preferredLanguage").value}),
+      }, token);
+      localStorage.setItem("lecturesift-ui", body.account.user.preferred_language);
+      localStorage.setItem("lecturesift-country", body.account.user.country_code);
+      $("accountCountry").textContent = body.account.user.country_code;
+      const notice = $("preferencesNotice"); notice.textContent = body.message; notice.hidden = false;
+    } catch (error) {
+      const notice = $("preferencesNotice"); notice.textContent = error.message; notice.classList.add("error"); notice.hidden = false;
+    } finally { setBusy(button, false, "Tercihleri kaydet"); }
+  });
   $("logoutButton").addEventListener("click", async () => {
     try { await request("/billing/logout", {method:"POST"}, token); } catch {}
     localStorage.removeItem(TOKEN_KEY);
