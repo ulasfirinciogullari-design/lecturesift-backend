@@ -1,4 +1,4 @@
-"""Idempotent quality enhancements shared by web and Celery workers."""
+"""Idempotent quality and packaging enhancements shared by web and workers."""
 
 from __future__ import annotations
 
@@ -35,10 +35,25 @@ def _normalize_flashcards(result: dict) -> None:
             continue
         back = " ".join(str(item.get("back") or item.get("answer") or "").split())
         front = item.get("front") or item.get("question") or ""
-        if not back:
-            continue
-        normalized.append({"front": _question_front(str(front), language), "back": back})
+        if back:
+            normalized.append({"front": _question_front(str(front), language), "back": back})
     result["flashcards"] = normalized
+
+
+def _embed_recovery_payload(package_dir: Path, result: dict, artifacts: list[dict], slides_dir: Path) -> None:
+    internal = package_dir / "_lecturesift"
+    shutil.rmtree(internal, ignore_errors=True)
+    internal.mkdir(parents=True, exist_ok=True)
+    (internal / "result.json").write_text(json.dumps({**result, "artifacts": artifacts}, ensure_ascii=False, indent=2), encoding="utf-8")
+    if slides_dir.exists():
+        included = {str(slide.get("file") or "") for slide in result.get("slides") or [] if slide.get("file")}
+        included.update(str(slide.get("translated_file") or "") for slide in result.get("slides") or [] if slide.get("translated_file"))
+        recovery_slides = internal / "slides"
+        recovery_slides.mkdir(parents=True, exist_ok=True)
+        for filename in included:
+            source = slides_dir / Path(filename).name
+            if source.exists() and source.is_file():
+                shutil.copy2(source, recovery_slides / source.name)
 
 
 def install_pipeline_enhancements() -> None:
@@ -46,14 +61,12 @@ def install_pipeline_enhancements() -> None:
     if _INSTALLED:
         return
     from . import pipeline
-
     original = pipeline.build_artifacts
 
     def enhanced(job_dir: Path, result: dict, slides_dir: Path):
         _normalize_flashcards(result)
         artifacts, _old_zip = original(job_dir, result, slides_dir)
         package_dir = job_dir / "package"
-
         for artifact in artifacts:
             filename = str(artifact.get("file", ""))
             if filename.startswith("Ders_Notlari."):
@@ -64,12 +77,9 @@ def install_pipeline_enhancements() -> None:
                     source.replace(target)
                 artifact["file"] = target_name
                 artifact["label"] = str(artifact.get("label", "")).replace("Ders Notları", "Akıllı Notlar")
-
         result_path = job_dir / "result.json"
-        result_path.write_text(
-            json.dumps({**result, "artifacts": artifacts}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        result_path.write_text(json.dumps({**result, "artifacts": artifacts}, ensure_ascii=False, indent=2), encoding="utf-8")
+        _embed_recovery_payload(package_dir, result, artifacts, slides_dir)
         zip_base = job_dir / "LectureSift_Study_Pack"
         zip_path = zip_base.with_suffix(".zip")
         if zip_path.exists():
