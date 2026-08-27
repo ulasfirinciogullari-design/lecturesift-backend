@@ -114,13 +114,12 @@ def _assert_target_account(client: InstagramClient) -> None:
         raise InstagramConfigurationError("Configured Instagram account is not @lecturesift")
 
 
-def publish_next_launch_post(*, only_if_none_completed: bool = False) -> dict:
+def publish_next_launch_post(*, only_if_none_completed: bool = False, force: bool = False) -> dict:
     """Publish the first missing launch-grid card, with marker-based idempotency."""
-    if not INSTAGRAM_DAILY_AUTOMATION_ENABLED:
+    if not force and not INSTAGRAM_DAILY_AUTOMATION_ENABLED:
         return {"status": "disabled"}
-    if not PUBLIC_BASE_URL:
-        raise RuntimeError("PUBLIC_BASE_URL must be set for Instagram automation")
 
+    base_url = PUBLIC_BASE_URL or "https://lecturesift-backend.onrender.com"
     client = _client()
     _assert_target_account(client)
     recent = client.get_recent_media(limit=50).get("data", [])
@@ -133,7 +132,7 @@ def publish_next_launch_post(*, only_if_none_completed: bool = False) -> dict:
     if post is None:
         return {"status": "launch_complete", "completed": completed}
 
-    media_url = f"{PUBLIC_BASE_URL}/instagram/launch/image/{post.index}.jpg"
+    media_url = f"{base_url}/instagram/launch/image/{post.index}.jpg"
     container = client.create_media_container(media_url=media_url, caption=post.caption)
     _wait_until_ready(client, container["id"])
     published = client.publish_media(container["id"])
@@ -144,8 +143,6 @@ def publish_daily_post(day: date | None = None) -> dict:
     """Publish the next launch card first; once launch is complete, publish the daily study tip."""
     if not INSTAGRAM_DAILY_AUTOMATION_ENABLED:
         return {"status": "disabled"}
-    if not PUBLIC_BASE_URL:
-        raise RuntimeError("PUBLIC_BASE_URL must be set for daily Instagram automation")
 
     launch = publish_next_launch_post()
     if launch.get("status") != "launch_complete":
@@ -157,7 +154,8 @@ def publish_daily_post(day: date | None = None) -> dict:
     if is_already_published(client, selected_day):
         return {"status": "already_published", "kind": "daily", "date": selected_day.isoformat()}
     tip = daily_tip(selected_day)
-    media_url = f"{PUBLIC_BASE_URL}/instagram/daily/image/{selected_day.isoformat()}.jpg"
+    base_url = PUBLIC_BASE_URL or "https://lecturesift-backend.onrender.com"
+    media_url = f"{base_url}/instagram/daily/image/{selected_day.isoformat()}.jpg"
     container = client.create_media_container(media_url=media_url, caption=tip.caption)
     _wait_until_ready(client, container["id"])
     published = client.publish_media(container["id"])
