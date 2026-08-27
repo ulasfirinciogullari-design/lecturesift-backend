@@ -56,7 +56,7 @@ INSTAGRAM_REWARDS = Table(
     METADATA,
     Column("id", String(36), primary_key=True),
     Column("user_id", String(36), ForeignKey("billing_users.id"), nullable=False, unique=True),
-    Column("handle", String(100), nullable=False),
+    Column("handle", String(100), nullable=False, unique=True),
     Column("status", String(24), nullable=False),
     Column("minutes", Integer, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
