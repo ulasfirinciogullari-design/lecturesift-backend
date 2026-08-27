@@ -110,6 +110,24 @@ def main() -> None:
         )
         write_if_changed(rollout_routes, value)
 
+    pipeline = ROOT / "lecturesift" / "pipeline.py"
+    if pipeline.exists():
+        value = pipeline.read_text(encoding="utf-8")
+        value = value.replace("import cv2\n\n", "")
+        if "from .duration import media_duration_seconds" not in value:
+            value = value.replace(
+                "from .config import APP_VERSION\n",
+                "from .config import APP_VERSION\nfrom .duration import media_duration_seconds\n",
+                1,
+            )
+        value = re.sub(
+            r"def _source_duration_seconds\(paths: list\[Path\]\) -> float:\n(?:    .*\n)+?    return total\n",
+            "def _source_duration_seconds(paths: list[Path]) -> float:\n    return media_duration_seconds(paths)\n",
+            value,
+            count=1,
+        )
+        write_if_changed(pipeline, value)
+
 
 if __name__ == "__main__":
     main()
