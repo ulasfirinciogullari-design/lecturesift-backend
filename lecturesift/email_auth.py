@@ -45,13 +45,35 @@ from .billing_service import (
 class EmailDeliveryError(RuntimeError):
     """Raised when Resend did not accept a transactional email."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        provider_status: int | None = None,
+        provider_code: str | None = None,
+    ):
+        super().__init__(message)
+        self.provider_status = provider_status
+        self.provider_code = provider_code
+
 
 class EmailVerificationError(RuntimeError):
-    def __init__(self, message: str, *, code: str, status_code: int = 400, retry_after: int | None = None):
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str,
+        status_code: int = 400,
+        retry_after: int | None = None,
+        provider_status: int | None = None,
+        provider_code: str | None = None,
+    ):
         super().__init__(message)
         self.code = code
         self.status_code = status_code
         self.retry_after = retry_after
+        self.provider_status = provider_status
+        self.provider_code = provider_code
 
 
 EMAIL_VERIFICATIONS = Table(
@@ -189,7 +211,10 @@ def _email_copy(code: str, language: str) -> tuple[str, str, str]:
 
 def _send_verification_email(recipient: str, code: str, language: str, idempotency_key: str) -> str:
     if not email_delivery_available():
-        raise EmailDeliveryError("Resend e-posta servisi yapılandırılmamış.")
+        raise EmailDeliveryError(
+            "Resend e-posta servisi yapılandırılmamış.",
+            provider_code="not_configured",
+        )
     subject, text_body, html_body = _email_copy(code, language)
     payload: dict = {
         "from": config.RESEND_FROM_EMAIL.strip(),
@@ -206,12 +231,15 @@ def _send_verification_email(recipient: str, code: str, language: str, idempoten
         "User-Agent": f"LectureSift/{config.APP_VERSION}",
         "Idempotency-Key": idempotency_key[:256],
     }
-    last_error: Exception | None = None
+    last_error: EmailDeliveryError | None = None
     for attempt in range(2):
         try:
             response = httpx.post("https://api.resend.com/emails", json=payload, headers=headers, timeout=12.0)
-        except httpx.RequestError as exc:
-            last_error = exc
+        except httpx.RequestError:
+            last_error = EmailDeliveryError(
+                "Resend ağına ulaşılamadı.",
+                provider_code="network_error",
+            )
             if attempt == 0:
                 time.sleep(0.4)
                 continue
@@ -219,17 +247,32 @@ def _send_verification_email(recipient: str, code: str, language: str, idempoten
         if response.is_success:
             try:
                 return str(response.json().get("id") or "accepted")
-            except ValueError:
+            except (AttributeError, ValueError):
                 return "accepted"
+
+        provider_code: str | None = None
+        try:
+            error_body = response.json()
+            if isinstance(error_body, dict):
+                raw_code = error_body.get("name") or error_body.get("code")
+                if raw_code is not None:
+                    provider_code = str(raw_code).strip()[:80] or None
+        except ValueError:
+            pass
+        last_error = EmailDeliveryError(
+            "Resend isteği kabul etmedi.",
+            provider_status=int(response.status_code),
+            provider_code=provider_code or f"http_{response.status_code}",
+        )
         if response.status_code == 429 or response.status_code >= 500:
-            last_error = RuntimeError(f"Resend transient status {response.status_code}")
             if attempt == 0:
                 time.sleep(0.4)
                 continue
-        else:
-            last_error = RuntimeError(f"Resend rejected request with status {response.status_code}")
         break
-    raise EmailDeliveryError("Doğrulama e-postası gönderilemedi.") from last_error
+    raise last_error or EmailDeliveryError(
+        "Doğrulama e-postası gönderilemedi.",
+        provider_code="unknown_delivery_error",
+    )
 
 
 def _public_verification(email: str) -> dict:
@@ -314,6 +357,8 @@ def register_with_email_verification(email: str, password: str, language: str = 
             "Doğrulama e-postası gönderilemedi. Biraz sonra tekrar dene.",
             code="LS-AUTH-04",
             status_code=503,
+            provider_status=exc.provider_status,
+            provider_code=exc.provider_code,
         ) from exc
     return _public_verification(normalized)
 
@@ -519,6 +564,8 @@ def resend_email_verification(email: str, language: str = "tr") -> dict:
             "Doğrulama e-postası gönderilemedi. Biraz sonra tekrar dene.",
             code="LS-AUTH-04",
             status_code=503,
+            provider_status=exc.provider_status,
+            provider_code=exc.provider_code,
         ) from exc
     return _public_verification(normalized)
 
@@ -527,6 +574,10 @@ def _raise_http(exc: EmailVerificationError) -> None:
     detail: dict = {"code": exc.code, "message": str(exc)}
     if exc.retry_after is not None:
         detail["retry_after"] = exc.retry_after
+    if exc.provider_status is not None:
+        detail["provider_status"] = exc.provider_status
+    if exc.provider_code:
+        detail["provider_code"] = exc.provider_code
     raise HTTPException(exc.status_code, detail=detail) from exc
 
 
