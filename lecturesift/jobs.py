@@ -2,8 +2,9 @@ import json
 import shutil
 import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from redis import Redis
 
@@ -14,6 +15,7 @@ from .storage import STORAGE
 class JobStore:
     TASK_WEIGHTS = {"visual": 38.0, "audio": 32.0}
     REDIS_KEY = "lecturesift:jobs:v2"
+    REDIS_LOCK_KEY = "lecturesift:jobs:v2:write-lock"
 
     def __init__(self) -> None:
         self._jobs: dict[str, dict[str, Any]] = {}
@@ -21,6 +23,37 @@ class JobStore:
         self._state_path = WORK_DIR / "jobs-state.json"
         self._redis: Redis | None = Redis.from_url(REDIS_URL, decode_responses=True) if REDIS_URL else None
         self._load()
+
+    @contextmanager
+    def _distributed_write_lock(self) -> Iterator[None]:
+        """Prevent the web process and worker from overwriting each other's jobs.
+
+        The local file fallback remains available if Redis is temporarily
+        unreachable, while configured Redis deployments serialize full-state
+        read/modify/write operations with a short renewable lock.
+        """
+        lock = None
+        acquired = False
+        if self._redis is not None:
+            try:
+                lock = self._redis.lock(
+                    self.REDIS_LOCK_KEY,
+                    timeout=30,
+                    blocking_timeout=10,
+                    thread_local=False,
+                )
+                acquired = bool(lock.acquire(blocking=True))
+            except Exception:
+                lock = None
+                acquired = False
+        try:
+            yield
+        finally:
+            if lock is not None and acquired:
+                try:
+                    lock.release()
+                except Exception:
+                    pass
 
     def _load(self) -> None:
         text = ""
@@ -112,7 +145,7 @@ class JobStore:
             },
             **extra,
         }
-        with self._lock:
+        with self._lock, self._distributed_write_lock():
             self._refresh_locked()
             self._jobs[job_id] = data
             self._flush_locked()
@@ -125,7 +158,7 @@ class JobStore:
             return self._materialize_completed(data.copy()) if data else None
 
     def update(self, job_id: str, **values: Any) -> None:
-        with self._lock:
+        with self._lock, self._distributed_write_lock():
             self._refresh_locked()
             data = self._jobs[job_id]
             data.update(values)
@@ -133,7 +166,7 @@ class JobStore:
             self._flush_locked()
 
     def update_task(self, job_id: str, task: str, percent: float, stage: str) -> None:
-        with self._lock:
+        with self._lock, self._distributed_write_lock():
             self._refresh_locked()
             data = self._jobs[job_id]
             tasks = data.setdefault("tasks", {})
@@ -166,7 +199,7 @@ class JobStore:
     def cleanup_expired(self) -> int:
         cutoff = time.time() - JOB_TTL_SECONDS
         removed: list[Path] = []
-        with self._lock:
+        with self._lock, self._distributed_write_lock():
             self._refresh_locked()
             for job_id, data in list(self._jobs.items()):
                 if float(data.get("updated", 0)) < cutoff:
