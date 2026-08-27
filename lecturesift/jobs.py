@@ -13,7 +13,7 @@ from .storage import STORAGE
 
 class JobStore:
     TASK_WEIGHTS = {"visual": 38.0, "audio": 32.0}
-    REDIS_KEY = "lecturesift:jobs:v2"
+    REDIS_KEY = "lecturesift:jobs:v3"
 
     def __init__(self) -> None:
         self._jobs: dict[str, dict[str, Any]] = {}
@@ -59,11 +59,7 @@ class JobStore:
             return
 
     def _flush_locked(self) -> None:
-        payload = json.dumps(
-            {"version": 2, "saved_at": time.time(), "jobs": self._jobs},
-            ensure_ascii=False,
-            separators=(",", ":"),
-        )
+        payload = json.dumps({"version": 3, "saved_at": time.time(), "jobs": self._jobs}, ensure_ascii=False, separators=(",", ":"))
         temporary = self._state_path.with_suffix(".tmp")
         temporary.write_text(payload, encoding="utf-8")
         temporary.replace(self._state_path)
@@ -71,28 +67,27 @@ class JobStore:
             try:
                 self._redis.set(self.REDIS_KEY, payload)
             except Exception:
-                # Local fallback remains usable when Redis is temporarily down.
                 pass
 
     def _materialize_completed(self, data: dict[str, Any]) -> dict[str, Any]:
-        if data.get("status") != "done" or not data.get("remote_prefix") or not STORAGE.remote:
+        key = str(data.get("remote_download_key") or "")
+        if data.get("status") != "done" or not key or not STORAGE.remote:
             return data
-        job_id = str(data.get("job_id", ""))
+        job_id = str(data.get("job_id") or "")
         if not job_id:
             return data
         local_dir = WORK_DIR / job_id
-        if not (local_dir / "result.json").exists():
+        result_path = local_dir / "result.json"
+        local_zip = local_dir / Path(key).name
+        if not result_path.exists() or not local_zip.exists():
             try:
                 local_dir.mkdir(parents=True, exist_ok=True)
-                STORAGE.materialize_job(job_id, local_dir)
+                STORAGE.materialize_output(job_id, key, local_dir)
             except Exception:
                 return data
         data["job_dir"] = str(local_dir)
-        remote_download_key = str(data.get("remote_download_key", ""))
-        if remote_download_key:
-            local_zip = local_dir / Path(remote_download_key).name
-            if local_zip.exists():
-                data["result_path"] = str(local_zip)
+        if local_zip.exists():
+            data["result_path"] = str(local_zip)
         return data
 
     def create(self, job_id: str, job_dir: Path, options: dict, **extra: Any) -> dict:
@@ -106,10 +101,7 @@ class JobStore:
             "updated": now,
             "job_dir": str(job_dir),
             "options": options,
-            "tasks": {
-                "visual": {"percent": 0, "stage": "waiting"},
-                "audio": {"percent": 0, "stage": "waiting"},
-            },
+            "tasks": {"visual": {"percent": 0, "stage": "waiting"}, "audio": {"percent": 0, "stage": "waiting"}},
             **extra,
         }
         with self._lock:
@@ -127,7 +119,9 @@ class JobStore:
     def update(self, job_id: str, **values: Any) -> None:
         with self._lock:
             self._refresh_locked()
-            data = self._jobs[job_id]
+            data = self._jobs.get(job_id)
+            if data is None:
+                return
             data.update(values)
             data["updated"] = time.time()
             self._flush_locked()
@@ -135,7 +129,9 @@ class JobStore:
     def update_task(self, job_id: str, task: str, percent: float, stage: str) -> None:
         with self._lock:
             self._refresh_locked()
-            data = self._jobs[job_id]
+            data = self._jobs.get(job_id)
+            if data is None:
+                return
             tasks = data.setdefault("tasks", {})
             tasks[task] = {"percent": max(0, min(100, round(percent))), "stage": stage}
             weighted = 8.0
@@ -150,18 +146,26 @@ class JobStore:
         data = self.get(job_id)
         if not data:
             return None
-        for key in ("job_dir", "result_path", "technical_error", "source_keys"):
+        for key in ("job_dir", "result_path", "technical_error", "source_keys", "queue_error"):
             data.pop(key, None)
         return data
 
     def recoverable(self) -> list[dict[str, Any]]:
         with self._lock:
             self._refresh_locked()
-            return [
-                data.copy()
-                for data in self._jobs.values()
-                if data.get("status") in {"queued", "working"}
-            ]
+            return [data.copy() for data in self._jobs.values() if data.get("status") in {"queued", "working"}]
+
+    def remove(self, job_id: str) -> dict | None:
+        with self._lock:
+            self._refresh_locked()
+            data = self._jobs.pop(job_id, None)
+            if data is not None:
+                self._flush_locked()
+        if data:
+            path = Path(data.get("job_dir") or WORK_DIR / job_id)
+            if path.is_dir() and path.parent == WORK_DIR:
+                shutil.rmtree(path, ignore_errors=True)
+        return data.copy() if data else None
 
     def cleanup_expired(self) -> int:
         cutoff = time.time() - JOB_TTL_SECONDS
@@ -170,13 +174,15 @@ class JobStore:
             self._refresh_locked()
             for job_id, data in list(self._jobs.items()):
                 if float(data.get("updated", 0)) < cutoff:
-                    removed.append(Path(data.get("job_dir", WORK_DIR / job_id)))
-                    del self._jobs[job_id]
+                    path = Path(data.get("job_dir") or WORK_DIR / job_id)
+                    if path.is_dir() and path.parent == WORK_DIR:
+                        removed.append(path)
+                    if data.get("status") != "done" or not data.get("remote_download_key"):
+                        del self._jobs[job_id]
             if removed:
                 self._flush_locked()
         for path in removed:
-            if path.is_dir() and path.parent == WORK_DIR:
-                shutil.rmtree(path, ignore_errors=True)
+            shutil.rmtree(path, ignore_errors=True)
         return len(removed)
 
 
