@@ -8,7 +8,6 @@ yt-dlp
 reportlab==4.4.3
 python-docx==1.1.2
 httpx==0.28.1
-resend==2.37.0
 Pillow==11.3.0
 SQLAlchemy==2.0.43
 psycopg[binary]==3.2.10

@@ -13,18 +13,21 @@ from lecturesift.app import _options, app
 from lecturesift.errors import normalize_error
 from lecturesift.exports import build_artifacts
 from lecturesift.jobs import JOBS
+from lecturesift.billing_service import register_user, verify_email
 from lecturesift.media import convert_videos_to_mp3, extract_audio_chunks, validate_remote_url
 from lecturesift.pipeline import process_job
 from lecturesift.slides import presentation_score, read_frame_at, scan_candidate_timestamps
 
 
 def billing_headers(client: TestClient) -> dict[str, str]:
-    account = client.post(
-        "/billing/register",
-        json={"email": f"upload-{uuid.uuid4()}@example.com", "password": "strong-test-password"},
+    account = register_user(
+        f"upload-{uuid.uuid4()}@example.com",
+        "Strong-test-password1",
+        "Test",
+        "User",
     )
-    assert account.status_code == 200
-    return {"Authorization": f"Bearer {account.json()['token']}"}
+    verified = verify_email(account["verification_token"])
+    return {"Authorization": f"Bearer {verified['token']}"}
 
 
 def synthetic_slide() -> np.ndarray:

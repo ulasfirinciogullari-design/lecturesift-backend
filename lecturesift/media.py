@@ -181,24 +181,34 @@ def download_remote_video(url: str, job_dir: Path) -> Path:
 
 
 def has_audio_stream(video_path: Path) -> bool:
-    process = subprocess.run(
-        [
-            "ffprobe",
-            "-v",
-            "error",
-            "-select_streams",
-            "a",
-            "-show_entries",
-            "stream=index",
-            "-of",
-            "csv=p=0",
-            str(video_path),
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    return bool(process.stdout.strip())
+    try:
+        process = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "a",
+                "-show_entries",
+                "stream=index",
+                "-of",
+                "csv=p=0",
+                str(video_path),
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        return bool(process.stdout.strip())
+    except FileNotFoundError:
+        # Minimal FFmpeg distributions may omit ffprobe. Mapping the first
+        # audio stream to a null output gives the same yes/no answer.
+        fallback = subprocess.run(
+            ["ffmpeg", "-v", "error", "-i", str(video_path), "-map", "0:a:0", "-f", "null", "-"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return fallback.returncode == 0
 
 
 def extract_audio_chunks(video_path: Path, job_dir: Path, prefix: str = "audio") -> list[Path]:

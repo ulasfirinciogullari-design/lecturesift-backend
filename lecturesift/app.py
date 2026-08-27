@@ -22,14 +22,22 @@ from .billing_service import (
     authenticate_session,
     bank_transfer_available,
     billing_database_health,
+    create_password_reset_token,
+    create_verification_token,
     create_manual_order,
     login_user,
+    logout_user,
     register_user,
-    require_job_entitlement,
+    reset_password,
+    update_account_preferences,
+    validate_job_features,
+    verify_email,
+    verify_email_code,
 )
 from .config import (
     APP_VERSION,
     BILLING_ADMIN_TOKEN,
+    FRONTEND_BASE_URL,
     INSTAGRAM_ACCESS_TOKEN,
     INSTAGRAM_ACCOUNT_ID,
     INSTAGRAM_ADMIN_TOKEN,
@@ -46,6 +54,7 @@ from .daily_social import render_daily_image
 from .instagram import InstagramAPIError, InstagramClient, InstagramConfigurationError
 from .jobs import JOBS
 from .media import download_remote_video, validate_remote_url
+from .mailer import EmailDeliveryError, email_delivery_configured, send_transactional_email
 from .pipeline import process_job
 
 
@@ -135,9 +144,84 @@ class BillingAuthRequest(BaseModel):
     password: str
 
 
+class BillingRegisterRequest(BillingAuthRequest):
+    first_name: str
+    last_name: str
+    phone: str = ""
+    country_code: str = "TR"
+
+
+class BillingEmailRequest(BaseModel):
+    email: str
+
+
+class BillingTokenRequest(BaseModel):
+    token: str
+
+
+class BillingVerificationCodeRequest(BaseModel):
+    email: str
+    code: str
+
+
+class BillingPasswordResetRequest(BillingTokenRequest):
+    new_password: str
+
+
 class ManualOrderRequest(BaseModel):
     plan_code: str
     interval: str = "monthly"
+
+
+class BillingPreferencesRequest(BaseModel):
+    country_code: str
+    preferred_language: str
+
+
+def _send_verification_email(email: str, token: str, code: str) -> None:
+    link = f"{FRONTEND_BASE_URL}/verify.html?token={token}"
+    code_cells = "".join(
+        (
+            '<td style="width:16.66%;height:44px;padding:0;text-align:center;'
+            'border:1px solid #d9d5ff;border-radius:8px;background:#f6f4ff;'
+            'color:#28204f;font-family:Arial,sans-serif;font-size:24px;'
+            f'font-weight:800;line-height:44px;white-space:nowrap">{digit}</td>'
+        )
+        for digit in code
+    )
+    code_table = (
+        '<table role="presentation" aria-label="Altı haneli doğrulama kodu" '
+        'style="width:100%;max-width:276px;table-layout:fixed;border-collapse:separate;'
+        'border-spacing:4px;margin:24px 0;mso-table-lspace:0;mso-table-rspace:0">'
+        f"<tr>{code_cells}</tr></table>"
+    )
+    send_transactional_email(
+        email,
+        "LectureSift e-posta doğrulama",
+        (
+            "<h1>LectureSift hesabını doğrula</h1>"
+            "<p>Hesabını etkinleştirmek için bağlantıya tıkla veya doğrulama ekranına aşağıdaki kodu gir.</p>"
+            f"{code_table}"
+            f'<p><a href="{link}">E-posta adresimi doğrula</a></p>'
+            "<p>Kod ve bağlantı 24 saat geçerlidir. Bu hesabı sen oluşturmadıysan e-postayı yok say.</p>"
+        ),
+        f"LectureSift doğrulama kodun: {code}\nDoğrulama bağlantın: {link}\nKod ve bağlantı 24 saat geçerlidir.",
+    )
+
+
+def _send_password_reset_email(email: str, token: str) -> None:
+    link = f"{FRONTEND_BASE_URL}/reset-password.html?token={token}"
+    send_transactional_email(
+        email,
+        "LectureSift şifre yenileme",
+        (
+            "<h1>LectureSift şifreni yenile</h1>"
+            "<p>Yeni bir şifre belirlemek için aşağıdaki güvenli bağlantıyı kullan.</p>"
+            f'<p><a href="{link}">Şifremi yenile</a></p>'
+            "<p>Bu bağlantı 45 dakika geçerlidir. Bu isteği sen yapmadıysan e-postayı yok say.</p>"
+        ),
+        f"LectureSift şifreni yenile: {link}\nBu bağlantı 45 dakika geçerlidir.",
+    )
 
 
 def _instagram_error(exc: InstagramAPIError) -> None:
@@ -271,8 +355,8 @@ def health() -> dict:
 
 
 @app.get("/billing/plans")
-def billing_plans() -> dict:
-    return public_catalog()
+def billing_plans(currency: str = "TRY") -> dict:
+    return public_catalog(currency)
 
 
 @app.get("/billing/providers")
@@ -295,18 +379,97 @@ def billing_health() -> dict:
         database = billing_database_health()
     except BillingConfigurationError as exc:
         raise HTTPException(503, detail={"code": "LS-BILL-00", "message": str(exc)}) from exc
-    return {"ok": True, "database": database}
+    return {"ok": True, "database": database, "email_delivery_configured": email_delivery_configured()}
 
 
 @app.post("/billing/register")
-def billing_register(payload: BillingAuthRequest) -> dict:
+def billing_register(payload: BillingRegisterRequest) -> dict:
+    if not email_delivery_configured():
+        raise HTTPException(
+            503,
+            detail={"code": "LS-BILL-15", "message": "E-posta doğrulama hizmeti henüz etkinleştirilmemiş."},
+        )
     try:
-        result = register_user(payload.email, payload.password)
+        result = register_user(
+            payload.email,
+            payload.password,
+            payload.first_name,
+            payload.last_name,
+            payload.phone,
+            payload.country_code,
+        )
+        _send_verification_email(
+            result["user"]["email"],
+            result.pop("verification_token"),
+            result.pop("verification_code"),
+        )
     except BillingConfigurationError as exc:
         raise HTTPException(503, detail={"code": "LS-BILL-00", "message": str(exc)}) from exc
+    except EmailDeliveryError as exc:
+        raise HTTPException(503, detail={"code": "LS-BILL-16", "message": str(exc)}) from exc
     except BillingError as exc:
         raise HTTPException(400, detail={"code": "LS-BILL-05", "message": str(exc)}) from exc
+    return {
+        "ok": True,
+        "verification_required": True,
+        "message": "Doğrulama kodunu ve bağlantısını e-posta adresine gönderdik.",
+        "user": result["user"],
+    }
+
+
+@app.post("/billing/verify-email")
+def billing_verify_email(payload: BillingTokenRequest) -> dict:
+    try:
+        result = verify_email(payload.token)
+    except BillingAuthenticationError as exc:
+        raise HTTPException(400, detail={"code": "LS-BILL-17", "message": str(exc)}) from exc
     return {"ok": True, **result, "account": account_status(result["user"]["id"])}
+
+
+@app.post("/billing/verify-email-code")
+def billing_verify_email_code(payload: BillingVerificationCodeRequest) -> dict:
+    try:
+        result = verify_email_code(payload.email, payload.code)
+    except BillingAuthenticationError as exc:
+        raise HTTPException(400, detail={"code": "LS-BILL-17", "message": str(exc)}) from exc
+    return {"ok": True, **result, "account": account_status(result["user"]["id"])}
+
+
+@app.post("/billing/resend-verification")
+def billing_resend_verification(payload: BillingEmailRequest) -> dict:
+    if not email_delivery_configured():
+        raise HTTPException(503, detail={"code": "LS-BILL-15", "message": "E-posta doğrulama hizmeti henüz etkinleştirilmemiş."})
+    try:
+        result = create_verification_token(payload.email)
+        if result:
+            _send_verification_email(result["email"], result["token"], result["code"])
+    except EmailDeliveryError as exc:
+        raise HTTPException(503, detail={"code": "LS-BILL-16", "message": str(exc)}) from exc
+    return {"ok": True, "message": "Hesap uygunsa doğrulama kodu ve bağlantısı gönderildi."}
+
+
+@app.post("/billing/forgot-password")
+def billing_forgot_password(payload: BillingEmailRequest) -> dict:
+    if not email_delivery_configured():
+        raise HTTPException(503, detail={"code": "LS-BILL-15", "message": "E-posta hizmeti henüz etkinleştirilmemiş."})
+    try:
+        result = create_password_reset_token(payload.email)
+        if result:
+            _send_password_reset_email(result["email"], result["token"])
+    except EmailDeliveryError as exc:
+        raise HTTPException(503, detail={"code": "LS-BILL-16", "message": str(exc)}) from exc
+    return {"ok": True, "message": "Hesap uygunsa şifre yenileme bağlantısı gönderildi."}
+
+
+@app.post("/billing/reset-password")
+def billing_reset_password(payload: BillingPasswordResetRequest) -> dict:
+    try:
+        reset_password(payload.token, payload.new_password)
+    except BillingAuthenticationError as exc:
+        raise HTTPException(400, detail={"code": "LS-BILL-18", "message": str(exc)}) from exc
+    except BillingError as exc:
+        raise HTTPException(400, detail={"code": "LS-BILL-19", "message": str(exc)}) from exc
+    return {"ok": True, "message": "Şifren yenilendi. Yeni şifrenle giriş yapabilirsin."}
 
 
 @app.post("/billing/login")
@@ -320,9 +483,31 @@ def billing_login(payload: BillingAuthRequest) -> dict:
     return {"ok": True, **result, "account": account_status(result["user"]["id"])}
 
 
+@app.post("/billing/logout")
+def billing_logout(user: dict = Depends(_billing_user)) -> dict:
+    logout_user(user["id"])
+    return {"ok": True, "message": "Oturum kapatıldı.", "user_id": user["id"]}
+
+
 @app.get("/billing/me")
 def billing_me(user: dict = Depends(_billing_user)) -> dict:
     return {"ok": True, "account": account_status(user["id"])}
+
+
+@app.patch("/billing/me/preferences")
+def billing_update_preferences(
+    payload: BillingPreferencesRequest,
+    user: dict = Depends(_billing_user),
+) -> dict:
+    try:
+        account = update_account_preferences(
+            user["id"], payload.country_code, payload.preferred_language
+        )
+    except BillingAuthenticationError as exc:
+        raise HTTPException(401, detail={"code": "LS-BILL-06", "message": str(exc)}) from exc
+    except BillingError as exc:
+        raise HTTPException(400, detail={"code": "LS-BILL-21", "message": str(exc)}) from exc
+    return {"ok": True, "message": "Hesap tercihlerin kaydedildi.", "account": account}
 
 
 @app.post("/billing/manual-transfer/orders")
@@ -497,8 +682,25 @@ async def create_job(
     job_type: str = Form("study_pack"),
     billing_user: dict = Depends(_billing_user),
 ) -> dict:
+    options = _options(
+        source_language,
+        output_language,
+        summary_style,
+        quiz_count,
+        flashcard_count,
+        translate_transcript,
+        slides_offset_seconds,
+        output_formats,
+        job_type,
+    )
     try:
-        require_job_entitlement(billing_user["id"])
+        validate_job_features(
+            billing_user["id"],
+            quiz_count=options["quiz_count"],
+            flashcard_count=options["flashcard_count"],
+            output_formats=options["output_formats"],
+            summary_style=options["summary_style"],
+        )
     except BillingError as exc:
         raise HTTPException(402, detail={"code": "LS-BILL-10", "message": str(exc)}) from exc
     layout = "separate" if source_layout == "separate" or slides_file or visual_files else "classic"
@@ -533,17 +735,6 @@ async def create_job(
         shutil.rmtree(job_dir, ignore_errors=True)
         raise
 
-    options = _options(
-        source_language,
-        output_language,
-        summary_style,
-        quiz_count,
-        flashcard_count,
-        translate_transcript,
-        slides_offset_seconds,
-        output_formats,
-        job_type,
-    )
     options["billing_user_id"] = billing_user["id"]
     source_type = "upload_separate" if layout == "separate" else ("upload_multi" if len(audio_paths) > 1 else "upload")
     JOBS.create(
@@ -579,18 +770,6 @@ def create_url_job(
     job_type: str = Form("study_pack"),
     billing_user: dict = Depends(_billing_user),
 ) -> dict:
-    try:
-        require_job_entitlement(billing_user["id"])
-    except BillingError as exc:
-        raise HTTPException(402, detail={"code": "LS-BILL-10", "message": str(exc)}) from exc
-    try:
-        url = validate_remote_url(video_url)
-    except LectureSiftError as exc:
-        _raise_public(exc)
-
-    JOBS.cleanup_expired()
-    job_id = str(uuid.uuid4())
-    job_dir = _job_path(job_id)
     options = _options(
         source_language,
         output_language,
@@ -602,6 +781,24 @@ def create_url_job(
         output_formats,
         job_type,
     )
+    try:
+        validate_job_features(
+            billing_user["id"],
+            quiz_count=options["quiz_count"],
+            flashcard_count=options["flashcard_count"],
+            output_formats=options["output_formats"],
+            summary_style=options["summary_style"],
+        )
+    except BillingError as exc:
+        raise HTTPException(402, detail={"code": "LS-BILL-10", "message": str(exc)}) from exc
+    try:
+        url = validate_remote_url(video_url)
+    except LectureSiftError as exc:
+        _raise_public(exc)
+
+    JOBS.cleanup_expired()
+    job_id = str(uuid.uuid4())
+    job_dir = _job_path(job_id)
     options["billing_user_id"] = billing_user["id"]
     JOBS.create(job_id, job_dir, options, source_type="url", source_url=url)
     JOBS.update(job_id, status="working", percent=3, stage="url_download")

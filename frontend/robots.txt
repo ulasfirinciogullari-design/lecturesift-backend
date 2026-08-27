@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /account.html
+Disallow: /verify.html
+Disallow: /reset-password.html
+Sitemap: https://lecturesift.com/sitemap.xml
