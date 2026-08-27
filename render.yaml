@@ -9,11 +9,13 @@ services:
   - type: web
     name: lecturesift-backend
     runtime: docker
-    plan: free
+    plan: starter
     autoDeploy: true
     envVars:
       - key: OPENAI_API_KEY
         sync: false
+      - key: VISION_TRANSLATION_MODEL
+        value: gpt-4o-mini
       - key: INSTAGRAM_ACCESS_TOKEN
         sync: false
       - key: INSTAGRAM_ACCOUNT_ID
@@ -43,19 +45,51 @@ services:
       - key: EMAIL_PROVIDER
         value: resend
       - key: EMAIL_FROM
-        sync: false
+        value: LectureSift <no-reply@mail.lecturesift.com>
       - key: RESEND_API_KEY
         sync: false
       - key: FRONTEND_BASE_URL
         value: https://lecturesift.com
-      - key: INSTAGRAM_DAILY_AUTOMATION_ENABLED
-        value: true
       - key: PUBLIC_BASE_URL
         value: https://lecturesift-backend.onrender.com
+      - key: CORS_ALLOW_ORIGINS
+        value: https://lecturesift.com,https://www.lecturesift.com,https://clever-horse-22b1a8.netlify.app
+      - key: RATE_LIMIT_ENABLED
+        value: "true"
       - key: LECTURESIFT_GUEST_TRIAL_MINUTES
         value: "5"
       - key: LECTURESIFT_INSTAGRAM_BONUS_MINUTES
         value: "30"
+      - key: LECTURESIFT_PLAN_PRICE_OVERRIDES
+        sync: false
+      - key: PAYTR_MERCHANT_ID
+        sync: false
+      - key: PAYTR_MERCHANT_KEY
+        sync: false
+      - key: PAYTR_MERCHANT_SALT
+        sync: false
+      - key: PAYTR_TEST_MODE
+        value: "true"
+      - key: PAYTR_DEBUG
+        value: "false"
+      - key: PAYTR_RECURRING_ENABLED
+        value: "false"
+      - key: LIVE_SALES_ENABLED
+        value: "false"
+      - key: LEGAL_ENTITY_NAME
+        sync: false
+      - key: LEGAL_ADDRESS
+        sync: false
+      - key: LEGAL_TAX_ID
+        sync: false
+      - key: LEGAL_REGISTRY_ID
+        sync: false
+      - key: LEGAL_EMAIL
+        value: support@lecturesift.com
+      - key: LEGAL_PHONE
+        sync: false
+      - key: ACCOUNT_DELETION_GRACE_DAYS
+        value: "7"
       - key: CELERY_BROKER_URL
         fromService:
           type: keyvalue
@@ -76,6 +110,8 @@ services:
         sync: false
       - key: S3_SECRET_ACCESS_KEY
         sync: false
+      - key: INSTAGRAM_DAILY_AUTOMATION_ENABLED
+        value: "true"
 
   - type: worker
     name: lecturesift-worker
@@ -88,6 +124,8 @@ services:
         value: "1"
       - key: OPENAI_API_KEY
         sync: false
+      - key: VISION_TRANSLATION_MODEL
+        value: gpt-4o-mini
       - key: DATABASE_URL
         fromDatabase:
           name: lecturesift-postgres
@@ -118,6 +156,30 @@ services:
         sync: false
 
   - type: cron
+    name: lecturesift-retention-cleanup
+    runtime: docker
+    plan: starter
+    schedule: "17 2 * * *"
+    dockerCommand: python -m lecturesift.retention_cleanup
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: lecturesift-postgres
+          property: connectionString
+      - key: S3_ENDPOINT_URL
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: ACCOUNT_DELETION_GRACE_DAYS
+        value: "7"
+
+  - type: cron
     name: lecturesift-instagram-daily
     runtime: docker
     plan: starter
@@ -131,6 +193,6 @@ services:
       - key: INSTAGRAM_APP_SECRET
         sync: false
       - key: INSTAGRAM_DAILY_AUTOMATION_ENABLED
-        value: true
+        value: "true"
       - key: PUBLIC_BASE_URL
         value: https://lecturesift-backend.onrender.com
