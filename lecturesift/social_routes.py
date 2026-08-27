@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 
@@ -13,6 +16,8 @@ from .config import (
 )
 from .instagram import InstagramAPIError, InstagramClient, InstagramConfigurationError
 from .launch_social import LAUNCH_POSTS, completed_indices, next_pending_post, render_launch_image
+
+_BOOTSTRAP_STATUS_PATH = Path("/tmp/lecturesift-launch-bootstrap.json")
 
 
 def _client() -> InstagramClient:
@@ -36,6 +41,16 @@ def install_social_routes(app: FastAPI) -> None:
             media_type="image/jpeg",
             headers={"Cache-Control": "public, max-age=86400"},
         )
+
+    @app.get("/instagram/launch/bootstrap")
+    def instagram_launch_bootstrap_status() -> dict:
+        if not _BOOTSTRAP_STATUS_PATH.exists():
+            return {"status": "not_started"}
+        try:
+            payload = json.loads(_BOOTSTRAP_STATUS_PATH.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {"status": "unavailable"}
+        return payload if isinstance(payload, dict) else {"status": "unavailable"}
 
     @app.get("/instagram/launch/status")
     def instagram_launch_status() -> dict:
