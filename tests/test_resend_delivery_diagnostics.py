@@ -4,6 +4,7 @@ from resend.exceptions import ResendError
 
 import lecturesift.email_auth as email_auth
 from lecturesift import config
+from lecturesift.resend_smtp import ResendSMTPError
 
 
 def test_resend_rejection_retains_only_safe_provider_metadata(monkeypatch):
@@ -18,7 +19,11 @@ def test_resend_rejection_retains_only_safe_provider_metadata(monkeypatch):
             suggested_action="Generate a new key.",
         )
 
+    def reject_smtp(**kwargs):
+        raise ResendSMTPError("invalid_api_key", status=535)
+
     monkeypatch.setattr(email_auth.resend.Emails, "send", reject)
+    monkeypatch.setattr(email_auth, "send_resend_smtp", reject_smtp)
 
     with pytest.raises(email_auth.EmailDeliveryError) as captured:
         email_auth._send_verification_email(
@@ -29,7 +34,7 @@ def test_resend_rejection_retains_only_safe_provider_metadata(monkeypatch):
         )
 
     error = captured.value
-    assert error.provider_status == 403
+    assert error.provider_status == 535
     assert error.provider_code == "invalid_api_key"
     assert "credential" not in str(error).casefold()
     assert "re_hidden_test_value" not in str(error)
