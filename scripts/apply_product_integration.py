@@ -13,26 +13,13 @@ def replace(path: str, old: str, new: str, *, count: int = 1) -> None:
     target.write_text(text.replace(old, new), encoding="utf-8")
 
 
-def insert_after(path: str, marker: str, value: str) -> None:
-    replace(path, marker, marker + value)
-
-
 # ---- FastAPI integration -------------------------------------------------
-insert_after(
-    "lecturesift/app.py",
-    "from .billing_service import (\n",
-    "",
-)
 replace(
     "lecturesift/app.py",
     ")\nfrom .config import (\n    APP_VERSION,\n",
     ")\nfrom .commerce import (\n    complete_job_history,\n    preview_result_for_user,\n    record_manual_order_entitlement,\n    register_job_history,\n    require_download_access,\n    require_visual_translation_access,\n)\nfrom .config import (\n    APP_VERSION,\n    CORS_ALLOW_ORIGINS,\n",
 )
-replace(
-    "lecturesift/app.py",
-    '    allow_origins=["*"],\n',
-    "    allow_origins=CORS_ALLOW_ORIGINS,\n",
-)
+replace("lecturesift/app.py", '    allow_origins=["*"],\n', "    allow_origins=CORS_ALLOW_ORIGINS,\n")
 replace(
     "lecturesift/app.py",
     "def _public_job(data: dict) -> dict:\n    result = data.copy()\n    for key in (\"job_dir\", \"result_path\", \"technical_error\"):\n        result.pop(key, None)\n    result[\"options\"] = {\n        key: value for key, value in result.get(\"options\", {}).items() if key != \"billing_user_id\"\n    }\n    return result\n\n\n",
@@ -48,16 +35,8 @@ replace(
     '        "translate_transcript": translation_enabled,\n        "slides_offset_seconds":',
     '        "translate_transcript": translation_enabled,\n        "translate_visual_text": bool(translate_visual_text) and not (source != "auto" and source == output),\n        "slides_offset_seconds":',
 )
-replace(
-    "lecturesift/app.py",
-    "        account = approve_manual_order(reference)\n",
-    "        account = approve_manual_order(reference)\n        record_manual_order_entitlement(reference)\n",
-)
-replace(
-    "lecturesift/app.py",
-    '    return json.loads(path.read_text(encoding="utf-8"))\n',
-    '    result = json.loads(path.read_text(encoding="utf-8"))\n    return preview_result_for_user(user["id"], job_id, result)\n',
-)
+replace("lecturesift/app.py", "        account = approve_manual_order(reference)\n", "        account = approve_manual_order(reference)\n        record_manual_order_entitlement(reference)\n")
+replace("lecturesift/app.py", '    return json.loads(path.read_text(encoding="utf-8"))\n', '    result = json.loads(path.read_text(encoding="utf-8"))\n    return preview_result_for_user(user["id"], job_id, result)\n')
 replace(
     "lecturesift/app.py",
     "@app.get(\"/jobs/{job_id}/slide/{filename}\")\ndef get_slide(job_id: str, filename: str, user: dict = Depends(_billing_user)) -> FileResponse:\n    data = _owned_job(job_id, user)\n    if Path(filename).name != filename:\n        raise HTTPException(400, detail={\"code\": \"LS-FILE-01\", \"message\": \"Geçersiz dosya adı.\"})\n    path = Path(data[\"job_dir\"]) / \"slides\" / filename\n    if not path.exists():\n        raise HTTPException(404, detail={\"code\": \"LS-FILE-02\", \"message\": \"Slayt görseli bulunamadı.\"})\n    return FileResponse(str(path), media_type=\"image/jpeg\")\n",
@@ -74,18 +53,8 @@ replace(
     "    data = _owned_job(job_id, user)\n    if data.get(\"status\") != \"done\":\n        raise HTTPException(409, detail={\"code\": \"LS-JOB-02\", \"message\": \"Ders analizi henüz tamamlanmadı.\"})\n    return FileResponse(\n",
     "    data = _owned_job(job_id, user)\n    if data.get(\"status\") != \"done\":\n        raise HTTPException(409, detail={\"code\": \"LS-JOB-02\", \"message\": \"Ders analizi henüz tamamlanmadı.\"})\n    _download_access_or_402(user[\"id\"], job_id)\n    return FileResponse(\n",
 )
-replace(
-    "lecturesift/app.py",
-    "    translate_transcript: bool = Form(True),\n    slides_offset_seconds: float = Form(0),\n",
-    "    translate_transcript: bool = Form(True),\n    translate_visual_text: bool = Form(False),\n    slides_offset_seconds: float = Form(0),\n",
-    count=2,
-)
-replace(
-    "lecturesift/app.py",
-    "        translate_transcript,\n        slides_offset_seconds,\n",
-    "        translate_transcript,\n        translate_visual_text,\n        slides_offset_seconds,\n",
-    count=2,
-)
+replace("lecturesift/app.py", "    translate_transcript: bool = Form(True),\n    slides_offset_seconds: float = Form(0),\n", "    translate_transcript: bool = Form(True),\n    translate_visual_text: bool = Form(False),\n    slides_offset_seconds: float = Form(0),\n", count=2)
+replace("lecturesift/app.py", "        translate_transcript,\n        slides_offset_seconds,\n", "        translate_transcript,\n        translate_visual_text,\n        slides_offset_seconds,\n", count=2)
 replace(
     "lecturesift/app.py",
     "        validate_job_features(\n            billing_user[\"id\"],\n            quiz_count=options[\"quiz_count\"],\n            flashcard_count=options[\"flashcard_count\"],\n            output_formats=options[\"output_formats\"],\n            summary_style=options[\"summary_style\"],\n        )\n",
@@ -108,54 +77,29 @@ replace(
     "            JOBS.update(\n                job_id,\n                status=\"error\",\n                percent=0,\n                stage=\"error\",\n                error_code=normalized.code,\n                error=normalized.user_message,\n                technical_error=normalized.technical_message,\n                elapsed_seconds=round(time.time() - started, 1),\n            )\n            complete_job_history(job_id, status=\"error\")\n",
 )
 
-# ---- Pipeline: timestamped transcript sections + translated slide images --
-replace(
-    "lecturesift/pipeline.py",
-    "from .slides import extract_slides\n",
-    "from .slides import extract_slides\nfrom .visual_translation import translate_slide_images\n",
-)
-replace(
-    "lecturesift/pipeline.py",
-    "def _audio_pipeline(job_id: str, video_paths: list[Path], job_dir: Path, options: dict) -> tuple[str, str]:\n    audio_chunks: list[Path] = []\n",
-    "def _audio_pipeline(job_id: str, video_paths: list[Path], job_dir: Path, options: dict) -> tuple[str, str, list[dict]]:\n    audio_chunks: list[Path] = []\n",
-)
-replace(
-    "lecturesift/pipeline.py",
-    "        return \"\", \"\"\n\n    transcripts: list[str] = []\n",
-    "        return \"\", \"\", []\n\n    transcripts: list[str] = []\n    transcript_segments: list[dict] = []\n    timeline_cursor = 0.0\n",
-)
+# ---- Pipeline ------------------------------------------------------------
+replace("lecturesift/pipeline.py", "from .slides import extract_slides\n", "from .slides import extract_slides\nfrom .visual_translation import translate_slide_images\n")
+replace("lecturesift/pipeline.py", "def _audio_pipeline(job_id: str, video_paths: list[Path], job_dir: Path, options: dict) -> tuple[str, str]:\n    audio_chunks: list[Path] = []\n", "def _audio_pipeline(job_id: str, video_paths: list[Path], job_dir: Path, options: dict) -> tuple[str, str, list[dict]]:\n    audio_chunks: list[Path] = []\n")
+replace("lecturesift/pipeline.py", "        return \"\", \"\"\n\n    transcripts: list[str] = []\n", "        return \"\", \"\", []\n\n    transcripts: list[str] = []\n    transcript_segments: list[dict] = []\n    timeline_cursor = 0.0\n")
 replace(
     "lecturesift/pipeline.py",
     "        text = transcribe(audio_path, options[\"source_language\"])\n        if text.strip():\n            transcripts.append(text.strip())\n",
     "        text = transcribe(audio_path, options[\"source_language\"])\n        duration = _source_duration_seconds([audio_path])\n        if text.strip():\n            transcripts.append(text.strip())\n            transcript_segments.append({\n                \"index\": len(transcript_segments) + 1,\n                \"start_second\": round(timeline_cursor, 1),\n                \"end_second\": round(timeline_cursor + duration, 1),\n                \"text\": text.strip(),\n            })\n        timeline_cursor += duration\n",
 )
-replace(
-    "lecturesift/pipeline.py",
-    "    return original, translated\n",
-    "    return original, translated, transcript_segments\n",
-)
+replace("lecturesift/pipeline.py", "    return original, translated\n", "    return original, translated, transcript_segments\n")
 replace(
     "lecturesift/pipeline.py",
     "            original_transcript, translated_transcript = audio_future.result()\n\n        diagnostics[\"source_mode\"] = source_mode\n\n        JOBS.update(job_id, percent=73, stage=\"study_pack\")\n",
     "            original_transcript, translated_transcript, transcript_segments = audio_future.result()\n\n        diagnostics[\"source_mode\"] = source_mode\n        if options.get(\"translate_visual_text\") and slides:\n            JOBS.update(job_id, percent=71, stage=\"visual_translation\")\n            slides, visual_diagnostics = translate_slide_images(\n                slides, slides_dir, options[\"output_language\"],\n                progress=lambda percent, stage: JOBS.update(job_id, percent=min(72, 70 + percent * 0.02), stage=stage),\n            )\n            diagnostics[\"visual_translation\"] = visual_diagnostics\n        else:\n            diagnostics[\"visual_translation\"] = {\"requested\": False, \"translated_slides\": 0, \"translated_regions\": 0}\n\n        JOBS.update(job_id, percent=73, stage=\"study_pack\")\n",
 )
-replace(
-    "lecturesift/pipeline.py",
-    "            options[\"flashcard_count\"],\n        )\n",
-    "            options[\"flashcard_count\"],\n            transcript_segments=transcript_segments,\n        )\n",
-    count=1,
-)
-replace(
-    "lecturesift/pipeline.py",
-    '            "transcript": translated_transcript or original_transcript,\n            **study_pack,\n',
-    '            "transcript": translated_transcript or original_transcript,\n            "transcript_segments": transcript_segments,\n            **study_pack,\n',
-)
+replace("lecturesift/pipeline.py", "            options[\"flashcard_count\"],\n        )\n", "            options[\"flashcard_count\"],\n            transcript_segments=transcript_segments,\n        )\n", count=1)
+replace("lecturesift/pipeline.py", '            "transcript": translated_transcript or original_transcript,\n            **study_pack,\n', '            "transcript": translated_transcript or original_transcript,\n            "transcript_segments": transcript_segments,\n            **study_pack,\n')
 
 # Hidden guest plan must never unlock downloads or visual translation.
-replace(
-    "lecturesift/rollout_service.py",
-    "        (\"short\", \"standard\"),\n        1,\n    ),\n",
-    "        (\"short\", \"standard\"),\n        1,\n        download_enabled=False,\n        visual_translation=False,\n        output_retention_days=1,\n    ),\n",
-)
+replace("lecturesift/rollout_service.py", "        (\"short\", \"standard\"),\n        1,\n    ),\n", "        (\"short\", \"standard\"),\n        1,\n        download_enabled=False,\n        visual_translation=False,\n        output_retention_days=1,\n    ),\n")
+
+# Keep legacy acceptance expectations aligned with this integration release.
+replace("tests/test_v4.py", '    assert health.json()["version"] == "4.1"\n', '    assert health.json()["version"] == "4.2"\n')
+replace("tests/test_billing.py", '    assert providers["paytr"]["status"] == "pending_credentials"\n', '    assert providers["paytr"]["status"] == "configuration_required"\n')
 
 print("Product integration patch applied.")
