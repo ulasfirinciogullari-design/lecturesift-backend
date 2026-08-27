@@ -48,10 +48,21 @@ function renderAdminOrders(orders) {
     <td>${adminEscape(order.plan_code)} / ${adminEscape(order.interval)}</td>
     <td>${adminMoney(order.amount_minor, order.currency)}</td>
     <td><span class="status-pill ${order.status === "paid" ? "paid" : ""}">${adminEscape(adminT(`order.${order.status}`, order.status))}</span></td>
-    <td>${order.status === "pending" ? `<button data-approve="${adminEscape(order.reference)}">${adminEscape(adminT("admin.approve", "Onayla"))}</button>` : "—"}</td>
+    <td>${order.status === "pending" ? `<span class="admin-actions"><button class="admin-action approve" data-order-decision="${adminEscape(order.reference)}" data-approve="1">${adminEscape(adminT("admin.approve", "Onayla"))}</button><button class="admin-action reject" data-order-decision="${adminEscape(order.reference)}" data-approve="0">${adminEscape(adminT("admin.reject", "Reddet"))}</button></span>` : "—"}</td>
   </tr>`).join("");
   admin$("adminOrders").innerHTML = `<table class="admin-table"><thead><tr><th>${adminT("payment.orderNumber","Sipariş no")}</th><th>${adminT("admin.customer","Müşteri")}</th><th>${adminT("admin.plan","Plan")}</th><th>${adminT("payment.amount","Tutar")}</th><th>${adminT("admin.status","Durum")}</th><th>${adminT("admin.action","İşlem")}</th></tr></thead><tbody>${rows || `<tr><td colspan="6">${adminT("admin.noOrders","Sipariş bulunamadı.")}</td></tr>`}</tbody></table>`;
-  document.querySelectorAll("[data-approve]").forEach(button => button.addEventListener("click", () => approveOrder(button)));
+  document.querySelectorAll("[data-order-decision]").forEach(button => button.addEventListener("click", () => decideOrder(button)));
+}
+
+function renderAdminRewards(rewards) {
+  const rows = rewards.map(reward => `<tr>
+    <td><strong>@${adminEscape(reward.handle)}</strong><br><small>${adminEscape(reward.email || "")}</small></td>
+    <td>+${Number(reward.minutes || 0).toLocaleString(window.LectureSiftI18n?.locale || "tr-TR")} ${adminEscape(adminT("unit.minuteShort", "dk"))}</td>
+    <td>${adminEscape(adminT(`order.${reward.status}`, reward.status))}</td>
+    <td><span class="admin-actions"><button class="admin-action approve" data-reward-decision="${adminEscape(reward.id)}" data-approve="1">${adminEscape(adminT("admin.approve", "Onayla"))}</button><button class="admin-action reject" data-reward-decision="${adminEscape(reward.id)}" data-approve="0">${adminEscape(adminT("admin.reject", "Reddet"))}</button></span></td>
+  </tr>`).join("");
+  admin$("adminRewards").innerHTML = `<table class="admin-table"><thead><tr><th>${adminT("admin.handle","Kullanıcı adı")}</th><th>${adminT("admin.minutes","Dakika")}</th><th>${adminT("admin.status","Durum")}</th><th>${adminT("admin.action","İşlem")}</th></tr></thead><tbody>${rows || `<tr><td colspan="4">${adminT("admin.noRewards","Bekleyen bonus talebi yok.")}</td></tr>`}</tbody></table>`;
+  document.querySelectorAll("[data-reward-decision]").forEach(button => button.addEventListener("click", () => decideReward(button)));
 }
 
 function renderAdminUsers(users) {
@@ -64,22 +75,38 @@ function renderAdminUsers(users) {
 }
 
 async function loadAdmin() {
-  const body = await adminRequest("/billing/admin/overview?limit=100");
+  const [body, rewardBody] = await Promise.all([
+    adminRequest("/billing/admin/overview?limit=100"),
+    adminRequest("/admin/instagram-rewards?status=pending_verification"),
+  ]);
   admin$("adminUsers").textContent = body.counts.users;
   admin$("adminVerified").textContent = body.counts.verified_users;
   admin$("adminPending").textContent = body.counts.pending_orders;
   admin$("adminSubscriptions").textContent = body.counts.active_subscriptions;
   renderAdminOrders(body.orders || []);
+  renderAdminRewards(rewardBody.rewards || []);
   renderAdminUsers(body.users || []);
   admin$("adminLogin").hidden = true;
   admin$("adminPanel").hidden = false;
 }
 
-async function approveOrder(button) {
-  const reference = button.dataset.approve;
+async function decideOrder(button) {
+  const reference = button.dataset.orderDecision;
   button.disabled = true;
   try {
-    await adminRequest(`/billing/manual-transfer/orders/${encodeURIComponent(reference)}/approve`, {method: "POST"});
+    await adminRequest(`/admin/manual-orders/${encodeURIComponent(reference)}/decision`, {method: "POST", body: JSON.stringify({approve: button.dataset.approve === "1"})});
+    await loadAdmin();
+  } catch (error) {
+    adminNotice(error.message, true);
+    button.disabled = false;
+  }
+}
+
+async function decideReward(button) {
+  const rewardId = button.dataset.rewardDecision;
+  button.disabled = true;
+  try {
+    await adminRequest(`/admin/instagram-rewards/${encodeURIComponent(rewardId)}/decision`, {method: "POST", body: JSON.stringify({approve: button.dataset.approve === "1"})});
     await loadAdmin();
   } catch (error) {
     adminNotice(error.message, true);

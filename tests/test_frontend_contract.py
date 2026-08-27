@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 from lecturesift.billing import SUPPORTED_CURRENCIES
@@ -96,3 +97,41 @@ def test_profile_admin_bank_and_full_comparison_interfaces_are_present():
     assert all(value in plans for value in ("compareHead", "compareBody", "publicBankHolder"))
     assert "renderCompare" in plan_script and "/billing/manual-transfer" in plan_script
     assert "adminTokenForm" in admin and "adminOrders" in admin
+
+
+def test_runtime_translation_keys_exist_for_every_dynamic_message():
+    runtime = (FRONTEND / "rollout.js").read_text(encoding="utf-8")
+    catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    used_keys = set(re.findall(r'rt\(["\']([^"\']+)["\']', runtime))
+    catalog_keys = set(re.findall(r'^\s*["\']([^"\']+)["\']\s*:\s*\[', catalog, re.MULTILINE))
+    assert used_keys
+    assert used_keys <= catalog_keys
+
+    translation_rows = re.findall(r'^\s*["\'][^"\']+["\']\s*:\s*(\[[^\n]+\])', catalog, re.MULTILINE)
+    assert translation_rows
+    assert all(len(json.loads(row)) == 13 for row in translation_rows)
+    assert all(all(str(value).strip() for value in json.loads(row)) for row in translation_rows)
+
+
+def test_private_pages_are_excluded_from_search_indexing():
+    private_pages = (
+        "login.html",
+        "register.html",
+        "account.html",
+        "forgot-password.html",
+        "verify.html",
+        "reset-password.html",
+        "admin.html",
+    )
+    for page in private_pages:
+        content = (FRONTEND / page).read_text(encoding="utf-8")
+        assert '<meta name="robots" content="noindex,nofollow">' in content, page
+
+    sitemap = (FRONTEND / "sitemap.xml").read_text(encoding="utf-8")
+    robots = (FRONTEND / "robots.txt").read_text(encoding="utf-8")
+    for page in private_pages:
+        assert page not in sitemap
+        assert f"Disallow: /{page}" in robots
+
+    for page in ("features.html", "plans.html", "about.html", "contact.html"):
+        assert page in sitemap
