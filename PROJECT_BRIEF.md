@@ -16,18 +16,21 @@ The V4 foundation passed this real-video gate on August 27, 2026. After the sing
 
 A second real-video gate used the 4:28 University of Manchester “Flipped Classroom for Quantitative Methods” WebM. It mixes an office interview with three full-screen or slide-dominant educational frames. After adding single-pass format-independent FFmpeg sampling, accurate frame seeking, and textured natural-scene rejection, V4 completed visual analysis in 4.25 seconds with approximately 84 MB peak RSS. It rejected all interview/office frames and preserved exactly the three genuine slide frames at 01:13, 02:42, and 04:15.
 
-## V4 foundation
+## V4.1 foundation
 
 - Parallel audio transcription and visual scanning
 - Timestamp-only visual candidates for low memory usage
 - Layout, text, face/skin, persistence, and duplicate checks for slides
-- Original plus translated transcript
+- One transcript when source and output languages match; original plus translated transcript otherwise
 - Five summary profiles
 - Interactive quiz and flashcards in the browser
-- Individual PDF/TXT downloads plus complete ZIP
+- Selectable PDF, Word, and TXT downloads; the default ZIP contains only PDFs
 - Human-readable errors with small support codes such as `LS-URL-02`
 - Live processing timeline
-- Optional dual-source mode: transcription from the primary/audio recording and slide extraction from a synchronized second recording
+- Ordered multi-video lectures, with drag-and-drop reordering in the interface
+- Separate ordered audio and visual/slide source lists, including a global synchronization offset
+- Video-to-MP3 conversion, combining ordered videos into one audio file
+- URL-to-video download utility using direct-media discovery and provider extraction
 - Direct video and supported education-page URLs, with honest warnings about provider restrictions
 - Turkish and English product copy, with core labels for eleven additional languages
 
@@ -36,8 +39,8 @@ A second real-video gate used the 4:28 University of Manchester “Flipped Class
 1. The known no-slide Biology 252 sample returns exactly 0 slides. **Passed on V4 foundation.**
 2. A genuine slide-based lecture keeps readable, unique presentation frames. **Passed on V4 foundation.**
 3. A long lecture completes without memory spikes or oversized transcription uploads.
-4. Original and translated transcripts remain separately accessible.
-5. Every completed job provides web results, individual PDF/TXT files, and a ZIP.
+4. Original and translated transcripts remain separately accessible when they differ; identical-language output is not duplicated.
+5. Every completed study job provides web results, selected PDF/Word/TXT files, and a ZIP; default ZIPs contain PDFs only.
 6. Errors are understandable without exposing stack traces or infrastructure jargon.
 
 ## Next phases

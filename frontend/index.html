@@ -17,7 +17,7 @@
       <span>Lecture<span>Sift</span></span>
     </a>
     <div class="top-actions">
-      <span class="version-pill">V4</span>
+      <span class="version-pill">V4.1</span>
       <label class="language-picker">
         <span class="sr-only">Arayüz dili</span>
         <select id="uiLanguage"></select>
@@ -50,42 +50,36 @@
         </div>
 
         <div id="uploadPanel" class="source-panel active" role="tabpanel" aria-labelledby="uploadTab">
-          <div class="dual-upload-grid">
-            <div class="upload-source-card">
-              <div class="upload-source-head"><strong data-i18n="audioSourceTitle">Ana / ses videosu</strong><span data-i18n="required">Zorunlu</span></div>
-              <p data-i18n="audioSourceHelp">Ses ve transkript buradan alınır. Ayrı slayt videosu eklemezsen görüntüler de bu videodan taranır.</p>
-              <input id="videoFile" class="file-input" type="file" accept="video/mp4,video/webm,video/quicktime,video/x-matroska">
-              <label id="dropZone" class="drop-zone compact" for="videoFile">
-                <span class="upload-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15.5v2.25A2.25 2.25 0 0 0 7.25 20h9.5A2.25 2.25 0 0 0 19 17.75V15.5"/></svg>
-                </span>
-                <strong data-i18n="dropTitle">Videoyu buraya bırak</strong>
-                <span data-i18n="dropText">veya cihazından seç</span>
-              </label>
-              <div id="selectedFile" class="selected-file" hidden>
-                <span class="file-dot"></span>
-                <div><strong id="selectedFileName"></strong><small id="selectedFileSize"></small></div>
-                <button id="removeFile" type="button" aria-label="Dosyayı kaldır">×</button>
-              </div>
-            </div>
+          <div id="recordingModeTabs" class="recording-mode-tabs">
+            <button id="classicMode" class="active" type="button" data-i18n="classicMode">Video ve ses birlikte</button>
+            <button id="separateMode" type="button" data-i18n="separateMode">Ses ve görüntü ayrı</button>
+          </div>
 
+          <div id="classicSources" class="source-builder">
+            <input id="classicFiles" class="file-input" type="file" multiple accept="video/mp4,video/webm,video/quicktime,video/x-matroska">
+            <label id="classicDropZone" class="drop-zone compact" for="classicFiles">
+              <span class="upload-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15.5v2.25A2.25 2.25 0 0 0 7.25 20h9.5A2.25 2.25 0 0 0 19 17.75V15.5"/></svg></span>
+              <strong data-i18n="addVideos">Bir veya birden fazla video ekle</strong>
+              <span data-i18n="sortHelp">Dosyalar eklenince sıralarını değiştirebilirsin</span>
+            </label>
+            <div id="classicFileList" class="source-file-list"></div>
+          </div>
+
+          <div id="separateSources" class="separate-source-grid" hidden>
+            <div class="upload-source-card">
+              <div class="upload-source-head"><strong data-i18n="audioSourceTitle">Ses kaynakları</strong><span data-i18n="required">Zorunlu</span></div>
+              <p data-i18n="audioSourceHelp">Sesli videoları veya kayıtları ders sırasına göre ekle.</p>
+              <input id="audioFiles" class="file-input" type="file" multiple accept="video/mp4,video/webm,video/quicktime,video/x-matroska">
+              <label id="audioDropZone" class="mini-drop-zone" for="audioFiles" data-i18n="addAudioFiles">Ses videolarını ekle</label>
+              <div id="audioFileList" class="source-file-list compact-list"></div>
+            </div>
             <div class="upload-source-card optional">
-              <div class="upload-source-head"><strong data-i18n="slidesSourceTitle">Ayrı slayt videosu</strong><span data-i18n="optional">İsteğe bağlı</span></div>
-              <p data-i18n="slidesSourceHelp">Eş zamanlı kaydedilen, slaytların geçtiği ikinci videoyu buraya ekle.</p>
-              <input id="slidesVideoFile" class="file-input" type="file" accept="video/mp4,video/webm,video/quicktime,video/x-matroska">
-              <label id="slidesDropZone" class="drop-zone compact secondary" for="slidesVideoFile">
-                <span class="upload-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15.5v2.25A2.25 2.25 0 0 0 7.25 20h9.5A2.25 2.25 0 0 0 19 17.75V15.5"/></svg>
-                </span>
-                <strong data-i18n="addSlidesVideo">Slayt videosu ekle</strong>
-                <span data-i18n="dropText">veya cihazından seç</span>
-              </label>
-              <div id="selectedSlidesFile" class="selected-file" hidden>
-                <span class="file-dot"></span>
-                <div><strong id="selectedSlidesFileName"></strong><small id="selectedSlidesFileSize"></small></div>
-                <button id="removeSlidesFile" type="button" aria-label="Slayt videosunu kaldır">×</button>
-              </div>
-              <label id="syncControl" class="sync-control" hidden>
+              <div class="upload-source-head"><strong data-i18n="slidesSourceTitle">Görüntü / slayt kaynakları</strong><span data-i18n="required">Zorunlu</span></div>
+              <p data-i18n="slidesSourceHelp">Slayt videolarını ders sırasına göre ekle.</p>
+              <input id="visualFiles" class="file-input" type="file" multiple accept="video/mp4,video/webm,video/quicktime,video/x-matroska">
+              <label id="visualDropZone" class="mini-drop-zone secondary" for="visualFiles" data-i18n="addVisualFiles">Slayt videolarını ekle</label>
+              <div id="visualFileList" class="source-file-list compact-list"></div>
+              <label id="syncControl" class="sync-control">
                 <span><b data-i18n="syncOffset">Slayt zaman farkı</b><small data-i18n="syncOffsetHelp">Aynı anda başladıysa 0 bırak.</small></span>
                 <span><input id="slidesOffset" type="number" min="-3600" max="3600" step="0.1" value="0"><i>sn</i></span>
               </label>
@@ -109,13 +103,27 @@
           <div><span class="step-number">02</span><h2 data-i18n="settingsTitle">Çalışma paketini ayarla</h2></div>
         </div>
 
-        <div class="settings-grid">
+        <div class="operation-grid">
+          <label class="control"><span data-i18n="operationType">İşlem türü</span><select id="jobType">
+            <option value="study_pack" data-i18n="studyPackOption">Ders çalışma paketi hazırla</option>
+            <option value="audio_export" data-i18n="audioExportOption">Videoyu MP3'e çevir</option>
+            <option value="download_video" data-i18n="downloadVideoOption">URL'den video indir</option>
+          </select></label>
+          <fieldset id="formatChoices" class="format-choices">
+            <legend data-i18n="outputFormats">Çıktı biçimleri</legend>
+            <label><input id="formatPdf" type="checkbox" value="pdf" checked><span>PDF</span></label>
+            <label><input id="formatDocx" type="checkbox" value="docx"><span>Word</span></label>
+            <label><input id="formatTxt" type="checkbox" value="txt"><span>TXT</span></label>
+          </fieldset>
+        </div>
+
+        <div id="studySettings" class="settings-grid">
           <label class="control"><span data-i18n="sourceLanguage">Video dili</span><select id="sourceLanguage"></select></label>
           <label class="control"><span data-i18n="outputLanguage">Çıktı dili</span><select id="outputLanguage"></select></label>
           <label class="control"><span data-i18n="summaryStyle">Özet profili</span><select id="summaryStyle"></select></label>
           <label class="control"><span data-i18n="quizCount">Quiz sorusu</span><select id="quizCount"><option>5</option><option selected>10</option><option>20</option><option>30</option></select></label>
           <label class="control"><span data-i18n="cardCount">Bilgi kartı</span><select id="cardCount"><option>10</option><option selected>20</option><option>40</option><option>60</option></select></label>
-          <label class="toggle-control"><span><b data-i18n="translateTitle">Transkripti çevir</b><small data-i18n="translateHelp">Orijinali de korunur</small></span><input id="translateTranscript" type="checkbox" checked><i aria-hidden="true"></i></label>
+          <label id="translateControl" class="toggle-control"><span><b data-i18n="translateTitle">Transkripti çevir</b><small id="translateHelp" data-i18n="translateHelp">Orijinali de korunur</small></span><input id="translateTranscript" type="checkbox" checked><i aria-hidden="true"></i></label>
         </div>
 
         <button id="analyzeButton" class="primary-button" type="button">

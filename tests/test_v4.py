@@ -9,11 +9,11 @@ import cv2
 import numpy as np
 from fastapi.testclient import TestClient
 
-from lecturesift.app import app
+from lecturesift.app import _options, app
 from lecturesift.errors import normalize_error
 from lecturesift.exports import build_artifacts
 from lecturesift.jobs import JOBS
-from lecturesift.media import extract_audio_chunks, validate_remote_url
+from lecturesift.media import convert_videos_to_mp3, extract_audio_chunks, validate_remote_url
 from lecturesift.pipeline import process_job
 from lecturesift.slides import presentation_score, read_frame_at, scan_candidate_timestamps
 
@@ -105,13 +105,13 @@ def test_health_and_unsupported_upload():
     client = TestClient(app)
     health = client.get("/health")
     assert health.status_code == 200
-    assert health.json()["version"] == "4.0"
+    assert health.json()["version"] == "4.1"
     response = client.post("/jobs", files={"file": ("notes.txt", b"not a video", "text/plain")})
     assert response.status_code == 400
     assert response.json()["detail"]["code"] == "LS-UPLOAD-01"
 
 
-def test_pdf_txt_and_zip_exports(tmp_path: Path):
+def test_default_zip_contains_only_pdfs(tmp_path: Path):
     slides = tmp_path / "slides"
     slides.mkdir()
     cv2.imwrite(str(slides / "slide_001_00m05s.jpg"), synthetic_slide())
@@ -127,15 +127,49 @@ def test_pdf_txt_and_zip_exports(tmp_path: Path):
         "transcript_original": "Bugün enerji ve iş konusunu konuşacağız.",
         "transcript_translated": "Today we will discuss energy and work.",
         "diagnostics": {"final_unique_slides": 1},
+        "slides": [{"file": "slide_001_00m05s.jpg", "timestamp": "00:05", "second": 5}],
+        "options": {"output_formats": ["pdf"]},
     }
     artifacts, zip_path = build_artifacts(tmp_path, result, slides)
     assert zip_path.exists()
-    assert {item["file"] for item in artifacts} >= {"Ozet.pdf", "Ozet.txt", "Transkript_Orijinal.pdf", "Transkript_Ceviri.txt"}
+    assert {item["file"] for item in artifacts} >= {
+        "Ozet.pdf",
+        "Transkript_Orijinal.pdf",
+        "Transkript_Ceviri.pdf",
+        "Slaytlar.pdf",
+    }
+    assert all(item["file"].endswith(".pdf") for item in artifacts)
     parsed = json.loads((tmp_path / "result.json").read_text(encoding="utf-8"))
     assert parsed["artifacts"]
     with zipfile.ZipFile(zip_path) as archive:
         assert "Ders_Notlari.pdf" in archive.namelist()
-        assert "Slaytlar/slide_001_00m05s.jpg" in archive.namelist()
+        assert "Slaytlar.pdf" in archive.namelist()
+        assert all(name.endswith(".pdf") for name in archive.namelist())
+
+
+def test_selected_word_and_txt_exports(tmp_path: Path):
+    result = {
+        "title": "Biçim Testi",
+        "summary": "Seçilen biçimler üretilir.",
+        "transcript_original": "Tek transkript.",
+        "transcript_translated": "",
+        "slides": [],
+        "quiz": [],
+        "flashcards": [],
+        "options": {"output_formats": ["docx", "txt"]},
+    }
+    artifacts, zip_path = build_artifacts(tmp_path, result, tmp_path / "slides")
+    names = {item["file"] for item in artifacts}
+    assert "Ozet.docx" in names and "Ozet.txt" in names
+    assert "Transkript_Ceviri.docx" not in names
+    with zipfile.ZipFile(zip_path) as archive:
+        assert all(name.endswith((".docx", ".txt")) for name in archive.namelist())
+
+
+def test_same_explicit_language_disables_duplicate_translation():
+    options = _options("tr", "tr", "standard", 10, 20, True, output_formats="pdf,docx,txt")
+    assert options["translate_transcript"] is False
+    assert options["output_formats"] == ["pdf", "docx", "txt"]
 
 
 def test_no_audio_scene_video_completes_without_false_slides(tmp_path: Path):
@@ -224,17 +258,17 @@ def test_dual_source_uses_audio_video_for_audio_and_slide_video_for_visuals(tmp_
         "translate_transcript": True,
         "slides_offset_seconds": 2.5,
     }
-    JOBS.create(job_id, tmp_path, options, source_type="upload_dual")
+    JOBS.create(job_id, tmp_path, options, source_type="upload_separate")
     process_job(job_id, audio_video, options, visual_video)
 
     job = JOBS.get(job_id)
     result = json.loads((tmp_path / "result.json").read_text(encoding="utf-8"))
     assert job["status"] == "done"
-    assert result["sources"]["mode"] == "dual"
+    assert result["sources"]["mode"] == "separate"
     assert result["sources"]["audio"] == "speaker.mp4"
     assert result["sources"]["visual"] == "presentation.mp4"
-    assert result["diagnostics"]["source_mode"] == "dual"
-    assert transcribed_chunks == ["audio_000.mp3"]
+    assert result["diagnostics"]["source_mode"] == "separate"
+    assert transcribed_chunks == ["audio_001_000.mp3"]
     assert result["transcript_original"] == "Bu ses ana videodan geldi."
     assert len(result["slides"]) == 1
     assert result["slides"][0]["second"] == result["slides"][0]["source_second"] + 2.5
@@ -279,14 +313,15 @@ def test_dual_source_upload_endpoint_saves_both_roles(tmp_path: Path, monkeypatc
 
     assert response.status_code == 200
     job = JOBS.get(response.json()["job_id"])
-    audio_path, visual_path = captured["args"][1], captured["args"][3]
+    audio_paths, visual_paths = captured["args"][1], captured["args"][3]
     assert captured["started"] is True
-    assert job["source_type"] == "upload_dual"
-    assert job["file_size_bytes"] == len(b"audio-source")
-    assert job["slides_file_size_bytes"] == len(b"visual-source")
+    assert job["source_type"] == "upload_separate"
+    assert job["file_size_bytes"] == len(b"audio-source") + len(b"visual-source")
+    assert job["audio_file_sizes"] == [len(b"audio-source")]
+    assert job["visual_file_sizes"] == [len(b"visual-source")]
     assert captured["args"][2]["slides_offset_seconds"] == 1.5
-    assert audio_path.read_bytes() == b"audio-source"
-    assert visual_path.read_bytes() == b"visual-source"
+    assert audio_paths[0].read_bytes() == b"audio-source"
+    assert visual_paths[0].read_bytes() == b"visual-source"
     shutil.rmtree(Path(job["job_dir"]), ignore_errors=True)
 
 
@@ -334,6 +369,54 @@ def test_audio_is_prepared_in_bounded_chunks(tmp_path: Path):
     chunks = extract_audio_chunks(video, tmp_path)
     assert [path.name for path in chunks] == ["audio_000.mp3"]
     assert chunks[0].stat().st_size > 0
+
+
+def test_multi_upload_preserves_user_order(tmp_path: Path, monkeypatch):
+    captured: dict = {}
+
+    class DeferredThread:
+        def __init__(self, target, args, daemon):
+            captured["args"] = args
+
+        def start(self):
+            pass
+
+    monkeypatch.setattr("lecturesift.app.WORK_DIR", tmp_path)
+    monkeypatch.setattr("lecturesift.app.threading.Thread", DeferredThread)
+    client = TestClient(app)
+    response = client.post(
+        "/jobs",
+        files=[
+            ("files", ("third.mp4", b"3", "video/mp4")),
+            ("files", ("first.webm", b"1", "video/webm")),
+            ("files", ("second.mov", b"2", "video/quicktime")),
+        ],
+    )
+    assert response.status_code == 200
+    paths = captured["args"][1]
+    assert [path.name for path in paths] == ["part_001.mp4", "part_002.webm", "part_003.mov"]
+    assert [path.read_bytes() for path in paths] == [b"3", b"1", b"2"]
+    shutil.rmtree(Path(JOBS.get(response.json()["job_id"])["job_dir"]), ignore_errors=True)
+
+
+def test_multiple_videos_convert_to_one_mp3(tmp_path: Path):
+    videos = []
+    for index, frequency in enumerate((440, 880), 1):
+        video = tmp_path / f"source-{index}.mp4"
+        subprocess.run(
+            [
+                "ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=blue:s=160x120:d=0.5",
+                "-f", "lavfi", "-i", f"sine=frequency={frequency}:duration=0.5", "-shortest",
+                "-c:v", "mpeg4", "-c:a", "aac", str(video),
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        videos.append(video)
+    result = convert_videos_to_mp3(videos, tmp_path)
+    assert result.name == "LectureSift_Ders_Sesi.mp3"
+    assert result.stat().st_size > 0
 
 
 def test_webm_sampling_keeps_real_timestamps(tmp_path: Path):

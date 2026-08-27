@@ -10,7 +10,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from .config import APP_VERSION, MAX_VIDEO_BYTES, OPENAI_API_KEY, VIDEO_EXTENSIONS, WORK_DIR
+from .config import APP_VERSION, MAX_SOURCE_FILES, MAX_VIDEO_BYTES, OPENAI_API_KEY, VIDEO_EXTENSIONS, WORK_DIR
 from .errors import LectureSiftError, normalize_error
 from .jobs import JOBS
 from .media import download_remote_video, validate_remote_url
@@ -35,15 +35,26 @@ def _options(
     flashcard_count: int,
     translate_transcript: bool,
     slides_offset_seconds: float = 0,
+    output_formats: str = "pdf",
+    job_type: str = "study_pack",
 ) -> dict:
+    source = source_language or "auto"
+    output = output_language or "tr"
+    translation_enabled = bool(translate_transcript) and not (source != "auto" and source == output)
+    formats = [value for value in dict.fromkeys(output_formats.lower().replace(" ", "").split(",")) if value in {"pdf", "docx", "txt"}]
+    if not formats:
+        formats = ["pdf"]
+    selected_job_type = job_type if job_type in {"study_pack", "audio_export", "download_video"} else "study_pack"
     return {
-        "source_language": source_language or "auto",
-        "output_language": output_language or "tr",
+        "source_language": source,
+        "output_language": output,
         "summary_style": summary_style or "standard",
         "quiz_count": max(3, min(int(quiz_count), 30)),
         "flashcard_count": max(5, min(int(flashcard_count), 60)),
-        "translate_transcript": bool(translate_transcript),
+        "translate_transcript": translation_enabled,
         "slides_offset_seconds": max(-3600.0, min(float(slides_offset_seconds or 0), 3600.0)),
+        "output_formats": formats,
+        "job_type": selected_job_type,
     }
 
 
@@ -81,6 +92,33 @@ async def _save_upload(file: UploadFile, destination: Path, bytes_used: int = 0)
     return total
 
 
+def _validate_upload_list(files: list[UploadFile], label: str) -> list[str]:
+    if not files:
+        _raise_public(LectureSiftError("LS-UPLOAD-03", f"{label} için en az bir video ekle."))
+    if len(files) > MAX_SOURCE_FILES:
+        _raise_public(LectureSiftError("LS-UPLOAD-04", f"{label} için en fazla {MAX_SOURCE_FILES} video eklenebilir."))
+    return [_upload_extension(file) for file in files]
+
+
+async def _save_upload_list(
+    files: list[UploadFile],
+    extensions: list[str],
+    job_dir: Path,
+    role: str,
+    bytes_used: int,
+) -> tuple[list[Path], int, list[int]]:
+    paths: list[Path] = []
+    sizes: list[int] = []
+    total = bytes_used
+    for index, (file, extension) in enumerate(zip(files, extensions), 1):
+        destination = job_dir / f"{role}_{index:03d}{extension}"
+        before = total
+        total = await _save_upload(file, destination, total)
+        paths.append(destination)
+        sizes.append(total - before)
+    return paths, total, sizes
+
+
 @app.get("/")
 def root() -> dict:
     return {
@@ -100,7 +138,10 @@ def health() -> dict:
         "study_pack": True,
         "async_jobs": True,
         "dual_source_upload": True,
-        "pdf_txt_exports": True,
+        "multi_source_upload": True,
+        "output_formats": ["pdf", "docx", "txt"],
+        "audio_export": True,
+        "url_video_download": True,
     }
 
 
@@ -163,14 +204,18 @@ def download(job_id: str) -> FileResponse:
     return FileResponse(
         data["result_path"],
         media_type="application/zip",
-        filename="LectureSift_Study_Pack_V4.zip",
+        filename="LectureSift_Paketi_V4.1.zip",
     )
 
 
 @app.post("/jobs")
 async def create_job(
-    file: UploadFile = File(...),
+    file: UploadFile | None = File(None),
     slides_file: UploadFile | None = File(None),
+    files: list[UploadFile] | None = File(None),
+    audio_files: list[UploadFile] | None = File(None),
+    visual_files: list[UploadFile] | None = File(None),
+    source_layout: str = Form("classic"),
     source_language: str = Form("auto"),
     output_language: str = Form("tr"),
     summary_style: str = Form("standard"),
@@ -178,21 +223,37 @@ async def create_job(
     flashcard_count: int = Form(20),
     translate_transcript: bool = Form(True),
     slides_offset_seconds: float = Form(0),
+    output_formats: str = Form("pdf"),
+    job_type: str = Form("study_pack"),
 ) -> dict:
-    audio_extension = _upload_extension(file)
-    slides_extension = _upload_extension(slides_file) if slides_file else None
+    layout = "separate" if source_layout == "separate" or slides_file or visual_files else "classic"
+    if layout == "separate":
+        audio_uploads = list(audio_files or ([] if file is None else [file]))
+        visual_uploads = list(visual_files or ([] if slides_file is None else [slides_file]))
+        audio_extensions = _validate_upload_list(audio_uploads, "Ses kaynağı")
+        visual_extensions = _validate_upload_list(visual_uploads, "Görüntü/slayt kaynağı")
+    else:
+        classic_uploads = list(files or ([] if file is None else [file]))
+        classic_extensions = _validate_upload_list(classic_uploads, "Ders kaynağı")
 
     JOBS.cleanup_expired()
     job_id = str(uuid.uuid4())
     job_dir = _job_path(job_id)
-    audio_video_path = job_dir / f"audio_input{audio_extension}"
-    slides_video_path = job_dir / f"slides_input{slides_extension}" if slides_extension else None
     total = 0
     try:
-        total = await _save_upload(file, audio_video_path)
-        audio_size = total
-        if slides_file and slides_video_path:
-            total = await _save_upload(slides_file, slides_video_path, total)
+        if layout == "separate":
+            audio_paths, total, audio_sizes = await _save_upload_list(
+                audio_uploads, audio_extensions, job_dir, "audio", total
+            )
+            visual_paths, total, visual_sizes = await _save_upload_list(
+                visual_uploads, visual_extensions, job_dir, "visual", total
+            )
+        else:
+            audio_paths, total, audio_sizes = await _save_upload_list(
+                classic_uploads, classic_extensions, job_dir, "part", total
+            )
+            visual_paths = []
+            visual_sizes = []
     except Exception:
         shutil.rmtree(job_dir, ignore_errors=True)
         raise
@@ -205,22 +266,27 @@ async def create_job(
         flashcard_count,
         translate_transcript,
         slides_offset_seconds,
+        output_formats,
+        job_type,
     )
-    source_type = "upload_dual" if slides_video_path else "upload"
+    source_type = "upload_separate" if layout == "separate" else ("upload_multi" if len(audio_paths) > 1 else "upload")
     JOBS.create(
         job_id,
         job_dir,
         options,
         source_type=source_type,
-        file_size_bytes=audio_size,
-        slides_file_size_bytes=max(0, total - audio_size),
+        source_layout=layout,
+        file_size_bytes=total,
+        audio_file_sizes=audio_sizes,
+        visual_file_sizes=visual_sizes,
+        source_file_count=len(audio_paths) + len(visual_paths),
     )
     threading.Thread(
         target=process_job,
-        args=(job_id, audio_video_path, options, slides_video_path),
+        args=(job_id, audio_paths, options, visual_paths if layout == "separate" else None),
         daemon=True,
     ).start()
-    return {"job_id": job_id, "status": "queued", "version": APP_VERSION}
+    return {"job_id": job_id, "status": "queued", "version": APP_VERSION, "source_layout": layout}
 
 
 @app.post("/jobs/url")
@@ -233,6 +299,8 @@ def create_url_job(
     flashcard_count: int = Form(20),
     translate_transcript: bool = Form(True),
     slides_offset_seconds: float = Form(0),
+    output_formats: str = Form("pdf"),
+    job_type: str = Form("study_pack"),
 ) -> dict:
     try:
         url = validate_remote_url(video_url)
@@ -250,6 +318,8 @@ def create_url_job(
         flashcard_count,
         translate_transcript,
         slides_offset_seconds,
+        output_formats,
+        job_type,
     )
     JOBS.create(job_id, job_dir, options, source_type="url", source_url=url)
     JOBS.update(job_id, status="working", percent=3, stage="url_download")

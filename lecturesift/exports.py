@@ -3,13 +3,17 @@ import shutil
 from pathlib import Path
 from xml.sax.saxutils import escape
 
+from docx import Document
+from docx.shared import Inches
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus import Image as ReportImage
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
 
 
@@ -94,6 +98,19 @@ def _write_pdf(path: Path, title: str, sections: list[tuple[str, list[str]]]) ->
     document.build(story)
 
 
+def _write_docx(path: Path, title: str, sections: list[tuple[str, list[str]]]) -> None:
+    document = Document()
+    document.add_heading(title, 0)
+    document.add_paragraph("LectureSift AI Study Pack")
+    for heading, paragraphs in sections:
+        if heading:
+            document.add_heading(heading, level=1)
+        for value in paragraphs:
+            for paragraph in str(value or "").split("\n"):
+                document.add_paragraph(paragraph)
+    document.save(path)
+
+
 def _notes_text(pack: dict) -> str:
     blocks: list[str] = []
     if pack.get("key_points"):
@@ -133,83 +150,123 @@ def _flashcards_text(cards: list[dict]) -> str:
     )
 
 
+def _write_slides_pdf(path: Path, title: str, slides: list[dict], slides_dir: Path) -> None:
+    styles = _styles()
+    document = SimpleDocTemplate(
+        str(path),
+        pagesize=landscape(A4),
+        rightMargin=15 * mm,
+        leftMargin=15 * mm,
+        topMargin=12 * mm,
+        bottomMargin=12 * mm,
+        title=f"{title} - Slaytlar",
+        author="LectureSift",
+    )
+    story = []
+    max_width, max_height = 260 * mm, 155 * mm
+    for index, slide in enumerate(slides):
+        image_path = slides_dir / slide["file"]
+        if not image_path.exists():
+            continue
+        width, height = ImageReader(str(image_path)).getSize()
+        scale = min(max_width / width, max_height / height)
+        story.append(_paragraph(f"{title} — {slide.get('timestamp', '')}", styles["heading"]))
+        story.append(ReportImage(str(image_path), width=width * scale, height=height * scale))
+        if index < len(slides) - 1:
+            story.append(PageBreak())
+    if not story:
+        story.append(_paragraph("Slayt bulunamadı.", styles["body"]))
+    document.build(story)
+
+
+def _write_slides_docx(path: Path, title: str, slides: list[dict], slides_dir: Path) -> None:
+    document = Document()
+    document.add_heading(f"{title} - Slaytlar", 0)
+    for index, slide in enumerate(slides):
+        image_path = slides_dir / slide["file"]
+        if not image_path.exists():
+            continue
+        document.add_heading(slide.get("timestamp", ""), level=1)
+        document.add_picture(str(image_path), width=Inches(6.5))
+        if index < len(slides) - 1:
+            document.add_page_break()
+    document.save(path)
+
+
+def _artifact(path: Path, label: str) -> dict:
+    return {
+        "file": path.name,
+        "label": label,
+        "format": path.suffix.removeprefix(".").upper(),
+        "size_bytes": path.stat().st_size,
+    }
+
+
+def _save_result(job_dir: Path, result: dict, artifacts: list[dict]) -> None:
+    complete_result = {**result, "artifacts": artifacts}
+    (job_dir / "result.json").write_text(json.dumps(complete_result, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def build_artifacts(job_dir: Path, result: dict, slides_dir: Path) -> tuple[list[dict], Path]:
     package_dir = job_dir / "package"
     package_dir.mkdir(parents=True, exist_ok=True)
-
+    formats = set(result.get("options", {}).get("output_formats") or ["pdf"])
     title = result.get("title") or "LectureSift Ders Paketi"
-    summary = result.get("summary", "")
-    notes = _notes_text(result)
     original = result.get("transcript_original", "") or "Videoda ses parçası bulunamadı."
     translated = result.get("transcript_translated", "")
-    quiz_text = _quiz_text(result.get("quiz", []))
-    flashcards_text = _flashcards_text(result.get("flashcards", []))
-
-    text_files = {
-        "Ozet.txt": summary,
-        "Ders_Notlari.txt": notes,
-        "Transkript_Orijinal.txt": original,
-        "Quiz.txt": quiz_text,
-        "Flashcards.txt": flashcards_text,
-    }
+    documents = [
+        ("Ozet", "Özet", f"{title} - Özet", [("Özet", [result.get("summary", "")])], result.get("summary", "")),
+        ("Ders_Notlari", "Ders Notları", f"{title} - Ders Notları", [("Ders Notları", [_notes_text(result)])], _notes_text(result)),
+        ("Transkript_Orijinal", "Orijinal Transkript", f"{title} - Orijinal Transkript", [("Transkript", [original])], original),
+        ("Quiz", "Quiz", f"{title} - Quiz", [("Sorular ve Yanıtlar", [_quiz_text(result.get("quiz", []))])], _quiz_text(result.get("quiz", []))),
+        ("Flashcards", "Bilgi Kartları", f"{title} - Bilgi Kartları", [("Bilgi Kartları", [_flashcards_text(result.get("flashcards", []))])], _flashcards_text(result.get("flashcards", []))),
+    ]
     if translated:
-        text_files["Transkript_Ceviri.txt"] = translated
-    for filename, content in text_files.items():
-        (package_dir / filename).write_text(content, encoding="utf-8")
+        documents.insert(3, ("Transkript_Ceviri", "Çevrilmiş Transkript", f"{title} - Çevrilmiş Transkript", [("Transkript", [translated])], translated))
 
-    _write_pdf(package_dir / "Ozet.pdf", f"{title} - Özet", [("Özet", [summary])])
-    _write_pdf(package_dir / "Ders_Notlari.pdf", f"{title} - Ders Notları", [("Ders Notları", [notes])])
-    _write_pdf(package_dir / "Transkript_Orijinal.pdf", f"{title} - Orijinal Transkript", [("Transkript", [original])])
-    _write_pdf(package_dir / "Quiz.pdf", f"{title} - Quiz", [("Sorular ve Yanıtlar", [quiz_text])])
-    _write_pdf(package_dir / "Flashcards.pdf", f"{title} - Bilgi Kartları", [("Bilgi Kartları", [flashcards_text])])
-    if translated:
-        _write_pdf(package_dir / "Transkript_Ceviri.pdf", f"{title} - Çevrilmiş Transkript", [("Transkript", [translated])])
+    artifacts: list[dict] = []
+    for stem, label, document_title, sections, plain_text in documents:
+        if "pdf" in formats:
+            path = package_dir / f"{stem}.pdf"
+            _write_pdf(path, document_title, sections)
+            artifacts.append(_artifact(path, f"{label} (PDF)"))
+        if "docx" in formats:
+            path = package_dir / f"{stem}.docx"
+            _write_docx(path, document_title, sections)
+            artifacts.append(_artifact(path, f"{label} (Word)"))
+        if "txt" in formats:
+            path = package_dir / f"{stem}.txt"
+            path.write_text(plain_text, encoding="utf-8")
+            artifacts.append(_artifact(path, f"{label} (TXT)"))
 
-    if slides_dir.exists():
-        shutil.copytree(slides_dir, package_dir / "Slaytlar")
+    slides = result.get("slides", [])
+    if slides:
+        if "pdf" in formats:
+            path = package_dir / "Slaytlar.pdf"
+            _write_slides_pdf(path, title, slides, slides_dir)
+            artifacts.append(_artifact(path, "Slaytlar (PDF)"))
+        if "docx" in formats:
+            path = package_dir / "Slaytlar.docx"
+            _write_slides_docx(path, title, slides, slides_dir)
+            artifacts.append(_artifact(path, "Slaytlar (Word)"))
+        if "txt" in formats:
+            path = package_dir / "Slaytlar.txt"
+            path.write_text("\n".join(f"{item.get('timestamp', '')} — {item.get('file', '')}" for item in slides), encoding="utf-8")
+            artifacts.append(_artifact(path, "Slayt Listesi (TXT)"))
 
-    (package_dir / "diagnostics.json").write_text(
-        json.dumps(result.get("diagnostics", {}), ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
-    labels = {
-        "Ozet.pdf": "Özet (PDF)",
-        "Ozet.txt": "Özet (TXT)",
-        "Ders_Notlari.pdf": "Ders Notları (PDF)",
-        "Ders_Notlari.txt": "Ders Notları (TXT)",
-        "Transkript_Orijinal.pdf": "Orijinal Transkript (PDF)",
-        "Transkript_Orijinal.txt": "Orijinal Transkript (TXT)",
-        "Transkript_Ceviri.pdf": "Çevrilmiş Transkript (PDF)",
-        "Transkript_Ceviri.txt": "Çevrilmiş Transkript (TXT)",
-        "Quiz.pdf": "Quiz (PDF)",
-        "Quiz.txt": "Quiz (TXT)",
-        "Flashcards.pdf": "Bilgi Kartları (PDF)",
-        "Flashcards.txt": "Bilgi Kartları (TXT)",
-    }
-    artifacts = []
-    for filename, label in labels.items():
-        path = package_dir / filename
-        if path.exists():
-            artifacts.append(
-                {
-                    "file": filename,
-                    "label": label,
-                    "format": path.suffix.removeprefix(".").upper(),
-                    "size_bytes": path.stat().st_size,
-                }
-            )
-
-    complete_result = {**result, "artifacts": artifacts}
-    (package_dir / "result.json").write_text(
-        json.dumps(complete_result, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    (job_dir / "result.json").write_text(
-        json.dumps(complete_result, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
+    _save_result(job_dir, result, artifacts)
     zip_base = job_dir / "LectureSift_Study_Pack_V4"
+    shutil.make_archive(str(zip_base), "zip", root_dir=package_dir)
+    return artifacts, zip_base.with_suffix(".zip")
+
+
+def build_binary_artifact(job_dir: Path, result: dict, source: Path, filename: str, label: str) -> tuple[list[dict], Path]:
+    package_dir = job_dir / "package"
+    package_dir.mkdir(parents=True, exist_ok=True)
+    destination = package_dir / filename
+    shutil.copy2(source, destination)
+    artifacts = [_artifact(destination, label)]
+    _save_result(job_dir, result, artifacts)
+    zip_base = job_dir / "LectureSift_Download"
     shutil.make_archive(str(zip_base), "zip", root_dir=package_dir)
     return artifacts, zip_base.with_suffix(".zip")

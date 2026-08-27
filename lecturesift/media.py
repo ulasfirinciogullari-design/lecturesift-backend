@@ -3,6 +3,7 @@ import ipaddress
 import re
 import socket
 import subprocess
+import shutil
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -200,8 +201,9 @@ def has_audio_stream(video_path: Path) -> bool:
     return bool(process.stdout.strip())
 
 
-def extract_audio_chunks(video_path: Path, job_dir: Path) -> list[Path]:
-    audio_pattern = job_dir / "audio_%03d.mp3"
+def extract_audio_chunks(video_path: Path, job_dir: Path, prefix: str = "audio") -> list[Path]:
+    safe_prefix = re.sub(r"[^a-zA-Z0-9_-]", "_", prefix)
+    audio_pattern = job_dir / f"{safe_prefix}_%03d.mp3"
     run_command(
         [
             "ffmpeg",
@@ -224,7 +226,65 @@ def extract_audio_chunks(video_path: Path, job_dir: Path) -> list[Path]:
             str(audio_pattern),
         ]
     )
-    chunks = [path for path in sorted(job_dir.glob("audio_*.mp3")) if path.stat().st_size > 0]
+    chunks = [path for path in sorted(job_dir.glob(f"{safe_prefix}_*.mp3")) if path.stat().st_size > 0]
     if not chunks:
         raise RuntimeError("Audio extraction failed.")
     return chunks
+
+
+def convert_videos_to_mp3(video_paths: list[Path], job_dir: Path) -> Path:
+    parts_dir = job_dir / "audio_export_parts"
+    parts_dir.mkdir(parents=True, exist_ok=True)
+    parts: list[Path] = []
+    for index, video_path in enumerate(video_paths, 1):
+        if not has_audio_stream(video_path):
+            continue
+        part = parts_dir / f"part_{index:03d}.mp3"
+        run_command(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(video_path),
+                "-vn",
+                "-ac",
+                "2",
+                "-ar",
+                "44100",
+                "-b:a",
+                "128k",
+                str(part),
+            ]
+        )
+        if part.exists() and part.stat().st_size:
+            parts.append(part)
+    if not parts:
+        shutil.rmtree(parts_dir, ignore_errors=True)
+        raise LectureSiftError("LS-AUDIO-01", "Yüklenen videolarda dönüştürülebilecek bir ses kanalı bulunamadı.")
+
+    destination = job_dir / "LectureSift_Ders_Sesi.mp3"
+    if len(parts) == 1:
+        shutil.move(str(parts[0]), destination)
+    else:
+        concat_file = parts_dir / "concat.txt"
+        concat_file.write_text(
+            "\n".join(f"file '{str(path.resolve()).replace(chr(39), chr(39) + chr(92) + chr(39) + chr(39))}'" for path in parts),
+            encoding="utf-8",
+        )
+        run_command(
+            [
+                "ffmpeg",
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(concat_file),
+                "-c",
+                "copy",
+                str(destination),
+            ]
+        )
+    shutil.rmtree(parts_dir, ignore_errors=True)
+    return destination

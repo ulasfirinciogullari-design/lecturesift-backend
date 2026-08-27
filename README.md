@@ -1,6 +1,6 @@
-# LectureSift V4
+# LectureSift V4.1
 
-LectureSift turns one lecture recording—or a synchronized audio recording plus a separate slide recording—into a study workspace: original and translated transcripts, structured notes, summary, verified presentation slides, quiz, flashcards, and downloadable PDF/TXT files.
+LectureSift turns ordered lecture recordings—or separate ordered audio and slide recordings—into a study workspace: transcript, optional translation, structured notes, summary, verified presentation slides, quiz, flashcards, and selectable PDF/Word/TXT files. It can also merge video audio into one MP3 or prepare a downloadable video from a supported URL.
 
 ## Current architecture
 
@@ -9,7 +9,7 @@ LectureSift turns one lecture recording—or a synchronized audio recording plus
 - `lecturesift/pipeline.py`: parallel audio and visual processing
 - `lecturesift/slides.py`: timestamp-only, low-memory slide detection
 - `lecturesift/ai.py`: transcription, translation, and study-pack generation
-- `lecturesift/exports.py`: PDF, TXT, JSON, and ZIP exports
+- `lecturesift/exports.py`: PDF, Word, TXT, MP3/video, and ZIP exports
 
 Production services:
 
@@ -39,15 +39,15 @@ pytest -q
 node --check frontend/app.js
 ```
 
-The automated suite covers human-readable API errors, SSRF/private-URL rejection, PDF/TXT/ZIP packaging, single- and dual-source routing, slide-vs-scene classification, classroom/person-band and textured-office rejection, WebM timestamp accuracy, a no-audio natural-scene video that must return zero slides, and a short genuine slide that must be preserved.
+The automated suite covers human-readable API errors, SSRF/private-URL rejection, PDF-only default packaging, selectable Word/TXT outputs, ordered multi-source routing, separate audio/visual routing, MP3 merging, slide-vs-scene classification, WebM timestamp accuracy, and genuine-slide preservation.
 
 ## Main API routes
 
-- `POST /jobs`: upload a primary/audio video and optionally a synchronized `slides_file`
-- `POST /jobs/url`: submit a supported video/page URL
+- `POST /jobs`: upload ordered `files`, or ordered `audio_files` plus `visual_files`
+- `POST /jobs/url`: submit a supported video/page URL for study-pack creation, MP3 conversion, or video download
 - `GET /jobs/{job_id}`: live progress
 - `GET /jobs/{job_id}/result`: structured result
-- `GET /jobs/{job_id}/artifact/{filename}`: individual PDF/TXT output
+- `GET /jobs/{job_id}/artifact/{filename}`: individual PDF/Word/TXT/MP3/video output
 - `GET /jobs/{job_id}/download`: complete ZIP package
 - `GET /health`: deployment health and engine version
 
