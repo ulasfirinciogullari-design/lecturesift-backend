@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>LectureSift Yönetim</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/rollout.css?v=1">
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="/"><span class="brand-mark"><i></i><i></i><i></i></span><span>Lecture<span>Sift</span></span></a><a class="top-link" href="/">Çalışma alanı</a></header>
+  <main class="rollout-admin">
+    <div class="rollout-admin-head"><div><p class="eyebrow">Yönetim paneli</p><h1>Ödeme ve bonus onayları</h1></div><button id="adminRefresh" class="rollout-action secondary" type="button">Yenile</button></div>
+    <section id="adminLogin" class="rollout-card"><h2>Admin erişimi</h2><form id="adminLoginForm" class="rollout-form"><label>Admin anahtarı<input id="adminToken" type="password" autocomplete="off"></label><button type="submit">Paneli aç</button></form><div id="adminLoginStatus" class="rollout-status" hidden></div></section>
+    <div id="adminDashboard" class="rollout-grid" hidden>
+      <section class="rollout-card"><h2>Bekleyen Havale / EFT siparişleri</h2><p class="rollout-muted">Banka hesabında tutar ve sipariş numarası eşleşiyorsa onayla.</p><div id="adminOrders" class="rollout-admin-list"></div></section>
+      <section class="rollout-card"><h2>Instagram +30 dk talepleri</h2><p class="rollout-muted">Kullanıcı adının LectureSift hesabını takip ettiğini doğruladıktan sonra onayla.</p><div id="adminRewards" class="rollout-admin-list"></div></section>
+    </div>
+  </main>
+  <script src="/admin.js?v=1"></script>
+</body>
+</html>
