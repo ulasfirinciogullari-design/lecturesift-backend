@@ -14,13 +14,13 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Verify official SDK deployment and live delivery
+      - name: Identify final Resend delivery outcome
         shell: bash
         run: |
           set -euo pipefail
 
           for attempt in $(seq 1 60); do
-            email="delivered+lecturesift-sdk-${GITHUB_RUN_ID}-${attempt}@resend.dev"
+            email="delivered+lecturesift-classify-${GITHUB_RUN_ID}-${attempt}@resend.dev"
             password="$(python -c 'import secrets; print(secrets.token_urlsafe(24))')"
             export TEST_EMAIL="$email" TEST_PASSWORD="$password"
             python - <<'PY' > /tmp/register-payload.json
@@ -61,9 +61,8 @@ jobs:
           detail = body.get('detail') if isinstance(body, dict) else None
           if isinstance(detail, dict):
               provider_code = detail.get('provider_code')
-              # The legacy custom HTTP client could only expose this generic
-              # code. Keep polling until the official SDK deployment is live.
-              if provider_code and provider_code != 'http_403':
+              legacy_codes = {'http_403', 'InternalServerError'}
+              if provider_code and provider_code not in legacy_codes:
                   print('diagnosed')
                   raise SystemExit
           print('retry')
@@ -71,15 +70,15 @@ jobs:
             )"
 
             if [[ "$outcome" == "success" ]]; then
-              echo 'Controlled Resend delivery was accepted through the official SDK.'
+              echo 'Controlled Resend delivery was accepted.'
               exit 0
             fi
             if [[ "$outcome" == "diagnosed" ]]; then
-              echo 'The official SDK returned a safe structured provider diagnosis above.'
+              echo 'The final safe Resend diagnosis is shown above.'
               exit 2
             fi
             sleep 10
           done
 
-          echo 'The official SDK deployment or final provider response was not observed.'
+          echo 'The classification deployment or final provider response was not observed.'
           exit 1
