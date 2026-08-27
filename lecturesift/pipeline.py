@@ -1,3 +1,4 @@
+import os
 import shutil
 import time
 import traceback
@@ -6,12 +7,13 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from .ai import make_study_pack, transcribe, translate_transcript
-from .config import APP_VERSION
+from .config import APP_VERSION, CELERY_BROKER_URL
 from .errors import normalize_error
 from .exports import build_artifacts, build_binary_artifact
 from .jobs import JOBS
 from .media import convert_videos_to_mp3, extract_audio_chunks, has_audio_stream
 from .slides import extract_slides
+from .storage import STORAGE
 
 
 def _path_list(value: Path | list[Path] | tuple[Path, ...]) -> list[Path]:
@@ -30,25 +32,17 @@ def _audio_pipeline(job_id: str, video_paths: list[Path], job_dir: Path, options
         JOBS.update_task(job_id, "audio", 5 + 18 * (index - 1) / max(1, len(video_paths)), "audio_extract")
         if has_audio_stream(video_path):
             audio_chunks.extend(extract_audio_chunks(video_path, job_dir, prefix=f"audio_{index:03d}"))
-
     if not audio_chunks:
         JOBS.update_task(job_id, "audio", 100, "no_audio")
         return "", ""
-
     transcripts: list[str] = []
     for index, audio_path in enumerate(audio_chunks, 1):
-        JOBS.update_task(
-            job_id,
-            "audio",
-            24 + 50 * (index - 1) / max(1, len(audio_chunks)),
-            "transcription",
-        )
+        JOBS.update_task(job_id, "audio", 24 + 50 * (index - 1) / max(1, len(audio_chunks)), "transcription")
         text = transcribe(audio_path, options["source_language"])
         if text.strip():
             transcripts.append(text.strip())
     original = "\n\n".join(transcripts)
     JOBS.update_task(job_id, "audio", 76, "transcript_ready")
-
     translated = ""
     if options.get("translate_transcript", True) and original.strip():
         JOBS.update_task(job_id, "audio", 80, "transcript_translation")
@@ -63,13 +57,7 @@ def _aligned_timestamp(second: float) -> str:
     return f"{int(second // 60):02d}:{int(second % 60):02d}"
 
 
-def _visual_pipeline(
-    job_id: str,
-    video_paths: list[Path],
-    job_dir: Path,
-    slides_dir: Path,
-    slides_offset_seconds: float,
-) -> tuple[list[dict], dict]:
+def _visual_pipeline(job_id: str, video_paths: list[Path], job_dir: Path, slides_dir: Path, slides_offset_seconds: float) -> tuple[list[dict], dict]:
     slides_dir.mkdir(parents=True, exist_ok=True)
     segments_dir = job_dir / "slide_segments"
     segments_dir.mkdir(parents=True, exist_ok=True)
@@ -78,14 +66,11 @@ def _visual_pipeline(
     rejections: Counter[str] = Counter()
     timeline_cursor = 0.0
     diagnostic_totals = {"fast_candidates": 0, "presentation_candidates": 0, "persistent_groups": 0}
-
     for part_index, video_path in enumerate(video_paths, 1):
         part_dir = segments_dir / f"part_{part_index:03d}"
-
         def progress(percent: float, stage: str) -> None:
             combined = 100 * ((part_index - 1) + percent / 100) / max(1, len(video_paths))
             JOBS.update_task(job_id, "visual", combined, stage)
-
         manifest, diagnostics = extract_slides(video_path, part_dir, progress)
         duration = float(diagnostics.get("duration_seconds", 0) or 0)
         for slide in manifest:
@@ -94,52 +79,51 @@ def _visual_pipeline(
             final_index = len(merged) + 1
             filename = f"slide_{final_index:03d}_{int(aligned_second // 60):02d}m{int(aligned_second % 60):02d}s.jpg"
             shutil.copy2(part_dir / slide["file"], slides_dir / filename)
-            merged.append(
-                {
-                    **slide,
-                    "file": filename,
-                    "part": part_index,
-                    "source_second": round(source_second, 1),
-                    "second": round(aligned_second, 1),
-                    "timestamp": _aligned_timestamp(aligned_second),
-                }
-            )
+            merged.append({**slide, "file": filename, "part": part_index, "source_second": round(source_second, 1), "second": round(aligned_second, 1), "timestamp": _aligned_timestamp(aligned_second)})
         for key in diagnostic_totals:
             diagnostic_totals[key] += int(diagnostics.get(key, 0) or 0)
         rejections.update(diagnostics.get("rejections", {}))
-        parts.append(
-            {
-                "part": part_index,
-                "file": video_path.name,
-                "start_second": round(timeline_cursor, 1),
-                "duration_seconds": round(duration, 1),
-                "slides": len(manifest),
-            }
-        )
+        parts.append({"part": part_index, "file": video_path.name, "start_second": round(timeline_cursor, 1), "duration_seconds": round(duration, 1), "slides": len(manifest)})
         timeline_cursor += duration
-
     shutil.rmtree(segments_dir, ignore_errors=True)
-    diagnostics = {
-        "engine": "v4-layout-persistence",
-        "memory_mode": "timestamp_only",
-        "source_parts": len(video_paths),
-        "duration_seconds": round(timeline_cursor, 1),
-        **diagnostic_totals,
-        "final_unique_slides": len(merged),
-        "slides_offset_seconds": slides_offset_seconds,
-        "parts": parts,
-        "rejections": dict(rejections),
-    }
+    diagnostics = {"engine": "v4-layout-persistence", "memory_mode": "timestamp_only", "source_parts": len(video_paths), "duration_seconds": round(timeline_cursor, 1), **diagnostic_totals, "final_unique_slides": len(merged), "slides_offset_seconds": slides_offset_seconds, "parts": parts, "rejections": dict(rejections)}
     JOBS.update_task(job_id, "visual", 100, "visual_done")
     return merged, diagnostics
 
 
-def process_job(
-    job_id: str,
-    audio_video_paths: Path | list[Path] | tuple[Path, ...],
-    options: dict,
-    visual_video_paths: Path | list[Path] | tuple[Path, ...] | None = None,
-) -> None:
+def _queue_if_available(job_id: str, audio_video_paths, options: dict, visual_video_paths=None) -> bool:
+    if not CELERY_BROKER_URL or not STORAGE.remote or os.getenv("LECTURESIFT_WORKER") == "1":
+        return False
+    from .tasks import process_uploaded_job
+    audio_sources = _path_list(audio_video_paths)
+    visual_sources = _path_list(visual_video_paths) if visual_video_paths is not None else []
+    audio_keys = []
+    visual_keys = []
+    for index, path in enumerate(audio_sources, 1):
+        key = STORAGE.source_key(job_id, "audio", index, path)
+        STORAGE.upload_file(path, key)
+        audio_keys.append(key)
+    for index, path in enumerate(visual_sources, 1):
+        key = STORAGE.source_key(job_id, "visual", index, path)
+        STORAGE.upload_file(path, key)
+        visual_keys.append(key)
+    JOBS.update(job_id, status="queued", percent=5, stage="queued_worker", queue_mode="celery", worker_state="queued", source_keys={"audio": audio_keys, "visual": visual_keys})
+    process_uploaded_job.delay(job_id, audio_keys, options, visual_keys or None)
+    return True
+
+
+def process_job(job_id: str, audio_video_paths: Path | list[Path] | tuple[Path, ...], options: dict, visual_video_paths: Path | list[Path] | tuple[Path, ...] | None = None) -> None:
+    try:
+        if _queue_if_available(job_id, audio_video_paths, options, visual_video_paths):
+            return
+    except Exception as exc:
+        normalized = normalize_error(exc)
+        JOBS.update(job_id, status="error", percent=0, stage="queue_error", error_code=normalized.code, error=normalized.user_message, technical_error=normalized.technical_message)
+        return
+    _process_job_local(job_id, audio_video_paths, options, visual_video_paths)
+
+
+def _process_job_local(job_id: str, audio_video_paths: Path | list[Path] | tuple[Path, ...], options: dict, visual_video_paths: Path | list[Path] | tuple[Path, ...] | None = None) -> None:
     data = JOBS.get(job_id)
     if not data:
         return
@@ -149,135 +133,39 @@ def process_job(
     visual_sources = _path_list(visual_video_paths) if visual_video_paths is not None else list(audio_sources)
     source_mode = "separate" if visual_video_paths is not None else "classic"
     started = time.time()
-
     try:
         JOBS.update(job_id, status="working", percent=8, stage="parallel_analysis", started=started)
-
         if options.get("job_type") == "audio_export":
             JOBS.update(job_id, percent=35, stage="audio_extract")
             audio_path = convert_videos_to_mp3(audio_sources, job_dir)
-            result = {
-                "version": APP_VERSION,
-                "job_id": job_id,
-                "job_type": "audio_export",
-                "options": options,
-                "title": "LectureSift MP3",
-                "summary": "Video sesi MP3 dosyasına dönüştürüldü.",
-                "slides": [],
-                "transcript_original": "",
-                "transcript_translated": "",
-                "quiz": [],
-                "flashcards": [],
-                "sources": {"mode": source_mode, "audio_files": [path.name for path in audio_sources]},
-            }
-            artifacts, zip_path = build_binary_artifact(
-                job_dir, result, audio_path, "LectureSift_Ders_Sesi.mp3", "Ders Sesi (MP3)"
-            )
+            result = {"version": APP_VERSION, "job_id": job_id, "job_type": "audio_export", "options": options, "title": "LectureSift MP3", "summary": "Video sesi MP3 dosyasına dönüştürüldü.", "slides": [], "transcript_original": "", "transcript_translated": "", "quiz": [], "flashcards": [], "sources": {"mode": source_mode, "audio_files": [path.name for path in audio_sources]}}
+            artifacts, zip_path = build_binary_artifact(job_dir, result, audio_path, "LectureSift_Ders_Sesi.mp3", "Ders Sesi (MP3)")
             result["artifacts"] = artifacts
-            JOBS.update(
-                job_id,
-                status="done",
-                percent=100,
-                stage="done",
-                elapsed_seconds=round(time.time() - started, 1),
-                result_path=str(zip_path),
-            )
+            JOBS.update(job_id, status="done", percent=100, stage="done", elapsed_seconds=round(time.time() - started, 1), result_path=str(zip_path))
             return
-
         if options.get("job_type") == "download_video":
             source = audio_sources[0]
             filename = f"LectureSift_Indirilen_Video{source.suffix.lower() or '.mp4'}"
-            result = {
-                "version": APP_VERSION,
-                "job_id": job_id,
-                "job_type": "download_video",
-                "options": options,
-                "title": "LectureSift Video İndirme",
-                "summary": "Video bağlantıdan indirilmeye hazırlandı.",
-                "slides": [],
-                "transcript_original": "",
-                "transcript_translated": "",
-                "quiz": [],
-                "flashcards": [],
-                "sources": {"mode": "url", "audio_files": [source.name]},
-            }
+            result = {"version": APP_VERSION, "job_id": job_id, "job_type": "download_video", "options": options, "title": "LectureSift Video İndirme", "summary": "Video bağlantıdan indirilmeye hazırlandı.", "slides": [], "transcript_original": "", "transcript_translated": "", "quiz": [], "flashcards": [], "sources": {"mode": "url", "audio_files": [source.name]}}
             artifacts, zip_path = build_binary_artifact(job_dir, result, source, filename, "İndirilen Video")
             result["artifacts"] = artifacts
-            JOBS.update(
-                job_id,
-                status="done",
-                percent=100,
-                stage="done",
-                elapsed_seconds=round(time.time() - started, 1),
-                result_path=str(zip_path),
-            )
+            JOBS.update(job_id, status="done", percent=100, stage="done", elapsed_seconds=round(time.time() - started, 1), result_path=str(zip_path))
             return
-
         with ThreadPoolExecutor(max_workers=2, thread_name_prefix="lecturesift") as executor:
             audio_future = executor.submit(_audio_pipeline, job_id, audio_sources, job_dir, options)
-            slides, diagnostics = _visual_pipeline(
-                job_id,
-                visual_sources,
-                job_dir,
-                slides_dir,
-                float(options.get("slides_offset_seconds", 0) or 0),
-            )
+            slides, diagnostics = _visual_pipeline(job_id, visual_sources, job_dir, slides_dir, float(options.get("slides_offset_seconds", 0) or 0))
             original_transcript, translated_transcript = audio_future.result()
-
         diagnostics["source_mode"] = source_mode
-
         JOBS.update(job_id, percent=73, stage="study_pack")
-        study_pack = make_study_pack(
-            original_transcript,
-            options["output_language"],
-            options["summary_style"],
-            options["quiz_count"],
-            options["flashcard_count"],
-        )
-
+        study_pack = make_study_pack(original_transcript, options["output_language"], options["summary_style"], options["quiz_count"], options["flashcard_count"])
         JOBS.update(job_id, percent=90, stage="exports")
-        result = {
-            "version": APP_VERSION,
-            "job_id": job_id,
-            "options": options,
-            "sources": {
-                "mode": source_mode,
-                "audio": audio_sources[0].name,
-                "visual": visual_sources[0].name,
-                "audio_files": [path.name for path in audio_sources],
-                "visual_files": [path.name for path in visual_sources],
-                "slides_offset_seconds": float(options.get("slides_offset_seconds", 0) or 0),
-            },
-            "slides": slides,
-            "diagnostics": diagnostics,
-            "transcript_original": original_transcript,
-            "transcript_translated": translated_transcript,
-            "transcript": translated_transcript or original_transcript,
-            **study_pack,
-        }
+        result = {"version": APP_VERSION, "job_id": job_id, "options": options, "sources": {"mode": source_mode, "audio": audio_sources[0].name, "visual": visual_sources[0].name, "audio_files": [path.name for path in audio_sources], "visual_files": [path.name for path in visual_sources], "slides_offset_seconds": float(options.get("slides_offset_seconds", 0) or 0)}, "slides": slides, "diagnostics": diagnostics, "transcript_original": original_transcript, "transcript_translated": translated_transcript, "transcript": translated_transcript or original_transcript, **study_pack}
         artifacts, zip_path = build_artifacts(job_dir, result, slides_dir)
         result["artifacts"] = artifacts
-
         elapsed = round(time.time() - started, 1)
-        JOBS.update(
-            job_id,
-            status="done",
-            percent=100,
-            stage="done",
-            elapsed_seconds=elapsed,
-            result_path=str(zip_path),
-        )
+        JOBS.update(job_id, status="done", percent=100, stage="done", elapsed_seconds=elapsed, result_path=str(zip_path))
     except Exception as exc:
         normalized = normalize_error(exc)
         print(f"PROCESS ERROR [{normalized.code}]: {normalized.technical_message}", flush=True)
         traceback.print_exc()
-        JOBS.update(
-            job_id,
-            status="error",
-            percent=0,
-            stage="error",
-            error_code=normalized.code,
-            error=normalized.user_message,
-            technical_error=normalized.technical_message,
-            elapsed_seconds=round(time.time() - started, 1),
-        )
+        JOBS.update(job_id, status="error", percent=0, stage="error", error_code=normalized.code, error=normalized.user_message, technical_error=normalized.technical_message, elapsed_seconds=round(time.time() - started, 1))
