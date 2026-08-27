@@ -10,7 +10,9 @@ from pydantic import BaseModel
 
 from . import config
 from .billing_service import BillingAuthenticationError, BillingConfigurationError, BillingError, authenticate_session
+from .jobs import JOBS
 from .mailer import EmailDeliveryError
+from .queue import worker_health
 from .rollout_service import (
     claim_instagram_reward,
     create_or_resume_guest,
@@ -24,6 +26,7 @@ from .rollout_service import (
     update_profile,
     verify_email_change,
 )
+from .storage import STORAGE
 
 
 router = APIRouter(tags=["product-rollout"])
@@ -83,6 +86,13 @@ def _billing_failure(exc: Exception, code: str = "LS-BILL-22") -> None:
 
 @router.get("/rollout/health")
 def rollout_health() -> dict:
+    queue = JOBS.redis_health()
+    storage = STORAGE.health()
+    worker = worker_health() if queue["connected"] else {
+        "configured": bool(config.CELERY_BROKER_URL),
+        "reachable": False,
+        "workers": 0,
+    }
     return {
         "ok": True,
         "guest_trial_minutes": config.GUEST_TRIAL_MAX_MINUTES,
@@ -94,6 +104,15 @@ def rollout_health() -> dict:
             and config.S3_BUCKET
             and config.S3_ACCESS_KEY_ID
             and config.S3_SECRET_ACCESS_KEY
+        ),
+        "queue": queue,
+        "storage": storage,
+        "worker": worker,
+        "durable_processing_ready": bool(
+            config.CELERY_BROKER_URL
+            and queue["connected"]
+            and storage["connected"]
+            and worker["reachable"]
         ),
     }
 

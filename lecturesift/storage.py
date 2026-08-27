@@ -49,6 +49,15 @@ class ObjectStorage:
         self._client.download_file(self.bucket, key, str(destination))
         return destination
 
+    def health(self) -> dict[str, bool]:
+        if not self.remote or self._client is None:
+            return {"configured": False, "connected": False}
+        try:
+            self._client.head_bucket(Bucket=self.bucket)
+            return {"configured": True, "connected": True}
+        except Exception:
+            return {"configured": True, "connected": False}
+
     @staticmethod
     def _is_source_media(path: Path, job_dir: Path, relative: str) -> bool:
         if relative.startswith(("sources/", "slide_segments/")):

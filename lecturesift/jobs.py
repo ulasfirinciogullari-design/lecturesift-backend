@@ -55,6 +55,52 @@ class JobStore:
                 except Exception:
                     pass
 
+    @contextmanager
+    def processing_lock(self, job_id: str) -> Iterator[bool]:
+        """Keep one worker on a job while allowing fast recovery after a crash."""
+        if self._redis is None:
+            yield True
+            return
+
+        try:
+            lock = self._redis.lock(
+                f"lecturesift:job:{job_id}:processing",
+                timeout=180,
+                blocking_timeout=0,
+                thread_local=False,
+            )
+            acquired = bool(lock.acquire(blocking=False))
+        except Exception:
+            # A Celery worker already depends on Redis. Fail closed so its
+            # normal retry path cannot run the same long job twice.
+            acquired = False
+            lock = None
+        if not acquired:
+            yield False
+            return
+
+        stop = threading.Event()
+
+        def renew() -> None:
+            while not stop.wait(60):
+                try:
+                    if lock is not None:
+                        lock.extend(180, replace_ttl=True)
+                except Exception:
+                    return
+
+        refresher = threading.Thread(target=renew, daemon=True, name=f"job-lock-{job_id[:8]}")
+        refresher.start()
+        try:
+            yield True
+        finally:
+            stop.set()
+            if lock is not None:
+                try:
+                    lock.release()
+                except Exception:
+                    pass
+
     def _load(self) -> None:
         text = ""
         if self._redis is not None:
@@ -187,6 +233,25 @@ class JobStore:
             data.pop(key, None)
         return data
 
+    def list_for_user(self, user_id: str, limit: int = 50) -> list[dict[str, Any]]:
+        with self._lock:
+            self._refresh_locked()
+            owned = [
+                data.copy()
+                for data in self._jobs.values()
+                if data.get("options", {}).get("billing_user_id") == user_id
+            ]
+        owned.sort(key=lambda item: float(item.get("created", 0)), reverse=True)
+        return owned[: max(1, min(100, int(limit)))]
+
+    def redis_health(self) -> dict[str, bool]:
+        if self._redis is None:
+            return {"configured": False, "connected": False}
+        try:
+            return {"configured": True, "connected": bool(self._redis.ping())}
+        except Exception:
+            return {"configured": True, "connected": False}
+
     def recoverable(self) -> list[dict[str, Any]]:
         with self._lock:
             self._refresh_locked()
@@ -197,12 +262,13 @@ class JobStore:
             ]
 
     def cleanup_expired(self) -> int:
-        cutoff = time.time() - JOB_TTL_SECONDS
+        now = time.time()
         removed: list[Path] = []
         with self._lock, self._distributed_write_lock():
             self._refresh_locked()
             for job_id, data in list(self._jobs.items()):
-                if float(data.get("updated", 0)) < cutoff:
+                retention_seconds = max(60, int(data.get("retention_seconds", JOB_TTL_SECONDS)))
+                if float(data.get("updated", 0)) < now - retention_seconds:
                     removed.append(Path(data.get("job_dir", WORK_DIR / job_id)))
                     del self._jobs[job_id]
             if removed:

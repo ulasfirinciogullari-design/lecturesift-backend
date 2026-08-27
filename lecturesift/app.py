@@ -120,12 +120,49 @@ def _owned_job(job_id: str, user: dict) -> dict:
 
 def _public_job(data: dict) -> dict:
     result = data.copy()
-    for key in ("job_dir", "result_path", "technical_error"):
+    for key in (
+        "job_dir",
+        "result_path",
+        "technical_error",
+        "source_keys",
+        "celery_task_id",
+        "remote_prefix",
+        "remote_result_key",
+        "remote_download_key",
+        "queue_error",
+    ):
         result.pop(key, None)
     result["options"] = {
         key: value for key, value in result.get("options", {}).items() if key != "billing_user_id"
     }
     return result
+
+
+def start_url_job(job_id: str, url: str, job_dir: Path, options: dict) -> str:
+    """Start the local URL path; durable runtime replaces this in production."""
+    def worker() -> None:
+        started = time.time()
+        try:
+            video_path = download_remote_video(url, job_dir)
+            JOBS.update(job_id, percent=8, stage="parallel_analysis")
+            process_job(job_id, video_path, options)
+        except Exception as exc:
+            normalized = normalize_error(exc)
+            print(f"URL ERROR [{normalized.code}]: {normalized.technical_message}", flush=True)
+            traceback.print_exc()
+            JOBS.update(
+                job_id,
+                status="error",
+                percent=0,
+                stage="error",
+                error_code=normalized.code,
+                error=normalized.user_message,
+                technical_error=normalized.technical_message,
+                elapsed_seconds=round(time.time() - started, 1),
+            )
+
+    threading.Thread(target=worker, daemon=True).start()
+    return "working"
 
 
 class InstagramMediaRequest(BaseModel):
@@ -616,6 +653,11 @@ def get_job(job_id: str, user: dict = Depends(_billing_user)) -> dict:
     return _public_job(_owned_job(job_id, user))
 
 
+@app.get("/jobs")
+def list_jobs(limit: int = 50, user: dict = Depends(_billing_user)) -> dict:
+    return {"jobs": [_public_job(item) for item in JOBS.list_for_user(user["id"], limit)]}
+
+
 @app.get("/jobs/{job_id}/result")
 def get_result(job_id: str, user: dict = Depends(_billing_user)) -> dict:
     data = _owned_job(job_id, user)
@@ -694,7 +736,7 @@ async def create_job(
         job_type,
     )
     try:
-        validate_job_features(
+        entitlement = validate_job_features(
             billing_user["id"],
             quiz_count=options["quiz_count"],
             flashcard_count=options["flashcard_count"],
@@ -747,6 +789,7 @@ async def create_job(
         audio_file_sizes=audio_sizes,
         visual_file_sizes=visual_sizes,
         source_file_count=len(audio_paths) + len(visual_paths),
+        retention_seconds=max(1, int(entitlement["plan"]["history_days"])) * 24 * 60 * 60,
     )
     threading.Thread(
         target=process_job,
@@ -782,7 +825,7 @@ def create_url_job(
         job_type,
     )
     try:
-        validate_job_features(
+        entitlement = validate_job_features(
             billing_user["id"],
             quiz_count=options["quiz_count"],
             flashcard_count=options["flashcard_count"],
@@ -800,30 +843,14 @@ def create_url_job(
     job_id = str(uuid.uuid4())
     job_dir = _job_path(job_id)
     options["billing_user_id"] = billing_user["id"]
-    JOBS.create(job_id, job_dir, options, source_type="url", source_url=url)
+    JOBS.create(
+        job_id,
+        job_dir,
+        options,
+        source_type="url",
+        source_url=url,
+        retention_seconds=max(1, int(entitlement["plan"]["history_days"])) * 24 * 60 * 60,
+    )
     JOBS.update(job_id, status="working", percent=3, stage="url_download")
-
-    def worker() -> None:
-        started = time.time()
-        try:
-            video_path = download_remote_video(url, job_dir)
-            JOBS.update(job_id, percent=8, stage="parallel_analysis")
-            process_job(job_id, video_path, options)
-        except Exception as exc:
-            normalized = normalize_error(exc)
-            print(f"URL ERROR [{normalized.code}]: {normalized.technical_message}", flush=True)
-            traceback.print_exc()
-            JOBS.update(
-                job_id,
-                status="error",
-                percent=0,
-                stage="error",
-                error_code=normalized.code,
-                error=normalized.user_message,
-                technical_error=normalized.technical_message,
-                elapsed_seconds=round(time.time() - started, 1),
-            )
-
-    threading.Thread(target=worker, daemon=True).start()
-    return {"job_id": job_id, "status": "working", "version": APP_VERSION}
-
+    status = start_url_job(job_id, url, job_dir, options)
+    return {"job_id": job_id, "status": status, "version": APP_VERSION}

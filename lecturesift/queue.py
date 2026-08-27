@@ -28,3 +28,14 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
 )
+
+
+def worker_health(timeout: float = 1.0) -> dict[str, bool | int]:
+    configured = bool(CELERY_BROKER_URL or REDIS_URL)
+    if not configured:
+        return {"configured": False, "reachable": False, "workers": 0}
+    try:
+        replies = celery_app.control.ping(timeout=timeout) or []
+        return {"configured": True, "reachable": bool(replies), "workers": len(replies)}
+    except Exception:
+        return {"configured": True, "reachable": False, "workers": 0}

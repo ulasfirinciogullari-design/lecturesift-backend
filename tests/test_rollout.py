@@ -44,9 +44,10 @@ def test_guest_trial_is_five_minutes_resumable_and_single_job():
     assert resumed.json()["account"]["user"]["id"] == body["account"]["user"]["id"]
 
     user_id = body["account"]["user"]["id"]
-    rollout_service.reserve_guest_job(user_id, "job-one", 4.9)
+    first_job = f"job-{uuid.uuid4()}"
+    rollout_service.reserve_guest_job(user_id, first_job, 4.9)
     with pytest.raises(Exception, match="daha önce"):
-        rollout_service.reserve_guest_job(user_id, "job-two", 1.0)
+        rollout_service.reserve_guest_job(user_id, f"job-{uuid.uuid4()}", 1.0)
     other = client.post("/billing/guest-session", json={"device_id": f"device-{uuid.uuid4()}"}).json()
     with pytest.raises(Exception, match="en fazla"):
         rollout_service.reserve_guest_job(other["account"]["user"]["id"], "too-long", 5.5)
@@ -119,10 +120,11 @@ def test_manual_order_admin_rejection_and_instagram_approval(monkeypatch):
     assert rejected.status_code == 200
     assert rejected.json()["result"]["status"] == "rejected"
 
+    instagram_handle = f"@lecture_{uuid.uuid4().hex[:12]}"
     claim = client.post(
         "/billing/instagram-reward",
         headers=auth(token),
-        json={"handle": "@lecture_student"},
+        json={"handle": instagram_handle},
     )
     assert claim.status_code == 200
     reward_id = claim.json()["reward"]["id"]
@@ -142,7 +144,7 @@ def test_manual_order_admin_rejection_and_instagram_approval(monkeypatch):
     duplicate = client.post(
         "/billing/instagram-reward",
         headers=auth(token),
-        json={"handle": "@lecture_student"},
+        json={"handle": instagram_handle},
     )
     assert duplicate.status_code == 400
 

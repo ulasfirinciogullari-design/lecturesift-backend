@@ -699,6 +699,19 @@ def require_job_entitlement(user_id: str) -> dict:
     return status
 
 
+def require_duration_entitlement(user_id: str, duration_seconds: float) -> dict:
+    """Reject media that cannot fit in the user's currently available minutes."""
+    status = require_job_entitlement(user_id)
+    required_minutes = max(1, int(math.ceil(max(0.0, duration_seconds) / 60)))
+    remaining = status["remaining_minutes"]
+    if remaining is not None and required_minutes > int(remaining):
+        raise BillingError(
+            f"Bu kaynak yaklaşık {required_minutes} dakika; hesabında {int(remaining)} dakika kaldı. "
+            "Daha kısa bir kaynak yükle veya dakika hakkını artır."
+        )
+    return status
+
+
 def validate_job_features(
     user_id: str,
     *,
@@ -727,11 +740,26 @@ def record_usage(user_id: str, job_id: str, duration_seconds: float) -> None:
     init_billing_database()
     try:
         with ENGINE.begin() as connection:
-            user = connection.execute(select(USERS).where(USERS.c.id == user_id)).first()
+            user = connection.execute(
+                select(USERS).where(USERS.c.id == user_id).with_for_update()
+            ).first()
             if not user:
                 return
             subscription = _active_subscription(connection, user_id, now)
             plan_code = subscription.plan_code if subscription else "free"
+            plan = PLAN_BY_CODE[plan_code]
+            period_start = (
+                subscription.starts_at
+                if subscription
+                else datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+            )
+            used_before = connection.execute(
+                select(func.coalesce(func.sum(USAGE_EVENTS.c.minutes), 0)).where(
+                    USAGE_EVENTS.c.user_id == user_id,
+                    USAGE_EVENTS.c.plan_code == plan_code,
+                    USAGE_EVENTS.c.occurred_at >= period_start,
+                )
+            ).scalar_one()
             connection.execute(
                 USAGE_EVENTS.insert().values(
                     id=str(uuid.uuid4()),
@@ -742,21 +770,14 @@ def record_usage(user_id: str, job_id: str, duration_seconds: float) -> None:
                     occurred_at=now,
                 )
             )
-            if not subscription:
-                month_start = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
-                used = connection.execute(
-                    select(func.coalesce(func.sum(USAGE_EVENTS.c.minutes), 0)).where(
-                        USAGE_EVENTS.c.user_id == user_id,
-                        USAGE_EVENTS.c.plan_code == "free",
-                        USAGE_EVENTS.c.occurred_at >= month_start,
-                    )
-                ).scalar_one()
-                overflow = min(minutes, max(0, int(used) - int(PLAN_BY_CODE["free"].minutes or 0)))
-                if overflow:
+            if plan.minutes is not None and user.credit_minutes:
+                plan_minutes_left = max(0, int(plan.minutes) - int(used_before))
+                credit_spend = min(int(user.credit_minutes), max(0, minutes - plan_minutes_left))
+                if credit_spend:
                     connection.execute(
                         update(USERS)
                         .where(USERS.c.id == user_id)
-                        .values(credit_minutes=max(0, int(user.credit_minutes) - overflow))
+                        .values(credit_minutes=max(0, int(user.credit_minutes) - credit_spend))
                     )
     except IntegrityError:
         # Job usage is idempotent; a retried completion must not charge twice.
