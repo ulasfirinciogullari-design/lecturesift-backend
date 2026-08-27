@@ -17,4 +17,6 @@ COPY main.py ./main.py
 COPY url_app.py ./url_app.py
 COPY lecturesift ./lecturesift
 
-CMD ["sh","-c","uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]
+# Start the API normally and bootstrap only the very first launch-grid post in
+# a detached helper. Marker checks make deploy retries and later deploys safe.
+CMD ["sh","-c","python -m lecturesift.launch_once & exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]
