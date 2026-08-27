@@ -33,43 +33,10 @@ if FONT_BOLD_PATH.exists():
 def _styles() -> dict:
     base = getSampleStyleSheet()
     return {
-        "title": ParagraphStyle(
-            "LectureTitle",
-            parent=base["Title"],
-            fontName=FONT_BOLD,
-            fontSize=22,
-            leading=27,
-            textColor=colors.HexColor("#172554"),
-            alignment=TA_CENTER,
-            spaceAfter=14,
-        ),
-        "heading": ParagraphStyle(
-            "LectureHeading",
-            parent=base["Heading2"],
-            fontName=FONT_BOLD,
-            fontSize=14,
-            leading=18,
-            textColor=colors.HexColor("#4338CA"),
-            spaceBefore=10,
-            spaceAfter=7,
-        ),
-        "body": ParagraphStyle(
-            "LectureBody",
-            parent=base["BodyText"],
-            fontName=FONT_NAME,
-            fontSize=10.5,
-            leading=15,
-            textColor=colors.HexColor("#1F2937"),
-            spaceAfter=6,
-        ),
-        "small": ParagraphStyle(
-            "LectureSmall",
-            parent=base["BodyText"],
-            fontName=FONT_NAME,
-            fontSize=8.5,
-            leading=12,
-            textColor=colors.HexColor("#64748B"),
-        ),
+        "title": ParagraphStyle("LectureTitle", parent=base["Title"], fontName=FONT_BOLD, fontSize=22, leading=27, textColor=colors.HexColor("#172554"), alignment=TA_CENTER, spaceAfter=14),
+        "heading": ParagraphStyle("LectureHeading", parent=base["Heading2"], fontName=FONT_BOLD, fontSize=14, leading=18, textColor=colors.HexColor("#4338CA"), spaceBefore=10, spaceAfter=7),
+        "body": ParagraphStyle("LectureBody", parent=base["BodyText"], fontName=FONT_NAME, fontSize=10.5, leading=15, textColor=colors.HexColor("#1F2937"), spaceAfter=6),
+        "small": ParagraphStyle("LectureSmall", parent=base["BodyText"], fontName=FONT_NAME, fontSize=8.5, leading=12, textColor=colors.HexColor("#64748B")),
     }
 
 
@@ -79,16 +46,7 @@ def _paragraph(text: str, style) -> Paragraph:
 
 def _write_pdf(path: Path, title: str, sections: list[tuple[str, list[str]]]) -> None:
     styles = _styles()
-    document = SimpleDocTemplate(
-        str(path),
-        pagesize=A4,
-        rightMargin=18 * mm,
-        leftMargin=18 * mm,
-        topMargin=17 * mm,
-        bottomMargin=17 * mm,
-        title=title,
-        author="LectureSift",
-    )
+    document = SimpleDocTemplate(str(path), pagesize=A4, rightMargin=18 * mm, leftMargin=18 * mm, topMargin=17 * mm, bottomMargin=17 * mm, title=title, author="LectureSift")
     story = [_paragraph(title, styles["title"]), _paragraph("LectureSift AI Study Pack", styles["small"]), Spacer(1, 8)]
     for heading, paragraphs in sections:
         if heading:
@@ -116,10 +74,7 @@ def _notes_text(pack: dict) -> str:
     if pack.get("key_points"):
         blocks.append("ÖNEMLİ NOKTALAR\n" + "\n".join(f"• {item}" for item in pack["key_points"]))
     if pack.get("important_terms"):
-        blocks.append(
-            "KAVRAMLAR VE TANIMLAR\n"
-            + "\n".join(f"• {item.get('term', '')}: {item.get('definition', '')}" for item in pack["important_terms"])
-        )
+        blocks.append("KAVRAMLAR VE TANIMLAR\n" + "\n".join(f"• {item.get('term', '')}: {item.get('definition', '')}" for item in pack["important_terms"]))
     for note in pack.get("notes", []):
         value = f"{note.get('heading', '')}\n{note.get('content', '')}"
         bullets = note.get("bullets") or []
@@ -136,32 +91,17 @@ def _quiz_text(quiz: list[dict]) -> str:
     for index, item in enumerate(quiz, 1):
         options = "\n".join(f"  {chr(65 + option_index)}. {option}" for option_index, option in enumerate(item.get("options", [])))
         answer_index = int(item.get("answer_index", 0))
-        blocks.append(
-            f"{index}. {item.get('question', '')}\n{options}\n"
-            f"Doğru cevap: {chr(65 + answer_index)}\nAçıklama: {item.get('explanation', '')}"
-        )
+        blocks.append(f"{index}. {item.get('question', '')}\n{options}\nDoğru cevap: {chr(65 + answer_index)}\nAçıklama: {item.get('explanation', '')}")
     return "\n\n".join(blocks)
 
 
 def _flashcards_text(cards: list[dict]) -> str:
-    return "\n\n".join(
-        f"{index}. Soru: {item.get('front', '')}\nCevap: {item.get('back', '')}"
-        for index, item in enumerate(cards, 1)
-    )
+    return "\n\n".join(f"{index}. Soru: {item.get('front', '')}\nCevap: {item.get('back', '')}" for index, item in enumerate(cards, 1))
 
 
 def _write_slides_pdf(path: Path, title: str, slides: list[dict], slides_dir: Path) -> None:
     styles = _styles()
-    document = SimpleDocTemplate(
-        str(path),
-        pagesize=landscape(A4),
-        rightMargin=15 * mm,
-        leftMargin=15 * mm,
-        topMargin=12 * mm,
-        bottomMargin=12 * mm,
-        title=f"{title} - Slaytlar",
-        author="LectureSift",
-    )
+    document = SimpleDocTemplate(str(path), pagesize=landscape(A4), rightMargin=15 * mm, leftMargin=15 * mm, topMargin=12 * mm, bottomMargin=12 * mm, title=f"{title} - Slaytlar", author="LectureSift")
     story = []
     max_width, max_height = 260 * mm, 155 * mm
     for index, slide in enumerate(slides):
@@ -194,12 +134,7 @@ def _write_slides_docx(path: Path, title: str, slides: list[dict], slides_dir: P
 
 
 def _artifact(path: Path, label: str) -> dict:
-    return {
-        "file": path.name,
-        "label": label,
-        "format": path.suffix.removeprefix(".").upper(),
-        "size_bytes": path.stat().st_size,
-    }
+    return {"file": path.name, "label": label, "format": path.suffix.removeprefix(".").upper(), "size_bytes": path.stat().st_size}
 
 
 def _save_result(job_dir: Path, result: dict, artifacts: list[dict]) -> None:
@@ -214,12 +149,13 @@ def build_artifacts(job_dir: Path, result: dict, slides_dir: Path) -> tuple[list
     title = result.get("title") or "LectureSift Ders Paketi"
     original = result.get("transcript_original", "") or "Videoda ses parçası bulunamadı."
     translated = result.get("transcript_translated", "")
+    smart_notes = _notes_text(result)
     documents = [
         ("Ozet", "Özet", f"{title} - Özet", [("Özet", [result.get("summary", "")])], result.get("summary", "")),
-        ("Ders_Notlari", "Ders Notları", f"{title} - Ders Notları", [("Ders Notları", [_notes_text(result)])], _notes_text(result)),
+        ("Akilli_Notlar", "Akıllı Notlar", f"{title} - Akıllı Notlar", [("Akıllı Notlar", [smart_notes])], smart_notes),
         ("Transkript_Orijinal", "Orijinal Transkript", f"{title} - Orijinal Transkript", [("Transkript", [original])], original),
         ("Quiz", "Quiz", f"{title} - Quiz", [("Sorular ve Yanıtlar", [_quiz_text(result.get("quiz", []))])], _quiz_text(result.get("quiz", []))),
-        ("Flashcards", "Bilgi Kartları", f"{title} - Bilgi Kartları", [("Bilgi Kartları", [_flashcards_text(result.get("flashcards", []))])], _flashcards_text(result.get("flashcards", []))),
+        ("Bilgi_Kartlari", "Bilgi Kartları", f"{title} - Bilgi Kartları", [("Bilgi Kartları", [_flashcards_text(result.get("flashcards", []))])], _flashcards_text(result.get("flashcards", []))),
     ]
     if translated:
         documents.insert(3, ("Transkript_Ceviri", "Çevrilmiş Transkript", f"{title} - Çevrilmiş Transkript", [("Transkript", [translated])], translated))
@@ -255,7 +191,7 @@ def build_artifacts(job_dir: Path, result: dict, slides_dir: Path) -> tuple[list
             artifacts.append(_artifact(path, "Slayt Listesi (TXT)"))
 
     _save_result(job_dir, result, artifacts)
-    zip_base = job_dir / "LectureSift_Study_Pack_V4"
+    zip_base = job_dir / "LectureSift_Study_Pack"
     shutil.make_archive(str(zip_base), "zip", root_dir=package_dir)
     return artifacts, zip_base.with_suffix(".zip")
 
