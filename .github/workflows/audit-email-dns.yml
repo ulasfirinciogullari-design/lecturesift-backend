@@ -71,16 +71,37 @@ jobs:
             query TXT _dmarc.lecturesift.com "$ns"
           done
 
-      - name: Verify live backend and frontend integration
+      - name: Confirm corrected live sender and frontend integration
         shell: bash
         run: |
           set -euo pipefail
 
-          echo '=== Backend email health ==='
-          curl --fail --location --silent --show-error \
-            --retry 8 --retry-delay 5 --retry-all-errors --max-time 150 \
-            https://lecturesift-backend.onrender.com/billing/email/health \
-            | tee /tmp/email-health.json
+          expected_sender='LectureSift <no-reply@mail.lecturesift.com>'
+          matched=false
+          for attempt in $(seq 1 40); do
+            body="$(curl --fail --location --silent --show-error \
+              --retry 2 --retry-delay 3 --retry-all-errors --max-time 120 \
+              https://lecturesift-backend.onrender.com/billing/email/health || true)"
+            if [[ -n "$body" ]]; then
+              printf '%s' "$body" > /tmp/email-health.json
+              sender="$(python -c 'import json; print(json.load(open("/tmp/email-health.json")).get("sender") or "")' 2>/dev/null || true)"
+              configured="$(python -c 'import json; print(str(json.load(open("/tmp/email-health.json")).get("configured", False)).lower())' 2>/dev/null || true)"
+              required="$(python -c 'import json; print(str(json.load(open("/tmp/email-health.json")).get("verification_required", False)).lower())' 2>/dev/null || true)"
+              database_ready="$(python -c 'import json; print(str(json.load(open("/tmp/email-health.json")).get("database", {}).get("ready", False)).lower())' 2>/dev/null || true)"
+              echo "Attempt $attempt: sender=$sender configured=$configured required=$required database_ready=$database_ready"
+              if [[ "$sender" == "$expected_sender" && "$configured" == "true" && "$required" == "true" && "$database_ready" == "true" ]]; then
+                matched=true
+                break
+              fi
+            fi
+            sleep 10
+          done
+
+          if [[ "$matched" != "true" ]]; then
+            echo 'The live backend did not expose the corrected verified-domain sender.'
+            [[ -f /tmp/email-health.json ]] && python -m json.tool /tmp/email-health.json || true
+            exit 1
+          fi
           python -m json.tool /tmp/email-health.json
 
           echo
