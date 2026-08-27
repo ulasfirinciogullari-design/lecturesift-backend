@@ -226,23 +226,9 @@
     const grid = $("plansGrid");
     const heading = document.querySelector("#plans .billing-heading");
     if (!grid || !heading) return;
-    let currency = selectedCurrency();
-    let label = $("rolloutCurrency");
-    if (!label) {
-      label = document.createElement("label");
-      label.id = "rolloutCurrency";
-      label.className = "rollout-currency";
-      label.innerHTML = '<span>Para birimi</span><select></select>';
-      heading.appendChild(label);
-      const supported = window.LECTURESIFT_LOCALE_DATA?.currencies || ["TRY","USD","EUR","GBP","CAD","AUD","JPY"];
-      label.querySelector("select").replaceChildren(...supported.map(code => new Option(code, code)));
-      label.querySelector("select").value = supported.includes(currency) ? currency : "USD";
-      currency = label.querySelector("select").value;
-      label.querySelector("select").onchange = () => {
-        currency = label.querySelector("select").value;
-        localStorage.setItem("lecturesift-currency", currency);
-        load();
-      };
+    const selector = $("billingCurrency");
+    let currency = selector?.value || selectedCurrency();
+    if (!document.querySelector("#plans .rollout-guest-note")) {
       const note = document.createElement("p");
       note.className = "rollout-guest-note";
       note.textContent = "Fiyatlar seçilen para biriminde gösterilir. Havale/EFT siparişi, oluşturulduğunda ekranda görünen kesin TRY tutarıyla ödenir; açıklamaya sipariş numarası yazılır.";
@@ -250,6 +236,7 @@
     }
     async function load() {
       try {
+        currency = selector?.value || currency;
         const body = await api(`/billing/plans?currency=${encodeURIComponent(currency)}`, {}, "");
         if (typeof billingCatalog !== "undefined") billingCatalog = body;
         const currentCode = typeof billingAccount !== "undefined" ? billingAccount?.plan?.code : "";
