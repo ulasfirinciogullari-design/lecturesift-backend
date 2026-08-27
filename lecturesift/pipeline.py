@@ -5,7 +5,10 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import cv2
+
 from .ai import make_study_pack, transcribe, translate_transcript
+from .billing_service import record_usage
 from .config import APP_VERSION
 from .errors import normalize_error
 from .exports import build_artifacts, build_binary_artifact
@@ -22,6 +25,35 @@ def _path_list(value: Path | list[Path] | tuple[Path, ...]) -> list[Path]:
 
 def _same_text(left: str, right: str) -> bool:
     return " ".join(left.casefold().split()) == " ".join(right.casefold().split())
+
+
+def _public_options(options: dict) -> dict:
+    return {key: value for key, value in options.items() if key != "billing_user_id"}
+
+
+def _source_duration_seconds(paths: list[Path]) -> float:
+    total = 0.0
+    for path in paths:
+        capture = cv2.VideoCapture(str(path))
+        try:
+            fps = float(capture.get(cv2.CAP_PROP_FPS) or 0)
+            frames = float(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+            if fps > 0 and frames > 0:
+                total += frames / fps
+        finally:
+            capture.release()
+    return total
+
+
+def _record_billing_usage(job_id: str, options: dict, paths: list[Path]) -> None:
+    user_id = options.get("billing_user_id")
+    if not user_id:
+        return
+    try:
+        record_usage(str(user_id), job_id, _source_duration_seconds(paths))
+    except Exception:
+        # The completed study pack remains available if metering is temporarily unavailable.
+        print("BILLING USAGE ERROR: metering is temporarily unavailable", flush=True)
 
 
 def _audio_pipeline(job_id: str, video_paths: list[Path], job_dir: Path, options: dict) -> tuple[str, str]:
@@ -160,7 +192,7 @@ def process_job(
                 "version": APP_VERSION,
                 "job_id": job_id,
                 "job_type": "audio_export",
-                "options": options,
+                "options": _public_options(options),
                 "title": "LectureSift MP3",
                 "summary": "Video sesi MP3 dosyasına dönüştürüldü.",
                 "slides": [],
@@ -182,6 +214,7 @@ def process_job(
                 elapsed_seconds=round(time.time() - started, 1),
                 result_path=str(zip_path),
             )
+            _record_billing_usage(job_id, options, audio_sources)
             return
 
         if options.get("job_type") == "download_video":
@@ -191,7 +224,7 @@ def process_job(
                 "version": APP_VERSION,
                 "job_id": job_id,
                 "job_type": "download_video",
-                "options": options,
+                "options": _public_options(options),
                 "title": "LectureSift Video İndirme",
                 "summary": "Video bağlantıdan indirilmeye hazırlandı.",
                 "slides": [],
@@ -211,6 +244,7 @@ def process_job(
                 elapsed_seconds=round(time.time() - started, 1),
                 result_path=str(zip_path),
             )
+            _record_billing_usage(job_id, options, audio_sources)
             return
 
         with ThreadPoolExecutor(max_workers=2, thread_name_prefix="lecturesift") as executor:
@@ -239,7 +273,7 @@ def process_job(
         result = {
             "version": APP_VERSION,
             "job_id": job_id,
-            "options": options,
+            "options": _public_options(options),
             "sources": {
                 "mode": source_mode,
                 "audio": audio_sources[0].name,
@@ -267,6 +301,7 @@ def process_job(
             elapsed_seconds=elapsed,
             result_path=str(zip_path),
         )
+        _record_billing_usage(job_id, options, audio_sources)
     except Exception as exc:
         normalized = normalize_error(exc)
         print(f"PROCESS ERROR [{normalized.code}]: {normalized.technical_message}", flush=True)

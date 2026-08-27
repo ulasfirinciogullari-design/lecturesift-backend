@@ -1,9 +1,10 @@
 import os
+import tempfile
 from pathlib import Path
 
 
 APP_VERSION = "4.1"
-WORK_DIR = Path(os.getenv("LECTURESIFT_WORK_DIR", "/tmp/lecturesift"))
+WORK_DIR = Path(os.getenv("LECTURESIFT_WORK_DIR", str(Path(tempfile.gettempdir()) / "lecturesift")))
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -14,6 +15,13 @@ INSTAGRAM_ADMIN_TOKEN = os.getenv("INSTAGRAM_ADMIN_TOKEN", "")
 INSTAGRAM_GRAPH_API_VERSION = os.getenv("INSTAGRAM_GRAPH_API_VERSION", "v23.0")
 INSTAGRAM_DAILY_AUTOMATION_ENABLED = os.getenv("INSTAGRAM_DAILY_AUTOMATION_ENABLED", "false").lower() == "true"
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{WORK_DIR / 'billing.db'}")
+BILLING_SESSION_SECRET = os.getenv("BILLING_SESSION_SECRET", "")
+BILLING_ADMIN_TOKEN = os.getenv("BILLING_ADMIN_TOKEN", "")
+BILLING_BANK_IBAN = os.getenv("BILLING_BANK_IBAN", "").replace(" ", "").upper()
+BILLING_BANK_ACCOUNT_HOLDER = os.getenv("BILLING_BANK_ACCOUNT_HOLDER", "").strip()
+BILLING_BANK_NAME = os.getenv("BILLING_BANK_NAME", "").strip()
+BILLING_SUPPORT_EMAIL = os.getenv("BILLING_SUPPORT_EMAIL", "").strip()
 MAX_VIDEO_BYTES = int(os.getenv("LECTURESIFT_MAX_VIDEO_BYTES", str(1024 * 1024 * 1024)))
 MAX_SOURCE_FILES = int(os.getenv("LECTURESIFT_MAX_SOURCE_FILES", "24"))
 JOB_TTL_SECONDS = int(os.getenv("LECTURESIFT_JOB_TTL_SECONDS", str(6 * 60 * 60)))

@@ -34,7 +34,15 @@ const EN = {
   correct: "Correct", incorrect: "Incorrect", score: "Score", reveal: "Reveal answer", previous: "Previous", next: "Next", know: "I know this", repeat: "Repeat",
   download: "Download", processing: "Lecture analysis in progress", done: "Your study pack is ready", parallel_analysis: "Audio and visuals are being analyzed together",
   url_download: "Downloading the video", study_pack: "Creating smart notes and questions", exports: "Preparing selected output files",
-  errorFallback: "The request could not be completed. Check the video or link and try again."
+  errorFallback: "The request could not be completed. Check the video or link and try again.",
+  plansNav: "Plans", login: "Sign in", register: "Create account", logout: "Sign out",
+  plansEyebrow: "Transparent usage plans", plansTitle: "Process what you need and upgrade anytime.",
+  plansSubtitle: "Bank transfers activate after payment review. Cards and automatic renewal will be added when PayTR is ready.",
+  accountTitle: "Create an account or sign in", accountHelp: "Your plan, minutes, and payments are linked to this account.",
+  remainingMinutes: "Processing minutes remaining", transferEyebrow: "Bank transfer details", transferTitle: "Your order is ready",
+  orderReference: "Order reference", amount: "Amount", accountHolder: "Account holder", sendReceipt: "Email the receipt",
+  currentPlan: "Current plan", choosePlan: "Choose plan", popular: "Popular", perMonth: "/ month", oneTime: "one time",
+  pendingApproval: "Pending review", loginRequired: "Sign in before choosing a plan.", accountReady: "Account is ready."
 };
 
 const TR = {
@@ -65,7 +73,15 @@ const TR = {
   correct: "Doğru", incorrect: "Yanlış", score: "Skor", reveal: "Cevabı göster", previous: "Önceki", next: "Sonraki", know: "Biliyorum", repeat: "Tekrar et",
   download: "İndir", processing: "Ders analizi sürüyor", done: "Çalışma paketin hazır", parallel_analysis: "Ses ve görüntü birlikte analiz ediliyor",
   url_download: "Video bağlantıdan alınıyor", study_pack: "Akıllı notlar ve sorular hazırlanıyor", exports: "Seçilen çıktı dosyaları hazırlanıyor",
-  errorFallback: "İşlem tamamlanamadı. Videoyu veya bağlantıyı kontrol edip yeniden deneyebilirsin."
+  errorFallback: "İşlem tamamlanamadı. Videoyu veya bağlantıyı kontrol edip yeniden deneyebilirsin.",
+  plansNav: "Planlar", login: "Giriş", register: "Hesap oluştur", logout: "Çıkış",
+  plansEyebrow: "Şeffaf kullanım planları", plansTitle: "İhtiyacın kadar işle, istediğin zaman yükselt.",
+  plansSubtitle: "Havale ödemeleri ödeme kontrolünden sonra etkinleştirilir. PayTR açıldığında kart ve otomatik yenileme eklenecek.",
+  accountTitle: "Hesabını oluştur veya giriş yap", accountHelp: "Planın, dakikaların ve ödemelerin bu hesaba bağlanır.",
+  remainingMinutes: "Kalan işlem dakikası", transferEyebrow: "Havale bilgileri", transferTitle: "Siparişin oluşturuldu",
+  orderReference: "Sipariş referansı", amount: "Tutar", accountHolder: "Hesap sahibi", sendReceipt: "Dekontu e-postayla gönder",
+  currentPlan: "Mevcut plan", choosePlan: "Planı seç", popular: "Popüler", perMonth: "/ ay", oneTime: "tek ödeme",
+  pendingApproval: "Kontrol bekliyor", loginRequired: "Plan seçmeden önce giriş yap.", accountReady: "Hesabın hazır."
 };
 
 const LEGACY = {
@@ -80,6 +96,27 @@ const LEGACY = {
   ja: ["講義動画またはリンク", "ファイルをアップロード", "リンクを使用", "講義を分析", "動画の言語", "出力言語", "要約プロファイル", "クイズ", "カード", "要約", "ノート", "文字起こし", "スライド", "全ファイルをダウンロード"],
   ko: ["강의 영상 또는 링크", "파일 업로드", "링크 사용", "강의 분석", "영상 언어", "출력 언어", "요약 프로필", "퀴즈", "플래시카드", "요약", "노트", "전사", "슬라이드", "전체 파일 다운로드"],
   hi: ["लेक्चर वीडियो या लिंक", "फ़ाइल अपलोड करें", "लिंक का उपयोग करें", "लेक्चर का विश्लेषण", "वीडियो भाषा", "आउटपुट भाषा", "सारांश प्रोफ़ाइल", "क्विज़", "फ्लैशकार्ड", "सारांश", "नोट्स", "ट्रांसक्रिप्ट", "स्लाइड", "सभी फ़ाइलें डाउनलोड करें"]
+};
+
+const PLAN_COPY = {
+  tr: {
+    free: ["Ücretsiz", "LectureSift'i denemek ve kısa dersleri işlemek için.", "60 dk / ay"],
+    credit: ["Dakika Paketi", "Abonelik olmadan ek işlem hakkı.", "180 dakika"],
+    lite: ["Lite", "Düzenli bireysel ders çalışması için.", "600 dk / ay"],
+    plus: ["Plus", "Yoğun ders dönemi ve çoklu kaynaklar için.", "2.400 dk / ay"],
+    pro: ["Pro", "Uzun kayıtlar ve öncelikli işleme için.", "6.000 dk / ay"],
+    max: ["Max", "En yüksek bireysel kullanım kapasitesi.", "15.000 dk / ay"],
+    business: ["Business", "Ekipler, kurumlar ve özel kapasite için.", "10 kullanıcı"]
+  },
+  en: {
+    free: ["Free", "Try LectureSift and process short lectures.", "60 min / month"],
+    credit: ["Minute Pack", "Extra processing without a subscription.", "180 minutes"],
+    lite: ["Lite", "For regular individual study.", "600 min / month"],
+    plus: ["Plus", "For intensive study and multiple sources.", "2,400 min / month"],
+    pro: ["Pro", "For long recordings and priority processing.", "6,000 min / month"],
+    max: ["Max", "The highest individual processing capacity.", "15,000 min / month"],
+    business: ["Business", "For teams, institutions, and custom capacity.", "10 seats"]
+  }
 };
 
 const ERRORS = {
@@ -101,6 +138,8 @@ let currentLanguage = localStorage.getItem("lecturesift-ui") || "tr";
 let sourceMode = "upload", sourceLayout = "classic", classicVideos = [], audioVideos = [], visualVideos = [];
 let jobId = null, timerStarted = null, timerHandle = null, pollHandle = null;
 let latestResult = null, cardIndex = 0, cardRevealed = false, quizScore = 0, quizAnswered = 0;
+let billingToken = localStorage.getItem("lecturesift-billing-token") || "";
+let billingAccount = null, billingCatalog = null;
 
 function stringsFor(language) {
   if (language === "tr") return TR;
@@ -132,6 +171,8 @@ function applyLanguage() {
   localStorage.setItem("lecturesift-ui", currentLanguage);
   ["classic", "audio", "visual"].forEach(renderFileList);
   syncTranslationChoice(); updateOperationUI();
+  if (billingCatalog) renderPlans();
+  renderBillingAccount();
 }
 
 Object.entries(LANGUAGES).forEach(([code, label]) => {
@@ -145,6 +186,139 @@ sourceLanguage.value = "auto";
 outputLanguage.value = currentLanguage in LANGUAGES ? currentLanguage : "tr";
 uiLanguage.addEventListener("change", () => { currentLanguage = uiLanguage.value; applyLanguage(); if (!latestResult) outputLanguage.value = currentLanguage; syncTranslationChoice(); });
 applyLanguage();
+
+const PLAN_ORDER = ["free", "credit", "lite", "plus", "pro", "max", "business"];
+
+function planCopy(code) {
+  return (PLAN_COPY[currentLanguage] || PLAN_COPY.en)[code] || PLAN_COPY.en[code] || [code, "", ""];
+}
+
+function formatTry(amountMinor) {
+  return new Intl.NumberFormat(currentLanguage === "tr" ? "tr-TR" : "en-US", {
+    style: "currency", currency: "TRY", maximumFractionDigits: 0
+  }).format((amountMinor || 0) / 100);
+}
+
+function renderBillingAccount() {
+  if (!$('authForm')) return;
+  const loggedIn = Boolean(billingAccount && billingToken);
+  $("authForm").hidden = loggedIn;
+  $("accountStatus").hidden = !loggedIn;
+  $("accountButton").textContent = loggedIn ? billingAccount.user.email : t("login");
+  if (!loggedIn) return;
+  $("accountEmail").textContent = billingAccount.user.email;
+  $("accountPlan").textContent = `${t("currentPlan")}: ${planCopy(billingAccount.plan.code)[0]}`;
+  $("accountRemaining").textContent = billingAccount.remaining_minutes == null ? "∞" : billingAccount.remaining_minutes.toLocaleString(currentLanguage);
+}
+
+async function billingRequest(path, options = {}) {
+  const headers = {"Content-Type": "application/json", ...(options.headers || {})};
+  if (billingToken) headers.Authorization = `Bearer ${billingToken}`;
+  const response = await fetch(`${API}${path}`, {...options, headers});
+  if (!response.ok) {
+    const error = await responseError(response);
+    throw Object.assign(new Error(error.message), {code: error.code});
+  }
+  return response.json();
+}
+
+async function protectedFetch(path) {
+  const response = await fetch(`${API}${path}`, {
+    cache: "no-store",
+    headers: {Authorization: `Bearer ${billingToken}`},
+  });
+  if (!response.ok) {
+    const error = await responseError(response);
+    throw Object.assign(new Error(error.message), {code: error.code});
+  }
+  return response;
+}
+
+async function downloadProtected(path, filename) {
+  try {
+    const response = await protectedFetch(path);
+    const objectUrl = URL.createObjectURL(await response.blob());
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl; anchor.download = filename || "LectureSift";
+    document.body.appendChild(anchor); anchor.click(); anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  } catch (error) { showError(error.message, error.code || "LS-NETWORK-01"); }
+}
+
+async function refreshBillingAccount() {
+  if (!billingToken) { billingAccount = null; renderBillingAccount(); renderPlans(); return; }
+  try {
+    const body = await billingRequest("/billing/me");
+    billingAccount = body.account;
+  } catch {
+    billingToken = ""; billingAccount = null; localStorage.removeItem("lecturesift-billing-token");
+  }
+  renderBillingAccount(); renderPlans();
+}
+
+async function authenticateBilling(mode) {
+  const email = $("billingEmail").value.trim(), password = $("billingPassword").value;
+  if (!email || password.length < 10) { showError(currentLanguage === "tr" ? "Geçerli e-posta ve en az 10 karakterli parola gir." : "Enter a valid email and a password of at least 10 characters.", "LS-BILL-11"); return; }
+  try {
+    const body = await billingRequest(`/billing/${mode}`, {method:"POST", body:JSON.stringify({email, password})});
+    billingToken = body.token; billingAccount = body.account;
+    localStorage.setItem("lecturesift-billing-token", billingToken);
+    $("billingPassword").value = "";
+    renderBillingAccount(); renderPlans();
+  } catch (error) { showError(error.message, error.code || "LS-BILL-12"); }
+}
+
+function renderPlans() {
+  if (!billingCatalog || !$("plansGrid")) return;
+  const plans = new Map(billingCatalog.plans.map(plan => [plan.code, plan]));
+  $("plansGrid").innerHTML = PLAN_ORDER.map(code => {
+    const plan = plans.get(code); if (!plan) return "";
+    const copy = planCopy(code), current = billingAccount?.plan?.code === code;
+    const price = plan.manual_price ? formatTry(plan.manual_price.amount_minor) : (code === "free" ? formatTry(0) : (currentLanguage === "tr" ? "Teklif" : "Quote"));
+    const suffix = plan.kind === "subscription" ? t("perMonth") : (plan.kind === "one_time" ? t("oneTime") : "");
+    const buttonLabel = current ? t("currentPlan") : (code === "business" ? (currentLanguage === "tr" ? "Bize ulaş" : "Contact us") : t("choosePlan"));
+    return `<article class="plan-card ${plan.featured ? "featured" : ""}">
+      ${plan.featured ? `<span class="plan-badge">${escapeHtml(t("popular"))}</span>` : ""}
+      <h3>${escapeHtml(copy[0])}</h3><p>${escapeHtml(copy[1])}</p>
+      <div class="plan-price">${escapeHtml(price)} <small>${escapeHtml(suffix)}</small></div>
+      <ul class="plan-features"><li>${escapeHtml(copy[2])}</li><li>${plan.export_enabled ? "PDF, Word, TXT" : "PDF preview"}</li><li>${plan.priority === "priority" ? (currentLanguage === "tr" ? "Öncelikli işleme" : "Priority processing") : (currentLanguage === "tr" ? "Standart işleme" : "Standard processing")}</li></ul>
+      <button class="plan-action" type="button" data-plan="${escapeHtml(code)}" ${current || code === "free" || code === "business" ? "disabled" : ""}>${escapeHtml(buttonLabel)}</button>
+    </article>`;
+  }).join("");
+  document.querySelectorAll(".plan-action[data-plan]").forEach(button => button.onclick = () => createTransferOrder(button.dataset.plan));
+}
+
+async function createTransferOrder(planCode) {
+  if (!billingToken) { $("plans").scrollIntoView({behavior:"smooth"}); showError(t("loginRequired"), "LS-BILL-01"); return; }
+  const plan = billingCatalog.plans.find(item => item.code === planCode);
+  const interval = plan?.kind === "one_time" ? "one_time" : "monthly";
+  try {
+    const body = await billingRequest("/billing/manual-transfer/orders", {method:"POST", body:JSON.stringify({plan_code:planCode, interval})});
+    const order = body.order;
+    $("transferReference").textContent = order.reference;
+    $("transferAmount").textContent = formatTry(order.amount_minor);
+    $("transferIban").textContent = order.bank.iban.replace(/(.{4})/g, "$1 ").trim();
+    $("transferHolder").textContent = order.bank.account_holder;
+    $("transferInstruction").textContent = order.instruction;
+    $("transferStatus").textContent = t("pendingApproval");
+    $("transferSupport").href = `mailto:${encodeURIComponent(order.support_email)}?subject=${encodeURIComponent(`LectureSift ${order.reference}`)}`;
+    $("transferPanel").hidden = false;
+    $("transferPanel").scrollIntoView({behavior:"smooth", block:"center"});
+  } catch (error) { showError(error.message, error.code || "LS-BILL-13"); }
+}
+
+async function loadBilling() {
+  try {
+    billingCatalog = await fetch(`${API}/billing/plans`, {cache:"no-store"}).then(response => response.json());
+    renderPlans(); await refreshBillingAccount();
+  } catch { showError(currentLanguage === "tr" ? "Plan bilgileri şu anda alınamıyor." : "Plan information is temporarily unavailable.", "LS-BILL-14"); }
+}
+
+$("accountButton").onclick = () => $("plans").scrollIntoView({behavior:"smooth"});
+$("loginButton").onclick = () => authenticateBilling("login");
+$("registerButton").onclick = () => authenticateBilling("register");
+$("logoutButton").onclick = () => { billingToken = ""; billingAccount = null; localStorage.removeItem("lecturesift-billing-token"); renderBillingAccount(); renderPlans(); };
+loadBilling();
 
 function setSourceMode(mode) {
   sourceMode = mode;
@@ -295,6 +469,7 @@ function formData() {
 
 $("analyzeButton").onclick = async () => {
   $("errorBox").hidden = true;
+  if (!billingToken || !billingAccount) { $("plans").scrollIntoView({behavior:"smooth"}); showError(t("loginRequired"), "LS-BILL-01"); return; }
   const uploadFiles = sourceLayout === "separate" ? [...audioVideos, ...visualVideos] : classicVideos;
   if (sourceMode === "upload" && sourceLayout === "classic" && !classicVideos.length) { $("classicFiles").click(); return; }
   if (sourceMode === "upload" && sourceLayout === "separate" && (!audioVideos.length || !visualVideos.length)) {
@@ -310,7 +485,7 @@ $("analyzeButton").onclick = async () => {
   if (sourceMode === "link") {
     data.append("video_url", videoUrl.value.trim());
     try {
-      const response = await fetch(`${API}/jobs/url`, {method: "POST", body: data});
+      const response = await fetch(`${API}/jobs/url`, {method: "POST", body: data, headers:{Authorization:`Bearer ${billingToken}`}});
       if (!response.ok) { const error = await responseError(response); showError(error.message, error.code); return; }
       jobId = (await response.json()).job_id; pollJob();
     } catch (error) { showError(error.message, "LS-NETWORK-01"); }
@@ -323,6 +498,7 @@ $("analyzeButton").onclick = async () => {
     classicVideos.forEach(file => data.append("files", file));
   }
   const request = new XMLHttpRequest(); request.open("POST", `${API}/jobs`);
+  request.setRequestHeader("Authorization", `Bearer ${billingToken}`);
   request.upload.onprogress = event => { if (event.lengthComputable) updateProgress(Math.min(7, event.loaded / event.total * 7), t("processing")); };
   request.onload = async () => {
     if (request.status < 300) { jobId = JSON.parse(request.responseText).job_id; pollJob(); }
@@ -333,10 +509,10 @@ $("analyzeButton").onclick = async () => {
 
 async function pollJob() {
   try {
-    const response = await fetch(`${API}/jobs/${jobId}`, {cache: "no-store"});
+    const response = await fetch(`${API}/jobs/${jobId}`, {cache: "no-store", headers:{Authorization:`Bearer ${billingToken}`}});
     if (!response.ok) { const error = await responseError(response); showError(error.message, error.code); return; }
     const job = await response.json(); updateJobView(job);
-    if (job.status === "done") { clearInterval(timerHandle); await loadResult(); return; }
+    if (job.status === "done") { clearInterval(timerHandle); await loadResult(); await refreshBillingAccount(); return; }
     if (job.status === "error") { showError(job.error, job.error_code); return; }
     pollHandle = setTimeout(pollJob, 1300);
   } catch (error) { pollHandle = setTimeout(pollJob, 2500); }
@@ -344,7 +520,7 @@ async function pollJob() {
 
 async function loadResult() {
   try {
-    const response = await fetch(`${API}/jobs/${jobId}/result`, {cache: "no-store"});
+    const response = await fetch(`${API}/jobs/${jobId}/result`, {cache: "no-store", headers:{Authorization:`Bearer ${billingToken}`}});
     if (!response.ok) { const error = await responseError(response); showError(error.message, error.code); return; }
     latestResult = await response.json(); renderResult(latestResult); $("analyzeButton").disabled = false;
   } catch (error) { showError(error.message, "LS-NETWORK-01"); }
@@ -354,7 +530,8 @@ function renderResult(data) {
   $("resultHeading").textContent = data.title || "LectureSift";
   const utilityResult = data.job_type && data.job_type !== "study_pack";
   $("resultMeta").textContent = utilityResult ? `${data.artifacts?.length || 0} ${t("tabFiles")}` : `${data.slides?.length || 0} ${t("tabSlides")} · ${data.quiz?.length || 0} Quiz · ${data.flashcards?.length || 0} ${t("tabCards")}`;
-  $("downloadAll").href = `${API}/jobs/${jobId}/download`;
+  $("downloadAll").href = "#";
+  $("downloadAll").onclick = event => { event.preventDefault(); downloadProtected(`/jobs/${jobId}/download`, "LectureSift_Paketi_V4.1.zip"); };
   $("summaryContent").textContent = data.summary || t("noContent");
   $("keyPoints").innerHTML = (data.key_points || []).map(point => `<div class="key-item"><i>✦</i><span>${escapeHtml(point)}</span></div>`).join("");
   const terms = (data.important_terms || []).map(item => `<div class="note-item"><h3>${escapeHtml(item.term)}</h3><p>${escapeHtml(item.definition)}</p></div>`).join("");
@@ -362,7 +539,15 @@ function renderResult(data) {
   const exam = data.exam_focus?.length ? `<div class="note-item"><h3>${escapeHtml(t("summaryExam"))}</h3><ul>${data.exam_focus.map(value => `<li>${escapeHtml(value)}</li>`).join("")}</ul></div>` : "";
   $("notesContent").innerHTML = terms + notes + exam || `<div class="empty-state">${escapeHtml(t("noContent"))}</div>`;
   renderTranscript(true);
-  $("slidesContent").innerHTML = data.slides?.length ? data.slides.map(slide => `<figure class="slide-card"><img loading="lazy" src="${API}/jobs/${jobId}/slide/${encodeURIComponent(slide.file)}" alt="Slide ${escapeHtml(slide.timestamp)}"><figcaption>${escapeHtml(slide.timestamp || `${slide.second}s`)}</figcaption></figure>`).join("") : `<div class="empty-state">${escapeHtml(t("noSlides"))}</div>`;
+  $("slidesContent").innerHTML = data.slides?.length ? data.slides.map(slide => `<figure class="slide-card"><img loading="lazy" data-protected-src="/jobs/${jobId}/slide/${encodeURIComponent(slide.file)}" alt="Slide ${escapeHtml(slide.timestamp)}"><figcaption>${escapeHtml(slide.timestamp || `${slide.second}s`)}</figcaption></figure>`).join("") : `<div class="empty-state">${escapeHtml(t("noSlides"))}</div>`;
+  document.querySelectorAll("img[data-protected-src]").forEach(async image => {
+    try {
+      const response = await protectedFetch(image.dataset.protectedSrc);
+      const objectUrl = URL.createObjectURL(await response.blob());
+      image.onload = () => URL.revokeObjectURL(objectUrl);
+      image.src = objectUrl;
+    } catch { image.alt = t("noSlides"); }
+  });
   renderQuiz(data.quiz || []); renderCards(); renderFiles(data.artifacts || []);
   document.querySelectorAll(".result-tab").forEach(button => { button.hidden = utilityResult && button.dataset.pane !== "files"; button.classList.toggle("active", utilityResult ? button.dataset.pane === "files" : button.dataset.pane === "summary"); });
   document.querySelectorAll(".result-pane").forEach(pane => pane.classList.remove("active"));
@@ -406,7 +591,11 @@ function renderCards() {
 }
 
 function renderFiles(files) {
-  $("filesContent").innerHTML = files.map(file => `<div class="file-item"><div><strong>${escapeHtml(file.label)}</strong><small>${escapeHtml(file.format)} · ${formatBytes(file.size_bytes)}</small></div><a href="${API}/jobs/${jobId}/artifact/${encodeURIComponent(file.file)}">${escapeHtml(t("download"))}</a></div>`).join("") || `<div class="empty-state">${escapeHtml(t("noContent"))}</div>`;
+  $("filesContent").innerHTML = files.map(file => `<div class="file-item"><div><strong>${escapeHtml(file.label)}</strong><small>${escapeHtml(file.format)} · ${formatBytes(file.size_bytes)}</small></div><a href="#" data-artifact="${encodeURIComponent(file.file)}" data-filename="${escapeHtml(file.file)}">${escapeHtml(t("download"))}</a></div>`).join("") || `<div class="empty-state">${escapeHtml(t("noContent"))}</div>`;
+  document.querySelectorAll("a[data-artifact]").forEach(anchor => anchor.onclick = event => {
+    event.preventDefault();
+    downloadProtected(`/jobs/${jobId}/artifact/${anchor.dataset.artifact}`, anchor.dataset.filename);
+  });
 }
 
 document.querySelectorAll(".result-tab").forEach(button => button.onclick = () => {
