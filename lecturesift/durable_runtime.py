@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import os
+import threading
 import time
 from pathlib import Path
 
+from .billing_service import require_duration_entitlement
 from .config import CELERY_BROKER_URL
 from .duration import media_duration_seconds
 from .jobs import JOBS
@@ -15,6 +17,10 @@ from .storage import STORAGE
 
 
 _INSTALLED = False
+
+
+def _queue_ready() -> bool:
+    return bool(CELERY_BROKER_URL and STORAGE.remote and os.getenv("LECTURESIFT_WORKER") != "1")
 
 
 def _paths(value) -> list[Path]:
@@ -46,6 +52,7 @@ def install_durable_runtime() -> None:
     from . import pipeline
 
     local_process_job = pipeline.process_job
+    local_start_url_job = app_module.start_url_job
 
     def dispatch(job_id: str, audio_video_paths, options: dict, visual_video_paths=None) -> None:
         audio_paths = _paths(audio_video_paths)
@@ -62,16 +69,21 @@ def install_durable_runtime() -> None:
             path.stat().st_size for path in audio_paths + visual_paths if path.exists()
         )
         user_id = str(options.get("billing_user_id", ""))
+        guest_user = False
         try:
-            if user_id and is_guest_user(user_id):
-                reserve_guest_job(user_id, job_id, media_minutes)
+            if user_id:
+                guest_user = is_guest_user(user_id)
+                if guest_user:
+                    reserve_guest_job(user_id, job_id, media_minutes)
+                else:
+                    require_duration_entitlement(user_id, duration)
         except BillingError as exc:
             JOBS.update(
                 job_id,
                 status="error",
                 percent=0,
                 stage="error",
-                error_code="LS-GUEST-04",
+                error_code="LS-GUEST-04" if guest_user else "LS-BILL-10",
                 error=str(exc),
             )
             return
@@ -85,10 +97,7 @@ def install_durable_runtime() -> None:
             eta_started_at=time.time(),
         )
 
-        queue_enabled = bool(
-            CELERY_BROKER_URL and STORAGE.remote and os.getenv("LECTURESIFT_WORKER") != "1"
-        )
-        if queue_enabled:
+        if _queue_ready():
             try:
                 from .tasks import process_uploaded_job
 
@@ -131,7 +140,78 @@ def install_durable_runtime() -> None:
             elapsed = float(finished.get("elapsed_seconds") or (time.time() - started))
             record_runtime(job_id, media_minutes, elapsed, size_bytes)
             _publish_if_configured(job_id, Path(finished.get("job_dir") or data["job_dir"]))
+            for source_path in audio_paths + visual_paths:
+                try:
+                    source_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+    def dispatch_url(job_id: str, url: str, job_dir: Path, options: dict) -> str:
+        if not _queue_ready():
+            return local_start_url_job(job_id, url, job_dir, options)
+        try:
+            from .tasks import process_url_job
+
+            JOBS.update(
+                job_id,
+                status="queued",
+                percent=5,
+                stage="queued_worker",
+                queue_mode="celery",
+                worker_state="queued",
+            )
+            task = process_url_job.delay(job_id, url, options)
+            JOBS.update(job_id, celery_task_id=task.id)
+            return "queued"
+        except Exception as exc:
+            JOBS.update(
+                job_id,
+                queue_mode="fallback",
+                worker_state="local_fallback",
+                queue_error=str(exc),
+            )
+            return local_start_url_job(job_id, url, job_dir, options)
+
+    def recover_durable_jobs() -> None:
+        if not _queue_ready():
+            return
+        from .tasks import process_uploaded_job, process_url_job
+
+        for data in JOBS.recoverable():
+            job_id = str(data.get("job_id", ""))
+            options = data.get("options") or {}
+            if not job_id or not options:
+                continue
+            source_keys = data.get("source_keys") or {}
+            audio_keys = list(source_keys.get("audio") or [])
+            visual_keys = list(source_keys.get("visual") or [])
+            try:
+                if audio_keys:
+                    task = process_uploaded_job.delay(job_id, audio_keys, options, visual_keys or None)
+                elif data.get("source_type") == "url" and data.get("source_url"):
+                    task = process_url_job.delay(job_id, str(data["source_url"]), options)
+                else:
+                    continue
+                JOBS.update(
+                    job_id,
+                    status="queued",
+                    stage="recovered_queue",
+                    worker_state="requeued",
+                    celery_task_id=task.id,
+                    recovered_at=time.time(),
+                )
+            except Exception as exc:
+                JOBS.update(job_id, recovery_error=str(exc))
 
     app_module.process_job = dispatch
+    app_module.start_url_job = dispatch_url
+    app_module.app.add_event_handler(
+        "startup",
+        lambda: threading.Thread(
+            target=recover_durable_jobs,
+            daemon=True,
+            name="lecturesift-recovery",
+        ).start(),
+    )
     app_module._lecturesift_durable_dispatch_installed = True
     _INSTALLED = True
