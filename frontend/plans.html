@@ -1,44 +1,81 @@
 <!doctype html>
 <html lang="tr">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="LectureSift planlarını, dakika ve öğrenme haklarını karşılaştır.">
-  <title>Planlar | LectureSift</title><link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/detail.css">
-<link rel="stylesheet" href="/rollout.css?v=1"></head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="LectureSift aylık, yıllık ve tek seferlik planlarını karşılaştır; kart veya havale ile satın al.">
+  <title>Planlar ve Ödeme | LectureSift</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/detail.css">
+  <link rel="stylesheet" href="/commerce.css?v=1">
+</head>
 <body class="plans-page">
   <header class="topbar">
     <a class="brand" href="/"><span class="brand-mark"><i></i><i></i><i></i></span><span>Lecture<span>Sift</span></span></a>
-    <nav class="top-actions"><a class="top-link" href="/features.html">Özellikler</a><a class="top-link active" href="/plans.html">Planlar</a><a class="top-link" href="/about.html">Hakkımızda</a><a class="account-link" href="/login.html">Giriş</a></nav>
+    <nav class="top-actions"><a class="top-link" href="/features.html">Özellikler</a><a class="top-link active" href="/plans.html">Planlar</a><a class="top-link" href="/about.html">Hakkımızda</a><a id="accountLink" class="account-link" href="/login.html">Giriş</a></nav>
   </header>
+
   <main class="detail-main">
     <section class="detail-hero">
-      <p class="eyebrow">Planlar ve kullanım hakları</p><h1>Ders yoğunluğuna göre büyüyen esnek planlar.</h1>
-      <p>Dakika, quiz, bilgi kartı, özet ve dosya haklarını açıkça karşılaştır. Ülke ve para birimine göre yerelleştirilmiş fiyatı seç.</p>
+      <p class="eyebrow">Planlar, krediler ve güvenli ödeme</p>
+      <h1>Dersi ücretsiz önizle; indirmeyi ihtiyacın kadar aç.</h1>
+      <p>Ücretsiz hesapla temel sonucu sınırlı gör. Tek seferlik Mini veya Dakika Paketi ile indirmeyi aç; düzenli kullanımda aylık ya da iki ay avantajlı yıllık aboneliğe geç.</p>
     </section>
+
     <section class="billing-section">
-      <div class="billing-heading"><div><p class="eyebrow">Tüm planlar</p><h2>İhtiyacın kadar işle.</h2></div>
-        <div class="billing-side"><p>Kartlı ödeme PayTR bağlandığında açılacak. TRY havale siparişleri ödeme kontrolünden sonra etkinleşir.</p><label class="currency-picker"><span>Para birimi</span><select id="billingCurrency"><option value="TRY">TRY ₺</option><option value="USD">USD $</option><option value="EUR">EUR €</option><option value="GBP">GBP £</option></select></label></div>
+      <div class="billing-heading">
+        <div><p class="eyebrow">Tüm planlar</p><h2>İşleme ve indirme hakkını seç.</h2></div>
+        <div class="billing-side">
+          <div id="billingCycle" class="billing-cycle" role="group" aria-label="Faturalama dönemi">
+            <button type="button" data-interval="monthly" class="active">Aylık</button>
+            <button type="button" data-interval="annual">Yıllık · 2 ay avantaj</button>
+          </div>
+          <label class="currency-picker"><span>Para birimi</span><select id="billingCurrency"></select></label>
+        </div>
       </div>
+
+      <div id="commerceReadiness" class="notice" hidden></div>
       <div id="accountPanel" class="account-panel">
-        <div id="authForm" class="account-cta"><div><strong>Hesabını oluştur veya giriş yap</strong><small>Plan ve kredi hakların doğrulanmış hesabına bağlanır.</small></div><div><a class="cta-login" href="/login.html?next=/plans.html">Giriş yap</a><a class="cta-register" href="/register.html">Ücretsiz hesap oluştur</a></div></div>
+        <div id="authForm" class="account-cta"><div><strong>Hesabını oluştur veya giriş yap</strong><small>Plan, ödeme, dakika ve indirme hakları doğrulanmış hesabına bağlanır.</small></div><div><a class="cta-login" href="/login.html?next=/plans.html">Giriş yap</a><a class="cta-register" href="/register.html?next=/plans.html">Ücretsiz hesap oluştur</a></div></div>
         <div id="accountStatus" class="account-status" hidden><div><strong id="accountEmail"></strong><small id="accountPlan"></small></div><div><strong id="accountRemaining"></strong><small>Kalan dakika</small></div><a class="cta-login" href="/account.html">Hesabım</a></div>
       </div>
+
       <div id="plansGrid" class="plans-grid" aria-live="polite"></div>
+
       <div id="transferPanel" class="transfer-panel" hidden>
-        <div class="transfer-head"><div><p class="eyebrow">Havale bilgileri</p><h3>Siparişin oluşturuldu</h3></div><span id="transferStatus">Onay bekliyor</span></div>
+        <div class="transfer-head"><div><p class="eyebrow">Havale/EFT</p><h3>Sipariş oluşturuldu</h3></div><span id="transferStatus">Onay bekliyor</span></div>
         <div class="transfer-grid"><div><small>Sipariş referansı</small><strong id="transferReference"></strong></div><div><small>Tutar</small><strong id="transferAmount"></strong></div><div><small>IBAN</small><strong id="transferIban"></strong></div><div><small>Hesap sahibi</small><strong id="transferHolder"></strong></div></div>
-        <p id="transferInstruction"></p><a id="transferSupport" href="#">Dekontu e-postayla gönder</a>
+        <p id="transferInstruction"></p><a id="transferSupport" href="#">Dekontu destek ekibine gönder</a>
       </div>
     </section>
-    <section class="detail-section"><div class="credit-callout"><div><h3>Planına ek dakika gerektiğinde</h3><p>Dakika Paketi aboneliğini değiştirmez; mevcut planının üzerine tek seferlik ek kredi ekler. Satın alma ve kalan kredi Hesabım sayfasında görünür.</p></div><a href="/account.html">Kredilerimi yönet</a></div></section>
-    <section class="detail-section"><h2>Hakları karşılaştır</h2><p class="intro">Aşağıdaki özet, planların kullanım sınırlarını birlikte görmeni sağlar.</p>
-      <div class="compare-wrap"><table class="compare-table"><thead><tr><th>Hak</th><th>Ücretsiz</th><th>Lite</th><th>Plus</th><th>Pro</th><th>Max</th></tr></thead><tbody><tr><td>Aylık dakika</td><td>60</td><td>600</td><td>2.400</td><td>6.000</td><td>15.000</td></tr><tr><td>Quiz sorusu</td><td>10</td><td>20</td><td>30</td><td>30</td><td>30</td></tr><tr><td>Bilgi kartı</td><td>20</td><td>40</td><td>60</td><td>60</td><td>60</td></tr><tr><td>Özet profilleri</td><td>Hızlı, Standart</td><td colspan="4">Tüm profiller</td></tr><tr><td>Dosyalar</td><td>PDF</td><td colspan="4">PDF, DOCX, TXT</td></tr><tr><td>İşlem önceliği</td><td>Standart</td><td>Standart</td><td>Standart</td><td>Öncelikli</td><td>Öncelikli</td></tr></tbody></table></div>
+
+    <section class="detail-section">
+      <h2>Ne değişiyor?</h2>
+      <div class="feature-grid">
+        <article><span>01</span><h3>Ücretsiz önizleme</h3><p>Ücretsiz hesapta transkriptin ve çalışma paketinin sınırlı bölümü görünür; dosya ve ZIP indirme kapalıdır.</p></article>
+        <article><span>02</span><h3>Mini indirme paketi</h3><p>Sembolik tek ödeme ile 60 dakika ve PDF, Word, TXT, ZIP indirme hakkı açılır.</p></article>
+        <article><span>03</span><h3>Aylık veya yıllık</h3><p>Yıllık abonelikte 12 aylık erişim için 10 aylık ücret alınır.</p></article>
+        <article><span>04</span><h3>Görsel metin çevirisi</h3><p>Mini ve ücretli planlarda slayt/ekran yazıları hedef dile çevrilir; orijinal görseller ayrıca saklanır.</p></article>
+      </div>
     </section>
-    <section class="detail-section"><h2>Planlarla ilgili sorular</h2><div class="faq-list"><details><summary>Planımı istediğim zaman değiştirebilir miyim?</summary><p>Evet. Ödeme sağlayıcısı etkinleştirildiğinde yükseltme, düşürme ve yenileme işlemleri hesap ekranından yönetilecek.</p></details><details><summary>Ek dakika paketi aboneliğimi değiştirir mi?</summary><p>Hayır. Tek seferlik kredi paketi mevcut planına eklenir.</p></details><details><summary>Fiyat neden para birimine göre değişiyor?</summary><p>Fiyatlar yalnızca kur çevirisi değildir; desteklenen bölgeler için ayrı liste fiyatları gösterilir. Ödeme ekranındaki nihai tutar geçerlidir.</p></details></div></section>
+
+    <section class="detail-section">
+      <h2>Hakları karşılaştır</h2>
+      <div class="compare-wrap"><table class="compare-table"><thead><tr><th>Hak</th><th>Ücretsiz</th><th>Mini</th><th>Lite</th><th>Plus</th><th>Pro</th><th>Max</th></tr></thead><tbody><tr><td>Dakika</td><td>60/ay</td><td>60 tek sefer</td><td>600/ay</td><td>2.400/ay</td><td>6.000/ay</td><td>15.000/ay</td></tr><tr><td>Sonuç</td><td>Sınırlı önizleme</td><td colspan="6">Tam sonuç</td></tr><tr><td>İndirme</td><td>Yok</td><td colspan="6">PDF, Word, TXT, ZIP</td></tr><tr><td>Görsel içi çeviri</td><td>Yok</td><td colspan="6">Var, orijinal görsel korunur</td></tr><tr><td>İşlem önceliği</td><td>Standart</td><td>Standart</td><td>Standart</td><td>Standart</td><td>Öncelikli</td><td>Öncelikli</td></tr></tbody></table></div>
+    </section>
+
+    <section class="detail-section"><h2>Sık sorulanlar</h2><div class="faq-list"><details><summary>Yıllık plan nasıl fiyatlanır?</summary><p>Yıllık planda 12 aylık erişim açılır; toplam ücret aylık fiyatın 10 katıdır. Ödeme ekranındaki kesin tutar geçerlidir.</p></details><details><summary>Mini paket abonelik midir?</summary><p>Hayır. Tek seferlik 60 dakika ve indirme hakkıdır; otomatik yenilenmez.</p></details><details><summary>Kart bilgileri LectureSift’te saklanır mı?</summary><p>Hayır. Kart bilgileri ödeme kuruluşunun güvenli ekranında işlenir; LectureSift yalnız ödeme sonucu, tutar ve sipariş referansını kaydeder.</p></details><details><summary>Otomatik yenileme hemen açık mı?</summary><p>PayTR kart saklama/tekrarlayan ödeme yetkisi etkinleşene kadar abonelikler dönem sonunda manuel yenilenebilir. Hesabında yenileme durumu açıkça gösterilir.</p></details><details><summary>Havale seçebilir miyim?</summary><p>TRY siparişlerinde PayTR hazır değilse veya havaleyi tercih edersen sipariş referansıyla havale/EFT oluşturabilirsin.</p></details></div></section>
   </main>
-  <div id="errorBox" class="error-box" hidden role="alert"><button id="closeError" type="button">×</button><span>!</span><div><strong id="errorTitle">İşlem tamamlanamadı</strong><p id="errorMessage"></p><small id="errorCode"></small></div></div>
+
+  <div id="checkoutOverlay" class="checkout-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="checkoutTitle">
+    <section class="checkout-dialog"><header><div><small>Güvenli kart ödemesi</small><strong id="checkoutTitle">PayTR ödeme ekranı</strong></div><button id="closeCheckout" type="button" aria-label="Ödeme ekranını kapat">×</button></header><div id="checkoutStatus" class="checkout-status"></div><iframe id="checkoutFrame" class="checkout-frame" title="PayTR güvenli ödeme ekranı" allow="payment"></iframe></section>
+  </div>
+
+  <div id="errorBox" class="error-box" hidden role="alert"><button id="closeError" type="button">×</button><span>!</span><div><strong>İşlem tamamlanamadı</strong><p id="errorMessage"></p><small id="errorCode"></small></div></div>
+
   <footer class="site-footer"><div class="footer-main"><a class="brand" href="/">LectureSift</a><p>Ders kaynaklarını çalışma paketlerine dönüştür.</p></div><div class="footer-links"><div><strong>Ürün</strong><a href="/features.html">Özellikler</a><a href="/plans.html">Planlar</a></div><div><strong>Hesap</strong><a href="/account.html">Hesabım</a><a href="/login.html">Giriş</a></div><div><strong>Yasal</strong><a href="/privacy.html">Gizlilik</a><a href="/terms.html">Koşullar</a><a href="/refund.html">İptal ve iade</a></div></div><div class="footer-bottom"><span>© 2026 LectureSift</span></div></footer>
-  <script src="/locale-data.js?v=2"></script><script src="/plans.js?v=4"></script>
-<script src="/rollout.js?v=1"></script></body>
+  <script src="/locale-data.js?v=2"></script>
+  <script src="/plans.js?v=6"></script>
+</body>
 </html>
