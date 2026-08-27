@@ -34,6 +34,24 @@ services:
         sync: false
       - key: S3_SECRET_ACCESS_KEY
         sync: false
+      - key: CONTACT_EMAIL
+        value: support@lecturesift.com
+      - key: EMAIL_FROM
+        value: LectureSift <noreply@lecturesift.com>
+      - key: RESEND_API_KEY
+        sync: false
+      - key: LECTURESIFT_ADMIN_TOKEN
+        sync: false
+      - key: BANK_TRANSFER_IBAN
+        sync: false
+      - key: BANK_TRANSFER_RECIPIENT
+        sync: false
+      - key: LECTURESIFT_INSTAGRAM_ACCOUNT
+        value: lecturesift
+      - key: LECTURESIFT_GUEST_TRIAL_MAX_MINUTES
+        value: "5"
+      - key: LECTURESIFT_INSTAGRAM_BONUS_MINUTES
+        value: "30"
 
   - type: worker
     name: lecturesift-worker
