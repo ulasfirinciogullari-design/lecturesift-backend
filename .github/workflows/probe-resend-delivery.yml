@@ -14,13 +14,13 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for diagnostic deployment and probe delivery
+      - name: Verify official SDK deployment and live delivery
         shell: bash
         run: |
           set -euo pipefail
 
           for attempt in $(seq 1 60); do
-            email="delivered+lecturesift-${GITHUB_RUN_ID}-${attempt}@resend.dev"
+            email="delivered+lecturesift-sdk-${GITHUB_RUN_ID}-${attempt}@resend.dev"
             password="$(python -c 'import secrets; print(secrets.token_urlsafe(24))')"
             export TEST_EMAIL="$email" TEST_PASSWORD="$password"
             python - <<'PY' > /tmp/register-payload.json
@@ -59,23 +59,27 @@ jobs:
               raise SystemExit
 
           detail = body.get('detail') if isinstance(body, dict) else None
-          if isinstance(detail, dict) and detail.get('provider_code'):
-              print('diagnosed')
-          else:
-              print('retry')
+          if isinstance(detail, dict):
+              provider_code = detail.get('provider_code')
+              # The legacy custom HTTP client could only expose this generic
+              # code. Keep polling until the official SDK deployment is live.
+              if provider_code and provider_code != 'http_403':
+                  print('diagnosed')
+                  raise SystemExit
+          print('retry')
           PY
             )"
 
             if [[ "$outcome" == "success" ]]; then
-              echo 'Controlled Resend delivery was accepted.'
+              echo 'Controlled Resend delivery was accepted through the official SDK.'
               exit 0
             fi
             if [[ "$outcome" == "diagnosed" ]]; then
-              echo 'A safe Resend provider status/code is now available above.'
+              echo 'The official SDK returned a safe structured provider diagnosis above.'
               exit 2
             fi
             sleep 10
           done
 
-          echo 'Diagnostic deployment or provider response was not observed.'
+          echo 'The official SDK deployment or final provider response was not observed.'
           exit 1
