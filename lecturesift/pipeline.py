@@ -12,6 +12,7 @@ from .errors import normalize_error
 from .exports import build_artifacts, build_binary_artifact
 from .jobs import JOBS
 from .media import convert_videos_to_mp3, extract_audio_chunks, has_audio_stream
+from .platform import PLATFORM
 from .slides import extract_slides
 from .storage import STORAGE
 
@@ -24,6 +25,17 @@ def _path_list(value: Path | list[Path] | tuple[Path, ...]) -> list[Path]:
 
 def _same_text(left: str, right: str) -> bool:
     return " ".join(left.casefold().split()) == " ".join(right.casefold().split())
+
+
+def _record_eta_sample(job_id: str, elapsed: float) -> None:
+    try:
+        data = JOBS.get(job_id) or {}
+        media_minutes = float(data.get("media_minutes", 0) or 0)
+        file_size = int(data.get("file_size_bytes", 0) or 0)
+        if media_minutes > 0 and elapsed > 0:
+            PLATFORM.record_job_speed(media_minutes, elapsed, file_size)
+    except Exception:
+        pass
 
 
 def _audio_pipeline(job_id: str, video_paths: list[Path], job_dir: Path, options: dict) -> tuple[str, str]:
@@ -68,9 +80,11 @@ def _visual_pipeline(job_id: str, video_paths: list[Path], job_dir: Path, slides
     diagnostic_totals = {"fast_candidates": 0, "presentation_candidates": 0, "persistent_groups": 0}
     for part_index, video_path in enumerate(video_paths, 1):
         part_dir = segments_dir / f"part_{part_index:03d}"
+
         def progress(percent: float, stage: str) -> None:
             combined = 100 * ((part_index - 1) + percent / 100) / max(1, len(video_paths))
             JOBS.update_task(job_id, "visual", combined, stage)
+
         manifest, diagnostics = extract_slides(video_path, part_dir, progress)
         duration = float(diagnostics.get("duration_seconds", 0) or 0)
         for slide in manifest:
@@ -141,7 +155,9 @@ def _process_job_local(job_id: str, audio_video_paths: Path | list[Path] | tuple
             result = {"version": APP_VERSION, "job_id": job_id, "job_type": "audio_export", "options": options, "title": "LectureSift MP3", "summary": "Video sesi MP3 dosyasına dönüştürüldü.", "slides": [], "transcript_original": "", "transcript_translated": "", "quiz": [], "flashcards": [], "sources": {"mode": source_mode, "audio_files": [path.name for path in audio_sources]}}
             artifacts, zip_path = build_binary_artifact(job_dir, result, audio_path, "LectureSift_Ders_Sesi.mp3", "Ders Sesi (MP3)")
             result["artifacts"] = artifacts
-            JOBS.update(job_id, status="done", percent=100, stage="done", elapsed_seconds=round(time.time() - started, 1), result_path=str(zip_path))
+            elapsed = round(time.time() - started, 1)
+            JOBS.update(job_id, status="done", percent=100, stage="done", elapsed_seconds=elapsed, result_path=str(zip_path))
+            _record_eta_sample(job_id, elapsed)
             return
         if options.get("job_type") == "download_video":
             source = audio_sources[0]
@@ -149,7 +165,9 @@ def _process_job_local(job_id: str, audio_video_paths: Path | list[Path] | tuple
             result = {"version": APP_VERSION, "job_id": job_id, "job_type": "download_video", "options": options, "title": "LectureSift Video İndirme", "summary": "Video bağlantıdan indirilmeye hazırlandı.", "slides": [], "transcript_original": "", "transcript_translated": "", "quiz": [], "flashcards": [], "sources": {"mode": "url", "audio_files": [source.name]}}
             artifacts, zip_path = build_binary_artifact(job_dir, result, source, filename, "İndirilen Video")
             result["artifacts"] = artifacts
-            JOBS.update(job_id, status="done", percent=100, stage="done", elapsed_seconds=round(time.time() - started, 1), result_path=str(zip_path))
+            elapsed = round(time.time() - started, 1)
+            JOBS.update(job_id, status="done", percent=100, stage="done", elapsed_seconds=elapsed, result_path=str(zip_path))
+            _record_eta_sample(job_id, elapsed)
             return
         with ThreadPoolExecutor(max_workers=2, thread_name_prefix="lecturesift") as executor:
             audio_future = executor.submit(_audio_pipeline, job_id, audio_sources, job_dir, options)
@@ -164,6 +182,7 @@ def _process_job_local(job_id: str, audio_video_paths: Path | list[Path] | tuple
         result["artifacts"] = artifacts
         elapsed = round(time.time() - started, 1)
         JOBS.update(job_id, status="done", percent=100, stage="done", elapsed_seconds=elapsed, result_path=str(zip_path))
+        _record_eta_sample(job_id, elapsed)
     except Exception as exc:
         normalized = normalize_error(exc)
         print(f"PROCESS ERROR [{normalized.code}]: {normalized.technical_message}", flush=True)
