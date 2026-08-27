@@ -22,7 +22,8 @@ BILLING_ADMIN_TOKEN = os.getenv("BILLING_ADMIN_TOKEN", "")
 BILLING_BANK_IBAN = os.getenv("BILLING_BANK_IBAN", "").replace(" ", "").upper()
 BILLING_BANK_ACCOUNT_HOLDER = os.getenv("BILLING_BANK_ACCOUNT_HOLDER", "").strip()
 BILLING_BANK_NAME = os.getenv("BILLING_BANK_NAME", "").strip()
-BILLING_SUPPORT_EMAIL = os.getenv("BILLING_SUPPORT_EMAIL", "").strip()
+CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "support@lecturesift.com").strip()
+BILLING_SUPPORT_EMAIL = os.getenv("BILLING_SUPPORT_EMAIL", CONTACT_EMAIL).strip()
 EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "none").strip().lower()
 EMAIL_FROM = os.getenv("EMAIL_FROM", "").strip()
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
@@ -34,6 +35,16 @@ SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
 MAX_VIDEO_BYTES = int(os.getenv("LECTURESIFT_MAX_VIDEO_BYTES", str(1024 * 1024 * 1024)))
 MAX_SOURCE_FILES = int(os.getenv("LECTURESIFT_MAX_SOURCE_FILES", "24"))
 JOB_TTL_SECONDS = int(os.getenv("LECTURESIFT_JOB_TTL_SECONDS", str(6 * 60 * 60)))
+GUEST_TRIAL_MAX_MINUTES = float(os.getenv("LECTURESIFT_GUEST_TRIAL_MINUTES", "5"))
+INSTAGRAM_BONUS_MINUTES = int(os.getenv("LECTURESIFT_INSTAGRAM_BONUS_MINUTES", "30"))
+
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "")
+REDIS_URL = os.getenv("REDIS_URL", CELERY_BROKER_URL)
+S3_ENDPOINT_URL = os.getenv("S3_ENDPOINT_URL", "")
+S3_REGION = os.getenv("S3_REGION", "auto")
+S3_BUCKET = os.getenv("S3_BUCKET", "")
+S3_ACCESS_KEY_ID = os.getenv("S3_ACCESS_KEY_ID", "")
+S3_SECRET_ACCESS_KEY = os.getenv("S3_SECRET_ACCESS_KEY", "")
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".webm", ".mpeg", ".mpg", ".m4v"}
 
@@ -54,9 +65,9 @@ LANGUAGE_NAMES = {
 }
 
 SUMMARY_STYLES = {
-    "short": "very concise, key points only",
-    "standard": "balanced, structured, and study-friendly",
-    "detailed": "detailed, explanatory, and study-friendly",
-    "exam": "exam-focused with definitions, distinctions, likely questions, and common traps",
-    "five_minute": "a five-minute learning plan with the smallest useful set of ideas",
+    "short": "concise but complete; cover the central argument, essential definitions, and main conclusions in roughly 250-450 words",
+    "standard": "broad and comprehensive; cover every major topic, definition, distinction, example, causal link, lecturer emphasis, and conclusion in a structured 700-1400 word summary",
+    "detailed": "deep, explanatory, and comprehensive; preserve the lecture's conceptual sequence and explain difficult links in roughly 1400-2600 words when the source supports it",
+    "exam": "comprehensive and exam-focused with definitions, distinctions, mechanisms, likely questions, examples, common traps, and lecturer emphasis",
+    "five_minute": "a compact five-minute learning plan that still covers the minimum complete conceptual map, not merely a few bullet points",
 }
