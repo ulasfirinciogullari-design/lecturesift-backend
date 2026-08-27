@@ -103,10 +103,9 @@ def billing_guest_session(payload: GuestSessionRequest, request: Request) -> dic
     device_id = payload.device_id.strip()
     if len(device_id) < 8 or len(device_id) > 200:
         raise HTTPException(400, detail={"code": "LS-GUEST-01", "message": "Misafir cihaz kimliği geçersiz."})
-    forwarded = (request.headers.get("x-forwarded-for") or "").split(",", 1)[0].strip()
-    remote = forwarded or (request.client.host if request.client else "unknown")
     user_agent = request.headers.get("user-agent", "unknown")[:300]
-    fingerprint = hashlib.sha256(f"{device_id}|{remote}|{user_agent}".encode("utf-8")).hexdigest()
+    # Keep the trial tied to this browser/device even when the user changes Wi-Fi or mobile network.
+    fingerprint = hashlib.sha256(f"{device_id}|{user_agent}".encode("utf-8")).hexdigest()
     try:
         result = create_or_resume_guest(fingerprint)
     except (BillingError, BillingAuthenticationError, BillingConfigurationError) as exc:
