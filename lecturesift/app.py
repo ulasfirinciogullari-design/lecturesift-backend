@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, HttpUrl
 
+from .billing import public_catalog, public_providers
 from .config import (
     APP_VERSION,
     INSTAGRAM_ACCESS_TOKEN,
@@ -202,6 +203,16 @@ def health() -> dict:
         "url_video_download": True,
         "instagram_configured": all((INSTAGRAM_ACCESS_TOKEN, INSTAGRAM_ACCOUNT_ID, INSTAGRAM_APP_SECRET)),
     }
+
+
+@app.get("/billing/plans")
+def billing_plans() -> dict:
+    return public_catalog()
+
+
+@app.get("/billing/providers")
+def billing_providers() -> dict:
+    return public_providers()
 
 
 @app.get("/instagram/health")
