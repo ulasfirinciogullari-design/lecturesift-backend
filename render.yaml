@@ -1,9 +1,69 @@
 services:
+  - type: keyvalue
+    name: lecturesift-queue
+    plan: starter
+    ipAllowList: []
+    maxmemoryPolicy: noeviction
+    persistenceMode: journal-snapshot
+
   - type: web
     name: lecturesift-backend
     runtime: docker
     plan: free
-    autoDeploy: true
+    autoDeployTrigger: checksPass
     envVars:
       - key: OPENAI_API_KEY
+        sync: false
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: lecturesift-queue
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: lecturesift-queue
+          property: connectionString
+      - key: S3_ENDPOINT_URL
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+
+  - type: worker
+    name: lecturesift-worker
+    runtime: docker
+    plan: starter
+    autoDeployTrigger: checksPass
+    dockerCommand: celery -A lecturesift.queue.celery_app worker --loglevel=INFO --concurrency=1
+    maxShutdownDelaySeconds: 300
+    envVars:
+      - key: LECTURESIFT_WORKER
+        value: "1"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: lecturesift-queue
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: lecturesift-queue
+          property: connectionString
+      - key: S3_ENDPOINT_URL
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
         sync: false
