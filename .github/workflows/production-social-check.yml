@@ -1,0 +1,56 @@
+name: Production social check
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify-social-rollout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Wait for Render deployment and API health
+        shell: bash
+        run: |
+          set -euo pipefail
+          health_url="https://lecturesift-backend.onrender.com/health"
+          for attempt in $(seq 1 40); do
+            if body=$(curl --silent --show-error --fail --max-time 20 "$health_url"); then
+              echo "Production health: $body"
+              break
+            fi
+            if [ "$attempt" -eq 40 ]; then
+              echo "Production API did not become healthy in time." >&2
+              exit 1
+            fi
+            sleep 15
+          done
+
+      - name: Verify Instagram connection and first launch marker
+        shell: bash
+        run: |
+          set -euo pipefail
+          instagram_health="https://lecturesift-backend.onrender.com/instagram/health"
+          launch_status="https://lecturesift-backend.onrender.com/instagram/launch/status"
+
+          echo "Instagram health:"
+          curl --silent --show-error --fail --max-time 25 "$instagram_health"
+          echo
+
+          for attempt in $(seq 1 32); do
+            if body=$(curl --silent --show-error --fail --max-time 25 "$launch_status"); then
+              echo "Launch status: $body"
+              count=$(python -c 'import json,sys; print(json.loads(sys.argv[1]).get("completed_count", 0))' "$body")
+              if [ "$count" -ge 1 ]; then
+                exit 0
+              fi
+            fi
+            if [ "$attempt" -eq 32 ]; then
+              echo "Instagram launch marker was not observed in time." >&2
+              exit 1
+            fi
+            sleep 15
+          done
