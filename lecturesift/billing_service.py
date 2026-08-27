@@ -11,6 +11,7 @@ import hashlib
 import hmac
 import json
 import math
+import os
 import secrets
 import threading
 import uuid
@@ -123,12 +124,20 @@ def utcnow() -> datetime:
 
 def init_billing_database() -> None:
     global _INITIALIZED
+    if os.getenv("RENDER") and _database_url().startswith("sqlite:"):
+        raise BillingConfigurationError("Kalıcı abonelik veritabanı henüz bağlanmamış.")
     if _INITIALIZED:
         return
     with _INIT_LOCK:
         if not _INITIALIZED:
             METADATA.create_all(ENGINE)
             _INITIALIZED = True
+
+
+def billing_database_health() -> dict:
+    init_billing_database()
+    backend = ENGINE.url.get_backend_name()
+    return {"connected": True, "persistent": backend == "postgresql", "backend": backend}
 
 
 def _hash_password(password: str, salt: bytes) -> str:

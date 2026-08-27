@@ -21,6 +21,7 @@ from .billing_service import (
     approve_manual_order,
     authenticate_session,
     bank_transfer_available,
+    billing_database_health,
     create_manual_order,
     login_user,
     register_user,
@@ -84,6 +85,8 @@ def _billing_user(authorization: str | None = Header(None)) -> dict:
         raise HTTPException(401, detail={"code": "LS-BILL-01", "message": "Devam etmek için giriş yap."})
     try:
         return authenticate_session(value)
+    except BillingConfigurationError as exc:
+        raise HTTPException(503, detail={"code": "LS-BILL-00", "message": str(exc)}) from exc
     except BillingAuthenticationError as exc:
         raise HTTPException(401, detail={"code": "LS-BILL-02", "message": str(exc)}) from exc
 
@@ -286,10 +289,21 @@ def billing_manual_transfer_status() -> dict:
     }
 
 
+@app.get("/billing/health")
+def billing_health() -> dict:
+    try:
+        database = billing_database_health()
+    except BillingConfigurationError as exc:
+        raise HTTPException(503, detail={"code": "LS-BILL-00", "message": str(exc)}) from exc
+    return {"ok": True, "database": database}
+
+
 @app.post("/billing/register")
 def billing_register(payload: BillingAuthRequest) -> dict:
     try:
         result = register_user(payload.email, payload.password)
+    except BillingConfigurationError as exc:
+        raise HTTPException(503, detail={"code": "LS-BILL-00", "message": str(exc)}) from exc
     except BillingError as exc:
         raise HTTPException(400, detail={"code": "LS-BILL-05", "message": str(exc)}) from exc
     return {"ok": True, **result, "account": account_status(result["user"]["id"])}
@@ -299,6 +313,8 @@ def billing_register(payload: BillingAuthRequest) -> dict:
 def billing_login(payload: BillingAuthRequest) -> dict:
     try:
         result = login_user(payload.email, payload.password)
+    except BillingConfigurationError as exc:
+        raise HTTPException(503, detail={"code": "LS-BILL-00", "message": str(exc)}) from exc
     except BillingAuthenticationError as exc:
         raise HTTPException(401, detail={"code": "LS-BILL-06", "message": str(exc)}) from exc
     return {"ok": True, **result, "account": account_status(result["user"]["id"])}
@@ -330,6 +346,8 @@ def billing_create_manual_order(
 def billing_approve_manual_order(reference: str) -> dict:
     try:
         account = approve_manual_order(reference)
+    except BillingConfigurationError as exc:
+        raise HTTPException(503, detail={"code": "LS-BILL-00", "message": str(exc)}) from exc
     except BillingError as exc:
         raise HTTPException(404, detail={"code": "LS-BILL-09", "message": str(exc)}) from exc
     return {"ok": True, "account": account}

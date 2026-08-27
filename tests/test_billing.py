@@ -27,6 +27,19 @@ def test_billing_providers_distinguish_ready_state():
     assert "global" in providers["paddle"]["regions"]
 
 
+def test_billing_health_reports_local_database_and_fails_closed_on_render(monkeypatch):
+    client = TestClient(app)
+    response = client.get("/billing/health")
+    assert response.status_code == 200
+    assert response.json()["database"]["backend"] == "sqlite"
+    assert response.json()["database"]["persistent"] is False
+
+    monkeypatch.setenv("RENDER", "true")
+    response = client.get("/billing/health")
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "LS-BILL-00"
+
+
 def _new_account(client: TestClient) -> tuple[str, str]:
     email = f"billing-{uuid.uuid4()}@example.com"
     response = client.post("/billing/register", json={"email": email, "password": "strong-test-password"})
