@@ -8,6 +8,7 @@ from typing import Any
 from redis import Redis
 
 from .config import JOB_TTL_SECONDS, REDIS_URL, WORK_DIR
+from .storage import STORAGE
 
 
 class JobStore:
@@ -69,6 +70,27 @@ class JobStore:
         if self._redis is not None:
             self._redis.set(self.REDIS_KEY, payload)
 
+    def _materialize_completed(self, data: dict[str, Any]) -> dict[str, Any]:
+        if data.get("status") != "done" or not data.get("remote_prefix") or not STORAGE.remote:
+            return data
+        job_id = str(data.get("job_id", ""))
+        if not job_id:
+            return data
+        local_dir = WORK_DIR / job_id
+        if not (local_dir / "result.json").exists():
+            try:
+                local_dir.mkdir(parents=True, exist_ok=True)
+                STORAGE.materialize_job(job_id, local_dir)
+            except Exception:
+                return data
+        data["job_dir"] = str(local_dir)
+        remote_download_key = str(data.get("remote_download_key", ""))
+        if remote_download_key:
+            local_zip = local_dir / Path(remote_download_key).name
+            if local_zip.exists():
+                data["result_path"] = str(local_zip)
+        return data
+
     def create(self, job_id: str, job_dir: Path, options: dict, **extra: Any) -> dict:
         now = time.time()
         data = {
@@ -96,7 +118,7 @@ class JobStore:
         with self._lock:
             self._refresh_locked()
             data = self._jobs.get(job_id)
-            return data.copy() if data else None
+            return self._materialize_completed(data.copy()) if data else None
 
     def update(self, job_id: str, **values: Any) -> None:
         with self._lock:
