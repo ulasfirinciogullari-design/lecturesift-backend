@@ -26,6 +26,7 @@ from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Table, del
 from sqlalchemy.exc import IntegrityError
 
 from . import config
+from .resend_diagnostics import classify_resend_error
 from .billing_service import (
     ENGINE,
     METADATA,
@@ -244,11 +245,15 @@ def _send_verification_email(recipient: str, code: str, language: str, idempoten
             )
         except ResendError as exc:
             provider_status = _resend_status(exc.code)
-            provider_code = str(exc.error_type or "resend_error").strip()[:80]
+            provider_code = classify_resend_error(
+                status=provider_status,
+                error_type=exc.error_type,
+                message=exc.message,
+            )
             last_error = EmailDeliveryError(
                 "Resend isteği kabul etmedi.",
                 provider_status=provider_status,
-                provider_code=provider_code or "resend_error",
+                provider_code=provider_code,
             )
             if (
                 attempt == 0
