@@ -1,6 +1,6 @@
 .version-pill{display:none!important}
-.topbar,.auth-topbar{position:sticky!important;top:0;z-index:80;background:rgba(6,16,34,.9);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
-.topbar .brand,.auth-topbar .brand{flex:0 0 auto;visibility:visible!important;opacity:1!important}
+.topbar,.auth-topbar,.legal-topbar{position:sticky!important;top:0;z-index:80;background:rgba(6,16,34,.9);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+.topbar .brand,.auth-topbar .brand,.legal-topbar .brand{flex:0 0 auto;visibility:visible!important;opacity:1!important}
 .rollout-eta{margin:12px 0 0;padding:10px 12px;border:1px solid rgba(57,166,255,.22);border-radius:12px;background:rgba(57,166,255,.07);color:#b8dfff;font-size:11px;line-height:1.45}
 .rollout-eta strong{display:block;margin-bottom:3px;color:#fff;font-size:12px}
 .rollout-currency{display:flex;align-items:center;gap:8px;margin-top:12px;color:var(--muted,#99a9c8);font-size:11px}
