@@ -27,6 +27,7 @@ from sqlalchemy.exc import IntegrityError
 
 from . import config
 from .resend_diagnostics import classify_resend_error
+from .resend_smtp import ResendSMTPError, send_resend_smtp
 from .billing_service import (
     ENGINE,
     METADATA,
@@ -255,6 +256,24 @@ def _send_verification_email(recipient: str, code: str, language: str, idempoten
                 provider_status=provider_status,
                 provider_code=provider_code,
             )
+            if provider_status == 403:
+                try:
+                    return send_resend_smtp(
+                        api_key=config.RESEND_API_KEY.strip(),
+                        sender=config.RESEND_FROM_EMAIL.strip(),
+                        recipient=recipient,
+                        subject=subject,
+                        text_body=text_body,
+                        html_body=html_body,
+                        idempotency_key=idempotency_key,
+                        reply_to=config.BILLING_SUPPORT_EMAIL.strip(),
+                    )
+                except ResendSMTPError as smtp_exc:
+                    last_error = EmailDeliveryError(
+                        "Resend SMTP isteği kabul etmedi.",
+                        provider_status=smtp_exc.status,
+                        provider_code=smtp_exc.code,
+                    )
             if (
                 attempt == 0
                 and provider_status is not None
