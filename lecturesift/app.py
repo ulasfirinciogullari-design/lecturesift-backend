@@ -9,9 +9,10 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, HttpUrl
 
+from .billing import public_catalog, public_providers
 from .config import (
     APP_VERSION,
     INSTAGRAM_ACCESS_TOKEN,
@@ -26,6 +27,7 @@ from .config import (
     WORK_DIR,
 )
 from .errors import LectureSiftError, normalize_error
+from .daily_social import render_daily_image
 from .instagram import InstagramAPIError, InstagramClient, InstagramConfigurationError
 from .jobs import JOBS
 from .media import download_remote_video, validate_remote_url
@@ -203,6 +205,16 @@ def health() -> dict:
     }
 
 
+@app.get("/billing/plans")
+def billing_plans() -> dict:
+    return public_catalog()
+
+
+@app.get("/billing/providers")
+def billing_providers() -> dict:
+    return public_providers()
+
+
 @app.get("/instagram/health")
 def instagram_health(client: InstagramClient = Depends(_instagram_client)) -> dict:
     try:
@@ -258,6 +270,22 @@ def instagram_publish_media(
     except InstagramAPIError as exc:
         _instagram_error(exc)
     return {"ok": True, "media_id": result.get("id"), "status": "published"}
+
+
+@app.get("/instagram/daily/image/{day}.jpg")
+def instagram_daily_image(day: str) -> Response:
+    """Public deterministic image endpoint used by Instagram's media fetcher."""
+    from datetime import date
+
+    try:
+        selected_day = date.fromisoformat(day)
+    except ValueError:
+        raise HTTPException(400, detail={"code": "LS-IG-06", "message": "Geçersiz tarih."})
+    return Response(
+        content=render_daily_image(selected_day),
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 @app.get("/jobs/{job_id}")

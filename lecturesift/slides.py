@@ -27,6 +27,10 @@ def _scaled(frame: np.ndarray, width: int) -> np.ndarray:
 
 
 def face_area_ratio(frame: np.ndarray) -> float:
+    # Some minimal OpenCV builds omit the Haar cascade data. A missing
+    # optional classifier must not stop lecture processing altogether.
+    if _FACE_CLASSIFIER.empty():
+        return 0.0
     small = _scaled(frame, 360)
     gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
     faces = _FACE_CLASSIFIER.detectMultiScale(gray, scaleFactor=1.15, minNeighbors=5, minSize=(36, 36))
