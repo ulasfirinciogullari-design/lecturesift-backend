@@ -6,9 +6,8 @@ import shutil
 import time
 from pathlib import Path
 
-import cv2
-
 from .config import WORK_DIR
+from .duration import media_duration_seconds
 from .jobs import JOBS
 from .pipeline_enhancements import install_pipeline_enhancements
 from .queue import celery_app
@@ -17,20 +16,6 @@ from .storage import STORAGE
 
 install_pipeline_enhancements()
 from .pipeline import process_job  # noqa: E402  (patched before binding)
-
-
-def _duration_seconds(paths: list[Path]) -> float:
-    total = 0.0
-    for path in paths:
-        capture = cv2.VideoCapture(str(path))
-        try:
-            fps = float(capture.get(cv2.CAP_PROP_FPS) or 0)
-            frames = float(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-            if fps > 0 and frames > 0:
-                total += frames / fps
-        finally:
-            capture.release()
-    return total
 
 
 def _download_sources(job_id: str, role: str, keys: list[str], job_dir: Path) -> list[Path]:
@@ -64,7 +49,10 @@ def process_uploaded_job(
         JOBS.update(job_id, job_dir=str(job_dir), status="working", stage="worker_download", worker_state="downloading")
         audio_paths = _download_sources(job_id, "audio", list(audio_keys), job_dir)
         visual_paths = _download_sources(job_id, "visual", list(visual_keys or []), job_dir)
-        duration = max(_duration_seconds(audio_paths), _duration_seconds(visual_paths) if visual_paths else 0.0)
+        duration = max(
+            media_duration_seconds(audio_paths),
+            media_duration_seconds(visual_paths) if visual_paths else 0.0,
+        )
         media_minutes = max(0.1, duration / 60.0)
         user_id = str(options.get("billing_user_id", ""))
         if user_id and is_guest_user(user_id):
