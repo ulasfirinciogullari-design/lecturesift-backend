@@ -6,140 +6,46 @@
   <meta name="description" content="Ders videolarını slayt, transkript, akıllı not, özet, quiz ve bilgi kartlarına dönüştür.">
   <title>LectureSift - AI Ders Çalışma Asistanı</title>
   <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./platform.css">
 </head>
 <body>
   <div class="ambient ambient-one"></div>
   <div class="ambient ambient-two"></div>
 
   <header class="topbar">
-    <a class="brand" href="#app" aria-label="LectureSift ana sayfa">
-      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-      <span>Lecture<span>Sift</span></span>
-    </a>
-    <nav class="top-nav" aria-label="Ana menü">
-      <a href="#app">Çalışma Alanı</a>
-      <a href="#features">Özellikler</a>
-      <a href="#plans">Planlar</a>
-      <a href="#account">Hesap</a>
-    </nav>
-    <div class="top-actions">
-      <label class="language-picker">
-        <span class="sr-only">Arayüz dili</span>
-        <select id="uiLanguage"></select>
-      </label>
-    </div>
+    <a class="brand" href="#app" aria-label="LectureSift ana sayfa"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>Lecture<span>Sift</span></span></a>
+    <nav class="top-nav" aria-label="Ana menü"><a href="#app">Çalışma Alanı</a><a href="#features">Özellikler</a><a href="#plans">Planlar</a><a href="#account">Hesap</a></nav>
+    <div class="top-actions"><label class="language-picker"><span class="sr-only">Arayüz dili</span><select id="uiLanguage"></select></label></div>
   </header>
 
   <main id="app" class="page-shell">
-    <section class="intro" aria-labelledby="pageTitle">
-      <div>
-        <p class="eyebrow" data-i18n="eyebrow">Yapay zekâ destekli ders çalışma alanı</p>
-        <h1 id="pageTitle" data-i18n="title">Bir ders videosundan çalışmaya hazır her şey.</h1>
-      </div>
-      <p class="intro-copy" data-i18n="subtitle">Videoyu yükle veya bağlantıyı yapıştır. LectureSift transkript, akıllı notlar, kapsamlı özet, slaytlar, quiz ve soru-cevap bilgi kartlarını tek pakette hazırlar.</p>
-    </section>
-
+    <section class="intro" aria-labelledby="pageTitle"><div><p class="eyebrow" data-i18n="eyebrow">Yapay zekâ destekli ders çalışma alanı</p><h1 id="pageTitle" data-i18n="title">Bir ders videosundan çalışmaya hazır her şey.</h1></div><p class="intro-copy" data-i18n="subtitle">Videoyu yükle veya bağlantıyı yapıştır. LectureSift transkript, akıllı notlar, kapsamlı özet, slaytlar, quiz ve bilgi kartlarını tek pakette hazırlar.</p></section>
     <section id="platformArea"></section>
 
     <section class="workspace" aria-label="Ders analizi">
       <div class="panel input-panel">
-        <div class="panel-heading">
-          <div><span class="step-number">01</span><h2 data-i18n="sourceTitle">Ders kaynağını ekle</h2></div>
-          <span class="secure-note" data-i18n="secure">Güvenli işlem</span>
-        </div>
-
-        <div class="source-tabs" role="tablist" aria-label="Video kaynağı">
-          <button class="source-tab active" id="uploadTab" type="button" role="tab" aria-selected="true" aria-controls="uploadPanel" data-i18n="uploadTab">Dosya yükle</button>
-          <button class="source-tab" id="linkTab" type="button" role="tab" aria-selected="false" aria-controls="linkPanel" data-i18n="linkTab">Bağlantı kullan</button>
-        </div>
-
+        <div class="panel-heading"><div><span class="step-number">01</span><h2 data-i18n="sourceTitle">Ders kaynağını ekle</h2></div><span class="secure-note" data-i18n="secure">Güvenli işlem</span></div>
+        <div class="source-tabs" role="tablist" aria-label="Video kaynağı"><button class="source-tab active" id="uploadTab" type="button" role="tab" aria-selected="true" aria-controls="uploadPanel" data-i18n="uploadTab">Dosya yükle</button><button class="source-tab" id="linkTab" type="button" role="tab" aria-selected="false" aria-controls="linkPanel" data-i18n="linkTab">Bağlantı kullan</button></div>
         <div id="uploadPanel" class="source-panel active" role="tabpanel" aria-labelledby="uploadTab">
-          <div id="recordingModeTabs" class="recording-mode-tabs">
-            <button id="classicMode" class="active" type="button" data-i18n="classicMode">Video ve ses birlikte</button>
-            <button id="separateMode" type="button" data-i18n="separateMode">Ses ve görüntü ayrı</button>
-          </div>
-          <div id="classicSources" class="source-builder">
-            <input id="classicFiles" class="file-input" type="file" multiple accept="video/mp4,video/webm,video/quicktime,video/x-matroska">
-            <label id="classicDropZone" class="drop-zone compact" for="classicFiles">
-              <span class="upload-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15.5v2.25A2.25 2.25 0 0 0 7.25 20h9.5A2.25 2.25 0 0 0 19 17.75V15.5"/></svg></span>
-              <strong data-i18n="addVideos">Bir veya birden fazla video ekle</strong>
-              <span data-i18n="sortHelp">Dosyalar eklenince sıralarını değiştirebilirsin</span>
-            </label>
-            <div id="classicFileList" class="source-file-list"></div>
-          </div>
-          <div id="separateSources" class="separate-source-grid" hidden>
-            <div class="upload-source-card">
-              <div class="upload-source-head"><strong data-i18n="audioSourceTitle">Ses kaynakları</strong><span data-i18n="required">Zorunlu</span></div>
-              <p data-i18n="audioSourceHelp">Sesli videoları veya kayıtları ders sırasına göre ekle.</p>
-              <input id="audioFiles" class="file-input" type="file" multiple accept="video/mp4,video/webm,video/quicktime,video/x-matroska">
-              <label id="audioDropZone" class="mini-drop-zone" for="audioFiles" data-i18n="addAudioFiles">Ses videolarını ekle</label>
-              <div id="audioFileList" class="source-file-list compact-list"></div>
-            </div>
-            <div class="upload-source-card optional">
-              <div class="upload-source-head"><strong data-i18n="slidesSourceTitle">Görüntü / slayt kaynakları</strong><span data-i18n="required">Zorunlu</span></div>
-              <p data-i18n="slidesSourceHelp">Slayt videolarını ders sırasına göre ekle.</p>
-              <input id="visualFiles" class="file-input" type="file" multiple accept="video/mp4,video/webm,video/quicktime,video/x-matroska">
-              <label id="visualDropZone" class="mini-drop-zone secondary" for="visualFiles" data-i18n="addVisualFiles">Slayt videolarını ekle</label>
-              <div id="visualFileList" class="source-file-list compact-list"></div>
-              <label id="syncControl" class="sync-control"><span><b data-i18n="syncOffset">Slayt zaman farkı</b><small data-i18n="syncOffsetHelp">Aynı anda başladıysa 0 bırak.</small></span><span><input id="slidesOffset" type="number" min="-3600" max="3600" step="0.1" value="0"><i>sn</i></span></label>
-            </div>
-          </div>
+          <div id="recordingModeTabs" class="recording-mode-tabs"><button id="classicMode" class="active" type="button" data-i18n="classicMode">Video ve ses birlikte</button><button id="separateMode" type="button" data-i18n="separateMode">Ses ve görüntü ayrı</button></div>
+          <div id="classicSources" class="source-builder"><input id="classicFiles" class="file-input" type="file" multiple accept="video/mp4,video/webm,video/quicktime,video/x-matroska"><label id="classicDropZone" class="drop-zone compact" for="classicFiles"><span class="upload-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15.5v2.25A2.25 2.25 0 0 0 7.25 20h9.5A2.25 2.25 0 0 0 19 17.75V15.5"/></svg></span><strong data-i18n="addVideos">Bir veya birden fazla video ekle</strong><span data-i18n="sortHelp">Dosyalar eklenince sıralarını değiştirebilirsin</span></label><div id="classicFileList" class="source-file-list"></div></div>
+          <div id="separateSources" class="separate-source-grid" hidden><div class="upload-source-card"><div class="upload-source-head"><strong data-i18n="audioSourceTitle">Ses kaynakları</strong><span data-i18n="required">Zorunlu</span></div><p data-i18n="audioSourceHelp">Sesli videoları veya kayıtları ders sırasına göre ekle.</p><input id="audioFiles" class="file-input" type="file" multiple accept="video/mp4,video/webm,video/quicktime,video/x-matroska"><label id="audioDropZone" class="mini-drop-zone" for="audioFiles" data-i18n="addAudioFiles">Ses videolarını ekle</label><div id="audioFileList" class="source-file-list compact-list"></div></div><div class="upload-source-card optional"><div class="upload-source-head"><strong data-i18n="slidesSourceTitle">Görüntü / slayt kaynakları</strong><span data-i18n="required">Zorunlu</span></div><p data-i18n="slidesSourceHelp">Slayt videolarını ders sırasına göre ekle.</p><input id="visualFiles" class="file-input" type="file" multiple accept="video/mp4,video/webm,video/quicktime,video/x-matroska"><label id="visualDropZone" class="mini-drop-zone secondary" for="visualFiles" data-i18n="addVisualFiles">Slayt videolarını ekle</label><div id="visualFileList" class="source-file-list compact-list"></div><label id="syncControl" class="sync-control"><span><b data-i18n="syncOffset">Slayt zaman farkı</b><small data-i18n="syncOffsetHelp">Aynı anda başladıysa 0 bırak.</small></span><span><input id="slidesOffset" type="number" min="-3600" max="3600" step="0.1" value="0"><i>sn</i></span></label></div></div>
           <p class="combined-limit" data-i18n="fileHelp">MP4, MOV, MKV veya WebM - toplam en fazla 1 GB</p>
         </div>
-
-        <div id="linkPanel" class="source-panel" role="tabpanel" aria-labelledby="linkTab" hidden>
-          <label class="field-label" for="videoUrl" data-i18n="urlLabel">Video veya eğitim sayfası bağlantısı</label>
-          <div class="url-field"><span aria-hidden="true">↗</span><input id="videoUrl" type="url" inputmode="url" placeholder="https://site.com/lecture/video.mp4" autocomplete="url"></div>
-          <p class="field-help" data-i18n="urlHelp">Doğrudan MP4/WebM bağlantıları ve desteklenen eğitim sayfaları kabul edilir.</p>
-        </div>
-
-        <div class="divider"></div>
-        <div class="panel-heading compact"><div><span class="step-number">02</span><h2 data-i18n="settingsTitle">Çalışma paketini ayarla</h2></div></div>
-
-        <div class="operation-grid">
-          <label class="control"><span data-i18n="operationType">İşlem türü</span><select id="jobType"><option value="study_pack" data-i18n="studyPackOption">Ders çalışma paketi hazırla</option><option value="audio_export" data-i18n="audioExportOption">Videoyu MP3'e çevir</option><option value="download_video" data-i18n="downloadVideoOption">URL'den video indir</option></select></label>
-          <fieldset id="formatChoices" class="format-choices"><legend data-i18n="outputFormats">Çıktı biçimleri</legend><label><input id="formatPdf" type="checkbox" value="pdf" checked><span>PDF</span></label><label><input id="formatDocx" type="checkbox" value="docx"><span>Word</span></label><label><input id="formatTxt" type="checkbox" value="txt"><span>TXT</span></label></fieldset>
-        </div>
-
-        <div id="studySettings" class="settings-grid">
-          <label class="control"><span data-i18n="sourceLanguage">Video dili</span><select id="sourceLanguage"></select></label>
-          <label class="control"><span data-i18n="outputLanguage">Çıktı dili</span><select id="outputLanguage"></select></label>
-          <label class="control"><span data-i18n="summaryStyle">Özet profili</span><select id="summaryStyle"></select></label>
-          <label class="control"><span data-i18n="quizCount">Quiz sorusu</span><select id="quizCount"><option>5</option><option selected>10</option><option>20</option><option>30</option></select></label>
-          <label class="control"><span data-i18n="cardCount">Bilgi kartı</span><select id="cardCount"><option>10</option><option selected>20</option><option>40</option><option>60</option></select></label>
-          <label id="translateControl" class="toggle-control"><span><b data-i18n="translateTitle">Transkripti çevir</b><small id="translateHelp" data-i18n="translateHelp">Orijinali de korunur</small></span><input id="translateTranscript" type="checkbox" checked><i aria-hidden="true"></i></label>
-        </div>
+        <div id="linkPanel" class="source-panel" role="tabpanel" aria-labelledby="linkTab" hidden><label class="field-label" for="videoUrl" data-i18n="urlLabel">Video veya eğitim sayfası bağlantısı</label><div class="url-field"><span aria-hidden="true">↗</span><input id="videoUrl" type="url" inputmode="url" placeholder="https://site.com/lecture/video.mp4" autocomplete="url"></div><p class="field-help" data-i18n="urlHelp">Doğrudan MP4/WebM bağlantıları ve desteklenen eğitim sayfaları kabul edilir.</p></div>
+        <div class="divider"></div><div class="panel-heading compact"><div><span class="step-number">02</span><h2 data-i18n="settingsTitle">Çalışma paketini ayarla</h2></div></div>
+        <div class="operation-grid"><label class="control"><span data-i18n="operationType">İşlem türü</span><select id="jobType"><option value="study_pack" data-i18n="studyPackOption">Ders çalışma paketi hazırla</option><option value="audio_export" data-i18n="audioExportOption">Videoyu MP3'e çevir</option><option value="download_video" data-i18n="downloadVideoOption">URL'den video indir</option></select></label><fieldset id="formatChoices" class="format-choices"><legend data-i18n="outputFormats">Çıktı biçimleri</legend><label><input id="formatPdf" type="checkbox" value="pdf" checked><span>PDF</span></label><label><input id="formatDocx" type="checkbox" value="docx"><span>Word</span></label><label><input id="formatTxt" type="checkbox" value="txt"><span>TXT</span></label></fieldset></div>
+        <div id="studySettings" class="settings-grid"><label class="control"><span data-i18n="sourceLanguage">Video dili</span><select id="sourceLanguage"></select></label><label class="control"><span data-i18n="outputLanguage">Çıktı dili</span><select id="outputLanguage"></select></label><label class="control"><span data-i18n="summaryStyle">Özet profili</span><select id="summaryStyle"></select></label><label class="control"><span data-i18n="quizCount">Quiz sorusu</span><select id="quizCount"><option>5</option><option selected>10</option><option>20</option><option>30</option></select></label><label class="control"><span data-i18n="cardCount">Bilgi kartı</span><select id="cardCount"><option>10</option><option selected>20</option><option>40</option><option>60</option></select></label><label id="translateControl" class="toggle-control"><span><b data-i18n="translateTitle">Transkripti çevir</b><small id="translateHelp" data-i18n="translateHelp">Orijinali de korunur</small></span><input id="translateTranscript" type="checkbox" checked><i aria-hidden="true"></i></label></div>
         <p id="usageHint" class="combined-limit">Hesapsız deneme süresi en fazla 5 dakikadır. Uzun dersler için hesabına giriş yap.</p>
         <button id="analyzeButton" class="primary-button" type="button"><span data-i18n="analyze">Dersi analiz et</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></button>
       </div>
-
-      <aside class="panel process-panel" aria-live="polite">
-        <div class="process-head"><div><p class="eyebrow" data-i18n="processEyebrow">Canlı işlem merkezi</p><h2 id="processTitle" data-i18n="readyTitle">Analize hazır</h2></div><span id="elapsedTime" class="elapsed">00:00</span></div>
-        <p id="etaText" class="eta-text">Tahmini bitiş süresi dosya yüklendikten sonra hesaplanacak.</p>
-        <div class="progress-visual"><div id="progressRing" class="progress-ring" style="--progress:0deg"><span id="progressPercent">0%</span></div><div><strong id="currentStage" data-i18n="readyStage">Video bekleniyor</strong><p id="stageDetail" data-i18n="readyDetail">Kaynağı ekleyip ayarlarını seçtiğinde işlem adımlarını burada canlı göreceksin.</p></div></div>
-        <ol id="stageList" class="stage-list"><li data-stage="url_download"><i></i><span data-i18n="stageReceive">Video alınıyor</span><b>--</b></li><li data-stage="audio"><i></i><span data-i18n="stageAudio">Ses ayrıştırılıyor</span><b>--</b></li><li data-stage="transcription"><i></i><span data-i18n="stageTranscript">Konuşma çözümleniyor</span><b>--</b></li><li data-stage="scene_scan"><i></i><span data-i18n="stageVisual">Görsel içerik taranıyor</span><b>--</b></li><li data-stage="slide_validation"><i></i><span data-i18n="stageSlides">Slaytlar doğrulanıyor</span><b>--</b></li><li data-stage="study_pack"><i></i><span data-i18n="stageStudy">Ders yapılandırılıyor</span><b>--</b></li><li data-stage="exports"><i></i><span data-i18n="stageExport">Çıktılar hazırlanıyor</span><b>--</b></li></ol>
-        <div class="promise-card"><span aria-hidden="true">✦</span><p><strong data-i18n="promiseTitle">Tek videodan tam çalışma paketi</strong><small>Slaytlar, doğru dilde transkript, akıllı notlar, kapsamlı özet, quiz, soru-cevap bilgi kartları ve seçtiğin dosyalar.</small></p></div>
-      </aside>
+      <aside class="panel process-panel" aria-live="polite"><div class="process-head"><div><p class="eyebrow" data-i18n="processEyebrow">Canlı işlem merkezi</p><h2 id="processTitle" data-i18n="readyTitle">Analize hazır</h2></div><span id="elapsedTime" class="elapsed">00:00</span></div><p id="etaText" class="eta-text">Tahmini bitiş süresi dosya yüklendikten sonra hesaplanacak.</p><div class="progress-visual"><div id="progressRing" class="progress-ring" style="--progress:0deg"><span id="progressPercent">0%</span></div><div><strong id="currentStage" data-i18n="readyStage">Video bekleniyor</strong><p id="stageDetail" data-i18n="readyDetail">Kaynağı ekleyip ayarlarını seçtiğinde işlem adımlarını burada canlı göreceksin.</p></div></div><ol id="stageList" class="stage-list"><li data-stage="url_download"><i></i><span data-i18n="stageReceive">Video alınıyor</span><b>--</b></li><li data-stage="audio"><i></i><span data-i18n="stageAudio">Ses ayrıştırılıyor</span><b>--</b></li><li data-stage="transcription"><i></i><span data-i18n="stageTranscript">Konuşma çözümleniyor</span><b>--</b></li><li data-stage="scene_scan"><i></i><span data-i18n="stageVisual">Görsel içerik taranıyor</span><b>--</b></li><li data-stage="slide_validation"><i></i><span data-i18n="stageSlides">Slaytlar doğrulanıyor</span><b>--</b></li><li data-stage="study_pack"><i></i><span data-i18n="stageStudy">Ders yapılandırılıyor</span><b>--</b></li><li data-stage="exports"><i></i><span data-i18n="stageExport">Çıktılar hazırlanıyor</span><b>--</b></li></ol><div class="promise-card"><span aria-hidden="true">✦</span><p><strong data-i18n="promiseTitle">Tek videodan tam çalışma paketi</strong><small>Slaytlar, doğru dilde transkript, akıllı notlar, kapsamlı özet, quiz, soru-cevap bilgi kartları ve seçtiğin dosyalar.</small></p></div></aside>
     </section>
 
-    <section id="results" class="results" hidden aria-labelledby="resultHeading">
-      <div class="result-header"><div><p class="eyebrow" data-i18n="resultEyebrow">Ders paketi hazır</p><h2 id="resultHeading">LectureSift</h2><p id="resultMeta"></p></div><a id="downloadAll" class="download-button" href="#"><span data-i18n="downloadAll">Tüm paketi indir</span><b>ZIP</b></a></div>
-      <div class="result-tabs" role="tablist"><button class="result-tab active" data-pane="summary" data-i18n="tabSummary">Özet</button><button class="result-tab" data-pane="notes" data-i18n="tabNotes">Akıllı notlar</button><button class="result-tab" data-pane="transcript" data-i18n="tabTranscript">Transkript</button><button class="result-tab" data-pane="slides" data-i18n="tabSlides">Slaytlar</button><button class="result-tab" data-pane="quiz">Quiz</button><button class="result-tab" data-pane="cards" data-i18n="tabCards">Bilgi kartları</button><button class="result-tab" data-pane="files" data-i18n="tabFiles">Dosyalar</button></div>
-      <div class="result-body">
-        <article id="pane-summary" class="result-pane active"><div id="summaryContent" class="prose"></div><div id="keyPoints" class="key-grid"></div></article>
-        <article id="pane-notes" class="result-pane"><div id="notesContent" class="notes-grid"></div></article>
-        <article id="pane-transcript" class="result-pane"><div class="transcript-tools"><button id="showTranslated" class="chip active" data-i18n="translated">Çevrilmiş</button><button id="showOriginal" class="chip" data-i18n="original">Orijinal</button></div><div id="transcriptContent" class="transcript-box"></div></article>
-        <article id="pane-slides" class="result-pane"><div id="slidesContent" class="slides-grid"></div></article>
-        <article id="pane-quiz" class="result-pane"><div id="quizStatus" class="quiz-status"></div><div id="quizContent"></div></article>
-        <article id="pane-cards" class="result-pane"><div id="cardContent"></div></article>
-        <article id="pane-files" class="result-pane"><div id="filesContent" class="files-grid"></div></article>
-      </div>
-    </section>
+    <section id="results" class="results" hidden aria-labelledby="resultHeading"><div class="result-header"><div><p class="eyebrow" data-i18n="resultEyebrow">Ders paketi hazır</p><h2 id="resultHeading">LectureSift</h2><p id="resultMeta"></p></div><a id="downloadAll" class="download-button" href="#"><span data-i18n="downloadAll">Tüm paketi indir</span><b>ZIP</b></a></div><div class="result-tabs" role="tablist"><button class="result-tab active" data-pane="summary" data-i18n="tabSummary">Özet</button><button class="result-tab" data-pane="notes" data-i18n="tabNotes">Akıllı notlar</button><button class="result-tab" data-pane="transcript" data-i18n="tabTranscript">Transkript</button><button class="result-tab" data-pane="slides" data-i18n="tabSlides">Slaytlar</button><button class="result-tab" data-pane="quiz">Quiz</button><button class="result-tab" data-pane="cards" data-i18n="tabCards">Bilgi kartları</button><button class="result-tab" data-pane="files" data-i18n="tabFiles">Dosyalar</button></div><div class="result-body"><article id="pane-summary" class="result-pane active"><div id="summaryContent" class="prose"></div><div id="keyPoints" class="key-grid"></div></article><article id="pane-notes" class="result-pane"><div id="notesContent" class="notes-grid"></div></article><article id="pane-transcript" class="result-pane"><div class="transcript-tools"><button id="showTranslated" class="chip active" data-i18n="translated">Çevrilmiş</button><button id="showOriginal" class="chip" data-i18n="original">Orijinal</button></div><div id="transcriptContent" class="transcript-box"></div></article><article id="pane-slides" class="result-pane"><div id="slidesContent" class="slides-grid"></div></article><article id="pane-quiz" class="result-pane"><div id="quizStatus" class="quiz-status"></div><div id="quizContent"></div></article><article id="pane-cards" class="result-pane"><div id="cardContent"></div></article><article id="pane-files" class="result-pane"><div id="filesContent" class="files-grid"></div></article></div></section>
   </main>
 
   <div id="errorBox" class="error-box" hidden role="alert"><button id="closeError" type="button" aria-label="Kapat">×</button><span aria-hidden="true">!</span><div><strong id="errorTitle" data-i18n="errorTitle">İşlem tamamlanamadı</strong><p id="errorMessage"></p><small id="errorCode"></small></div></div>
-
-  <script src="./app.js"></script>
-  <script src="./platform.js"></script>
+  <script src="./app.js"></script><script src="./platform.js"></script>
 </body>
 </html>
