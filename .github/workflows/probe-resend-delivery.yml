@@ -14,39 +14,32 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Check DNS, email health, and controlled registration
+      - name: Check current email configuration and controlled registration
         shell: bash
         run: |
           set -euo pipefail
 
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq dnsutils >/dev/null
-
-          echo '=== Public DNS ==='
-          printf 'MX send.mail.lecturesift.com: '
-          dig +short MX send.mail.lecturesift.com | tr '\n' ' '; echo
-          printf 'SPF send.mail.lecturesift.com: '
-          dig +short TXT send.mail.lecturesift.com | tr '\n' ' '; echo
-          printf 'DKIM resend._domainkey.mail.lecturesift.com: '
-          dig +short TXT resend._domainkey.mail.lecturesift.com | tr '\n' ' '; echo
-          printf 'A lecturesift.com: '
-          dig +short A lecturesift.com | tr '\n' ' '; echo
-          printf 'CNAME www.lecturesift.com: '
-          dig +short CNAME www.lecturesift.com | tr '\n' ' '; echo
-
-          echo
-          echo '=== Email health ==='
+          echo '=== Backend health ==='
           curl --fail --location --silent --show-error \
-            --retry 3 --retry-delay 3 --retry-all-errors --max-time 180 \
-            https://lecturesift-backend.onrender.com/billing/email/health \
-            | tee /tmp/email-health.json
+            --retry 3 --retry-delay 2 --retry-all-errors --max-time 180 \
+            https://lecturesift-backend.onrender.com/health \
+            | tee /tmp/health.json
           echo
-          python -m json.tool /tmp/email-health.json
+          python -m json.tool /tmp/health.json
 
           echo
-          echo '=== Controlled Resend delivery ==='
-          for attempt in $(seq 1 6); do
-            email="delivered+lecturesift-check-${GITHUB_RUN_ID}-${attempt}@resend.dev"
+          echo '=== Billing health ==='
+          billing_status="$(curl --location --silent --show-error \
+            --retry 3 --retry-delay 2 --retry-all-errors --max-time 180 \
+            --output /tmp/billing-health.json --write-out '%{http_code}' \
+            https://lecturesift-backend.onrender.com/billing/health)"
+          echo "HTTP $billing_status"
+          python -m json.tool /tmp/billing-health.json || cat /tmp/billing-health.json
+
+          echo
+          echo '=== Controlled registration and Resend delivery ==='
+          for attempt in $(seq 1 4); do
+            email="delivered+lecturesift-current-${GITHUB_RUN_ID}-${attempt}@resend.dev"
             password="$(python -c 'import secrets; print(secrets.token_urlsafe(24))')"
             export TEST_EMAIL="$email" TEST_PASSWORD="$password"
 
@@ -56,7 +49,10 @@ jobs:
           print(json.dumps({
               "email": os.environ["TEST_EMAIL"],
               "password": os.environ["TEST_PASSWORD"],
-              "language": "tr",
+              "first_name": "LectureSift",
+              "last_name": "Delivery Check",
+              "phone": "",
+              "country_code": "TR"
           }))
           PY
 
@@ -77,15 +73,16 @@ jobs:
               body = json.load(handle)
           assert body.get('ok') is True
           assert body.get('verification_required') is True
-          assert body.get('email')
-          assert 'token' not in body
-          print('RESULT: verification email accepted by Resend')
+          assert body.get('user', {}).get('email')
+          assert 'verification_token' not in body
+          assert 'verification_code' not in body
+          print('RESULT: live verification email accepted by Resend')
           PY
               exit 0
             fi
 
-            sleep 8
+            sleep 6
           done
 
-          echo 'RESULT: verification email was not accepted'
+          echo 'RESULT: live verification email was not accepted'
           exit 1
