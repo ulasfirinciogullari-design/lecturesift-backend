@@ -14,13 +14,13 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Identify final Resend delivery outcome
+      - name: Verify deployed Resend SMTP fallback
         shell: bash
         run: |
           set -euo pipefail
 
           for attempt in $(seq 1 60); do
-            email="delivered+lecturesift-classify-${GITHUB_RUN_ID}-${attempt}@resend.dev"
+            email="delivered+lecturesift-smtp-${GITHUB_RUN_ID}-${attempt}@resend.dev"
             password="$(python -c 'import secrets; print(secrets.token_urlsafe(24))')"
             export TEST_EMAIL="$email" TEST_PASSWORD="$password"
             python - <<'PY' > /tmp/register-payload.json
@@ -61,7 +61,8 @@ jobs:
           detail = body.get('detail') if isinstance(body, dict) else None
           if isinstance(detail, dict):
               provider_code = detail.get('provider_code')
-              legacy_codes = {'http_403', 'InternalServerError'}
+              # These codes belong to deployments before SMTP fallback.
+              legacy_codes = {'http_403', 'InternalServerError', 'forbidden_unknown'}
               if provider_code and provider_code not in legacy_codes:
                   print('diagnosed')
                   raise SystemExit
@@ -70,15 +71,15 @@ jobs:
             )"
 
             if [[ "$outcome" == "success" ]]; then
-              echo 'Controlled Resend delivery was accepted.'
+              echo 'Controlled verification email was accepted by Resend.'
               exit 0
             fi
             if [[ "$outcome" == "diagnosed" ]]; then
-              echo 'The final safe Resend diagnosis is shown above.'
+              echo 'The deployed SMTP fallback returned the safe final diagnosis above.'
               exit 2
             fi
             sleep 10
           done
 
-          echo 'The classification deployment or final provider response was not observed.'
+          echo 'The SMTP fallback deployment or final provider response was not observed.'
           exit 1
