@@ -11,7 +11,10 @@ const EN = {
   title: "Everything you need to study from one lecture video.",
   subtitle: "Upload a video or paste a link. LectureSift prepares the transcript, smart notes, summary, slides, quiz, flashcards, and downloadable study files.",
   sourceTitle: "Add the lecture source", secure: "Secure processing", uploadTab: "Upload file", linkTab: "Use a link",
-  dropTitle: "Drop your video here", dropText: "or choose from your device", fileHelp: "MP4, MOV, MKV, or WebM - up to 1 GB",
+  dropTitle: "Drop your video here", dropText: "or choose from your device", fileHelp: "MP4, MOV, MKV, or WebM - 1 GB total",
+  audioSourceTitle: "Main / audio video", audioSourceHelp: "Audio and transcript come from this video. If you do not add a separate slide video, its visuals are scanned too.",
+  slidesSourceTitle: "Separate slide video", slidesSourceHelp: "Add the second synchronized recording that shows the slides.", addSlidesVideo: "Add slide video",
+  required: "Required", optional: "Optional", syncOffset: "Slide time offset", syncOffsetHelp: "Leave at 0 if both recordings started together.",
   urlLabel: "Video or education-page URL", urlHelp: "Direct MP4/WebM links and supported education pages are accepted. YouTube may restrict server-side downloads.",
   settingsTitle: "Configure the study pack", sourceLanguage: "Video language", outputLanguage: "Output language", summaryStyle: "Summary profile",
   quizCount: "Quiz questions", cardCount: "Flashcards", translateTitle: "Translate transcript", translateHelp: "The original is preserved", analyze: "Analyze lecture",
@@ -35,7 +38,10 @@ const TR = {
   title: "Bir ders videosundan çalışmaya hazır her şey.",
   subtitle: "Videoyu yükle veya bağlantıyı yapıştır. LectureSift transkript, akıllı notlar, özet, slaytlar, quiz ve bilgi kartlarını tek pakette hazırlar.",
   sourceTitle: "Ders kaynağını ekle", secure: "Güvenli işlem", uploadTab: "Dosya yükle", linkTab: "Bağlantı kullan",
-  dropTitle: "Videoyu buraya bırak", dropText: "veya cihazından seç", fileHelp: "MP4, MOV, MKV veya WebM - en fazla 1 GB",
+  dropTitle: "Videoyu buraya bırak", dropText: "veya cihazından seç", fileHelp: "MP4, MOV, MKV veya WebM - toplam en fazla 1 GB",
+  audioSourceTitle: "Ana / ses videosu", audioSourceHelp: "Ses ve transkript buradan alınır. Ayrı slayt videosu eklemezsen görüntüler de bu videodan taranır.",
+  slidesSourceTitle: "Ayrı slayt videosu", slidesSourceHelp: "Eş zamanlı kaydedilen, slaytların geçtiği ikinci videoyu buraya ekle.", addSlidesVideo: "Slayt videosu ekle",
+  required: "Zorunlu", optional: "İsteğe bağlı", syncOffset: "Slayt zaman farkı", syncOffsetHelp: "Aynı anda başladıysa 0 bırak.",
   urlLabel: "Video veya eğitim sayfası bağlantısı", urlHelp: "Doğrudan MP4/WebM bağlantıları ve desteklenen eğitim sayfaları kabul edilir. YouTube bazı sunucularda indirmeyi kısıtlayabilir.",
   settingsTitle: "Çalışma paketini ayarla", sourceLanguage: "Video dili", outputLanguage: "Çıktı dili", summaryStyle: "Özet profili",
   quizCount: "Quiz sorusu", cardCount: "Bilgi kartı", translateTitle: "Transkripti çevir", translateHelp: "Orijinali de korunur", analyze: "Dersi analiz et",
@@ -82,9 +88,9 @@ const ERRORS = {
 
 const $ = (id) => document.getElementById(id);
 const uiLanguage = $("uiLanguage"), sourceLanguage = $("sourceLanguage"), outputLanguage = $("outputLanguage");
-const summaryStyle = $("summaryStyle"), videoFile = $("videoFile"), videoUrl = $("videoUrl");
+const summaryStyle = $("summaryStyle"), videoFile = $("videoFile"), slidesVideoFile = $("slidesVideoFile"), videoUrl = $("videoUrl");
 let currentLanguage = localStorage.getItem("lecturesift-ui") || "tr";
-let sourceMode = "upload", selectedVideo = null, jobId = null, timerStarted = null, timerHandle = null, pollHandle = null;
+let sourceMode = "upload", selectedVideo = null, selectedSlidesVideo = null, jobId = null, timerStarted = null, timerHandle = null, pollHandle = null;
 let latestResult = null, cardIndex = 0, cardRevealed = false, quizScore = 0, quizAnswered = 0;
 
 function stringsFor(language) {
@@ -152,6 +158,21 @@ $("removeFile").onclick = () => { selectedVideo = null; videoFile.value = ""; $(
 ["dragleave", "drop"].forEach(event => $("dropZone").addEventListener(event, e => { e.preventDefault(); $("dropZone").classList.remove("dragging"); }));
 $("dropZone").addEventListener("drop", event => chooseFile(event.dataTransfer.files[0]));
 
+function chooseSlidesFile(file) {
+  if (!file) return;
+  selectedSlidesVideo = file;
+  $("slidesDropZone").hidden = true; $("selectedSlidesFile").hidden = false; $("syncControl").hidden = false;
+  $("selectedSlidesFileName").textContent = file.name; $("selectedSlidesFileSize").textContent = formatBytes(file.size);
+}
+slidesVideoFile.onchange = () => chooseSlidesFile(slidesVideoFile.files[0]);
+$("removeSlidesFile").onclick = () => {
+  selectedSlidesVideo = null; slidesVideoFile.value = ""; $("slidesOffset").value = "0";
+  $("slidesDropZone").hidden = false; $("selectedSlidesFile").hidden = true; $("syncControl").hidden = true;
+};
+["dragenter", "dragover"].forEach(event => $("slidesDropZone").addEventListener(event, e => { e.preventDefault(); $("slidesDropZone").classList.add("dragging"); }));
+["dragleave", "drop"].forEach(event => $("slidesDropZone").addEventListener(event, e => { e.preventDefault(); $("slidesDropZone").classList.remove("dragging"); }));
+$("slidesDropZone").addEventListener("drop", event => chooseSlidesFile(event.dataTransfer.files[0]));
+
 function startTimer() {
   timerStarted = Date.now(); clearInterval(timerHandle);
   timerHandle = setInterval(() => { $("elapsedTime").textContent = formatTime((Date.now() - timerStarted) / 1000); }, 1000);
@@ -196,6 +217,7 @@ function formData() {
   data.append("source_language", sourceLanguage.value); data.append("output_language", outputLanguage.value);
   data.append("summary_style", summaryStyle.value); data.append("quiz_count", $("quizCount").value); data.append("flashcard_count", $("cardCount").value);
   data.append("translate_transcript", $("translateTranscript").checked ? "true" : "false");
+  data.append("slides_offset_seconds", selectedSlidesVideo ? ($("slidesOffset").value || "0") : "0");
   return data;
 }
 
@@ -216,6 +238,7 @@ $("analyzeButton").onclick = async () => {
     return;
   }
   data.append("file", selectedVideo);
+  if (selectedSlidesVideo) data.append("slides_file", selectedSlidesVideo);
   const request = new XMLHttpRequest(); request.open("POST", `${API}/jobs`);
   request.upload.onprogress = event => { if (event.lengthComputable) updateProgress(Math.min(7, event.loaded / event.total * 7), t("processing")); };
   request.onload = async () => {

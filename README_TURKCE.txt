@@ -7,6 +7,13 @@ LectureSift bir ders videosundan şunları üretir:
 - Quiz ve bilgi kartları
 - Ayrı PDF/TXT dosyaları ve tümünü içeren ZIP paketi
 
+ÇİFT KAYNAK MODU
+Ana/ses videosu transkript ve yapay zekâ içerikleri için kullanılır. İsteğe bağlı
+ikinci slayt videosu eklendiğinde görsel tarama yalnızca bu eş zamanlı kayıtta
+yapılır. İki video aynı anda başladıysa zaman farkı 0 bırakılır; başlangıç farkı
+varsa saniye cinsinden düzeltme uygulanabilir. İki dosyanın toplam yükleme sınırı
+1 GB'dır.
+
 CANLI ADRESLER
 Arayüz: https://clever-horse-22b1a8.netlify.app/
 Backend: https://lecturesift-backend.onrender.com/
@@ -21,8 +28,8 @@ V4'TEKİ ANA DEĞİŞİKLİKLER
 - Hatalar kullanıcıya kısa bir açıklama ve LS-... destek koduyla gösterilir.
 
 GÜVENLİ YAYIN KURALI
-main dalı canlı Netlify ve Render sürümüdür. V4, gerçek video testleri tamamlanana
-kadar ayrı bir dalda tutulmalıdır.
+main dalı canlı Netlify ve Render sürümüdür. Değişiklikler canlıya alınmadan önce
+otomatik testlerden ve ilgili yerel kabul testinden geçmelidir.
 
 İLK KABUL TESTİ
 Carleton College Biology 252 videosunda gerçek slayt bulunmadığı için beklenen

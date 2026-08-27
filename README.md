@@ -1,6 +1,6 @@
 # LectureSift V4
 
-LectureSift turns a lecture video into a study workspace: original and translated transcripts, structured notes, summary, verified presentation slides, quiz, flashcards, and downloadable PDF/TXT files.
+LectureSift turns one lecture recording—or a synchronized audio recording plus a separate slide recording—into a study workspace: original and translated transcripts, structured notes, summary, verified presentation slides, quiz, flashcards, and downloadable PDF/TXT files.
 
 ## Current architecture
 
@@ -16,7 +16,7 @@ Production services:
 - Frontend: <https://clever-horse-22b1a8.netlify.app/>
 - Backend: <https://lecturesift-backend.onrender.com/>
 
-The production deployment stays on `main`. V4 work should first be tested from a separate branch.
+The production deployment stays on `main`.
 
 ## Local development
 
@@ -39,11 +39,11 @@ pytest -q
 node --check frontend/app.js
 ```
 
-The automated suite covers human-readable API errors, SSRF/private-URL rejection, PDF/TXT/ZIP packaging, slide-vs-scene classification, classroom/person-band and textured-office rejection, WebM timestamp accuracy, a no-audio natural-scene video that must return zero slides, and a short genuine slide that must be preserved.
+The automated suite covers human-readable API errors, SSRF/private-URL rejection, PDF/TXT/ZIP packaging, single- and dual-source routing, slide-vs-scene classification, classroom/person-band and textured-office rejection, WebM timestamp accuracy, a no-audio natural-scene video that must return zero slides, and a short genuine slide that must be preserved.
 
 ## Main API routes
 
-- `POST /jobs`: upload a video
+- `POST /jobs`: upload a primary/audio video and optionally a synchronized `slides_file`
 - `POST /jobs/url`: submit a supported video/page URL
 - `GET /jobs/{job_id}`: live progress
 - `GET /jobs/{job_id}/result`: structured result

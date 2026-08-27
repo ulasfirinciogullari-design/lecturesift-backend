@@ -1,4 +1,5 @@
 import json
+import shutil
 import threading
 import time
 import traceback
@@ -33,6 +34,7 @@ def _options(
     quiz_count: int,
     flashcard_count: int,
     translate_transcript: bool,
+    slides_offset_seconds: float = 0,
 ) -> dict:
     return {
         "source_language": source_language or "auto",
@@ -41,6 +43,7 @@ def _options(
         "quiz_count": max(3, min(int(quiz_count), 30)),
         "flashcard_count": max(5, min(int(flashcard_count), 60)),
         "translate_transcript": bool(translate_transcript),
+        "slides_offset_seconds": max(-3600.0, min(float(slides_offset_seconds or 0), 3600.0)),
     }
 
 
@@ -52,6 +55,30 @@ def _job_path(job_id: str) -> Path:
 
 def _raise_public(error: LectureSiftError) -> None:
     raise HTTPException(status_code=error.status_code, detail=error.public())
+
+
+def _upload_extension(file: UploadFile) -> str:
+    extension = Path(file.filename or "video.mp4").suffix.lower()
+    if extension not in VIDEO_EXTENSIONS:
+        _raise_public(LectureSiftError("LS-UPLOAD-01", "Bu video biçimi desteklenmiyor. MP4, MOV, MKV veya WebM kullan."))
+    return extension
+
+
+async def _save_upload(file: UploadFile, destination: Path, bytes_used: int = 0) -> int:
+    total = bytes_used
+    with open(destination, "wb") as output:
+        while chunk := await file.read(1024 * 1024):
+            total += len(chunk)
+            if total > MAX_VIDEO_BYTES:
+                _raise_public(
+                    LectureSiftError(
+                        "LS-UPLOAD-02",
+                        "Yüklenen video dosyalarının toplam boyutu izin verilen sınırı aşıyor.",
+                        status_code=413,
+                    )
+                )
+            output.write(chunk)
+    return total
 
 
 @app.get("/")
@@ -72,6 +99,7 @@ def health() -> dict:
         "slide_engine": "v4-layout-persistence",
         "study_pack": True,
         "async_jobs": True,
+        "dual_source_upload": True,
         "pdf_txt_exports": True,
     }
 
@@ -142,31 +170,31 @@ def download(job_id: str) -> FileResponse:
 @app.post("/jobs")
 async def create_job(
     file: UploadFile = File(...),
+    slides_file: UploadFile | None = File(None),
     source_language: str = Form("auto"),
     output_language: str = Form("tr"),
     summary_style: str = Form("standard"),
     quiz_count: int = Form(10),
     flashcard_count: int = Form(20),
     translate_transcript: bool = Form(True),
+    slides_offset_seconds: float = Form(0),
 ) -> dict:
-    extension = Path(file.filename or "video.mp4").suffix.lower()
-    if extension not in VIDEO_EXTENSIONS:
-        _raise_public(LectureSiftError("LS-UPLOAD-01", "Bu video biçimi desteklenmiyor. MP4, MOV, MKV veya WebM kullan."))
+    audio_extension = _upload_extension(file)
+    slides_extension = _upload_extension(slides_file) if slides_file else None
 
     JOBS.cleanup_expired()
     job_id = str(uuid.uuid4())
     job_dir = _job_path(job_id)
-    video_path = job_dir / f"input{extension}"
+    audio_video_path = job_dir / f"audio_input{audio_extension}"
+    slides_video_path = job_dir / f"slides_input{slides_extension}" if slides_extension else None
     total = 0
     try:
-        with open(video_path, "wb") as output:
-            while chunk := await file.read(1024 * 1024):
-                total += len(chunk)
-                if total > MAX_VIDEO_BYTES:
-                    _raise_public(LectureSiftError("LS-UPLOAD-02", "Video izin verilen dosya boyutunu aşıyor.", status_code=413))
-                output.write(chunk)
-    except HTTPException:
-        video_path.unlink(missing_ok=True)
+        total = await _save_upload(file, audio_video_path)
+        audio_size = total
+        if slides_file and slides_video_path:
+            total = await _save_upload(slides_file, slides_video_path, total)
+    except Exception:
+        shutil.rmtree(job_dir, ignore_errors=True)
         raise
 
     options = _options(
@@ -176,9 +204,22 @@ async def create_job(
         quiz_count,
         flashcard_count,
         translate_transcript,
+        slides_offset_seconds,
     )
-    JOBS.create(job_id, job_dir, options, source_type="upload", file_size_bytes=total)
-    threading.Thread(target=process_job, args=(job_id, video_path, options), daemon=True).start()
+    source_type = "upload_dual" if slides_video_path else "upload"
+    JOBS.create(
+        job_id,
+        job_dir,
+        options,
+        source_type=source_type,
+        file_size_bytes=audio_size,
+        slides_file_size_bytes=max(0, total - audio_size),
+    )
+    threading.Thread(
+        target=process_job,
+        args=(job_id, audio_video_path, options, slides_video_path),
+        daemon=True,
+    ).start()
     return {"job_id": job_id, "status": "queued", "version": APP_VERSION}
 
 
@@ -191,6 +232,7 @@ def create_url_job(
     quiz_count: int = Form(10),
     flashcard_count: int = Form(20),
     translate_transcript: bool = Form(True),
+    slides_offset_seconds: float = Form(0),
 ) -> dict:
     try:
         url = validate_remote_url(video_url)
@@ -207,6 +249,7 @@ def create_url_job(
         quiz_count,
         flashcard_count,
         translate_transcript,
+        slides_offset_seconds,
     )
     JOBS.create(job_id, job_dir, options, source_type="url", source_url=url)
     JOBS.update(job_id, status="working", percent=3, stage="url_download")

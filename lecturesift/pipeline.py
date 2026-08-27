@@ -40,25 +40,48 @@ def _audio_pipeline(job_id: str, video_path: Path, job_dir: Path, options: dict)
     return original, translated
 
 
-def process_job(job_id: str, video_path: Path, options: dict) -> None:
+def _shift_slide_timeline(slides: list[dict], offset_seconds: float) -> None:
+    if not offset_seconds:
+        return
+    for slide in slides:
+        source_second = float(slide.get("second", 0))
+        aligned_second = max(0.0, source_second + offset_seconds)
+        slide["source_second"] = round(source_second, 1)
+        slide["second"] = round(aligned_second, 1)
+        slide["timestamp"] = f"{int(aligned_second // 60):02d}:{int(aligned_second % 60):02d}"
+
+
+def process_job(
+    job_id: str,
+    audio_video_path: Path,
+    options: dict,
+    visual_video_path: Path | None = None,
+) -> None:
     data = JOBS.get(job_id)
     if not data:
         return
     job_dir = Path(data["job_dir"])
     slides_dir = job_dir / "slides"
+    visual_source = visual_video_path or audio_video_path
+    dual_source = visual_video_path is not None
     started = time.time()
 
     try:
         JOBS.update(job_id, status="working", percent=8, stage="parallel_analysis", started=started)
 
         with ThreadPoolExecutor(max_workers=2, thread_name_prefix="lecturesift") as executor:
-            audio_future = executor.submit(_audio_pipeline, job_id, video_path, job_dir, options)
+            audio_future = executor.submit(_audio_pipeline, job_id, audio_video_path, job_dir, options)
             slides, diagnostics = extract_slides(
-                video_path,
+                visual_source,
                 slides_dir,
                 lambda percent, stage: JOBS.update_task(job_id, "visual", percent, stage),
             )
             original_transcript, translated_transcript = audio_future.result()
+
+        timeline_offset = float(options.get("slides_offset_seconds", 0) or 0)
+        _shift_slide_timeline(slides, timeline_offset)
+        diagnostics["source_mode"] = "dual" if dual_source else "single"
+        diagnostics["slides_offset_seconds"] = timeline_offset
 
         JOBS.update(job_id, percent=73, stage="study_pack")
         study_pack = make_study_pack(
@@ -74,6 +97,12 @@ def process_job(job_id: str, video_path: Path, options: dict) -> None:
             "version": "4.0",
             "job_id": job_id,
             "options": options,
+            "sources": {
+                "mode": "dual" if dual_source else "single",
+                "audio": audio_video_path.name,
+                "visual": visual_source.name,
+                "slides_offset_seconds": timeline_offset,
+            },
             "slides": slides,
             "diagnostics": diagnostics,
             "transcript_original": original_transcript,

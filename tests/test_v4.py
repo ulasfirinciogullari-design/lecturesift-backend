@@ -1,4 +1,5 @@
 import json
+import shutil
 import subprocess
 import uuid
 import zipfile
@@ -163,6 +164,130 @@ def test_no_audio_scene_video_completes_without_false_slides(tmp_path: Path):
     assert result["slides"] == []
     assert result["diagnostics"]["final_unique_slides"] == 0
     assert Path(job["result_path"]).exists()
+
+
+def test_dual_source_uses_audio_video_for_audio_and_slide_video_for_visuals(tmp_path: Path, monkeypatch):
+    audio_video = tmp_path / "speaker.mp4"
+    visual_video = tmp_path / "presentation.mp4"
+    speaker_frame = tmp_path / "speaker.jpg"
+    cv2.imwrite(str(speaker_frame), synthetic_scene())
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-loop",
+            "1",
+            "-i",
+            str(speaker_frame),
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=660:duration=8",
+            "-t",
+            "8",
+            "-c:v",
+            "mpeg4",
+            "-q:v",
+            "7",
+            "-c:a",
+            "aac",
+            str(audio_video),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    slide_writer = cv2.VideoWriter(str(visual_video), cv2.VideoWriter_fourcc(*"mp4v"), 5.0, (1280, 720))
+    assert slide_writer.isOpened()
+    for _ in range(40):
+        slide_writer.write(synthetic_slide())
+    slide_writer.release()
+
+    transcribed_chunks: list[str] = []
+    monkeypatch.setattr(
+        "lecturesift.pipeline.transcribe",
+        lambda path, _language: transcribed_chunks.append(path.name) or "Bu ses ana videodan geldi.",
+    )
+    monkeypatch.setattr("lecturesift.pipeline.translate_transcript", lambda text, _language: f"Çeviri: {text}")
+    monkeypatch.setattr(
+        "lecturesift.pipeline.make_study_pack",
+        lambda *_args: {"title": "Çift Kaynak Testi", "summary": "Ses ve slayt ayrı kayıtlardan işlendi."},
+    )
+
+    job_id = f"test-{uuid.uuid4()}"
+    options = {
+        "source_language": "auto",
+        "output_language": "tr",
+        "summary_style": "standard",
+        "quiz_count": 10,
+        "flashcard_count": 20,
+        "translate_transcript": True,
+        "slides_offset_seconds": 2.5,
+    }
+    JOBS.create(job_id, tmp_path, options, source_type="upload_dual")
+    process_job(job_id, audio_video, options, visual_video)
+
+    job = JOBS.get(job_id)
+    result = json.loads((tmp_path / "result.json").read_text(encoding="utf-8"))
+    assert job["status"] == "done"
+    assert result["sources"]["mode"] == "dual"
+    assert result["sources"]["audio"] == "speaker.mp4"
+    assert result["sources"]["visual"] == "presentation.mp4"
+    assert result["diagnostics"]["source_mode"] == "dual"
+    assert transcribed_chunks == ["audio_000.mp3"]
+    assert result["transcript_original"] == "Bu ses ana videodan geldi."
+    assert len(result["slides"]) == 1
+    assert result["slides"][0]["second"] == result["slides"][0]["source_second"] + 2.5
+
+
+def test_second_upload_rejects_unsupported_video_format():
+    client = TestClient(app)
+    response = client.post(
+        "/jobs",
+        files={
+            "file": ("audio.mp4", b"audio", "video/mp4"),
+            "slides_file": ("slides.txt", b"not video", "text/plain"),
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "LS-UPLOAD-01"
+
+
+def test_dual_source_upload_endpoint_saves_both_roles(tmp_path: Path, monkeypatch):
+    captured: dict = {}
+
+    class DeferredThread:
+        def __init__(self, target, args, daemon):
+            captured["target"] = target
+            captured["args"] = args
+            captured["daemon"] = daemon
+
+        def start(self):
+            captured["started"] = True
+
+    monkeypatch.setattr("lecturesift.app.WORK_DIR", tmp_path)
+    monkeypatch.setattr("lecturesift.app.threading.Thread", DeferredThread)
+    client = TestClient(app)
+    response = client.post(
+        "/jobs",
+        files={
+            "file": ("speaker.mp4", b"audio-source", "video/mp4"),
+            "slides_file": ("slides.webm", b"visual-source", "video/webm"),
+        },
+        data={"slides_offset_seconds": "1.5"},
+    )
+
+    assert response.status_code == 200
+    job = JOBS.get(response.json()["job_id"])
+    audio_path, visual_path = captured["args"][1], captured["args"][3]
+    assert captured["started"] is True
+    assert job["source_type"] == "upload_dual"
+    assert job["file_size_bytes"] == len(b"audio-source")
+    assert job["slides_file_size_bytes"] == len(b"visual-source")
+    assert captured["args"][2]["slides_offset_seconds"] == 1.5
+    assert audio_path.read_bytes() == b"audio-source"
+    assert visual_path.read_bytes() == b"visual-source"
+    shutil.rmtree(Path(job["job_dir"]), ignore_errors=True)
 
 
 def test_short_static_slide_is_preserved(tmp_path: Path):

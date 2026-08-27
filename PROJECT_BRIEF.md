@@ -27,6 +27,7 @@ A second real-video gate used the 4:28 University of Manchester “Flipped Class
 - Individual PDF/TXT downloads plus complete ZIP
 - Human-readable errors with small support codes such as `LS-URL-02`
 - Live processing timeline
+- Optional dual-source mode: transcription from the primary/audio recording and slide extraction from a synchronized second recording
 - Direct video and supported education-page URLs, with honest warnings about provider restrictions
 - Turkish and English product copy, with core labels for eleven additional languages
 
@@ -49,4 +50,4 @@ A second real-video gate used the 4:28 University of Manchester “Flipped Class
 
 ## Deployment rule
 
-`main` is the live Netlify/Render deployment. V4 changes must remain on a test branch until the real-video acceptance gates pass.
+`main` is the live Netlify/Render deployment. Changes must pass the automated suite and a focused local acceptance test before publishing.
