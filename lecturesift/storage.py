@@ -63,6 +63,14 @@ class ObjectStorage:
             if not path.is_file():
                 continue
             relative = path.relative_to(job_dir).as_posix()
+            publishable = (
+                relative == "result.json"
+                or relative.startswith("package/")
+                or relative.startswith("slides/")
+                or relative.lower().endswith(".zip")
+            )
+            if not publishable:
+                continue
             key = f"jobs/{job_id}/{relative}"
             self.upload_file(path, key)
             uploaded.append(key)
