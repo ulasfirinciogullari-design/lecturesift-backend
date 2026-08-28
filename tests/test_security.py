@@ -6,6 +6,8 @@ from fastapi.testclient import TestClient
 from lecturesift import config
 from lecturesift.app import app
 from lecturesift.billing_service import register_user, verify_email
+from lecturesift.jobs import JOBS
+from lecturesift.rollout_routes import install_rollout_routes
 from lecturesift.security import RateLimitExceeded, RateLimiter
 
 
@@ -63,3 +65,27 @@ def test_owner_session_can_open_admin_without_exposing_admin_token(monkeypatch):
     assert account.status_code == 200
     assert account.json()["account"]["is_admin"] is True
     assert overview.status_code == 200
+
+
+def test_admin_can_monitor_processing_jobs_without_internal_paths(monkeypatch):
+    install_rollout_routes(app)
+    email = f"jobs-owner-{uuid.uuid4()}@example.com"
+    created = register_user(email, "Strong-test-password1", "Jobs", "Owner", country_code="TR")
+    token = verify_email(created["verification_token"])["token"]
+    user_id = created["user"]["id"]
+    monkeypatch.setattr(config, "BILLING_ADMIN_EMAILS", {email.casefold()})
+    job_id = f"admin-job-{uuid.uuid4()}"
+    JOBS.create(job_id, config.WORK_DIR / job_id, {"billing_user_id": user_id, "language": "tr"})
+    try:
+        response = TestClient(app).get(
+            "/billing/admin/jobs",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        item = next(job for job in response.json()["jobs"] if job["job_id"] == job_id)
+        assert item["owner_id"] == user_id
+        assert item["status"] == "queued"
+        assert "job_dir" not in item
+        assert "billing_user_id" not in item["options"]
+    finally:
+        JOBS.delete_for_user(user_id)

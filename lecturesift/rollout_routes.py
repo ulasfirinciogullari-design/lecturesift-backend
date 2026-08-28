@@ -461,6 +461,25 @@ def admin_credit_events(limit: int = Query(100, ge=1, le=250), admin: dict = Dep
     return {"ok": True, "events": list_admin_credit_events(limit)}
 
 
+@router.get("/billing/admin/jobs")
+def admin_processing_jobs(
+    limit: int = Query(100, ge=1, le=250),
+    admin: dict = Depends(_admin),
+) -> dict:
+    del admin
+    jobs = JOBS.list_for_admin(limit)
+    counts: dict[str, int] = {}
+    for item in jobs:
+        status = str(item.get("status") or "unknown")
+        counts[status] = counts.get(status, 0) + 1
+    return {
+        "ok": True,
+        "counts": counts,
+        "jobs": jobs,
+        "worker": worker_health(),
+    }
+
+
 @router.get("/billing/admin/contact-messages")
 def admin_contact_messages(
     status: str = Query(""),

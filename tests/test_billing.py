@@ -283,6 +283,11 @@ def test_manual_transfer_order_and_admin_approval(monkeypatch):
     )
     assert overview.status_code == 200
     assert overview.json()["counts"]["users"] >= 1
+    assert overview.json()["counts"]["users_24h"] >= 1
+    assert overview.json()["counts"]["users_7d"] >= 1
+    assert overview.json()["counts"]["paid_orders"] >= 1
+    assert overview.json()["verification_rate"] >= 0
+    assert overview.json()["revenue_by_currency"]["TRY"] >= order["amount_minor"]
     assert any(item["order_number"] == order["order_number"] for item in overview.json()["orders"])
 
     cancelled = client.post(

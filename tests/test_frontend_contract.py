@@ -207,6 +207,7 @@ def test_profile_admin_bank_and_full_comparison_interfaces_are_present():
     plans = (FRONTEND / "plans.html").read_text(encoding="utf-8")
     plan_script = (FRONTEND / "plans.js").read_text(encoding="utf-8")
     admin = (FRONTEND / "admin.html").read_text(encoding="utf-8")
+    admin_script = (FRONTEND / "admin.js").read_text(encoding="utf-8")
     workspace_script = (FRONTEND / "app.js").read_text(encoding="utf-8")
     assert all(
         value in account
@@ -230,6 +231,9 @@ def test_profile_admin_bank_and_full_comparison_interfaces_are_present():
     assert "adminTokenForm" in admin and "adminOrders" in admin
     assert "adminReadiness" in admin
     assert "adminContactMessages" in admin
+    assert all(value in admin for value in ("adminTimeline", "adminJobs", "adminAlerts", "adminExportOrders"))
+    assert "/billing/admin/jobs" in admin_script
+    assert "adminReadinessChecks" in admin_script and "Opsiyonel · kapalı" in admin_script
     assert "restoreRequestedJob" in workspace_script
     assert 'new URLSearchParams(location.search).get("job")' in workspace_script
     assert "/ask" in workspace_script and "lessonQuestionForm" in workspace_script
