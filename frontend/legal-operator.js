@@ -46,6 +46,7 @@
       addRow(list, t("legal.phone", "Telefon"), operator.phone, `tel:${operator.phone}`);
       addRow(list, t("legal.email", "E-posta"), operator.email, `mailto:${operator.email}`);
       addRow(list, t("legal.taxId", "Vergi kimliği"), operator.tax_id);
+      addRow(list, t("legal.taxOffice", "Vergi dairesi"), operator.tax_office);
       addRow(list, t("legal.registrationId", "Sicil / kayıt"), operator.registration_id);
       addRow(list, t("legal.mersisId", "MERSİS numarası"), operator.mersis_id);
       addRow(list, t("legal.tradeRegistry", "Ticaret sicili"), operator.trade_registry);

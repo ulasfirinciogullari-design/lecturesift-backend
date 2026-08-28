@@ -66,6 +66,8 @@ services:
         sync: false
       - key: LEGAL_TAX_ID
         sync: false
+      - key: LEGAL_TAX_OFFICE
+        sync: false
       - key: LEGAL_REGISTRATION_ID
         sync: false
       - key: LEGAL_MERSIS_ID

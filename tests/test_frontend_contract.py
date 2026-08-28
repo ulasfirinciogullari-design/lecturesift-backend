@@ -263,6 +263,24 @@ def test_distance_sales_contract_covers_digital_service_checkout_requirements():
     assert 'a[href*="distance-sales"]' in operator
 
 
+def test_delivery_and_refund_terms_are_explicit_and_localized():
+    refund = (FRONTEND / "refund.html").read_text(encoding="utf-8")
+    catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    assert "Teslimat ve İade Şartları" in refund
+    assert "Dijital teslimat ve hizmet başlangıcı" in refund
+    assert "fiziksel teslimat yapılmaz" in refund
+    for key in (
+        "refund.pageTitle",
+        "refund.navTitle",
+        "refund.heroTitle",
+        "refund.heroLead",
+        "refund.deliveryTitle",
+        "refund.deliveryText",
+        "legal.taxOffice",
+    ):
+        assert f'"{key}"' in catalog
+
+
 def test_legal_operator_identity_is_public_only_after_configuration():
     i18n = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
     operator = (FRONTEND / "legal-operator.js").read_text(encoding="utf-8")
@@ -278,12 +296,14 @@ def test_legal_operator_identity_is_public_only_after_configuration():
             "LEGAL_OPERATOR_COUNTRY",
             "LEGAL_OPERATOR_PHONE",
             "LEGAL_OPERATOR_EMAIL",
+            "LEGAL_TAX_OFFICE",
             "LEGAL_MERSIS_ID",
             "LEGAL_TRADE_REGISTRY",
             "LEGAL_KEP_ADDRESS",
             "LEGAL_CHAMBER_NAME",
         )
     )
+    assert 'operator.tax_office' in operator
 
 
 def test_runtime_translation_keys_exist_for_every_dynamic_message():
