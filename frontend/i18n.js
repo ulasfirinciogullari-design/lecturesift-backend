@@ -505,6 +505,13 @@
   displayAdsScript.src = "/display-ads.js?v=1";
   displayAdsScript.defer = true;
   document.head.append(displayAdsScript);
+  if (location.hostname.endsWith(".netlify.app")) {
+    const removeNetlifyPreviewFrame = () => {
+      document.querySelectorAll('iframe#nl-hud-frame,iframe[src^="https://app.netlify.com/cdp/"]').forEach(frame => frame.remove());
+    };
+    removeNetlifyPreviewFrame();
+    new MutationObserver(removeNetlifyPreviewFrame).observe(document.documentElement, { childList: true, subtree: true });
+  }
   const contactForm = document.querySelector('form[name="contact"]');
   if (contactForm) contactForm.action = localizedPath(selected, "/thanks.html");
 })();

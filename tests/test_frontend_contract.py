@@ -39,6 +39,10 @@ def test_owner_only_netlify_toolbar_is_hidden_on_every_site_layout():
         content = (FRONTEND / stylesheet).read_text(encoding="utf-8")
         assert "iframe#nl-hud-frame" in content
         assert 'iframe[src^="https://app.netlify.com/cdp/"]{display:none!important}' in content
+    script = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    assert 'location.hostname.endsWith(".netlify.app")' in script
+    assert "removeNetlifyPreviewFrame" in script
+    assert "new MutationObserver" in script
 
 
 def test_account_identity_and_localized_minutes_do_not_overflow_rtl_mobile():
