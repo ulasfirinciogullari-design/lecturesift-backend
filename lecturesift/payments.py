@@ -127,6 +127,13 @@ def _clean_location(value: str, label: str, *, maximum: int) -> str:
     return selected
 
 
+def _clean_name(value: str, label: str) -> str:
+    selected = " ".join(value.strip().split())
+    if len(selected) < 2 or len(selected) > 80:
+        raise BillingError(f"Kartlı ödeme için {label} 2 ile 80 karakter arasında olmalı.")
+    return selected
+
+
 def _amount_string(amount_minor: int) -> str:
     return f"{Decimal(int(amount_minor)) / Decimal(100):.2f}"
 
@@ -202,6 +209,8 @@ def create_iyzico_checkout(
     interval: str,
     currency: str,
     user_ip: str,
+    first_name: str,
+    last_name: str,
     billing_address: str,
     billing_city: str,
     billing_zip_code: str,
@@ -227,14 +236,11 @@ def create_iyzico_checkout(
     selected_city = _clean_location(billing_city, "şehir", maximum=80)
     selected_zip = _clean_location(billing_zip_code, "posta kodu", maximum=20)
     selected_phone = _phone(phone or user.get("phone") or "")
+    selected_first_name = _clean_name(first_name or user.get("first_name") or "", "ad")
+    selected_last_name = _clean_name(last_name or user.get("last_name") or "", "soyad")
     selected_ip = user_ip.strip()[:39]
     if not selected_ip:
         raise BillingError("Ödeme isteği için kullanıcı IP adresi alınamadı.")
-    first_name = (user.get("first_name") or "").strip()
-    last_name = (user.get("last_name") or "").strip()
-    if not first_name or not last_name:
-        raise BillingError("Kartlı ödeme için hesap profilindeki ad ve soyadı tamamla.")
-
     order = create_payment_order(user["id"], "iyzico", plan_code, interval, selected_currency)
     reference = order["reference"]
     record_payment_consent(
@@ -247,7 +253,7 @@ def create_iyzico_checkout(
         user_agent=user_agent,
     )
     price = _amount_string(order["amount_minor"])
-    contact_name = f"{first_name} {last_name}"[:160]
+    contact_name = f"{selected_first_name} {selected_last_name}"[:160]
     country = (user.get("country_code") or "TR").strip().upper()[:2]
     callback_url = f"{config.PUBLIC_BASE_URL}/billing/iyzico/callback?order={reference}"
     payload = {
@@ -262,8 +268,8 @@ def create_iyzico_checkout(
         "enabledInstallments": [1],
         "buyer": {
             "id": user["id"],
-            "name": first_name[:80],
-            "surname": last_name[:80],
+            "name": selected_first_name,
+            "surname": selected_last_name,
             # iyzico's own official integrations use this non-identifying value
             # when a merchant does not collect a Turkish national ID.
             "identityNumber": "11111111111",
@@ -376,6 +382,8 @@ def create_paytr_checkout(
     interval: str,
     currency: str,
     user_ip: str,
+    first_name: str,
+    last_name: str,
     billing_address: str,
     phone: str,
     language: str,
@@ -395,6 +403,8 @@ def create_paytr_checkout(
         raise BillingError("PayTR bu para birimini desteklemiyor. TRY, USD, EUR veya GBP seç.")
     selected_address = _clean_address(billing_address)
     selected_phone = _phone(phone or user.get("phone") or "")
+    selected_first_name = _clean_name(first_name or user.get("first_name") or "", "ad")
+    selected_last_name = _clean_name(last_name or user.get("last_name") or "", "soyad")
     selected_ip = user_ip.strip()[:39]
     if not selected_ip:
         raise BillingError("Ödeme isteği için kullanıcı IP adresi alınamadı.")
@@ -438,7 +448,7 @@ def create_paytr_checkout(
         "debug_on": "1" if config.PAYTR_DEBUG else "0",
         "no_installment": no_installment,
         "max_installment": max_installment,
-        "user_name": (user.get("name") or user["email"])[:60],
+        "user_name": f"{selected_first_name} {selected_last_name}"[:60],
         "user_address": selected_address,
         "user_phone": selected_phone,
         "merchant_ok_url": f"{config.FRONTEND_BASE_URL}/account.html?payment=success&order={reference}",

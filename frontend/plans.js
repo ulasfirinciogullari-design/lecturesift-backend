@@ -290,6 +290,8 @@ async function buy(planCode, interval = "monthly") {
     ? format(price.amount_minor * multiplier, price.currency || currency)
     : pt("plans.quote", "Teklif");
   $("checkoutPhone").value = account?.user?.phone || "";
+  $("checkoutFirstName").value = account?.user?.first_name || "";
+  $("checkoutLastName").value = account?.user?.last_name || "";
   $("checkoutTerms").checked = false;
   $("checkoutEarlyPerformance").checked = false;
   $("checkoutCardButton").disabled = !commerceIdentity.configured || !provider.configured || !provider.currencies?.includes(currency);
@@ -312,6 +314,8 @@ async function createTransfer(planCode, interval) {
       body: JSON.stringify({
         plan_code: planCode,
         interval,
+        first_name: $("checkoutFirstName").value.trim(),
+        last_name: $("checkoutLastName").value.trim(),
         terms_accepted:$("checkoutTerms").checked,
         early_performance_requested:$("checkoutEarlyPerformance").checked,
         language:PLANS_I18N.language,
@@ -377,6 +381,8 @@ $("checkoutForm").addEventListener("submit", async event => {
         plan_code: planCode,
         interval: $("checkoutInterval").value,
         currency,
+        first_name: $("checkoutFirstName").value.trim(),
+        last_name: $("checkoutLastName").value.trim(),
         billing_address: $("checkoutAddress").value.trim(),
         billing_city: $("checkoutCity").value.trim(),
         billing_zip_code: $("checkoutZipCode").value.trim(),

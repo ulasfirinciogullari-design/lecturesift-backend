@@ -229,10 +229,26 @@ def test_profile_admin_bank_and_full_comparison_interfaces_are_present():
     assert 'code !== "test" || currency === "TRY"' in plan_script
     assert "adminTokenForm" in admin and "adminOrders" in admin
     assert "adminReadiness" in admin
+    assert "adminContactMessages" in admin
     assert "restoreRequestedJob" in workspace_script
     assert 'new URLSearchParams(location.search).get("job")' in workspace_script
     assert "/ask" in workspace_script and "lessonQuestionForm" in workspace_script
     assert "renderExamPrep" in workspace_script and "startExamButton" in workspace_script
+
+
+def test_checkout_names_contact_inbox_and_mobile_plan_navigation_are_wired():
+    plans_html = (FRONTEND / "plans.html").read_text(encoding="utf-8")
+    plans_js = (FRONTEND / "plans.js").read_text(encoding="utf-8")
+    contact_html = (FRONTEND / "contact.html").read_text(encoding="utf-8")
+    contact_js = (FRONTEND / "contact.js").read_text(encoding="utf-8")
+    admin_js = (FRONTEND / "admin.js").read_text(encoding="utf-8")
+    rollout_css = (FRONTEND / "rollout.css").read_text(encoding="utf-8")
+    assert "checkoutFirstName" in plans_html and "checkoutLastName" in plans_html
+    assert 'first_name: $("checkoutFirstName")' in plans_js
+    assert 'last_name: $("checkoutLastName")' in plans_js
+    assert "contactForm" in contact_html and "/contact/messages" in contact_js
+    assert "/billing/admin/contact-messages" in admin_js
+    assert ".topbar .top-actions .top-link" in rollout_css
 
 
 def test_secure_card_checkout_is_prepared_without_collecting_card_details():

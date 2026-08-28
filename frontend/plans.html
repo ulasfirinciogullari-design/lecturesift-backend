@@ -5,7 +5,7 @@
   <meta name="description" content="LectureSift planlarını, dakika ve öğrenme haklarını karşılaştır.">
   <title>Planlar | LectureSift</title><link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/detail.css">
-<link rel="stylesheet" href="/rollout.css?v=1"></head>
+<link rel="stylesheet" href="/rollout.css?v=2"></head>
 <body class="plans-page">
   <header class="topbar">
     <a class="brand" href="/"><span class="brand-mark"><i></i><i></i><i></i></span><span>Lecture<span>Sift</span></span></a>
@@ -38,6 +38,8 @@
           <input id="checkoutPlanCode" type="hidden">
           <input id="checkoutInterval" type="hidden">
           <section class="checkout-summary" aria-labelledby="checkoutSummaryTitle"><h4 id="checkoutSummaryTitle" data-i18n="payment.orderSummary">Sipariş özeti</h4><dl><div><dt data-i18n="payment.plan">Plan</dt><dd id="checkoutSummaryPlan">—</dd></div><div><dt data-i18n="payment.billingPeriod">Ödeme dönemi</dt><dd id="checkoutSummaryInterval">—</dd></div><div><dt data-i18n="payment.total">Toplam tutar</dt><dd id="checkoutSummaryTotal">—</dd></div><div><dt data-i18n="payment.serviceStart">Hizmet başlangıcı</dt><dd data-i18n="payment.immediateAfterApproval">Ödeme onayından hemen sonra</dd></div></dl></section>
+          <label><span data-i18n="field.firstName">Ad</span><input id="checkoutFirstName" autocomplete="given-name" maxlength="80" required></label>
+          <label><span data-i18n="field.lastName">Soyad</span><input id="checkoutLastName" autocomplete="family-name" maxlength="80" required></label>
           <label><span data-i18n="field.billingAddress">Fatura adresi</span><textarea id="checkoutAddress" maxlength="400" required></textarea></label>
           <label><span data-i18n="field.billingCity">Şehir</span><input id="checkoutCity" autocomplete="address-level2" maxlength="80" required></label>
           <label><span data-i18n="field.billingZipCode">Posta kodu</span><input id="checkoutZipCode" autocomplete="postal-code" maxlength="20" required></label>
@@ -62,7 +64,7 @@
   </main>
   <div id="errorBox" class="error-box" hidden role="alert"><button id="closeError" type="button">×</button><span>!</span><div><strong id="errorTitle">İşlem tamamlanamadı</strong><p id="errorMessage"></p><small id="errorCode"></small></div></div>
   <footer class="site-footer"><div class="footer-main"><a class="brand" href="/">LectureSift</a><p>Ders kaynaklarını çalışma paketlerine dönüştür.</p></div><div class="footer-links"><div><strong>Ürün</strong><a href="/features.html">Özellikler</a><a href="/plans.html">Planlar</a></div><div><strong>Hesap</strong><a href="/account.html">Hesabım</a><a href="/login.html">Giriş</a></div><div><strong>Yasal</strong><a href="/privacy.html">Gizlilik</a><a href="/terms.html">Koşullar</a><a href="/distance-sales.html">Mesafeli Satış Sözleşmesi</a><a href="/refund.html">İptal ve iade</a></div></div><div class="footer-bottom"><span>© 2026 LectureSift</span><img class="payment-brand-band footer-payment-band" src="/assets/payments/iyzico-card-brands-white.png" alt="iyzico ile Öde, Mastercard, Visa, American Express ve TROY"></div></footer>
-  <script src="/locale-data.js?v=3"></script><script src="/page-i18n.js?v=1"></script><script src="/i18n.js?v=11"></script><script src="/plans.js?v=10"></script>
+  <script src="/locale-data.js?v=3"></script><script src="/page-i18n.js?v=1"></script><script src="/i18n.js?v=11"></script><script src="/plans.js?v=11"></script>
   <script src="/rollout.js?v=2"></script>
 </body>
 </html>

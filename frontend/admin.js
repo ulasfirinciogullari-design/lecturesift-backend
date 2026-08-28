@@ -94,13 +94,25 @@ function renderAdminCreditEvents(events) {
   admin$("adminCreditEvents").innerHTML = `<table class="admin-table"><thead><tr><th>${adminT("admin.created","Kayıt tarihi")}</th><th>${adminT("admin.customer","Müşteri")}</th><th>${adminT("admin.minutes","Dakika")}</th><th>${adminT("admin.balanceChange","Bakiye değişimi")}</th><th>${adminT("admin.reason","Neden")}</th></tr></thead><tbody>${rows || `<tr><td colspan="5">${adminT("admin.noAudit","Henüz yönetici dakika işlemi yok.")}</td></tr>`}</tbody></table>`;
 }
 
+function renderAdminContactMessages(messages) {
+  const rows = messages.map(item => `<tr>
+    <td><strong>${adminEscape(item.name)}</strong><br><a href="mailto:${adminEscape(item.email)}">${adminEscape(item.email)}</a><br><small>${adminDate(item.created_at)}</small></td>
+    <td><strong>${adminEscape(item.topic)}</strong>${item.order_reference ? `<br><small>${adminEscape(adminT("payment.orderNumber", "Sipariş no"))}: ${adminEscape(item.order_reference)}</small>` : ""}</td>
+    <td class="admin-message-cell">${adminEscape(item.message)}</td>
+    <td><span class="status-pill ${item.status === "resolved" ? "paid" : ""}">${adminEscape(item.status)}</span><br><small>${item.email_notified ? "E-posta bildirildi" : "Panelde saklandı"}</small></td>
+    <td><span class="admin-actions"><button class="admin-action" data-contact-status="${adminEscape(item.id)}" data-status="read">Okundu</button><button class="admin-action approve" data-contact-status="${adminEscape(item.id)}" data-status="resolved">Çözümlendi</button></span></td>
+  </tr>`).join("");
+  admin$("adminContactMessages").innerHTML = `<table class="admin-table"><thead><tr><th>Gönderen</th><th>Konu</th><th>Mesaj</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>${rows || '<tr><td colspan="5">Henüz iletişim mesajı yok.</td></tr>'}</tbody></table>`;
+  document.querySelectorAll("[data-contact-status]").forEach(button => button.addEventListener("click", () => updateContactMessage(button)));
+}
+
 function renderAdminReadiness(billing, runtime) {
   const checks = [
     [adminT("admin.database", "Kalıcı veritabanı"), Boolean(billing?.database?.connected && billing?.database?.persistent)],
     [adminT("admin.emailDelivery", "E-posta gönderimi"), Boolean(billing?.email_delivery_configured)],
     [adminT("admin.commerceIdentity", "Satıcı/sağlayıcı kimliği"), Boolean(billing?.commerce_identity?.configured)],
     [adminT("admin.bankTransfer", "Havale hesap bilgileri"), Boolean(billing?.payments?.bank_transfer?.configured)],
-    [adminT("admin.cardPayments", "Kartlı ödeme"), Boolean(billing?.payments?.paytr?.configured)],
+    [adminT("admin.cardPayments", "Kartlı ödeme"), Boolean(billing?.payments?.iyzico?.configured || billing?.payments?.paytr?.configured)],
     [adminT("admin.displayAds", "Ücretsiz planda banner reklam"), Boolean(runtime?.display_ads_configured)],
     [adminT("admin.durableProcessing", "Dayanıklı işleme altyapısı"), Boolean(runtime?.durable_processing_ready)],
     [adminT("admin.databaseRecovery", "Veritabanı geri yükleme"), Boolean(runtime?.recovery?.database_managed_backup_confirmed)],
@@ -111,11 +123,12 @@ function renderAdminReadiness(billing, runtime) {
 }
 
 async function loadAdmin() {
-  const [body, rewardBody, refundBody, creditBody, billingHealth, runtimeHealth] = await Promise.all([
+  const [body, rewardBody, refundBody, creditBody, contactBody, billingHealth, runtimeHealth] = await Promise.all([
     adminRequest("/billing/admin/overview?limit=100"),
     adminRequest("/admin/instagram-rewards?status=pending_verification"),
     adminRequest("/billing/admin/refund-requests"),
     adminRequest("/billing/admin/credit-events?limit=100"),
+    adminRequest("/billing/admin/contact-messages?limit=100"),
     fetch(`${ADMIN_API}/billing/health`, {cache:"no-store"}).then(response => response.ok ? response.json() : null).catch(() => null),
     fetch(`${ADMIN_API}/rollout/health`, {cache:"no-store"}).then(response => response.ok ? response.json() : null).catch(() => null),
   ]);
@@ -128,6 +141,7 @@ async function loadAdmin() {
   renderAdminRefunds(refundBody.requests || []);
   renderAdminUsers(body.users || []);
   renderAdminCreditEvents(creditBody.events || []);
+  renderAdminContactMessages(contactBody.messages || []);
   renderAdminReadiness(billingHealth, runtimeHealth);
   admin$("adminLogin").hidden = true;
   admin$("adminPanel").hidden = false;
@@ -178,6 +192,20 @@ async function adjustCredit(button) {
   try {
     const body = await adminRequest(`/billing/admin/users/${encodeURIComponent(userId)}/credit-adjustment`, {method:"POST", body:JSON.stringify({minutes_delta:delta, reason})});
     adminNotice(body.message);
+    await loadAdmin();
+  } catch (error) {
+    adminNotice(error.message, true);
+    button.disabled = false;
+  }
+}
+
+async function updateContactMessage(button) {
+  button.disabled = true;
+  try {
+    await adminRequest(`/billing/admin/contact-messages/${encodeURIComponent(button.dataset.contactStatus)}/status`, {
+      method: "POST",
+      body: JSON.stringify({status: button.dataset.status}),
+    });
     await loadAdmin();
   } catch (error) {
     adminNotice(error.message, true);

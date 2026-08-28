@@ -18,6 +18,7 @@ from .rollout_service import (
     adjust_admin_credit,
     claim_instagram_reward,
     close_user_account,
+    create_contact_message,
     create_refund_request,
     create_or_resume_guest,
     decide_admin_order,
@@ -30,12 +31,14 @@ from .rollout_service import (
     list_admin_credit_events,
     list_admin_refund_requests,
     list_admin_rewards,
+    list_contact_messages,
     refund_requests_for_user,
     request_email_change,
     issue_rewarded_ad_session,
     redeem_rewarded_ad_session,
     rewarded_ads_for_user,
     update_profile,
+    update_contact_message_status,
     verify_email_change,
 )
 from .storage import STORAGE
@@ -96,6 +99,18 @@ class CreditAdjustmentRequest(BaseModel):
     reason: str
 
 
+class ContactMessageRequest(BaseModel):
+    name: str
+    email: str
+    topic: str
+    message: str
+    order_reference: str = ""
+
+
+class ContactStatusRequest(BaseModel):
+    status: str
+
+
 def _user(authorization: str | None = Header(None)) -> dict:
     scheme, _, token = (authorization or "").partition(" ")
     if scheme.casefold() != "bearer" or not token:
@@ -110,14 +125,20 @@ def _user(authorization: str | None = Header(None)) -> dict:
 
 def _admin(authorization: str | None = Header(None)) -> dict:
     scheme, _, token = (authorization or "").partition(" ")
-    if not config.BILLING_ADMIN_TOKEN and not config.BILLING_ADMIN_EMAILS:
+    admin_tokens = tuple(
+        value for value in (config.BILLING_ADMIN_TOKEN, config.INSTAGRAM_ADMIN_TOKEN) if value
+    )
+    admin_emails = set(config.BILLING_ADMIN_EMAILS)
+    if config.LEGAL_OPERATOR_EMAIL:
+        admin_emails.add(config.LEGAL_OPERATOR_EMAIL.casefold())
+    if not admin_tokens and not admin_emails:
         raise HTTPException(503, detail={"code": "LS-BILL-03", "message": "Admin paneli henüz etkin değil."})
     if scheme.casefold() == "bearer" and token:
-        if config.BILLING_ADMIN_TOKEN and hmac.compare_digest(token, config.BILLING_ADMIN_TOKEN):
+        if any(hmac.compare_digest(token, value) for value in admin_tokens):
             return {"actor": "admin_token"}
         try:
             user = authenticate_session(token)
-            if user["email"].casefold() in config.BILLING_ADMIN_EMAILS:
+            if user["email"].casefold() in admin_emails:
                 return {"actor": f"user:{user['id']}"}
         except (BillingAuthenticationError, BillingConfigurationError):
             pass
@@ -183,6 +204,33 @@ def ads_config() -> dict:
         "banner_unit_path": config.DISPLAY_AD_UNIT_PATH if configured else None,
         "consent_required": True,
         "paid_plans_ad_free": True,
+    }
+
+
+@router.post("/contact/messages")
+def submit_contact_message(payload: ContactMessageRequest, request: Request) -> dict:
+    client_key = request.client.host if request.client else "unknown"
+    try:
+        RATE_LIMITER.check("contact-message", client_key, limit=5, window_seconds=60 * 60)
+        result = create_contact_message(
+            payload.name,
+            payload.email,
+            payload.topic,
+            payload.message,
+            payload.order_reference,
+        )
+    except RateLimitExceeded as exc:
+        raise HTTPException(
+            429,
+            detail={"code": "LS-CONTACT-02", "message": str(exc)},
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
+    except (BillingError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-CONTACT-01")
+    return {
+        "ok": True,
+        "message": "Mesajın alındı. Destek ekibi en kısa sürede e-posta adresinden dönecek.",
+        "reference": result["id"],
     }
 
 
@@ -411,6 +459,34 @@ def admin_refund_request_decision(
 def admin_credit_events(limit: int = Query(100, ge=1, le=250), admin: dict = Depends(_admin)) -> dict:
     del admin
     return {"ok": True, "events": list_admin_credit_events(limit)}
+
+
+@router.get("/billing/admin/contact-messages")
+def admin_contact_messages(
+    status: str = Query(""),
+    limit: int = Query(100, ge=1, le=250),
+    admin: dict = Depends(_admin),
+) -> dict:
+    del admin
+    try:
+        messages = list_contact_messages(status, limit)
+    except BillingError as exc:
+        _billing_failure(exc, "LS-CONTACT-03")
+    return {"ok": True, "messages": messages}
+
+
+@router.post("/billing/admin/contact-messages/{message_id}/status")
+def admin_contact_message_status(
+    message_id: str,
+    payload: ContactStatusRequest,
+    admin: dict = Depends(_admin),
+) -> dict:
+    del admin
+    try:
+        result = update_contact_message_status(message_id, payload.status)
+    except BillingError as exc:
+        _billing_failure(exc, "LS-CONTACT-04")
+    return {"ok": True, "message": result}
 
 
 @router.post("/billing/admin/users/{user_id}/credit-adjustment")
