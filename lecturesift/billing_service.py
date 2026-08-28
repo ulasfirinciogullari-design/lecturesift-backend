@@ -728,6 +728,8 @@ def _public_payment_order(order) -> dict:
         "provider_amount_minor": order.provider_amount_minor,
         "currency": order.currency,
         "status": order.status,
+        "failure_code": order.failure_code,
+        "failure_message": order.failure_message,
         "created_at": order.created_at.isoformat(),
         "updated_at": order.updated_at.isoformat(),
     }

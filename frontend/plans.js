@@ -105,6 +105,22 @@ function showError(message, code = "LS-BILL-20") {
   $("errorBox").hidden = false;
 }
 
+function showPaymentRedirectResult() {
+  const params = new URLSearchParams(location.search);
+  const result = params.get("payment");
+  const reference = params.get("order");
+  if (!result || !reference) return;
+  if (result === "failed") {
+    const order = (account?.payment_orders || []).find(item => item.reference === reference);
+    showError(
+      order?.failure_message || pt("payment.declined", "Ödeme banka veya iyzico tarafından onaylanmadı."),
+      order?.failure_code || "LS-PAY-DECLINED",
+    );
+  } else if (result === "verification_failed") {
+    showError(pt("order.failed", "Ödeme sonucu doğrulanamadı."), "LS-PAY-VERIFY");
+  }
+}
+
 async function api(path, options = {}) {
   const headers = {"Content-Type": "application/json", ...(options.headers || {})};
   const token = localStorage.getItem(TOKEN_KEY);
@@ -353,6 +369,7 @@ async function load() {
     renderPlans();
     renderPaymentStatus();
     await renderBankDetails();
+    showPaymentRedirectResult();
   } catch (error) { showError(error.message, error.code); }
 }
 

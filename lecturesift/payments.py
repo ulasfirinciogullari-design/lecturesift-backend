@@ -338,7 +338,30 @@ def process_iyzico_callback(*, order_reference: str, token: str) -> dict:
         {"locale": "tr", "conversationId": order_reference, "token": selected_token},
     )
     if body.get("status") != "success":
-        raise PaymentProviderError("iyzico ödeme sonucu doğrulanamadı.")
+        # A declined Checkout Form payment is returned as a valid, authenticated
+        # retrieve response whose status is ``failure``.  Treat it as a terminal
+        # payment result instead of leaving the local order indefinitely in the
+        # ``created`` state.  The request itself is signed and sent server-side;
+        # when iyzico echoes a conversation id it must still match our order.
+        conversation_id = str(body.get("conversationId") or "")
+        if conversation_id and conversation_id != order_reference:
+            raise PaymentProviderError("iyzico ödeme sonucu siparişle eşleşmiyor.")
+        failure_code = str(
+            body.get("errorCode")
+            or body.get("errorGroup")
+            or "iyzico_failure"
+        )
+        failure_message = str(
+            body.get("errorMessage")
+            or "Ödeme banka veya iyzico tarafından onaylanmadı."
+        )
+        return complete_payment_order(
+            order_reference,
+            succeeded=False,
+            provider_amount_minor=0,
+            failure_code=failure_code,
+            failure_message=failure_message,
+        )
     signature_values = [
         body.get("paymentStatus"),
         body.get("paymentId"),
