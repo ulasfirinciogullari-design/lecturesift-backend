@@ -196,8 +196,10 @@ async function initAccount() {
   };
 
   const renderOrders = account => {
-    $("ordersList").innerHTML = account.manual_orders.length ? account.manual_orders.map(order => `
-      <div class="order-row"><span><strong>${order.order_number || order.reference}</strong><br><small>${planName(order.plan_code)} · ${new Intl.DateTimeFormat(I18N.locale, {dateStyle:"medium"}).format(new Date(order.created_at))}</small></span><strong>${order.status === "paid" ? t("order.paid", "Aktif") : t("order.pending", "Kontrol bekliyor")}</strong></div>`).join("") : `<p class="empty-copy">${t("payment.noOrders", "Henüz ödeme siparişin yok.")}</p>`;
+    const orders = [...(account.manual_orders || []), ...(account.payment_orders || [])]
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    $("ordersList").innerHTML = orders.length ? orders.map(order => `
+      <div class="order-row"><span><strong>${order.order_number || order.reference}</strong><br><small>${planName(order.plan_code)} · ${new Intl.DateTimeFormat(I18N.locale, {dateStyle:"medium"}).format(new Date(order.created_at))}</small></span><strong>${t(`order.${order.status}`, order.status)}</strong></div>`).join("") : `<p class="empty-copy">${t("payment.noOrders", "Henüz ödeme siparişin yok.")}</p>`;
   };
 
   const renderAccount = account => {
@@ -224,6 +226,35 @@ async function initAccount() {
     $("accountPage").hidden = false;
   };
 
+  const reconcilePaymentRedirect = async () => {
+    const params = new URLSearchParams(location.search);
+    const reference = params.get("order");
+    const result = params.get("payment");
+    if (!reference || !result) return;
+    if (result === "failed") {
+      showFormNotice("paymentResultNotice", t("order.failed", "Ödeme başarısız"), true);
+      return;
+    }
+    showFormNotice("paymentResultNotice", t("payment.verifying", "Ödeme sonucu güvenli bildirimle doğrulanıyor…"));
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      try {
+        const body = await request("/billing/me", {}, token);
+        renderAccount(body.account);
+        const order = (body.account.payment_orders || []).find(item => item.reference === reference);
+        if (order?.status === "paid") {
+          showFormNotice("paymentResultNotice", t("payment.confirmed", "Ödeme doğrulandı; plan veya kredilerin hesabına eklendi."));
+          return;
+        }
+        if (["failed", "token_failed"].includes(order?.status)) {
+          showFormNotice("paymentResultNotice", t(`order.${order.status}`, order.status), true);
+          return;
+        }
+      } catch {}
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+    showFormNotice("paymentResultNotice", t("payment.stillPending", "Ödeme bildirimi henüz gelmedi. Sipariş numaranla birkaç dakika sonra tekrar kontrol edebilirsin."));
+  };
+
   try {
     const body = await request("/billing/me", {}, token);
     renderAccount(body.account);
@@ -238,6 +269,7 @@ async function initAccount() {
     localStorage.removeItem(TOKEN_KEY);
     location.replace("/login.html?next=/account.html");
   }
+  void reconcilePaymentRedirect();
   $("preferencesForm").addEventListener("submit", async event => {
     event.preventDefault();
     const button = $("preferencesSubmit");

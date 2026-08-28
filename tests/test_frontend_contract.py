@@ -123,6 +123,22 @@ def test_profile_admin_bank_and_full_comparison_interfaces_are_present():
     assert "adminTokenForm" in admin and "adminOrders" in admin
 
 
+def test_secure_card_checkout_is_prepared_without_collecting_card_details():
+    plans = (FRONTEND / "plans.html").read_text(encoding="utf-8")
+    script = (FRONTEND / "plans.js").read_text(encoding="utf-8")
+    rollout = (FRONTEND / "rollout.js").read_text(encoding="utf-8")
+    headers = (FRONTEND.parent / "netlify.toml").read_text(encoding="utf-8")
+    assert all(value in plans for value in ("checkoutForm", "checkoutAddress", "paytrFrame"))
+    assert "/billing/checkout" in script and "body.checkout_url" in script
+    assert "card_number" not in plans.lower() and "cvv" not in plans.lower()
+    assert "frame-src https://www.paytr.com" in headers
+    plans_hook = rollout.split("async function installPlansPage()", 1)[1].split(
+        "function accountToken()", 1
+    )[0]
+    assert "data-rollout-plan" not in plans_hook
+    assert "renderPlans =" not in plans_hook
+
+
 def test_runtime_translation_keys_exist_for_every_dynamic_message():
     runtime = (FRONTEND / "rollout.js").read_text(encoding="utf-8")
     catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")

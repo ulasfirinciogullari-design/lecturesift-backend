@@ -1,4 +1,5 @@
 import hmac
+import ipaddress
 import json
 import shutil
 import threading
@@ -7,7 +8,7 @@ import traceback
 import uuid
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, HttpUrl
@@ -59,6 +60,12 @@ from .jobs import JOBS
 from .media import download_remote_video, validate_remote_url
 from .mailer import EmailDeliveryError, email_delivery_configured, send_transactional_email
 from .pipeline import process_job
+from .payments import (
+    PaymentProviderError,
+    create_paytr_checkout,
+    paytr_public_status,
+    process_paytr_callback,
+)
 
 
 app = FastAPI(title=f"LectureSift Backend V{APP_VERSION}")
@@ -229,6 +236,15 @@ class BillingPasswordChangeRequest(BaseModel):
     new_password: str
 
 
+class BillingCheckoutRequest(BaseModel):
+    plan_code: str
+    interval: str = "monthly"
+    currency: str = "TRY"
+    billing_address: str
+    phone: str = ""
+    language: str = "tr"
+
+
 def _send_verification_email(email: str, token: str, code: str) -> None:
     link = f"{FRONTEND_BASE_URL}/verify.html?token={token}"
     code_cells = "".join(
@@ -327,6 +343,21 @@ def _raise_public(error: LectureSiftError) -> None:
     raise HTTPException(status_code=error.status_code, detail=error.public())
 
 
+def _client_ip(request: Request) -> str:
+    candidates = []
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        candidates.extend(part.strip() for part in forwarded.split(","))
+    if request.client:
+        candidates.append(request.client.host)
+    for candidate in candidates:
+        try:
+            return str(ipaddress.ip_address(candidate))
+        except ValueError:
+            continue
+    return ""
+
+
 def _upload_extension(file: UploadFile) -> str:
     extension = Path(file.filename or "video.mp4").suffix.lower()
     if extension not in VIDEO_EXTENSIONS:
@@ -412,7 +443,13 @@ def billing_plans(currency: str = "TRY") -> dict:
 
 @app.get("/billing/providers")
 def billing_providers() -> dict:
-    return public_providers()
+    body = public_providers()
+    paytr = paytr_public_status()
+    body["providers"] = [
+        {**provider, **paytr} if provider.get("code") == "paytr" else provider
+        for provider in body["providers"]
+    ]
+    return body
 
 
 @app.get("/billing/manual-transfer")
@@ -426,7 +463,12 @@ def billing_health() -> dict:
         database = billing_database_health()
     except BillingConfigurationError as exc:
         raise HTTPException(503, detail={"code": "LS-BILL-00", "message": str(exc)}) from exc
-    return {"ok": True, "database": database, "email_delivery_configured": email_delivery_configured()}
+    return {
+        "ok": True,
+        "database": database,
+        "email_delivery_configured": email_delivery_configured(),
+        "payments": {"paytr": paytr_public_status()},
+    }
 
 
 @app.post("/billing/register")
@@ -601,6 +643,55 @@ def billing_create_manual_order(
     except BillingError as exc:
         raise HTTPException(400, detail={"code": "LS-BILL-08", "message": str(exc)}) from exc
     return {"ok": True, "order": order}
+
+
+@app.post("/billing/checkout")
+def billing_create_checkout(
+    payload: BillingCheckoutRequest,
+    request: Request,
+    user: dict = Depends(_billing_user),
+) -> dict:
+    try:
+        checkout = create_paytr_checkout(
+            user,
+            plan_code=payload.plan_code,
+            interval=payload.interval,
+            currency=payload.currency,
+            user_ip=_client_ip(request),
+            billing_address=payload.billing_address,
+            phone=payload.phone,
+            language=payload.language,
+        )
+    except BillingConfigurationError as exc:
+        raise HTTPException(503, detail={"code": "LS-PAY-01", "message": str(exc)}) from exc
+    except (BillingAuthenticationError, BillingError, PaymentProviderError) as exc:
+        raise HTTPException(400, detail={"code": "LS-PAY-02", "message": str(exc)}) from exc
+    return {"ok": True, **checkout}
+
+
+@app.post("/billing/paytr/callback")
+def billing_paytr_callback(
+    merchant_oid: str = Form(...),
+    status: str = Form(...),
+    total_amount: str = Form(...),
+    payment_amount: str = Form(...),
+    hash: str = Form(...),
+    failed_reason_code: str = Form(""),
+    failed_reason_msg: str = Form(""),
+) -> Response:
+    try:
+        process_paytr_callback(
+            merchant_oid=merchant_oid,
+            status=status,
+            total_amount=total_amount,
+            payment_amount=payment_amount,
+            callback_hash=hash,
+            failed_reason_code=failed_reason_code,
+            failed_reason_msg=failed_reason_msg,
+        )
+    except (BillingConfigurationError, BillingError, PaymentProviderError):
+        return Response("PAYTR notification failed", status_code=400, media_type="text/plain")
+    return Response("OK", media_type="text/plain")
 
 
 @app.post(

@@ -53,6 +53,7 @@ const FALLBACK_PRICES = {
 
 let catalog = null;
 let account = null;
+let providers = [];
 let currency = "TRY";
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({
@@ -189,6 +190,18 @@ function renderAccount() {
   $("accountRemaining").textContent = account.remaining_minutes == null ? "∞" : `${account.remaining_minutes} ${pt("plans.minuteUnit", "dakika")}`;
 }
 
+function paytrStatus() {
+  return providers.find(provider => provider.code === "paytr") || {configured: false, currencies: []};
+}
+
+function renderPaymentStatus() {
+  const paytr = paytrStatus();
+  if (!$('cardAvailability')) return;
+  $('cardAvailability').textContent = paytr.configured
+    ? pt("payment.providerReady", "Kartlı ödeme kullanıma hazır.")
+    : pt("payment.providerPending", "Kartlı ödeme için PayTR mağaza bilgileri bekleniyor.");
+}
+
 function renderPlans() {
   const map = new Map((catalog?.plans || []).map(plan => [plan.code, plan]));
   $("plansGrid").innerHTML = ORDER.map(code => {
@@ -205,6 +218,9 @@ function renderPlans() {
     const minutesText = minutes == null
       ? `${entitlements.team_seats || plan.team_seats || 10} ${pt("plans.userUnit", "kullanıcı")}`
       : `${Number(minutes).toLocaleString(PLANS_I18N.locale)} ${plan.kind === "subscription" || plan.kind === "free" ? pt("plans.minutesPerMonth", "dk / ay") : pt("plans.minuteUnit", "dakika")}`;
+    const actions = plan.kind === "subscription"
+      ? `<div class="plan-card-actions"><button class="plan-action" data-plan="${esc(code)}" data-interval="monthly" ${current ? "disabled" : ""}>${esc(pt("rollout.chooseMonthly", "Aylık seç"))}</button><button class="plan-action" data-plan="${esc(code)}" data-interval="annual" ${current ? "disabled" : ""}>${esc(pt("rollout.annual", "Yıllık"))} · ${esc(price ? format(price.amount_minor * 10, price.currency || currency) : "")}</button></div>`
+      : `<button class="plan-action" data-plan="${esc(code)}" data-interval="${plan.kind === "one_time" ? "one_time" : "monthly"}" ${current || code === "free" || code === "business" ? "disabled" : ""}>${esc(current ? pt("plans.current", "Mevcut plan") : (code === "business" ? pt("plans.contact", "Bize ulaş") : pt("plans.select", "Planı seç")))}</button>`;
     return `<article class="plan-card ${plan.featured ? "featured" : ""}">
       ${plan.featured ? `<span class="plan-badge">${esc(pt("plans.popular", "Popüler"))}</span>` : ""}
       <h3>${esc(planLabel(code))}</h3><p>${esc(pt(`plan.${code}.description`, COPY[code][1]))}</p>
@@ -217,29 +233,44 @@ function renderPlans() {
         <li>${esc((entitlements.export_formats || []).join(", ").toUpperCase())}</li>
         <li>${esc(plan.priority === "priority" ? pt("priority.priority", "Öncelikli") : pt("priority.standard", "Standart"))} ${esc(pt("plans.processingSuffix", "işleme"))}</li>
       </ul>
-      <button class="plan-action" data-plan="${esc(code)}" ${current || code === "free" || code === "business" ? "disabled" : ""}>${esc(current ? pt("plans.current", "Mevcut plan") : (code === "business" ? pt("plans.contact", "Bize ulaş") : pt("plans.select", "Planı seç")))}</button>
+      ${actions}
     </article>`;
   }).join("");
   document.querySelectorAll(".plan-action[data-plan]").forEach(button => {
-    button.onclick = () => buy(button.dataset.plan);
+    button.onclick = () => buy(button.dataset.plan, button.dataset.interval);
   });
   renderCompare();
 }
 
-async function buy(planCode) {
+async function buy(planCode, interval = "monthly") {
   if (!localStorage.getItem(TOKEN_KEY)) {
     location.href = `/login.html?next=${encodeURIComponent("/plans.html")}`;
     return;
   }
-  if (currency !== "TRY") {
+  const paytr = paytrStatus();
+  if (currency !== "TRY" && (!paytr.configured || !paytr.currencies?.includes(currency))) {
     showError(pt("plans.globalPending", "Global kart ve yerel ödeme yöntemleri ödeme sağlayıcısı etkinleştiğinde açılacak. Şimdilik havale için TRY seçebilirsin."));
     return;
   }
+  $("checkoutPlanCode").value = planCode;
+  $("checkoutInterval").value = interval;
+  $("checkoutTitle").textContent = planLabel(planCode);
+  $("checkoutPhone").value = account?.user?.phone || "";
+  $("checkoutCardButton").disabled = !paytr.configured || !paytr.currencies?.includes(currency);
+  $("checkoutBankButton").disabled = currency !== "TRY";
+  $("checkoutNotice").textContent = paytr.configured
+    ? pt("payment.providerReady", "Kartlı ödeme kullanıma hazır.")
+    : pt("payment.providerPending", "Kartlı ödeme için PayTR mağaza bilgileri bekleniyor.");
+  $("checkoutForm").hidden = false;
+  $("paytrFrame").hidden = true;
+  $("checkoutPanel").hidden = false;
+}
+
+async function createTransfer(planCode, interval) {
   try {
-    const plan = catalog.plans.find(item => item.code === planCode);
     const body = await api("/billing/manual-transfer/orders", {
       method: "POST",
-      body: JSON.stringify({plan_code: planCode, interval: plan?.kind === "one_time" ? "one_time" : "monthly"}),
+      body: JSON.stringify({plan_code: planCode, interval}),
     });
     const order = body.order;
     $("transferReference").textContent = order.order_number || order.reference;
@@ -249,6 +280,7 @@ async function buy(planCode) {
     $("transferInstruction").textContent = order.instruction;
     $("transferSupport").href = `mailto:${encodeURIComponent(order.support_email)}?subject=${encodeURIComponent(`LectureSift ${order.reference}`)}`;
     $("transferPanel").hidden = false;
+    $("checkoutPanel").hidden = true;
     $("transferPanel").scrollIntoView({behavior: "smooth"});
   } catch (error) { showError(error.message, error.code); }
 }
@@ -259,11 +291,16 @@ async function load() {
   populateCurrencies();
   $("billingCurrency").value = selected;
   try {
-    const remote = await api(`/billing/plans?currency=${encodeURIComponent(selected)}`);
+    const [remote, providerBody] = await Promise.all([
+      api(`/billing/plans?currency=${encodeURIComponent(selected)}`),
+      api("/billing/providers"),
+    ]);
+    providers = providerBody.providers || [];
     catalog = normalizeCatalog(remote, selected);
     try { account = (await api("/billing/me")).account; } catch { account = null; }
     renderAccount();
     renderPlans();
+    renderPaymentStatus();
     await renderBankDetails();
   } catch (error) { showError(error.message, error.code); }
 }
@@ -274,5 +311,38 @@ $("billingCurrency").addEventListener("change", () => {
   load();
 });
 $("closeError").onclick = () => { $("errorBox").hidden = true; };
+$("checkoutClose").onclick = $("checkoutCancel").onclick = () => {
+  $("checkoutPanel").hidden = true;
+  $("paytrFrame").src = "about:blank";
+};
+$("checkoutBankButton").onclick = () => createTransfer($("checkoutPlanCode").value, $("checkoutInterval").value);
+$("checkoutForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const button = $("checkoutCardButton");
+  if (button.disabled) return;
+  button.disabled = true;
+  $("checkoutNotice").textContent = pt("payment.opening", "Güvenli ödeme açılıyor…");
+  try {
+    const planCode = $("checkoutPlanCode").value;
+    const body = await api("/billing/checkout", {
+      method: "POST",
+      body: JSON.stringify({
+        plan_code: planCode,
+        interval: $("checkoutInterval").value,
+        currency,
+        billing_address: $("checkoutAddress").value.trim(),
+        phone: $("checkoutPhone").value.trim(),
+        language: PLANS_I18N.language,
+      }),
+    });
+    $("checkoutForm").hidden = true;
+    $("checkoutNotice").textContent = `${pt("payment.orderNumber", "Sipariş no")}: ${body.order.order_number}`;
+    $("paytrFrame").src = body.checkout_url;
+    $("paytrFrame").hidden = false;
+  } catch (error) {
+    $("checkoutNotice").textContent = error.message;
+    button.disabled = false;
+  }
+});
 currency = detectedCurrency();
 load();

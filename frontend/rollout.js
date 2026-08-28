@@ -306,19 +306,9 @@
   }
 
   async function installPlansPage() {
-    const grid = $("plansGrid");
-    if (!grid || !$("billingCurrency")) return;
-    const redraw = () => {
-      if (typeof catalog === "undefined" || !catalog) return;
-      const currentCode = typeof account !== "undefined" ? account?.plan?.code : "";
-      grid.innerHTML = (catalog.plans || []).map(plan => workspacePlanCard(plan, catalog.selected_currency || currency || "TRY", currentCode)).join("");
-      grid.querySelectorAll("[data-rollout-plan]").forEach(button => {
-        button.onclick = () => createLocalizedTransferOrder(button.dataset.rolloutPlan, button.dataset.rolloutCycle);
-      });
-      if (typeof renderCompare === "function") renderCompare();
-    };
-    if (typeof renderPlans === "function") renderPlans = redraw;
-    setTimeout(redraw, 250);
+    // plans.js owns the dedicated pricing page. Keeping this hook as a no-op
+    // prevents the legacy workspace renderer from replacing secure checkout.
+    return;
   }
 
   function accountToken() { return localStorage.getItem(TOKEN_KEY) || ""; }

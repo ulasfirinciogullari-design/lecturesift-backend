@@ -30,9 +30,24 @@
         <div class="transfer-grid"><div><small data-i18n="payment.orderNumber">Sipariş no</small><strong id="transferReference"></strong></div><div><small data-i18n="payment.amount">Tutar</small><strong id="transferAmount"></strong></div><div><small data-i18n="payment.iban">IBAN</small><strong id="transferIban"></strong></div><div><small data-i18n="payment.accountHolder">Hesap sahibi</small><strong id="transferHolder"></strong></div></div>
         <p id="transferInstruction"></p><a id="transferSupport" href="#">Dekontu e-postayla gönder</a>
       </div>
+      <div id="checkoutPanel" class="checkout-panel" hidden role="dialog" aria-modal="true" aria-labelledby="checkoutTitle">
+        <div class="checkout-head"><div><p class="eyebrow" data-i18n="payment.checkoutTitle">Güvenli ödeme</p><h3 id="checkoutTitle"></h3></div><button id="checkoutClose" type="button" aria-label="Kapat" data-i18n-aria-label="common.close">×</button></div>
+        <p data-i18n="payment.checkoutHelp">Kartlı ödeme için fatura adresini ve telefonunu gir. Kart bilgilerin LectureSift sunucularında tutulmaz.</p>
+        <form id="checkoutForm" class="checkout-form">
+          <input id="checkoutPlanCode" type="hidden">
+          <input id="checkoutInterval" type="hidden">
+          <label><span data-i18n="field.billingAddress">Fatura adresi</span><textarea id="checkoutAddress" maxlength="400" required></textarea></label>
+          <label><span data-i18n="field.phone">Telefon</span><input id="checkoutPhone" type="tel" autocomplete="tel" maxlength="20" required></label>
+          <button id="checkoutCardButton" class="primary" type="submit" data-i18n="payment.payByCard">Kartla güvenli öde</button>
+          <button id="checkoutBankButton" class="secondary" type="button" data-i18n="payment.payByTransfer">Havale siparişi oluştur</button>
+          <button id="checkoutCancel" class="secondary" type="button" data-i18n="common.cancel">İptal</button>
+        </form>
+        <p id="checkoutNotice" class="checkout-notice"></p>
+        <iframe id="paytrFrame" title="PayTR güvenli ödeme formu" data-i18n-title="payment.frameTitle" hidden></iframe>
+      </div>
     </section>
     <section class="detail-section"><div class="credit-callout"><div><h3 data-i18n="plans.extraTitle">Planına ek dakika gerektiğinde</h3><p data-i18n="plans.extraText">Dakika Paketi aboneliğini değiştirmez; mevcut planının üzerine tek seferlik ek kredi ekler. Satın alma ve kalan kredi Hesabım sayfasında görünür.</p></div><a href="/account.html" data-i18n="plans.manageCredits">Kredilerimi yönet</a></div></section>
-    <section class="detail-section payment-methods"><h2 data-i18n="payment.methodsTitle">Ödeme seçenekleri</h2><p class="intro" data-i18n="payment.methodsText">Havale şu anda kullanılabilir. Kart ve yerel ödeme seçenekleri PayTR etkinleştirildiğinde burada açılacak.</p><div class="payment-method-grid"><article><span>↗</span><div><h3 data-i18n="payment.bankTransfer">Banka havalesi</h3><p id="bankAvailability" data-i18n="payment.loading">Bilgiler yükleniyor…</p><dl id="publicBankDetails" hidden><div><dt data-i18n="payment.iban">IBAN</dt><dd id="publicBankIban"></dd></div><div><dt data-i18n="payment.accountHolder">Hesap sahibi</dt><dd id="publicBankHolder"></dd></div><div><dt data-i18n="payment.bankName">Banka</dt><dd id="publicBankName">—</dd></div></dl></div></article><article><span>▣</span><div><h3 data-i18n="payment.card">Kart ve yerel yöntemler</h3><p data-i18n="payment.cardPending">PayTR mağaza onayı ve anahtarları tamamlandığında güvenli ödeme açılacak.</p></div></article></div></section>
+    <section class="detail-section payment-methods"><h2 data-i18n="payment.methodsTitle">Ödeme seçenekleri</h2><p class="intro" data-i18n="payment.methodsText">Havale şu anda kullanılabilir. Kart ve yerel ödeme seçenekleri PayTR etkinleştirildiğinde burada açılacak.</p><div class="payment-method-grid"><article><span>↗</span><div><h3 data-i18n="payment.bankTransfer">Banka havalesi</h3><p id="bankAvailability" data-i18n="payment.loading">Bilgiler yükleniyor…</p><dl id="publicBankDetails" hidden><div><dt data-i18n="payment.iban">IBAN</dt><dd id="publicBankIban"></dd></div><div><dt data-i18n="payment.accountHolder">Hesap sahibi</dt><dd id="publicBankHolder"></dd></div><div><dt data-i18n="payment.bankName">Banka</dt><dd id="publicBankName">—</dd></div></dl></div></article><article><span>▣</span><div><h3 data-i18n="payment.card">Kart ve yerel yöntemler</h3><p id="cardAvailability" data-i18n="payment.cardPending">PayTR mağaza onayı ve anahtarları tamamlandığında güvenli ödeme açılacak.</p></div></article></div></section>
     <section id="compare" class="detail-section"><h2 data-i18n="plans.compareTitle">Hakları karşılaştır</h2><p class="intro" data-i18n="plans.compareText">Tüm planları; dakika, üretim hakları, dosyalar, öncelik ve ekip kapasitesiyle ayrıntılı karşılaştır.</p>
       <div class="compare-wrap"><table id="compareTable" class="compare-table"><thead id="compareHead"></thead><tbody id="compareBody"></tbody></table></div>
     </section>
@@ -41,6 +56,6 @@
   <div id="errorBox" class="error-box" hidden role="alert"><button id="closeError" type="button">×</button><span>!</span><div><strong id="errorTitle">İşlem tamamlanamadı</strong><p id="errorMessage"></p><small id="errorCode"></small></div></div>
   <footer class="site-footer"><div class="footer-main"><a class="brand" href="/">LectureSift</a><p>Ders kaynaklarını çalışma paketlerine dönüştür.</p></div><div class="footer-links"><div><strong>Ürün</strong><a href="/features.html">Özellikler</a><a href="/plans.html">Planlar</a></div><div><strong>Hesap</strong><a href="/account.html">Hesabım</a><a href="/login.html">Giriş</a></div><div><strong>Yasal</strong><a href="/privacy.html">Gizlilik</a><a href="/terms.html">Koşullar</a><a href="/refund.html">İptal ve iade</a></div></div><div class="footer-bottom"><span>© 2026 LectureSift</span></div></footer>
   <script src="/locale-data.js?v=3"></script><script src="/page-i18n.js?v=1"></script><script src="/i18n.js?v=2"></script><script src="/plans.js?v=5"></script>
-  <script src="/rollout.js?v=1"></script>
+  <script src="/rollout.js?v=2"></script>
 </body>
 </html>

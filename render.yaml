@@ -36,6 +36,16 @@ services:
         sync: false
       - key: BILLING_BANK_NAME
         sync: false
+      - key: PAYTR_MERCHANT_ID
+        sync: false
+      - key: PAYTR_MERCHANT_KEY
+        sync: false
+      - key: PAYTR_MERCHANT_SALT
+        sync: false
+      - key: PAYTR_TEST_MODE
+        value: "true"
+      - key: PAYTR_DEBUG
+        value: "false"
       - key: CONTACT_EMAIL
         value: support@lecturesift.com
       - key: BILLING_SUPPORT_EMAIL

@@ -33,7 +33,7 @@ from sqlalchemy import (
 from sqlalchemy.exc import IntegrityError
 
 from . import config
-from .billing import PLAN_BY_CODE
+from .billing import PLAN_BY_CODE, REGIONAL_PRICES
 
 
 class BillingError(Exception):
@@ -133,6 +133,24 @@ MANUAL_ORDERS = Table(
     Column("amount_minor", Integer, nullable=False),
     Column("currency", String(3), nullable=False),
     Column("status", String(16), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+)
+
+PAYMENT_ORDERS = Table(
+    "billing_payment_orders",
+    METADATA,
+    Column("reference", String(64), primary_key=True),
+    Column("user_id", String(36), ForeignKey("billing_users.id"), nullable=False, index=True),
+    Column("provider", String(24), nullable=False),
+    Column("plan_code", String(32), nullable=False),
+    Column("interval", String(16), nullable=False),
+    Column("amount_minor", Integer, nullable=False),
+    Column("currency", String(3), nullable=False),
+    Column("status", String(24), nullable=False),
+    Column("provider_amount_minor", Integer, nullable=True),
+    Column("failure_code", String(32), nullable=True),
+    Column("failure_message", String(240), nullable=True),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False),
 )
@@ -624,6 +642,22 @@ def _public_manual_order(order) -> dict:
     }
 
 
+def _public_payment_order(order) -> dict:
+    return {
+        "reference": order.reference,
+        "order_number": order.reference,
+        "provider": order.provider,
+        "plan_code": order.plan_code,
+        "interval": order.interval,
+        "amount_minor": order.amount_minor,
+        "provider_amount_minor": order.provider_amount_minor,
+        "currency": order.currency,
+        "status": order.status,
+        "created_at": order.created_at.isoformat(),
+        "updated_at": order.updated_at.isoformat(),
+    }
+
+
 def account_status(user_id: str) -> dict:
     init_billing_database()
     now = utcnow()
@@ -653,6 +687,12 @@ def account_status(user_id: str) -> dict:
             .order_by(MANUAL_ORDERS.c.created_at.desc())
             .limit(10)
         ).all()
+        payment_orders = connection.execute(
+            select(PAYMENT_ORDERS)
+            .where(PAYMENT_ORDERS.c.user_id == user_id)
+            .order_by(PAYMENT_ORDERS.c.created_at.desc())
+            .limit(10)
+        ).all()
     base_remaining = None if plan.minutes is None else max(0, int(plan.minutes) - int(used))
     credit_minutes = int(user.credit_minutes)
     remaining = None if base_remaining is None else base_remaining + credit_minutes
@@ -674,6 +714,7 @@ def account_status(user_id: str) -> dict:
         "remaining_minutes": remaining,
         "can_create_job": remaining is None or remaining > 0,
         "manual_orders": [_public_manual_order(order) for order in orders],
+        "payment_orders": [_public_payment_order(order) for order in payment_orders],
     }
 
 
@@ -873,6 +914,164 @@ def record_usage(user_id: str, job_id: str, duration_seconds: float) -> None:
         return
 
 
+def _activate_purchase(
+    connection,
+    *,
+    user_id: str,
+    plan_code: str,
+    interval: str,
+    reference: str,
+    now: datetime,
+) -> None:
+    plan = PLAN_BY_CODE[plan_code]
+    if plan.kind == "one_time":
+        connection.execute(
+            update(USERS)
+            .where(USERS.c.id == user_id)
+            .values(credit_minutes=USERS.c.credit_minutes + int(plan.minutes or 0))
+        )
+        return
+    connection.execute(
+        update(SUBSCRIPTIONS)
+        .where(
+            SUBSCRIPTIONS.c.user_id == user_id,
+            SUBSCRIPTIONS.c.status == "active",
+        )
+        .values(status="replaced")
+    )
+    days = 365 if interval == "annual" else 30
+    connection.execute(
+        SUBSCRIPTIONS.insert().values(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            plan_code=plan_code,
+            interval=interval,
+            status="active",
+            starts_at=now,
+            ends_at=now + timedelta(days=days),
+            source_reference=reference,
+            created_at=now,
+        )
+    )
+
+
+def create_payment_order(
+    user_id: str,
+    provider: str,
+    plan_code: str,
+    interval: str,
+    currency: str,
+) -> dict:
+    selected_provider = provider.strip().lower()
+    selected_currency = currency.strip().upper()
+    plan = PLAN_BY_CODE.get(plan_code)
+    if not plan or plan.code in {"free", "business"}:
+        raise BillingError("Bu plan çevrimiçi ödeme ile satın alınamıyor.")
+    valid_intervals = {"one_time"} if plan.kind == "one_time" else {"monthly", "annual"}
+    if interval not in valid_intervals:
+        raise BillingError("Geçersiz ödeme dönemi.")
+    amount_minor = REGIONAL_PRICES.get(plan_code, {}).get(selected_currency)
+    if amount_minor is None:
+        raise BillingError("Bu para birimi çevrimiçi ödeme için desteklenmiyor.")
+    if interval == "annual":
+        amount_minor *= 10
+    if not selected_provider or len(selected_provider) > 24:
+        raise BillingError("Geçersiz ödeme sağlayıcısı.")
+    reference = f"LS{utcnow():%Y%m%d}{secrets.token_hex(6).upper()}"
+    now = utcnow()
+    init_billing_database()
+    with ENGINE.begin() as connection:
+        user = connection.execute(select(USERS.c.id).where(USERS.c.id == user_id)).first()
+        if not user:
+            raise BillingAuthenticationError("Hesap bulunamadı.")
+        connection.execute(
+            PAYMENT_ORDERS.insert().values(
+                reference=reference,
+                user_id=user_id,
+                provider=selected_provider,
+                plan_code=plan_code,
+                interval=interval,
+                amount_minor=int(amount_minor),
+                currency=selected_currency,
+                status="created",
+                provider_amount_minor=None,
+                failure_code=None,
+                failure_message=None,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+    return payment_order(reference)
+
+
+def payment_order(reference: str) -> dict:
+    init_billing_database()
+    with ENGINE.connect() as connection:
+        order = connection.execute(
+            select(PAYMENT_ORDERS).where(PAYMENT_ORDERS.c.reference == reference)
+        ).first()
+    if not order:
+        raise BillingError("Ödeme siparişi bulunamadı.")
+    return _public_payment_order(order)
+
+
+def mark_payment_order_token_failed(reference: str) -> None:
+    init_billing_database()
+    with ENGINE.begin() as connection:
+        connection.execute(
+            update(PAYMENT_ORDERS)
+            .where(
+                PAYMENT_ORDERS.c.reference == reference,
+                PAYMENT_ORDERS.c.status == "created",
+            )
+            .values(status="token_failed", updated_at=utcnow())
+        )
+
+
+def complete_payment_order(
+    reference: str,
+    *,
+    succeeded: bool,
+    provider_amount_minor: int,
+    failure_code: str = "",
+    failure_message: str = "",
+) -> dict:
+    init_billing_database()
+    now = utcnow()
+    with ENGINE.begin() as connection:
+        order = connection.execute(
+            select(PAYMENT_ORDERS)
+            .where(PAYMENT_ORDERS.c.reference == reference)
+            .with_for_update()
+        ).first()
+        if not order:
+            raise BillingError("Ödeme siparişi bulunamadı.")
+        if order.status in {"paid", "failed"}:
+            return _public_payment_order(order)
+        next_status = "paid" if succeeded else "failed"
+        connection.execute(
+            update(PAYMENT_ORDERS)
+            .where(PAYMENT_ORDERS.c.reference == reference)
+            .values(
+                status=next_status,
+                provider_amount_minor=max(0, int(provider_amount_minor)),
+                failure_code=(failure_code or "")[:32] or None,
+                failure_message=(failure_message or "")[:240] or None,
+                updated_at=now,
+            )
+        )
+        if succeeded:
+            _activate_purchase(
+                connection,
+                user_id=order.user_id,
+                plan_code=order.plan_code,
+                interval=order.interval,
+                reference=reference,
+                now=now,
+            )
+    return payment_order(reference)
+
+
 def bank_transfer_available() -> bool:
     return all(
         (
@@ -967,6 +1166,13 @@ def admin_billing_overview(limit: int = 100) -> dict:
                 )
             ).scalar_one()
         )
+        pending_count += int(
+            connection.execute(
+                select(func.count()).select_from(PAYMENT_ORDERS).where(
+                    PAYMENT_ORDERS.c.status == "created"
+                )
+            ).scalar_one()
+        )
         active_subscription_count = int(
             connection.execute(
                 select(func.count()).select_from(SUBSCRIPTIONS).where(
@@ -985,6 +1191,18 @@ def admin_billing_overview(limit: int = 100) -> dict:
             .join(USERS, USERS.c.id == MANUAL_ORDERS.c.user_id)
             .outerjoin(USER_PROFILES, USER_PROFILES.c.user_id == USERS.c.id)
             .order_by(MANUAL_ORDERS.c.created_at.desc())
+            .limit(safe_limit)
+        ).all()
+        payment_order_rows = connection.execute(
+            select(
+                PAYMENT_ORDERS,
+                USERS.c.email.label("user_email"),
+                USER_PROFILES.c.first_name.label("first_name"),
+                USER_PROFILES.c.last_name.label("last_name"),
+            )
+            .join(USERS, USERS.c.id == PAYMENT_ORDERS.c.user_id)
+            .outerjoin(USER_PROFILES, USER_PROFILES.c.user_id == USERS.c.id)
+            .order_by(PAYMENT_ORDERS.c.created_at.desc())
             .limit(safe_limit)
         ).all()
         user_rows = connection.execute(
@@ -1010,7 +1228,7 @@ def admin_billing_overview(limit: int = 100) -> dict:
             "pending_orders": pending_count,
             "active_subscriptions": active_subscription_count,
         },
-        "orders": [
+        "orders": sorted([
             {
                 **_public_manual_order(row),
                 "user": {
@@ -1021,7 +1239,18 @@ def admin_billing_overview(limit: int = 100) -> dict:
                 },
             }
             for row in order_rows
-        ],
+        ] + [
+            {
+                **_public_payment_order(row),
+                "user": {
+                    "email": row.user_email,
+                    "name": " ".join(
+                        part for part in (row.first_name, row.last_name) if part
+                    ),
+                },
+            }
+            for row in payment_order_rows
+        ], key=lambda item: item["created_at"], reverse=True)[:safe_limit],
         "users": [
             {
                 "id": row.id,
@@ -1048,31 +1277,17 @@ def approve_manual_order(reference: str) -> dict:
         if not order:
             raise BillingError("Sipariş bulunamadı.")
         if order.status != "paid":
-            plan = PLAN_BY_CODE[order.plan_code]
             connection.execute(
                 update(MANUAL_ORDERS)
                 .where(MANUAL_ORDERS.c.reference == reference)
                 .values(status="paid", updated_at=now)
             )
-            if plan.kind == "one_time":
-                connection.execute(
-                    update(USERS)
-                    .where(USERS.c.id == order.user_id)
-                    .values(credit_minutes=USERS.c.credit_minutes + int(plan.minutes or 0))
-                )
-            else:
-                days = 365 if order.interval == "annual" else 30
-                connection.execute(
-                    SUBSCRIPTIONS.insert().values(
-                        id=str(uuid.uuid4()),
-                        user_id=order.user_id,
-                        plan_code=order.plan_code,
-                        interval=order.interval,
-                        status="active",
-                        starts_at=now,
-                        ends_at=now + timedelta(days=days),
-                        source_reference=reference,
-                        created_at=now,
-                    )
-                )
+            _activate_purchase(
+                connection,
+                user_id=order.user_id,
+                plan_code=order.plan_code,
+                interval=order.interval,
+                reference=reference,
+                now=now,
+            )
     return account_status(order.user_id)

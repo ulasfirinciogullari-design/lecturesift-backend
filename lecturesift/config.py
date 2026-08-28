@@ -22,6 +22,11 @@ BILLING_ADMIN_TOKEN = os.getenv("BILLING_ADMIN_TOKEN", "")
 BILLING_BANK_IBAN = os.getenv("BILLING_BANK_IBAN", "").replace(" ", "").upper()
 BILLING_BANK_ACCOUNT_HOLDER = os.getenv("BILLING_BANK_ACCOUNT_HOLDER", "").strip()
 BILLING_BANK_NAME = os.getenv("BILLING_BANK_NAME", "").strip()
+PAYTR_MERCHANT_ID = os.getenv("PAYTR_MERCHANT_ID", "").strip()
+PAYTR_MERCHANT_KEY = os.getenv("PAYTR_MERCHANT_KEY", "")
+PAYTR_MERCHANT_SALT = os.getenv("PAYTR_MERCHANT_SALT", "")
+PAYTR_TEST_MODE = os.getenv("PAYTR_TEST_MODE", "true").lower() == "true"
+PAYTR_DEBUG = os.getenv("PAYTR_DEBUG", "false").lower() == "true"
 CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "support@lecturesift.com").strip()
 BILLING_SUPPORT_EMAIL = os.getenv("BILLING_SUPPORT_EMAIL", CONTACT_EMAIL).strip()
 EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "none").strip().lower()

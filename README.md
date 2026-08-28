@@ -55,6 +55,16 @@ The automated suite covers human-readable API errors, SSRF/private-URL rejection
 - `GET /instagram/media/{container_id}`: inspect container processing status
 - `POST /instagram/media/publish`: publish a ready media container
 
+## Billing and PayTR
+
+Account, bank-transfer, credit-pack, and admin approval data is stored in the configured PostgreSQL database. PayTR checkout remains disabled until all three runtime-only values are present: `PAYTR_MERCHANT_ID`, `PAYTR_MERCHANT_KEY`, and `PAYTR_MERCHANT_SALT`. `PAYTR_TEST_MODE=true` is the safe default while merchant approval and test payments are in progress.
+
+Configure the PayTR notification URL as:
+
+`https://lecturesift-backend.onrender.com/billing/paytr/callback`
+
+The callback validates PayTR's HMAC signature and the original order amount, and processes repeated notifications idempotently. It must remain public and return plain `OK` only after the verified order state has been recorded. Never commit PayTR credentials or include them in logs.
+
 Instagram credentials are read only from `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_ACCOUNT_ID`, and
 `INSTAGRAM_APP_SECRET`. Publishing routes additionally require `INSTAGRAM_ADMIN_TOKEN` as a Bearer
 token, so they remain disabled by default. Never place any of these values in source control.
