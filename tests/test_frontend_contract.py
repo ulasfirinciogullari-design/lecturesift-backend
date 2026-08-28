@@ -142,6 +142,27 @@ def test_public_navigation_is_consistent_localized_and_session_aware():
     assert '@media(max-width:860px)' in rollout
 
 
+def test_every_page_supports_persistent_light_and_dark_themes():
+    for page in FRONTEND.glob("*.html"):
+        content = page.read_text(encoding="utf-8")
+        assert "/theme.css?v=1" in content, page.name
+        assert "/theme.js?v=1" in content, page.name
+        assert "i18n.js?v=14" in content, page.name
+
+    script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
+    style = (FRONTEND / "theme.css").read_text(encoding="utf-8")
+    cookies = (FRONTEND / "cookies.html").read_text(encoding="utf-8")
+    assert 'const STORAGE_KEY = "lecturesift-theme"' in script
+    assert 'window.matchMedia("(prefers-color-scheme: light)")' in script
+    assert 'root.dataset.theme = theme' in script
+    assert 'localStorage.setItem(STORAGE_KEY, nextTheme)' in script
+    assert 'className = "theme-toggle"' in script
+    assert 'html[data-theme="light"]' in style
+    assert '@media(prefers-reduced-motion:reduce)' in style
+    assert "lecturesift-theme" in cookies
+    assert all(f'data-i18n="theme.{key}"' in cookies for key in ("storageContent", "storagePurpose", "storageControl"))
+
+
 def test_static_page_copy_covers_every_language_without_empty_entries():
     script = (FRONTEND / "page-i18n.js").read_text(encoding="utf-8")
     payload = script.split("window.LECTURESIFT_PAGE_COPY=", 1)[1].rstrip(";\n")

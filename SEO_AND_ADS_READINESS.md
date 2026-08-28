@@ -8,6 +8,8 @@
 - One European-regulations consent message is active in AdSense Privacy & Messaging.
 - The current legal payment address has been submitted in Google Payments and is under review. Do not submit the older verified address to AdSense while this review is pending.
 - No Google Ads account exists under the connected Google account yet, so campaign and conversion identifiers are not available. No ad spend is activated by this repository.
+- The Google Ad Manager signup currently reports `uncheckedAdsenseAccount`. Banner and rewarded inventory must remain disabled until Google finishes the AdSense account/application review.
+- The live worker, private object storage, managed database backup, object-retention confirmation, and restore drill all report ready.
 
 ## Already implemented in the application
 
