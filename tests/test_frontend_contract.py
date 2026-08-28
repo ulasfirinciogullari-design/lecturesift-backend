@@ -173,6 +173,18 @@ def test_every_declared_interface_key_has_thirteen_translations():
     assert all(all(str(value).strip() for value in rows[key]) for key in central)
 
 
+def test_dynamic_plan_descriptions_are_localized_and_account_uses_plan_label():
+    script = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    plans = (FRONTEND / "plans.js").read_text(encoding="utf-8")
+    for code in ("free", "credit", "lite", "plus", "pro", "max", "business"):
+        payload = re.search(rf'^\s*"plan\.{code}\.description":\[(.*?)\],?$', script, re.MULTILINE)
+        assert payload, code
+        values = json.loads(f"[{payload.group(1)}]")
+        assert len(values) == 13
+        assert len(set(values)) >= 10
+    assert '$("accountPlan").textContent = planLabel(account.plan.code);' in plans
+
+
 def test_profile_admin_bank_and_full_comparison_interfaces_are_present():
     account = (FRONTEND / "account.html").read_text(encoding="utf-8")
     auth = (FRONTEND / "auth.js").read_text(encoding="utf-8")

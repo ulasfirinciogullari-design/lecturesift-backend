@@ -188,7 +188,7 @@ function renderAccount() {
   $("authForm").hidden = true;
   $("accountStatus").hidden = false;
   $("accountEmail").textContent = account.user.email;
-  $("accountPlan").textContent = account.plan.name || account.plan.code;
+  $("accountPlan").textContent = planLabel(account.plan.code);
   $("accountRemaining").textContent = account.remaining_minutes == null ? "∞" : `${account.remaining_minutes} ${pt("plans.minuteUnit", "dakika")}`;
 }
 
