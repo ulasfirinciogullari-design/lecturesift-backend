@@ -116,6 +116,12 @@ services:
         value: "false"
       - key: LECTURESIFT_DISPLAY_AD_UNIT_PATH
         sync: false
+      - key: LECTURESIFT_ADSENSE_PUBLISHER_ID
+        value: ca-pub-7608481350058806
+      - key: LECTURESIFT_SITE_BANNER_ENABLED
+        value: "true"
+      - key: LECTURESIFT_ACCOUNT_ACTIVITY_RETENTION_DAYS
+        value: "180"
       - key: LECTURESIFT_ANALYTICS_ENABLED
         value: "false"
       - key: LECTURESIFT_GA_MEASUREMENT_ID

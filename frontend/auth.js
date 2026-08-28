@@ -200,6 +200,54 @@ async function initAccount() {
   let token = localStorage.getItem(TOKEN_KEY);
   if (!token) return location.replace("/login.html?next=/account.html");
   let currentAccount = null;
+  const accountViews = ["overview", "profile", "payments", "lessons", "security"];
+  const accountViewKey = "lecturesift-account-view";
+
+  const activateAccountView = (requested, {focus = false, updateHash = true} = {}) => {
+    const view = accountViews.includes(requested) ? requested : "overview";
+    document.querySelectorAll("[data-account-view]").forEach(panel => {
+      const selected = panel.dataset.accountView === view;
+      panel.hidden = !selected;
+      panel.setAttribute("aria-hidden", String(!selected));
+    });
+    document.querySelectorAll("[data-account-view-button]").forEach(button => {
+      const selected = button.dataset.accountViewButton === view;
+      button.setAttribute("aria-selected", String(selected));
+      button.tabIndex = selected ? 0 : -1;
+      if (selected && focus) {
+        button.focus({preventScroll:true});
+        button.scrollIntoView({behavior:"smooth", block:"nearest", inline:"center"});
+      }
+    });
+    sessionStorage.setItem(accountViewKey, view);
+    if (updateHash) history.replaceState(null, "", `${location.pathname}${location.search}#account-${view}`);
+  };
+
+  const setupAccountNavigation = () => {
+    const buttons = [...document.querySelectorAll("[data-account-view-button]")];
+    buttons.forEach((button, index) => {
+      const panel = document.querySelector(`[data-account-view="${button.dataset.accountViewButton}"]`);
+      button.id = `accountViewTab-${button.dataset.accountViewButton}`;
+      panel?.setAttribute("aria-labelledby", button.id);
+      button.addEventListener("click", () => activateAccountView(button.dataset.accountViewButton, {focus:true}));
+      button.addEventListener("keydown", event => {
+        const moves = {ArrowRight:1, ArrowLeft:-1, Home:-index, End:buttons.length - 1 - index};
+        if (moves[event.key] === undefined) return;
+        event.preventDefault();
+        const target = (index + moves[event.key] + buttons.length) % buttons.length;
+        activateAccountView(buttons[target].dataset.accountViewButton, {focus:true});
+      });
+    });
+    const hashView = location.hash.startsWith("#account-") ? location.hash.slice(9) : "";
+    const paymentRedirect = new URLSearchParams(location.search).has("payment");
+    activateAccountView(paymentRedirect ? "payments" : (hashView || sessionStorage.getItem(accountViewKey) || "overview"), {updateHash:false});
+    window.addEventListener("hashchange", () => {
+      const next = location.hash.startsWith("#account-") ? location.hash.slice(9) : "";
+      if (next) activateAccountView(next, {updateHash:false});
+    });
+  };
+
+  setupAccountNavigation();
 
   const showFormNotice = (id, message, error = false) => {
     const notice = $(id); notice.textContent = message; notice.classList.toggle("error", error); notice.hidden = false;

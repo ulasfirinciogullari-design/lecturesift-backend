@@ -108,6 +108,11 @@
     "auth.resetting":["Şifre yenileniyor…","Resetting password…","Passwort wird geändert…","Réinitialisation…","Restableciendo contraseña…","Reimpostazione password…","Redefinindo senha…","Сброс пароля…","جارٍ إعادة تعيين كلمة المرور…","正在重置密码…","パスワードを再設定中…","비밀번호 재설정 중…","पासवर्ड रीसेट हो रहा है…"],
     "auth.resetPassword":["Şifreyi yenile","Reset password","Passwort zurücksetzen","Réinitialiser le mot de passe","Restablecer contraseña","Reimposta password","Redefinir senha","Сбросить пароль","إعادة تعيين كلمة المرور","重置密码","パスワードを再設定","비밀번호 재설정","पासवर्ड रीसेट करें"],
     "account.eyebrow":["Hesabım","My account","Mein Konto","Mon compte","Mi cuenta","Il mio account","Minha conta","Мой аккаунт","حسابي","我的账户","マイアカウント","내 계정","मेरा खाता"],
+    "account.navOverview":["Genel bakış","Overview","Übersicht","Vue d’ensemble","Resumen","Panoramica","Visão geral","Обзор","نظرة عامة","概览","概要","개요","ओवरव्यू"],
+    "account.navProfile":["Profil ve tercihler","Profile & preferences","Profil & Einstellungen","Profil et préférences","Perfil y preferencias","Profilo e preferenze","Perfil e preferências","Профиль и настройки","الملف والتفضيلات","个人资料与偏好","プロフィールと設定","프로필 및 환경설정","प्रोफ़ाइल और प्राथमिकताएँ"],
+    "account.navPayments":["Ödemeler","Payments","Zahlungen","Paiements","Pagos","Pagamenti","Pagamentos","Платежи","المدفوعات","付款","支払い","결제","भुगतान"],
+    "account.navLessons":["Derslerim","My lessons","Meine Lektionen","Mes cours","Mis lecciones","Le mie lezioni","Minhas aulas","Мои занятия","دروسي","我的课程","マイレッスン","내 수업","मेरे पाठ"],
+    "account.navSecurity":["Güvenlik ve veriler","Security & data","Sicherheit & Daten","Sécurité et données","Seguridad y datos","Sicurezza e dati","Segurança e dados","Безопасность и данные","الأمان والبيانات","安全与数据","セキュリティとデータ","보안 및 데이터","सुरक्षा और डेटा"],
     "account.verified":["✓ E-posta doğrulandı","✓ Email verified","✓ E-Mail bestätigt","✓ E-mail vérifié","✓ Correo verificado","✓ E-mail verificata","✓ E-mail verificado","✓ Почта подтверждена","✓ تم تأكيد البريد","✓ 邮箱已验证","✓ メール確認済み","✓ 이메일 인증됨","✓ ईमेल सत्यापित"],
     "account.usageTitle":["Kullanım ve krediler","Usage and credits","Nutzung und Guthaben","Utilisation et crédits","Uso y créditos","Utilizzo e crediti","Uso e créditos","Использование и кредиты","الاستخدام والرصيد","使用量与额度","利用状況とクレジット","사용량 및 크레딧","उपयोग और क्रेडिट"],
     "account.remaining":["Toplam kalan dakika","Total minutes remaining","Verbleibende Minuten gesamt","Minutes restantes","Minutos restantes","Minuti rimanenti","Minutos restantes","Осталось минут","إجمالي الدقائق المتبقية","剩余总分钟数","残り合計分数","총 남은 시간","कुल शेष मिनट"],
@@ -549,10 +554,10 @@
   document.head.append(rewardedAdsScript);
   const displayAdsStyle = document.createElement("link");
   displayAdsStyle.rel = "stylesheet";
-  displayAdsStyle.href = "/display-ads.css?v=1";
+  displayAdsStyle.href = "/display-ads.css?v=2";
   document.head.append(displayAdsStyle);
   const displayAdsScript = document.createElement("script");
-  displayAdsScript.src = "/display-ads.js?v=1";
+  displayAdsScript.src = "/display-ads.js?v=2";
   displayAdsScript.defer = true;
   document.head.append(displayAdsScript);
   if (location.hostname.endsWith(".netlify.app")) {
