@@ -32,6 +32,7 @@ from .rollout_service import (
     decide_instagram_reward,
     decide_refund_request,
     export_account_data,
+    guest_trial_status,
     instagram_reward_for_user,
     is_guest_user,
     list_admin_orders,
@@ -356,6 +357,7 @@ def billing_rollout_account(user: dict = Depends(_user)) -> dict:
     return {
         "ok": True,
         "guest": is_guest_user(user["id"]),
+        "guest_trial": guest_trial_status(user["id"]),
         "instagram_reward": instagram_reward_for_user(user["id"]),
         "rewarded_ads": rewarded_ads_for_user(user["id"]),
         "contact_email": config.CONTACT_EMAIL,

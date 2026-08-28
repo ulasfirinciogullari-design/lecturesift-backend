@@ -1,12 +1,12 @@
 # LectureSift search and advertising readiness
 
-## Verified account state (28 August 2026)
+## Verified account state (29 August 2026)
 
 - The `lecturesift.com` domain property is verified in Google Search Console.
 - `https://lecturesift.com/sitemap.xml` is successful and Google reports 130 discovered pages. Performance and indexing data are still being processed.
-- The AdSense site is connected and currently marked as preparing. `ads.txt` is authorised.
+- The AdSense site is connected, `ads.txt` is authorised, and Auto ads are enabled for consented visitors on selected public pages.
 - One European-regulations consent message is active in AdSense Privacy & Messaging.
-- AdSense payment/profile information still requires completion by the account owner.
+- The current legal payment address has been submitted in Google Payments and is under review. Do not submit the older verified address to AdSense while this review is pending.
 - No Google Ads account exists under the connected Google account yet, so campaign and conversion identifiers are not available. No ad spend is activated by this repository.
 
 ## Already implemented in the application
@@ -18,14 +18,14 @@
 - Analytics and advertising code is consent-gated.
 - Google Analytics 4 loads only after analytics consent, limits automatic page views to public pages, and disables advertising signals. Token-bearing verification and password-reset pages are excluded.
 - Google Ads signup and verified-purchase conversion events are prepared separately from analytics and run only after advertising consent. Duplicate purchase conversions are suppressed per browser session.
-- Banner ads are disabled by default, limited to selected public pages, and hidden for ad-free paid plans.
+- AdSense Auto ads are enabled only after advertising consent, limited to selected public pages, and hidden for ad-free paid plans. Full-screen vignette ads are disabled in the AdSense site settings.
 - Rewarded ads are voluntary, rate-limited, and disabled until a real provider unit is configured.
 
 ## External setup still required
 
 1. Monitor Search Console indexing, Core Web Vitals, manual actions, and security issues while the newly submitted data is processed.
 2. Keep the GA4 measurement ID configured in Render and verify the first consented page view in Realtime after deployment.
-3. Complete AdSense payment/profile information and wait for the site review to move from preparing to ready.
+3. Wait for the current Google Payments address review, then submit that reviewed profile in AdSense and wait for the site review to move from preparing to ready.
 4. Maintain the active European-regulations consent message and test it before enabling ad inventory.
 5. Create a Google Ads account plus signup and purchase conversion actions; place the public `AW-...` ID and both conversion labels in the matching Render variables. Verify them with Tag Assistant before spending.
 6. Create Google Ad Manager/AdSense inventory, obtain the real banner and rewarded unit paths, and configure them in Render. Never publish placeholder unit paths.
