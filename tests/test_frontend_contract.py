@@ -245,6 +245,7 @@ def test_secure_card_checkout_is_prepared_without_collecting_card_details():
 
 def test_distance_sales_contract_covers_digital_service_checkout_requirements():
     contract = (FRONTEND / "distance-sales.html").read_text(encoding="utf-8")
+    operator = (FRONTEND / "legal-operator.js").read_text(encoding="utf-8")
     assert "Mesafeli Satış Sözleşmesi" in contract
     assert "MSS-2026-08-28-v1" in contract
     for topic in (
@@ -258,7 +259,8 @@ def test_distance_sales_contract_covers_digital_service_checkout_requirements():
         "Başvuru, uyuşmazlık ve yetki",
     ):
         assert topic in contract
-    assert "/billing/operator" in (FRONTEND / "legal-operator.js").read_text(encoding="utf-8")
+    assert "/billing/operator" in operator
+    assert 'a[href*="distance-sales"]' in operator
 
 
 def test_legal_operator_identity_is_public_only_after_configuration():

@@ -5,7 +5,7 @@
   const i18n = window.LectureSiftI18n;
   const t = (key, fallback) => i18n?.t(key, fallback) || fallback;
   const ensureDistanceSalesLink = host => {
-    if (!host || host.querySelector('a[href$="distance-sales.html"]')) return;
+    if (!host || host.querySelector('a[href*="distance-sales"]')) return;
     const link = document.createElement("a");
     link.href = i18n?.localizedPath?.(i18n.language, "/distance-sales.html") || "/distance-sales.html";
     link.textContent = t("legal.distanceSales", "Mesafeli Satış Sözleşmesi");
