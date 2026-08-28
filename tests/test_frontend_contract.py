@@ -55,6 +55,7 @@ def test_required_product_and_legal_pages_exist():
         "verify.html",
         "account.html",
         "admin.html",
+        "thanks.html",
     ):
         assert (FRONTEND / page).is_file(), page
 
@@ -220,3 +221,13 @@ def test_optional_analytics_and_advertising_are_consent_gated():
     assert 'category === "necessary"' in consent
     assert "lecturesift-consent-v1" in cookies
     assert "consent.storageContent" in cookies
+
+
+def test_contact_form_has_a_branded_noindex_success_page():
+    i18n = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    thanks = (FRONTEND / "thanks.html").read_text(encoding="utf-8")
+    robots = (FRONTEND / "robots.txt").read_text(encoding="utf-8")
+    assert 'contactForm.action = "/thanks.html"' in i18n
+    assert '<meta name="robots" content="noindex,nofollow">' in thanks
+    assert 'data-i18n="thanks.title"' in thanks
+    assert "Disallow: /thanks.html" in robots
