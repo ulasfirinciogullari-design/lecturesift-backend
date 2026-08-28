@@ -34,6 +34,22 @@ def test_plan_page_preserves_learning_entitlements_and_zero_decimal_prices():
     assert "accountAdMode" in (FRONTEND / "account.html").read_text(encoding="utf-8")
 
 
+def test_homepage_promotes_campaigns_without_duplicating_plan_checkout():
+    homepage = (FRONTEND / "index.html").read_text(encoding="utf-8")
+    assert 'id="campaigns"' in homepage
+    assert all(
+        key in homepage
+        for key in (
+            "campaigns.freeTitle",
+            "campaigns.annualTitle",
+            "campaigns.flexTitle",
+        )
+    )
+    assert 'id="plansGrid"' not in homepage
+    assert 'id="transferPanel"' not in homepage
+    assert 'href="/plans.html"' in homepage
+
+
 def test_owner_only_netlify_toolbar_is_hidden_on_every_site_layout():
     for stylesheet in ("styles.css", "auth.css", "legal.css"):
         content = (FRONTEND / stylesheet).read_text(encoding="utf-8")
@@ -261,6 +277,15 @@ def test_distance_sales_contract_covers_digital_service_checkout_requirements():
         assert topic in contract
     assert "/billing/operator" in operator
     assert 'a[href*="distance-sales"]' in operator
+    assert "Ödeme, satıcı/sağlayıcının zorunlu kimlik" not in contract
+
+
+def test_privacy_page_uses_current_controller_identity_without_draft_warning():
+    privacy = (FRONTEND / "privacy.html").read_text(encoding="utf-8")
+    catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    assert 'data-i18n="privacy.controllerIdentity"' in privacy
+    assert "Canlı satış öncesi tamamlanması zorunludur" not in privacy
+    assert '"privacy.controllerIdentity"' in catalog
 
 
 def test_delivery_and_refund_terms_are_explicit_and_localized():
@@ -285,9 +310,11 @@ def test_legal_operator_identity_is_public_only_after_configuration():
     i18n = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
     operator = (FRONTEND / "legal-operator.js").read_text(encoding="utf-8")
     blueprint = (FRONTEND.parent / "render.yaml").read_text(encoding="utf-8")
-    assert 'legalOperatorScript.src = "/legal-operator.js?v=1"' in i18n
+    assert 'legalOperatorScript.src = "/legal-operator.js?v=2"' in i18n
     assert "/billing/operator" in operator
     assert "if (!operator?.configured) return" in operator
+    assert '"/distance-sales.html", "/contact.html"' in operator
+    assert "if (!showOperatorDetails) return" in operator
     assert all(
         key in blueprint
         for key in (
@@ -304,6 +331,15 @@ def test_legal_operator_identity_is_public_only_after_configuration():
         )
     )
     assert 'operator.tax_office' in operator
+
+
+def test_card_payment_pending_copy_matches_iyzico_review_without_exposing_paytr_setup():
+    plans = (FRONTEND / "plans.js").read_text(encoding="utf-8")
+    catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    assert "pendingCardMessage" in plans
+    assert 'pt("payment.iyzicoReview"' in plans
+    assert "Kartlı ödeme için PayTR mağaza bilgileri bekleniyor" not in plans
+    assert "Kartlı ödeme için PayTR mağaza bilgileri bekleniyor" not in catalog
 
 
 def test_runtime_translation_keys_exist_for_every_dynamic_message():
