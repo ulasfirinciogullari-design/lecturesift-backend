@@ -538,6 +538,10 @@
   consentScript.src = "/consent.js?v=1";
   consentScript.defer = true;
   document.head.append(consentScript);
+  const analyticsScript = document.createElement("script");
+  analyticsScript.src = "/analytics.js?v=1";
+  analyticsScript.defer = true;
+  document.head.append(analyticsScript);
   const rewardedAdsScript = document.createElement("script");
   rewardedAdsScript.src = "/rewarded-ads.js?v=1";
   rewardedAdsScript.defer = true;

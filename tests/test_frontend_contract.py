@@ -443,6 +443,7 @@ def test_public_pages_have_share_metadata_canonical_urls_and_structured_data():
 def test_optional_analytics_and_advertising_are_consent_gated():
     i18n = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
     consent = (FRONTEND / "consent.js").read_text(encoding="utf-8")
+    analytics = (FRONTEND / "analytics.js").read_text(encoding="utf-8")
     cookies = (FRONTEND / "cookies.html").read_text(encoding="utf-8")
 
     assert 'consentScript.src = "/consent.js?v=1"' in i18n
@@ -450,6 +451,15 @@ def test_optional_analytics_and_advertising_are_consent_gated():
     assert 'const STORAGE_KEY = "lecturesift-consent-v1"' in consent
     assert 'analytics: false, advertising: false' in consent
     assert 'category === "necessary"' in consent
+    assert 'analyticsScript.src = "/analytics.js?v=1"' in i18n
+    assert 'LectureSiftConsent?.allows("analytics")' in analytics
+    assert "/analytics/config" in analytics
+    assert "googletagmanager.com/gtag/js" in analytics
+    assert 'ad_storage: "denied"' in analytics
+    assert "allow_google_signals: false" in analytics
+    assert 'new Set([\n    "/", "/index.html", "/features.html"' in analytics
+    assert "reset-password.html" not in analytics
+    assert "verify.html" not in analytics
     assert "lecturesift-consent-v1" in cookies
     assert "consent.storageContent" in cookies
     rewarded = (FRONTEND / "rewarded-ads.js").read_text(encoding="utf-8")

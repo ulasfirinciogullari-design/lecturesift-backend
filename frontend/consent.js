@@ -87,4 +87,5 @@
     allows: category => category === "necessary" || !!read()?.[category],
     open: () => root.querySelector('[data-consent="manage"]').click(),
   });
+  document.dispatchEvent(new CustomEvent("lecturesift:consent-ready", {detail: window.LectureSiftConsent.get()}));
 })();

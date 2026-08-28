@@ -50,6 +50,29 @@ def test_display_ads_are_disabled_by_default_and_hide_unit_details(monkeypatch):
     assert enabled["banner_unit_path"] == "/1234567/lecturesift_banner"
 
 
+def test_analytics_config_requires_opt_in_and_a_valid_public_measurement_id(monkeypatch):
+    monkeypatch.setattr(config, "ANALYTICS_ENABLED", False)
+    monkeypatch.setattr(config, "GA_MEASUREMENT_ID", "G-4L2CBDSZ48")
+    assert client.get("/analytics/config").json() == {
+        "enabled": False,
+        "provider": None,
+        "measurement_id": None,
+        "consent_required": True,
+        "advertising_signals": False,
+    }
+
+    monkeypatch.setattr(config, "ANALYTICS_ENABLED", True)
+    monkeypatch.setattr(config, "GA_MEASUREMENT_ID", "not-valid")
+    assert client.get("/analytics/config").json()["enabled"] is False
+
+    monkeypatch.setattr(config, "GA_MEASUREMENT_ID", "G-4L2CBDSZ48")
+    enabled = client.get("/analytics/config").json()
+    assert enabled["enabled"] is True
+    assert enabled["provider"] == "google_analytics_4"
+    assert enabled["measurement_id"] == "G-4L2CBDSZ48"
+    assert enabled["advertising_signals"] is False
+
+
 def test_guest_trial_is_five_minutes_resumable_and_single_job():
     device = f"device-{uuid.uuid4()}"
     first = client.post("/billing/guest-session", json={"device_id": device})
