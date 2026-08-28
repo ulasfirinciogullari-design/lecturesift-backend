@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 import uuid
 
 import lecturesift.app as app_module
+import lecturesift.billing_service as billing_service_module
 from lecturesift import config
 from lecturesift.app import app
 from lecturesift.billing_service import (
@@ -82,6 +83,25 @@ def _new_account(client: TestClient) -> tuple[str, str]:
     registration = register_user(email, "Strong-test-password1", "Test", "User", country_code="TR")
     result = verify_email(registration["verification_token"])
     return email, result["token"]
+
+
+def test_same_six_digit_verification_code_can_be_issued_to_different_users(monkeypatch):
+    monkeypatch.setattr(billing_service_module.secrets, "randbelow", lambda _: 123456)
+    first = register_user(
+        f"same-code-a-{uuid.uuid4()}@example.com",
+        "Strong-test-password1",
+        "Ada",
+        "Lovelace",
+    )
+    second = register_user(
+        f"same-code-b-{uuid.uuid4()}@example.com",
+        "Strong-test-password1",
+        "Grace",
+        "Hopper",
+    )
+    assert first["verification_code"] == second["verification_code"] == "123456"
+    assert verify_email_code(first["user"]["email"], "123456")["user"]["email_verified"] is True
+    assert verify_email_code(second["user"]["email"], "123456")["user"]["email_verified"] is True
 
 
 def test_registration_requires_email_verification(monkeypatch):

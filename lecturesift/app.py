@@ -74,6 +74,7 @@ from .payments import (
     paytr_public_status,
     preferred_card_provider,
     process_iyzico_callback,
+    process_iyzico_webhook,
     process_paytr_callback,
 )
 from .security import RATE_LIMITER, RateLimitExceeded
@@ -844,12 +845,26 @@ def billing_iyzico_callback(order: str, token: str = Form(...)) -> Response:
             f"{FRONTEND_BASE_URL}/plans.html?payment=verification_failed&order={order}",
             status_code=303,
         )
-    destination = "account.html" if result["status"] == "paid" else "plans.html"
-    payment = "success" if result["status"] == "paid" else "failed"
+    destination = "account.html" if result["status"] in {"paid", "pending"} else "plans.html"
+    payment = "success" if result["status"] == "paid" else result["status"]
     return RedirectResponse(
         f"{FRONTEND_BASE_URL}/{destination}?payment={payment}&order={order}",
         status_code=303,
     )
+
+
+@app.post("/billing/iyzico/webhook")
+def billing_iyzico_webhook(
+    payload: dict,
+    signature: str = Header("", alias="X-IYZ-SIGNATURE-V3"),
+) -> Response:
+    try:
+        process_iyzico_webhook(payload=payload, signature=signature)
+    except (BillingConfigurationError, BillingError, PaymentProviderError):
+        # iyzico retries non-2xx notifications. Do not acknowledge anything
+        # that could not be authenticated and re-confirmed server-side.
+        return Response("iyzico notification failed", status_code=400, media_type="text/plain")
+    return Response("OK", media_type="text/plain")
 
 
 @app.post("/billing/paytr/callback")
