@@ -16,6 +16,10 @@ from .mailer import EmailDeliveryError
 from .queue import worker_health
 from .security import RATE_LIMITER, RateLimitExceeded
 from .rollout_service import (
+    admin_close_user_account,
+    admin_revoke_user_sessions,
+    admin_set_user_subscription,
+    admin_update_user,
     adjust_admin_credit,
     claim_instagram_reward,
     close_user_account,
@@ -30,6 +34,7 @@ from .rollout_service import (
     is_guest_user,
     list_admin_orders,
     list_admin_credit_events,
+    list_admin_account_events,
     list_admin_refund_requests,
     list_admin_rewards,
     list_contact_messages,
@@ -112,6 +117,27 @@ class ContactStatusRequest(BaseModel):
     status: str
 
 
+class AdminUserUpdateRequest(BaseModel):
+    email: str
+    first_name: str
+    last_name: str
+    phone: str = ""
+    country_code: str = "TR"
+    preferred_language: str = "tr"
+    email_verified: bool = True
+
+
+class AdminSubscriptionRequest(BaseModel):
+    plan_code: str
+    interval: str = "monthly"
+    duration_days: int = 30
+
+
+class AdminAccountCloseRequest(BaseModel):
+    confirmation_email: str
+    reason: str
+
+
 def _user(authorization: str | None = Header(None)) -> dict:
     scheme, _, token = (authorization or "").partition(" ")
     if scheme.casefold() != "bearer" or not token:
@@ -167,6 +193,11 @@ def rollout_health() -> dict:
         "analytics_configured": bool(
             config.ANALYTICS_ENABLED and re.fullmatch(r"G-[A-Z0-9]+", config.GA_MEASUREMENT_ID)
         ),
+        "google_ads_conversion_configured": bool(
+            re.fullmatch(r"AW-[0-9]+", config.GOOGLE_ADS_ID)
+            and config.GOOGLE_ADS_SIGNUP_LABEL
+            and config.GOOGLE_ADS_PURCHASE_LABEL
+        ),
         "display_ads_configured": bool(config.DISPLAY_ADS_ENABLED and config.DISPLAY_AD_UNIT_PATH),
         "contact_email": config.CONTACT_EMAIL,
         "durable_queue_configured": bool(config.CELERY_BROKER_URL),
@@ -216,12 +247,19 @@ def analytics_config() -> dict:
     configured = bool(
         config.ANALYTICS_ENABLED and re.fullmatch(r"G-[A-Z0-9]+", config.GA_MEASUREMENT_ID)
     )
+    ads_configured = bool(re.fullmatch(r"AW-[0-9]+", config.GOOGLE_ADS_ID))
     return {
         "enabled": configured,
         "provider": "google_analytics_4" if configured else None,
         "measurement_id": config.GA_MEASUREMENT_ID if configured else None,
         "consent_required": True,
         "advertising_signals": False,
+        "google_ads": {
+            "enabled": ads_configured,
+            "id": config.GOOGLE_ADS_ID if ads_configured else None,
+            "signup_label": config.GOOGLE_ADS_SIGNUP_LABEL if ads_configured and config.GOOGLE_ADS_SIGNUP_LABEL else None,
+            "purchase_label": config.GOOGLE_ADS_PURCHASE_LABEL if ads_configured and config.GOOGLE_ADS_PURCHASE_LABEL else None,
+        },
     }
 
 
@@ -537,6 +575,90 @@ def admin_credit_adjustment(
     except (BillingError, BillingConfigurationError) as exc:
         _billing_failure(exc, "LS-ADMIN-01")
     return {"ok": True, "message": "Dakika bakiyesi güncellendi ve işlem kaydedildi.", "event": result}
+
+
+@router.patch("/billing/admin/users/{user_id}")
+def admin_user_update(
+    user_id: str,
+    payload: AdminUserUpdateRequest,
+    admin: dict = Depends(_admin),
+) -> dict:
+    try:
+        account = admin_update_user(
+            user_id,
+            email=payload.email,
+            first_name=payload.first_name,
+            last_name=payload.last_name,
+            phone=payload.phone,
+            country_code=payload.country_code,
+            preferred_language=payload.preferred_language,
+            email_verified=payload.email_verified,
+            actor=admin["actor"],
+        )
+    except (BillingError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-ADMIN-02")
+    return {"ok": True, "message": "Kullanıcı profili güncellendi; eski oturumlar kapatıldı.", "account": account}
+
+
+@router.post("/billing/admin/users/{user_id}/subscription")
+def admin_user_subscription(
+    user_id: str,
+    payload: AdminSubscriptionRequest,
+    admin: dict = Depends(_admin),
+) -> dict:
+    try:
+        account = admin_set_user_subscription(
+            user_id,
+            plan_code=payload.plan_code,
+            interval=payload.interval,
+            duration_days=payload.duration_days,
+            actor=admin["actor"],
+        )
+    except (BillingError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-ADMIN-03")
+    return {"ok": True, "message": "Kullanıcının abonelik hakları güncellendi.", "account": account}
+
+
+@router.post("/billing/admin/users/{user_id}/revoke-sessions")
+def admin_user_revoke_sessions(user_id: str, admin: dict = Depends(_admin)) -> dict:
+    try:
+        result = admin_revoke_user_sessions(user_id, admin["actor"])
+    except (BillingError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-ADMIN-04")
+    return {"ok": True, "message": "Kullanıcının tüm açık oturumları kapatıldı.", **result}
+
+
+@router.delete("/billing/admin/users/{user_id}")
+def admin_user_close(
+    user_id: str,
+    payload: AdminAccountCloseRequest,
+    admin: dict = Depends(_admin),
+) -> dict:
+    try:
+        result = admin_close_user_account(
+            user_id,
+            confirmation_email=payload.confirmation_email,
+            reason=payload.reason,
+            actor=admin["actor"],
+        )
+    except (BillingError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-ADMIN-05")
+    cleanup = JOBS.delete_for_user(user_id)
+    return {
+        "ok": True,
+        "message": "Hesap kapatıldı, kimlik bilgileri anonimleştirildi ve ders dosyaları silindi.",
+        "deleted_jobs": cleanup["jobs"],
+        **result,
+    }
+
+
+@router.get("/billing/admin/account-events")
+def admin_account_events(
+    limit: int = Query(100, ge=1, le=500),
+    admin: dict = Depends(_admin),
+) -> dict:
+    del admin
+    return {"ok": True, "events": list_admin_account_events(limit)}
 
 
 @router.get("/admin/instagram-rewards", dependencies=[Depends(_admin)])

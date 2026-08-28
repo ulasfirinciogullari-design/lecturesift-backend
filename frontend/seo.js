@@ -16,6 +16,7 @@
     "/terms.html",
     "/cookies.html",
     "/refund.html",
+    "/distance-sales.html",
   ]);
   const PAGE_TYPES = {
     "/": "website",
@@ -27,6 +28,7 @@
     "/terms.html": "article",
     "/cookies.html": "article",
     "/refund.html": "article",
+    "/distance-sales.html": "article",
   };
 
   const parts = location.pathname.split("/").filter(Boolean);

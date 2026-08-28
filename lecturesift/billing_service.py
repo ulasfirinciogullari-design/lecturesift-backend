@@ -1349,11 +1349,15 @@ def admin_billing_overview(limit: int = 100) -> dict:
     init_billing_database()
     safe_limit = max(1, min(int(limit), 250))
     now = utcnow()
+    active_user = USERS.c.email.not_like("deleted+%@users.invalid")
     with ENGINE.connect() as connection:
-        user_count = int(connection.execute(select(func.count()).select_from(USERS)).scalar_one())
+        user_count = int(
+            connection.execute(select(func.count()).select_from(USERS).where(active_user)).scalar_one()
+        )
         users_24h = int(
             connection.execute(
                 select(func.count()).select_from(USERS).where(
+                    active_user,
                     USERS.c.created_at >= now - timedelta(hours=24)
                 )
             ).scalar_one()
@@ -1361,6 +1365,7 @@ def admin_billing_overview(limit: int = 100) -> dict:
         users_7d = int(
             connection.execute(
                 select(func.count()).select_from(USERS).where(
+                    active_user,
                     USERS.c.created_at >= now - timedelta(days=7)
                 )
             ).scalar_one()
@@ -1368,13 +1373,17 @@ def admin_billing_overview(limit: int = 100) -> dict:
         users_30d = int(
             connection.execute(
                 select(func.count()).select_from(USERS).where(
+                    active_user,
                     USERS.c.created_at >= now - timedelta(days=30)
                 )
             ).scalar_one()
         )
         verified_count = int(
             connection.execute(
-                select(func.count()).select_from(USER_PROFILES).where(
+                select(func.count()).select_from(USER_PROFILES).join(
+                    USERS, USERS.c.id == USER_PROFILES.c.user_id
+                ).where(
+                    active_user,
                     USER_PROFILES.c.email_verified_at.is_not(None)
                 )
             ).scalar_one()
@@ -1395,7 +1404,10 @@ def admin_billing_overview(limit: int = 100) -> dict:
         )
         active_subscription_count = int(
             connection.execute(
-                select(func.count()).select_from(SUBSCRIPTIONS).where(
+                select(func.count(func.distinct(SUBSCRIPTIONS.c.user_id))).select_from(
+                    SUBSCRIPTIONS
+                ).join(USERS, USERS.c.id == SUBSCRIPTIONS.c.user_id).where(
+                    active_user,
                     SUBSCRIPTIONS.c.status.in_(("active", "cancel_at_end")),
                     SUBSCRIPTIONS.c.ends_at > now,
                 )
@@ -1467,11 +1479,45 @@ def admin_billing_overview(limit: int = 100) -> dict:
                 USER_PROFILES.c.phone,
                 USER_PROFILES.c.country_code,
                 USER_PROFILES.c.email_verified_at,
+                USER_PREFERENCES.c.preferred_language,
             )
             .outerjoin(USER_PROFILES, USER_PROFILES.c.user_id == USERS.c.id)
+            .outerjoin(USER_PREFERENCES, USER_PREFERENCES.c.user_id == USERS.c.id)
+            .where(active_user)
             .order_by(USERS.c.created_at.desc())
             .limit(safe_limit)
         ).all()
+        active_subscription_rows = connection.execute(
+            select(SUBSCRIPTIONS)
+            .join(USERS, USERS.c.id == SUBSCRIPTIONS.c.user_id)
+            .where(
+                active_user,
+                SUBSCRIPTIONS.c.status.in_(("active", "cancel_at_end")),
+                SUBSCRIPTIONS.c.ends_at > now,
+            )
+            .order_by(SUBSCRIPTIONS.c.ends_at.desc())
+        ).all()
+        usage_rows = connection.execute(
+            select(
+                USAGE_EVENTS.c.user_id,
+                func.coalesce(func.sum(USAGE_EVENTS.c.minutes), 0).label("total_minutes"),
+            ).group_by(USAGE_EVENTS.c.user_id)
+        ).all()
+    subscriptions_by_user = {}
+    plan_distribution: dict[str, int] = {"free": max(0, user_count - active_subscription_count)}
+    for row in active_subscription_rows:
+        if row.user_id in subscriptions_by_user:
+            continue
+        subscriptions_by_user[row.user_id] = {
+            "id": row.id,
+            "plan_code": row.plan_code,
+            "interval": row.interval,
+            "status": row.status,
+            "starts_at": row.starts_at.isoformat(),
+            "ends_at": row.ends_at.isoformat(),
+        }
+        plan_distribution[row.plan_code] = plan_distribution.get(row.plan_code, 0) + 1
+    usage_by_user = {row.user_id: int(row.total_minutes or 0) for row in usage_rows}
     return {
         "counts": {
             "users": user_count,
@@ -1486,6 +1532,7 @@ def admin_billing_overview(limit: int = 100) -> dict:
         },
         "verification_rate": round((verified_count / user_count * 100) if user_count else 0, 1),
         "revenue_by_currency": dict(sorted(revenue_by_currency.items())),
+        "plan_distribution": dict(sorted(plan_distribution.items())),
         "orders": sorted([
             {
                 **_public_manual_order(row),
@@ -1513,11 +1560,17 @@ def admin_billing_overview(limit: int = 100) -> dict:
             {
                 "id": row.id,
                 "email": row.email,
+                "first_name": row.first_name or "",
+                "last_name": row.last_name or "",
                 "name": " ".join(part for part in (row.first_name, row.last_name) if part),
                 "phone": row.phone,
                 "country_code": row.country_code,
+                "preferred_language": row.preferred_language or "tr",
                 "email_verified": row.email_verified_at is not None,
                 "credit_minutes": int(row.credit_minutes),
+                "total_usage_minutes": usage_by_user.get(row.id, 0),
+                "plan_code": subscriptions_by_user.get(row.id, {}).get("plan_code", "free"),
+                "subscription": subscriptions_by_user.get(row.id),
                 "created_at": row.created_at.isoformat(),
             }
             for row in user_rows

@@ -528,7 +528,7 @@
     document.head.append(legalOperatorScript);
   }
   const seoScript = document.createElement("script");
-  seoScript.src = "/seo.js?v=1";
+  seoScript.src = "/seo.js?v=2";
   seoScript.defer = true;
   document.head.append(seoScript);
   const consentStyle = document.createElement("link");
@@ -540,7 +540,7 @@
   consentScript.defer = true;
   document.head.append(consentScript);
   const analyticsScript = document.createElement("script");
-  analyticsScript.src = "/analytics.js?v=1";
+  analyticsScript.src = "/analytics.js?v=2";
   analyticsScript.defer = true;
   document.head.append(analyticsScript);
   const rewardedAdsScript = document.createElement("script");
