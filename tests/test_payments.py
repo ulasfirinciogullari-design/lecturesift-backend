@@ -6,8 +6,8 @@ import uuid
 from fastapi.testclient import TestClient
 
 from lecturesift import config, payments
-from lecturesift.app import app
 from lecturesift.billing_service import register_user, verify_email
+from main import app
 
 
 def _account() -> tuple[str, str]:
@@ -114,9 +114,11 @@ def test_paytr_checkout_and_callback_are_signed_and_idempotent(monkeypatch):
     assert account["plan"]["code"] == "plus"
     assert account["payment_orders"][0]["status"] == "paid"
     assert account["payment_orders"][0]["provider_amount_minor"] == 71300
-    exported = client.get(
+    export_response = client.get(
         "/billing/me/export", headers={"Authorization": f"Bearer {token}"}
-    ).json()["export"]
+    )
+    assert export_response.status_code == 200, export_response.text
+    exported = export_response.json()["export"]
     assert exported["payment_consents"][0]["order_reference"] == reference
     assert "ip_hash" not in exported["payment_consents"][0]
 

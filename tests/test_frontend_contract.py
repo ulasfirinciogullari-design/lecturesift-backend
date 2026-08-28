@@ -232,8 +232,32 @@ def test_secure_card_checkout_is_prepared_without_collecting_card_details():
     assert "data-rollout-plan" not in plans_hook
     assert "renderPlans =" not in plans_hook
     assert all(value in plans for value in ("checkoutTerms", "checkoutEarlyPerformance"))
+    assert all(value in plans for value in ("checkoutSummaryPlan", "checkoutSummaryInterval", "checkoutSummaryTotal"))
+    assert "/distance-sales.html" in plans
+    assert "/assets/payments/iyzico-ile-ode-white.png" in plans
+    assert "/assets/payments/iyzico-card-brands-white.png" in plans
+    assert (FRONTEND / "assets" / "payments" / "iyzico-ile-ode-white.png").stat().st_size > 20_000
+    assert (FRONTEND / "assets" / "payments" / "iyzico-card-brands-white.png").stat().st_size > 10_000
     assert "terms_accepted" in script and "early_performance_requested" in script
     assert "reportValidity()" in script
+
+
+def test_distance_sales_contract_covers_digital_service_checkout_requirements():
+    contract = (FRONTEND / "distance-sales.html").read_text(encoding="utf-8")
+    assert "Mesafeli Satış Sözleşmesi" in contract
+    assert "MSS-2026-08-28-v1" in contract
+    for topic in (
+        "Taraflar",
+        "Ön bilgilendirme",
+        "Fiyat, vergiler ve ödeme",
+        "İfa, teslim ve kullanım",
+        "Cayma hakkı ve istisnalar",
+        "İptal, ayıplı hizmet ve iade",
+        "Kişisel veriler ve işlem güvenliği",
+        "Başvuru, uyuşmazlık ve yetki",
+    ):
+        assert topic in contract
+    assert "/billing/operator" in (FRONTEND / "legal-operator.js").read_text(encoding="utf-8")
 
 
 def test_legal_operator_identity_is_public_only_after_configuration():
@@ -251,6 +275,10 @@ def test_legal_operator_identity_is_public_only_after_configuration():
             "LEGAL_OPERATOR_COUNTRY",
             "LEGAL_OPERATOR_PHONE",
             "LEGAL_OPERATOR_EMAIL",
+            "LEGAL_MERSIS_ID",
+            "LEGAL_TRADE_REGISTRY",
+            "LEGAL_KEP_ADDRESS",
+            "LEGAL_CHAMBER_NAME",
         )
     )
 
@@ -327,7 +355,7 @@ def test_public_pages_have_share_metadata_canonical_urls_and_structured_data():
     assert "max-image-preview:large" in seo
     assert 'url: `${PRODUCTION_ORIGIN}/`' in seo
     assert (FRONTEND / "og-image.png").stat().st_size > 100_000
-    assert sitemap.count("<lastmod>2026-08-28</lastmod>") == 9 * 13
+    assert sitemap.count("<lastmod>2026-08-28</lastmod>") == 10 * 13
 
 
 def test_optional_analytics_and_advertising_are_consent_gated():
@@ -420,7 +448,7 @@ def test_every_supported_language_has_a_stable_indexable_url():
         assert f"/{language}/*" in redirects
         assert f"<loc>https://lecturesift.com/{language}/</loc>" in sitemap
         assert f'hreflang="{language}"' in sitemap
-    assert sitemap.count("<url>") == 9 * 13
+    assert sitemap.count("<url>") == 10 * 13
 
     app = (FRONTEND / "app.js").read_text(encoding="utf-8")
     auth = (FRONTEND / "auth.js").read_text(encoding="utf-8")

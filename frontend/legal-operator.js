@@ -4,6 +4,15 @@
   if (!card || document.querySelector("[data-legal-operator]")) return;
   const i18n = window.LectureSiftI18n;
   const t = (key, fallback) => i18n?.t(key, fallback) || fallback;
+  const ensureDistanceSalesLink = host => {
+    if (!host || host.querySelector('a[href$="distance-sales.html"]')) return;
+    const link = document.createElement("a");
+    link.href = i18n?.localizedPath?.(i18n.language, "/distance-sales.html") || "/distance-sales.html";
+    link.textContent = t("legal.distanceSales", "Mesafeli Satış Sözleşmesi");
+    host.append(link);
+  };
+  ensureDistanceSalesLink(document.querySelector(".legal-nav"));
+  ensureDistanceSalesLink(document.querySelector(".legal-footer nav"));
   const addRow = (list, label, value, href = "") => {
     if (!value) return;
     const row = document.createElement("div");
@@ -38,6 +47,10 @@
       addRow(list, t("legal.email", "E-posta"), operator.email, `mailto:${operator.email}`);
       addRow(list, t("legal.taxId", "Vergi kimliği"), operator.tax_id);
       addRow(list, t("legal.registrationId", "Sicil / kayıt"), operator.registration_id);
+      addRow(list, t("legal.mersisId", "MERSİS numarası"), operator.mersis_id);
+      addRow(list, t("legal.tradeRegistry", "Ticaret sicili"), operator.trade_registry);
+      addRow(list, t("legal.kepAddress", "KEP adresi"), operator.kep_address, operator.kep_address ? `mailto:${operator.kep_address}` : "");
+      addRow(list, t("legal.chamberName", "Meslek odası"), operator.chamber_name);
       section.append(heading, list);
       card.prepend(section);
     })

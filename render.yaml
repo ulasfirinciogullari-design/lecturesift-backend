@@ -68,6 +68,14 @@ services:
         sync: false
       - key: LEGAL_REGISTRATION_ID
         sync: false
+      - key: LEGAL_MERSIS_ID
+        sync: false
+      - key: LEGAL_TRADE_REGISTRY
+        sync: false
+      - key: LEGAL_KEP_ADDRESS
+        sync: false
+      - key: LEGAL_CHAMBER_NAME
+        sync: false
       - key: EMAIL_PROVIDER
         value: resend
       - key: EMAIL_FROM

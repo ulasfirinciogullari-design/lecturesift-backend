@@ -146,7 +146,7 @@ PROVIDERS = (
         "regions": ["TR"],
         "currencies": ["TRY", "USD", "EUR"],
         "capabilities": ["cards", "one_time", "monthly", "annual", "saved_card"],
-        "status": "fallback",
+        "status": "application_review",
     },
 )
 

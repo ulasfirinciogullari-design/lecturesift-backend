@@ -198,9 +198,12 @@ function paytrStatus() {
 
 function renderPaymentStatus() {
   const paytr = paytrStatus();
+  const iyzico = providers.find(provider => provider.code === "iyzico") || {status: "planned"};
   if (!$('cardAvailability')) return;
   $('cardAvailability').textContent = paytr.configured
     ? pt("payment.providerReady", "Kartlı ödeme kullanıma hazır.")
+    : iyzico.status === "application_review"
+    ? pt("payment.iyzicoReview", "iyzico mağaza başvurusu inceleme sürecinde. Onay ve canlı anahtarlar tamamlanmadan kartlı ödeme alınmaz.")
     : pt("payment.providerPending", "Kartlı ödeme için PayTR mağaza bilgileri bekleniyor.");
 }
 
@@ -258,6 +261,18 @@ async function buy(planCode, interval = "monthly") {
   $("checkoutPlanCode").value = planCode;
   $("checkoutInterval").value = interval;
   $("checkoutTitle").textContent = planLabel(planCode);
+  const plan = catalog?.plans?.find(item => item.code === planCode);
+  const price = plan?.display_price || plan?.manual_price;
+  const multiplier = interval === "annual" ? 10 : 1;
+  $("checkoutSummaryPlan").textContent = planLabel(planCode);
+  $("checkoutSummaryInterval").textContent = interval === "annual"
+    ? pt("rollout.annual", "Yıllık")
+    : interval === "one_time"
+    ? pt("plans.oneTime", "Tek ödeme")
+    : pt("rollout.chooseMonthly", "Aylık");
+  $("checkoutSummaryTotal").textContent = price
+    ? format(price.amount_minor * multiplier, price.currency || currency)
+    : pt("plans.quote", "Teklif");
   $("checkoutPhone").value = account?.user?.phone || "";
   $("checkoutTerms").checked = false;
   $("checkoutEarlyPerformance").checked = false;

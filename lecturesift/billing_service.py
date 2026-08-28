@@ -222,6 +222,10 @@ def commerce_identity() -> dict:
             **required,
             "tax_id": config.LEGAL_TAX_ID or None,
             "registration_id": config.LEGAL_REGISTRATION_ID or None,
+            "mersis_id": config.LEGAL_MERSIS_ID or None,
+            "trade_registry": config.LEGAL_TRADE_REGISTRY or None,
+            "kep_address": config.LEGAL_KEP_ADDRESS or None,
+            "chamber_name": config.LEGAL_CHAMBER_NAME or None,
         } if configured else {}),
     }
 
@@ -248,7 +252,7 @@ def record_payment_consent(
                 PAYMENT_CONSENTS.insert().values(
                     order_reference=order_reference,
                     user_id=user_id,
-                    terms_version="2026-08-28",
+                    terms_version="MSS-2026-08-28-v1",
                     privacy_version="2.0-2026-08-28",
                     terms_accepted=1,
                     early_performance_requested=1,
