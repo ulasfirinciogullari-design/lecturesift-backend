@@ -14,7 +14,7 @@ Confirm the current prices in the provider dashboards before creating paid resou
 
 - Bucket name: choose a private, non-public bucket.
 - Region: `auto`.
-- Lifecycle safety rule: delete objects with the `jobs/` prefix after 1 day. Application cleanup normally removes original sources immediately after successful processing and removes results when their account retention expires; the bucket rule is a final safety net.
+- Lifecycle safety rule: delete objects with the `jobs/` prefix after 731 days. Application cleanup normally removes original sources immediately after successful processing and removes results when their account retention expires (1-730 days depending on the plan); the bucket rule is only a final safety net beyond the longest plan retention.
 - API token: restrict it to object read/write access for this bucket only.
 - Do not enable an `r2.dev` public URL or public custom domain.
 

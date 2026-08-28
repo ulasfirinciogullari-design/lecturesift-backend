@@ -53,7 +53,10 @@ class ObjectStorage:
         if not self.remote or self._client is None:
             return {"configured": False, "connected": False}
         try:
-            self._client.head_bucket(Bucket=self.bucket)
+            # A bucket-scoped R2 Object Read & Write token can list objects but
+            # may not be allowed to perform bucket-management operations. Test
+            # the least-privileged operation the application actually needs.
+            self._client.list_objects_v2(Bucket=self.bucket, MaxKeys=1)
             return {"configured": True, "connected": True}
         except Exception:
             return {"configured": True, "connected": False}

@@ -92,3 +92,21 @@ def test_object_storage_deletes_private_source_keys_in_batches():
     assert storage.delete_keys(keys + [keys[0], ""]) == 1001
     assert [len(call["Delete"]["Objects"]) for call in storage._client.calls] == [1000, 1]
     assert all(call["Bucket"] == "private-bucket" for call in storage._client.calls)
+
+
+def test_object_storage_health_uses_bucket_scoped_object_permission():
+    class FakeClient:
+        def __init__(self):
+            self.calls = []
+
+        def list_objects_v2(self, **kwargs):
+            self.calls.append(kwargs)
+            return {"KeyCount": 0}
+
+    storage = ObjectStorage.__new__(ObjectStorage)
+    storage.bucket = "private-bucket"
+    storage.remote = True
+    storage._client = FakeClient()
+
+    assert storage.health() == {"configured": True, "connected": True}
+    assert storage._client.calls == [{"Bucket": "private-bucket", "MaxKeys": 1}]
