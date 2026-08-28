@@ -29,6 +29,26 @@ def auth(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
+def test_display_ads_are_disabled_by_default_and_hide_unit_details(monkeypatch):
+    monkeypatch.setattr(config, "DISPLAY_ADS_ENABLED", False)
+    monkeypatch.setattr(config, "DISPLAY_AD_UNIT_PATH", "/1234567/lecturesift_banner")
+    disabled = client.get("/ads/config")
+    assert disabled.status_code == 200
+    assert disabled.json() == {
+        "enabled": False,
+        "provider": None,
+        "banner_unit_path": None,
+        "consent_required": True,
+        "paid_plans_ad_free": True,
+    }
+
+    monkeypatch.setattr(config, "DISPLAY_ADS_ENABLED", True)
+    enabled = client.get("/ads/config").json()
+    assert enabled["enabled"] is True
+    assert enabled["provider"] == "google_gpt"
+    assert enabled["banner_unit_path"] == "/1234567/lecturesift_banner"
+
+
 def test_guest_trial_is_five_minutes_resumable_and_single_job():
     device = f"device-{uuid.uuid4()}"
     first = client.post("/billing/guest-session", json={"device_id": device})

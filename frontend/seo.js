@@ -69,6 +69,13 @@
   setMeta('meta[property="og:description"]', {property: "og:description", content: description});
   setMeta('meta[property="og:url"]', {property: "og:url", content: canonicalUrl});
   setMeta('meta[property="og:locale"]', {property: "og:locale", content: OG_LOCALES[language] || "tr_TR"});
+  document.head.querySelectorAll('meta[property="og:locale:alternate"]').forEach(node => node.remove());
+  LANGUAGES.filter(locale => locale !== language).forEach(locale => {
+    const node = document.createElement("meta");
+    node.setAttribute("property", "og:locale:alternate");
+    node.setAttribute("content", OG_LOCALES[locale]);
+    document.head.append(node);
+  });
   setMeta('meta[property="og:image"]', {property: "og:image", content: imageUrl});
   setMeta('meta[property="og:image:alt"]', {property: "og:image:alt", content: "LectureSift yapay zekâ destekli ders çalışma platformu"});
   setMeta('meta[name="twitter:card"]', {name: "twitter:card", content: "summary_large_image"});
@@ -76,42 +83,74 @@
   setMeta('meta[name="twitter:description"]', {name: "twitter:description", content: description});
   setMeta('meta[name="twitter:image"]', {name: "twitter:image", content: imageUrl});
 
+  const productionHost = new Set(["lecturesift.com", "www.lecturesift.com"]).has(location.hostname);
   if (!new Set(["lecturesift.com", "www.lecturesift.com", "localhost", "127.0.0.1"]).has(location.hostname)) {
     setMeta('meta[name="robots"]', {name: "robots", content: "noindex,nofollow,noarchive"});
+  } else if (productionHost) {
+    setMeta('meta[name="robots"]', {name: "robots", content: "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1"});
   }
+
+  const graph = [
+    {
+      "@type": "Organization",
+      "@id": `${PRODUCTION_ORIGIN}/#organization`,
+      name: "LectureSift",
+      url: `${PRODUCTION_ORIGIN}/`,
+      logo: `${PRODUCTION_ORIGIN}/favicon.svg`,
+      sameAs: ["https://www.instagram.com/lecturesift/"],
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${PRODUCTION_ORIGIN}/#website`,
+      name: "LectureSift",
+      url: `${PRODUCTION_ORIGIN}/`,
+      inLanguage: document.documentElement.lang || "tr",
+      publisher: {"@id": `${PRODUCTION_ORIGIN}/#organization`},
+    },
+    {
+      "@type": "WebPage",
+      "@id": `${canonicalUrl}#webpage`,
+      name: document.title,
+      url: canonicalUrl,
+      description,
+      inLanguage: document.documentElement.lang || "tr",
+      isPartOf: {"@id": `${PRODUCTION_ORIGIN}/#website`},
+      about: {"@id": `${PRODUCTION_ORIGIN}/#application`},
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": `${PRODUCTION_ORIGIN}/#application`,
+      name: "LectureSift",
+      url: `${PRODUCTION_ORIGIN}/`,
+      applicationCategory: "EducationalApplication",
+      operatingSystem: "Web",
+      description,
+      image: imageUrl,
+      offers: {"@type": "Offer", price: "0", priceCurrency: "TRY"},
+      publisher: {"@id": `${PRODUCTION_ORIGIN}/#organization`},
+    },
+  ];
+  if (path !== "/") {
+    const pageName = document.querySelector("h1")?.textContent?.trim() || document.title;
+    graph.push({
+      "@type": "BreadcrumbList",
+      "@id": `${canonicalUrl}#breadcrumb`,
+      itemListElement: [
+        {"@type": "ListItem", position: 1, name: "LectureSift", item: `${PRODUCTION_ORIGIN}/`},
+        {"@type": "ListItem", position: 2, name: pageName, item: canonicalUrl},
+      ],
+    });
+  }
+  const questions = [...document.querySelectorAll(".faq-list details")].map(detail => {
+    const name = detail.querySelector("summary")?.textContent?.trim();
+    const answer = detail.querySelector("p")?.textContent?.trim();
+    return name && answer ? {"@type": "Question", name, acceptedAnswer: {"@type": "Answer", text: answer}} : null;
+  }).filter(Boolean);
+  if (questions.length) graph.push({"@type": "FAQPage", "@id": `${canonicalUrl}#faq`, mainEntity: questions});
 
   const schema = {
     "@context": "https://schema.org",
-    "@graph": [
-      {
-        "@type": "Organization",
-        "@id": `${PRODUCTION_ORIGIN}/#organization`,
-        name: "LectureSift",
-        url: canonicalUrl,
-        logo: `${PRODUCTION_ORIGIN}/favicon.svg`,
-        sameAs: ["https://www.instagram.com/lecturesift/"],
-      },
-      {
-        "@type": "WebSite",
-        "@id": `${PRODUCTION_ORIGIN}/#website`,
-        name: "LectureSift",
-        url: canonicalUrl,
-        inLanguage: document.documentElement.lang || "tr",
-        publisher: {"@id": `${PRODUCTION_ORIGIN}/#organization`},
-      },
-      {
-        "@type": "SoftwareApplication",
-        "@id": `${PRODUCTION_ORIGIN}/#application`,
-        name: "LectureSift",
-        url: `${PRODUCTION_ORIGIN}/`,
-        applicationCategory: "EducationalApplication",
-        operatingSystem: "Web",
-        description,
-        image: imageUrl,
-        offers: {"@type": "Offer", price: "0", priceCurrency: "TRY"},
-        publisher: {"@id": `${PRODUCTION_ORIGIN}/#organization`},
-      },
-    ],
+    "@graph": graph,
   };
   const jsonLd = document.createElement("script");
   jsonLd.type = "application/ld+json";

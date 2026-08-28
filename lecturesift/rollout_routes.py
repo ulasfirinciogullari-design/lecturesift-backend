@@ -142,6 +142,7 @@ def rollout_health() -> dict:
         "ok": True,
         "guest_trial_minutes": config.GUEST_TRIAL_MAX_MINUTES,
         "instagram_bonus_minutes": config.INSTAGRAM_BONUS_MINUTES,
+        "display_ads_configured": bool(config.DISPLAY_ADS_ENABLED and config.DISPLAY_AD_UNIT_PATH),
         "contact_email": config.CONTACT_EMAIL,
         "durable_queue_configured": bool(config.CELERY_BROKER_URL),
         "durable_processing_required": config.REQUIRE_DURABLE_PROCESSING,
@@ -170,6 +171,18 @@ def rollout_health() -> dict:
                 and config.RECOVERY_DRILL_CONFIRMED
             ),
         },
+    }
+
+
+@router.get("/ads/config")
+def ads_config() -> dict:
+    configured = bool(config.DISPLAY_ADS_ENABLED and config.DISPLAY_AD_UNIT_PATH)
+    return {
+        "enabled": configured,
+        "provider": "google_gpt" if configured else None,
+        "banner_unit_path": config.DISPLAY_AD_UNIT_PATH if configured else None,
+        "consent_required": True,
+        "paid_plans_ad_free": True,
     }
 
 

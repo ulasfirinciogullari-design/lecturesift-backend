@@ -267,9 +267,15 @@ def test_public_pages_have_share_metadata_canonical_urls_and_structured_data():
     assert 'meta[property="og:image"]' in seo
     assert 'meta[name="twitter:card"]' in seo
     assert '"@type": "SoftwareApplication"' in seo
+    assert '"@type": "WebPage"' in seo
+    assert '"@type": "BreadcrumbList"' in seo
+    assert '"@type": "FAQPage"' in seo
+    assert 'meta[property="og:locale:alternate"]' in seo
     assert 'applicationCategory: "EducationalApplication"' in seo
     assert 'price: "0"' in seo
     assert "noindex,nofollow,noarchive" in seo
+    assert "max-image-preview:large" in seo
+    assert 'url: `${PRODUCTION_ORIGIN}/`' in seo
     assert (FRONTEND / "og-image.png").stat().st_size > 100_000
     assert sitemap.count("<lastmod>2026-08-28</lastmod>") == 9 * 13
 
@@ -299,6 +305,27 @@ def test_optional_analytics_and_advertising_are_consent_gated():
     assert 'basePath === "/terms.html"' in i18n
     assert 't("privacy.adsDisclosure")' in i18n
     assert 't("terms.rewardPolicy")' in i18n
+
+
+def test_banner_ads_are_opt_in_public_only_and_paid_plans_are_ad_free():
+    i18n = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    display = (FRONTEND / "display-ads.js").read_text(encoding="utf-8")
+    blueprint = (FRONTEND.parent / "render.yaml").read_text(encoding="utf-8")
+
+    assert 'displayAdsScript.src = "/display-ads.js?v=1"' in i18n
+    assert 'displayAdsStyle.href = "/display-ads.css?v=1"' in i18n
+    assert 'LectureSiftConsent?.allows("advertising")' in display
+    assert 'body.account?.plan?.entitlements?.ad_free === true' in display
+    assert 'const PUBLIC_AD_PATHS = new Set([' in display
+    allowed_paths = display.split("const PUBLIC_AD_PATHS", 1)[1].split("]);", 1)[0]
+    assert '"/account.html"' not in allowed_paths
+    assert 'json("/ads/config")' in display
+    assert "securepubads.g.doubleclick.net/tag/js/gpt.js" in display
+    assert "event.isEmpty) container.remove()" in display
+    assert "LECTURESIFT_DISPLAY_ADS_ENABLED" in blueprint
+    assert 'value: "false"' in blueprint.split("LECTURESIFT_DISPLAY_ADS_ENABLED", 1)[1][:80]
+    assert (FRONTEND / "display-ads.css").is_file()
+    assert (FRONTEND.parent / "SEO_AND_ADS_READINESS.md").is_file()
 
 
 def test_free_results_show_a_localized_download_paywall():

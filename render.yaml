@@ -94,6 +94,10 @@ services:
         value: "1"
       - key: LECTURESIFT_REWARDED_AD_DAILY_LIMIT_MINUTES
         value: "3"
+      - key: LECTURESIFT_DISPLAY_ADS_ENABLED
+        value: "false"
+      - key: LECTURESIFT_DISPLAY_AD_UNIT_PATH
+        sync: false
       - key: CELERY_BROKER_URL
         fromService:
           type: keyvalue
