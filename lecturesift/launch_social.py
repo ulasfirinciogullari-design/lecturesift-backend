@@ -125,52 +125,76 @@ def _fit_text(draw: ImageDraw.ImageDraw, text: str, max_width: int, start_size: 
     return _font(min_size, bold)
 
 
-def render_launch_image(index: int) -> bytes:
-    post = post_for_index(index)
-    image = Image.new("RGB", (1080, 1080), "#071429")
-    draw = ImageDraw.Draw(image)
-
-    draw.rounded_rectangle((58, 58, 1022, 1022), radius=54, fill="#0b1d3a", outline="#243d68", width=3)
-    if index % 3 == 1:
-        draw.ellipse((710, -90, 1170, 370), fill="#17376d")
-        draw.ellipse((790, -25, 1125, 310), outline="#39a6ff", width=5)
-    elif index % 3 == 2:
-        draw.rounded_rectangle((735, 60, 1018, 395), radius=70, fill="#1b315e")
-        draw.line((760, 360, 1010, 110), fill="#4ce0a3", width=8)
-    else:
-        draw.polygon(((800, 55), (1018, 55), (1018, 335), (900, 265)), fill="#24316a")
-        draw.arc((735, 40, 1065, 370), 40, 280, fill="#39a6ff", width=7)
-
-    draw.rounded_rectangle((98, 102, 365, 166), radius=27, fill="#142d55")
-    draw.text((130, 120), "LECTURESIFT", fill="#4ce0a3", font=_font(27, True))
-    draw.text((98, 250), post.kicker, fill="#88b9f2", font=_font(28, True))
-
-    title_font = _fit_text(draw, post.title, 865, 82, 54, bold=True)
-    draw.text((98, 318), post.title, fill="white", font=title_font)
-
-    words = post.subtitle.split()
+def _wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_width: int, max_lines: int = 3) -> str:
+    words = text.split()
     lines: list[str] = []
     current = ""
-    font = _font(42)
     for word in words:
         candidate = f"{current} {word}".strip()
-        width = draw.textbbox((0, 0), candidate, font=font)[2]
-        if width <= 820:
+        if draw.textbbox((0, 0), candidate, font=font)[2] <= max_width:
             current = candidate
         else:
             if current:
                 lines.append(current)
             current = word
-    if current:
+            if len(lines) >= max_lines - 1:
+                break
+    if current and len(lines) < max_lines:
         lines.append(current)
-    draw.multiline_text((98, 455), "\n".join(lines[:3]), fill="#d9e9ff", font=font, spacing=16)
+    return "\n".join(lines)
 
-    draw.rounded_rectangle((98, 817, 982, 935), radius=34, fill="#102a50", outline="#1d4f84", width=2)
-    draw.text((132, 846), "AI-powered study workflows", fill="#b8d8ff", font=_font(31, True))
-    draw.text((132, 890), "lecturesift.com", fill="#4ce0a3", font=_font(25))
-    draw.rounded_rectangle((858, 842, 950, 912), radius=24, fill="#39a6ff")
-    draw.text((879, 859), f"{index:02d}", fill="#061022", font=_font(30, True))
+
+def render_launch_image(index: int) -> bytes:
+    """Render a 3:4 feed card with a conservative Instagram grid-safe area."""
+    post = post_for_index(index)
+    image = Image.new("RGB", (1080, 1440), "#050b1f")
+    draw = ImageDraw.Draw(image)
+
+    # Keep meaningful content well inside the profile-thumbnail crop area.
+    draw.rounded_rectangle((72, 72, 1008, 1368), radius=58, fill="#08162f", outline="#223b68", width=3)
+    draw.ellipse((690, 120, 1080, 510), fill="#132b61")
+    draw.ellipse((770, 165, 1030, 425), outline="#8f52ff", width=5)
+
+    draw.rounded_rectangle((118, 132, 408, 198), radius=28, fill="#10284f")
+    draw.text((150, 150), "LECTURESIFT", fill="#42d8ff", font=_font(28, True))
+    draw.text((118, 286), post.kicker, fill="#a8c7ef", font=_font(30, True))
+
+    title_font = _fit_text(draw, post.title, 830, 82, 54, bold=True)
+    title = _wrap(draw, post.title, title_font, 830, max_lines=2)
+    draw.multiline_text((118, 352), title, fill="white", font=title_font, spacing=12)
+
+    title_box = draw.multiline_textbbox((118, 352), title, font=title_font, spacing=12)
+    subtitle_y = max(520, title_box[3] + 54)
+    subtitle_font = _font(40)
+    subtitle = _wrap(draw, post.subtitle, subtitle_font, 820, max_lines=3)
+    draw.multiline_text((118, subtitle_y), subtitle, fill="#d9e8ff", font=subtitle_font, spacing=18)
+
+    panel_top = max(760, subtitle_y + 190)
+    panel_bottom = 1160
+    draw.rounded_rectangle((118, panel_top, 962, panel_bottom), radius=42, fill="#0b2148", outline="#1d5a92", width=3)
+
+    # A simple study-pack flow that remains legible as a profile thumbnail.
+    draw.rounded_rectangle((156, panel_top + 54, 386, panel_top + 250), radius=28, fill="#0d2e5a", outline="#2ca8ff", width=3)
+    draw.text((197, panel_top + 91), "LECTURE", fill="#7fd6ff", font=_font(26, True))
+    draw.rounded_rectangle((196, panel_top + 148, 345, panel_top + 198), radius=18, fill="#1f6ec0")
+    draw.polygon(((245, panel_top + 157), (245, panel_top + 190), (280, panel_top + 174)), fill="white")
+
+    draw.line((414, panel_top + 150, 510, panel_top + 150), fill="#4ce0ff", width=8)
+    draw.polygon(((510, panel_top + 150), (482, panel_top + 133), (482, panel_top + 167)), fill="#4ce0ff")
+
+    outputs = (("TRANSCRIPT", "#2ca8ff"), ("NOTES", "#4f7dff"), ("QUIZ", "#8b5cff"), ("FLASHCARDS", "#c049ff"))
+    out_y = panel_top + 38
+    for label, color in outputs:
+        draw.rounded_rectangle((540, out_y, 914, out_y + 70), radius=24, fill="#101f48", outline=color, width=3)
+        draw.text((576, out_y + 20), label, fill="white", font=_font(24, True))
+        out_y += 82
+
+    draw.rounded_rectangle((118, 1220, 962, 1322), radius=34, fill="#0b2246", outline="#214f82", width=2)
+    draw.text((154, 1248), "AI-powered study workflows", fill="#c4ddff", font=_font(31, True))
+    draw.text((154, 1287), "lecturesift.com", fill="#4ce0a3", font=_font(24))
+    draw.rounded_rectangle((842, 1245, 925, 1308), radius=22, fill="#386fff")
+    draw.text((860, 1260), f"{index:02d}", fill="white", font=_font(27, True))
 
     output = io.BytesIO()
-    image.save(output, format="JPEG", quality=93, optimize=True)
+    image.save(output, format="JPEG", quality=94, optimize=True)
     return output.getvalue()
