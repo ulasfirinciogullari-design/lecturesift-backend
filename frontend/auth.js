@@ -299,7 +299,9 @@ async function initAccount() {
       if (suggestedCurrency) localStorage.setItem("lecturesift-currency", suggestedCurrency);
       renderAccount(body.account);
       showFormNotice("preferencesNotice", body.message);
-      if (I18N.language !== body.account.user.preferred_language) location.reload();
+      if (I18N.language !== body.account.user.preferred_language) {
+        location.assign(I18N.localizedPath(body.account.user.preferred_language));
+      }
     } catch (error) {
       showFormNotice("preferencesNotice", error.message, true);
     } finally { setBusy(button, false, t("preferences.save", "Tercihleri kaydet")); }

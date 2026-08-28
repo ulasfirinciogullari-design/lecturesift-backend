@@ -145,7 +145,7 @@ const ERRORS = {
 const $ = (id) => document.getElementById(id);
 const uiLanguage = $("uiLanguage"), sourceLanguage = $("sourceLanguage"), outputLanguage = $("outputLanguage");
 const summaryStyle = $("summaryStyle"), videoUrl = $("videoUrl"), jobType = $("jobType");
-let currentLanguage = localStorage.getItem("lecturesift-ui") || "tr";
+let currentLanguage = window.LectureSiftI18n?.language || localStorage.getItem("lecturesift-ui") || "tr";
 let sourceMode = "upload", sourceLayout = "classic", classicVideos = [], audioVideos = [], visualVideos = [];
 let jobId = null, timerStarted = null, timerHandle = null, pollHandle = null;
 let latestResult = null, cardIndex = 0, cardRevealed = false, quizScore = 0, quizAnswered = 0;
@@ -199,7 +199,18 @@ sourceLanguage.add(new Option(TR.auto, "auto"), 0);
 uiLanguage.value = currentLanguage;
 sourceLanguage.value = "auto";
 outputLanguage.value = currentLanguage in LANGUAGES ? currentLanguage : "tr";
-uiLanguage.addEventListener("change", () => { currentLanguage = uiLanguage.value; applyLanguage(); if (!latestResult) outputLanguage.value = currentLanguage; syncTranslationChoice(); });
+uiLanguage.addEventListener("change", () => {
+  currentLanguage = uiLanguage.value;
+  localStorage.setItem("lecturesift-ui", currentLanguage);
+  const nextPath = window.LectureSiftI18n?.localizedPath?.(currentLanguage);
+  if (nextPath && nextPath !== location.pathname) {
+    location.assign(`${nextPath}${location.search}${location.hash}`);
+    return;
+  }
+  applyLanguage();
+  if (!latestResult) outputLanguage.value = currentLanguage;
+  syncTranslationChoice();
+});
 applyLanguage();
 
 const PLAN_ORDER = ["free", "credit", "lite", "plus", "pro", "max", "business"];

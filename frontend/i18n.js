@@ -2,6 +2,17 @@
   const codes = ["tr","en","de","fr","es","it","pt","ru","ar","zh","ja","ko","hi"];
   const languages = {tr:"Türkçe",en:"English",de:"Deutsch",fr:"Français",es:"Español",it:"Italiano",pt:"Português",ru:"Русский",ar:"العربية",zh:"中文",ja:"日本語",ko:"한국어",hi:"हिन्दी"};
   const locales = {tr:"tr-TR",en:"en-US",de:"de-DE",fr:"fr-FR",es:"es-ES",it:"it-IT",pt:"pt-BR",ru:"ru-RU",ar:"ar-SA",zh:"zh-CN",ja:"ja-JP",ko:"ko-KR",hi:"hi-IN"};
+  const pathParts = location.pathname.split("/").filter(Boolean);
+  const pathLanguage = codes.includes(pathParts[0]) ? pathParts[0] : null;
+  const basePath = (() => {
+    if (!pathLanguage) return location.pathname || "/";
+    const rest = pathParts.slice(1).join("/");
+    return rest ? `/${rest}` : "/";
+  })();
+  const localizedPath = (language, pathname = basePath) => {
+    const normalized = pathname === "/index.html" ? "/" : (pathname.startsWith("/") ? pathname : `/${pathname}`);
+    return language === "tr" ? normalized : `/${language}${normalized === "/" ? "/" : normalized}`;
+  };
   const rows = {
     "language.label":["Site dili","Site language","Seitensprache","Langue du site","Idioma del sitio","Lingua del sito","Idioma do site","Язык сайта","لغة الموقع","网站语言","サイト言語","사이트 언어","साइट की भाषा"],
     "nav.workspace":["Çalışma alanına dön","Back to workspace","Zurück zum Arbeitsbereich","Retour à l’espace de travail","Volver al espacio de trabajo","Torna all’area di lavoro","Voltar ao espaço de trabalho","Вернуться в рабочую область","العودة إلى مساحة العمل","返回工作区","ワークスペースに戻る","작업 공간으로 돌아가기","वर्कस्पेस पर वापस जाएँ"],
@@ -262,6 +273,7 @@
   };
 
   const selected = (() => {
+    if (pathLanguage) return pathLanguage;
     const saved = localStorage.getItem("lecturesift-ui");
     if (codes.includes(saved)) return saved;
     const browser = (navigator.language || "tr").split("-")[0].toLowerCase();
@@ -303,6 +315,19 @@
     });
   }
 
+  document.querySelectorAll('a[href]').forEach(anchor => {
+    const raw = anchor.getAttribute("href");
+    if (!raw || raw.startsWith("#") || /^(?:mailto:|tel:|javascript:)/i.test(raw)) return;
+    let url;
+    try { url = new URL(raw, location.href); } catch { return; }
+    if (url.origin !== location.origin) return;
+    const segments = url.pathname.split("/").filter(Boolean);
+    const linkedLanguage = codes.includes(segments[0]) ? segments.shift() : null;
+    const linkedBase = segments.length ? `/${segments.join("/")}` : "/";
+    url.pathname = localizedPath(selected, linkedBase);
+    anchor.setAttribute("href", `${url.pathname}${url.search}${url.hash}`);
+  });
+
   const host = document.querySelector(".auth-topbar,.topbar,.legal-topbar");
   if (host && !host.querySelector(".language-switcher,#uiLanguage")) {
     const picker = document.createElement("select");
@@ -310,12 +335,15 @@
     picker.setAttribute("aria-label", t("language.label", "Site language"));
     Object.entries(languages).forEach(([code, label]) => picker.add(new Option(label, code)));
     picker.value = selected;
-    picker.addEventListener("change", () => { localStorage.setItem("lecturesift-ui", picker.value); location.reload(); });
+    picker.addEventListener("change", () => {
+      localStorage.setItem("lecturesift-ui", picker.value);
+      location.assign(`${localizedPath(picker.value)}${location.search}${location.hash}`);
+    });
     const nav = host.querySelector("nav,.top-actions");
     host.insertBefore(picker, nav || host.lastElementChild);
   }
 
-  window.LectureSiftI18n = Object.freeze({language:selected, locale:locales[selected], languages, t, exact, keys:Object.keys(rows)});
+  window.LectureSiftI18n = Object.freeze({language:selected, locale:locales[selected], languages, t, exact, localizedPath, keys:Object.keys(rows)});
   const seoScript = document.createElement("script");
   seoScript.src = "/seo.js?v=1";
   seoScript.defer = true;
@@ -329,5 +357,5 @@
   consentScript.defer = true;
   document.head.append(consentScript);
   const contactForm = document.querySelector('form[name="contact"]');
-  if (contactForm) contactForm.action = "/thanks.html";
+  if (contactForm) contactForm.action = localizedPath(selected, "/thanks.html");
 })();

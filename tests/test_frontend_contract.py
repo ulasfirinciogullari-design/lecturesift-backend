@@ -206,7 +206,7 @@ def test_public_pages_have_share_metadata_canonical_urls_and_structured_data():
     assert 'price: "0"' in seo
     assert "noindex,nofollow,noarchive" in seo
     assert (FRONTEND / "og-image.png").stat().st_size > 100_000
-    assert sitemap.count("<lastmod>2026-08-28</lastmod>") == 9
+    assert sitemap.count("<lastmod>2026-08-28</lastmod>") == 9 * 13
 
 
 def test_optional_analytics_and_advertising_are_consent_gated():
@@ -227,7 +227,31 @@ def test_contact_form_has_a_branded_noindex_success_page():
     i18n = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
     thanks = (FRONTEND / "thanks.html").read_text(encoding="utf-8")
     robots = (FRONTEND / "robots.txt").read_text(encoding="utf-8")
-    assert 'contactForm.action = "/thanks.html"' in i18n
+    assert 'localizedPath(selected, "/thanks.html")' in i18n
     assert '<meta name="robots" content="noindex,nofollow">' in thanks
     assert 'data-i18n="thanks.title"' in thanks
     assert "Disallow: /thanks.html" in robots
+
+
+def test_every_supported_language_has_a_stable_indexable_url():
+    i18n = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    seo = (FRONTEND / "seo.js").read_text(encoding="utf-8")
+    redirects = (FRONTEND / "_redirects").read_text(encoding="utf-8")
+    sitemap = (FRONTEND / "sitemap.xml").read_text(encoding="utf-8")
+    languages = ("tr", "en", "de", "fr", "es", "it", "pt", "ru", "ar", "zh", "ja", "ko", "hi")
+
+    assert "if (pathLanguage) return pathLanguage" in i18n
+    assert "localizedPath(picker.value)" in i18n
+    assert 'link[rel="alternate"][hreflang=' in seo
+    assert 'hreflang: "x-default"' in seo
+    for language in languages[1:]:
+        assert f"/{language}/*" in redirects
+        assert f"<loc>https://lecturesift.com/{language}/</loc>" in sitemap
+        assert f'hreflang="{language}"' in sitemap
+    assert sitemap.count("<url>") == 9 * 13
+
+    app = (FRONTEND / "app.js").read_text(encoding="utf-8")
+    auth = (FRONTEND / "auth.js").read_text(encoding="utf-8")
+    assert "window.LectureSiftI18n?.language" in app
+    assert "localizedPath?.(currentLanguage)" in app
+    assert "I18N.localizedPath(body.account.user.preferred_language)" in auth
