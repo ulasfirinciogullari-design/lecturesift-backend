@@ -1,8 +1,8 @@
 """One-time launch-step publisher used after a web deployment.
 
-This deployment is intentionally gated to advance the launch grid from exactly
-seven completed cards to the eighth card. Marker checks keep retries idempotent,
-and later unrelated deploys cannot advance the grid again.
+This deployment is intentionally gated to restart the launch grid from a clean
+Instagram profile. It publishes only when no LectureSift launch markers exist,
+so retries stay idempotent and unrelated later deploys cannot advance the grid.
 """
 
 from __future__ import annotations
@@ -17,7 +17,8 @@ from .instagram import InstagramAPIError, InstagramConfigurationError
 from .launch_social import completed_indices
 
 _STATUS_PATH = Path("/tmp/lecturesift-launch-bootstrap.json")
-_EXPECTED_COMPLETED = [1, 2, 3, 4, 5, 6, 7]
+_EXPECTED_COMPLETED: list[int] = []
+_TARGET_INDEX = 1
 
 
 def _write_status(payload: dict) -> None:
@@ -28,7 +29,7 @@ def _write_status(payload: dict) -> None:
 
 
 def main() -> int:
-    _write_status({"status": "waiting", "target_index": 8})
+    _write_status({"status": "waiting", "target_index": _TARGET_INDEX})
     time.sleep(30)
     last_error: Exception | None = None
     for attempt in range(4):
@@ -41,7 +42,7 @@ def main() -> int:
                         "status": "launch_step_not_ready",
                         "completed": completed,
                         "expected_completed": _EXPECTED_COMPLETED,
-                        "target_index": 8,
+                        "target_index": _TARGET_INDEX,
                     }
                 )
                 print(f"Launch bootstrap skipped: completed={completed}", flush=True)
@@ -53,7 +54,7 @@ def main() -> int:
                 for key, value in result.items()
                 if key in {"status", "kind", "index", "completed"}
             }
-            safe_result["target_index"] = 8
+            safe_result["target_index"] = _TARGET_INDEX
             _write_status(safe_result)
             print(f"Launch bootstrap: {result.get('status')}", flush=True)
             return 0
@@ -63,7 +64,7 @@ def main() -> int:
                 {
                     "status": "retrying" if attempt < 3 else "error",
                     "attempt": attempt + 1,
-                    "target_index": 8,
+                    "target_index": _TARGET_INDEX,
                     "error_type": getattr(exc, "error_type", type(exc).__name__),
                 }
             )
