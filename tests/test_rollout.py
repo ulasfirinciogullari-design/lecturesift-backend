@@ -350,7 +350,11 @@ def test_admin_credit_adjustment_is_bounded_and_audited(monkeypatch):
 def test_admin_can_manage_profile_subscription_sessions_and_close_account(monkeypatch):
     email, token = new_account()
     monkeypatch.setattr(config, "BILLING_ADMIN_TOKEN", "admin-secret")
-    monkeypatch.setattr(config, "INSTAGRAM_ADMIN_TOKEN", "admin-secret")
+    monkeypatch.setattr(config, "INSTAGRAM_ADMIN_TOKEN", "instagram-only-secret")
+    assert client.get(
+        "/billing/admin/credit-events",
+        headers=auth("instagram-only-secret"),
+    ).status_code == 401
     user_id = client.get("/billing/me", headers=auth(token)).json()["account"]["user"]["id"]
     changed_email = f"managed-{uuid.uuid4()}@example.com"
 
