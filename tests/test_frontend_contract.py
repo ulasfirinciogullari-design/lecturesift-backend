@@ -267,6 +267,46 @@ def test_profile_admin_bank_and_full_comparison_interfaces_are_present():
     assert "renderExamPrep" in workspace_script and "startExamButton" in workspace_script
 
 
+def test_admin_large_dataset_controls_and_compact_account_tabs_are_wired():
+    admin = (FRONTEND / "admin.html").read_text(encoding="utf-8")
+    admin_script = (FRONTEND / "admin.js").read_text(encoding="utf-8")
+    account = (FRONTEND / "account.html").read_text(encoding="utf-8")
+    auth = (FRONTEND / "auth.js").read_text(encoding="utf-8")
+    rollout = (FRONTEND.parent / "lecturesift" / "rollout_routes.py").read_text(encoding="utf-8")
+    assert all(
+        value in admin
+        for value in (
+            "adminUsersPagination",
+            "adminOrdersPagination",
+            "adminBulkToolbar",
+            "adminBulkConfirmation",
+            "adminUserDialog",
+            'data-admin-view="growth"',
+        )
+    )
+    assert all(
+        value in admin_script
+        for value in (
+            "/billing/admin/users?",
+            "/billing/admin/orders?",
+            "/billing/admin/users/bulk-action",
+            "applyAdminBulkAction",
+            "confirmation_word",
+            "payment_method",
+            "ip_network",
+        )
+    )
+    assert all(
+        f'data-account-view="{view}"' in account
+        and f'data-account-view-button="{view}"' in account
+        for view in ("overview", "profile", "payments", "lessons", "security")
+    )
+    assert "activateAccountView" in auth and "lecturesift-account-view" in auth
+    assert '@router.get("/billing/admin/users")' in rollout
+    assert '@router.get("/billing/admin/orders")' in rollout
+    assert '@router.post("/billing/admin/users/bulk-action")' in rollout
+
+
 def test_checkout_names_contact_inbox_and_mobile_plan_navigation_are_wired():
     plans_html = (FRONTEND / "plans.html").read_text(encoding="utf-8")
     plans_js = (FRONTEND / "plans.js").read_text(encoding="utf-8")
@@ -528,8 +568,8 @@ def test_banner_ads_are_opt_in_public_only_and_paid_plans_are_ad_free():
     display = (FRONTEND / "display-ads.js").read_text(encoding="utf-8")
     blueprint = (FRONTEND.parent / "render.yaml").read_text(encoding="utf-8")
 
-    assert 'displayAdsScript.src = "/display-ads.js?v=1"' in i18n
-    assert 'displayAdsStyle.href = "/display-ads.css?v=1"' in i18n
+    assert 'displayAdsScript.src = "/display-ads.js?v=2"' in i18n
+    assert 'displayAdsStyle.href = "/display-ads.css?v=2"' in i18n
     assert 'LectureSiftConsent?.allows("advertising")' in display
     assert 'body.account?.plan?.entitlements?.ad_free === true' in display
     assert 'const PUBLIC_AD_PATHS = new Set([' in display
@@ -537,6 +577,9 @@ def test_banner_ads_are_opt_in_public_only_and_paid_plans_are_ad_free():
     assert '"/account.html"' not in allowed_paths
     assert 'json("/ads/config")' in display
     assert "securepubads.g.doubleclick.net/tag/js/gpt.js" in display
+    assert "loadAdSenseAutoAds" in display
+    assert "pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=" in display
+    assert "renderHouseCampaign" in display
     assert "event.isEmpty) container.remove()" in display
     assert "LECTURESIFT_DISPLAY_ADS_ENABLED" in blueprint
     assert 'value: "false"' in blueprint.split("LECTURESIFT_DISPLAY_ADS_ENABLED", 1)[1][:80]

@@ -8,13 +8,15 @@ from __future__ import annotations
 
 import hashlib
 import html
+import ipaddress
+import math
 import secrets
 import statistics
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Table, delete, func, select, update
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Table, and_, delete, exists, func, literal, or_, select, union_all, update
 from sqlalchemy.exc import IntegrityError
 
 from . import config
@@ -129,6 +131,20 @@ ADMIN_ACCOUNT_EVENTS = Table(
     Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
+ACCOUNT_ACTIVITY = Table(
+    "lecturesift_account_activity",
+    METADATA,
+    Column("id", String(36), primary_key=True),
+    Column("user_id", String(36), ForeignKey("billing_users.id"), nullable=False, index=True),
+    Column("event_type", String(32), nullable=False, index=True),
+    # Only a salted fingerprint and a masked network are retained. Full IP
+    # addresses are deliberately not persisted in the application database.
+    Column("ip_hash", String(64), nullable=False),
+    Column("ip_network", String(64), nullable=False),
+    Column("user_agent", String(240), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, index=True),
+)
+
 REFUND_REQUESTS = Table(
     "lecturesift_refund_requests",
     METADATA,
@@ -189,6 +205,7 @@ def init_rollout_database() -> None:
         RUNTIME_METRICS,
         ADMIN_CREDIT_EVENTS,
         ADMIN_ACCOUNT_EVENTS,
+        ACCOUNT_ACTIVITY,
         REFUND_REQUESTS,
         CONTACT_MESSAGES,
     ):
@@ -1029,6 +1046,403 @@ def decide_refund_request(request_id: str, action: str, note: str, actor: str) -
             select(REFUND_REQUESTS).where(REFUND_REQUESTS.c.id == request_id)
         ).first()
     return _public_refund_request(updated)
+
+
+def _masked_ip_network(client_ip: str) -> str:
+    try:
+        address = ipaddress.ip_address((client_ip or "").strip())
+    except ValueError:
+        return "unknown"
+    prefix = 24 if address.version == 4 else 64
+    return str(ipaddress.ip_network(f"{address}/{prefix}", strict=False))
+
+
+def record_account_activity(user_id: str, event_type: str, client_ip: str, user_agent: str) -> bool:
+    """Record security activity without retaining a full IP address."""
+    normalized_user_id = (user_id or "").strip()
+    normalized_event = (event_type or "activity").strip().lower()[:32]
+    if not normalized_user_id:
+        return False
+    secret = config.BILLING_SESSION_SECRET or config.DATABASE_URL or "lecturesift-activity"
+    fingerprint = hashlib.sha256(f"{secret}|{client_ip}".encode("utf-8")).hexdigest()
+    safe_agent = " ".join((user_agent or "unknown").replace("\x00", "").split())[:240] or "unknown"
+    try:
+        init_rollout_database()
+        with ENGINE.begin() as connection:
+            connection.execute(
+                delete(ACCOUNT_ACTIVITY).where(
+                    ACCOUNT_ACTIVITY.c.created_at
+                    < utcnow() - timedelta(days=config.ACCOUNT_ACTIVITY_RETENTION_DAYS)
+                )
+            )
+            connection.execute(
+                ACCOUNT_ACTIVITY.insert().values(
+                    id=str(uuid.uuid4()),
+                    user_id=normalized_user_id,
+                    event_type=normalized_event,
+                    ip_hash=fingerprint,
+                    ip_network=_masked_ip_network(client_ip),
+                    user_agent=safe_agent,
+                    created_at=utcnow(),
+                )
+            )
+        return True
+    except Exception:
+        # Account access must not fail merely because a non-essential audit
+        # insert is temporarily unavailable.
+        return False
+
+
+def list_admin_user_activity(user_id: str, limit: int = 30) -> list[dict[str, Any]]:
+    init_rollout_database()
+    safe_limit = max(1, min(int(limit), 100))
+    with ENGINE.connect() as connection:
+        exists_row = connection.execute(select(USERS.c.id).where(USERS.c.id == user_id)).first()
+        if not exists_row:
+            raise BillingError("Kullanıcı bulunamadı.")
+        rows = connection.execute(
+            select(ACCOUNT_ACTIVITY)
+            .where(ACCOUNT_ACTIVITY.c.user_id == user_id)
+            .order_by(ACCOUNT_ACTIVITY.c.created_at.desc())
+            .limit(safe_limit)
+        ).all()
+    return [
+        {
+            "id": row.id,
+            "event_type": row.event_type,
+            "ip_network": row.ip_network,
+            "ip_fingerprint": row.ip_hash[:12],
+            "user_agent": row.user_agent,
+            "created_at": row.created_at.isoformat(),
+        }
+        for row in rows
+    ]
+
+
+def _protected_admin_emails() -> set[str]:
+    protected = {item.casefold() for item in config.BILLING_PROTECTED_EMAILS}
+    if config.LEGAL_OPERATOR_EMAIL:
+        protected.add(config.LEGAL_OPERATOR_EMAIL.casefold())
+    return protected
+
+
+def _latest_activity_map(connection, user_ids: list[str]) -> dict[str, dict[str, Any]]:
+    if not user_ids:
+        return {}
+    latest = (
+        select(
+            ACCOUNT_ACTIVITY.c.user_id,
+            func.max(ACCOUNT_ACTIVITY.c.created_at).label("last_at"),
+        )
+        .where(ACCOUNT_ACTIVITY.c.user_id.in_(user_ids))
+        .group_by(ACCOUNT_ACTIVITY.c.user_id)
+        .subquery()
+    )
+    rows = connection.execute(
+        select(ACCOUNT_ACTIVITY)
+        .join(
+            latest,
+            and_(
+                ACCOUNT_ACTIVITY.c.user_id == latest.c.user_id,
+                ACCOUNT_ACTIVITY.c.created_at == latest.c.last_at,
+            ),
+        )
+    ).all()
+    return {
+        row.user_id: {
+            "event_type": row.event_type,
+            "ip_network": row.ip_network,
+            "ip_fingerprint": row.ip_hash[:12],
+            "user_agent": row.user_agent,
+            "created_at": row.created_at.isoformat(),
+        }
+        for row in rows
+    }
+
+
+def list_admin_users_page(
+    *,
+    search: str = "",
+    verification: str = "all",
+    plan_code: str = "all",
+    sort: str = "created_desc",
+    page: int = 1,
+    page_size: int = 50,
+) -> dict[str, Any]:
+    init_billing_database()
+    now = utcnow()
+    safe_page = max(1, int(page))
+    safe_page_size = max(10, min(int(page_size), 100))
+    filters = [USERS.c.email.not_like("deleted+%@users.invalid")]
+    needle = (search or "").strip().casefold()
+    if needle:
+        pattern = f"%{needle[:160]}%"
+        filters.append(
+            or_(
+                func.lower(USERS.c.email).like(pattern),
+                func.lower(func.coalesce(USER_PROFILES.c.first_name, "")).like(pattern),
+                func.lower(func.coalesce(USER_PROFILES.c.last_name, "")).like(pattern),
+                func.lower(func.coalesce(USER_PROFILES.c.phone, "")).like(pattern),
+            )
+        )
+    if verification == "verified":
+        filters.append(USER_PROFILES.c.email_verified_at.is_not(None))
+    elif verification == "unverified":
+        filters.append(USER_PROFILES.c.email_verified_at.is_(None))
+    active_subscription = and_(
+        SUBSCRIPTIONS.c.user_id == USERS.c.id,
+        SUBSCRIPTIONS.c.status.in_(("active", "cancel_at_end")),
+        SUBSCRIPTIONS.c.ends_at > now,
+    )
+    if plan_code == "free":
+        filters.append(~exists(select(literal(1)).where(active_subscription)))
+    elif plan_code and plan_code != "all":
+        filters.append(
+            exists(
+                select(literal(1)).where(
+                    active_subscription,
+                    SUBSCRIPTIONS.c.plan_code == plan_code,
+                )
+            )
+        )
+    base = (
+        select(
+            USERS.c.id,
+            USERS.c.email,
+            USERS.c.credit_minutes,
+            USERS.c.created_at,
+            USER_PROFILES.c.first_name,
+            USER_PROFILES.c.last_name,
+            USER_PROFILES.c.phone,
+            USER_PROFILES.c.country_code,
+            USER_PROFILES.c.email_verified_at,
+            USER_PROFILES.c.phone_verified_at,
+            USER_PROFILES.c.updated_at,
+            USER_PREFERENCES.c.preferred_language,
+        )
+        .select_from(
+            USERS.outerjoin(USER_PROFILES, USER_PROFILES.c.user_id == USERS.c.id)
+            .outerjoin(USER_PREFERENCES, USER_PREFERENCES.c.user_id == USERS.c.id)
+        )
+        .where(*filters)
+    )
+    sort_map = {
+        "created_asc": USERS.c.created_at.asc(),
+        "email_asc": func.lower(USERS.c.email).asc(),
+        "email_desc": func.lower(USERS.c.email).desc(),
+        "credit_desc": USERS.c.credit_minutes.desc(),
+        "credit_asc": USERS.c.credit_minutes.asc(),
+    }
+    ordering = sort_map.get(sort, USERS.c.created_at.desc())
+    with ENGINE.connect() as connection:
+        total = int(connection.execute(select(func.count()).select_from(base.subquery())).scalar_one())
+        rows = connection.execute(
+            base.order_by(ordering).offset((safe_page - 1) * safe_page_size).limit(safe_page_size)
+        ).all()
+        user_ids = [row.id for row in rows]
+        subscriptions = connection.execute(
+            select(SUBSCRIPTIONS)
+            .where(
+                SUBSCRIPTIONS.c.user_id.in_(user_ids) if user_ids else literal(False),
+                SUBSCRIPTIONS.c.status.in_(("active", "cancel_at_end")),
+                SUBSCRIPTIONS.c.ends_at > now,
+            )
+            .order_by(SUBSCRIPTIONS.c.ends_at.desc())
+        ).all()
+        usage_rows = connection.execute(
+            select(
+                USAGE_EVENTS.c.user_id,
+                func.coalesce(func.sum(USAGE_EVENTS.c.minutes), 0).label("total_minutes"),
+            )
+            .where(USAGE_EVENTS.c.user_id.in_(user_ids) if user_ids else literal(False))
+            .group_by(USAGE_EVENTS.c.user_id)
+        ).all()
+        latest_activity = _latest_activity_map(connection, user_ids)
+    subscriptions_by_user: dict[str, dict[str, Any]] = {}
+    for item in subscriptions:
+        subscriptions_by_user.setdefault(item.user_id, {
+            "id": item.id,
+            "plan_code": item.plan_code,
+            "interval": item.interval,
+            "status": item.status,
+            "starts_at": item.starts_at.isoformat(),
+            "ends_at": item.ends_at.isoformat(),
+        })
+    usage_by_user = {item.user_id: int(item.total_minutes or 0) for item in usage_rows}
+    protected = _protected_admin_emails()
+    items = []
+    for row in rows:
+        subscription = subscriptions_by_user.get(row.id)
+        items.append({
+            "id": row.id,
+            "email": row.email,
+            "first_name": row.first_name or "",
+            "last_name": row.last_name or "",
+            "name": " ".join(part for part in (row.first_name, row.last_name) if part),
+            "phone": row.phone or "",
+            "country_code": row.country_code or "",
+            "preferred_language": row.preferred_language or "tr",
+            "email_verified": row.email_verified_at is not None,
+            "phone_verified": row.phone_verified_at is not None,
+            "is_protected": row.email.casefold() in protected,
+            "credit_minutes": int(row.credit_minutes or 0),
+            "total_usage_minutes": usage_by_user.get(row.id, 0),
+            "plan_code": subscription["plan_code"] if subscription else "free",
+            "subscription": subscription,
+            "created_at": row.created_at.isoformat(),
+            "updated_at": row.updated_at.isoformat() if row.updated_at else row.created_at.isoformat(),
+            "last_activity": latest_activity.get(row.id),
+        })
+    return {
+        "items": items,
+        "pagination": {
+            "page": safe_page,
+            "page_size": safe_page_size,
+            "total": total,
+            "total_pages": max(1, math.ceil(total / safe_page_size)),
+        },
+    }
+
+
+def list_admin_orders_page(
+    *,
+    search: str = "",
+    status: str = "all",
+    provider: str = "all",
+    page: int = 1,
+    page_size: int = 50,
+) -> dict[str, Any]:
+    init_billing_database()
+    safe_page = max(1, int(page))
+    safe_page_size = max(10, min(int(page_size), 100))
+    manual = select(
+        MANUAL_ORDERS.c.reference.label("reference"),
+        MANUAL_ORDERS.c.user_id.label("user_id"),
+        literal("bank_transfer").label("provider"),
+        MANUAL_ORDERS.c.plan_code.label("plan_code"),
+        MANUAL_ORDERS.c.interval.label("interval"),
+        MANUAL_ORDERS.c.amount_minor.label("amount_minor"),
+        literal(None, type_=Integer).label("provider_amount_minor"),
+        MANUAL_ORDERS.c.currency.label("currency"),
+        MANUAL_ORDERS.c.status.label("status"),
+        literal(None, type_=String(32)).label("failure_code"),
+        literal(None, type_=String(240)).label("failure_message"),
+        MANUAL_ORDERS.c.created_at.label("created_at"),
+        MANUAL_ORDERS.c.updated_at.label("updated_at"),
+    )
+    card = select(
+        PAYMENT_ORDERS.c.reference,
+        PAYMENT_ORDERS.c.user_id,
+        PAYMENT_ORDERS.c.provider,
+        PAYMENT_ORDERS.c.plan_code,
+        PAYMENT_ORDERS.c.interval,
+        PAYMENT_ORDERS.c.amount_minor,
+        PAYMENT_ORDERS.c.provider_amount_minor,
+        PAYMENT_ORDERS.c.currency,
+        PAYMENT_ORDERS.c.status,
+        PAYMENT_ORDERS.c.failure_code,
+        PAYMENT_ORDERS.c.failure_message,
+        PAYMENT_ORDERS.c.created_at,
+        PAYMENT_ORDERS.c.updated_at,
+    )
+    orders = union_all(manual, card).subquery("admin_orders")
+    filters = []
+    needle = (search or "").strip().casefold()
+    if needle:
+        pattern = f"%{needle[:160]}%"
+        filters.append(
+            or_(
+                func.lower(orders.c.reference).like(pattern),
+                func.lower(USERS.c.email).like(pattern),
+                func.lower(func.coalesce(USER_PROFILES.c.first_name, "")).like(pattern),
+                func.lower(func.coalesce(USER_PROFILES.c.last_name, "")).like(pattern),
+            )
+        )
+    if status == "failed":
+        filters.append(orders.c.status.in_(("failed", "token_failed", "cancelled")))
+    elif status and status != "all":
+        filters.append(orders.c.status == status)
+    if provider == "card":
+        filters.append(orders.c.provider != "bank_transfer")
+    elif provider and provider != "all":
+        filters.append(orders.c.provider == provider)
+    base = (
+        select(
+            orders,
+            USERS.c.email.label("user_email"),
+            USER_PROFILES.c.first_name,
+            USER_PROFILES.c.last_name,
+            PAYMENT_CONSENTS.c.ip_hash.label("consent_ip_hash"),
+            PAYMENT_CONSENTS.c.user_agent_hash.label("consent_user_agent_hash"),
+            PAYMENT_CONSENTS.c.language.label("consent_language"),
+            PAYMENT_CONSENTS.c.accepted_at.label("consent_accepted_at"),
+        )
+        .join(USERS, USERS.c.id == orders.c.user_id)
+        .outerjoin(USER_PROFILES, USER_PROFILES.c.user_id == USERS.c.id)
+        .outerjoin(PAYMENT_CONSENTS, PAYMENT_CONSENTS.c.order_reference == orders.c.reference)
+        .where(*filters)
+    )
+    with ENGINE.connect() as connection:
+        total = int(connection.execute(select(func.count()).select_from(base.subquery())).scalar_one())
+        rows = connection.execute(
+            base.order_by(orders.c.created_at.desc())
+            .offset((safe_page - 1) * safe_page_size)
+            .limit(safe_page_size)
+        ).all()
+        latest_activity = _latest_activity_map(connection, list({row.user_id for row in rows}))
+    items = []
+    for row in rows:
+        activity = latest_activity.get(row.user_id)
+        items.append({
+            "reference": row.reference,
+            "order_number": row.reference,
+            "provider": row.provider,
+            "payment_method": "bank_transfer" if row.provider == "bank_transfer" else "card",
+            "plan_code": row.plan_code,
+            "interval": row.interval,
+            "amount_minor": int(row.amount_minor),
+            "provider_amount_minor": row.provider_amount_minor,
+            "currency": row.currency,
+            "status": row.status,
+            "failure_code": row.failure_code,
+            "failure_message": row.failure_message,
+            "created_at": row.created_at.isoformat(),
+            "updated_at": row.updated_at.isoformat(),
+            "user": {
+                "id": row.user_id,
+                "email": row.user_email,
+                "name": " ".join(part for part in (row.first_name, row.last_name) if part),
+                "last_activity": activity,
+            },
+            "consent": {
+                "accepted_at": row.consent_accepted_at.isoformat() if row.consent_accepted_at else None,
+                "language": row.consent_language,
+                "ip_fingerprint": row.consent_ip_hash[:12] if row.consent_ip_hash else None,
+                "user_agent_fingerprint": row.consent_user_agent_hash[:12] if row.consent_user_agent_hash else None,
+            },
+        })
+    return {
+        "items": items,
+        "pagination": {
+            "page": safe_page,
+            "page_size": safe_page_size,
+            "total": total,
+            "total_pages": max(1, math.ceil(total / safe_page_size)),
+        },
+    }
+
+
+def admin_user_identity(user_id: str) -> dict[str, Any]:
+    init_billing_database()
+    with ENGINE.connect() as connection:
+        row = connection.execute(select(USERS.c.id, USERS.c.email).where(USERS.c.id == user_id)).first()
+    if not row or row.email.startswith("deleted+"):
+        raise BillingError("Kullanıcı bulunamadı.")
+    return {
+        "id": row.id,
+        "email": row.email,
+        "is_protected": row.email.casefold() in _protected_admin_emails(),
+    }
 
 
 def _record_admin_account_event(

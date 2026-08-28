@@ -77,6 +77,7 @@ from .payments import (
     process_paytr_callback,
 )
 from .security import RATE_LIMITER, RateLimitExceeded
+from .rollout_service import record_account_activity
 
 
 app = FastAPI(title=f"LectureSift Backend V{APP_VERSION}")
@@ -585,6 +586,12 @@ def billing_register(payload: BillingRegisterRequest, request: Request) -> dict:
             payload.phone,
             payload.country_code,
         )
+        record_account_activity(
+            result["user"]["id"],
+            "registered",
+            _client_ip(request),
+            request.headers.get("user-agent", ""),
+        )
         _send_verification_email(
             result["user"]["email"],
             result.pop("verification_token"),
@@ -669,6 +676,12 @@ def billing_login(payload: BillingAuthRequest, request: Request) -> dict:
     _rate_limit(request, "login", payload.email, limit=10, window_seconds=15 * 60)
     try:
         result = login_user(payload.email, payload.password)
+        record_account_activity(
+            result["user"]["id"],
+            "login",
+            _client_ip(request),
+            request.headers.get("user-agent", ""),
+        )
     except BillingConfigurationError as exc:
         raise HTTPException(503, detail={"code": "LS-BILL-00", "message": str(exc)}) from exc
     except BillingAuthenticationError as exc:
@@ -677,7 +690,13 @@ def billing_login(payload: BillingAuthRequest, request: Request) -> dict:
 
 
 @app.post("/billing/logout")
-def billing_logout(user: dict = Depends(_billing_user)) -> dict:
+def billing_logout(request: Request, user: dict = Depends(_billing_user)) -> dict:
+    record_account_activity(
+        user["id"],
+        "logout",
+        _client_ip(request),
+        request.headers.get("user-agent", ""),
+    )
     logout_user(user["id"])
     return {"ok": True, "message": "Oturum kapatıldı.", "user_id": user["id"]}
 

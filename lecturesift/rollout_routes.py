@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import re
+import unicodedata
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -17,6 +18,7 @@ from .queue import worker_health
 from .security import RATE_LIMITER, RateLimitExceeded
 from .rollout_service import (
     admin_close_user_account,
+    admin_user_identity,
     admin_revoke_user_sessions,
     admin_set_user_subscription,
     admin_update_user,
@@ -33,6 +35,9 @@ from .rollout_service import (
     instagram_reward_for_user,
     is_guest_user,
     list_admin_orders,
+    list_admin_orders_page,
+    list_admin_user_activity,
+    list_admin_users_page,
     list_admin_credit_events,
     list_admin_account_events,
     list_admin_refund_requests,
@@ -138,6 +143,17 @@ class AdminAccountCloseRequest(BaseModel):
     reason: str
 
 
+class AdminBulkUserRequest(BaseModel):
+    user_ids: list[str]
+    action: str
+    confirmation: str = ""
+    reason: str = ""
+    minutes_delta: int = 0
+    plan_code: str = "free"
+    interval: str = "monthly"
+    duration_days: int = 30
+
+
 def _user(authorization: str | None = Header(None)) -> dict:
     scheme, _, token = (authorization or "").partition(" ")
     if scheme.casefold() != "bearer" or not token:
@@ -186,7 +202,10 @@ def rollout_health() -> dict:
             and config.GOOGLE_ADS_SIGNUP_LABEL
             and config.GOOGLE_ADS_PURCHASE_LABEL
         ),
-        "display_ads_configured": bool(config.DISPLAY_ADS_ENABLED and config.DISPLAY_AD_UNIT_PATH),
+        "display_ads_configured": bool(
+            (config.DISPLAY_ADS_ENABLED and config.DISPLAY_AD_UNIT_PATH)
+            or re.fullmatch(r"ca-pub-[0-9]+", config.ADSENSE_PUBLISHER_ID)
+        ),
         "contact_email": config.CONTACT_EMAIL,
         "durable_queue_configured": bool(config.CELERY_BROKER_URL),
         "durable_processing_required": config.REQUIRE_DURABLE_PROCESSING,
@@ -227,6 +246,27 @@ def ads_config() -> dict:
         "banner_unit_path": config.DISPLAY_AD_UNIT_PATH if configured else None,
         "consent_required": True,
         "paid_plans_ad_free": True,
+        "adsense_auto_ads": {
+            "enabled": bool(re.fullmatch(r"ca-pub-[0-9]+", config.ADSENSE_PUBLISHER_ID)),
+            "publisher_id": (
+                config.ADSENSE_PUBLISHER_ID
+                if re.fullmatch(r"ca-pub-[0-9]+", config.ADSENSE_PUBLISHER_ID)
+                else None
+            ),
+        },
+        "house_campaign": {
+            "enabled": bool(
+                config.SITE_BANNER_ENABLED
+                and config.SITE_BANNER_TITLE
+                and config.SITE_BANNER_TEXT
+                and config.SITE_BANNER_CTA
+                and config.SITE_BANNER_URL.startswith("/")
+            ),
+            "title": config.SITE_BANNER_TITLE,
+            "text": config.SITE_BANNER_TEXT,
+            "cta": config.SITE_BANNER_CTA,
+            "url": config.SITE_BANNER_URL if config.SITE_BANNER_URL.startswith("/") else "/plans.html",
+        },
     }
 
 
@@ -475,6 +515,137 @@ def admin_manual_order_decision(reference: str, payload: DecisionRequest) -> dic
     except (BillingError, BillingConfigurationError) as exc:
         _billing_failure(exc, "LS-BILL-09")
     return {"ok": True, "result": result}
+
+
+@router.get("/billing/admin/users")
+def admin_users_page(
+    search: str = Query("", max_length=160),
+    verification: str = Query("all"),
+    plan: str = Query("all"),
+    sort: str = Query("created_desc"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=10, le=100),
+    admin: dict = Depends(_admin),
+) -> dict:
+    del admin
+    try:
+        result = list_admin_users_page(
+            search=search,
+            verification=verification,
+            plan_code=plan,
+            sort=sort,
+            page=page,
+            page_size=page_size,
+        )
+    except (BillingError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-ADMIN-06")
+    return {"ok": True, "users": result["items"], "pagination": result["pagination"]}
+
+
+@router.get("/billing/admin/orders")
+def admin_orders_page(
+    search: str = Query("", max_length=160),
+    status: str = Query("all"),
+    provider: str = Query("all"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=10, le=100),
+    admin: dict = Depends(_admin),
+) -> dict:
+    del admin
+    try:
+        result = list_admin_orders_page(
+            search=search,
+            status=status,
+            provider=provider,
+            page=page,
+            page_size=page_size,
+        )
+    except (BillingError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-ADMIN-07")
+    return {"ok": True, "orders": result["items"], "pagination": result["pagination"]}
+
+
+@router.get("/billing/admin/users/{user_id}/activity")
+def admin_user_activity(
+    user_id: str,
+    limit: int = Query(30, ge=1, le=100),
+    admin: dict = Depends(_admin),
+) -> dict:
+    del admin
+    try:
+        activity = list_admin_user_activity(user_id, limit)
+    except BillingError as exc:
+        _billing_failure(exc, "LS-ADMIN-09")
+    return {
+        "ok": True,
+        "activity": activity,
+        "privacy": {
+            "full_ip_stored": False,
+            "retention_days": config.ACCOUNT_ACTIVITY_RETENTION_DAYS,
+        },
+    }
+
+
+def _bulk_confirmation(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value or "")
+    return "".join(char for char in normalized if not unicodedata.combining(char)).casefold().strip()
+
+
+@router.post("/billing/admin/users/bulk-action")
+def admin_users_bulk_action(
+    payload: AdminBulkUserRequest,
+    admin: dict = Depends(_admin),
+) -> dict:
+    unique_ids = list(dict.fromkeys(item.strip() for item in payload.user_ids if item.strip()))
+    if not unique_ids or len(unique_ids) > 100:
+        raise HTTPException(400, detail={"code": "LS-ADMIN-08", "message": "Bir işlemde 1 ile 100 kullanıcı seç."})
+    action = payload.action.strip().lower()
+    if action not in {"credit", "subscription", "revoke_sessions", "delete"}:
+        raise HTTPException(400, detail={"code": "LS-ADMIN-08", "message": "Geçersiz toplu işlem."})
+    reason = payload.reason.strip()
+    if action in {"credit", "delete"} and len(reason) < 4:
+        raise HTTPException(400, detail={"code": "LS-ADMIN-08", "message": "İşlem nedenini en az dört karakterle yaz."})
+    if action == "delete" and _bulk_confirmation(payload.confirmation) != "sil":
+        raise HTTPException(400, detail={"code": "LS-ADMIN-08", "message": "Toplu hesap kapatma için SİL yaz."})
+    if action == "credit" and (payload.minutes_delta == 0 or abs(payload.minutes_delta) > 10_000):
+        raise HTTPException(400, detail={"code": "LS-ADMIN-08", "message": "Dakika değişimi -10.000 ile 10.000 arasında ve sıfırdan farklı olmalı."})
+    results = []
+    for user_id in unique_ids:
+        try:
+            identity = admin_user_identity(user_id)
+            if action == "credit":
+                result = adjust_admin_credit(user_id, payload.minutes_delta, reason, admin["actor"])
+            elif action == "subscription":
+                result = admin_set_user_subscription(
+                    user_id,
+                    plan_code=payload.plan_code,
+                    interval=payload.interval,
+                    duration_days=payload.duration_days,
+                    actor=admin["actor"],
+                )
+            elif action == "revoke_sessions":
+                result = admin_revoke_user_sessions(user_id, admin["actor"])
+            else:
+                result = admin_close_user_account(
+                    user_id,
+                    confirmation_email=identity["email"],
+                    reason=reason,
+                    actor=admin["actor"],
+                )
+                cleanup = JOBS.delete_for_user(user_id)
+                result = {**result, "deleted_jobs": cleanup["jobs"]}
+            results.append({"user_id": user_id, "email": identity["email"], "ok": True, "result": result})
+        except (BillingError, BillingConfigurationError) as exc:
+            results.append({"user_id": user_id, "ok": False, "message": str(exc)})
+    succeeded = sum(1 for item in results if item["ok"])
+    return {
+        "ok": succeeded > 0,
+        "message": f"{succeeded} kullanıcı için işlem tamamlandı; {len(results) - succeeded} işlem uygulanamadı.",
+        "processed": len(results),
+        "succeeded": succeeded,
+        "failed": len(results) - succeeded,
+        "results": results,
+    }
 
 
 @router.get("/billing/admin/refund-requests")

@@ -33,6 +33,7 @@ def auth(token: str) -> dict:
 def test_display_ads_are_disabled_by_default_and_hide_unit_details(monkeypatch):
     monkeypatch.setattr(config, "DISPLAY_ADS_ENABLED", False)
     monkeypatch.setattr(config, "DISPLAY_AD_UNIT_PATH", "/1234567/lecturesift_banner")
+    monkeypatch.setattr(config, "SITE_BANNER_ENABLED", True)
     disabled = client.get("/ads/config")
     assert disabled.status_code == 200
     assert disabled.json() == {
@@ -41,6 +42,17 @@ def test_display_ads_are_disabled_by_default_and_hide_unit_details(monkeypatch):
         "banner_unit_path": None,
         "consent_required": True,
         "paid_plans_ad_free": True,
+        "adsense_auto_ads": {
+            "enabled": True,
+            "publisher_id": config.ADSENSE_PUBLISHER_ID,
+        },
+        "house_campaign": {
+            "enabled": True,
+            "title": config.SITE_BANNER_TITLE,
+            "text": config.SITE_BANNER_TEXT,
+            "cta": config.SITE_BANNER_CTA,
+            "url": config.SITE_BANNER_URL,
+        },
     }
 
     monkeypatch.setattr(config, "DISPLAY_ADS_ENABLED", True)
@@ -488,6 +500,89 @@ def test_rewarded_ad_sessions_are_opt_in_capped_and_single_use(monkeypatch):
     assert "claim_token" not in serialized
     assert "token_hash" not in serialized
 
+
+def test_admin_paginated_users_orders_activity_and_bulk_actions(monkeypatch):
+    first_email, first_token = new_account()
+    second_email, second_token = new_account()
+    first_user = client.get("/billing/me", headers=auth(first_token)).json()["account"]["user"]
+    second_user = client.get("/billing/me", headers=auth(second_token)).json()["account"]["user"]
+    monkeypatch.setattr(config, "ADMIN_ADMIN", "admin-secret")
+    monkeypatch.setattr(config, "BILLING_BANK_IBAN", "TR000000000000000000000000")
+    monkeypatch.setattr(config, "BILLING_BANK_ACCOUNT_HOLDER", "Test Holder")
+    monkeypatch.setattr(config, "BILLING_SUPPORT_EMAIL", "support@example.com")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_NAME", "LectureSift Test")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_ADDRESS", "Test Address 1")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_COUNTRY", "TR")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_PHONE", "+905551112233")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_EMAIL", "support@example.com")
+
+    assert rollout_service.record_account_activity(
+        first_user["id"], "login", "203.0.113.42", "Test Browser/1.0"
+    )
+    users = client.get(
+        f"/billing/admin/users?search={first_email}&page=1&page_size=10",
+        headers=auth("admin-secret"),
+    )
+    assert users.status_code == 200
+    assert users.json()["pagination"]["total"] == 1
+    listed_user = users.json()["users"][0]
+    assert listed_user["last_activity"]["ip_network"] == "203.0.113.0/24"
+    assert listed_user["last_activity"]["ip_fingerprint"]
+    assert "203.0.113.42" not in json.dumps(listed_user)
+
+    activity = client.get(
+        f"/billing/admin/users/{first_user['id']}/activity?limit=10",
+        headers=auth("admin-secret"),
+    )
+    assert activity.status_code == 200
+    activity_body = activity.json()
+    assert activity_body["privacy"]["full_ip_stored"] is False
+    assert activity_body["privacy"]["retention_days"] >= 30
+    assert activity_body["activity"][0]["ip_network"] == "203.0.113.0/24"
+    assert "203.0.113.42" not in json.dumps(activity_body)
+
+    bulk = client.post(
+        "/billing/admin/users/bulk-action",
+        headers=auth("admin-secret"),
+        json={
+            "user_ids": [first_user["id"], second_user["id"]],
+            "action": "credit",
+            "minutes_delta": 7,
+            "reason": "Toplu destek telafisi",
+        },
+    )
+    assert bulk.status_code == 200
+    assert bulk.json()["succeeded"] == 2
+
+    order = client.post(
+        "/billing/manual-transfer/orders",
+        headers=auth(first_token),
+        json={"plan_code": "plus", "interval": "monthly", "terms_accepted": True, "early_performance_requested": True},
+    ).json()["order"]
+    orders = client.get(
+        f"/billing/admin/orders?search={order['reference']}&provider=bank_transfer&page_size=10",
+        headers=auth("admin-secret"),
+    )
+    assert orders.status_code == 200
+    listed_order = orders.json()["orders"][0]
+    assert listed_order["payment_method"] == "bank_transfer"
+    assert listed_order["user"]["email"] == first_email
+    assert listed_order["created_at"] and listed_order["updated_at"]
+
+    refused = client.post(
+        "/billing/admin/users/bulk-action",
+        headers=auth("admin-secret"),
+        json={"user_ids": [second_user["id"]], "action": "delete", "confirmation": "hayır", "reason": "Test hesabı"},
+    )
+    assert refused.status_code == 400
+    deleted = client.post(
+        "/billing/admin/users/bulk-action",
+        headers=auth("admin-secret"),
+        json={"user_ids": [second_user["id"]], "action": "delete", "confirmation": "SİL", "reason": "Test hesabı"},
+    )
+    assert deleted.status_code == 200
+    assert deleted.json()["succeeded"] == 1
+    assert client.get("/billing/me", headers=auth(second_token)).status_code == 401
 
 def test_eta_learns_from_completed_jobs():
     baseline = rollout_service.estimate_eta_seconds(10, 0)

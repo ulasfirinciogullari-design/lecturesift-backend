@@ -49,6 +49,30 @@
     return {container, slot};
   }
 
+  function renderHouseCampaign(campaign) {
+    if (!campaign?.enabled || document.querySelector(".display-ad")) return;
+    const container = document.createElement("aside");
+    container.className = "display-ad house-campaign";
+    container.setAttribute("aria-label", campaign.title || "LectureSift kampanyası");
+    const copy = document.createElement("div");
+    const eyebrow = document.createElement("span");
+    eyebrow.className = "display-ad-label";
+    eyebrow.textContent = "LectureSift önerisi";
+    const title = document.createElement("strong");
+    title.textContent = campaign.title || "Planları keşfet";
+    const text = document.createElement("p");
+    text.textContent = campaign.text || "Daha fazla ders işleme hakkına ulaş.";
+    copy.append(eyebrow, title, text);
+    const link = document.createElement("a");
+    link.href = String(campaign.url || "/plans.html").startsWith("/") ? campaign.url : "/plans.html";
+    link.textContent = campaign.cta || "Planları incele";
+    link.className = "house-campaign-action";
+    container.append(copy, link);
+    const footer = document.querySelector("footer");
+    if (footer) footer.before(container);
+    else document.body.append(container);
+  }
+
   function loadProvider() {
     if (window.googletag?.apiReady) return Promise.resolve();
     return new Promise((resolve, reject) => {
@@ -63,14 +87,32 @@
     });
   }
 
+  function loadAdSenseAutoAds(publisherId) {
+    if (!/^ca-pub-[0-9]+$/.test(String(publisherId || ""))) return;
+    if (document.querySelector('script[data-lecturesift-adsense="true"]')) return;
+    const script = document.createElement("script");
+    script.async = true;
+    script.crossOrigin = "anonymous";
+    script.dataset.lecturesiftAdsense = "true";
+    script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(publisherId)}`;
+    document.head.append(script);
+  }
+
   async function start() {
     if (started || !PUBLIC_AD_PATHS.has(unlocalizedPath())) return;
-    if (!window.LectureSiftConsent?.allows("advertising")) return;
     started = true;
     try {
       const config = await json("/ads/config");
-      if (!config.enabled || config.provider !== "google_gpt" || !String(config.banner_unit_path || "").startsWith("/")) return;
       if (await paidAccountIsAdFree()) return;
+      const advertisingAllowed = window.LectureSiftConsent?.allows("advertising") === true;
+      const providerReady = config.enabled && config.provider === "google_gpt" && String(config.banner_unit_path || "").startsWith("/");
+      if (!advertisingAllowed || !providerReady) {
+        renderHouseCampaign(config.house_campaign);
+        if (advertisingAllowed && config.adsense_auto_ads?.enabled) {
+          loadAdSenseAutoAds(config.adsense_auto_ads.publisher_id);
+        }
+        return;
+      }
       const {container, slot} = insertContainer();
       await loadProvider();
       window.googletag.cmd.push(() => {
@@ -91,10 +133,13 @@
     }
   }
 
-  document.addEventListener("lecturesift:consent", event => {
-    if (event.detail?.advertising) start();
-    else document.querySelector(".display-ad")?.remove();
-  });
+  const refreshForConsent = () => {
+    document.querySelector(".display-ad")?.remove();
+    started = false;
+    start();
+  };
+  document.addEventListener("lecturesift:consent", refreshForConsent);
+  document.addEventListener("lecturesift:consent-ready", refreshForConsent);
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, {once: true});
   else start();
 })();

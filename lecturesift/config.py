@@ -79,6 +79,22 @@ REWARDED_AD_DAILY_LIMIT_MINUTES = max(
 )
 DISPLAY_ADS_ENABLED = os.getenv("LECTURESIFT_DISPLAY_ADS_ENABLED", "false").lower() == "true"
 DISPLAY_AD_UNIT_PATH = os.getenv("LECTURESIFT_DISPLAY_AD_UNIT_PATH", "").strip()
+ADSENSE_PUBLISHER_ID = os.getenv(
+    "LECTURESIFT_ADSENSE_PUBLISHER_ID", "ca-pub-7608481350058806"
+).strip()
+SITE_BANNER_ENABLED = os.getenv("LECTURESIFT_SITE_BANNER_ENABLED", "true").lower() == "true"
+SITE_BANNER_TITLE = os.getenv(
+    "LECTURESIFT_SITE_BANNER_TITLE", "Derslerini daha hızlı çalış"
+).strip()
+SITE_BANNER_TEXT = os.getenv(
+    "LECTURESIFT_SITE_BANNER_TEXT",
+    "Quiz, bilgi kartı, akıllı özet ve daha fazla işleme dakikası için planları keşfet.",
+).strip()
+SITE_BANNER_CTA = os.getenv("LECTURESIFT_SITE_BANNER_CTA", "Planları incele").strip()
+SITE_BANNER_URL = os.getenv("LECTURESIFT_SITE_BANNER_URL", "/plans.html").strip()
+ACCOUNT_ACTIVITY_RETENTION_DAYS = max(
+    30, int(os.getenv("LECTURESIFT_ACCOUNT_ACTIVITY_RETENTION_DAYS", "180"))
+)
 ANALYTICS_ENABLED = os.getenv("LECTURESIFT_ANALYTICS_ENABLED", "false").lower() == "true"
 GA_MEASUREMENT_ID = os.getenv("LECTURESIFT_GA_MEASUREMENT_ID", "").strip().upper()
 GOOGLE_ADS_ID = os.getenv("LECTURESIFT_GOOGLE_ADS_ID", "").strip().upper()
