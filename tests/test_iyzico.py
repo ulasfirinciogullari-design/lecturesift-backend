@@ -161,6 +161,49 @@ def test_iyzico_checkout_and_callback_verify_signatures_amount_and_order(monkeyp
     assert account["payment_orders"][0]["status"] == "paid"
 
 
+def test_iyzico_one_lira_test_pack_uses_exact_live_amount(monkeypatch):
+    _configure(monkeypatch)
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "status": "success",
+                "conversationId": captured["payload"]["conversationId"],
+                "token": "one-lira-token",
+                "paymentPageUrl": "https://api.iyzipay.com/checkoutform/one-lira-token",
+                "signature": _response_signature([
+                    captured["payload"]["conversationId"],
+                    "one-lira-token",
+                ]),
+            }
+
+    def fake_post(url, *, content, headers, timeout):
+        captured["payload"] = json.loads(content)
+        return FakeResponse()
+
+    monkeypatch.setattr(payments.httpx, "post", fake_post)
+    _, session = _account()
+    response = TestClient(app).post(
+        "/billing/checkout",
+        headers={"Authorization": f"Bearer {session}", "X-Forwarded-For": "203.0.113.42"},
+        json={
+            "plan_code": "test", "interval": "one_time", "currency": "TRY",
+            "billing_address": "Örnek Mahallesi No 3", "billing_city": "Hatay",
+            "billing_zip_code": "31800", "phone": "+905551112233", "language": "tr",
+            "terms_accepted": True, "early_performance_requested": True,
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert captured["payload"]["price"] == "1.00"
+    assert captured["payload"]["paidPrice"] == "1.00"
+    assert captured["payload"]["currency"] == "TRY"
+    assert captured["payload"]["basketItems"][0]["name"] == "LectureSift test"
+
+
 def test_iyzico_callback_rejects_tampered_response(monkeypatch):
     _configure(monkeypatch)
     token = "tamper-test-token"

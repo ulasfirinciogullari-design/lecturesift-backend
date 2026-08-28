@@ -1,6 +1,6 @@
 const API = "https://lecturesift-backend.onrender.com";
 const TOKEN_KEY = "lecturesift-billing-token";
-const ORDER = ["free", "credit", "lite", "plus", "pro", "max", "business"];
+const ORDER = ["free", "test", "credit", "lite", "plus", "pro", "max", "business"];
 const LOCALE_DATA = window.LECTURESIFT_LOCALE_DATA || {
   countries: [], currencies: ["TRY", "USD", "EUR", "GBP"], currencyForCountry: {},
 };
@@ -9,6 +9,7 @@ const PLANS_I18N = window.LectureSiftI18n || {language:"tr",locale:"tr-TR",t:(ke
 const pt = (key, fallback) => PLANS_I18N.t(key, fallback);
 const COPY = {
   free: ["Ücretsiz", "Denemek ve kısa dersler için"],
+  test: ["1 TL Test Paketi", "Canlı kart ödemesini küçük tutarla denemek için"],
   credit: ["Dakika Paketi", "Abonelik olmadan ek kullanım"],
   lite: ["Lite", "Düzenli bireysel çalışma"],
   plus: ["Plus", "Yoğun ders dönemi ve çoklu kaynaklar"],
@@ -19,6 +20,7 @@ const COPY = {
 const ALL_SUMMARIES = ["short", "standard", "detailed", "exam", "five_minute"];
 const FALLBACK_META = {
   free: {kind: "free", minutes: 60, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 60, quiz_questions: 10, flashcards: 20, export_formats: ["pdf"], summary_profiles: ["short", "standard"], team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: false}},
+  test: {kind: "one_time", minutes: 1, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 1, quiz_questions: 1, flashcards: 1, export_formats: ["pdf"], summary_profiles: ["short"], team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: true}},
   credit: {kind: "one_time", minutes: 180, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 180, quiz_questions: 20, flashcards: 40, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: true}},
   lite: {kind: "subscription", minutes: 600, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 600, quiz_questions: 20, flashcards: 40, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
   plus: {kind: "subscription", minutes: 2400, priority: "standard", team_seats: 1, featured: true, entitlements: {minutes: 2400, quiz_questions: 30, flashcards: 60, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
@@ -27,28 +29,28 @@ const FALLBACK_META = {
   business: {kind: "quote", minutes: null, priority: "priority", team_seats: 10, featured: false, entitlements: {minutes: null, quiz_questions: null, flashcards: null, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, team_seats: 10, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
 };
 const FALLBACK_PRICES = {
-  TRY: [0, 19900, 34900, 69900, 129900, 249900, null],
-  USD: [0, 500, 900, 1800, 3300, 6300, null],
-  EUR: [0, 500, 900, 1700, 3100, 5900, null],
-  GBP: [0, 400, 800, 1500, 2700, 5200, null],
-  CAD: [0, 700, 1200, 2500, 4500, 8500, null],
-  AUD: [0, 800, 1400, 2800, 5200, 9900, null],
-  NZD: [0, 900, 1600, 3100, 5700, 10900, null],
-  JPY: [0, 800, 1400, 2800, 5000, 9500, null],
-  KRW: [0, 7000, 13000, 25000, 47000, 89000, null],
-  CNY: [0, 3600, 6500, 12900, 23900, 45900, null],
-  INR: [0, 39900, 74900, 149900, 279900, 529900, null],
-  BRL: [0, 2500, 4500, 8900, 16900, 31900, null],
-  MXN: [0, 9900, 17900, 34900, 64900, 124900, null],
-  CHF: [0, 500, 800, 1600, 3000, 5700, null],
-  SEK: [0, 5500, 9900, 19900, 36900, 69900, null],
-  NOK: [0, 5900, 10900, 21900, 39900, 76900, null],
-  DKK: [0, 3500, 6500, 12900, 22900, 44900, null],
-  PLN: [0, 2000, 3600, 7200, 13200, 25200, null],
-  AED: [0, 1900, 3300, 6600, 12100, 23100, null],
-  SAR: [0, 1900, 3400, 6800, 12400, 23600, null],
-  SGD: [0, 700, 1200, 2400, 4500, 8500, null],
-  HKD: [0, 3900, 7000, 14000, 26000, 49000, null],
+  TRY: [0, 100, 19900, 34900, 69900, 129900, 249900, null],
+  USD: [0, null, 500, 900, 1800, 3300, 6300, null],
+  EUR: [0, null, 500, 900, 1700, 3100, 5900, null],
+  GBP: [0, null, 400, 800, 1500, 2700, 5200, null],
+  CAD: [0, null, 700, 1200, 2500, 4500, 8500, null],
+  AUD: [0, null, 800, 1400, 2800, 5200, 9900, null],
+  NZD: [0, null, 900, 1600, 3100, 5700, 10900, null],
+  JPY: [0, null, 800, 1400, 2800, 5000, 9500, null],
+  KRW: [0, null, 7000, 13000, 25000, 47000, 89000, null],
+  CNY: [0, null, 3600, 6500, 12900, 23900, 45900, null],
+  INR: [0, null, 39900, 74900, 149900, 279900, 529900, null],
+  BRL: [0, null, 2500, 4500, 8900, 16900, 31900, null],
+  MXN: [0, null, 9900, 17900, 34900, 64900, 124900, null],
+  CHF: [0, null, 500, 800, 1600, 3000, 5700, null],
+  SEK: [0, null, 5500, 9900, 19900, 36900, 69900, null],
+  NOK: [0, null, 5900, 10900, 21900, 39900, 76900, null],
+  DKK: [0, null, 3500, 6500, 12900, 22900, 44900, null],
+  PLN: [0, null, 2000, 3600, 7200, 13200, 25200, null],
+  AED: [0, null, 1900, 3300, 6600, 12100, 23100, null],
+  SAR: [0, null, 1900, 3400, 6800, 12400, 23600, null],
+  SGD: [0, null, 700, 1200, 2400, 4500, 8500, null],
+  HKD: [0, null, 3900, 7000, 14000, 26000, 49000, null],
 };
 
 let catalog = null;
@@ -122,9 +124,10 @@ function summaries(items = []) {
 }
 
 function planLabel(code) { return pt(`plan.${code}`, COPY[code]?.[0] || code); }
+function visibleOrder() { return ORDER.filter(code => code !== "test" || currency === "TRY"); }
 
 function renderCompare() {
-  const plans = ORDER.map(code => catalog?.plans?.find(plan => plan.code === code)).filter(Boolean);
+  const plans = visibleOrder().map(code => catalog?.plans?.find(plan => plan.code === code)).filter(Boolean);
   $("compareHead").innerHTML = `<tr><th>${esc(pt("plans.right", "Hak"))}</th>${plans.map(plan => `<th>${esc(planLabel(plan.code))}</th>`).join("")}</tr>`;
   const yes = pt("common.yes", "Evet"), all = pt("common.all", "Tümü"), standard = pt("priority.standard", "Standart"), priority = pt("priority.priority", "Öncelikli");
   const rows = [
@@ -222,7 +225,7 @@ function renderPaymentStatus() {
 
 function renderPlans() {
   const map = new Map((catalog?.plans || []).map(plan => [plan.code, plan]));
-  $("plansGrid").innerHTML = ORDER.map(code => {
+  $("plansGrid").innerHTML = visibleOrder().map(code => {
     const plan = map.get(code);
     if (!plan) return "";
     const entitlements = plan.entitlements || {};
@@ -290,7 +293,7 @@ async function buy(planCode, interval = "monthly") {
   $("checkoutTerms").checked = false;
   $("checkoutEarlyPerformance").checked = false;
   $("checkoutCardButton").disabled = !commerceIdentity.configured || !provider.configured || !provider.currencies?.includes(currency);
-  $("checkoutBankButton").disabled = !commerceIdentity.configured || currency !== "TRY";
+  $("checkoutBankButton").disabled = !commerceIdentity.configured || currency !== "TRY" || !plan?.manual_price;
   $("checkoutNotice").textContent = !commerceIdentity.configured
     ? pt("payment.commercePending", "Satıcı/sağlayıcı kimliği ve iletişim bilgileri tamamlanmadan ödeme açılamaz.")
     : provider.configured
@@ -321,6 +324,7 @@ async function createTransfer(planCode, interval) {
     $("transferHolder").textContent = order.bank.account_holder;
     $("transferInstruction").textContent = order.instruction;
     $("transferSupport").href = `mailto:${encodeURIComponent(order.support_email)}?subject=${encodeURIComponent(`LectureSift ${order.reference}`)}`;
+    $("transferSupport").textContent = `${pt("payment.sendReceiptTo", "Dekontu e-postayla gönder")}: ${order.support_email}`;
     $("transferPanel").hidden = false;
     $("checkoutPanel").hidden = true;
     $("transferPanel").scrollIntoView({behavior: "smooth"});

@@ -79,6 +79,7 @@ ALL_SUMMARY_PROFILES = ("short", "standard", "detailed", "exam", "five_minute")
 
 PLANS = (
     Plan("free", "free", 60, ("pdf",), "standard", 1, 10, 20, ("short", "standard"), 7),
+    Plan("test", "one_time", 1, ("pdf",), "standard", 1, 1, 1, ("short",), 1),
     Plan("credit", "one_time", 180, ("pdf", "docx", "txt"), "standard", 1, 20, 40, ALL_SUMMARY_PROFILES, 30, 19900),
     Plan("lite", "subscription", 600, ("pdf", "docx", "txt"), "standard", 1, 20, 40, ALL_SUMMARY_PROFILES, 90, 34900),
     Plan("plus", "subscription", 2400, ("pdf", "docx", "txt"), "standard", 1, 30, 60, ALL_SUMMARY_PROFILES, 180, 69900, featured=True),
@@ -92,31 +93,31 @@ PLAN_BY_CODE = {plan.code: plan for plan in PLANS}
 # Intentional regional product prices, not volatile exchange-rate conversions.
 # The connected checkout provider remains the source of truth for tax and the
 # final amount charged.
-_PRICE_PLAN_CODES = ("free", "credit", "lite", "plus", "pro", "max")
+_PRICE_PLAN_CODES = ("free", "test", "credit", "lite", "plus", "pro", "max")
 _REGIONAL_PRICE_POINTS = {
-    "TRY": (0, 19900, 34900, 69900, 129900, 249900),
-    "USD": (0, 500, 900, 1800, 3300, 6300),
-    "EUR": (0, 500, 900, 1700, 3100, 5900),
-    "GBP": (0, 400, 800, 1500, 2700, 5200),
-    "CAD": (0, 700, 1200, 2500, 4500, 8500),
-    "AUD": (0, 800, 1400, 2800, 5200, 9900),
-    "NZD": (0, 900, 1600, 3100, 5700, 10900),
+    "TRY": (0, 100, 19900, 34900, 69900, 129900, 249900),
+    "USD": (0, None, 500, 900, 1800, 3300, 6300),
+    "EUR": (0, None, 500, 900, 1700, 3100, 5900),
+    "GBP": (0, None, 400, 800, 1500, 2700, 5200),
+    "CAD": (0, None, 700, 1200, 2500, 4500, 8500),
+    "AUD": (0, None, 800, 1400, 2800, 5200, 9900),
+    "NZD": (0, None, 900, 1600, 3100, 5700, 10900),
     # JPY and KRW have zero-decimal minor units; the other values use cents.
-    "JPY": (0, 800, 1400, 2800, 5000, 9500),
-    "KRW": (0, 7000, 13000, 25000, 47000, 89000),
-    "CNY": (0, 3600, 6500, 12900, 23900, 45900),
-    "INR": (0, 39900, 74900, 149900, 279900, 529900),
-    "BRL": (0, 2500, 4500, 8900, 16900, 31900),
-    "MXN": (0, 9900, 17900, 34900, 64900, 124900),
-    "CHF": (0, 500, 800, 1600, 3000, 5700),
-    "SEK": (0, 5500, 9900, 19900, 36900, 69900),
-    "NOK": (0, 5900, 10900, 21900, 39900, 76900),
-    "DKK": (0, 3500, 6500, 12900, 22900, 44900),
-    "PLN": (0, 2000, 3600, 7200, 13200, 25200),
-    "AED": (0, 1900, 3300, 6600, 12100, 23100),
-    "SAR": (0, 1900, 3400, 6800, 12400, 23600),
-    "SGD": (0, 700, 1200, 2400, 4500, 8500),
-    "HKD": (0, 3900, 7000, 14000, 26000, 49000),
+    "JPY": (0, None, 800, 1400, 2800, 5000, 9500),
+    "KRW": (0, None, 7000, 13000, 25000, 47000, 89000),
+    "CNY": (0, None, 3600, 6500, 12900, 23900, 45900),
+    "INR": (0, None, 39900, 74900, 149900, 279900, 529900),
+    "BRL": (0, None, 2500, 4500, 8900, 16900, 31900),
+    "MXN": (0, None, 9900, 17900, 34900, 64900, 124900),
+    "CHF": (0, None, 500, 800, 1600, 3000, 5700),
+    "SEK": (0, None, 5500, 9900, 19900, 36900, 69900),
+    "NOK": (0, None, 5900, 10900, 21900, 39900, 76900),
+    "DKK": (0, None, 3500, 6500, 12900, 22900, 44900),
+    "PLN": (0, None, 2000, 3600, 7200, 13200, 25200),
+    "AED": (0, None, 1900, 3300, 6600, 12100, 23100),
+    "SAR": (0, None, 1900, 3400, 6800, 12400, 23600),
+    "SGD": (0, None, 700, 1200, 2400, 4500, 8500),
+    "HKD": (0, None, 3900, 7000, 14000, 26000, 49000),
 }
 REGIONAL_PRICES = {
     plan_code: {
