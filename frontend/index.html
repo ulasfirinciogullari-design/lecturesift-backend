@@ -8,7 +8,7 @@
   <title>LectureSift - AI Ders Çalışma Asistanı</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
-<link rel="stylesheet" href="/rollout.css?v=7"><link rel="stylesheet" href="/theme.css?v=1"><script src="/theme.js?v=1"></script></head>
+<link rel="stylesheet" href="/rollout.css?v=7"><link rel="stylesheet" href="/theme.css?v=2"><script src="/theme.js?v=2"></script></head>
 <body>
   <div class="ambient ambient-one"></div>
   <div class="ambient ambient-two"></div>
@@ -222,27 +222,27 @@
         <div><p class="eyebrow" data-i18n="resultEyebrow">Ders paketi hazır</p><h2 id="resultHeading">LectureSift</h2><p id="resultMeta"></p></div>
         <a id="downloadAll" class="download-button" href="#"><span data-i18n="downloadAll">Tüm paketi indir</span><b>ZIP</b></a>
       </div>
-      <div class="result-tabs" role="tablist">
-        <button class="result-tab active" data-pane="summary" data-i18n="tabSummary">Özet</button>
-        <button class="result-tab" data-pane="notes" data-i18n="tabNotes">Akıllı notlar</button>
-        <button class="result-tab" data-pane="transcript" data-i18n="tabTranscript">Transkript</button>
-        <button class="result-tab" data-pane="slides" data-i18n="tabSlides">Slaytlar</button>
-        <button class="result-tab" data-pane="quiz">Quiz</button>
-        <button class="result-tab" data-pane="exam" data-i18n="exam.title">Sınava hazırlan</button>
-        <button class="result-tab" data-pane="cards" data-i18n="tabCards">Bilgi kartları</button>
-        <button class="result-tab" data-pane="ask" data-i18n="ask.title">Bu derse sor</button>
-        <button class="result-tab" data-pane="files" data-i18n="tabFiles">Dosyalar</button>
+      <div class="result-tabs" role="tablist" aria-label="Ders paketi bölümleri" data-i18n-aria-label="result.sectionsLabel">
+        <button id="resultTab-summary" type="button" role="tab" aria-selected="true" aria-controls="pane-summary" class="result-tab active" data-pane="summary" data-i18n="tabSummary">Özet</button>
+        <button id="resultTab-notes" type="button" role="tab" aria-selected="false" aria-controls="pane-notes" tabindex="-1" class="result-tab" data-pane="notes" data-i18n="tabNotes">Akıllı notlar</button>
+        <button id="resultTab-transcript" type="button" role="tab" aria-selected="false" aria-controls="pane-transcript" tabindex="-1" class="result-tab" data-pane="transcript" data-i18n="tabTranscript">Transkript</button>
+        <button id="resultTab-slides" type="button" role="tab" aria-selected="false" aria-controls="pane-slides" tabindex="-1" class="result-tab" data-pane="slides" data-i18n="tabSlides">Slaytlar</button>
+        <button id="resultTab-quiz" type="button" role="tab" aria-selected="false" aria-controls="pane-quiz" tabindex="-1" class="result-tab" data-pane="quiz">Quiz</button>
+        <button id="resultTab-exam" type="button" role="tab" aria-selected="false" aria-controls="pane-exam" tabindex="-1" class="result-tab" data-pane="exam" data-i18n="exam.title">Sınava hazırlan</button>
+        <button id="resultTab-cards" type="button" role="tab" aria-selected="false" aria-controls="pane-cards" tabindex="-1" class="result-tab" data-pane="cards" data-i18n="tabCards">Bilgi kartları</button>
+        <button id="resultTab-ask" type="button" role="tab" aria-selected="false" aria-controls="pane-ask" tabindex="-1" class="result-tab" data-pane="ask" data-i18n="ask.title">Bu derse sor</button>
+        <button id="resultTab-files" type="button" role="tab" aria-selected="false" aria-controls="pane-files" tabindex="-1" class="result-tab" data-pane="files" data-i18n="tabFiles">Dosyalar</button>
       </div>
       <div class="result-body">
-        <article id="pane-summary" class="result-pane active"><div id="summaryContent" class="prose"></div><div id="keyPoints" class="key-grid"></div></article>
-        <article id="pane-notes" class="result-pane"><div id="notesContent" class="notes-grid"></div></article>
-        <article id="pane-transcript" class="result-pane"><div class="transcript-tools"><button id="showTranslated" class="chip active" data-i18n="translated">Çevrilmiş</button><button id="showOriginal" class="chip" data-i18n="original">Orijinal</button></div><div id="transcriptContent" class="transcript-box"></div></article>
-        <article id="pane-slides" class="result-pane"><div id="slidesContent" class="slides-grid"></div></article>
-        <article id="pane-quiz" class="result-pane"><div id="quizStatus" class="quiz-status"></div><div id="quizContent"></div></article>
-        <article id="pane-exam" class="result-pane"><div class="exam-prep"><div class="exam-readiness"><span data-i18n="exam.readiness">Hazırlık durumu</span><strong id="examReadiness">—</strong><p id="examRecommendation"></p></div><div><h3 data-i18n="exam.focusTitle">Sınavda öne çıkabilecek konular</h3><div id="examFocusList" class="notes-grid"></div></div><button id="startExamButton" type="button" data-i18n="exam.start">Karışık deneme başlat</button></div></article>
-        <article id="pane-cards" class="result-pane"><div id="cardContent"></div></article>
-        <article id="pane-ask" class="result-pane"><div class="lesson-ask"><div><h3 data-i18n="ask.heading">Ders içeriğine dayalı yanıt al</h3><p data-i18n="ask.help">LectureSift yalnızca bu dersin özet, not ve transkriptini kullanır; destekleyen zaman damgalarını yanıtın altında gösterir.</p></div><form id="lessonQuestionForm"><textarea id="lessonQuestion" maxlength="500" required data-i18n-placeholder="ask.placeholder" placeholder="Örneğin: Öğretmen bu kavramı hangi örnekle açıkladı?"></textarea><button id="lessonQuestionButton" type="submit" data-i18n="ask.button">Derse sor</button></form><div id="lessonAnswer" class="lesson-answer" hidden aria-live="polite"></div></div></article>
-        <article id="pane-files" class="result-pane"><div id="filesContent" class="files-grid"></div></article>
+        <article id="pane-summary" role="tabpanel" aria-labelledby="resultTab-summary" class="result-pane active"><div id="summaryContent" class="prose"></div><div id="keyPoints" class="key-grid"></div></article>
+        <article id="pane-notes" role="tabpanel" aria-labelledby="resultTab-notes" class="result-pane" hidden><div id="notesContent" class="notes-grid"></div></article>
+        <article id="pane-transcript" role="tabpanel" aria-labelledby="resultTab-transcript" class="result-pane" hidden><div class="transcript-tools"><button id="showTranslated" type="button" class="chip active" data-i18n="translated">Çevrilmiş</button><button id="showOriginal" type="button" class="chip" data-i18n="original">Orijinal</button></div><div id="transcriptContent" class="transcript-box"></div></article>
+        <article id="pane-slides" role="tabpanel" aria-labelledby="resultTab-slides" class="result-pane" hidden><div id="slidesContent" class="slides-grid"></div></article>
+        <article id="pane-quiz" role="tabpanel" aria-labelledby="resultTab-quiz" class="result-pane" hidden><div id="quizStatus" class="quiz-status" aria-live="polite"></div><div id="quizContent"></div></article>
+        <article id="pane-exam" role="tabpanel" aria-labelledby="resultTab-exam" class="result-pane" hidden><div class="exam-prep"><div class="exam-readiness"><span data-i18n="exam.readiness">Hazırlık durumu</span><strong id="examReadiness">—</strong><p id="examRecommendation"></p></div><div><h3 data-i18n="exam.focusTitle">Sınavda öne çıkabilecek konular</h3><div id="examFocusList" class="notes-grid"></div></div><button id="startExamButton" type="button" data-i18n="exam.start">Karışık deneme başlat</button></div></article>
+        <article id="pane-cards" role="tabpanel" aria-labelledby="resultTab-cards" class="result-pane" hidden><div id="cardContent"></div></article>
+        <article id="pane-ask" role="tabpanel" aria-labelledby="resultTab-ask" class="result-pane" hidden><div class="lesson-ask"><div><h3 data-i18n="ask.heading">Ders içeriğine dayalı yanıt al</h3><p data-i18n="ask.help">LectureSift yalnızca bu dersin özet, not ve transkriptini kullanır; destekleyen zaman damgalarını yanıtın altında gösterir.</p></div><form id="lessonQuestionForm"><textarea id="lessonQuestion" maxlength="500" required aria-label="Örneğin: Öğretmen bu kavramı hangi örnekle açıkladı?" data-i18n-aria-label="ask.placeholder" data-i18n-placeholder="ask.placeholder" placeholder="Örneğin: Öğretmen bu kavramı hangi örnekle açıkladı?"></textarea><button id="lessonQuestionButton" type="submit" data-i18n="ask.button">Derse sor</button></form><div id="lessonAnswer" class="lesson-answer" hidden aria-live="polite"></div></div></article>
+        <article id="pane-files" role="tabpanel" aria-labelledby="resultTab-files" class="result-pane" hidden><div id="filesContent" class="files-grid"></div></article>
       </div>
     </section>
   </main>
@@ -260,8 +260,8 @@
   </div>
 
   <script src="./locale-data.js?v=3"></script>
-  <script src="./page-i18n.js?v=1"></script><script src="/i18n.js?v=14"></script><script src="/site-shell.js?v=1"></script>
-  <script src="./app.js?v=10"></script>
+  <script src="./page-i18n.js?v=2"></script><script src="/i18n.js?v=15"></script><script src="/site-shell.js?v=1"></script>
+  <script src="./app.js?v=11"></script>
   <script src="/rollout.js?v=3"></script>
 </body>
 </html>

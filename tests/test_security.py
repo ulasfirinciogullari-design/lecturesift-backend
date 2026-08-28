@@ -53,6 +53,23 @@ def test_cors_accepts_lecturesift_previews_and_rejects_unknown_origins():
     assert "access-control-allow-origin" not in blocked.headers
 
 
+def test_security_headers_harden_public_and_sensitive_responses():
+    client = TestClient(app)
+    public = client.get("/health")
+    sensitive = client.post(
+        "/billing/login",
+        json={"email": f"headers-{uuid.uuid4()}@example.com", "password": "Wrong-password1"},
+    )
+    for response in (public, sensitive):
+        assert response.headers["x-content-type-options"] == "nosniff"
+        assert response.headers["x-frame-options"] == "DENY"
+        assert response.headers["referrer-policy"] == "no-referrer"
+        assert response.headers["strict-transport-security"].startswith("max-age=31536000")
+    assert "cache-control" not in public.headers
+    assert sensitive.headers["cache-control"] == "no-store"
+    assert sensitive.headers["pragma"] == "no-cache"
+
+
 def test_owner_session_cannot_replace_dedicated_admin_token(monkeypatch):
     email = f"owner-{uuid.uuid4()}@example.com"
     created = register_user(email, "Strong-test-password1", "Site", "Owner", country_code="TR")

@@ -686,6 +686,43 @@ async function loadResult() {
   } catch (error) { showError(error.message, "LS-NETWORK-01"); }
 }
 
+function activateResultPane(paneName, {focus = false} = {}) {
+  const tabs = [...document.querySelectorAll(".result-tab")];
+  const availableTabs = tabs.filter(tab => !tab.hidden);
+  const target = availableTabs.find(tab => tab.dataset.pane === paneName) || availableTabs[0];
+  if (!target) return;
+  tabs.forEach(tab => {
+    const selected = tab === target;
+    tab.classList.toggle("active", selected);
+    tab.setAttribute("aria-selected", String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+  });
+  document.querySelectorAll(".result-pane").forEach(pane => {
+    const selected = pane.id === `pane-${target.dataset.pane}`;
+    pane.classList.toggle("active", selected);
+    pane.hidden = !selected;
+  });
+  if (focus) target.focus({preventScroll:true});
+}
+
+function setupResultTabs() {
+  document.querySelectorAll(".result-tab").forEach(button => {
+    button.addEventListener("click", () => activateResultPane(button.dataset.pane));
+    button.addEventListener("keydown", event => {
+      const tabs = [...document.querySelectorAll(".result-tab:not([hidden])")];
+      const index = tabs.indexOf(button);
+      if (index < 0) return;
+      const direction = {ArrowRight:1, ArrowDown:1, ArrowLeft:-1, ArrowUp:-1}[event.key];
+      let nextIndex = direction === undefined ? index : (index + direction + tabs.length) % tabs.length;
+      if (event.key === "Home") nextIndex = 0;
+      else if (event.key === "End") nextIndex = tabs.length - 1;
+      else if (direction === undefined) return;
+      event.preventDefault();
+      activateResultPane(tabs[nextIndex].dataset.pane, {focus:true});
+    });
+  });
+}
+
 function renderResult(data) {
   $("resultHeading").textContent = data.title || "LectureSift";
   const utilityResult = data.job_type && data.job_type !== "study_pack";
@@ -716,9 +753,8 @@ function renderResult(data) {
   });
   renderQuiz(data.quiz || []); renderExamPrep(data); renderCards(); renderFiles(data.artifacts || [], canDownload);
   $("lessonQuestionForm").reset(); $("lessonAnswer").hidden = true; $("lessonAnswer").replaceChildren();
-  document.querySelectorAll(".result-tab").forEach(button => { button.hidden = utilityResult && button.dataset.pane !== "files"; button.classList.toggle("active", utilityResult ? button.dataset.pane === "files" : button.dataset.pane === "summary"); });
-  document.querySelectorAll(".result-pane").forEach(pane => pane.classList.remove("active"));
-  $(utilityResult ? "pane-files" : "pane-summary").classList.add("active");
+  document.querySelectorAll(".result-tab").forEach(button => { button.hidden = utilityResult && button.dataset.pane !== "files"; });
+  activateResultPane(utilityResult ? "files" : "summary");
   $("results").hidden = false; $("results").scrollIntoView({behavior: "smooth", block: "start"});
 }
 
@@ -800,8 +836,7 @@ $("startExamButton").addEventListener("click", () => {
   const items = latestResult?.quiz || [];
   if (!items.length) return;
   renderQuiz(shuffledExamQuestions(items));
-  document.querySelectorAll(".result-tab").forEach(item => item.classList.toggle("active", item.dataset.pane === "quiz"));
-  document.querySelectorAll(".result-pane").forEach(item => item.classList.toggle("active", item.id === "pane-quiz"));
+  activateResultPane("quiz", {focus:true});
   $("pane-quiz").scrollIntoView({behavior:"smooth", block:"start"});
 });
 
@@ -826,8 +861,4 @@ function renderFiles(files, canDownload = true) {
   });
 }
 
-document.querySelectorAll(".result-tab").forEach(button => button.onclick = () => {
-  document.querySelectorAll(".result-tab").forEach(item => item.classList.remove("active"));
-  document.querySelectorAll(".result-pane").forEach(item => item.classList.remove("active"));
-  button.classList.add("active"); $(`pane-${button.dataset.pane}`).classList.add("active");
-});
+setupResultTabs();
