@@ -233,6 +233,12 @@ def test_profile_admin_bank_and_full_comparison_interfaces_are_present():
     assert "adminReadiness" in admin
     assert "adminContactMessages" in admin
     assert all(value in admin for value in ("adminTimeline", "adminJobs", "adminAlerts", "adminExportOrders", "adminOperationNotice", "adminAccountEvents", "adminPlanDistribution"))
+    assert all(
+        f'data-admin-view="{view}"' in admin
+        and f'data-admin-view-button="{view}"' in admin
+        for view in ("overview", "users", "finance", "support", "jobs", "system", "audit")
+    )
+    assert 'role="tablist"' in admin and 'aria-selected="true"' in admin
     assert "/billing/admin/jobs" in admin_script
     assert all(
         value in admin_script
@@ -249,6 +255,9 @@ def test_profile_admin_bank_and_full_comparison_interfaces_are_present():
             "sessionStorage.setItem",
             "user.is_protected",
             "Korunan hesap",
+            "ADMIN_VIEW_KEY",
+            "activateAdminView",
+            "setupAdminNavigation",
         )
     )
     assert "adminReadinessChecks" in admin_script and "Opsiyonel · kapalı" in admin_script
@@ -278,6 +287,9 @@ def test_checkout_names_contact_inbox_and_mobile_plan_navigation_are_wired():
             ".admin-user-card",
             ".admin-user-tools",
             ".admin-form-grid",
+            ".admin-workspace",
+            ".admin-view[hidden]",
+            ".admin-section-nav button[aria-selected=\"true\"]",
             "@media(max-width:620px)",
         )
     )
