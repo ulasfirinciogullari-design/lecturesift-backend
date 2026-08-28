@@ -196,18 +196,27 @@ function paytrStatus() {
   return providers.find(provider => provider.code === "paytr") || {configured: false, currencies: []};
 }
 
+function iyzicoStatus() {
+  return providers.find(provider => provider.code === "iyzico") || {configured: false, currencies: []};
+}
+
+function cardProviderStatus() {
+  const iyzico = iyzicoStatus();
+  if (iyzico.configured) return iyzico;
+  const paytr = paytrStatus();
+  if (paytr.configured) return paytr;
+  return iyzico;
+}
+
 function pendingCardMessage() {
-  const iyzico = providers.find(provider => provider.code === "iyzico") || {status: "planned"};
-  return ["application_review", "fallback"].includes(iyzico.status)
-    ? pt("payment.iyzicoReview", "iyzico mağaza başvurusu inceleme sürecinde. Onay ve canlı anahtarlar tamamlanmadan kartlı ödeme alınmaz.")
-    : pt("payment.cardPending", "Kartlı ödeme, yetkili ödeme kuruluşunun mağaza onayı ve canlı anahtarları tamamlandığında açılacak.");
+  return pt("payment.cardPending", "iyzico canlı ödeme anahtarları güvenli sunucu ayarına eklendiğinde kartlı ödeme açılacak.");
 }
 
 function renderPaymentStatus() {
-  const paytr = paytrStatus();
+  const provider = cardProviderStatus();
   if (!$('cardAvailability')) return;
-  $('cardAvailability').textContent = paytr.configured
-    ? pt("payment.providerReady", "Kartlı ödeme kullanıma hazır.")
+  $('cardAvailability').textContent = provider.configured
+    ? `${provider.code === "iyzico" ? "iyzico" : "PayTR"} · ${pt("payment.providerReady", "Kartlı ödeme kullanıma hazır.")}`
     : pendingCardMessage();
 }
 
@@ -257,8 +266,8 @@ async function buy(planCode, interval = "monthly") {
     location.href = `/login.html?next=${encodeURIComponent("/plans.html")}`;
     return;
   }
-  const paytr = paytrStatus();
-  if (currency !== "TRY" && (!paytr.configured || !paytr.currencies?.includes(currency))) {
+  const provider = cardProviderStatus();
+  if (!provider.configured || !provider.currencies?.includes(currency)) {
     showError(pt("plans.globalPending", "Global kart ve yerel ödeme yöntemleri ödeme sağlayıcısı etkinleştiğinde açılacak. Şimdilik havale için TRY seçebilirsin."));
     return;
   }
@@ -280,11 +289,11 @@ async function buy(planCode, interval = "monthly") {
   $("checkoutPhone").value = account?.user?.phone || "";
   $("checkoutTerms").checked = false;
   $("checkoutEarlyPerformance").checked = false;
-  $("checkoutCardButton").disabled = !commerceIdentity.configured || !paytr.configured || !paytr.currencies?.includes(currency);
+  $("checkoutCardButton").disabled = !commerceIdentity.configured || !provider.configured || !provider.currencies?.includes(currency);
   $("checkoutBankButton").disabled = !commerceIdentity.configured || currency !== "TRY";
   $("checkoutNotice").textContent = !commerceIdentity.configured
     ? pt("payment.commercePending", "Satıcı/sağlayıcı kimliği ve iletişim bilgileri tamamlanmadan ödeme açılamaz.")
-    : paytr.configured
+    : provider.configured
     ? pt("payment.providerReady", "Kartlı ödeme kullanıma hazır.")
     : pendingCardMessage();
   $("checkoutForm").hidden = false;
@@ -365,14 +374,20 @@ $("checkoutForm").addEventListener("submit", async event => {
         interval: $("checkoutInterval").value,
         currency,
         billing_address: $("checkoutAddress").value.trim(),
+        billing_city: $("checkoutCity").value.trim(),
+        billing_zip_code: $("checkoutZipCode").value.trim(),
         phone: $("checkoutPhone").value.trim(),
         language: PLANS_I18N.language,
         terms_accepted:$("checkoutTerms").checked,
         early_performance_requested:$("checkoutEarlyPerformance").checked,
       }),
     });
-    $("checkoutForm").hidden = true;
     $("checkoutNotice").textContent = `${pt("payment.orderNumber", "Sipariş no")}: ${body.order.order_number}`;
+    if (body.display_mode === "redirect" || body.provider === "iyzico") {
+      location.assign(body.checkout_url);
+      return;
+    }
+    $("checkoutForm").hidden = true;
     $("paytrFrame").src = body.checkout_url;
     $("paytrFrame").hidden = false;
   } catch (error) {

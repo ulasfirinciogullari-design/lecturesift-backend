@@ -36,6 +36,9 @@ PAYTR_MERCHANT_KEY = os.getenv("PAYTR_MERCHANT_KEY", "")
 PAYTR_MERCHANT_SALT = os.getenv("PAYTR_MERCHANT_SALT", "")
 PAYTR_TEST_MODE = os.getenv("PAYTR_TEST_MODE", "true").lower() == "true"
 PAYTR_DEBUG = os.getenv("PAYTR_DEBUG", "false").lower() == "true"
+IYZICO_API_KEY = os.getenv("IYZICO_API_KEY", "").strip()
+IYZICO_SECRET_KEY = os.getenv("IYZICO_SECRET_KEY", "")
+IYZICO_BASE_URL = os.getenv("IYZICO_BASE_URL", "https://api.iyzipay.com").rstrip("/")
 CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "support@lecturesift.com").strip()
 BILLING_SUPPORT_EMAIL = os.getenv("BILLING_SUPPORT_EMAIL", CONTACT_EMAIL).strip()
 LEGAL_OPERATOR_NAME = os.getenv("LEGAL_OPERATOR_NAME", "").strip()

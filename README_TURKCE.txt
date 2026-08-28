@@ -65,3 +65,11 @@ Render'daki BILLING_ADMIN_EMAILS değerine doğrulanmış sahip e-posta adresler
 virgülle ayrılarak yazılır. Bu hesaplar normal giriş yaptıktan sonra yönetici
 panelini otomatik açabilir. BILLING_ADMIN_TOKEN yalnızca acil durum yedeğidir;
 koda veya tarayıcıya kalıcı olarak kaydedilmez.
+
+IYZICO CANLI ÖDEME
+Kartlı ödemede birincil sağlayıcı iyzico'dur. IYZICO_API_KEY ve
+IYZICO_SECRET_KEY yalnızca Render Environment alanında gizli değer olarak
+saklanır; üretim adresi IYZICO_BASE_URL=https://api.iyzipay.com olmalıdır.
+Kart bilgileri LectureSift sunucusuna gelmez. Ödeme sonucu iyzico'dan tekrar
+sorgulanır; imza, sipariş numarası, para birimi ve tutar eşleşmeden plan açılmaz.
+Anahtarlar koda, GitHub'a, tarayıcıya veya uygulama kayıtlarına yazılmaz.

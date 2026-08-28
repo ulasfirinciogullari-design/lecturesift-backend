@@ -10,7 +10,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from pydantic import BaseModel, HttpUrl
 
 from . import config
@@ -68,8 +68,12 @@ from .mailer import EmailDeliveryError, email_delivery_configured, send_transact
 from .pipeline import process_job
 from .payments import (
     PaymentProviderError,
+    create_iyzico_checkout,
     create_paytr_checkout,
+    iyzico_public_status,
     paytr_public_status,
+    preferred_card_provider,
+    process_iyzico_callback,
     process_paytr_callback,
 )
 from .security import RATE_LIMITER, RateLimitExceeded
@@ -288,6 +292,8 @@ class BillingCheckoutRequest(BaseModel):
     interval: str = "monthly"
     currency: str = "TRY"
     billing_address: str
+    billing_city: str = ""
+    billing_zip_code: str = ""
     phone: str = ""
     language: str = "tr"
     terms_accepted: bool = False
@@ -522,10 +528,15 @@ def billing_plans(currency: str = "TRY") -> dict:
 def billing_providers() -> dict:
     body = public_providers()
     paytr = paytr_public_status()
+    iyzico = iyzico_public_status()
     body["providers"] = [
-        {**provider, **paytr} if provider.get("code") == "paytr" else provider
+        {**provider, **paytr} if provider.get("code") == "paytr" else
+        ({**provider, **iyzico} if provider.get("code") == "iyzico" else provider)
         for provider in body["providers"]
     ]
+    body["preferred_card_provider"] = (
+        "iyzico" if iyzico["configured"] else ("paytr" if paytr["configured"] else None)
+    )
     body["commerce_identity"] = commerce_identity()
     return body
 
@@ -551,6 +562,7 @@ def billing_health() -> dict:
         "database": database,
         "email_delivery_configured": email_delivery_configured(),
         "payments": {
+            "iyzico": iyzico_public_status(),
             "paytr": paytr_public_status(),
             "bank_transfer": {"configured": manual_transfer_details()["available"]},
         },
@@ -774,24 +786,52 @@ def billing_create_checkout(
 ) -> dict:
     _rate_limit(request, "checkout", user["id"], limit=10, window_seconds=10 * 60)
     try:
-        checkout = create_paytr_checkout(
-            user,
-            plan_code=payload.plan_code,
-            interval=payload.interval,
-            currency=payload.currency,
-            user_ip=_client_ip(request),
-            billing_address=payload.billing_address,
-            phone=payload.phone,
-            language=payload.language,
-            terms_accepted=payload.terms_accepted,
-            early_performance_requested=payload.early_performance_requested,
-            user_agent=request.headers.get("user-agent", ""),
-        )
+        provider = preferred_card_provider()
+        common = {
+            "plan_code": payload.plan_code,
+            "interval": payload.interval,
+            "currency": payload.currency,
+            "user_ip": _client_ip(request),
+            "billing_address": payload.billing_address,
+            "phone": payload.phone,
+            "language": payload.language,
+            "terms_accepted": payload.terms_accepted,
+            "early_performance_requested": payload.early_performance_requested,
+            "user_agent": request.headers.get("user-agent", ""),
+        }
+        if provider == "iyzico":
+            checkout = create_iyzico_checkout(
+                user,
+                billing_city=payload.billing_city,
+                billing_zip_code=payload.billing_zip_code,
+                **common,
+            )
+        else:
+            checkout = create_paytr_checkout(user, **common)
     except BillingConfigurationError as exc:
         raise HTTPException(503, detail={"code": "LS-PAY-01", "message": str(exc)}) from exc
     except (BillingAuthenticationError, BillingError, PaymentProviderError) as exc:
         raise HTTPException(400, detail={"code": "LS-PAY-02", "message": str(exc)}) from exc
     return {"ok": True, **checkout}
+
+
+@app.post("/billing/iyzico/callback")
+def billing_iyzico_callback(order: str, token: str = Form(...)) -> Response:
+    if not order.isalnum() or len(order) > 64:
+        return Response("Invalid order reference", status_code=400, media_type="text/plain")
+    try:
+        result = process_iyzico_callback(order_reference=order, token=token)
+    except (BillingConfigurationError, BillingError, PaymentProviderError):
+        return RedirectResponse(
+            f"{FRONTEND_BASE_URL}/plans.html?payment=verification_failed&order={order}",
+            status_code=303,
+        )
+    destination = "account.html" if result["status"] == "paid" else "plans.html"
+    payment = "success" if result["status"] == "paid" else "failed"
+    return RedirectResponse(
+        f"{FRONTEND_BASE_URL}/{destination}?payment={payment}&order={order}",
+        status_code=303,
+    )
 
 
 @app.post("/billing/paytr/callback")
