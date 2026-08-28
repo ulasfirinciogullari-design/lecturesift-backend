@@ -828,7 +828,7 @@ def account_status(user_id: str) -> dict:
         "download_access_source": (
             "plan" if plan.download_enabled else "credit" if paid_credit_access else None
         ),
-        "is_admin": user.email.casefold() in set(config.BILLING_ADMIN_EMAILS),
+        "is_admin": False,
         "manual_orders": [_public_manual_order(order) for order in orders],
         "payment_orders": [_public_payment_order(order) for order in payment_orders],
     }
@@ -1500,7 +1500,7 @@ def admin_billing_overview(limit: int = 100) -> dict:
                 func.coalesce(func.sum(USAGE_EVENTS.c.minutes), 0).label("total_minutes"),
             ).group_by(USAGE_EVENTS.c.user_id)
         ).all()
-    protected_emails = set(config.BILLING_PROTECTED_EMAILS) | set(config.BILLING_ADMIN_EMAILS)
+    protected_emails = set(config.BILLING_PROTECTED_EMAILS)
     if config.LEGAL_OPERATOR_EMAIL:
         protected_emails.add(config.LEGAL_OPERATOR_EMAIL.casefold())
     subscriptions_by_user = {}

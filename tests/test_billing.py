@@ -263,7 +263,7 @@ def test_manual_transfer_order_and_admin_approval(monkeypatch):
     monkeypatch.setattr(config, "LEGAL_OPERATOR_COUNTRY", "TR")
     monkeypatch.setattr(config, "LEGAL_OPERATOR_PHONE", "+905551112233")
     monkeypatch.setattr(config, "LEGAL_OPERATOR_EMAIL", "billing@example.com")
-    monkeypatch.setattr(config, "BILLING_ADMIN_TOKEN", "test-admin-token")
+    monkeypatch.setattr(config, "ADMIN_ADMIN", "test-admin-token")
     monkeypatch.setattr(config, "INSTAGRAM_ADMIN_TOKEN", "instagram-only-token")
 
     instagram_token_attempt = client.get(

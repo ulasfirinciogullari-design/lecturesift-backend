@@ -30,9 +30,7 @@ services:
           property: connectionString
       - key: BILLING_SESSION_SECRET
         generateValue: true
-      - key: BILLING_ADMIN_TOKEN
-        generateValue: true
-      - key: BILLING_ADMIN_EMAILS
+      - key: ADMIN_ADMIN
         sync: false
       - key: BILLING_PROTECTED_EMAILS
         sync: false

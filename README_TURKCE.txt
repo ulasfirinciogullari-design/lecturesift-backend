@@ -61,10 +61,10 @@ Bu adres kullanıcı sayfası değildir; PayTR'ın imzalı ödeme sonucunu gönd
 sunucu adresidir. Anahtarlar koda, GitHub'a veya uygulama kayıtlarına yazılmaz.
 
 YÖNETİCİ ERİŞİMİ
-Render'daki BILLING_ADMIN_EMAILS değerine doğrulanmış sahip e-posta adresleri
-virgülle ayrılarak yazılır. Bu hesaplar normal giriş yaptıktan sonra yönetici
-panelini otomatik açabilir. BILLING_ADMIN_TOKEN yalnızca acil durum yedeğidir;
-koda veya tarayıcıya kalıcı olarak kaydedilmez.
+Yönetici paneli yalnızca Render'daki bağımsız ADMIN_ADMIN anahtarıyla açılır.
+Normal kullanıcı oturumu, hukuki iletişim adresi, ödeme bilgileri veya Instagram
+anahtarları admin yetkisi vermez. ADMIN_ADMIN koda yazılmaz ve tarayıcıda yalnızca
+mevcut sekme kapanana kadar tutulur.
 
 IYZICO CANLI ÖDEME
 Kartlı ödemede birincil sağlayıcı iyzico'dur. IYZICO_API_KEY ve

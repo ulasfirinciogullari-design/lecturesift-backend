@@ -165,7 +165,7 @@ def test_legacy_account_without_profile_can_save_name_and_phone():
 
 
 def test_contact_messages_are_stored_and_visible_to_admin(monkeypatch):
-    monkeypatch.setattr(config, "BILLING_ADMIN_TOKEN", "admin-secret")
+    monkeypatch.setattr(config, "ADMIN_ADMIN", "admin-secret")
     monkeypatch.setattr(rollout_service, "email_delivery_configured", lambda: False)
     created = client.post(
         "/contact/messages",
@@ -200,7 +200,7 @@ def test_manual_order_admin_rejection_and_instagram_approval(monkeypatch):
     monkeypatch.setattr(config, "LEGAL_OPERATOR_COUNTRY", "TR")
     monkeypatch.setattr(config, "LEGAL_OPERATOR_PHONE", "+905551112233")
     monkeypatch.setattr(config, "LEGAL_OPERATOR_EMAIL", "support@example.com")
-    monkeypatch.setattr(config, "BILLING_ADMIN_TOKEN", "admin-secret")
+    monkeypatch.setattr(config, "ADMIN_ADMIN", "admin-secret")
 
     order = client.post(
         "/billing/manual-transfer/orders",
@@ -262,7 +262,7 @@ def test_refund_request_requires_paid_owned_order_and_tracks_manual_completion(m
     monkeypatch.setattr(config, "LEGAL_OPERATOR_COUNTRY", "TR")
     monkeypatch.setattr(config, "LEGAL_OPERATOR_PHONE", "+905551112233")
     monkeypatch.setattr(config, "LEGAL_OPERATOR_EMAIL", "support@example.com")
-    monkeypatch.setattr(config, "BILLING_ADMIN_TOKEN", "admin-secret")
+    monkeypatch.setattr(config, "ADMIN_ADMIN", "admin-secret")
 
     created = client.post(
         "/billing/manual-transfer/orders",
@@ -322,7 +322,7 @@ def test_refund_request_requires_paid_owned_order_and_tracks_manual_completion(m
 
 def test_admin_credit_adjustment_is_bounded_and_audited(monkeypatch):
     _, token = new_account()
-    monkeypatch.setattr(config, "BILLING_ADMIN_TOKEN", "admin-secret")
+    monkeypatch.setattr(config, "ADMIN_ADMIN", "admin-secret")
     account = client.get("/billing/me", headers=auth(token)).json()["account"]
     user_id = account["user"]["id"]
     before = account["credit_minutes"]
@@ -349,7 +349,7 @@ def test_admin_credit_adjustment_is_bounded_and_audited(monkeypatch):
 
 def test_admin_can_manage_profile_subscription_sessions_and_close_account(monkeypatch):
     email, token = new_account()
-    monkeypatch.setattr(config, "BILLING_ADMIN_TOKEN", "admin-secret")
+    monkeypatch.setattr(config, "ADMIN_ADMIN", "admin-secret")
     monkeypatch.setattr(config, "INSTAGRAM_ADMIN_TOKEN", "instagram-only-secret")
     assert client.get(
         "/billing/admin/credit-events",
