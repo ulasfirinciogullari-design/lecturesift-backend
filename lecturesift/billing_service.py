@@ -221,6 +221,7 @@ def commerce_identity() -> dict:
         **({
             **required,
             "tax_id": config.LEGAL_TAX_ID or None,
+            "tax_office": config.LEGAL_TAX_OFFICE or None,
             "registration_id": config.LEGAL_REGISTRATION_ID or None,
             "mersis_id": config.LEGAL_MERSIS_ID or None,
             "trade_registry": config.LEGAL_TRADE_REGISTRY or None,
