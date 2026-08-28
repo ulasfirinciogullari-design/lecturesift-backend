@@ -104,6 +104,44 @@ def test_every_page_loads_global_language_switcher_and_all_locales_exist():
     assert 'document.documentElement.dir = selected === "ar" ? "rtl" : "ltr"' in script
 
 
+def test_public_navigation_is_consistent_localized_and_session_aware():
+    public_pages = (
+        "index.html",
+        "features.html",
+        "plans.html",
+        "about.html",
+        "contact.html",
+        "privacy.html",
+        "terms.html",
+        "cookies.html",
+        "refund.html",
+        "distance-sales.html",
+    )
+    for page in public_pages:
+        content = (FRONTEND / page).read_text(encoding="utf-8")
+        assert "/site-shell.js?v=1" in content, page
+        assert "/rollout.css?v=7" in content, page
+
+    shell = (FRONTEND / "site-shell.js").read_text(encoding="utf-8")
+    assert 'const TOKEN_KEY = "lecturesift-billing-token"' in shell
+    assert 'fetch(`${API}/billing/me`' in shell
+    assert 'localStorage.removeItem(TOKEN_KEY)' in shell
+    assert 'response.status === 401 || response.status === 403' in shell
+    assert 'i18n.localizedPath(language, path)' in shell
+    assert 'account.href = pathFor(signedIn ? "/account.html" : "/login.html")' in shell
+    assert 'anchor.setAttribute("aria-current", "page")' in shell
+    assert 'https://www.instagram.com/lecturesift/' in shell
+    for key in ("menu", "home", "features", "plans", "about", "login", "account", "instagram"):
+        row = re.search(rf'^\s*{key}: \[(.*?)\],?$', shell, re.MULTILINE)
+        assert row, key
+        assert len(json.loads(f"[{row.group(1)}]")) == 13
+
+    rollout = (FRONTEND / "rollout.css").read_text(encoding="utf-8")
+    assert ".public-header-tools" in rollout
+    assert ".public-nav-link.active" in rollout
+    assert '@media(max-width:860px)' in rollout
+
+
 def test_static_page_copy_covers_every_language_without_empty_entries():
     script = (FRONTEND / "page-i18n.js").read_text(encoding="utf-8")
     payload = script.split("window.LECTURESIFT_PAGE_COPY=", 1)[1].rstrip(";\n")
