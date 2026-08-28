@@ -1,8 +1,8 @@
 """One-time launch-step publisher used after a web deployment.
 
-This deployment is intentionally gated to restart the launch grid from a clean
-Instagram profile. It publishes only when no LectureSift launch markers exist,
-so retries stay idempotent and unrelated later deploys cannot advance the grid.
+This deployment advances the clean 3:4 Instagram relaunch by exactly one card.
+It publishes only when the expected prior markers exist, so retries stay
+idempotent and unrelated later deploys cannot skip ahead.
 """
 
 from __future__ import annotations
@@ -17,8 +17,8 @@ from .instagram import InstagramAPIError, InstagramConfigurationError
 from .launch_social import completed_indices
 
 _STATUS_PATH = Path("/tmp/lecturesift-launch-bootstrap.json")
-_EXPECTED_COMPLETED: list[int] = []
-_TARGET_INDEX = 1
+_EXPECTED_COMPLETED: list[int] = [1]
+_TARGET_INDEX = 2
 
 
 def _write_status(payload: dict) -> None:
