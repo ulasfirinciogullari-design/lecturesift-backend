@@ -238,6 +238,7 @@ def test_secure_card_checkout_is_prepared_without_collecting_card_details():
     assert "/assets/payments/iyzico-card-brands-white.png" in plans
     assert (FRONTEND / "assets" / "payments" / "iyzico-ile-ode-white.png").stat().st_size > 20_000
     assert (FRONTEND / "assets" / "payments" / "iyzico-card-brands-white.png").stat().st_size > 10_000
+    assert '["application_review", "fallback"].includes(iyzico.status)' in script
     assert "terms_accepted" in script and "early_performance_requested" in script
     assert "reportValidity()" in script
 

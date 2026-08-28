@@ -202,7 +202,7 @@ function renderPaymentStatus() {
   if (!$('cardAvailability')) return;
   $('cardAvailability').textContent = paytr.configured
     ? pt("payment.providerReady", "Kartlı ödeme kullanıma hazır.")
-    : iyzico.status === "application_review"
+    : ["application_review", "fallback"].includes(iyzico.status)
     ? pt("payment.iyzicoReview", "iyzico mağaza başvurusu inceleme sürecinde. Onay ve canlı anahtarlar tamamlanmadan kartlı ödeme alınmaz.")
     : pt("payment.providerPending", "Kartlı ödeme için PayTR mağaza bilgileri bekleniyor.");
 }
