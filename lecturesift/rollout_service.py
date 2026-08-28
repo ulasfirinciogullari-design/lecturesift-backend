@@ -282,7 +282,10 @@ def close_user_account(
         connection.execute(delete(GUEST_TRIALS).where(GUEST_TRIALS.c.user_id == user_id))
         connection.execute(
             update(SUBSCRIPTIONS)
-            .where(SUBSCRIPTIONS.c.user_id == user_id, SUBSCRIPTIONS.c.status == "active")
+            .where(
+                SUBSCRIPTIONS.c.user_id == user_id,
+                SUBSCRIPTIONS.c.status.in_(("active", "cancel_at_end")),
+            )
             .values(status="cancelled")
         )
         connection.execute(

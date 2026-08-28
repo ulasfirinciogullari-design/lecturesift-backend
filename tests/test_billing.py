@@ -273,6 +273,24 @@ def test_manual_transfer_order_and_admin_approval(monkeypatch):
     assert overview.json()["counts"]["users"] >= 1
     assert any(item["order_number"] == order["order_number"] for item in overview.json()["orders"])
 
+    cancelled = client.post(
+        "/billing/me/subscription/cancel",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert cancelled.status_code == 200
+    cancelled_account = cancelled.json()["account"]
+    assert cancelled_account["plan"]["code"] == "plus"
+    assert cancelled_account["subscription"]["status"] == "cancel_at_end"
+    assert cancelled_account["subscription"]["cancel_at_period_end"] is True
+    assert cancelled_account["remaining_minutes"] > 0
+
+    repeated_cancel = client.post(
+        "/billing/me/subscription/cancel",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert repeated_cancel.status_code == 200
+    assert repeated_cancel.json()["account"]["plan"]["code"] == "plus"
+
 
 def test_job_creation_requires_account():
     response = TestClient(app).post("/jobs", files={"file": ("notes.txt", b"not a video", "text/plain")})

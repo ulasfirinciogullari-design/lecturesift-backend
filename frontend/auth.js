@@ -208,6 +208,17 @@ async function initAccount() {
     $("accountName").textContent = user.name || user.email;
     $("accountEmail").textContent = user.email;
     $("accountPlan").textContent = planName(account.plan.code);
+    const subscription = account.subscription;
+    $("subscriptionEndsRow").hidden = !subscription;
+    $("subscriptionActions").hidden = !subscription;
+    if (subscription) {
+      $("subscriptionEnds").textContent = new Intl.DateTimeFormat(I18N.locale, {dateStyle:"long"}).format(new Date(subscription.ends_at));
+      const scheduled = Boolean(subscription.cancel_at_period_end);
+      $("subscriptionState").textContent = scheduled
+        ? t("account.cancellationScheduled", "Yenileme durduruldu; ücretli hakların dönem sonuna kadar açık.")
+        : t("account.renewsUntilCancelled", "Ücretli hakların dönem boyunca açık. Yenilemeyi dilediğinde durdurabilirsin.");
+      $("cancelSubscriptionButton").hidden = scheduled;
+    }
     $("accountAdMode").textContent = account.plan.entitlements?.ad_free
       ? t("plans.adFree", "Reklamsız kullanım")
       : t("plans.rewardedOption", "İsteğe bağlı reklamla ek dakika");
@@ -325,6 +336,19 @@ async function initAccount() {
       token = body.token; localStorage.setItem(TOKEN_KEY, token); renderAccount(body.account); $("passwordForm").reset(); showFormNotice("passwordNotice", body.message);
     } catch (error) { showFormNotice("passwordNotice", error.message, true); }
     finally { setBusy(button, false, t("security.changePassword", "Parolayı değiştir")); }
+  });
+  $("cancelSubscriptionButton").addEventListener("click", async () => {
+    if (!confirm(t("account.cancelConfirm", "Abonelik yenilemesini durdurmak istediğine emin misin? Mevcut dönem hakların korunacak."))) return;
+    const button = $("cancelSubscriptionButton");
+    setBusy(button, true, t("state.saving", "Kaydediliyor…"));
+    try {
+      const body = await request("/billing/me/subscription/cancel", {method:"POST"}, token);
+      renderAccount(body.account);
+      showFormNotice("subscriptionNotice", body.message);
+    } catch (error) {
+      showFormNotice("subscriptionNotice", error.message, true);
+      setBusy(button, false, t("account.cancelSubscription", "Abonelik yenilemesini durdur"));
+    }
   });
   $("exportDataButton").addEventListener("click", async () => {
     const button = $("exportDataButton");

@@ -133,11 +133,13 @@ def test_profile_admin_bank_and_full_comparison_interfaces_are_present():
         )
     )
     assert "/billing/me/profile" in auth and "/billing/me/change-password" in auth
+    assert "/billing/me/subscription/cancel" in auth
     assert "/billing/me/export" in auth and "/billing/me/close-account" in auth
     assert 'href="/admin.html"' not in account
     assert all(value in plans for value in ("compareHead", "compareBody", "publicBankHolder"))
     assert "renderCompare" in plan_script and "/billing/manual-transfer" in plan_script
     assert "adminTokenForm" in admin and "adminOrders" in admin
+    assert "adminReadiness" in admin
 
 
 def test_secure_card_checkout_is_prepared_without_collecting_card_details():

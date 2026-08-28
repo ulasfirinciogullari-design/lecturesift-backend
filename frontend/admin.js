@@ -75,10 +75,22 @@ function renderAdminUsers(users) {
   admin$("adminUserList").innerHTML = `<table class="admin-table"><thead><tr><th>${adminT("admin.customer","Müşteri")}</th><th>${adminT("field.phone","Telefon")}</th><th>${adminT("field.country","Ülke")}</th><th>${adminT("admin.verified","Doğrulanmış")}</th><th>${adminT("account.creditBalance","Ek kredi")}</th><th>${adminT("admin.created","Kayıt tarihi")}</th></tr></thead><tbody>${rows || `<tr><td colspan="6">${adminT("admin.noUsers","Kullanıcı bulunamadı.")}</td></tr>`}</tbody></table>`;
 }
 
+function renderAdminReadiness(billing, runtime) {
+  const checks = [
+    [adminT("admin.database", "Kalıcı veritabanı"), Boolean(billing?.database?.connected && billing?.database?.persistent)],
+    [adminT("admin.emailDelivery", "E-posta gönderimi"), Boolean(billing?.email_delivery_configured)],
+    [adminT("admin.cardPayments", "Kartlı ödeme"), Boolean(billing?.payments?.paytr?.configured)],
+    [adminT("admin.durableProcessing", "Dayanıklı işleme altyapısı"), Boolean(runtime?.durable_processing_ready)],
+  ];
+  admin$("adminReadiness").innerHTML = checks.map(([label, ready]) => `<article><span>${adminEscape(label)}</span><strong class="${ready ? "ready" : "missing"}">${adminEscape(ready ? adminT("admin.ready", "Hazır") : adminT("admin.notReady", "Eksik ayar var"))}</strong></article>`).join("");
+}
+
 async function loadAdmin() {
-  const [body, rewardBody] = await Promise.all([
+  const [body, rewardBody, billingHealth, runtimeHealth] = await Promise.all([
     adminRequest("/billing/admin/overview?limit=100"),
     adminRequest("/admin/instagram-rewards?status=pending_verification"),
+    fetch(`${ADMIN_API}/billing/health`, {cache:"no-store"}).then(response => response.ok ? response.json() : null).catch(() => null),
+    fetch(`${ADMIN_API}/rollout/health`, {cache:"no-store"}).then(response => response.ok ? response.json() : null).catch(() => null),
   ]);
   admin$("adminUsers").textContent = body.counts.users;
   admin$("adminVerified").textContent = body.counts.verified_users;
@@ -87,6 +99,7 @@ async function loadAdmin() {
   renderAdminOrders(body.orders || []);
   renderAdminRewards(rewardBody.rewards || []);
   renderAdminUsers(body.users || []);
+  renderAdminReadiness(billingHealth, runtimeHealth);
   admin$("adminLogin").hidden = true;
   admin$("adminPanel").hidden = false;
 }

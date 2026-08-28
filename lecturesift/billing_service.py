@@ -611,7 +611,7 @@ def _active_subscription(connection, user_id: str, now: datetime):
         select(SUBSCRIPTIONS)
         .where(
             SUBSCRIPTIONS.c.user_id == user_id,
-            SUBSCRIPTIONS.c.status == "active",
+            SUBSCRIPTIONS.c.status.in_(("active", "cancel_at_end")),
             SUBSCRIPTIONS.c.ends_at > now,
         )
         .order_by(SUBSCRIPTIONS.c.ends_at.desc())
@@ -724,6 +724,7 @@ def account_status(user_id: str) -> dict:
                 "interval": subscription.interval,
                 "starts_at": subscription.starts_at.isoformat(),
                 "ends_at": subscription.ends_at.isoformat(),
+                "cancel_at_period_end": subscription.status == "cancel_at_end",
             }
             if subscription
             else None
@@ -740,6 +741,23 @@ def account_status(user_id: str) -> dict:
         "manual_orders": [_public_manual_order(order) for order in orders],
         "payment_orders": [_public_payment_order(order) for order in payment_orders],
     }
+
+
+def cancel_active_subscription(user_id: str) -> dict:
+    """Stop renewal while preserving paid access through the current term."""
+    init_billing_database()
+    now = utcnow()
+    with ENGINE.begin() as connection:
+        subscription = _active_subscription(connection, user_id, now)
+        if not subscription:
+            raise BillingError("İptal edilebilecek aktif bir abonelik bulunamadı.")
+        if subscription.status != "cancel_at_end":
+            connection.execute(
+                update(SUBSCRIPTIONS)
+                .where(SUBSCRIPTIONS.c.id == subscription.id)
+                .values(status="cancel_at_end")
+            )
+    return account_status(user_id)
 
 
 def update_account_preferences(user_id: str, country_code: str, preferred_language: str) -> dict:
@@ -1213,7 +1231,7 @@ def admin_billing_overview(limit: int = 100) -> dict:
         active_subscription_count = int(
             connection.execute(
                 select(func.count()).select_from(SUBSCRIPTIONS).where(
-                    SUBSCRIPTIONS.c.status == "active",
+                    SUBSCRIPTIONS.c.status.in_(("active", "cancel_at_end")),
                     SUBSCRIPTIONS.c.ends_at > now,
                 )
             ).scalar_one()
