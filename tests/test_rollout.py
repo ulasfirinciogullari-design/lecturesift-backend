@@ -393,6 +393,22 @@ def test_admin_can_manage_profile_subscription_sessions_and_close_account(monkey
     assert managed["plan_code"] == "plus"
     assert managed["subscription"]["status"] == "active"
 
+    monkeypatch.setattr(config, "BILLING_PROTECTED_EMAILS", {changed_email.casefold()})
+    protected_overview = client.get(
+        "/billing/admin/overview?limit=250", headers=auth("admin-secret")
+    ).json()
+    protected_user = next(item for item in protected_overview["users"] if item["id"] == user_id)
+    assert protected_user["is_protected"] is True
+    protected_close = client.request(
+        "DELETE",
+        f"/billing/admin/users/{user_id}",
+        headers=auth("admin-secret"),
+        json={"confirmation_email": changed_email, "reason": "Koruma testi"},
+    )
+    assert protected_close.status_code == 400
+    assert "kapatılamaz" in protected_close.json()["detail"]["message"]
+    monkeypatch.setattr(config, "BILLING_PROTECTED_EMAILS", set())
+
     revoked = client.post(
         f"/billing/admin/users/{user_id}/revoke-sessions",
         headers=auth("admin-secret"),

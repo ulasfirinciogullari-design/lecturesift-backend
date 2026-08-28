@@ -244,6 +244,10 @@ def test_profile_admin_bank_and_full_comparison_interfaces_are_present():
             "/billing/admin/account-events",
             "renderPlanDistribution",
             "google_ads_conversion_configured",
+            "ADMIN_SESSION_TOKEN_KEY",
+            "sessionStorage.setItem",
+            "user.is_protected",
+            "Korunan hesap",
         )
     )
     assert "adminReadinessChecks" in admin_script and "Opsiyonel · kapalı" in admin_script
@@ -368,6 +372,7 @@ def test_legal_operator_identity_is_public_only_after_configuration():
             "LEGAL_OPERATOR_COUNTRY",
             "LEGAL_OPERATOR_PHONE",
             "LEGAL_OPERATOR_EMAIL",
+            "BILLING_PROTECTED_EMAILS",
             "LEGAL_TAX_OFFICE",
             "LEGAL_MERSIS_ID",
             "LEGAL_TRADE_REGISTRY",

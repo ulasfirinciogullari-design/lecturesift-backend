@@ -153,8 +153,6 @@ def _user(authorization: str | None = Header(None)) -> dict:
 def _admin(authorization: str | None = Header(None)) -> dict:
     scheme, _, token = (authorization or "").partition(" ")
     admin_emails = set(config.BILLING_ADMIN_EMAILS)
-    if config.LEGAL_OPERATOR_EMAIL:
-        admin_emails.add(config.LEGAL_OPERATOR_EMAIL.casefold())
     if not config.BILLING_ADMIN_TOKEN and not admin_emails:
         raise HTTPException(503, detail={"code": "LS-BILL-03", "message": "Admin paneli henüz etkin değil."})
     if scheme.casefold() == "bearer" and token:
