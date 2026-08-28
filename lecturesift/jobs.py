@@ -160,18 +160,29 @@ class JobStore:
         if not job_id:
             return data
         local_dir = WORK_DIR / job_id
-        if not (local_dir / "result.json").exists():
+        remote_download_key = str(data.get("remote_download_key", ""))
+        remote_prefix = f"jobs/{job_id}/"
+        relative_download = (
+            remote_download_key[len(remote_prefix):]
+            if remote_download_key.startswith(remote_prefix)
+            else Path(remote_download_key).name
+        )
+        relative_path = Path(relative_download) if relative_download else None
+        if relative_path and (relative_path.is_absolute() or ".." in relative_path.parts):
+            relative_path = None
+        local_zip = local_dir / relative_path if relative_path else None
+        needs_materialization = not (local_dir / "result.json").exists() or bool(
+            local_zip and not local_zip.exists()
+        )
+        if needs_materialization:
             try:
                 local_dir.mkdir(parents=True, exist_ok=True)
                 STORAGE.materialize_job(job_id, local_dir)
             except Exception:
                 return data
         data["job_dir"] = str(local_dir)
-        remote_download_key = str(data.get("remote_download_key", ""))
-        if remote_download_key:
-            local_zip = local_dir / Path(remote_download_key).name
-            if local_zip.exists():
-                data["result_path"] = str(local_zip)
+        if local_zip and local_zip.exists():
+            data["result_path"] = str(local_zip)
         return data
 
     def create(self, job_id: str, job_dir: Path, options: dict, **extra: Any) -> dict:

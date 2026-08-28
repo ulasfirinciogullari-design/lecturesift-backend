@@ -119,6 +119,13 @@ def _resume_publish(job_id: str, data: dict) -> dict | None:
     job_dir = Path(str(data.get("job_dir") or ""))
     if data.get("worker_state") != "retrying" or not result_path.is_file() or not job_dir.is_dir():
         return None
+    JOBS.update(
+        job_id,
+        status="working",
+        percent=99,
+        stage="worker_publish",
+        worker_state="publishing",
+    )
     remote = STORAGE.publish_job(job_id, job_dir)
     _delete_remote_sources(data)
     _cleanup_sources(job_dir)
@@ -191,12 +198,28 @@ def process_uploaded_job(
                     raise transient
                 return {"job_id": job_id, "status": finished.get("status", "error")}
 
+            # The pipeline creates local output first. Do not expose a terminal
+            # status until the durable copy is available to every web instance.
+            JOBS.update(
+                job_id,
+                status="working",
+                percent=99,
+                stage="worker_publish",
+                worker_state="publishing",
+            )
             remote = STORAGE.publish_job(job_id, job_dir)
             _delete_remote_sources(finished)
             elapsed = float(finished.get("elapsed_seconds") or (time.time() - started))
             record_runtime(job_id, media_minutes, elapsed, source_size)
             _cleanup_sources(job_dir)
-            JOBS.update(job_id, worker_state="done", **remote)
+            JOBS.update(
+                job_id,
+                status="done",
+                percent=100,
+                stage="done",
+                worker_state="done",
+                **remote,
+            )
             return {"job_id": job_id, "status": "done", **remote}
         except Exception as exc:
             return _retry_or_fail(self, job_id, exc)

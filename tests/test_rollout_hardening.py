@@ -1,10 +1,13 @@
 import uuid
+import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from lecturesift.billing_service import register_user, verify_email
 from lecturesift.storage import ObjectStorage
+import lecturesift.jobs as jobs_module
+from lecturesift.jobs import JobStore
 from main import app
 
 
@@ -110,3 +113,35 @@ def test_object_storage_health_uses_bucket_scoped_object_permission():
 
     assert storage.health() == {"configured": True, "connected": True}
     assert storage._client.calls == [{"Bucket": "private-bucket", "MaxKeys": 1}]
+
+
+def test_completed_job_materializes_missing_nested_download(tmp_path: Path, monkeypatch):
+    job_id = "remote-job"
+    local_dir = tmp_path / job_id
+    local_dir.mkdir()
+    (local_dir / "result.json").write_text(json.dumps({"ok": True}), encoding="utf-8")
+    calls = []
+
+    def materialize(selected_job_id: str, destination: Path) -> int:
+        calls.append((selected_job_id, destination))
+        archive = destination / "package" / "LectureSift_Study_Pack.zip"
+        archive.parent.mkdir(parents=True, exist_ok=True)
+        archive.write_bytes(b"PK-test")
+        return 1
+
+    monkeypatch.setattr(jobs_module, "WORK_DIR", tmp_path)
+    monkeypatch.setattr(jobs_module.STORAGE, "remote", True)
+    monkeypatch.setattr(jobs_module.STORAGE, "materialize_job", materialize)
+    store = JobStore.__new__(JobStore)
+    data = {
+        "job_id": job_id,
+        "status": "done",
+        "remote_prefix": f"jobs/{job_id}/",
+        "remote_download_key": f"jobs/{job_id}/package/LectureSift_Study_Pack.zip",
+        "result_path": "/worker-only/LectureSift_Study_Pack.zip",
+    }
+
+    materialized = store._materialize_completed(data)
+
+    assert calls == [(job_id, local_dir)]
+    assert Path(materialized["result_path"]).read_bytes() == b"PK-test"
