@@ -19,6 +19,11 @@ FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "https://lecturesift.com").rs
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{WORK_DIR / 'billing.db'}")
 BILLING_SESSION_SECRET = os.getenv("BILLING_SESSION_SECRET", "")
 BILLING_ADMIN_TOKEN = os.getenv("BILLING_ADMIN_TOKEN", "")
+BILLING_ADMIN_EMAILS = {
+    email.strip().casefold()
+    for email in os.getenv("BILLING_ADMIN_EMAILS", "").split(",")
+    if email.strip()
+}
 BILLING_BANK_IBAN = os.getenv("BILLING_BANK_IBAN", "").replace(" ", "").upper()
 BILLING_BANK_ACCOUNT_HOLDER = os.getenv("BILLING_BANK_ACCOUNT_HOLDER", "").strip()
 BILLING_BANK_NAME = os.getenv("BILLING_BANK_NAME", "").strip()

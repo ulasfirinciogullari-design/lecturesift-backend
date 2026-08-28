@@ -713,6 +713,7 @@ def account_status(user_id: str) -> dict:
         "credit_minutes": credit_minutes,
         "remaining_minutes": remaining,
         "can_create_job": remaining is None or remaining > 0,
+        "is_admin": user.email.casefold() in config.BILLING_ADMIN_EMAILS,
         "manual_orders": [_public_manual_order(order) for order in orders],
         "payment_orders": [_public_payment_order(order) for order in payment_orders],
     }

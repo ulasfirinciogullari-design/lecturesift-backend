@@ -1,7 +1,7 @@
 const ADMIN_API = "https://lecturesift-backend.onrender.com";
 const admin$ = id => document.getElementById(id);
 const adminT = (key, fallback) => window.LectureSiftI18n?.t(key) || fallback || key;
-let adminAccessToken = "";
+let adminAccessToken = localStorage.getItem("lecturesift-billing-token") || "";
 
 function adminEscape(value) {
   return String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"})[char]);
@@ -122,3 +122,9 @@ admin$("adminTokenForm").addEventListener("submit", async event => {
   catch (error) { adminAccessToken = ""; adminNotice(error.message, true); }
 });
 admin$("adminRefresh").addEventListener("click", () => loadAdmin().catch(error => adminNotice(error.message, true)));
+if (adminAccessToken) {
+  loadAdmin().catch(() => {
+    adminAccessToken = "";
+    admin$("adminLogin").hidden = false;
+  });
+}

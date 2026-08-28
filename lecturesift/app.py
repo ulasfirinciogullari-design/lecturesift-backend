@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, HttpUrl
 
+from . import config
 from .billing import public_catalog, public_providers
 from .billing_service import (
     BillingAuthenticationError,
@@ -117,11 +118,19 @@ def _billing_user(authorization: str | None = Header(None)) -> dict:
 
 
 def _billing_admin(authorization: str | None = Header(None)) -> None:
-    if not BILLING_ADMIN_TOKEN:
+    if not BILLING_ADMIN_TOKEN and not config.BILLING_ADMIN_EMAILS:
         raise HTTPException(503, detail={"code": "LS-BILL-03", "message": "Ödeme onayı yönetimi etkin değil."})
     scheme, _, value = (authorization or "").partition(" ")
-    if scheme.lower() != "bearer" or not hmac.compare_digest(value, BILLING_ADMIN_TOKEN):
-        raise HTTPException(401, detail={"code": "LS-BILL-04", "message": "Yetkisiz istek."})
+    if scheme.lower() == "bearer" and value:
+        if BILLING_ADMIN_TOKEN and hmac.compare_digest(value, BILLING_ADMIN_TOKEN):
+            return
+        try:
+            user = authenticate_session(value)
+            if user["email"].casefold() in config.BILLING_ADMIN_EMAILS:
+                return
+        except (BillingAuthenticationError, BillingConfigurationError):
+            pass
+    raise HTTPException(401, detail={"code": "LS-BILL-04", "message": "Yetkisiz istek."})
 
 
 def _owned_job(job_id: str, user: dict) -> dict:

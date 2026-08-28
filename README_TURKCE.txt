@@ -59,3 +59,9 @@ PAYTR_TEST_MODE=true kullanılmalıdır. PayTR Bildirim URL adresi:
 https://lecturesift-backend.onrender.com/billing/paytr/callback
 Bu adres kullanıcı sayfası değildir; PayTR'ın imzalı ödeme sonucunu gönderdiği
 sunucu adresidir. Anahtarlar koda, GitHub'a veya uygulama kayıtlarına yazılmaz.
+
+YÖNETİCİ ERİŞİMİ
+Render'daki BILLING_ADMIN_EMAILS değerine doğrulanmış sahip e-posta adresleri
+virgülle ayrılarak yazılır. Bu hesaplar normal giriş yaptıktan sonra yönetici
+panelini otomatik açabilir. BILLING_ADMIN_TOKEN yalnızca acil durum yedeğidir;
+koda veya tarayıcıya kalıcı olarak kaydedilmez.

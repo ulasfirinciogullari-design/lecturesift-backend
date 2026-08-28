@@ -3,7 +3,9 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
+from lecturesift import config
 from lecturesift.app import app
+from lecturesift.billing_service import register_user, verify_email
 from lecturesift.security import RateLimitExceeded, RateLimiter
 
 
@@ -47,3 +49,17 @@ def test_cors_accepts_lecturesift_previews_and_rejects_unknown_origins():
     assert allowed.status_code == 200
     assert allowed.headers["access-control-allow-origin"].startswith("https://deploy-preview-")
     assert "access-control-allow-origin" not in blocked.headers
+
+
+def test_owner_session_can_open_admin_without_exposing_admin_token(monkeypatch):
+    email = f"owner-{uuid.uuid4()}@example.com"
+    created = register_user(email, "Strong-test-password1", "Site", "Owner", country_code="TR")
+    token = verify_email(created["verification_token"])["token"]
+    monkeypatch.setattr(config, "BILLING_ADMIN_EMAILS", {email.casefold()})
+    client = TestClient(app)
+    headers = {"Authorization": f"Bearer {token}"}
+    account = client.get("/billing/me", headers=headers)
+    overview = client.get("/billing/admin/overview", headers=headers)
+    assert account.status_code == 200
+    assert account.json()["account"]["is_admin"] is True
+    assert overview.status_code == 200

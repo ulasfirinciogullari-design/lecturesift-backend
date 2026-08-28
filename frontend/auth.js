@@ -222,6 +222,17 @@ async function initAccount() {
     populateCountrySelect($("accountCountrySelect"), user.country_code || "TR");
     $("preferredLanguage").replaceChildren(...Object.entries(I18N.languages).map(([code, label]) => new Option(label, code)));
     $("preferredLanguage").value = user.preferred_language || I18N.language;
+    let adminLink = $("accountAdminLink");
+    if (account.is_admin && !adminLink) {
+      adminLink = document.createElement("a");
+      adminLink.id = "accountAdminLink";
+      adminLink.className = "secondary-action link-action";
+      adminLink.href = "/admin.html";
+      adminLink.textContent = t("admin.open", "Yönetici panelini aç");
+      $("logoutButton").insertAdjacentElement("beforebegin", adminLink);
+    } else if (!account.is_admin && adminLink) {
+      adminLink.remove();
+    }
     renderOrders(account);
     $("accountPage").hidden = false;
   };

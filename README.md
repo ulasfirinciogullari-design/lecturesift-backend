@@ -59,6 +59,8 @@ The automated suite covers human-readable API errors, SSRF/private-URL rejection
 
 Account, bank-transfer, credit-pack, and admin approval data is stored in the configured PostgreSQL database. PayTR checkout remains disabled until all three runtime-only values are present: `PAYTR_MERCHANT_ID`, `PAYTR_MERCHANT_KEY`, and `PAYTR_MERCHANT_SALT`. `PAYTR_TEST_MODE=true` is the safe default while merchant approval and test payments are in progress.
 
+Set `BILLING_ADMIN_EMAILS` to a comma-separated list of verified owner emails so those normal user sessions can open `/admin.html`; `BILLING_ADMIN_TOKEN` remains the emergency fallback and must never be committed or stored in the browser.
+
 Configure the PayTR notification URL as:
 
 `https://lecturesift-backend.onrender.com/billing/paytr/callback`

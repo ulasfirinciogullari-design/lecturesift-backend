@@ -81,10 +81,18 @@ def _user(authorization: str | None = Header(None)) -> dict:
 
 def _admin(authorization: str | None = Header(None)) -> None:
     scheme, _, token = (authorization or "").partition(" ")
-    if not config.BILLING_ADMIN_TOKEN:
+    if not config.BILLING_ADMIN_TOKEN and not config.BILLING_ADMIN_EMAILS:
         raise HTTPException(503, detail={"code": "LS-BILL-03", "message": "Admin paneli henüz etkin değil."})
-    if scheme.casefold() != "bearer" or not hmac.compare_digest(token, config.BILLING_ADMIN_TOKEN):
-        raise HTTPException(401, detail={"code": "LS-BILL-04", "message": "Admin yetkisi gerekli."})
+    if scheme.casefold() == "bearer" and token:
+        if config.BILLING_ADMIN_TOKEN and hmac.compare_digest(token, config.BILLING_ADMIN_TOKEN):
+            return
+        try:
+            user = authenticate_session(token)
+            if user["email"].casefold() in config.BILLING_ADMIN_EMAILS:
+                return
+        except (BillingAuthenticationError, BillingConfigurationError):
+            pass
+    raise HTTPException(401, detail={"code": "LS-BILL-04", "message": "Admin yetkisi gerekli."})
 
 
 def _billing_failure(exc: Exception, code: str = "LS-BILL-22") -> None:

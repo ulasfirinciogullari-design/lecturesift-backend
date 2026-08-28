@@ -30,6 +30,8 @@ services:
         generateValue: true
       - key: BILLING_ADMIN_TOKEN
         generateValue: true
+      - key: BILLING_ADMIN_EMAILS
+        sync: false
       - key: BILLING_BANK_IBAN
         sync: false
       - key: BILLING_BANK_ACCOUNT_HOLDER
