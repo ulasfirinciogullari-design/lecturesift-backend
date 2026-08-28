@@ -116,6 +116,25 @@ def test_static_page_copy_covers_every_language_without_empty_entries():
         assert source in catalog
 
 
+def test_every_declared_interface_key_has_thirteen_translations():
+    html = "\n".join(page.read_text(encoding="utf-8") for page in FRONTEND.glob("*.html"))
+    required = set(re.findall(r'data-i18n(?:-placeholder)?="([^"]+)"', html))
+    script = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    rows = {
+        key: json.loads(f"[{payload}]")
+        for key, payload in re.findall(r'^\s*"([^"]+)":\[(.*?)\],?$', script, re.MULTILINE)
+    }
+    central = required & rows.keys()
+    legacy = required - rows.keys()
+    workspace_script = (FRONTEND / "app.js").read_text(encoding="utf-8")
+    uncovered = sorted(
+        key for key in legacy if not re.search(rf"\b{re.escape(key)}\s*:", workspace_script)
+    )
+    assert not uncovered, uncovered
+    assert all(len(rows[key]) == 13 for key in central)
+    assert all(all(str(value).strip() for value in rows[key]) for key in central)
+
+
 def test_profile_admin_bank_and_full_comparison_interfaces_are_present():
     account = (FRONTEND / "account.html").read_text(encoding="utf-8")
     auth = (FRONTEND / "auth.js").read_text(encoding="utf-8")
@@ -145,6 +164,7 @@ def test_profile_admin_bank_and_full_comparison_interfaces_are_present():
     assert "restoreRequestedJob" in workspace_script
     assert 'new URLSearchParams(location.search).get("job")' in workspace_script
     assert "/ask" in workspace_script and "lessonQuestionForm" in workspace_script
+    assert "renderExamPrep" in workspace_script and "startExamButton" in workspace_script
 
 
 def test_secure_card_checkout_is_prepared_without_collecting_card_details():

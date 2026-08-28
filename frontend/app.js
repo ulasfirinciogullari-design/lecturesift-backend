@@ -703,7 +703,7 @@ function renderResult(data) {
       image.src = objectUrl;
     } catch { image.alt = t("noSlides"); }
   });
-  renderQuiz(data.quiz || []); renderCards(); renderFiles(data.artifacts || [], canDownload);
+  renderQuiz(data.quiz || []); renderExamPrep(data); renderCards(); renderFiles(data.artifacts || [], canDownload);
   $("lessonQuestionForm").reset(); $("lessonAnswer").hidden = true; $("lessonAnswer").replaceChildren();
   document.querySelectorAll(".result-tab").forEach(button => { button.hidden = utilityResult && button.dataset.pane !== "files"; button.classList.toggle("active", utilityResult ? button.dataset.pane === "files" : button.dataset.pane === "summary"); });
   document.querySelectorAll(".result-pane").forEach(pane => pane.classList.remove("active"));
@@ -756,9 +756,43 @@ function renderQuiz(items) {
     shell.classList.add("answered"); quizAnswered += 1;
     shell.querySelectorAll(".quiz-option").forEach(option => { option.disabled = true; if (Number(option.dataset.option) === correct) option.classList.add("correct"); });
     if (selected === correct) quizScore += 1; else button.classList.add("wrong");
-    $("quizStatus").textContent = `${t("score")}: ${quizScore}/${items.length} · ${quizAnswered}/${items.length}`;
+    $("quizStatus").textContent = `${t("score")}: ${quizScore}/${items.length} · ${quizAnswered}/${items.length}`; updateExamReadiness(items.length);
   });
 }
+
+function updateExamReadiness(total = latestResult?.quiz?.length || 0) {
+  const answered = Math.min(quizAnswered, total);
+  const score = answered ? Math.round(quizScore / answered * 100) : 0;
+  $("examReadiness").textContent = answered ? `%${score} · ${answered}/${total}` : window.LectureSiftI18n?.t("exam.notStarted", "Henüz deneme çözülmedi") || "Henüz deneme çözülmedi";
+  $("examRecommendation").textContent = !answered
+    ? (window.LectureSiftI18n?.t("exam.startHelp", "Önce önemli konuları gözden geçir, ardından karışık denemeyi başlat.") || "Önce önemli konuları gözden geçir, ardından karışık denemeyi başlat.")
+    : score >= 80
+      ? (window.LectureSiftI18n?.t("exam.strong", "Bu derste güçlü görünüyorsun; yanlışlarını son kez gözden geçir.") || "Bu derste güçlü görünüyorsun; yanlışlarını son kez gözden geçir.")
+      : (window.LectureSiftI18n?.t("exam.review", "Sınav odaklarını ve yanlış yanıt açıklamalarını tekrar et.") || "Sınav odaklarını ve yanlış yanıt açıklamalarını tekrar et.");
+}
+
+function renderExamPrep(data) {
+  const focus = data.exam_focus || [];
+  $("examFocusList").innerHTML = focus.length ? focus.map((item, index) => `<div class="note-item"><h3>${index + 1}</h3><p>${escapeHtml(item)}</p></div>`).join("") : `<div class="empty-state">${escapeHtml(window.LectureSiftI18n?.t("exam.noFocus", "Bu ders için ayrı sınav odağı oluşmadı; quiz ve bilgi kartlarını kullanabilirsin.") || "Bu ders için ayrı sınav odağı oluşmadı; quiz ve bilgi kartlarını kullanabilirsin.")}</div>`;
+  $("startExamButton").disabled = !(data.quiz || []).length;
+  updateExamReadiness((data.quiz || []).length);
+}
+
+function shuffledExamQuestions(items) {
+  return [...items].sort(() => Math.random() - .5).map(item => {
+    const options = (item.options || []).map((value, index) => ({value, correct:index === Number(item.answer_index)})).sort(() => Math.random() - .5);
+    return {...item, options:options.map(option => option.value), answer_index:options.findIndex(option => option.correct)};
+  });
+}
+
+$("startExamButton").addEventListener("click", () => {
+  const items = latestResult?.quiz || [];
+  if (!items.length) return;
+  renderQuiz(shuffledExamQuestions(items));
+  document.querySelectorAll(".result-tab").forEach(item => item.classList.toggle("active", item.dataset.pane === "quiz"));
+  document.querySelectorAll(".result-pane").forEach(item => item.classList.toggle("active", item.id === "pane-quiz"));
+  $("pane-quiz").scrollIntoView({behavior:"smooth", block:"start"});
+});
 
 function renderCards() {
   const cards = latestResult?.flashcards || [];
