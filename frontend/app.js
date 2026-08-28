@@ -319,9 +319,9 @@ function renderBillingAccount() {
     $("accountButton").href = loggedIn ? "/account.html" : "/login.html";
   }
   if (!loggedIn) return;
-  $("accountEmail").textContent = billingAccount.user.email;
-  $("accountPlan").textContent = `${t("currentPlan")}: ${planCopy(billingAccount.plan.code)[0]}`;
-  $("accountRemaining").textContent = billingAccount.remaining_minutes == null ? "∞" : billingAccount.remaining_minutes.toLocaleString(currentLanguage);
+  if ($("accountEmail")) $("accountEmail").textContent = billingAccount.user.email;
+  if ($("accountPlan")) $("accountPlan").textContent = `${t("currentPlan")}: ${planCopy(billingAccount.plan.code)[0]}`;
+  if ($("accountRemaining")) $("accountRemaining").textContent = billingAccount.remaining_minutes == null ? "∞" : billingAccount.remaining_minutes.toLocaleString(currentLanguage);
 }
 
 async function billingRequest(path, options = {}) {
@@ -400,7 +400,7 @@ function renderPlans() {
 }
 
 async function createTransferOrder(planCode) {
-  if (!billingToken) { location.href = `/login.html?next=${encodeURIComponent("/#plans")}`; return; }
+  if (!billingToken) { location.href = `/login.html?next=${encodeURIComponent("/plans.html")}`; return; }
   if (billingCurrency !== "TRY") { showError(window.LectureSiftI18n?.t("plans.globalPending", "Global kart ödemeleri PayTR etkinleştiğinde açılacak. Şimdilik havale için TRY seçebilirsin.") || "Global kart ödemeleri PayTR etkinleştiğinde açılacak. Şimdilik havale için TRY seçebilirsin.", "LS-BILL-20"); return; }
   const plan = billingCatalog.plans.find(item => item.code === planCode);
   const interval = plan?.kind === "one_time" ? "one_time" : "monthly";

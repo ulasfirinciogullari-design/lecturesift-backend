@@ -196,15 +196,19 @@ function paytrStatus() {
   return providers.find(provider => provider.code === "paytr") || {configured: false, currencies: []};
 }
 
+function pendingCardMessage() {
+  const iyzico = providers.find(provider => provider.code === "iyzico") || {status: "planned"};
+  return ["application_review", "fallback"].includes(iyzico.status)
+    ? pt("payment.iyzicoReview", "iyzico mağaza başvurusu inceleme sürecinde. Onay ve canlı anahtarlar tamamlanmadan kartlı ödeme alınmaz.")
+    : pt("payment.cardPending", "Kartlı ödeme, yetkili ödeme kuruluşunun mağaza onayı ve canlı anahtarları tamamlandığında açılacak.");
+}
+
 function renderPaymentStatus() {
   const paytr = paytrStatus();
-  const iyzico = providers.find(provider => provider.code === "iyzico") || {status: "planned"};
   if (!$('cardAvailability')) return;
   $('cardAvailability').textContent = paytr.configured
     ? pt("payment.providerReady", "Kartlı ödeme kullanıma hazır.")
-    : ["application_review", "fallback"].includes(iyzico.status)
-    ? pt("payment.iyzicoReview", "iyzico mağaza başvurusu inceleme sürecinde. Onay ve canlı anahtarlar tamamlanmadan kartlı ödeme alınmaz.")
-    : pt("payment.providerPending", "Kartlı ödeme için PayTR mağaza bilgileri bekleniyor.");
+    : pendingCardMessage();
 }
 
 function renderPlans() {
@@ -282,7 +286,7 @@ async function buy(planCode, interval = "monthly") {
     ? pt("payment.commercePending", "Satıcı/sağlayıcı kimliği ve iletişim bilgileri tamamlanmadan ödeme açılamaz.")
     : paytr.configured
     ? pt("payment.providerReady", "Kartlı ödeme kullanıma hazır.")
-    : pt("payment.providerPending", "Kartlı ödeme için PayTR mağaza bilgileri bekleniyor.");
+    : pendingCardMessage();
   $("checkoutForm").hidden = false;
   $("paytrFrame").hidden = true;
   $("checkoutPanel").hidden = false;

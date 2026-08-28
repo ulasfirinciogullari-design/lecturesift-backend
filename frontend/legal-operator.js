@@ -13,6 +13,9 @@
   };
   ensureDistanceSalesLink(document.querySelector(".legal-nav"));
   ensureDistanceSalesLink(document.querySelector(".legal-footer nav"));
+  const showOperatorDetails = ["/distance-sales.html", "/contact.html"]
+    .some(path => location.pathname.endsWith(path));
+  if (!showOperatorDetails) return;
   const addRow = (list, label, value, href = "") => {
     if (!value) return;
     const row = document.createElement("div");
