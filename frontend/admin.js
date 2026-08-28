@@ -180,16 +180,24 @@ function renderAdminAlerts(checks) {
 
 function renderMetrics() {
   const counts = adminState.overview.counts || {};
+  const orders = adminState.overview.orders || [];
+  const users = adminState.overview.users || [];
   const newMessages = adminState.contacts.filter(item => item.status === "new").length;
   const openRefunds = adminState.refunds.filter(item => ["requested", "approved_pending_refund"].includes(item.status)).length;
   const activeJobs = adminState.jobs.filter(item => ["queued", "working"].includes(item.status)).length;
   const failedJobs = adminState.jobs.filter(item => item.status === "failed").length;
-  const revenues = Object.entries(adminState.overview.revenue_by_currency || {}).map(([currency, amount]) => adminMoney(amount, currency));
+  const revenueMap = {...(adminState.overview.revenue_by_currency || {})};
+  if (!Object.keys(revenueMap).length) orders.filter(item => item.status === "paid").forEach(item => { const currency = item.currency || "TRY"; revenueMap[currency] = Number(revenueMap[currency] || 0) + Number(item.amount_minor || 0); });
+  const revenues = Object.entries(revenueMap).map(([currency, amount]) => adminMoney(amount, currency));
+  const verifiedUsers = Number(counts.verified_users || 0);
+  const totalUsers = Number(counts.users || 0);
+  const verificationRate = adminState.overview.verification_rate ?? (totalUsers ? verifiedUsers / totalUsers * 100 : 0);
+  const users24h = counts.users_24h ?? users.filter(item => Date.now() - adminDateObject(item.created_at).getTime() <= 86400000).length;
   admin$("adminUsers").textContent = counts.users || 0;
   admin$("adminUsersGrowth").textContent = `Son 7 gün: ${counts.users_7d || 0} · 30 gün: ${counts.users_30d || 0}`;
   admin$("adminVerified").textContent = counts.verified_users || 0;
-  admin$("adminVerificationRate").textContent = `%${Number(adminState.overview.verification_rate || 0).toLocaleString(adminLocale())} doğrulama`;
-  admin$("adminPaidOrders").textContent = counts.paid_orders || 0;
+  admin$("adminVerificationRate").textContent = `%${Number(verificationRate || 0).toLocaleString(adminLocale())} doğrulama`;
+  admin$("adminPaidOrders").textContent = counts.paid_orders ?? orders.filter(item => item.status === "paid").length;
   admin$("adminRevenue").textContent = revenues.join(" + ") || adminMoney(0, "TRY");
   admin$("adminPending").textContent = counts.pending_orders || 0;
   admin$("adminFailedOrders").textContent = `Hatalı: ${counts.failed_orders || 0}`;
@@ -198,7 +206,7 @@ function renderMetrics() {
   admin$("adminOpenRefunds").textContent = `Açık iade: ${openRefunds}`;
   admin$("adminActiveJobs").textContent = activeJobs;
   admin$("adminFailedJobs").textContent = `Hatalı: ${failedJobs}`;
-  admin$("adminUsers24h").textContent = counts.users_24h || 0;
+  admin$("adminUsers24h").textContent = users24h;
   admin$("adminRefundBadge").textContent = `${openRefunds} açık`;
   admin$("adminRewardBadge").textContent = `${adminState.rewards.filter(item => item.status === "pending_verification").length} bekliyor`;
 }
