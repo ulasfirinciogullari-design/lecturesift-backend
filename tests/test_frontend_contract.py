@@ -122,6 +122,7 @@ def test_profile_admin_bank_and_full_comparison_interfaces_are_present():
     plans = (FRONTEND / "plans.html").read_text(encoding="utf-8")
     plan_script = (FRONTEND / "plans.js").read_text(encoding="utf-8")
     admin = (FRONTEND / "admin.html").read_text(encoding="utf-8")
+    workspace_script = (FRONTEND / "app.js").read_text(encoding="utf-8")
     assert all(
         value in account
         for value in (
@@ -134,12 +135,15 @@ def test_profile_admin_bank_and_full_comparison_interfaces_are_present():
     )
     assert "/billing/me/profile" in auth and "/billing/me/change-password" in auth
     assert "/billing/me/subscription/cancel" in auth
+    assert "/jobs?limit=30" in auth and "jobHistory" in account
     assert "/billing/me/export" in auth and "/billing/me/close-account" in auth
     assert 'href="/admin.html"' not in account
     assert all(value in plans for value in ("compareHead", "compareBody", "publicBankHolder"))
     assert "renderCompare" in plan_script and "/billing/manual-transfer" in plan_script
     assert "adminTokenForm" in admin and "adminOrders" in admin
     assert "adminReadiness" in admin
+    assert "restoreRequestedJob" in workspace_script
+    assert 'new URLSearchParams(location.search).get("job")' in workspace_script
 
 
 def test_secure_card_checkout_is_prepared_without_collecting_card_details():

@@ -241,6 +241,7 @@ def process_job(
             JOBS.update(
                 job_id,
                 status="done",
+                title=result["title"],
                 percent=100,
                 stage="done",
                 elapsed_seconds=round(time.time() - started, 1),
@@ -271,6 +272,7 @@ def process_job(
             JOBS.update(
                 job_id,
                 status="done",
+                title=result["title"],
                 percent=100,
                 stage="done",
                 elapsed_seconds=round(time.time() - started, 1),
@@ -352,6 +354,7 @@ def process_job(
         JOBS.update(
             job_id,
             status="done",
+            title=result.get("title") or "LectureSift Ders Paketi",
             percent=100,
             stage="done",
             elapsed_seconds=elapsed,

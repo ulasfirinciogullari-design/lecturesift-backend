@@ -152,6 +152,7 @@ let latestResult = null, cardIndex = 0, cardRevealed = false, quizScore = 0, qui
 let billingToken = localStorage.getItem("lecturesift-billing-token") || "";
 let billingAccount = null, billingCatalog = null;
 let billingCurrency = localStorage.getItem("lecturesift-currency") || "";
+let requestedJobLoaded = false;
 
 function stringsFor(language) {
   if (language === "tr") return TR;
@@ -426,13 +427,32 @@ async function loadBilling() {
     billingCurrency = selected;
     localStorage.setItem("lecturesift-currency", billingCurrency);
     if ($("billingCurrency")) $("billingCurrency").value = billingCurrency;
-    renderPlans(); await refreshBillingAccount();
+    renderPlans(); await refreshBillingAccount(); await restoreRequestedJob();
   } catch {
     billingCatalog = fallbackCatalog(detectedCurrency());
     billingCurrency = billingCatalog.selected_currency;
     if ($("billingCurrency")) $("billingCurrency").value = billingCurrency;
     renderPlans();
-    await refreshBillingAccount();
+    await refreshBillingAccount(); await restoreRequestedJob();
+  }
+}
+
+async function restoreRequestedJob() {
+  if (requestedJobLoaded || !billingToken || !billingAccount) return;
+  const requested = new URLSearchParams(location.search).get("job") || "";
+  if (!/^[A-Za-z0-9-]{8,80}$/.test(requested)) return;
+  requestedJobLoaded = true;
+  jobId = requested;
+  try {
+    const response = await fetch(`${API}/jobs/${encodeURIComponent(jobId)}`, {cache:"no-store", headers:{Authorization:`Bearer ${billingToken}`}});
+    if (!response.ok) { const error = await responseError(response); showError(error.message, error.code); return; }
+    const job = await response.json();
+    updateJobView(job);
+    if (job.status === "done") await loadResult();
+    else if (job.status === "error") showError(job.error, job.error_code);
+    else { startTimer(); pollJob(); }
+  } catch (error) {
+    showError(error.message, "LS-NETWORK-01");
   }
 }
 

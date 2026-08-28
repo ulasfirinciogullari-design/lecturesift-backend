@@ -202,6 +202,27 @@ async function initAccount() {
       <div class="order-row"><span><strong>${order.order_number || order.reference}</strong><br><small>${planName(order.plan_code)} · ${new Intl.DateTimeFormat(I18N.locale, {dateStyle:"medium"}).format(new Date(order.created_at))}</small></span><strong>${t(`order.${order.status}`, order.status)}</strong></div>`).join("") : `<p class="empty-copy">${t("payment.noOrders", "Henüz ödeme siparişin yok.")}</p>`;
   };
 
+  const renderJobHistory = jobs => {
+    $("jobHistory").innerHTML = jobs.length ? jobs.map(job => {
+      const created = new Intl.DateTimeFormat(I18N.locale, {dateStyle:"medium", timeStyle:"short"}).format(new Date(Number(job.created || 0) * 1000));
+      const label = job.title || (job.options?.job_type === "audio_export" ? t("history.audioExport", "MP3 dönüşümü") : job.options?.job_type === "download_video" ? t("history.videoDownload", "Video indirme") : t("history.studyPack", "Ders çalışma paketi"));
+      const status = job.status === "done" ? t("history.ready", "Hazır") : job.status === "error" ? t("history.failed", "Tamamlanamadı") : t("history.processing", "İşleniyor");
+      const action = job.status === "error" ? "" : `<a class="secondary-action link-action" href="/?job=${encodeURIComponent(job.job_id)}">${t("history.open", "Aç")}</a>`;
+      return `<div class="order-row history-row"><span><strong>${adminSafe(label)}</strong><br><small>${adminSafe(created)} · ${adminSafe(status)}</small></span>${action}</div>`;
+    }).join("") : `<p class="empty-copy">${t("account.noHistory", "Henüz işlenmiş bir dersin yok.")}</p>`;
+  };
+
+  const adminSafe = value => String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[char]);
+
+  const loadJobHistory = async () => {
+    try {
+      const body = await request("/jobs?limit=30", {}, token);
+      renderJobHistory(body.jobs || []);
+    } catch (error) {
+      $("jobHistory").innerHTML = `<p class="empty-copy">${adminSafe(error.message)}</p>`;
+    }
+  };
+
   const renderAccount = account => {
     currentAccount = account;
     const user = account.user;
@@ -249,6 +270,7 @@ async function initAccount() {
     }
     renderOrders(account);
     $("accountPage").hidden = false;
+    void loadJobHistory();
   };
 
   const reconcilePaymentRedirect = async () => {
