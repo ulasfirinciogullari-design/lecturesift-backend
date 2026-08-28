@@ -1257,7 +1257,7 @@ def admin_close_user_account(
             raise BillingError("Kullanıcı bulunamadı.")
         if confirmation_email.strip().casefold() != user.email.casefold():
             raise BillingError("Onay e-postası kullanıcı hesabıyla eşleşmiyor.")
-        protected_admin_emails = set(config.BILLING_PROTECTED_EMAILS) | set(config.BILLING_ADMIN_EMAILS)
+        protected_admin_emails = set(config.BILLING_PROTECTED_EMAILS)
         if config.LEGAL_OPERATOR_EMAIL:
             protected_admin_emails.add(config.LEGAL_OPERATOR_EMAIL.casefold())
         if user.email.casefold() in protected_admin_emails:

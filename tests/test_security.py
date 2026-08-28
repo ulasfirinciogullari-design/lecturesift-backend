@@ -53,18 +53,23 @@ def test_cors_accepts_lecturesift_previews_and_rejects_unknown_origins():
     assert "access-control-allow-origin" not in blocked.headers
 
 
-def test_owner_session_can_open_admin_without_exposing_admin_token(monkeypatch):
+def test_owner_session_cannot_replace_dedicated_admin_token(monkeypatch):
     email = f"owner-{uuid.uuid4()}@example.com"
     created = register_user(email, "Strong-test-password1", "Site", "Owner", country_code="TR")
     token = verify_email(created["verification_token"])["token"]
-    monkeypatch.setattr(config, "BILLING_ADMIN_EMAILS", {email.casefold()})
+    monkeypatch.setattr(config, "ADMIN_ADMIN", "dedicated-admin-secret")
     client = TestClient(app)
     headers = {"Authorization": f"Bearer {token}"}
     account = client.get("/billing/me", headers=headers)
     overview = client.get("/billing/admin/overview", headers=headers)
+    admin_overview = client.get(
+        "/billing/admin/overview",
+        headers={"Authorization": "Bearer dedicated-admin-secret"},
+    )
     assert account.status_code == 200
-    assert account.json()["account"]["is_admin"] is True
-    assert overview.status_code == 200
+    assert account.json()["account"]["is_admin"] is False
+    assert overview.status_code == 401
+    assert admin_overview.status_code == 200
 
 
 def test_legal_operator_identity_does_not_grant_admin_access(monkeypatch):
@@ -72,8 +77,7 @@ def test_legal_operator_identity_does_not_grant_admin_access(monkeypatch):
     created = register_user(email, "Strong-test-password1", "Legal", "Operator", country_code="TR")
     token = verify_email(created["verification_token"])["token"]
     monkeypatch.setattr(config, "LEGAL_OPERATOR_EMAIL", email)
-    monkeypatch.setattr(config, "BILLING_ADMIN_EMAILS", set())
-    monkeypatch.setattr(config, "BILLING_ADMIN_TOKEN", "billing-admin-secret")
+    monkeypatch.setattr(config, "ADMIN_ADMIN", "billing-admin-secret")
     client = TestClient(app)
 
     account = client.get("/billing/me", headers={"Authorization": f"Bearer {token}"})
@@ -95,14 +99,19 @@ def test_admin_can_monitor_processing_jobs_without_internal_paths(monkeypatch):
     created = register_user(email, "Strong-test-password1", "Jobs", "Owner", country_code="TR")
     token = verify_email(created["verification_token"])["token"]
     user_id = created["user"]["id"]
-    monkeypatch.setattr(config, "BILLING_ADMIN_EMAILS", {email.casefold()})
+    monkeypatch.setattr(config, "ADMIN_ADMIN", "dedicated-admin-secret")
     job_id = f"admin-job-{uuid.uuid4()}"
     JOBS.create(job_id, config.WORK_DIR / job_id, {"billing_user_id": user_id, "language": "tr"})
     try:
-        response = TestClient(app).get(
+        denied = TestClient(app).get(
             "/billing/admin/jobs",
             headers={"Authorization": f"Bearer {token}"},
         )
+        response = TestClient(app).get(
+            "/billing/admin/jobs",
+            headers={"Authorization": "Bearer dedicated-admin-secret"},
+        )
+        assert denied.status_code == 401
         assert response.status_code == 200
         item = next(job for job in response.json()["jobs"] if job["job_id"] == job_id)
         assert item["owner_id"] == user_id

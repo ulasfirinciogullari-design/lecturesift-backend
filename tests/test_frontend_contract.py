@@ -229,6 +229,7 @@ def test_profile_admin_bank_and_full_comparison_interfaces_are_present():
     assert 'payment.sendReceiptTo' in plan_script
     assert 'code !== "test" || currency === "TRY"' in plan_script
     assert "adminTokenForm" in admin and "adminOrders" in admin
+    assert "ADMIN_ADMIN" in admin
     assert "adminReadiness" in admin
     assert "adminContactMessages" in admin
     assert all(value in admin for value in ("adminTimeline", "adminJobs", "adminAlerts", "adminExportOrders", "adminOperationNotice", "adminAccountEvents", "adminPlanDistribution"))

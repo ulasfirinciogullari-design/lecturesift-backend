@@ -62,7 +62,7 @@ The automated suite covers human-readable API errors, SSRF/private-URL rejection
 
 Account, bank-transfer, credit-pack, and admin approval data is stored in the configured PostgreSQL database. iyzico is the preferred card provider when the runtime-only `IYZICO_API_KEY` and `IYZICO_SECRET_KEY` values are present. Production uses `IYZICO_BASE_URL=https://api.iyzipay.com`; sandbox testing may explicitly use `https://sandbox-api.iyzipay.com`. PayTR remains an optional fallback.
 
-Set `BILLING_ADMIN_EMAILS` to a comma-separated list of verified owner emails so those normal user sessions can open `/admin.html`; `BILLING_ADMIN_TOKEN` remains the emergency fallback and must never be committed or stored in the browser.
+Set the independent `ADMIN_ADMIN` secret in Render to open `/admin.html`. Normal user sessions, legal contact addresses, billing credentials, and Instagram credentials never grant admin access. The secret must never be committed and is retained only for the current browser-tab session.
 
 Transcript timelines always include clearly labeled audio-chunk start times. Set `LECTURESIFT_PRECISE_TRANSCRIPT_TIMESTAMPS=true` on both the web service and worker only after approving the higher transcription cost; this switches transcription to `gpt-4o-transcribe-diarize` and stores provider-reported segment start/end times and speaker labels. The safe default is `false`.
 

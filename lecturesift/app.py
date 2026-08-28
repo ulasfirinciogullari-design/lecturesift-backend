@@ -127,19 +127,12 @@ def _billing_user(authorization: str | None = Header(None)) -> dict:
 
 
 def _billing_admin(authorization: str | None = Header(None)) -> None:
-    admin_emails = set(config.BILLING_ADMIN_EMAILS)
-    if not config.BILLING_ADMIN_TOKEN and not admin_emails:
+    if not config.ADMIN_ADMIN:
         raise HTTPException(503, detail={"code": "LS-BILL-03", "message": "Ödeme onayı yönetimi etkin değil."})
     scheme, _, value = (authorization or "").partition(" ")
     if scheme.lower() == "bearer" and value:
-        if config.BILLING_ADMIN_TOKEN and hmac.compare_digest(value, config.BILLING_ADMIN_TOKEN):
+        if hmac.compare_digest(value, config.ADMIN_ADMIN):
             return
-        try:
-            user = authenticate_session(value)
-            if user["email"].casefold() in admin_emails:
-                return
-        except (BillingAuthenticationError, BillingConfigurationError):
-            pass
     raise HTTPException(401, detail={"code": "LS-BILL-04", "message": "Yetkisiz istek."})
 
 

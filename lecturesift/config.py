@@ -26,12 +26,7 @@ PUBLIC_BASE_URL = (
 FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "https://lecturesift.com").rstrip("/")
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{WORK_DIR / 'billing.db'}")
 BILLING_SESSION_SECRET = os.getenv("BILLING_SESSION_SECRET", "")
-BILLING_ADMIN_TOKEN = os.getenv("BILLING_ADMIN_TOKEN", "")
-BILLING_ADMIN_EMAILS = {
-    email.strip().casefold()
-    for email in os.getenv("BILLING_ADMIN_EMAILS", "").split(",")
-    if email.strip()
-}
+ADMIN_ADMIN = os.getenv("ADMIN_ADMIN", "")
 BILLING_PROTECTED_EMAILS = {
     email.strip().casefold()
     for email in os.getenv("BILLING_PROTECTED_EMAILS", "").split(",")
