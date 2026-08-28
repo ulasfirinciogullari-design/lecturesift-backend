@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow"><title>Yönetim | LectureSift</title>
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/auth.css"><link rel="stylesheet" href="/rollout.css?v=3">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/auth.css"><link rel="stylesheet" href="/rollout.css?v=4">
 </head>
 <body data-page="admin">
   <header class="auth-topbar"><a class="brand" href="/"><span class="brand-mark"><i></i><i></i><i></i></span><span>Lecture<span>Sift</span></span></a><a class="back-link" href="/" data-i18n="nav.workspace">Çalışma alanına dön</a></header>
@@ -15,39 +15,75 @@
         <div><strong>Canlı operasyon görünümü</strong><small id="adminLastUpdated">Henüz güncellenmedi</small></div>
         <div class="admin-command-actions"><label class="admin-toggle"><input id="adminAutoRefresh" type="checkbox" checked> 60 sn otomatik yenile</label><button id="adminRefresh" class="secondary-action" data-i18n="admin.refresh">Şimdi yenile</button></div>
       </div>
-      <nav class="admin-section-nav" aria-label="Panel bölümleri"><a href="#adminSystemSection">Sistem</a><a href="#adminTimelineSection">Zaman çizelgesi</a><a href="#adminJobsSection">İşleme işleri</a><a href="#adminOrdersSection">Ödemeler</a><a href="#adminMessagesSection">Mesajlar</a><a href="#adminUsersSection">Kullanıcılar</a><a href="#adminAuditSection">Denetim kaydı</a></nav>
       <div id="adminOperationNotice" class="notice admin-operation-notice" hidden aria-live="polite"></div>
-      <div id="adminAlerts" class="admin-alerts" aria-live="polite"></div>
-      <div class="admin-metrics">
-        <article><small data-i18n="admin.users">Toplam kullanıcı</small><strong id="adminUsers">0</strong><span id="adminUsersGrowth">Son 7 gün: 0</span></article>
-        <article><small data-i18n="admin.verified">Doğrulanmış</small><strong id="adminVerified">0</strong><span id="adminVerificationRate">%0</span></article>
-        <article><small>Ödenmiş sipariş</small><strong id="adminPaidOrders">0</strong><span id="adminRevenue">₺0</span></article>
-        <article><small data-i18n="admin.pending">Bekleyen siparişler</small><strong id="adminPending">0</strong><span id="adminFailedOrders">Hatalı: 0</span></article>
-        <article><small data-i18n="admin.subscriptions">Aktif abonelikler</small><strong id="adminSubscriptions">0</strong><span>Canlı haklar</span></article>
-        <article><small>Yeni mesaj</small><strong id="adminNewMessages">0</strong><span id="adminOpenRefunds">Açık iade: 0</span></article>
-        <article><small>Aktif iş</small><strong id="adminActiveJobs">0</strong><span id="adminFailedJobs">Hatalı: 0</span></article>
-        <article><small>Son 24 saat</small><strong id="adminUsers24h">0</strong><span>Yeni hesap</span></article>
+      <div class="admin-workspace">
+        <aside class="admin-sidebar" aria-label="Yönetim bölümleri">
+          <p class="admin-sidebar-label">YÖNETİM MENÜSÜ</p>
+          <nav class="admin-section-nav" role="tablist" aria-label="Panel bölümleri">
+            <button type="button" role="tab" data-admin-view-button="overview" aria-controls="adminOverviewView" aria-selected="true"><span class="admin-nav-icon" aria-hidden="true">◈</span><span><strong>Genel bakış</strong><small>Özet ve hareketler</small></span></button>
+            <button type="button" role="tab" data-admin-view-button="users" aria-controls="adminUsersView" aria-selected="false" tabindex="-1"><span class="admin-nav-icon" aria-hidden="true">◎</span><span><strong>Kullanıcılar</strong><small>Hesap ve dakikalar</small></span></button>
+            <button type="button" role="tab" data-admin-view-button="finance" aria-controls="adminFinanceView" aria-selected="false" tabindex="-1"><span class="admin-nav-icon" aria-hidden="true">₺</span><span><strong>Ödemeler</strong><small>Sipariş ve iadeler</small></span></button>
+            <button type="button" role="tab" data-admin-view-button="support" aria-controls="adminSupportView" aria-selected="false" tabindex="-1"><span class="admin-nav-icon" aria-hidden="true">◇</span><span><strong>Destek</strong><small>Mesaj ve talepler</small></span></button>
+            <button type="button" role="tab" data-admin-view-button="jobs" aria-controls="adminJobsView" aria-selected="false" tabindex="-1"><span class="admin-nav-icon" aria-hidden="true">▣</span><span><strong>İşleme</strong><small>Video ve belgeler</small></span></button>
+            <button type="button" role="tab" data-admin-view-button="system" aria-controls="adminSystemView" aria-selected="false" tabindex="-1"><span class="admin-nav-icon" aria-hidden="true">⚙</span><span><strong>Sistem</strong><small>Altyapı sağlığı</small></span></button>
+            <button type="button" role="tab" data-admin-view-button="audit" aria-controls="adminAuditView" aria-selected="false" tabindex="-1"><span class="admin-nav-icon" aria-hidden="true">⌁</span><span><strong>Denetim</strong><small>Değişiklik kayıtları</small></span></button>
+          </nav>
+        </aside>
+
+        <div class="admin-view-stack">
+          <section id="adminOverviewView" class="admin-view" role="tabpanel" data-admin-view="overview">
+            <div class="admin-view-heading"><div><p class="eyebrow">KONTROL MERKEZİ</p><h2>Genel bakış</h2></div><p>Bugünün önemli sayılarını, uyarılarını ve son hareketlerini tek yerde gör.</p></div>
+            <div id="adminAlerts" class="admin-alerts" aria-live="polite"></div>
+            <div class="admin-metrics">
+              <article><small data-i18n="admin.users">Toplam kullanıcı</small><strong id="adminUsers">0</strong><span id="adminUsersGrowth">Son 7 gün: 0</span></article>
+              <article><small data-i18n="admin.verified">Doğrulanmış</small><strong id="adminVerified">0</strong><span id="adminVerificationRate">%0</span></article>
+              <article><small>Ödenmiş sipariş</small><strong id="adminPaidOrders">0</strong><span id="adminRevenue">₺0</span></article>
+              <article><small data-i18n="admin.pending">Bekleyen siparişler</small><strong id="adminPending">0</strong><span id="adminFailedOrders">Hatalı: 0</span></article>
+              <article><small data-i18n="admin.subscriptions">Aktif abonelikler</small><strong id="adminSubscriptions">0</strong><span>Canlı haklar</span></article>
+              <article><small>Yeni mesaj</small><strong id="adminNewMessages">0</strong><span id="adminOpenRefunds">Açık iade: 0</span></article>
+              <article><small>Aktif iş</small><strong id="adminActiveJobs">0</strong><span id="adminFailedJobs">Hatalı: 0</span></article>
+              <article><small>Son 24 saat</small><strong id="adminUsers24h">0</strong><span>Yeni hesap</span></article>
+            </div>
+            <section class="dashboard-card wide-card admin-plan-overview"><div class="admin-section-head"><div><p class="eyebrow">ÜYELİKLER</p><h2>Plan dağılımı</h2></div><p class="admin-section-note">Aktif hesapların planlara göre güncel dağılımı.</p></div><div id="adminPlanDistribution" class="admin-plan-distribution"></div></section>
+            <section id="adminTimelineSection" class="dashboard-card wide-card"><div class="admin-section-head"><div><p class="eyebrow">HAREKETLER</p><h2>Operasyon zaman çizelgesi</h2></div><select id="adminTimelineFilter" class="admin-filter"><option value="all">Tüm hareketler</option><option value="order">Ödemeler</option><option value="contact">Mesajlar</option><option value="refund">İadeler</option><option value="user">Kullanıcılar</option><option value="job">İşleme işleri</option><option value="credit">Dakika işlemleri</option></select></div><div id="adminTimeline" class="admin-timeline"></div></section>
+          </section>
+
+          <section id="adminUsersView" class="admin-view" role="tabpanel" data-admin-view="users" hidden>
+            <div class="admin-view-heading"><div><p class="eyebrow">HESAPLAR</p><h2>Kullanıcı yönetimi</h2></div><p>Profilleri, üyelikleri, oturumları ve dakika bakiyelerini yönet.</p></div>
+            <section id="adminUsersSection" class="dashboard-card wide-card"><div class="admin-section-head"><div><p class="eyebrow">KULLANICILAR</p><h2 data-i18n="admin.usersTitle">Kullanıcılar</h2></div><div class="admin-filters"><input id="adminUserSearch" class="admin-filter" type="search" placeholder="Ad, e-posta veya telefon ara"><select id="adminUserStatus" class="admin-filter"><option value="all">Tüm hesaplar</option><option value="verified">Doğrulanmış</option><option value="unverified">Doğrulanmamış</option></select><button id="adminExportUsers" class="admin-action">CSV indir</button></div></div><p class="empty-copy" data-i18n="admin.creditHelp">Dakika değişiklikleri neden zorunlu olarak kaydedilir; bakiye sıfırın altına indirilemez.</p><div id="adminUserList" class="admin-table-wrap"></div></section>
+          </section>
+
+          <section id="adminFinanceView" class="admin-view" role="tabpanel" data-admin-view="finance" hidden>
+            <div class="admin-view-heading"><div><p class="eyebrow">FİNANS</p><h2>Ödemeler ve iadeler</h2></div><p>Siparişleri ara, ödeme durumlarını izle ve iade taleplerini yönet.</p></div>
+            <section id="adminOrdersSection" class="dashboard-card wide-card"><div class="admin-section-head"><div><p class="eyebrow">SİPARİŞLER</p><h2 data-i18n="admin.orders">Ödeme siparişleri</h2></div><div class="admin-filters"><input id="adminOrderSearch" class="admin-filter" type="search" placeholder="Sipariş no, e-posta veya ad ara"><select id="adminOrderStatus" class="admin-filter"><option value="all">Tüm durumlar</option><option value="pending">Bekliyor</option><option value="created">Başlatıldı</option><option value="paid">Ödendi</option><option value="failed">Hatalı</option><option value="rejected">Reddedildi</option></select><button id="adminExportOrders" class="admin-action">CSV indir</button></div></div><div id="adminOrders" class="admin-table-wrap"></div></section>
+            <section class="dashboard-card wide-card"><div class="admin-section-head"><h2 data-i18n="admin.refundsTitle">İade talepleri</h2><span id="adminRefundBadge" class="admin-count-badge">0 açık</span></div><p class="empty-copy" data-i18n="admin.refundsHelp">Onay, iadenin ödeme sağlayıcısı veya banka üzerinden yapılması gerektiğini belirtir. Para gerçekten gönderildikten sonra tamamlandı olarak işaretle.</p><div id="adminRefunds" class="admin-table-wrap"></div></section>
+          </section>
+
+          <section id="adminSupportView" class="admin-view" role="tabpanel" data-admin-view="support" hidden>
+            <div class="admin-view-heading"><div><p class="eyebrow">DESTEK</p><h2>Mesajlar ve talepler</h2></div><p>Kullanıcı iletişimini ve sosyal medya bonus taleplerini tek sıradan yönet.</p></div>
+            <section id="adminMessagesSection" class="dashboard-card wide-card"><div class="admin-section-head"><div><p class="eyebrow">GELEN KUTUSU</p><h2>İletişim mesajları</h2></div><div class="admin-filters"><input id="adminMessageSearch" class="admin-filter" type="search" placeholder="Ad, e-posta, konu veya sipariş no ara"><select id="adminMessageStatus" class="admin-filter"><option value="all">Tüm durumlar</option><option value="new">Yeni</option><option value="read">Okundu</option><option value="resolved">Çözümlendi</option></select><button id="adminExportMessages" class="admin-action">CSV indir</button></div></div><p class="empty-copy">Sitedeki iletişim formundan gelen mesajlar burada kalıcı olarak saklanır ve ayrıca destek e-posta adresine bildirilir.</p><div id="adminContactMessages" class="admin-table-wrap"></div></section>
+            <section class="dashboard-card wide-card"><div class="admin-section-head"><h2 data-i18n="admin.rewardsTitle">Instagram bonus talepleri</h2><span id="adminRewardBadge" class="admin-count-badge">0 bekliyor</span></div><p class="empty-copy" data-i18n="admin.rewardsHelp">Kullanıcı adının LectureSift hesabını takip ettiğini doğruladıktan sonra onayla.</p><div id="adminRewards" class="admin-table-wrap"></div></section>
+          </section>
+
+          <section id="adminJobsView" class="admin-view" role="tabpanel" data-admin-view="jobs" hidden>
+            <div class="admin-view-heading"><div><p class="eyebrow">İŞLEME</p><h2>Video ve belge işleri</h2></div><p>Kuyruktaki işleri, ilerlemeyi ve oluşan hataları hızlıca incele.</p></div>
+            <section id="adminJobsSection" class="dashboard-card wide-card"><div class="admin-section-head"><div><p class="eyebrow">İŞ KUYRUĞU</p><h2>İşleme işleri</h2></div><div class="admin-filters"><select id="adminJobStatus" class="admin-filter"><option value="all">Tüm durumlar</option><option value="queued">Kuyrukta</option><option value="working">Çalışıyor</option><option value="done">Tamamlandı</option><option value="failed">Hatalı</option></select></div></div><p class="empty-copy">İşlerin kuyruğa girişini, aşamasını, ilerleme yüzdesini ve hata kodunu buradan izle.</p><div id="adminJobs" class="admin-table-wrap"></div></section>
+          </section>
+
+          <section id="adminSystemView" class="admin-view" role="tabpanel" data-admin-view="system" hidden>
+            <div class="admin-view-heading"><div><p class="eyebrow">SİSTEM</p><h2>Altyapı sağlığı</h2></div><p>Canlı servisleri, ödeme sağlayıcılarını ve yapılandırma eksiklerini kontrol et.</p></div>
+            <section id="adminSystemSection" class="dashboard-card wide-card"><div class="admin-section-head"><div><p class="eyebrow">ALTYAPI</p><h2 data-i18n="admin.systemTitle">Sistem hazır olma durumu</h2></div><p class="admin-section-note">Kritik eksikler, isteğe bağlı özellikler ve planlanan güvenlik kontrolleri ayrı gösterilir.</p></div><div id="adminReadiness" class="admin-readiness"></div><div id="adminPaymentSummary" class="admin-provider-summary"></div></section>
+          </section>
+
+          <section id="adminAuditView" class="admin-view" role="tabpanel" data-admin-view="audit" hidden>
+            <div class="admin-view-heading"><div><p class="eyebrow">DENETİM</p><h2>Değişiklik kayıtları</h2></div><p>Yönetici işlemlerini ve tüm dakika hareketlerini geriye dönük incele.</p></div>
+            <section id="adminAuditSection" class="dashboard-card wide-card"><div class="admin-section-head"><div><p class="eyebrow">HESAP İŞLEMLERİ</p><h2>Yönetici işlem kayıtları</h2></div><p class="admin-section-note">Profil, plan, oturum ve hesap kapatma işlemleri yapan yöneticiyle birlikte değiştirilemez kayda alınır.</p></div><div id="adminAccountEvents" class="admin-table-wrap"></div></section>
+            <section class="dashboard-card wide-card"><h2 data-i18n="admin.auditTitle">Dakika işlem kayıtları</h2><div id="adminCreditEvents" class="admin-table-wrap"></div></section>
+          </section>
+        </div>
       </div>
-      <section class="dashboard-card wide-card admin-plan-overview"><div class="admin-section-head"><div><p class="eyebrow">ÜYELİKLER</p><h2>Plan dağılımı</h2></div><p class="admin-section-note">Aktif hesapların planlara göre güncel dağılımı.</p></div><div id="adminPlanDistribution" class="admin-plan-distribution"></div></section>
-
-      <section id="adminSystemSection" class="dashboard-card wide-card"><div class="admin-section-head"><div><p class="eyebrow">ALTYAPI</p><h2 data-i18n="admin.systemTitle">Sistem hazır olma durumu</h2></div><p class="admin-section-note">Kritik eksikler, isteğe bağlı özellikler ve planlanan güvenlik kontrolleri ayrı gösterilir.</p></div><div id="adminReadiness" class="admin-readiness"></div><div id="adminPaymentSummary" class="admin-provider-summary"></div></section>
-
-      <section id="adminTimelineSection" class="dashboard-card wide-card"><div class="admin-section-head"><div><p class="eyebrow">HAREKETLER</p><h2>Operasyon zaman çizelgesi</h2></div><select id="adminTimelineFilter" class="admin-filter"><option value="all">Tüm hareketler</option><option value="order">Ödemeler</option><option value="contact">Mesajlar</option><option value="refund">İadeler</option><option value="user">Kullanıcılar</option><option value="job">İşleme işleri</option><option value="credit">Dakika işlemleri</option></select></div><div id="adminTimeline" class="admin-timeline"></div></section>
-
-      <section id="adminJobsSection" class="dashboard-card wide-card"><div class="admin-section-head"><div><p class="eyebrow">İŞLEME</p><h2>Video ve belge işleri</h2></div><div class="admin-filters"><select id="adminJobStatus" class="admin-filter"><option value="all">Tüm durumlar</option><option value="queued">Kuyrukta</option><option value="working">Çalışıyor</option><option value="done">Tamamlandı</option><option value="failed">Hatalı</option></select></div></div><p class="empty-copy">İşlerin kuyruğa girişini, aşamasını, ilerleme yüzdesini ve hata kodunu buradan izle.</p><div id="adminJobs" class="admin-table-wrap"></div></section>
-
-      <section id="adminOrdersSection" class="dashboard-card wide-card"><div class="admin-section-head"><div><p class="eyebrow">FİNANS</p><h2 data-i18n="admin.orders">Ödeme siparişleri</h2></div><div class="admin-filters"><input id="adminOrderSearch" class="admin-filter" type="search" placeholder="Sipariş no, e-posta veya ad ara"><select id="adminOrderStatus" class="admin-filter"><option value="all">Tüm durumlar</option><option value="pending">Bekliyor</option><option value="created">Başlatıldı</option><option value="paid">Ödendi</option><option value="failed">Hatalı</option><option value="rejected">Reddedildi</option></select><button id="adminExportOrders" class="admin-action">CSV indir</button></div></div><div id="adminOrders" class="admin-table-wrap"></div></section>
-
-      <section id="adminMessagesSection" class="dashboard-card wide-card"><div class="admin-section-head"><div><p class="eyebrow">DESTEK</p><h2>İletişim mesajları</h2></div><div class="admin-filters"><input id="adminMessageSearch" class="admin-filter" type="search" placeholder="Ad, e-posta, konu veya sipariş no ara"><select id="adminMessageStatus" class="admin-filter"><option value="all">Tüm durumlar</option><option value="new">Yeni</option><option value="read">Okundu</option><option value="resolved">Çözümlendi</option></select><button id="adminExportMessages" class="admin-action">CSV indir</button></div></div><p class="empty-copy">Sitedeki iletişim formundan gelen mesajlar burada kalıcı olarak saklanır ve ayrıca destek e-posta adresine bildirilir.</p><div id="adminContactMessages" class="admin-table-wrap"></div></section>
-
-      <section class="dashboard-card wide-card"><div class="admin-section-head"><h2 data-i18n="admin.refundsTitle">İade talepleri</h2><span id="adminRefundBadge" class="admin-count-badge">0 açık</span></div><p class="empty-copy" data-i18n="admin.refundsHelp">Onay, iadenin ödeme sağlayıcısı veya banka üzerinden yapılması gerektiğini belirtir. Para gerçekten gönderildikten sonra tamamlandı olarak işaretle.</p><div id="adminRefunds" class="admin-table-wrap"></div></section>
-      <section class="dashboard-card wide-card"><div class="admin-section-head"><h2 data-i18n="admin.rewardsTitle">Instagram bonus talepleri</h2><span id="adminRewardBadge" class="admin-count-badge">0 bekliyor</span></div><p class="empty-copy" data-i18n="admin.rewardsHelp">Kullanıcı adının LectureSift hesabını takip ettiğini doğruladıktan sonra onayla.</p><div id="adminRewards" class="admin-table-wrap"></div></section>
-
-      <section id="adminUsersSection" class="dashboard-card wide-card"><div class="admin-section-head"><div><p class="eyebrow">HESAPLAR</p><h2 data-i18n="admin.usersTitle">Kullanıcılar</h2></div><div class="admin-filters"><input id="adminUserSearch" class="admin-filter" type="search" placeholder="Ad, e-posta veya telefon ara"><select id="adminUserStatus" class="admin-filter"><option value="all">Tüm hesaplar</option><option value="verified">Doğrulanmış</option><option value="unverified">Doğrulanmamış</option></select><button id="adminExportUsers" class="admin-action">CSV indir</button></div></div><p class="empty-copy" data-i18n="admin.creditHelp">Dakika değişiklikleri neden zorunlu olarak kaydedilir; bakiye sıfırın altına indirilemez.</p><div id="adminUserList" class="admin-table-wrap"></div></section>
-      <section id="adminAuditSection" class="dashboard-card wide-card"><div class="admin-section-head"><div><p class="eyebrow">DENETİM</p><h2>Yönetici işlem kayıtları</h2></div><p class="admin-section-note">Profil, plan, oturum ve hesap kapatma işlemleri yapan yöneticiyle birlikte değiştirilemez kayda alınır.</p></div><div id="adminAccountEvents" class="admin-table-wrap"></div></section>
-      <section class="dashboard-card wide-card"><h2 data-i18n="admin.auditTitle">Dakika işlem kayıtları</h2><div id="adminCreditEvents" class="admin-table-wrap"></div></section>
     </section>
   </main>
-  <script src="/page-i18n.js?v=1"></script><script src="/i18n.js?v=6"></script><script src="/admin.js?v=10"></script>
+  <script src="/page-i18n.js?v=1"></script><script src="/i18n.js?v=6"></script><script src="/admin.js?v=11"></script>
 </body>
 </html>

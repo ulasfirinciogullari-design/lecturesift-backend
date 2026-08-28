@@ -4,9 +4,63 @@ const adminT = (key, fallback) => window.LectureSiftI18n?.t(key) || fallback || 
 const adminLocale = () => window.LectureSiftI18n?.locale || "tr-TR";
 const adminMinuteShort = () => adminT("unit.minuteShort", "dk");
 const ADMIN_SESSION_TOKEN_KEY = "lecturesift-admin-session-token";
-let adminAccessToken = sessionStorage.getItem(ADMIN_SESSION_TOKEN_KEY) || localStorage.getItem("lecturesift-billing-token") || "";
+const ADMIN_VIEW_KEY = "lecturesift-admin-view";
+const ADMIN_VIEWS = ["overview", "users", "finance", "support", "jobs", "system", "audit"];
+let adminAccessToken = sessionStorage.getItem(ADMIN_SESSION_TOKEN_KEY) || "";
 let adminLoading = false;
 let adminState = {overview:{counts:{}}, rewards:[], refunds:[], credits:[], accountEvents:[], contacts:[], jobs:[], billing:null, runtime:null};
+
+function adminViewFromHash() {
+  const hash = window.location.hash.replace(/^#/, "");
+  const legacyViews = {adminUsersSection:"users", adminOrdersSection:"finance", adminMessagesSection:"support", adminJobsSection:"jobs", adminSystemSection:"system", adminAuditSection:"audit", adminTimelineSection:"overview"};
+  if (legacyViews[hash]) return legacyViews[hash];
+  return hash.startsWith("admin-") && ADMIN_VIEWS.includes(hash.slice(6)) ? hash.slice(6) : "";
+}
+
+function activateAdminView(requestedView, {focus = false, updateHash = true} = {}) {
+  const view = ADMIN_VIEWS.includes(requestedView) ? requestedView : "overview";
+  document.querySelectorAll("[data-admin-view]").forEach(panel => {
+    const selected = panel.dataset.adminView === view;
+    panel.hidden = !selected;
+    panel.setAttribute("aria-hidden", String(!selected));
+  });
+  document.querySelectorAll("[data-admin-view-button]").forEach(button => {
+    const selected = button.dataset.adminViewButton === view;
+    button.setAttribute("aria-selected", String(selected));
+    button.tabIndex = selected ? 0 : -1;
+    if (selected && focus) {
+      button.focus({preventScroll:true});
+      button.scrollIntoView({behavior:"smooth", block:"nearest", inline:"center"});
+    }
+  });
+  sessionStorage.setItem(ADMIN_VIEW_KEY, view);
+  if (updateHash) history.replaceState(null, "", `${location.pathname}${location.search}#admin-${view}`);
+}
+
+function setupAdminNavigation() {
+  const buttons = [...document.querySelectorAll("[data-admin-view-button]")];
+  buttons.forEach((button, index) => {
+    const panel = document.querySelector(`[data-admin-view="${button.dataset.adminViewButton}"]`);
+    button.id = `adminViewTab-${button.dataset.adminViewButton}`;
+    panel?.setAttribute("aria-labelledby", button.id);
+    button.addEventListener("click", () => activateAdminView(button.dataset.adminViewButton, {focus:true}));
+    button.addEventListener("keydown", event => {
+      const keyMoves = {ArrowDown:1, ArrowRight:1, ArrowUp:-1, ArrowLeft:-1};
+      let nextIndex = keyMoves[event.key] === undefined ? index : (index + keyMoves[event.key] + buttons.length) % buttons.length;
+      if (event.key === "Home") nextIndex = 0;
+      else if (event.key === "End") nextIndex = buttons.length - 1;
+      else if (keyMoves[event.key] === undefined) return;
+      event.preventDefault();
+      activateAdminView(buttons[nextIndex].dataset.adminViewButton, {focus:true});
+    });
+  });
+  const initialView = adminViewFromHash() || sessionStorage.getItem(ADMIN_VIEW_KEY) || "overview";
+  activateAdminView(initialView, {updateHash:false});
+  window.addEventListener("hashchange", () => {
+    const view = adminViewFromHash();
+    if (view) activateAdminView(view, {updateHash:false});
+  });
+}
 
 function adminEscape(value) {
   return String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"})[char]);
@@ -464,6 +518,7 @@ async function updateContactMessage(button) {
   catch (error) { adminNotice(error.message, true); button.disabled = false; }
 }
 
+setupAdminNavigation();
 admin$("adminTokenForm").addEventListener("submit", async event => {
   event.preventDefault(); adminAccessToken = admin$("adminToken").value.trim();
   try { await loadAdmin(); sessionStorage.setItem(ADMIN_SESSION_TOKEN_KEY, adminAccessToken); }
