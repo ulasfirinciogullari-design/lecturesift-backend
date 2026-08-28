@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -163,6 +164,9 @@ def rollout_health() -> dict:
         "ok": True,
         "guest_trial_minutes": config.GUEST_TRIAL_MAX_MINUTES,
         "instagram_bonus_minutes": config.INSTAGRAM_BONUS_MINUTES,
+        "analytics_configured": bool(
+            config.ANALYTICS_ENABLED and re.fullmatch(r"G-[A-Z0-9]+", config.GA_MEASUREMENT_ID)
+        ),
         "display_ads_configured": bool(config.DISPLAY_ADS_ENABLED and config.DISPLAY_AD_UNIT_PATH),
         "contact_email": config.CONTACT_EMAIL,
         "durable_queue_configured": bool(config.CELERY_BROKER_URL),
@@ -204,6 +208,20 @@ def ads_config() -> dict:
         "banner_unit_path": config.DISPLAY_AD_UNIT_PATH if configured else None,
         "consent_required": True,
         "paid_plans_ad_free": True,
+    }
+
+
+@router.get("/analytics/config")
+def analytics_config() -> dict:
+    configured = bool(
+        config.ANALYTICS_ENABLED and re.fullmatch(r"G-[A-Z0-9]+", config.GA_MEASUREMENT_ID)
+    )
+    return {
+        "enabled": configured,
+        "provider": "google_analytics_4" if configured else None,
+        "measurement_id": config.GA_MEASUREMENT_ID if configured else None,
+        "consent_required": True,
+        "advertising_signals": False,
     }
 
 

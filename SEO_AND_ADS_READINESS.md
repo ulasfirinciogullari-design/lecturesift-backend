@@ -7,6 +7,7 @@
 - Open Graph, Twitter cards, Organization, WebSite, WebPage, SoftwareApplication, breadcrumb, and eligible FAQ structured data.
 - Search previews are blocked from indexing; the production domain is indexable.
 - Analytics and advertising code is consent-gated.
+- Google Analytics 4 loads only after analytics consent, is limited to public pages, and disables advertising signals. Token-bearing verification and password-reset pages are excluded.
 - Banner ads are disabled by default, limited to selected public pages, and hidden for ad-free paid plans.
 - Rewarded ads are voluntary, rate-limited, and disabled until a real provider unit is configured.
 
@@ -14,7 +15,7 @@
 
 1. Verify `lecturesift.com` in Google Search Console with the DNS TXT value issued by Google.
 2. Submit `https://lecturesift.com/sitemap.xml` and monitor indexing, Core Web Vitals, manual actions, and security issues.
-3. Create or connect Google Analytics only if analytics measurement is desired; keep consent mode denied until the visitor opts in.
+3. Keep the GA4 measurement ID configured in Render and verify the first consented page view in Realtime after deployment.
 4. Create Google Ad Manager/AdSense inventory, obtain the real banner and rewarded unit paths, and configure them in Render. Never publish placeholder publisher IDs.
 5. Add the provider-issued `ads.txt` line only after the publisher account is approved.
 6. Create Google Ads campaigns only after a budget, target countries, conversion definitions, and landing pages are approved. Advertising spend is never activated by a code deployment.
