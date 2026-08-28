@@ -127,15 +127,21 @@ def _billing_user(authorization: str | None = Header(None)) -> dict:
 
 
 def _billing_admin(authorization: str | None = Header(None)) -> None:
-    if not BILLING_ADMIN_TOKEN and not config.BILLING_ADMIN_EMAILS:
+    admin_tokens = tuple(
+        token for token in (BILLING_ADMIN_TOKEN, config.INSTAGRAM_ADMIN_TOKEN) if token
+    )
+    admin_emails = set(config.BILLING_ADMIN_EMAILS)
+    if config.LEGAL_OPERATOR_EMAIL:
+        admin_emails.add(config.LEGAL_OPERATOR_EMAIL.casefold())
+    if not admin_tokens and not admin_emails:
         raise HTTPException(503, detail={"code": "LS-BILL-03", "message": "Ödeme onayı yönetimi etkin değil."})
     scheme, _, value = (authorization or "").partition(" ")
     if scheme.lower() == "bearer" and value:
-        if BILLING_ADMIN_TOKEN and hmac.compare_digest(value, BILLING_ADMIN_TOKEN):
+        if any(hmac.compare_digest(value, token) for token in admin_tokens):
             return
         try:
             user = authenticate_session(value)
-            if user["email"].casefold() in config.BILLING_ADMIN_EMAILS:
+            if user["email"].casefold() in admin_emails:
                 return
         except (BillingAuthenticationError, BillingConfigurationError):
             pass
@@ -266,6 +272,8 @@ class BillingPasswordResetRequest(BillingTokenRequest):
 class ManualOrderRequest(BaseModel):
     plan_code: str
     interval: str = "monthly"
+    first_name: str = ""
+    last_name: str = ""
     terms_accepted: bool = False
     early_performance_requested: bool = False
     language: str = "tr"
@@ -291,6 +299,8 @@ class BillingCheckoutRequest(BaseModel):
     plan_code: str
     interval: str = "monthly"
     currency: str = "TRY"
+    first_name: str = ""
+    last_name: str = ""
     billing_address: str
     billing_city: str = ""
     billing_zip_code: str = ""
@@ -761,6 +771,12 @@ def billing_create_manual_order(
     try:
         if not payload.terms_accepted or not payload.early_performance_requested:
             raise BillingError("Ödeme öncesi bilgilendirmeyi ve hizmetin hemen başlamasını açıkça onaylamalısın.")
+        update_account_profile(
+            user["id"],
+            payload.first_name or user.get("first_name", ""),
+            payload.last_name or user.get("last_name", ""),
+            user.get("phone") or "",
+        )
         order = create_manual_order(user["id"], payload.plan_code, payload.interval)
         record_payment_consent(
             order["reference"],
@@ -792,6 +808,8 @@ def billing_create_checkout(
             "interval": payload.interval,
             "currency": payload.currency,
             "user_ip": _client_ip(request),
+            "first_name": payload.first_name,
+            "last_name": payload.last_name,
             "billing_address": payload.billing_address,
             "phone": payload.phone,
             "language": payload.language,

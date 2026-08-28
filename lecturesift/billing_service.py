@@ -812,7 +812,10 @@ def account_status(user_id: str) -> dict:
         "download_access_source": (
             "plan" if plan.download_enabled else "credit" if paid_credit_access else None
         ),
-        "is_admin": user.email.casefold() in config.BILLING_ADMIN_EMAILS,
+        "is_admin": user.email.casefold() in (
+            set(config.BILLING_ADMIN_EMAILS)
+            | ({config.LEGAL_OPERATOR_EMAIL.casefold()} if config.LEGAL_OPERATOR_EMAIL else set())
+        ),
         "manual_orders": [_public_manual_order(order) for order in orders],
         "payment_orders": [_public_payment_order(order) for order in payment_orders],
     }
@@ -886,13 +889,30 @@ def update_account_profile(
     init_billing_database()
     now = utcnow()
     with ENGINE.begin() as connection:
+        user = connection.execute(select(USERS).where(USERS.c.id == user_id)).first()
+        if not user:
+            raise BillingAuthenticationError("Hesap bulunamadı.")
         profile = _profile_for(connection, user_id)
         if not profile:
-            raise BillingAuthenticationError("Hesap bulunamadı.")
-        connection.execute(
-            update(USER_PROFILES)
-            .where(USER_PROFILES.c.user_id == user_id)
-            .values(
+            connection.execute(
+                USER_PROFILES.insert().values(
+                    user_id=user_id,
+                    first_name=selected_first_name,
+                    last_name=selected_last_name,
+                    phone=selected_phone,
+                    country_code="TR",
+                    email_verified_at=now,
+                    phone_verified_at=None,
+                    session_version=1,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+        else:
+            connection.execute(
+                update(USER_PROFILES)
+                .where(USER_PROFILES.c.user_id == user_id)
+                .values(
                 first_name=selected_first_name,
                 last_name=selected_last_name,
                 phone=selected_phone,
@@ -900,8 +920,8 @@ def update_account_profile(
                     profile.phone_verified_at if selected_phone == profile.phone else None
                 ),
                 updated_at=now,
+                )
             )
-        )
     return account_status(user_id)
 
 

@@ -6,11 +6,12 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import delete
 
 import lecturesift.jobs as jobs_module
 import lecturesift.rollout_service as rollout_service
 from lecturesift import config, pipeline
-from lecturesift.billing_service import register_user, verify_email
+from lecturesift.billing_service import ENGINE, USER_PROFILES, register_user, verify_email
 from lecturesift.pipeline_enhancements import install_pipeline_enhancements
 from main import app
 
@@ -111,6 +112,47 @@ def test_profile_email_change_and_session_rotation(monkeypatch):
     assert client.get("/billing/me", headers=auth(token)).status_code == 401
     assert client.get("/billing/me", headers=auth(new_token)).status_code == 200
     assert old_email != new_email
+
+
+def test_legacy_account_without_profile_can_save_name_and_phone():
+    _, token = new_account()
+    account = client.get("/billing/me", headers=auth(token)).json()["account"]
+    with ENGINE.begin() as connection:
+        connection.execute(delete(USER_PROFILES).where(USER_PROFILES.c.user_id == account["user"]["id"]))
+
+    saved = client.patch(
+        "/billing/me/profile",
+        headers=auth(token),
+        json={"first_name": "Ulaş", "last_name": "Fırıncıoğulları", "phone": "+905336651805"},
+    )
+    assert saved.status_code == 200
+    assert saved.json()["account"]["user"]["name"] == "Ulaş Fırıncıoğulları"
+
+
+def test_contact_messages_are_stored_and_visible_to_admin(monkeypatch):
+    monkeypatch.setattr(config, "BILLING_ADMIN_TOKEN", "admin-secret")
+    monkeypatch.setattr(rollout_service, "email_delivery_configured", lambda: False)
+    created = client.post(
+        "/contact/messages",
+        json={
+            "name": "Test Kullanıcı",
+            "email": f"contact-{uuid.uuid4()}@example.com",
+            "topic": "Teknik destek",
+            "message": "Yönetici gelen kutusu için test mesajıdır.",
+            "order_reference": "LS-TEST-123",
+        },
+    )
+    assert created.status_code == 200
+    reference = created.json()["reference"]
+    listed = client.get("/billing/admin/contact-messages", headers=auth("admin-secret"))
+    assert reference in {item["id"] for item in listed.json()["messages"]}
+    resolved = client.post(
+        f"/billing/admin/contact-messages/{reference}/status",
+        headers=auth("admin-secret"),
+        json={"status": "resolved"},
+    )
+    assert resolved.status_code == 200
+    assert resolved.json()["message"]["status"] == "resolved"
 
 
 def test_manual_order_admin_rejection_and_instagram_approval(monkeypatch):

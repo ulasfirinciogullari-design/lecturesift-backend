@@ -130,6 +130,21 @@ REFUND_REQUESTS = Table(
     Column("updated_at", DateTime(timezone=True), nullable=False),
 )
 
+CONTACT_MESSAGES = Table(
+    "lecturesift_contact_messages",
+    METADATA,
+    Column("id", String(36), primary_key=True),
+    Column("name", String(120), nullable=False),
+    Column("email", String(320), nullable=False, index=True),
+    Column("topic", String(100), nullable=False),
+    Column("message", String(4000), nullable=False),
+    Column("order_reference", String(64), nullable=True),
+    Column("status", String(20), nullable=False),
+    Column("email_notified", Integer, nullable=False, default=0),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+)
+
 
 # Guest accounts must never fall back to the 60-minute registered free plan.
 # They receive a hidden, persistent five-minute plan instead.
@@ -160,6 +175,7 @@ def init_rollout_database() -> None:
         RUNTIME_METRICS,
         ADMIN_CREDIT_EVENTS,
         REFUND_REQUESTS,
+        CONTACT_MESSAGES,
     ):
         table.create(bind=ENGINE, checkfirst=True)
 
@@ -541,16 +557,34 @@ def update_profile(user_id: str, first_name: str, last_name: str, phone: str) ->
     last = _normalize_name(last_name, "Soyad")
     normalized_phone = "".join(char for char in phone.strip() if char.isdigit() or char == "+")[:32] or None
     with ENGINE.begin() as connection:
+        user = connection.execute(select(USERS).where(USERS.c.id == user_id)).first()
+        if not user:
+            raise BillingAuthenticationError("Hesap bulunamadı.")
         profile = connection.execute(
             select(USER_PROFILES).where(USER_PROFILES.c.user_id == user_id)
         ).first()
         if not profile:
-            raise BillingAuthenticationError("Hesap bulunamadı.")
-        connection.execute(
-            update(USER_PROFILES)
-            .where(USER_PROFILES.c.user_id == user_id)
-            .values(first_name=first, last_name=last, phone=normalized_phone, updated_at=utcnow())
-        )
+            now = utcnow()
+            connection.execute(
+                USER_PROFILES.insert().values(
+                    user_id=user_id,
+                    first_name=first,
+                    last_name=last,
+                    phone=normalized_phone,
+                    country_code="TR",
+                    email_verified_at=now,
+                    phone_verified_at=None,
+                    session_version=1,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+        else:
+            connection.execute(
+                update(USER_PROFILES)
+                .where(USER_PROFILES.c.user_id == user_id)
+                .values(first_name=first, last_name=last, phone=normalized_phone, updated_at=utcnow())
+            )
     return account_status(user_id)
 
 
@@ -1051,6 +1085,125 @@ def list_admin_credit_events(limit: int = 100) -> list[dict[str, Any]]:
         }
         for row in rows
     ]
+
+
+def _public_contact_message(row: Any) -> dict[str, Any]:
+    values = dict(row._mapping) if hasattr(row, "_mapping") else dict(row)
+    for key in ("created_at", "updated_at"):
+        if isinstance(values.get(key), datetime):
+            values[key] = values[key].isoformat()
+    values["email_notified"] = bool(values.get("email_notified"))
+    return values
+
+
+def create_contact_message(
+    name: str,
+    email: str,
+    topic: str,
+    message: str,
+    order_reference: str = "",
+) -> dict[str, Any]:
+    init_rollout_database()
+    normalized_name = " ".join(name.strip().split())
+    normalized_email = _normalize_email(email)
+    normalized_topic = " ".join(topic.strip().split())
+    normalized_message = message.strip()
+    normalized_reference = " ".join(order_reference.strip().split())[:64] or None
+    if len(normalized_name) < 2 or len(normalized_name) > 120:
+        raise BillingError("Ad soyad 2 ile 120 karakter arasında olmalı.")
+    if len(normalized_topic) < 2 or len(normalized_topic) > 100:
+        raise BillingError("Geçerli bir konu seç.")
+    if len(normalized_message) < 10 or len(normalized_message) > 4000:
+        raise BillingError("Mesaj 10 ile 4000 karakter arasında olmalı.")
+
+    message_id = str(uuid.uuid4())
+    now = utcnow()
+    with ENGINE.begin() as connection:
+        connection.execute(
+            CONTACT_MESSAGES.insert().values(
+                id=message_id,
+                name=normalized_name,
+                email=normalized_email,
+                topic=normalized_topic,
+                message=normalized_message,
+                order_reference=normalized_reference,
+                status="new",
+                email_notified=0,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+    notified = False
+    if email_delivery_configured() and config.CONTACT_EMAIL:
+        reference_line = f"\nSipariş referansı: {normalized_reference}" if normalized_reference else ""
+        safe_reference = html.escape(normalized_reference or "—")
+        try:
+            send_transactional_email(
+                config.CONTACT_EMAIL,
+                f"LectureSift iletişim: {normalized_topic}",
+                (
+                    "<h1>Yeni iletişim formu mesajı</h1>"
+                    f"<p><strong>Gönderen:</strong> {html.escape(normalized_name)} "
+                    f"&lt;{html.escape(normalized_email)}&gt;</p>"
+                    f"<p><strong>Konu:</strong> {html.escape(normalized_topic)}</p>"
+                    f"<p><strong>Sipariş referansı:</strong> {safe_reference}</p>"
+                    f"<p>{html.escape(normalized_message).replace(chr(10), '<br>')}</p>"
+                ),
+                (
+                    f"Gönderen: {normalized_name} <{normalized_email}>\n"
+                    f"Konu: {normalized_topic}{reference_line}\n\n{normalized_message}"
+                ),
+            )
+            notified = True
+        except EmailDeliveryError:
+            # The durable admin inbox remains the source of truth when email delivery is unavailable.
+            notified = False
+    if notified:
+        with ENGINE.begin() as connection:
+            connection.execute(
+                update(CONTACT_MESSAGES)
+                .where(CONTACT_MESSAGES.c.id == message_id)
+                .values(email_notified=1, updated_at=utcnow())
+            )
+    with ENGINE.connect() as connection:
+        row = connection.execute(
+            select(CONTACT_MESSAGES).where(CONTACT_MESSAGES.c.id == message_id)
+        ).one()
+    return _public_contact_message(row)
+
+
+def list_contact_messages(status: str = "", limit: int = 100) -> list[dict[str, Any]]:
+    init_rollout_database()
+    safe_limit = max(1, min(int(limit), 250))
+    normalized_status = status.strip().casefold()
+    if normalized_status and normalized_status not in {"new", "read", "resolved"}:
+        raise BillingError("Geçersiz iletişim mesajı durumu.")
+    with ENGINE.connect() as connection:
+        query = select(CONTACT_MESSAGES).order_by(CONTACT_MESSAGES.c.created_at.desc()).limit(safe_limit)
+        if normalized_status:
+            query = query.where(CONTACT_MESSAGES.c.status == normalized_status)
+        rows = connection.execute(query).all()
+    return [_public_contact_message(row) for row in rows]
+
+
+def update_contact_message_status(message_id: str, status: str) -> dict[str, Any]:
+    normalized_status = status.strip().casefold()
+    if normalized_status not in {"new", "read", "resolved"}:
+        raise BillingError("Geçersiz iletişim mesajı durumu.")
+    init_rollout_database()
+    with ENGINE.begin() as connection:
+        result = connection.execute(
+            update(CONTACT_MESSAGES)
+            .where(CONTACT_MESSAGES.c.id == message_id)
+            .values(status=normalized_status, updated_at=utcnow())
+        )
+        if not result.rowcount:
+            raise BillingError("İletişim mesajı bulunamadı.")
+        row = connection.execute(
+            select(CONTACT_MESSAGES).where(CONTACT_MESSAGES.c.id == message_id)
+        ).one()
+    return _public_contact_message(row)
 
 
 def list_admin_orders(status: str = "pending") -> list[dict]:
