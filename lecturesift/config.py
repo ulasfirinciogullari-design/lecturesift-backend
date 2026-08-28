@@ -32,6 +32,11 @@ BILLING_ADMIN_EMAILS = {
     for email in os.getenv("BILLING_ADMIN_EMAILS", "").split(",")
     if email.strip()
 }
+BILLING_PROTECTED_EMAILS = {
+    email.strip().casefold()
+    for email in os.getenv("BILLING_PROTECTED_EMAILS", "").split(",")
+    if email.strip()
+}
 BILLING_BANK_IBAN = os.getenv("BILLING_BANK_IBAN", "").replace(" ", "").upper()
 BILLING_BANK_ACCOUNT_HOLDER = os.getenv("BILLING_BANK_ACCOUNT_HOLDER", "").strip()
 BILLING_BANK_NAME = os.getenv("BILLING_BANK_NAME", "").strip()

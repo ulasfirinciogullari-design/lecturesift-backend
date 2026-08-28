@@ -67,6 +67,28 @@ def test_owner_session_can_open_admin_without_exposing_admin_token(monkeypatch):
     assert overview.status_code == 200
 
 
+def test_legal_operator_identity_does_not_grant_admin_access(monkeypatch):
+    email = f"legal-operator-{uuid.uuid4()}@example.com"
+    created = register_user(email, "Strong-test-password1", "Legal", "Operator", country_code="TR")
+    token = verify_email(created["verification_token"])["token"]
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_EMAIL", email)
+    monkeypatch.setattr(config, "BILLING_ADMIN_EMAILS", set())
+    monkeypatch.setattr(config, "BILLING_ADMIN_TOKEN", "billing-admin-secret")
+    client = TestClient(app)
+
+    account = client.get("/billing/me", headers={"Authorization": f"Bearer {token}"})
+    denied = client.get("/billing/admin/overview", headers={"Authorization": f"Bearer {token}"})
+    allowed = client.get(
+        "/billing/admin/overview",
+        headers={"Authorization": "Bearer billing-admin-secret"},
+    )
+
+    assert account.status_code == 200
+    assert account.json()["account"]["is_admin"] is False
+    assert denied.status_code == 401
+    assert allowed.status_code == 200
+
+
 def test_admin_can_monitor_processing_jobs_without_internal_paths(monkeypatch):
     install_rollout_routes(app)
     email = f"jobs-owner-{uuid.uuid4()}@example.com"

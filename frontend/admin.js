@@ -3,7 +3,8 @@ const admin$ = id => document.getElementById(id);
 const adminT = (key, fallback) => window.LectureSiftI18n?.t(key) || fallback || key;
 const adminLocale = () => window.LectureSiftI18n?.locale || "tr-TR";
 const adminMinuteShort = () => adminT("unit.minuteShort", "dk");
-let adminAccessToken = localStorage.getItem("lecturesift-billing-token") || "";
+const ADMIN_SESSION_TOKEN_KEY = "lecturesift-admin-session-token";
+let adminAccessToken = sessionStorage.getItem(ADMIN_SESSION_TOKEN_KEY) || localStorage.getItem("lecturesift-billing-token") || "";
 let adminLoading = false;
 let adminState = {overview:{counts:{}}, rewards:[], refunds:[], credits:[], accountEvents:[], contacts:[], jobs:[], billing:null, runtime:null};
 
@@ -104,10 +105,16 @@ function renderAdminUsers(users) {
   const plans = [["free","Ücretsiz"],["lite","Lite"],["plus","Plus"],["pro","Pro"],["max","Max"],["business","Business"]];
   const cards = users.map(user => {
     const subscription = user.subscription || null;
+    const protectedBadge = user.is_protected ? '<span class="status-pill paid">Korunan hesap</span>' : "";
+    const accountClosure = user.is_protected
+      ? '<section class="admin-user-form admin-security-tools"><h3>Korunan hesap</h3><p>Bu ana işletme hesabı admin panelinden kapatılamaz veya anonimleştirilemez.</p></section>'
+      : `<form class="admin-user-form danger-zone" data-user-close-form="${adminEscape(user.id)}">
+            <h3>Hesabı kapat ve anonimleştir</h3><p>Profil ve erişim silinir; yasal saklama zorunluluğu bulunan ödeme kayıtları anonim kullanıcı kimliğiyle korunur.</p><div class="admin-form-grid"><label class="wide"><span>Onay için e-postayı aynen yaz</span><input name="confirmation_email" type="email" autocomplete="off" required></label><label class="wide"><span>Kapatma nedeni</span><input name="reason" minlength="4" maxlength="500" required></label></div><button class="admin-action reject" type="submit">Hesabı kapat</button>
+          </form>`;
     const languageOptions = languages.map(([value,label]) => `<option value="${value}" ${value === (user.preferred_language || "tr") ? "selected" : ""}>${label}</option>`).join("");
     const planOptions = plans.map(([value,label]) => `<option value="${value}" ${value === (user.plan_code || "free") ? "selected" : ""}>${label}</option>`).join("");
     return `<article class="admin-user-card" data-user-card="${adminEscape(user.id)}">
-      <header><div><strong>${adminEscape(user.name || "İsimsiz kullanıcı")}</strong><small>${adminEscape(user.email)}</small></div><span class="status-pill ${user.email_verified ? "paid" : ""}">${user.email_verified ? "Doğrulandı" : "Doğrulama bekliyor"}</span></header>
+      <header><div><strong>${adminEscape(user.name || "İsimsiz kullanıcı")}</strong><small>${adminEscape(user.email)}</small></div><div class="admin-actions"><span class="status-pill ${user.email_verified ? "paid" : ""}">${user.email_verified ? "Doğrulandı" : "Doğrulama bekliyor"}</span>${protectedBadge}</div></header>
       <div class="admin-user-stats"><span><small>Plan</small><b>${adminEscape(user.plan_code || "free")}</b></span><span><small>Ek dakika</small><b>${Number(user.credit_minutes || 0).toLocaleString(adminLocale())} ${adminEscape(adminMinuteShort())}</b></span><span><small>Toplam kullanım</small><b>${Number(user.total_usage_minutes || 0).toLocaleString(adminLocale())} ${adminEscape(adminMinuteShort())}</b></span><span><small>Kayıt</small><b>${adminEscape(adminRelativeDate(user.created_at))}</b></span></div>
       ${subscription ? `<p class="admin-user-subscription">${adminEscape(subscription.interval)} · ${adminEscape(adminStatusLabel(subscription.status))} · ${adminEscape(adminDate(subscription.ends_at))} tarihinde biter</p>` : '<p class="admin-user-subscription">Aktif ücretli abonelik yok.</p>'}
       <details class="admin-user-manager"><summary>Kullanıcıyı yönet</summary>
@@ -130,9 +137,7 @@ function renderAdminUsers(users) {
             <h3>Abonelik ve plan</h3><div class="admin-form-grid"><label><span>Plan</span><select name="plan_code">${planOptions}</select></label><label><span>Dönem</span><select name="interval"><option value="monthly" ${subscription?.interval !== "annual" ? "selected" : ""}>Aylık</option><option value="annual" ${subscription?.interval === "annual" ? "selected" : ""}>Yıllık</option></select></label><label><span>Erişim süresi (gün)</span><input name="duration_days" type="number" min="1" max="3660" value="${subscription?.interval === "annual" ? 365 : 30}" required></label></div><button class="admin-action approve" type="submit">Planı kaydet</button>
           </form>
           <section class="admin-user-form admin-security-tools"><h3>Güvenlik</h3><p>Oturum kapatma, kullanıcının tüm cihazlarda yeniden giriş yapmasını gerektirir.</p><button class="admin-action" type="button" data-user-revoke="${adminEscape(user.id)}">Tüm oturumları kapat</button></section>
-          <form class="admin-user-form danger-zone" data-user-close-form="${adminEscape(user.id)}">
-            <h3>Hesabı kapat ve anonimleştir</h3><p>Profil ve erişim silinir; yasal saklama zorunluluğu bulunan ödeme kayıtları anonim kullanıcı kimliğiyle korunur.</p><div class="admin-form-grid"><label class="wide"><span>Onay için e-postayı aynen yaz</span><input name="confirmation_email" type="email" autocomplete="off" required></label><label class="wide"><span>Kapatma nedeni</span><input name="reason" minlength="4" maxlength="500" required></label></div><button class="admin-action reject" type="submit">Hesabı kapat</button>
-          </form>
+          ${accountClosure}
         </div>
       </details>
     </article>`;
@@ -461,7 +466,8 @@ async function updateContactMessage(button) {
 
 admin$("adminTokenForm").addEventListener("submit", async event => {
   event.preventDefault(); adminAccessToken = admin$("adminToken").value.trim();
-  try { await loadAdmin(); } catch (error) { adminAccessToken = ""; adminNotice(error.message, true); }
+  try { await loadAdmin(); sessionStorage.setItem(ADMIN_SESSION_TOKEN_KEY, adminAccessToken); }
+  catch (error) { sessionStorage.removeItem(ADMIN_SESSION_TOKEN_KEY); adminAccessToken = ""; adminNotice(error.message, true); }
 });
 admin$("adminRefresh").addEventListener("click", () => loadAdmin().catch(error => adminNotice(error.message, true)));
 ["adminOrderSearch","adminOrderStatus","adminMessageSearch","adminMessageStatus","adminUserSearch","adminUserStatus","adminJobStatus","adminTimelineFilter"].forEach(id => admin$(id)?.addEventListener(id.includes("Search") ? "input" : "change", applyAdminFilters));
@@ -469,4 +475,4 @@ admin$("adminExportOrders").addEventListener("click", () => downloadAdminCsv("le
 admin$("adminExportMessages").addEventListener("click", () => downloadAdminCsv("lecturesift-mesajlar.csv", adminState.contacts.map(item => ({tarih:item.created_at, ad_soyad:item.name, eposta:item.email, konu:item.topic, siparis_no:item.order_reference || "", durum:item.status, mesaj:item.message}))));
 admin$("adminExportUsers").addEventListener("click", () => downloadAdminCsv("lecturesift-kullanicilar.csv", (adminState.overview.users || []).map(item => ({kayit_tarihi:item.created_at, ad_soyad:item.name, eposta:item.email, telefon:item.phone || "", ulke:item.country_code || "", eposta_dogrulandi:item.email_verified ? "evet" : "hayir", kredi_dakika:item.credit_minutes}))));
 setInterval(() => { if (adminAccessToken && admin$("adminAutoRefresh").checked && document.visibilityState === "visible") loadAdmin({silent:true}).catch(() => {}); }, 60000);
-if (adminAccessToken) loadAdmin().catch(() => { adminAccessToken = ""; admin$("adminLogin").hidden = false; });
+if (adminAccessToken) loadAdmin().catch(() => { sessionStorage.removeItem(ADMIN_SESSION_TOKEN_KEY); adminAccessToken = ""; admin$("adminLogin").hidden = false; });

@@ -828,10 +828,7 @@ def account_status(user_id: str) -> dict:
         "download_access_source": (
             "plan" if plan.download_enabled else "credit" if paid_credit_access else None
         ),
-        "is_admin": user.email.casefold() in (
-            set(config.BILLING_ADMIN_EMAILS)
-            | ({config.LEGAL_OPERATOR_EMAIL.casefold()} if config.LEGAL_OPERATOR_EMAIL else set())
-        ),
+        "is_admin": user.email.casefold() in set(config.BILLING_ADMIN_EMAILS),
         "manual_orders": [_public_manual_order(order) for order in orders],
         "payment_orders": [_public_payment_order(order) for order in payment_orders],
     }
@@ -1503,6 +1500,9 @@ def admin_billing_overview(limit: int = 100) -> dict:
                 func.coalesce(func.sum(USAGE_EVENTS.c.minutes), 0).label("total_minutes"),
             ).group_by(USAGE_EVENTS.c.user_id)
         ).all()
+    protected_emails = set(config.BILLING_PROTECTED_EMAILS) | set(config.BILLING_ADMIN_EMAILS)
+    if config.LEGAL_OPERATOR_EMAIL:
+        protected_emails.add(config.LEGAL_OPERATOR_EMAIL.casefold())
     subscriptions_by_user = {}
     plan_distribution: dict[str, int] = {"free": max(0, user_count - active_subscription_count)}
     for row in active_subscription_rows:
@@ -1567,6 +1567,7 @@ def admin_billing_overview(limit: int = 100) -> dict:
                 "country_code": row.country_code,
                 "preferred_language": row.preferred_language or "tr",
                 "email_verified": row.email_verified_at is not None,
+                "is_protected": row.email.casefold() in protected_emails,
                 "credit_minutes": int(row.credit_minutes),
                 "total_usage_minutes": usage_by_user.get(row.id, 0),
                 "plan_code": subscriptions_by_user.get(row.id, {}).get("plan_code", "free"),
