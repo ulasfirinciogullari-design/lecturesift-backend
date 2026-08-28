@@ -160,6 +160,9 @@
     "summary.detailed":["Ayrıntılı","Detailed","Detailliert","Détaillé","Detallado","Dettagliato","Detalhado","Подробный","مفصل","详细","詳細","상세","विस्तृत"],
     "summary.exam":["Sınav","Exam-focused","Prüfungsfokus","Examen","Examen","Esame","Prova","Экзамен","اختبار","考试","試験","시험","परीक्षा"],
     "summary.fiveMinute":["5 dakika","5 minutes","5 Minuten","5 minutes","5 minutos","5 minuti","5 minutos","5 минут","5 دقائق","5分钟","5分","5분","5 मिनट"],
+    "consent.storageContent":["Zorunlu, istatistik ve reklam tercihlerin ile tercih zamanı; reklam kimliği içermez.","Your essential, analytics, and advertising choices and the preference time; it contains no advertising identifier.","Deine Auswahl für notwendige, statistische und Werbezwecke sowie der Zeitpunkt; sie enthält keine Werbe-ID.","Vos choix essentiels, statistiques et publicitaires et la date du choix ; aucune identité publicitaire.","Tus elecciones esenciales, analíticas y publicitarias y la fecha; no contiene identificadores publicitarios.","Le scelte essenziali, statistiche e pubblicitarie e la data; non contiene identificatori pubblicitari.","Suas escolhas essenciais, de análise e publicidade e a data; não contém identificador de publicidade.","Ваш выбор необходимых, аналитических и рекламных настроек и время; рекламных идентификаторов нет.","اختياراتك الضرورية والإحصائية والإعلانية ووقت الاختيار؛ ولا يتضمن معرّفًا إعلانيًا.","你的必要、分析和广告偏好及选择时间；不包含广告标识符。","必須・分析・広告の選択と選択日時。広告識別子は含みません。","필수·분석·광고 선택 및 선택 시각이며 광고 식별자는 포함하지 않습니다.","आपकी ज़रूरी, एनालिटिक्स और विज्ञापन पसंद तथा समय; इसमें विज्ञापन पहचानकर्ता नहीं है।"],
+    "consent.storagePurpose":["İsteğe bağlı ölçüm ve reklam araçlarının yalnızca seçimine uygun çalışmasını sağlamak.","Ensures optional measurement and advertising tools run only according to your choice.","Stellt sicher, dass optionale Mess- und Werbewerkzeuge nur gemäß deiner Auswahl laufen.","Veille à ce que les outils facultatifs de mesure et de publicité respectent votre choix.","Garantiza que las herramientas opcionales de medición y publicidad funcionen según tu elección.","Fa sì che gli strumenti opzionali di misurazione e pubblicità rispettino la tua scelta.","Garante que ferramentas opcionais de medição e publicidade respeitem sua escolha.","Обеспечивает работу необязательной аналитики и рекламы только согласно вашему выбору.","يضمن عمل أدوات القياس والإعلانات الاختيارية وفق اختيارك فقط.","确保可选的分析和广告工具仅按你的选择运行。","任意の計測・広告ツールが選択に従ってのみ動作するようにします。","선택적 측정 및 광고 도구가 사용자의 선택에 따라서만 작동하도록 합니다.","यह सुनिश्चित करता है कि वैकल्पिक मापन और विज्ञापन टूल केवल आपकी पसंद के अनुसार चलें।"],
+    "consent.storageControl":["Tercihi yeniden değiştirene veya site verisini silene kadar. Gizlilik tercihleri düğmesinden her zaman güncellenebilir.","Until you change the choice or clear site data. You can update it anytime from the privacy choices button.","Bis du die Auswahl änderst oder Websitedaten löschst. Über die Datenschutz-Schaltfläche jederzeit änderbar.","Jusqu’à modification du choix ou suppression des données du site. Modifiable à tout moment via le bouton de confidentialité.","Hasta que cambies la elección o borres los datos del sitio. Puedes actualizarla desde el botón de privacidad.","Finché non cambi la scelta o elimini i dati del sito. Puoi aggiornarla dal pulsante privacy.","Até alterar a escolha ou limpar os dados do site. Pode atualizar pelo botão de privacidade.","До изменения выбора или удаления данных сайта. Настройки можно изменить кнопкой конфиденциальности.","حتى تغيّر الاختيار أو تحذف بيانات الموقع. يمكن تحديثه دائمًا من زر خيارات الخصوصية.","直到你更改选择或清除网站数据。可随时通过隐私偏好按钮更新。","選択を変更するかサイトデータを削除するまで。プライバシー設定ボタンからいつでも変更できます。","선택을 바꾸거나 사이트 데이터를 지울 때까지이며 개인정보 선택 버튼에서 언제든 변경할 수 있습니다.","जब तक आप पसंद बदलें या साइट डेटा मिटाएँ। गोपनीयता पसंद बटन से कभी भी अपडेट किया जा सकता है।"],
     "common.yes":["Evet","Yes","Ja","Oui","Sí","Sì","Sim","Да","نعم","是","はい","예","हाँ"],
     "common.all":["Tümü","All","Alle","Tous","Todos","Tutti","Todos","Все","الكل","全部","すべて","모두","सभी"],
     "order.pending":["Kontrol bekliyor","Pending review","Prüfung ausstehend","En attente","Pendiente","In attesa","Em análise","На проверке","بانتظار المراجعة","待审核","確認待ち","검토 대기","समीक्षा लंबित"],
@@ -304,4 +307,16 @@
   }
 
   window.LectureSiftI18n = Object.freeze({language:selected, locale:locales[selected], languages, t, exact, keys:Object.keys(rows)});
+  const seoScript = document.createElement("script");
+  seoScript.src = "/seo.js?v=1";
+  seoScript.defer = true;
+  document.head.append(seoScript);
+  const consentStyle = document.createElement("link");
+  consentStyle.rel = "stylesheet";
+  consentStyle.href = "/consent.css?v=1";
+  document.head.append(consentStyle);
+  const consentScript = document.createElement("script");
+  consentScript.src = "/consent.js?v=1";
+  consentScript.defer = true;
+  document.head.append(consentScript);
 })();

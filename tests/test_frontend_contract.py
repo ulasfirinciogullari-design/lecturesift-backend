@@ -186,3 +186,34 @@ def test_private_pages_are_excluded_from_search_indexing():
 
     for page in ("features.html", "plans.html", "about.html", "contact.html"):
         assert page in sitemap
+
+
+def test_public_pages_have_share_metadata_canonical_urls_and_structured_data():
+    i18n = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    seo = (FRONTEND / "seo.js").read_text(encoding="utf-8")
+    sitemap = (FRONTEND / "sitemap.xml").read_text(encoding="utf-8")
+
+    assert 'seoScript.src = "/seo.js?v=1"' in i18n
+    assert 'link[rel="canonical"]' in seo
+    assert 'meta[property="og:image"]' in seo
+    assert 'meta[name="twitter:card"]' in seo
+    assert '"@type": "SoftwareApplication"' in seo
+    assert 'applicationCategory: "EducationalApplication"' in seo
+    assert 'price: "0"' in seo
+    assert "noindex,nofollow,noarchive" in seo
+    assert (FRONTEND / "og-image.png").stat().st_size > 100_000
+    assert sitemap.count("<lastmod>2026-08-28</lastmod>") == 9
+
+
+def test_optional_analytics_and_advertising_are_consent_gated():
+    i18n = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    consent = (FRONTEND / "consent.js").read_text(encoding="utf-8")
+    cookies = (FRONTEND / "cookies.html").read_text(encoding="utf-8")
+
+    assert 'consentScript.src = "/consent.js?v=1"' in i18n
+    assert 'consentStyle.href = "/consent.css?v=1"' in i18n
+    assert 'const STORAGE_KEY = "lecturesift-consent-v1"' in consent
+    assert 'analytics: false, advertising: false' in consent
+    assert 'category === "necessary"' in consent
+    assert "lecturesift-consent-v1" in cookies
+    assert "consent.storageContent" in cookies

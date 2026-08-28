@@ -1,5 +1,6 @@
 User-agent: *
 Allow: /
+Disallow: /404.html
 Disallow: /account.html
 Disallow: /admin.html
 Disallow: /login.html
