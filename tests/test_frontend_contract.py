@@ -1,5 +1,7 @@
 import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 from lecturesift.billing import SUPPORTED_CURRENCIES
@@ -145,9 +147,10 @@ def test_public_navigation_is_consistent_localized_and_session_aware():
 def test_every_page_supports_persistent_light_and_dark_themes():
     for page in FRONTEND.glob("*.html"):
         content = page.read_text(encoding="utf-8")
-        assert "/theme.css?v=1" in content, page.name
-        assert "/theme.js?v=1" in content, page.name
-        assert "i18n.js?v=14" in content, page.name
+        assert "/theme.css?v=2" in content, page.name
+        assert "/theme.js?v=2" in content, page.name
+        assert "i18n.js?v=15" in content, page.name
+        assert "page-i18n.js?v=2" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
     style = (FRONTEND / "theme.css").read_text(encoding="utf-8")
@@ -157,10 +160,36 @@ def test_every_page_supports_persistent_light_and_dark_themes():
     assert 'root.dataset.theme = theme' in script
     assert 'localStorage.setItem(STORAGE_KEY, nextTheme)' in script
     assert 'className = "theme-toggle"' in script
+    assert 'className = "skip-link"' in script
+    assert '"theme.skipToContent"' in script
     assert 'html[data-theme="light"]' in style
+    assert ".skip-link:focus" in style
+    assert ":focus-visible" in style
     assert '@media(prefers-reduced-motion:reduce)' in style
     assert "lecturesift-theme" in cookies
     assert all(f'data-i18n="theme.{key}"' in cookies for key in ("storageContent", "storagePurpose", "storageControl"))
+
+
+def test_keyboard_navigation_and_admin_filters_have_accessible_names():
+    index = (FRONTEND / "index.html").read_text(encoding="utf-8")
+    app = (FRONTEND / "app.js").read_text(encoding="utf-8")
+    admin = (FRONTEND / "admin.html").read_text(encoding="utf-8")
+    assert 'role="tablist" aria-label="Ders paketi bölümleri"' in index
+    assert index.count('role="tab" aria-selected=') >= 9
+    assert index.count('role="tabpanel" aria-labelledby="resultTab-') >= 9
+    assert 'data-i18n-aria-label="ask.placeholder"' in index
+    assert "function activateResultPane" in app
+    assert "function setupResultTabs" in app
+    assert all(key in app for key in ("ArrowRight", "ArrowLeft", "Home", "End"))
+    for control_id in (
+        "adminTimelineFilter", "adminUserSearch", "adminUserStatus", "adminUserPlan",
+        "adminUserSort", "adminUserPageSize", "adminBulkAction", "adminBulkMinutes",
+        "adminBulkPlan", "adminBulkReason", "adminBulkConfirmation", "adminOrderSearch",
+        "adminOrderStatus", "adminOrderProvider", "adminOrderPageSize", "adminMessageSearch",
+        "adminMessageStatus", "adminJobStatus",
+    ):
+        tag = re.search(rf'<(?:input|select)\b[^>]*id="{control_id}"[^>]*>', admin)
+        assert tag and 'aria-label="' in tag.group(0), control_id
 
 
 def test_static_page_copy_covers_every_language_without_empty_entries():
@@ -171,6 +200,8 @@ def test_static_page_copy_covers_every_language_without_empty_entries():
     assert all(len(translations) == 13 for translations in catalog.values())
     assert all(all(str(value).strip() for value in translations) for translations in catalog.values())
     assert all("LSSEP" not in str(translations) for translations in catalog.values())
+    assert "&#10;" not in script
+    assert "[ترجمة المصطلح:" not in script
     forbidden_brand_translations = (
         "VortragSift",
         "ConférenceSift",
@@ -186,6 +217,12 @@ def test_static_page_copy_covers_every_language_without_empty_entries():
         for value in translations
         for variant in forbidden_brand_translations
     )
+    for source, translations in catalog.items():
+        if "LectureSift" in source:
+            assert all(
+                value.count("LectureSift") >= source.count("LectureSift")
+                for value in translations
+            ), source
 
     rows = list(catalog.values())
     for language_index in range(1, 13):
@@ -204,6 +241,16 @@ def test_static_page_copy_covers_every_language_without_empty_entries():
         "KVKK aydınlatma ve gizlilik metni",
     ):
         assert source in catalog
+
+    coverage = subprocess.run(
+        [sys.executable, str(FRONTEND.parent / "scripts" / "sync_static_i18n.py"), "--check"],
+        cwd=FRONTEND.parent,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    assert coverage.returncode == 0, coverage.stdout + coverage.stderr
 
     central_rows = {
         values[0]: values
@@ -666,7 +713,7 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=10"' in index
+    assert 'src="./app.js?v=11"' in index
     assert 'src="/rollout.js?v=3"' in index
 
 
@@ -738,6 +785,10 @@ def test_google_ads_conversions_are_consent_gated_and_csp_allows_measurement():
     assert "lecturesift-purchase-${reference}" in auth
     assert "https://www.googletagmanager.com" in headers
     assert "https://www.google-analytics.com" in headers
+    assert 'Strict-Transport-Security = "max-age=31536000; includeSubDomains"' in headers
+    assert 'for = "/:lang/verify.html"' in headers
+    assert 'for = "/:lang/reset-password.html"' in headers
+    assert 'for = "/account.html"' in headers and 'for = "/admin.html"' in headers
     assert all(
         key in blueprint
         for key in (

@@ -7,6 +7,7 @@
     X-Content-Type-Options = "nosniff"
     X-Frame-Options = "DENY"
     Referrer-Policy = "no-referrer"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=()"
     Content-Security-Policy = "default-src 'self'; script-src 'self' https://www.googletagmanager.com https://securepubads.g.doubleclick.net https://pagead2.googlesyndication.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://www.google-analytics.com https://*.google.com https://*.googlesyndication.com https://*.doubleclick.net; media-src 'self' blob:; connect-src 'self' https://lecturesift-backend.onrender.com https://www.google-analytics.com https://*.google-analytics.com https://www.googletagmanager.com https://securepubads.g.doubleclick.net https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.doubleclick.net; frame-src https://www.paytr.com https://securepubads.g.doubleclick.net https://googleads.g.doubleclick.net https://*.googlesyndication.com; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
 
@@ -17,5 +18,35 @@
 
 [[headers]]
   for = "/reset-password.html"
+  [headers.values]
+    Cache-Control = "no-store"
+
+[[headers]]
+  for = "/:lang/verify.html"
+  [headers.values]
+    Cache-Control = "no-store"
+
+[[headers]]
+  for = "/:lang/reset-password.html"
+  [headers.values]
+    Cache-Control = "no-store"
+
+[[headers]]
+  for = "/account.html"
+  [headers.values]
+    Cache-Control = "no-store"
+
+[[headers]]
+  for = "/:lang/account.html"
+  [headers.values]
+    Cache-Control = "no-store"
+
+[[headers]]
+  for = "/admin.html"
+  [headers.values]
+    Cache-Control = "no-store"
+
+[[headers]]
+  for = "/:lang/admin.html"
   [headers.values]
     Cache-Control = "no-store"

@@ -26,6 +26,16 @@
   applyTheme(activeTheme);
 
   const setupToggle = () => {
+    const main = document.querySelector("main");
+    if (main && !document.querySelector(".skip-link")) {
+      if (!main.id) main.id = "main-content";
+      const skipLink = document.createElement("a");
+      skipLink.className = "skip-link";
+      skipLink.href = `#${main.id}`;
+      skipLink.textContent = window.LectureSiftI18n?.t?.("theme.skipToContent", "Ana içeriğe geç") || "Ana içeriğe geç";
+      document.body.insertBefore(skipLink, document.body.firstChild);
+    }
+
     if (!document.querySelector('meta[name="theme-color"]')) {
       const themeColor = document.createElement("meta");
       themeColor.name = "theme-color";
