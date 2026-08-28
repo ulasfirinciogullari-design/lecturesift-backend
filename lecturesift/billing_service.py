@@ -325,6 +325,15 @@ def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+def _auth_token_hash(user_id: str, purpose: str, token: str) -> str:
+    # Six-digit verification codes are intentionally short and therefore can
+    # repeat across users. Scope their stored hash to the account so a normal
+    # collision cannot abort somebody else's registration.
+    if purpose == "verify_email_code":
+        return _token_hash(f"{purpose}:{user_id}:{token}")
+    return _token_hash(token)
+
+
 def _store_auth_token(
     connection,
     user_id: str,
@@ -334,7 +343,7 @@ def _store_auth_token(
 ) -> None:
     connection.execute(
         AUTH_TOKENS.insert().values(
-            token_hash=_token_hash(token),
+            token_hash=_auth_token_hash(user_id, purpose, token),
             user_id=user_id,
             purpose=purpose,
             expires_at=expires_at,
@@ -567,7 +576,12 @@ def verify_email_code(email: str, code: str) -> dict:
             connection.execute(
                 select(AUTH_TOKENS).where(
                     AUTH_TOKENS.c.user_id == user.id,
-                    AUTH_TOKENS.c.token_hash == _token_hash(normalized_code),
+                    AUTH_TOKENS.c.token_hash.in_((
+                        _auth_token_hash(user.id, "verify_email_code", normalized_code),
+                        # Accept codes issued by the previous release until
+                        # their 24-hour lifetime expires.
+                        _token_hash(normalized_code),
+                    )),
                     AUTH_TOKENS.c.purpose == "verify_email_code",
                 )
             ).first()
@@ -1178,6 +1192,37 @@ def mark_payment_order_token_failed(reference: str) -> None:
             )
             .values(status="token_failed", updated_at=utcnow())
         )
+
+
+def mark_payment_order_pending(reference: str) -> dict:
+    """Keep an asynchronous provider payment open without granting access.
+
+    iyzico protected bank transfers are initiated in Checkout Form, but the
+    money can arrive up to three business days later.  Only a later signed
+    provider notification may move this order to ``paid``.
+    """
+    init_billing_database()
+    with ENGINE.begin() as connection:
+        order = connection.execute(
+            select(PAYMENT_ORDERS)
+            .where(PAYMENT_ORDERS.c.reference == reference)
+            .with_for_update()
+        ).first()
+        if not order:
+            raise BillingError("Ödeme siparişi bulunamadı.")
+        if order.status in {"created", "pending"}:
+            connection.execute(
+                update(PAYMENT_ORDERS)
+                .where(PAYMENT_ORDERS.c.reference == reference)
+                .values(
+                    status="pending",
+                    provider_amount_minor=None,
+                    failure_code=None,
+                    failure_message=None,
+                    updated_at=utcnow(),
+                )
+            )
+    return payment_order(reference)
 
 
 def complete_payment_order(

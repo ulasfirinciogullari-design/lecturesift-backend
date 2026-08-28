@@ -45,6 +45,19 @@ def _response_signature(values: list[object]) -> str:
     ).hexdigest()
 
 
+def _webhook_signature(payload: dict) -> str:
+    message = (
+        f"{config.IYZICO_SECRET_KEY}{payload['iyziEventType']}"
+        f"{payload['iyziPaymentId']}{payload['token']}"
+        f"{payload['paymentConversationId']}{payload['status']}"
+    )
+    return hmac.new(
+        config.IYZICO_SECRET_KEY.encode(),
+        message.encode(),
+        hashlib.sha256,
+    ).hexdigest()
+
+
 def test_iyzico_checkout_and_callback_verify_signatures_amount_and_order(monkeypatch):
     _configure(monkeypatch)
     captured = []
@@ -271,6 +284,115 @@ def test_iyzico_decline_is_recorded_instead_of_staying_created(monkeypatch):
     assert order["failure_code"] == "10220"
     assert order["failure_message"] == "Ödeme alınamadı"
     assert account["credit_minutes"] == 0
+
+
+def test_iyzico_bank_transfer_waits_for_signed_webhook_before_activation(monkeypatch):
+    _configure(monkeypatch)
+    state = {"reference": "", "matched": False}
+    token = "protected-bank-transfer-token"
+
+    class FakeResponse:
+        def __init__(self, body):
+            self._body = body
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._body
+
+    def fake_post(url, *, content, headers, timeout):
+        payload = json.loads(content)
+        reference = payload["conversationId"]
+        if url.endswith(payments.IYZICO_INITIALIZE_PATH):
+            state["reference"] = reference
+            return FakeResponse({
+                "status": "success",
+                "conversationId": reference,
+                "token": token,
+                "paymentPageUrl": f"https://api.iyzipay.com/checkoutform/{token}",
+                "signature": _response_signature([reference, token]),
+            })
+        payment_status = "SUCCESS" if state["matched"] else "INIT_BANK_TRANSFER"
+        values = [payment_status, "bank-payment-123", "TRY", reference, reference, "699", "699", token]
+        return FakeResponse({
+            "status": "success",
+            "paymentStatus": payment_status,
+            "paymentId": "bank-payment-123",
+            "currency": "TRY",
+            "basketId": reference,
+            "conversationId": reference,
+            "paidPrice": "699.00",
+            "price": "699.00",
+            "token": token,
+            "signature": _response_signature(values),
+        })
+
+    monkeypatch.setattr(payments.httpx, "post", fake_post)
+    _, session = _account()
+    client = TestClient(app)
+    checkout = client.post(
+        "/billing/checkout",
+        headers={"Authorization": f"Bearer {session}", "X-Forwarded-For": "203.0.113.46"},
+        json={
+            "plan_code": "plus", "interval": "monthly", "currency": "TRY",
+            "billing_address": "Örnek Mahallesi No 5", "billing_city": "Hatay",
+            "billing_zip_code": "31800", "phone": "+905551112233", "language": "tr",
+            "terms_accepted": True, "early_performance_requested": True,
+        },
+    )
+    assert checkout.status_code == 200, checkout.text
+    reference = state["reference"]
+
+    callback = client.post(
+        f"/billing/iyzico/callback?order={reference}",
+        data={"token": token},
+        follow_redirects=False,
+    )
+    assert callback.status_code == 303
+    assert callback.headers["location"].endswith(
+        f"/account.html?payment=pending&order={reference}"
+    )
+    account = client.get(
+        "/billing/me", headers={"Authorization": f"Bearer {session}"}
+    ).json()["account"]
+    assert account["payment_orders"][0]["status"] == "pending"
+    assert account["plan"]["code"] == "free"
+
+    webhook = {
+        "paymentConversationId": reference,
+        "merchantId": 3404590,
+        "status": "SUCCESS",
+        "token": token,
+        "iyziReferenceCode": "bank-webhook-reference",
+        "iyziEventType": "BANK_TRANSFER_AUTH",
+        "iyziEventTime": 1762239641852,
+        "iyziPaymentId": 27553416,
+    }
+    rejected = client.post(
+        "/billing/iyzico/webhook",
+        headers={"X-IYZ-SIGNATURE-V3": "tampered"},
+        json=webhook,
+    )
+    assert rejected.status_code == 400
+    state["matched"] = True
+    accepted = client.post(
+        "/billing/iyzico/webhook",
+        headers={"X-IYZ-SIGNATURE-V3": _webhook_signature(webhook)},
+        json=webhook,
+    )
+    repeated = client.post(
+        "/billing/iyzico/webhook",
+        headers={"X-IYZ-SIGNATURE-V3": _webhook_signature(webhook)},
+        json=webhook,
+    )
+    assert accepted.status_code == 200 and accepted.text == "OK"
+    assert repeated.status_code == 200 and repeated.text == "OK"
+    account = client.get(
+        "/billing/me", headers={"Authorization": f"Bearer {session}"}
+    ).json()["account"]
+    assert account["payment_orders"][0]["status"] == "paid"
+    assert account["plan"]["code"] == "plus"
 
 
 def test_iyzico_callback_rejects_tampered_response(monkeypatch):

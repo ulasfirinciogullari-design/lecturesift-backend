@@ -24,6 +24,7 @@ from .billing_service import (
     complete_payment_order,
     commerce_identity,
     create_payment_order,
+    mark_payment_order_pending,
     mark_payment_order_token_failed,
     payment_order,
     record_payment_consent,
@@ -36,6 +37,20 @@ PAYTR_CURRENCIES = {"TRY": "TL", "USD": "USD", "EUR": "EUR", "GBP": "GBP"}
 IYZICO_INITIALIZE_PATH = "/payment/iyzipos/checkoutform/initialize/auth/ecom"
 IYZICO_RETRIEVE_PATH = "/payment/iyzipos/checkoutform/auth/ecom/detail"
 IYZICO_CURRENCIES = ("TRY", "USD", "EUR", "GBP", "NOK", "CHF")
+IYZICO_ASYNC_PAYMENT_STATUSES = {
+    "INIT_BANK_TRANSFER",
+    "INIT_CREDIT",
+    "PENDING_CREDIT",
+    "INIT_APM",
+    "INIT_THREEDS",
+    "CALLBACK_THREEDS",
+    "BKM_POS_SELECTED",
+    "INIT_CONTACTLESS",
+}
+IYZICO_HPP_WEBHOOK_EVENTS = {
+    "CHECKOUT_FORM_AUTH",
+    "BANK_TRANSFER_AUTH",
+}
 IYZICO_BASE_URLS = {
     "https://api.iyzipay.com",
     "https://sandbox-api.iyzipay.com",
@@ -83,7 +98,16 @@ def iyzico_public_status() -> dict:
         "configured": configured,
         "status": "test_mode" if configured and sandbox else ("active" if configured else "pending_credentials"),
         "currencies": list(IYZICO_CURRENCIES),
-        "capabilities": ["cards", "foreign_cards", "one_time", "monthly", "annual", "3ds"],
+        "capabilities": [
+            "cards",
+            "foreign_cards",
+            "bank_transfer",
+            "one_time",
+            "monthly",
+            "annual",
+            "3ds",
+            "signed_webhook",
+        ],
         "checkout": "hosted_redirect",
         "recurring": False,
     }
@@ -162,6 +186,36 @@ def _verify_iyzico_response_signature(body: dict, values: list[object]) -> None:
     expected = _iyzico_response_signature(values)
     if not signature or not hmac.compare_digest(expected, signature):
         raise PaymentProviderError("Geçersiz iyzico yanıt imzası.")
+
+
+def _verify_iyzico_hpp_webhook_signature(payload: dict, signature: str) -> None:
+    """Verify iyzico's X-IYZ-SIGNATURE-V3 hosted-page notification."""
+    event_type = str(payload.get("iyziEventType") or "")
+    payment_id = str(payload.get("iyziPaymentId") or "")
+    token = str(payload.get("token") or "")
+    conversation_id = str(payload.get("paymentConversationId") or "")
+    raw_status = str(payload.get("status") or "")
+    if (
+        event_type not in IYZICO_HPP_WEBHOOK_EVENTS
+        or not payment_id
+        or not token
+        or not conversation_id
+        or not raw_status
+        or len(token) > 200
+        or len(conversation_id) > 64
+    ):
+        raise PaymentProviderError("Geçersiz iyzico webhook bildirimi.")
+    message = (
+        f"{config.IYZICO_SECRET_KEY}{event_type}{payment_id}"
+        f"{token}{conversation_id}{raw_status}"
+    )
+    expected = hmac.new(
+        config.IYZICO_SECRET_KEY.encode("utf-8"),
+        message.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    if not signature or not hmac.compare_digest(expected, signature.strip().lower()):
+        raise PaymentProviderError("Geçersiz iyzico webhook imzası.")
 
 
 def _iyzico_headers(path: str, raw_body: str) -> dict[str, str]:
@@ -388,13 +442,29 @@ def process_iyzico_callback(*, order_reference: str, token: str) -> dict:
         or basket_price != expected_price
     ):
         raise PaymentProviderError("iyzico ödeme sonucu siparişle eşleşmiyor.")
-    succeeded = str(body.get("paymentStatus") or "").upper() == "SUCCESS"
+    payment_status = str(body.get("paymentStatus") or "").upper()
+    if payment_status in IYZICO_ASYNC_PAYMENT_STATUSES:
+        return mark_payment_order_pending(order_reference)
+    succeeded = payment_status == "SUCCESS"
     return complete_payment_order(
         order_reference,
         succeeded=succeeded,
         provider_amount_minor=int(paid_price * 100),
         failure_code="" if succeeded else str(body.get("errorCode") or "payment_failed"),
         failure_message="" if succeeded else str(body.get("errorMessage") or "Ödeme tamamlanmadı."),
+    )
+
+
+def process_iyzico_webhook(*, payload: dict, signature: str) -> dict:
+    """Confirm a signed iyzico HPP event with a server-side retrieve call."""
+    if not iyzico_configured():
+        raise BillingConfigurationError("iyzico canlı ödeme anahtarları henüz etkinleştirilmemiş.")
+    if not isinstance(payload, dict):
+        raise PaymentProviderError("Geçersiz iyzico webhook bildirimi.")
+    _verify_iyzico_hpp_webhook_signature(payload, signature)
+    return process_iyzico_callback(
+        order_reference=str(payload.get("paymentConversationId") or ""),
+        token=str(payload.get("token") or ""),
     )
 
 
