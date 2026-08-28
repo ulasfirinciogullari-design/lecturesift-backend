@@ -60,7 +60,7 @@ from .config import (
     WORK_DIR,
 )
 from .errors import LectureSiftError, normalize_error
-from .daily_social import render_daily_image
+from .daily_social import render_daily_image, render_daily_reel, render_daily_reel_cover
 from .instagram import InstagramAPIError, InstagramClient, InstagramConfigurationError
 from .jobs import JOBS
 from .media import download_remote_video, validate_remote_url
@@ -914,6 +914,43 @@ def instagram_daily_image(day: str) -> Response:
     return Response(
         content=render_daily_image(selected_day),
         media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+@app.get("/instagram/daily/reel/{day}.jpg")
+def instagram_daily_reel_cover(day: str) -> Response:
+    """Public deterministic 9:16 cover fetched by Instagram."""
+    from datetime import date
+
+    try:
+        selected_day = date.fromisoformat(day)
+    except ValueError:
+        raise HTTPException(400, detail={"code": "LS-IG-06", "message": "Geçersiz tarih."})
+    return Response(
+        content=render_daily_reel_cover(selected_day),
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+@app.get("/instagram/daily/reel/{day}.mp4")
+def instagram_daily_reel_video(day: str) -> Response:
+    """Public deterministic MP4 fetched by Instagram for scheduled publishing."""
+    from datetime import date
+
+    try:
+        selected_day = date.fromisoformat(day)
+        if abs((selected_day - date.today()).days) > 2:
+            raise HTTPException(404, detail={"code": "LS-IG-06", "message": "Gönderi videosu bulunamadı."})
+        content = render_daily_reel(selected_day)
+    except ValueError:
+        raise HTTPException(400, detail={"code": "LS-IG-06", "message": "Geçersiz tarih."})
+    except RuntimeError as exc:
+        raise HTTPException(503, detail={"code": "LS-IG-07", "message": str(exc)}) from exc
+    return Response(
+        content=content,
+        media_type="video/mp4",
         headers={"Cache-Control": "public, max-age=86400"},
     )
 
