@@ -54,6 +54,8 @@ def test_billing_providers_distinguish_ready_state():
     assert response.status_code == 200
     providers = {provider["code"]: provider for provider in response.json()["providers"]}
     assert providers["paytr"]["status"] == "pending_credentials"
+    assert providers["iyzico"]["status"] == "pending_credentials"
+    assert providers["iyzico"]["checkout"] == "hosted_redirect"
     assert "global" in providers["paddle"]["regions"]
 
 

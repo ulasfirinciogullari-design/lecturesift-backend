@@ -50,6 +50,12 @@ services:
         value: "true"
       - key: PAYTR_DEBUG
         value: "false"
+      - key: IYZICO_API_KEY
+        sync: false
+      - key: IYZICO_SECRET_KEY
+        sync: false
+      - key: IYZICO_BASE_URL
+        value: https://api.iyzipay.com
       - key: CONTACT_EMAIL
         value: support@lecturesift.com
       - key: BILLING_SUPPORT_EMAIL

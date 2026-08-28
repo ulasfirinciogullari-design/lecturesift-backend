@@ -238,7 +238,7 @@ def test_secure_card_checkout_is_prepared_without_collecting_card_details():
     script = (FRONTEND / "plans.js").read_text(encoding="utf-8")
     rollout = (FRONTEND / "rollout.js").read_text(encoding="utf-8")
     headers = (FRONTEND.parent / "netlify.toml").read_text(encoding="utf-8")
-    assert all(value in plans for value in ("checkoutForm", "checkoutAddress", "paytrFrame"))
+    assert all(value in plans for value in ("checkoutForm", "checkoutAddress", "checkoutCity", "checkoutZipCode", "paytrFrame"))
     assert "/billing/checkout" in script and "body.checkout_url" in script
     assert "card_number" not in plans.lower() and "cvv" not in plans.lower()
     assert "frame-src https://www.paytr.com" in headers
@@ -254,7 +254,7 @@ def test_secure_card_checkout_is_prepared_without_collecting_card_details():
     assert "/assets/payments/iyzico-card-brands-white.png" in plans
     assert (FRONTEND / "assets" / "payments" / "iyzico-ile-ode-white.png").stat().st_size > 20_000
     assert (FRONTEND / "assets" / "payments" / "iyzico-card-brands-white.png").stat().st_size > 10_000
-    assert '["application_review", "fallback"].includes(iyzico.status)' in script
+    assert "cardProviderStatus" in script and 'body.display_mode === "redirect"' in script
     assert "terms_accepted" in script and "early_performance_requested" in script
     assert "reportValidity()" in script
 
@@ -333,11 +333,12 @@ def test_legal_operator_identity_is_public_only_after_configuration():
     assert 'operator.tax_office' in operator
 
 
-def test_card_payment_pending_copy_matches_iyzico_review_without_exposing_paytr_setup():
+def test_card_payment_copy_prefers_live_iyzico_without_exposing_paytr_setup():
     plans = (FRONTEND / "plans.js").read_text(encoding="utf-8")
     catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
     assert "pendingCardMessage" in plans
-    assert 'pt("payment.iyzicoReview"' in plans
+    assert 'provider.code === "iyzico"' in plans
+    assert 'location.assign(body.checkout_url)' in plans
     assert "Kartlı ödeme için PayTR mağaza bilgileri bekleniyor" not in plans
     assert "Kartlı ödeme için PayTR mağaza bilgileri bekleniyor" not in catalog
 

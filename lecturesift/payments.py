@@ -1,4 +1,8 @@
-"""PayTR checkout adapter with signed, idempotent payment callbacks."""
+"""Hosted payment adapters with signed, idempotent callbacks.
+
+Provider credentials are read only from runtime environment variables. Card
+details never pass through LectureSift servers.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +10,10 @@ import base64
 import hashlib
 import hmac
 import json
+import secrets
+import time
 from decimal import Decimal
+from urllib.parse import urlparse
 
 import httpx
 
@@ -26,6 +33,13 @@ from .billing_service import (
 PAYTR_TOKEN_URL = "https://www.paytr.com/odeme/api/get-token"
 PAYTR_CHECKOUT_BASE_URL = "https://www.paytr.com/odeme/guvenli"
 PAYTR_CURRENCIES = {"TRY": "TL", "USD": "USD", "EUR": "EUR", "GBP": "GBP"}
+IYZICO_INITIALIZE_PATH = "/payment/iyzipos/checkoutform/initialize/auth/ecom"
+IYZICO_RETRIEVE_PATH = "/payment/iyzipos/checkoutform/auth/ecom/detail"
+IYZICO_CURRENCIES = ("TRY", "USD", "EUR", "GBP", "NOK", "CHF")
+IYZICO_BASE_URLS = {
+    "https://api.iyzipay.com",
+    "https://sandbox-api.iyzipay.com",
+}
 
 
 class PaymentProviderError(BillingError):
@@ -50,6 +64,39 @@ def paytr_public_status() -> dict:
     }
 
 
+def _iyzico_base_url() -> str:
+    selected = config.IYZICO_BASE_URL.rstrip("/")
+    if selected not in IYZICO_BASE_URLS:
+        raise BillingConfigurationError("Geçersiz iyzico API adresi yapılandırması.")
+    return selected
+
+
+def iyzico_configured() -> bool:
+    return bool(config.IYZICO_API_KEY and config.IYZICO_SECRET_KEY)
+
+
+def iyzico_public_status() -> dict:
+    configured = iyzico_configured()
+    sandbox = config.IYZICO_BASE_URL.rstrip("/") == "https://sandbox-api.iyzipay.com"
+    return {
+        "code": "iyzico",
+        "configured": configured,
+        "status": "test_mode" if configured and sandbox else ("active" if configured else "pending_credentials"),
+        "currencies": list(IYZICO_CURRENCIES),
+        "capabilities": ["cards", "foreign_cards", "one_time", "monthly", "annual", "3ds"],
+        "checkout": "hosted_redirect",
+        "recurring": False,
+    }
+
+
+def preferred_card_provider() -> str:
+    if iyzico_configured():
+        return "iyzico"
+    if paytr_configured():
+        return "paytr"
+    raise BillingConfigurationError("Kartlı ödeme sağlayıcısı henüz etkinleştirilmemiş.")
+
+
 def _token(message: str) -> str:
     digest = hmac.new(
         config.PAYTR_MERCHANT_KEY.encode("utf-8"),
@@ -64,6 +111,262 @@ def _phone(value: str) -> str:
     if sum(char.isdigit() for char in selected) < 7:
         raise BillingError("Kartlı ödeme için geçerli bir telefon numarası gir.")
     return selected
+
+
+def _clean_address(value: str) -> str:
+    selected = " ".join(value.strip().split())
+    if len(selected) < 5 or len(selected) > 400:
+        raise BillingError("Kartlı ödeme için 5 ile 400 karakter arasında bir fatura adresi gir.")
+    return selected
+
+
+def _clean_location(value: str, label: str, *, maximum: int) -> str:
+    selected = " ".join(value.strip().split())
+    if len(selected) < 2 or len(selected) > maximum:
+        raise BillingError(f"Kartlı ödeme için geçerli bir {label} gir.")
+    return selected
+
+
+def _amount_string(amount_minor: int) -> str:
+    return f"{Decimal(int(amount_minor)) / Decimal(100):.2f}"
+
+
+def _strip_price_zeros(value: object) -> str:
+    try:
+        normalized = format(Decimal(str(value)), "f")
+    except Exception as exc:
+        raise PaymentProviderError("iyzico geçersiz ödeme tutarı döndürdü.") from exc
+    if "." in normalized:
+        normalized = normalized.rstrip("0").rstrip(".")
+    return normalized or "0"
+
+
+def _iyzico_response_signature(values: list[object]) -> str:
+    message = ":".join(str(value) for value in values)
+    return hmac.new(
+        config.IYZICO_SECRET_KEY.encode("utf-8"),
+        message.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _verify_iyzico_response_signature(body: dict, values: list[object]) -> None:
+    signature = str(body.get("signature") or "")
+    expected = _iyzico_response_signature(values)
+    if not signature or not hmac.compare_digest(expected, signature):
+        raise PaymentProviderError("Geçersiz iyzico yanıt imzası.")
+
+
+def _iyzico_headers(path: str, raw_body: str) -> dict[str, str]:
+    random_key = f"{int(time.time() * 1000)}{secrets.randbelow(1_000_000_000):09d}"
+    signature = hmac.new(
+        config.IYZICO_SECRET_KEY.encode("utf-8"),
+        f"{random_key}{path}{raw_body}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    authorization = base64.b64encode(
+        (
+            f"apiKey:{config.IYZICO_API_KEY}&randomKey:{random_key}"
+            f"&signature:{signature}"
+        ).encode("utf-8")
+    ).decode("ascii")
+    return {
+        "Authorization": f"IYZWSv2 {authorization}",
+        "x-iyzi-rnd": random_key,
+        "Content-Type": "application/json",
+    }
+
+
+def _iyzico_post(path: str, payload: dict) -> dict:
+    raw_body = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    try:
+        response = httpx.post(
+            f"{_iyzico_base_url()}{path}",
+            content=raw_body.encode("utf-8"),
+            headers=_iyzico_headers(path, raw_body),
+            timeout=20.0,
+        )
+        response.raise_for_status()
+        body = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise PaymentProviderError("iyzico ödeme hizmetine şu anda ulaşılamıyor.") from exc
+    if not isinstance(body, dict):
+        raise PaymentProviderError("iyzico geçersiz bir yanıt döndürdü.")
+    return body
+
+
+def create_iyzico_checkout(
+    user: dict,
+    *,
+    plan_code: str,
+    interval: str,
+    currency: str,
+    user_ip: str,
+    billing_address: str,
+    billing_city: str,
+    billing_zip_code: str,
+    phone: str,
+    language: str,
+    terms_accepted: bool,
+    early_performance_requested: bool,
+    user_agent: str,
+) -> dict:
+    if not iyzico_configured():
+        raise BillingConfigurationError("iyzico canlı ödeme anahtarları henüz etkinleştirilmemiş.")
+    if not commerce_identity()["configured"]:
+        raise BillingConfigurationError("Satıcı/sağlayıcı kimliği ve iletişim bilgileri tamamlanmadan ödeme açılamaz.")
+    if not config.PUBLIC_BASE_URL.startswith("https://"):
+        raise BillingConfigurationError("iyzico geri dönüş adresi güvenli HTTPS olarak yapılandırılmamış.")
+    if not terms_accepted or not early_performance_requested:
+        raise BillingError("Ödeme öncesi bilgilendirmeyi ve hizmetin hemen başlamasını açıkça onaylamalısın.")
+
+    selected_currency = currency.strip().upper()
+    if selected_currency not in IYZICO_CURRENCIES:
+        raise BillingError("iyzico için TRY, USD, EUR, GBP, NOK veya CHF seç.")
+    selected_address = _clean_address(billing_address)
+    selected_city = _clean_location(billing_city, "şehir", maximum=80)
+    selected_zip = _clean_location(billing_zip_code, "posta kodu", maximum=20)
+    selected_phone = _phone(phone or user.get("phone") or "")
+    selected_ip = user_ip.strip()[:39]
+    if not selected_ip:
+        raise BillingError("Ödeme isteği için kullanıcı IP adresi alınamadı.")
+    first_name = (user.get("first_name") or "").strip()
+    last_name = (user.get("last_name") or "").strip()
+    if not first_name or not last_name:
+        raise BillingError("Kartlı ödeme için hesap profilindeki ad ve soyadı tamamla.")
+
+    order = create_payment_order(user["id"], "iyzico", plan_code, interval, selected_currency)
+    reference = order["reference"]
+    record_payment_consent(
+        reference,
+        user["id"],
+        terms_accepted=terms_accepted,
+        early_performance_requested=early_performance_requested,
+        language=language,
+        client_ip=selected_ip,
+        user_agent=user_agent,
+    )
+    price = _amount_string(order["amount_minor"])
+    contact_name = f"{first_name} {last_name}"[:160]
+    country = (user.get("country_code") or "TR").strip().upper()[:2]
+    callback_url = f"{config.PUBLIC_BASE_URL}/billing/iyzico/callback?order={reference}"
+    payload = {
+        "locale": "tr" if language == "tr" else "en",
+        "conversationId": reference,
+        "price": price,
+        "paidPrice": price,
+        "currency": selected_currency,
+        "basketId": reference,
+        "paymentGroup": "PRODUCT",
+        "callbackUrl": callback_url,
+        "enabledInstallments": [1],
+        "buyer": {
+            "id": user["id"],
+            "name": first_name[:80],
+            "surname": last_name[:80],
+            # iyzico's own official integrations use this non-identifying value
+            # when a merchant does not collect a Turkish national ID.
+            "identityNumber": "11111111111",
+            "email": user["email"][:320],
+            "gsmNumber": selected_phone,
+            "registrationAddress": selected_address,
+            "ip": selected_ip,
+            "city": selected_city,
+            "country": country,
+            "zipCode": selected_zip,
+        },
+        "billingAddress": {
+            "address": selected_address,
+            "zipCode": selected_zip,
+            "contactName": contact_name,
+            "city": selected_city,
+            "country": country,
+        },
+        "basketItems": [{
+            "id": reference,
+            "price": price,
+            "name": f"LectureSift {plan_code}"[:120],
+            "category1": "Digital Education",
+            "itemType": "VIRTUAL",
+        }],
+    }
+    try:
+        body = _iyzico_post(IYZICO_INITIALIZE_PATH, payload)
+        if body.get("status") != "success":
+            raise PaymentProviderError("iyzico ödeme formunu başlatamadı. Bilgilerini kontrol edip tekrar dene.")
+        token = str(body.get("token") or "")
+        conversation_id = str(body.get("conversationId") or "")
+        checkout_url = str(body.get("paymentPageUrl") or "")
+        _verify_iyzico_response_signature(body, [conversation_id, token])
+        parsed = urlparse(checkout_url)
+        if (
+            conversation_id != reference
+            or not token
+            or parsed.scheme != "https"
+            or not (parsed.hostname == "iyzipay.com" or (parsed.hostname or "").endswith(".iyzipay.com"))
+        ):
+            raise PaymentProviderError("iyzico ödeme oturumu doğrulanamadı.")
+    except PaymentProviderError:
+        mark_payment_order_token_failed(reference)
+        raise
+    return {
+        "provider": "iyzico",
+        "order": order,
+        "checkout_url": checkout_url,
+        "display_mode": "redirect",
+        "mode": "test" if _iyzico_base_url().startswith("https://sandbox-") else "live",
+    }
+
+
+def process_iyzico_callback(*, order_reference: str, token: str) -> dict:
+    if not iyzico_configured():
+        raise BillingConfigurationError("iyzico canlı ödeme anahtarları henüz etkinleştirilmemiş.")
+    order = payment_order(order_reference)
+    if order["provider"] != "iyzico":
+        raise PaymentProviderError("Ödeme sağlayıcısı siparişle eşleşmiyor.")
+    selected_token = token.strip()
+    if not selected_token or len(selected_token) > 200:
+        raise PaymentProviderError("Geçersiz iyzico ödeme belirteci.")
+    body = _iyzico_post(
+        IYZICO_RETRIEVE_PATH,
+        {"locale": "tr", "conversationId": order_reference, "token": selected_token},
+    )
+    if body.get("status") != "success":
+        raise PaymentProviderError("iyzico ödeme sonucu doğrulanamadı.")
+    signature_values = [
+        body.get("paymentStatus"),
+        body.get("paymentId"),
+        body.get("currency"),
+        body.get("basketId"),
+        body.get("conversationId"),
+        _strip_price_zeros(body.get("paidPrice")),
+        _strip_price_zeros(body.get("price")),
+        body.get("token"),
+    ]
+    _verify_iyzico_response_signature(body, signature_values)
+    expected_price = Decimal(order["amount_minor"]) / Decimal(100)
+    try:
+        paid_price = Decimal(str(body.get("paidPrice")))
+        basket_price = Decimal(str(body.get("price")))
+    except Exception as exc:
+        raise PaymentProviderError("iyzico geçersiz ödeme tutarı döndürdü.") from exc
+    if (
+        str(body.get("conversationId") or "") != order_reference
+        or str(body.get("basketId") or "") != order_reference
+        or str(body.get("token") or "") != selected_token
+        or str(body.get("currency") or "").upper() != order["currency"]
+        or paid_price != expected_price
+        or basket_price != expected_price
+    ):
+        raise PaymentProviderError("iyzico ödeme sonucu siparişle eşleşmiyor.")
+    succeeded = str(body.get("paymentStatus") or "").upper() == "SUCCESS"
+    return complete_payment_order(
+        order_reference,
+        succeeded=succeeded,
+        provider_amount_minor=int(paid_price * 100),
+        failure_code="" if succeeded else str(body.get("errorCode") or "payment_failed"),
+        failure_message="" if succeeded else str(body.get("errorMessage") or "Ödeme tamamlanmadı."),
+    )
 
 
 def create_paytr_checkout(
@@ -90,9 +393,7 @@ def create_paytr_checkout(
     paytr_currency = PAYTR_CURRENCIES.get(selected_currency)
     if not paytr_currency:
         raise BillingError("PayTR bu para birimini desteklemiyor. TRY, USD, EUR veya GBP seç.")
-    selected_address = " ".join(billing_address.strip().split())
-    if len(selected_address) < 5 or len(selected_address) > 400:
-        raise BillingError("Kartlı ödeme için 5 ile 400 karakter arasında bir fatura adresi gir.")
+    selected_address = _clean_address(billing_address)
     selected_phone = _phone(phone or user.get("phone") or "")
     selected_ip = user_ip.strip()[:39]
     if not selected_ip:
