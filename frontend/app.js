@@ -132,7 +132,14 @@ const ERRORS = {
     "LS-UPLOAD-02": "The video is larger than the allowed file size.",
     "LS-VIDEO-02": "The video could not be read. It may be damaged or use an unsupported codec."
   },
-  tr: {}
+  tr: {
+    "LS-AI-01": "Yapay zekâ kullanım kotası doldu. Hesap kotası yenilendikten sonra tekrar dene.",
+    "LS-AI-02": "Yapay zekâ hizmeti yoğun. Birkaç dakika sonra tekrar dene.",
+    "LS-URL-02": "Video sağlayıcısı sunucu üzerinden indirmeyi engelledi. Dosyayı yükle veya doğrudan MP4/WebM bağlantısı kullan.",
+    "LS-URL-03": "Bu sayfada indirilebilir video bulunamadı. Doğrudan video bağlantısı kullan veya dosyayı yükle.",
+    "LS-UPLOAD-02": "Video izin verilen dosya boyutundan büyük.",
+    "LS-VIDEO-02": "Video okunamadı. Dosya bozuk olabilir veya desteklenmeyen bir codec kullanıyor olabilir."
+  }
 };
 
 const $ = (id) => document.getElementById(id);
@@ -149,15 +156,8 @@ let billingCurrency = localStorage.getItem("lecturesift-currency") || "";
 function stringsFor(language) {
   if (language === "tr") return TR;
   if (language === "en") return EN;
-  const values = LEGACY[language] || [];
-  return {
-    ...EN,
-    sourceTitle: values[0] || EN.sourceTitle, uploadTab: values[1] || EN.uploadTab, linkTab: values[2] || EN.linkTab,
-    analyze: values[3] || EN.analyze, sourceLanguage: values[4] || EN.sourceLanguage, outputLanguage: values[5] || EN.outputLanguage,
-    summaryStyle: values[6] || EN.summaryStyle, quizCount: values[7] || EN.quizCount, cardCount: values[8] || EN.cardCount,
-    tabSummary: values[9] || EN.tabSummary, tabNotes: values[10] || EN.tabNotes, tabTranscript: values[11] || EN.tabTranscript,
-    tabSlides: values[12] || EN.tabSlides, downloadAll: values[13] || EN.downloadAll
-  };
+  const exact = window.LectureSiftI18n?.exact;
+  return Object.fromEntries(Object.entries(TR).map(([key, value]) => [key, exact?.(value) || value]));
 }
 function t(key) { return stringsFor(currentLanguage)[key] || EN[key] || key; }
 function escapeHtml(value) { return String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"})[char]); }
@@ -170,7 +170,7 @@ function applyLanguage() {
   document.documentElement.dir = currentLanguage === "ar" ? "rtl" : "ltr";
   document.querySelectorAll("[data-i18n]").forEach(node => {
     const key = node.dataset.i18n;
-    if (currentLanguage === "tr" || currentLanguage === "en") node.textContent = strings[key] || EN[key] || node.textContent;
+    node.textContent = strings[key] || EN[key] || node.textContent;
   });
   const central = window.LectureSiftI18n;
   summaryStyle.innerHTML = [
@@ -181,6 +181,8 @@ function applyLanguage() {
     ["five_minute", central?.t("summary.fiveMinute", t("summaryFive")) || t("summaryFive")]
   ].map(([value, label]) => `<option value="${value}">${escapeHtml(label)}</option>`).join("");
   summaryStyle.value = "standard";
+  const autoOption = [...sourceLanguage.options].find(option => option.value === "auto");
+  if (autoOption) autoOption.textContent = t("auto");
   localStorage.setItem("lecturesift-ui", currentLanguage);
   ["classic", "audio", "visual"].forEach(renderFileList);
   syncTranslationChoice(); updateOperationUI();
@@ -234,7 +236,21 @@ function fallbackCatalog(currency) {
 }
 
 function planCopy(code) {
-  return (PLAN_COPY[currentLanguage] || PLAN_COPY.en)[code] || PLAN_COPY.en[code] || [code, "", ""];
+  const fallback = PLAN_COPY.tr[code] || [code, "", ""];
+  if (currentLanguage === "tr") return fallback;
+  if (currentLanguage === "en") return PLAN_COPY.en[code] || fallback;
+  const central = window.LectureSiftI18n;
+  const amount = {free:60, credit:180, lite:600, plus:2400, pro:6000, max:15000, business:10}[code];
+  const units = code === "business"
+    ? central?.t("plans.userUnit", "kullanıcı")
+    : code === "credit"
+      ? central?.t("plans.minuteUnit", "dakika")
+      : central?.t("plans.minutesPerMonth", "dk / ay");
+  return [
+    central?.t(`plan.${code}`, fallback[0]) || fallback[0],
+    central?.t(`plan.${code}.description`, fallback[1]) || fallback[1],
+    `${Number(amount).toLocaleString(central?.locale || navigator.language)} ${units}`,
+  ];
 }
 
 function detectedCurrency() {
@@ -355,14 +371,16 @@ function renderPlans() {
       export_formats: plan.export_formats || fallback[4],
     };
     const priceInfo = plan.display_price || plan.manual_price;
-    const price = priceInfo ? formatPrice(priceInfo.amount_minor, priceInfo.currency || billingCatalog.selected_currency) : (code === "free" ? formatPrice(0, billingCatalog.selected_currency) : (currentLanguage === "tr" ? "Teklif" : "Quote"));
+    const price = priceInfo ? formatPrice(priceInfo.amount_minor, priceInfo.currency || billingCatalog.selected_currency) : (code === "free" ? formatPrice(0, billingCatalog.selected_currency) : (window.LectureSiftI18n?.t("plans.quote", "Teklif") || "Teklif"));
     const suffix = plan.kind === "subscription" ? t("perMonth") : (plan.kind === "one_time" ? t("oneTime") : "");
-    const buttonLabel = current ? t("currentPlan") : (code === "business" ? (currentLanguage === "tr" ? "Bize ulaş" : "Contact us") : t("choosePlan"));
+    const buttonLabel = current ? t("currentPlan") : (code === "business" ? (window.LectureSiftI18n?.t("plans.contact", "Bize ulaş") || "Bize ulaş") : t("choosePlan"));
+    const summaryNames = {short:"summary.short",standard:"summary.standard",detailed:"summary.detailed",exam:"summary.exam",five_minute:"summary.fiveMinute"};
+    const local = (key, fallback) => window.LectureSiftI18n?.t(key, fallback) || fallback;
     return `<article class="plan-card ${plan.featured ? "featured" : ""}">
       ${plan.featured ? `<span class="plan-badge">${escapeHtml(t("popular"))}</span>` : ""}
       <h3>${escapeHtml(copy[0])}</h3><p>${escapeHtml(copy[1])}</p>
       <div class="plan-price">${escapeHtml(price)} <small>${escapeHtml(suffix)}</small></div>
-      <ul class="plan-features"><li>${escapeHtml(copy[2])}</li><li>${entitlements.quiz_questions ?? "∞"} ${currentLanguage === "tr" ? "quiz sorusu" : "quiz questions"}</li><li>${entitlements.flashcards ?? "∞"} ${currentLanguage === "tr" ? "bilgi kartı" : "flashcards"}</li><li>${escapeHtml((entitlements.summary_profiles || []).map(profile => ({short:"Hızlı",standard:"Standart",detailed:"Ayrıntılı",exam:"Sınav",five_minute:"5 dakika"}[profile] || profile)).join(", "))} ${currentLanguage === "tr" ? "özet" : "summary"}</li><li>${escapeHtml((entitlements.export_formats || []).join(", ").toUpperCase())}</li><li>${plan.priority === "priority" ? (currentLanguage === "tr" ? "Öncelikli işleme" : "Priority processing") : (currentLanguage === "tr" ? "Standart işleme" : "Standard processing")}</li></ul>
+      <ul class="plan-features"><li>${escapeHtml(copy[2])}</li><li>${entitlements.quiz_questions ?? "∞"} ${escapeHtml(local("plans.quizShort", "quiz sorusu"))}</li><li>${entitlements.flashcards ?? "∞"} ${escapeHtml(local("plans.cardsShort", "bilgi kartı"))}</li><li>${escapeHtml((entitlements.summary_profiles || []).map(profile => local(summaryNames[profile], profile)).join(", "))} ${escapeHtml(local("plans.summaryShort", "özet"))}</li><li>${escapeHtml((entitlements.export_formats || []).join(", ").toUpperCase())}</li><li>${escapeHtml(local(plan.priority === "priority" ? "priority.priority" : "priority.standard", plan.priority === "priority" ? "Öncelikli" : "Standart"))} ${escapeHtml(local("plans.processingSuffix", "işleme"))}</li></ul>
       <button class="plan-action" type="button" data-plan="${escapeHtml(code)}" ${current || code === "free" || code === "business" ? "disabled" : ""}>${escapeHtml(buttonLabel)}</button>
     </article>`;
   }).join("");
@@ -371,7 +389,7 @@ function renderPlans() {
 
 async function createTransferOrder(planCode) {
   if (!billingToken) { location.href = `/login.html?next=${encodeURIComponent("/#plans")}`; return; }
-  if (billingCurrency !== "TRY") { showError(currentLanguage === "tr" ? "Global kart ödemeleri PayTR etkinleştiğinde açılacak. Şimdilik havale için TRY seçebilirsin." : "Global card payments will open with the payment provider. Select TRY to use bank transfer for now.", "LS-BILL-20"); return; }
+  if (billingCurrency !== "TRY") { showError(window.LectureSiftI18n?.t("plans.globalPending", "Global kart ödemeleri PayTR etkinleştiğinde açılacak. Şimdilik havale için TRY seçebilirsin.") || "Global kart ödemeleri PayTR etkinleştiğinde açılacak. Şimdilik havale için TRY seçebilirsin.", "LS-BILL-20"); return; }
   const plan = billingCatalog.plans.find(item => item.code === planCode);
   const interval = plan?.kind === "one_time" ? "one_time" : "monthly";
   try {
@@ -539,8 +557,12 @@ function updateJobView(job) {
 }
 
 function showError(message, code = "LS-SYSTEM-01") {
-  const translated = (ERRORS[currentLanguage] || ERRORS.en)[code] || message || t("errorFallback");
-  $("errorMessage").textContent = translated; $("errorCode").textContent = `Hata kodu: ${code}`; $("errorBox").hidden = false;
+  const known = ERRORS.tr[code];
+  const translated = known
+    ? (currentLanguage === "tr" ? known : currentLanguage === "en" ? ERRORS.en[code] : window.LectureSiftI18n?.exact(known))
+    : message || t("errorFallback");
+  $("errorMessage").textContent = translated || message || t("errorFallback");
+  $("errorCode").textContent = `${window.LectureSiftI18n?.exact("Hata kodu") || "Hata kodu"}: ${code}`; $("errorBox").hidden = false;
   $("analyzeButton").disabled = false; clearTimeout(pollHandle); clearInterval(timerHandle);
 }
 $("closeError").onclick = () => { $("errorBox").hidden = true; };

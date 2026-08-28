@@ -75,6 +75,30 @@ def test_static_page_copy_covers_every_language_without_empty_entries():
     assert all(len(translations) == 13 for translations in catalog.values())
     assert all(all(str(value).strip() for value in translations) for translations in catalog.values())
     assert all("LSSEP" not in str(translations) for translations in catalog.values())
+    forbidden_brand_translations = (
+        "VortragSift",
+        "ConférenceSift",
+        "ConferenciaSift",
+        "LezioneSift",
+        "PalestraSift",
+        "ЛекцияSift",
+        "लेक्चरसिफ्ट",
+    )
+    assert not any(
+        variant in str(value)
+        for translations in catalog.values()
+        for value in translations
+        for variant in forbidden_brand_translations
+    )
+
+    rows = list(catalog.values())
+    for language_index in range(1, 13):
+        values = [translations[language_index] for translations in rows]
+        for offset in range(1, len(values)):
+            run = 0
+            for index in range(offset, len(values)):
+                run = run + 1 if values[index] == values[index - offset] else 0
+                assert run < 3, f"repeated translation block at language {language_index}, row {index}"
     for source in (
         "Hakları karşılaştır",
         "Profil bilgileri",
