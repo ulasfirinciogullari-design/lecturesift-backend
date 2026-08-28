@@ -18,7 +18,11 @@ INSTAGRAM_ADMIN_TOKEN = os.getenv("INSTAGRAM_ADMIN_TOKEN", "")
 INSTAGRAM_GRAPH_API_VERSION = os.getenv("INSTAGRAM_GRAPH_API_VERSION", "v23.0")
 INSTAGRAM_DAILY_AUTOMATION_ENABLED = os.getenv("INSTAGRAM_DAILY_AUTOMATION_ENABLED", "false").lower() == "true"
 INSTAGRAM_DAILY_MEDIA_TYPE = os.getenv("INSTAGRAM_DAILY_MEDIA_TYPE", "IMAGE").strip().upper()
-PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
+PUBLIC_BASE_URL = (
+    os.getenv("PUBLIC_BASE_URL")
+    or os.getenv("RENDER_EXTERNAL_URL")
+    or ""
+).rstrip("/")
 FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "https://lecturesift.com").rstrip("/")
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{WORK_DIR / 'billing.db'}")
 BILLING_SESSION_SECRET = os.getenv("BILLING_SESSION_SECRET", "")

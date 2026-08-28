@@ -192,7 +192,7 @@ def test_every_declared_interface_key_has_thirteen_translations():
 def test_dynamic_plan_descriptions_are_localized_and_account_uses_plan_label():
     script = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
     plans = (FRONTEND / "plans.js").read_text(encoding="utf-8")
-    for code in ("free", "credit", "lite", "plus", "pro", "max", "business"):
+    for code in ("free", "test", "credit", "lite", "plus", "pro", "max", "business"):
         payload = re.search(rf'^\s*"plan\.{code}\.description":\[(.*?)\],?$', script, re.MULTILINE)
         assert payload, code
         values = json.loads(f"[{payload.group(1)}]")
@@ -225,6 +225,8 @@ def test_profile_admin_bank_and_full_comparison_interfaces_are_present():
     assert 'href="/admin.html"' not in account
     assert all(value in plans for value in ("compareHead", "compareBody", "publicBankHolder"))
     assert "renderCompare" in plan_script and "/billing/manual-transfer" in plan_script
+    assert 'payment.sendReceiptTo' in plan_script
+    assert 'code !== "test" || currency === "TRY"' in plan_script
     assert "adminTokenForm" in admin and "adminOrders" in admin
     assert "adminReadiness" in admin
     assert "restoreRequestedJob" in workspace_script
