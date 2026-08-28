@@ -37,7 +37,18 @@ def test_plan_page_preserves_learning_entitlements_and_zero_decimal_prices():
 def test_owner_only_netlify_toolbar_is_hidden_on_every_site_layout():
     for stylesheet in ("styles.css", "auth.css", "legal.css"):
         content = (FRONTEND / stylesheet).read_text(encoding="utf-8")
-        assert "iframe#nl-hud-frame{display:none!important}" in content
+        assert "iframe#nl-hud-frame" in content
+        assert 'iframe[src^="https://app.netlify.com/cdp/"]{display:none!important}' in content
+
+
+def test_account_identity_and_localized_minutes_do_not_overflow_rtl_mobile():
+    style = (FRONTEND / "auth.css").read_text(encoding="utf-8")
+    auth = (FRONTEND / "auth.js").read_text(encoding="utf-8")
+    admin = (FRONTEND / "admin.js").read_text(encoding="utf-8")
+    assert ".account-hero>div{min-width:0;max-width:100%}" in style
+    assert "overflow-wrap:anywhere" in style
+    assert 't("unit.minuteShort", "dk")' in auth
+    assert 'adminT("unit.minuteShort", "dk")' in admin
 
 
 def test_required_product_and_legal_pages_exist():
@@ -114,6 +125,29 @@ def test_static_page_copy_covers_every_language_without_empty_entries():
         "KVKK aydınlatma ve gizlilik metni",
     ):
         assert source in catalog
+
+    central_rows = {
+        values[0]: values
+        for values in (
+            json.loads(f"[{payload}]")
+            for payload in re.findall(r'^\s*"[^"]+":\[(.*?)\],?$', (FRONTEND / "i18n.js").read_text(encoding="utf-8"), re.MULTILINE)
+        )
+    }
+    corrected_sources = (
+        "Yanlış",
+        "Cevabı göster",
+        "Biliyorum",
+        "Tekrar et",
+        "Planın, dakikaların ve ödemelerin bu hesaba bağlanır.",
+        "Dakika, quiz, bilgi kartı, özet ve dosya haklarını açıkça karşılaştır. Ülke ve para birimine göre yerelleştirilmiş fiyatı seç.",
+        "Planların bölgesel liste fiyatını seçtiğin para biriminde göstermek.",
+        "Video bağlantıdan alınıyor",
+    )
+    assert set(corrected_sources) <= central_rows.keys()
+    bad_fragments = ("&#", "[ترجمة", "actas", "atas", "회의록", "MOSTRAR")
+    bad_exact = {"Ripet", "Повторыть", "재교부"}
+    assert not any(fragment in value for source in corrected_sources for value in central_rows[source] for fragment in bad_fragments)
+    assert not any(value in bad_exact for source in corrected_sources for value in central_rows[source])
 
 
 def test_every_declared_interface_key_has_thirteen_translations():
