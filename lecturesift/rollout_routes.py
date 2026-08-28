@@ -152,16 +152,13 @@ def _user(authorization: str | None = Header(None)) -> dict:
 
 def _admin(authorization: str | None = Header(None)) -> dict:
     scheme, _, token = (authorization or "").partition(" ")
-    admin_tokens = tuple(
-        value for value in (config.BILLING_ADMIN_TOKEN, config.INSTAGRAM_ADMIN_TOKEN) if value
-    )
     admin_emails = set(config.BILLING_ADMIN_EMAILS)
     if config.LEGAL_OPERATOR_EMAIL:
         admin_emails.add(config.LEGAL_OPERATOR_EMAIL.casefold())
-    if not admin_tokens and not admin_emails:
+    if not config.BILLING_ADMIN_TOKEN and not admin_emails:
         raise HTTPException(503, detail={"code": "LS-BILL-03", "message": "Admin paneli henüz etkin değil."})
     if scheme.casefold() == "bearer" and token:
-        if any(hmac.compare_digest(token, value) for value in admin_tokens):
+        if config.BILLING_ADMIN_TOKEN and hmac.compare_digest(token, config.BILLING_ADMIN_TOKEN):
             return {"actor": "admin_token"}
         try:
             user = authenticate_session(token)

@@ -46,7 +46,6 @@ from .billing_service import (
 )
 from .config import (
     APP_VERSION,
-    BILLING_ADMIN_TOKEN,
     FRONTEND_BASE_URL,
     INSTAGRAM_ACCESS_TOKEN,
     INSTAGRAM_ACCOUNT_ID,
@@ -128,17 +127,14 @@ def _billing_user(authorization: str | None = Header(None)) -> dict:
 
 
 def _billing_admin(authorization: str | None = Header(None)) -> None:
-    admin_tokens = tuple(
-        token for token in (BILLING_ADMIN_TOKEN, config.INSTAGRAM_ADMIN_TOKEN) if token
-    )
     admin_emails = set(config.BILLING_ADMIN_EMAILS)
     if config.LEGAL_OPERATOR_EMAIL:
         admin_emails.add(config.LEGAL_OPERATOR_EMAIL.casefold())
-    if not admin_tokens and not admin_emails:
+    if not config.BILLING_ADMIN_TOKEN and not admin_emails:
         raise HTTPException(503, detail={"code": "LS-BILL-03", "message": "Ödeme onayı yönetimi etkin değil."})
     scheme, _, value = (authorization or "").partition(" ")
     if scheme.lower() == "bearer" and value:
-        if any(hmac.compare_digest(value, token) for token in admin_tokens):
+        if config.BILLING_ADMIN_TOKEN and hmac.compare_digest(value, config.BILLING_ADMIN_TOKEN):
             return
         try:
             user = authenticate_session(value)
