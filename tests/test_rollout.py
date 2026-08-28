@@ -98,12 +98,17 @@ def test_manual_order_admin_rejection_and_instagram_approval(monkeypatch):
     monkeypatch.setattr(config, "BILLING_BANK_IBAN", "TR000000000000000000000000")
     monkeypatch.setattr(config, "BILLING_BANK_ACCOUNT_HOLDER", "Test Holder")
     monkeypatch.setattr(config, "BILLING_SUPPORT_EMAIL", "support@example.com")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_NAME", "LectureSift Test")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_ADDRESS", "Test Address 1")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_COUNTRY", "TR")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_PHONE", "+905551112233")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_EMAIL", "support@example.com")
     monkeypatch.setattr(config, "BILLING_ADMIN_TOKEN", "admin-secret")
 
     order = client.post(
         "/billing/manual-transfer/orders",
         headers=auth(token),
-        json={"plan_code": "plus", "interval": "annual"},
+        json={"plan_code": "plus", "interval": "annual", "terms_accepted": True, "early_performance_requested": True},
     )
     assert order.status_code == 200
     reference = order.json()["order"]["reference"]
@@ -155,12 +160,17 @@ def test_refund_request_requires_paid_owned_order_and_tracks_manual_completion(m
     monkeypatch.setattr(config, "BILLING_BANK_IBAN", "TR000000000000000000000000")
     monkeypatch.setattr(config, "BILLING_BANK_ACCOUNT_HOLDER", "Test Holder")
     monkeypatch.setattr(config, "BILLING_SUPPORT_EMAIL", "support@example.com")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_NAME", "LectureSift Test")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_ADDRESS", "Test Address 1")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_COUNTRY", "TR")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_PHONE", "+905551112233")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_EMAIL", "support@example.com")
     monkeypatch.setattr(config, "BILLING_ADMIN_TOKEN", "admin-secret")
 
     created = client.post(
         "/billing/manual-transfer/orders",
         headers=auth(token),
-        json={"plan_code": "plus", "interval": "monthly"},
+        json={"plan_code": "plus", "interval": "monthly", "terms_accepted": True, "early_performance_requested": True},
     ).json()["order"]
     reference = created["reference"]
     unpaid = client.post(

@@ -181,6 +181,28 @@ def test_secure_card_checkout_is_prepared_without_collecting_card_details():
     )[0]
     assert "data-rollout-plan" not in plans_hook
     assert "renderPlans =" not in plans_hook
+    assert all(value in plans for value in ("checkoutTerms", "checkoutEarlyPerformance"))
+    assert "terms_accepted" in script and "early_performance_requested" in script
+    assert "reportValidity()" in script
+
+
+def test_legal_operator_identity_is_public_only_after_configuration():
+    i18n = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    operator = (FRONTEND / "legal-operator.js").read_text(encoding="utf-8")
+    blueprint = (FRONTEND.parent / "render.yaml").read_text(encoding="utf-8")
+    assert 'legalOperatorScript.src = "/legal-operator.js?v=1"' in i18n
+    assert "/billing/operator" in operator
+    assert "if (!operator?.configured) return" in operator
+    assert all(
+        key in blueprint
+        for key in (
+            "LEGAL_OPERATOR_NAME",
+            "LEGAL_OPERATOR_ADDRESS",
+            "LEGAL_OPERATOR_COUNTRY",
+            "LEGAL_OPERATOR_PHONE",
+            "LEGAL_OPERATOR_EMAIL",
+        )
+    )
 
 
 def test_runtime_translation_keys_exist_for_every_dynamic_message():
@@ -195,6 +217,20 @@ def test_runtime_translation_keys_exist_for_every_dynamic_message():
     assert translation_rows
     assert all(len(json.loads(row)) == 13 for row in translation_rows)
     assert all(all(str(value).strip() for value in json.loads(row)) for row in translation_rows)
+
+
+def test_account_plans_admin_and_legal_dynamic_copy_is_fully_localized():
+    catalog_script = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    catalog_keys = set(re.findall(r'^\s*,?["\']([^"\']+)["\']\s*:\s*\[', catalog_script, re.MULTILINE))
+    scripts = {
+        "auth.js": r'\bt\(["\']([^"\']+)["\']',
+        "plans.js": r'\bpt\(["\']([^"\']+)["\']',
+        "admin.js": r'\badminT\(["\']([^"\']+)["\']',
+        "legal-operator.js": r'\bt\(["\']([^"\']+)["\']',
+    }
+    for filename, pattern in scripts.items():
+        used = set(re.findall(pattern, (FRONTEND / filename).read_text(encoding="utf-8")))
+        assert used <= catalog_keys, (filename, sorted(used - catalog_keys))
 
 
 def test_private_pages_are_excluded_from_search_indexing():

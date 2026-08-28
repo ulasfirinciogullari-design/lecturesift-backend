@@ -25,6 +25,7 @@ from .billing_service import (
     MANUAL_ORDERS,
     METADATA,
     PAYMENT_ORDERS,
+    PAYMENT_CONSENTS,
     SUBSCRIPTIONS,
     USAGE_EVENTS,
     USERS,
@@ -243,6 +244,19 @@ def export_account_data(user_id: str) -> dict[str, Any]:
             .where(REFUND_REQUESTS.c.user_id == user_id)
             .order_by(REFUND_REQUESTS.c.created_at.desc())
         ).all()
+        payment_consents = connection.execute(
+            select(
+                PAYMENT_CONSENTS.c.order_reference,
+                PAYMENT_CONSENTS.c.terms_version,
+                PAYMENT_CONSENTS.c.privacy_version,
+                PAYMENT_CONSENTS.c.terms_accepted,
+                PAYMENT_CONSENTS.c.early_performance_requested,
+                PAYMENT_CONSENTS.c.language,
+                PAYMENT_CONSENTS.c.accepted_at,
+            )
+            .where(PAYMENT_CONSENTS.c.user_id == user_id)
+            .order_by(PAYMENT_CONSENTS.c.accepted_at.desc())
+        ).all()
     return {
         "generated_at": utcnow().isoformat(),
         "account": account,
@@ -309,6 +323,18 @@ def export_account_data(user_id: str) -> dict[str, Any]:
                 "updated_at": row.updated_at.isoformat(),
             }
             for row in refund_requests
+        ],
+        "payment_consents": [
+            {
+                "order_reference": row.order_reference,
+                "terms_version": row.terms_version,
+                "privacy_version": row.privacy_version,
+                "terms_accepted": bool(row.terms_accepted),
+                "early_performance_requested": bool(row.early_performance_requested),
+                "language": row.language,
+                "accepted_at": row.accepted_at.isoformat(),
+            }
+            for row in payment_consents
         ],
     }
 

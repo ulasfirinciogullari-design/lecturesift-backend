@@ -54,6 +54,20 @@ services:
         value: support@lecturesift.com
       - key: BILLING_SUPPORT_EMAIL
         value: support@lecturesift.com
+      - key: LEGAL_OPERATOR_NAME
+        sync: false
+      - key: LEGAL_OPERATOR_ADDRESS
+        sync: false
+      - key: LEGAL_OPERATOR_COUNTRY
+        sync: false
+      - key: LEGAL_OPERATOR_PHONE
+        sync: false
+      - key: LEGAL_OPERATOR_EMAIL
+        sync: false
+      - key: LEGAL_TAX_ID
+        sync: false
+      - key: LEGAL_REGISTRATION_ID
+        sync: false
       - key: EMAIL_PROVIDER
         value: resend
       - key: EMAIL_FROM

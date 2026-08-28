@@ -43,6 +43,11 @@ def test_subscription_overflow_spends_extra_minutes(monkeypatch):
     monkeypatch.setattr(config, "BILLING_BANK_IBAN", "TR000000000000000000000000")
     monkeypatch.setattr(config, "BILLING_BANK_ACCOUNT_HOLDER", "Test Holder")
     monkeypatch.setattr(config, "BILLING_SUPPORT_EMAIL", "support@example.com")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_NAME", "LectureSift Test")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_ADDRESS", "Test Address 1")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_COUNTRY", "TR")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_PHONE", "+905551112233")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_EMAIL", "support@example.com")
     order = create_manual_order(user_id, "plus", "monthly")
     approve_manual_order(order["reference"])
     with ENGINE.begin() as connection:

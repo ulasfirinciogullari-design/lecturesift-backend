@@ -98,6 +98,8 @@ function renderAdminReadiness(billing, runtime) {
   const checks = [
     [adminT("admin.database", "Kalıcı veritabanı"), Boolean(billing?.database?.connected && billing?.database?.persistent)],
     [adminT("admin.emailDelivery", "E-posta gönderimi"), Boolean(billing?.email_delivery_configured)],
+    [adminT("admin.commerceIdentity", "Satıcı/sağlayıcı kimliği"), Boolean(billing?.commerce_identity?.configured)],
+    [adminT("admin.bankTransfer", "Havale hesap bilgileri"), Boolean(billing?.payments?.bank_transfer?.configured)],
     [adminT("admin.cardPayments", "Kartlı ödeme"), Boolean(billing?.payments?.paytr?.configured)],
     [adminT("admin.durableProcessing", "Dayanıklı işleme altyapısı"), Boolean(runtime?.durable_processing_ready)],
     [adminT("admin.databaseRecovery", "Veritabanı geri yükleme"), Boolean(runtime?.recovery?.database_managed_backup_confirmed)],

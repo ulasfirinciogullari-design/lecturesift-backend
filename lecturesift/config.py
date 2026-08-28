@@ -37,6 +37,13 @@ PAYTR_TEST_MODE = os.getenv("PAYTR_TEST_MODE", "true").lower() == "true"
 PAYTR_DEBUG = os.getenv("PAYTR_DEBUG", "false").lower() == "true"
 CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "support@lecturesift.com").strip()
 BILLING_SUPPORT_EMAIL = os.getenv("BILLING_SUPPORT_EMAIL", CONTACT_EMAIL).strip()
+LEGAL_OPERATOR_NAME = os.getenv("LEGAL_OPERATOR_NAME", "").strip()
+LEGAL_OPERATOR_ADDRESS = os.getenv("LEGAL_OPERATOR_ADDRESS", "").strip()
+LEGAL_OPERATOR_COUNTRY = os.getenv("LEGAL_OPERATOR_COUNTRY", "").strip()
+LEGAL_OPERATOR_PHONE = os.getenv("LEGAL_OPERATOR_PHONE", "").strip()
+LEGAL_OPERATOR_EMAIL = os.getenv("LEGAL_OPERATOR_EMAIL", BILLING_SUPPORT_EMAIL).strip()
+LEGAL_TAX_ID = os.getenv("LEGAL_TAX_ID", "").strip()
+LEGAL_REGISTRATION_ID = os.getenv("LEGAL_REGISTRATION_ID", "").strip()
 EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "none").strip().lower()
 EMAIL_FROM = os.getenv("EMAIL_FROM", "").strip()
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()

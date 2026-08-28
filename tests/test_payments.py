@@ -30,6 +30,11 @@ def _configure(monkeypatch) -> None:
     monkeypatch.setattr(config, "PAYTR_MERCHANT_SALT", "merchant-salt")
     monkeypatch.setattr(config, "PAYTR_TEST_MODE", True)
     monkeypatch.setattr(config, "PAYTR_DEBUG", False)
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_NAME", "LectureSift Test")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_ADDRESS", "Test Address 1")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_COUNTRY", "TR")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_PHONE", "+905551112233")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_EMAIL", "billing@example.com")
 
 
 def _callback_hash(reference: str, status: str, total_amount: str) -> str:
@@ -71,6 +76,8 @@ def test_paytr_checkout_and_callback_are_signed_and_idempotent(monkeypatch):
             "billing_address": "Örnek Mahallesi 1, İstanbul",
             "phone": "+905551112233",
             "language": "tr",
+            "terms_accepted": True,
+            "early_performance_requested": True,
         },
     )
     assert checkout.status_code == 200
@@ -107,6 +114,11 @@ def test_paytr_checkout_and_callback_are_signed_and_idempotent(monkeypatch):
     assert account["plan"]["code"] == "plus"
     assert account["payment_orders"][0]["status"] == "paid"
     assert account["payment_orders"][0]["provider_amount_minor"] == 71300
+    exported = client.get(
+        "/billing/me/export", headers={"Authorization": f"Bearer {token}"}
+    ).json()["export"]
+    assert exported["payment_consents"][0]["order_reference"] == reference
+    assert "ip_hash" not in exported["payment_consents"][0]
 
 
 def test_paytr_callback_rejects_bad_hash_and_amount(monkeypatch):
@@ -132,6 +144,8 @@ def test_paytr_callback_rejects_bad_hash_and_amount(monkeypatch):
             "billing_address": "Örnek Mahallesi 2, Ankara",
             "phone": "+905551112233",
             "language": "en",
+            "terms_accepted": True,
+            "early_performance_requested": True,
         },
     ).json()
     reference = checkout["order"]["reference"]

@@ -155,6 +155,21 @@ PAYMENT_ORDERS = Table(
     Column("updated_at", DateTime(timezone=True), nullable=False),
 )
 
+PAYMENT_CONSENTS = Table(
+    "billing_payment_consents",
+    METADATA,
+    Column("order_reference", String(64), primary_key=True),
+    Column("user_id", String(36), ForeignKey("billing_users.id"), nullable=False, index=True),
+    Column("terms_version", String(24), nullable=False),
+    Column("privacy_version", String(24), nullable=False),
+    Column("terms_accepted", Integer, nullable=False),
+    Column("early_performance_requested", Integer, nullable=False),
+    Column("language", String(8), nullable=False),
+    Column("ip_hash", String(64), nullable=False),
+    Column("user_agent_hash", String(64), nullable=False),
+    Column("accepted_at", DateTime(timezone=True), nullable=False),
+)
+
 USAGE_EVENTS = Table(
     "billing_usage_events",
     METADATA,
@@ -190,6 +205,61 @@ def billing_database_health() -> dict:
     init_billing_database()
     backend = ENGINE.url.get_backend_name()
     return {"connected": True, "persistent": backend == "postgresql", "backend": backend}
+
+
+def commerce_identity() -> dict:
+    required = {
+        "operator_name": config.LEGAL_OPERATOR_NAME,
+        "address": config.LEGAL_OPERATOR_ADDRESS,
+        "country": config.LEGAL_OPERATOR_COUNTRY,
+        "phone": config.LEGAL_OPERATOR_PHONE,
+        "email": config.LEGAL_OPERATOR_EMAIL,
+    }
+    configured = all(required.values())
+    return {
+        "configured": configured,
+        **({
+            **required,
+            "tax_id": config.LEGAL_TAX_ID or None,
+            "registration_id": config.LEGAL_REGISTRATION_ID or None,
+        } if configured else {}),
+    }
+
+
+def record_payment_consent(
+    order_reference: str,
+    user_id: str,
+    *,
+    terms_accepted: bool,
+    early_performance_requested: bool,
+    language: str,
+    client_ip: str,
+    user_agent: str,
+) -> None:
+    if not terms_accepted or not early_performance_requested:
+        raise BillingError("Ödeme öncesi bilgilendirmeyi ve hizmetin hemen başlamasını açıkça onaylamalısın.")
+    init_billing_database()
+    secret = config.BILLING_SESSION_SECRET or "lecturesift-consent"
+    ip_hash = hashlib.sha256(f"{secret}|{client_ip}".encode("utf-8")).hexdigest()
+    user_agent_hash = hashlib.sha256(f"{secret}|{user_agent[:500]}".encode("utf-8")).hexdigest()
+    try:
+        with ENGINE.begin() as connection:
+            connection.execute(
+                PAYMENT_CONSENTS.insert().values(
+                    order_reference=order_reference,
+                    user_id=user_id,
+                    terms_version="2026-08-28",
+                    privacy_version="2.0-2026-08-28",
+                    terms_accepted=1,
+                    early_performance_requested=1,
+                    language=(language or "tr")[:8],
+                    ip_hash=ip_hash,
+                    user_agent_hash=user_agent_hash,
+                    accepted_at=utcnow(),
+                )
+            )
+    except IntegrityError:
+        return
 
 
 def _hash_password(password: str, salt: bytes) -> str:
@@ -1133,6 +1203,7 @@ def bank_transfer_available() -> bool:
             config.BILLING_BANK_IBAN,
             config.BILLING_BANK_ACCOUNT_HOLDER,
             config.BILLING_SUPPORT_EMAIL,
+            commerce_identity()["configured"],
         )
     )
 
@@ -1141,6 +1212,7 @@ def manual_transfer_details() -> dict:
     available = bank_transfer_available()
     return {
         "available": available,
+        "commerce_identity": commerce_identity(),
         "requires_account": True,
         "activation": "manual_after_bank_confirmation",
         "bank": (

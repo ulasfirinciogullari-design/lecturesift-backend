@@ -27,12 +27,14 @@ from .billing_service import (
     billing_database_health,
     cancel_active_subscription,
     change_account_password,
+    commerce_identity,
     create_password_reset_token,
     create_verification_token,
     create_manual_order,
     login_user,
     logout_user,
     manual_transfer_details,
+    record_payment_consent,
     register_user,
     require_download_entitlement,
     reset_password,
@@ -260,6 +262,9 @@ class BillingPasswordResetRequest(BillingTokenRequest):
 class ManualOrderRequest(BaseModel):
     plan_code: str
     interval: str = "monthly"
+    terms_accepted: bool = False
+    early_performance_requested: bool = False
+    language: str = "tr"
 
 
 class BillingPreferencesRequest(BaseModel):
@@ -285,6 +290,8 @@ class BillingCheckoutRequest(BaseModel):
     billing_address: str
     phone: str = ""
     language: str = "tr"
+    terms_accepted: bool = False
+    early_performance_requested: bool = False
 
 
 class LessonQuestionRequest(BaseModel):
@@ -519,7 +526,13 @@ def billing_providers() -> dict:
         {**provider, **paytr} if provider.get("code") == "paytr" else provider
         for provider in body["providers"]
     ]
+    body["commerce_identity"] = commerce_identity()
     return body
+
+
+@app.get("/billing/operator")
+def billing_operator() -> dict:
+    return commerce_identity()
 
 
 @app.get("/billing/manual-transfer")
@@ -537,7 +550,11 @@ def billing_health() -> dict:
         "ok": True,
         "database": database,
         "email_delivery_configured": email_delivery_configured(),
-        "payments": {"paytr": paytr_public_status()},
+        "payments": {
+            "paytr": paytr_public_status(),
+            "bank_transfer": {"configured": manual_transfer_details()["available"]},
+        },
+        "commerce_identity": commerce_identity(),
     }
 
 
@@ -726,10 +743,22 @@ def billing_cancel_subscription(user: dict = Depends(_billing_user)) -> dict:
 @app.post("/billing/manual-transfer/orders")
 def billing_create_manual_order(
     payload: ManualOrderRequest,
+    request: Request,
     user: dict = Depends(_billing_user),
 ) -> dict:
     try:
+        if not payload.terms_accepted or not payload.early_performance_requested:
+            raise BillingError("Ödeme öncesi bilgilendirmeyi ve hizmetin hemen başlamasını açıkça onaylamalısın.")
         order = create_manual_order(user["id"], payload.plan_code, payload.interval)
+        record_payment_consent(
+            order["reference"],
+            user["id"],
+            terms_accepted=payload.terms_accepted,
+            early_performance_requested=payload.early_performance_requested,
+            language=payload.language,
+            client_ip=_client_ip(request),
+            user_agent=request.headers.get("user-agent", ""),
+        )
     except BillingConfigurationError as exc:
         raise HTTPException(503, detail={"code": "LS-BILL-07", "message": str(exc)}) from exc
     except BillingError as exc:
@@ -754,6 +783,9 @@ def billing_create_checkout(
             billing_address=payload.billing_address,
             phone=payload.phone,
             language=payload.language,
+            terms_accepted=payload.terms_accepted,
+            early_performance_requested=payload.early_performance_requested,
+            user_agent=request.headers.get("user-agent", ""),
         )
     except BillingConfigurationError as exc:
         raise HTTPException(503, detail={"code": "LS-PAY-01", "message": str(exc)}) from exc

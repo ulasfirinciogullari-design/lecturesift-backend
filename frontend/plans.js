@@ -54,6 +54,7 @@ const FALLBACK_PRICES = {
 let catalog = null;
 let account = null;
 let providers = [];
+let commerceIdentity = {configured: false};
 let currency = "TRY";
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({
@@ -258,9 +259,13 @@ async function buy(planCode, interval = "monthly") {
   $("checkoutInterval").value = interval;
   $("checkoutTitle").textContent = planLabel(planCode);
   $("checkoutPhone").value = account?.user?.phone || "";
-  $("checkoutCardButton").disabled = !paytr.configured || !paytr.currencies?.includes(currency);
-  $("checkoutBankButton").disabled = currency !== "TRY";
-  $("checkoutNotice").textContent = paytr.configured
+  $("checkoutTerms").checked = false;
+  $("checkoutEarlyPerformance").checked = false;
+  $("checkoutCardButton").disabled = !commerceIdentity.configured || !paytr.configured || !paytr.currencies?.includes(currency);
+  $("checkoutBankButton").disabled = !commerceIdentity.configured || currency !== "TRY";
+  $("checkoutNotice").textContent = !commerceIdentity.configured
+    ? pt("payment.commercePending", "Satıcı/sağlayıcı kimliği ve iletişim bilgileri tamamlanmadan ödeme açılamaz.")
+    : paytr.configured
     ? pt("payment.providerReady", "Kartlı ödeme kullanıma hazır.")
     : pt("payment.providerPending", "Kartlı ödeme için PayTR mağaza bilgileri bekleniyor.");
   $("checkoutForm").hidden = false;
@@ -269,10 +274,17 @@ async function buy(planCode, interval = "monthly") {
 }
 
 async function createTransfer(planCode, interval) {
+  if (!$("checkoutForm").reportValidity()) return;
   try {
     const body = await api("/billing/manual-transfer/orders", {
       method: "POST",
-      body: JSON.stringify({plan_code: planCode, interval}),
+      body: JSON.stringify({
+        plan_code: planCode,
+        interval,
+        terms_accepted:$("checkoutTerms").checked,
+        early_performance_requested:$("checkoutEarlyPerformance").checked,
+        language:PLANS_I18N.language,
+      }),
     });
     const order = body.order;
     $("transferReference").textContent = order.order_number || order.reference;
@@ -298,6 +310,7 @@ async function load() {
       api("/billing/providers"),
     ]);
     providers = providerBody.providers || [];
+    commerceIdentity = providerBody.commerce_identity || {configured:false};
     catalog = normalizeCatalog(remote, selected);
     try { account = (await api("/billing/me")).account; } catch { account = null; }
     renderAccount();
@@ -335,6 +348,8 @@ $("checkoutForm").addEventListener("submit", async event => {
         billing_address: $("checkoutAddress").value.trim(),
         phone: $("checkoutPhone").value.trim(),
         language: PLANS_I18N.language,
+        terms_accepted:$("checkoutTerms").checked,
+        early_performance_requested:$("checkoutEarlyPerformance").checked,
       }),
     });
     $("checkoutForm").hidden = true;

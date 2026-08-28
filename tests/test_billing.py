@@ -231,11 +231,16 @@ def test_manual_transfer_order_and_admin_approval(monkeypatch):
     monkeypatch.setattr(config, "BILLING_BANK_IBAN", "TR000000000000000000000000")
     monkeypatch.setattr(config, "BILLING_BANK_ACCOUNT_HOLDER", "LectureSift Test")
     monkeypatch.setattr(config, "BILLING_SUPPORT_EMAIL", "billing@example.com")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_NAME", "LectureSift Test")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_ADDRESS", "Test Address 1")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_COUNTRY", "TR")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_PHONE", "+905551112233")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_EMAIL", "billing@example.com")
     monkeypatch.setattr(app_module, "BILLING_ADMIN_TOKEN", "test-admin-token")
 
     response = client.post(
         "/billing/manual-transfer/orders",
-        json={"plan_code": "plus", "interval": "monthly"},
+        json={"plan_code": "plus", "interval": "monthly", "terms_accepted": True, "early_performance_requested": True},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
@@ -292,6 +297,33 @@ def test_manual_transfer_order_and_admin_approval(monkeypatch):
     assert repeated_cancel.json()["account"]["plan"]["code"] == "plus"
 
 
+def test_payment_orders_fail_closed_without_identity_or_explicit_consent(monkeypatch):
+    client = TestClient(app)
+    _, token = _new_account(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    monkeypatch.setattr(config, "BILLING_BANK_IBAN", "TR000000000000000000000000")
+    monkeypatch.setattr(config, "BILLING_BANK_ACCOUNT_HOLDER", "LectureSift Test")
+    monkeypatch.setattr(config, "BILLING_SUPPORT_EMAIL", "billing@example.com")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_NAME", "")
+    missing_identity = client.post(
+        "/billing/manual-transfer/orders",
+        headers=headers,
+        json={"plan_code": "plus", "interval": "monthly", "terms_accepted": True, "early_performance_requested": True},
+    )
+    assert missing_identity.status_code == 503
+
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_NAME", "LectureSift Test")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_ADDRESS", "Test Address 1")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_COUNTRY", "TR")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_PHONE", "+905551112233")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_EMAIL", "billing@example.com")
+    missing_consent = client.post(
+        "/billing/manual-transfer/orders",
+        headers=headers,
+        json={"plan_code": "plus", "interval": "monthly"},
+    )
+    assert missing_consent.status_code == 400
+
 def test_job_creation_requires_account():
     response = TestClient(app).post("/jobs", files={"file": ("notes.txt", b"not a video", "text/plain")})
     assert response.status_code == 401
@@ -325,6 +357,11 @@ def test_free_results_are_preview_only_until_a_paid_credit_purchase(tmp_path, mo
     monkeypatch.setattr(config, "BILLING_BANK_IBAN", "TR000000000000000000000000")
     monkeypatch.setattr(config, "BILLING_BANK_ACCOUNT_HOLDER", "LectureSift Test")
     monkeypatch.setattr(config, "BILLING_SUPPORT_EMAIL", "billing@example.com")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_NAME", "LectureSift Test")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_ADDRESS", "Test Address 1")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_COUNTRY", "TR")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_PHONE", "+905551112233")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_EMAIL", "billing@example.com")
     order = create_manual_order(user_id, "credit", "one_time")
     approve_manual_order(order["reference"])
 

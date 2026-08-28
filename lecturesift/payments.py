@@ -15,9 +15,11 @@ from .billing_service import (
     BillingConfigurationError,
     BillingError,
     complete_payment_order,
+    commerce_identity,
     create_payment_order,
     mark_payment_order_token_failed,
     payment_order,
+    record_payment_consent,
 )
 
 
@@ -74,9 +76,16 @@ def create_paytr_checkout(
     billing_address: str,
     phone: str,
     language: str,
+    terms_accepted: bool,
+    early_performance_requested: bool,
+    user_agent: str,
 ) -> dict:
     if not paytr_configured():
         raise BillingConfigurationError("PayTR mağaza bilgileri henüz etkinleştirilmemiş.")
+    if not commerce_identity()["configured"]:
+        raise BillingConfigurationError("Satıcı/sağlayıcı kimliği ve iletişim bilgileri tamamlanmadan ödeme açılamaz.")
+    if not terms_accepted or not early_performance_requested:
+        raise BillingError("Ödeme öncesi bilgilendirmeyi ve hizmetin hemen başlamasını açıkça onaylamalısın.")
     selected_currency = currency.strip().upper()
     paytr_currency = PAYTR_CURRENCIES.get(selected_currency)
     if not paytr_currency:
@@ -91,6 +100,15 @@ def create_paytr_checkout(
 
     order = create_payment_order(user["id"], "paytr", plan_code, interval, selected_currency)
     reference = order["reference"]
+    record_payment_consent(
+        reference,
+        user["id"],
+        terms_accepted=terms_accepted,
+        early_performance_requested=early_performance_requested,
+        language=language,
+        client_ip=selected_ip,
+        user_agent=user_agent,
+    )
     amount = str(int(order["amount_minor"]))
     display_amount = f"{Decimal(order['amount_minor']) / Decimal(100):.2f}"
     basket = base64.b64encode(
