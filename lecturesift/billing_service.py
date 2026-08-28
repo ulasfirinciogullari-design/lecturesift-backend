@@ -1304,6 +1304,27 @@ def admin_billing_overview(limit: int = 100) -> dict:
     now = utcnow()
     with ENGINE.connect() as connection:
         user_count = int(connection.execute(select(func.count()).select_from(USERS)).scalar_one())
+        users_24h = int(
+            connection.execute(
+                select(func.count()).select_from(USERS).where(
+                    USERS.c.created_at >= now - timedelta(hours=24)
+                )
+            ).scalar_one()
+        )
+        users_7d = int(
+            connection.execute(
+                select(func.count()).select_from(USERS).where(
+                    USERS.c.created_at >= now - timedelta(days=7)
+                )
+            ).scalar_one()
+        )
+        users_30d = int(
+            connection.execute(
+                select(func.count()).select_from(USERS).where(
+                    USERS.c.created_at >= now - timedelta(days=30)
+                )
+            ).scalar_one()
+        )
         verified_count = int(
             connection.execute(
                 select(func.count()).select_from(USER_PROFILES).where(
@@ -1333,6 +1354,37 @@ def admin_billing_overview(limit: int = 100) -> dict:
                 )
             ).scalar_one()
         )
+        manual_paid_count = int(
+            connection.execute(
+                select(func.count()).select_from(MANUAL_ORDERS).where(
+                    MANUAL_ORDERS.c.status == "paid"
+                )
+            ).scalar_one()
+        )
+        card_paid_count = int(
+            connection.execute(
+                select(func.count()).select_from(PAYMENT_ORDERS).where(
+                    PAYMENT_ORDERS.c.status == "paid"
+                )
+            ).scalar_one()
+        )
+        failed_order_count = int(
+            connection.execute(
+                select(func.count()).select_from(PAYMENT_ORDERS).where(
+                    PAYMENT_ORDERS.c.status.in_(("failed", "token_failed", "cancelled"))
+                )
+            ).scalar_one()
+        )
+        revenue_by_currency: dict[str, int] = {}
+        for table in (MANUAL_ORDERS, PAYMENT_ORDERS):
+            revenue_rows = connection.execute(
+                select(table.c.currency, func.coalesce(func.sum(table.c.amount_minor), 0))
+                .where(table.c.status == "paid")
+                .group_by(table.c.currency)
+            ).all()
+            for currency, amount_minor in revenue_rows:
+                code = str(currency or "TRY").upper()
+                revenue_by_currency[code] = revenue_by_currency.get(code, 0) + int(amount_minor or 0)
         order_rows = connection.execute(
             select(
                 MANUAL_ORDERS,
@@ -1377,9 +1429,16 @@ def admin_billing_overview(limit: int = 100) -> dict:
         "counts": {
             "users": user_count,
             "verified_users": verified_count,
+            "users_24h": users_24h,
+            "users_7d": users_7d,
+            "users_30d": users_30d,
             "pending_orders": pending_count,
+            "paid_orders": manual_paid_count + card_paid_count,
+            "failed_orders": failed_order_count,
             "active_subscriptions": active_subscription_count,
         },
+        "verification_rate": round((verified_count / user_count * 100) if user_count else 0, 1),
+        "revenue_by_currency": dict(sorted(revenue_by_currency.items())),
         "orders": sorted([
             {
                 **_public_manual_order(row),

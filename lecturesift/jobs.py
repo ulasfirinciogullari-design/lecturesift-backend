@@ -255,6 +255,31 @@ class JobStore:
         owned.sort(key=lambda item: float(item.get("created", 0)), reverse=True)
         return owned[: max(1, min(100, int(limit)))]
 
+    def list_for_admin(self, limit: int = 100) -> list[dict[str, Any]]:
+        """Return a secret-free, newest-first operational view of all jobs."""
+        safe_limit = max(1, min(250, int(limit)))
+        with self._lock:
+            self._refresh_locked()
+            job_ids = sorted(
+                self._jobs,
+                key=lambda job_id: float(self._jobs[job_id].get("created", 0)),
+                reverse=True,
+            )[:safe_limit]
+            owners = {
+                job_id: str(
+                    (self._jobs[job_id].get("options") or {}).get("billing_user_id") or ""
+                )
+                for job_id in job_ids
+            }
+        jobs: list[dict[str, Any]] = []
+        for job_id in job_ids:
+            item = self.public(job_id)
+            if not item:
+                continue
+            item["owner_id"] = owners[job_id] or None
+            jobs.append(item)
+        return jobs
+
     def delete_for_user(self, user_id: str) -> dict[str, int]:
         removed: list[tuple[str, Path]] = []
         with self._lock, self._distributed_write_lock():
