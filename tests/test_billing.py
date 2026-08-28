@@ -349,3 +349,40 @@ def test_job_status_is_visible_only_to_its_owner(tmp_path):
     assert client.get(
         f"/jobs/{job_id}", headers={"Authorization": f"Bearer {other_token}"}
     ).status_code == 404
+
+
+def test_lesson_question_is_scoped_to_completed_job_owner(tmp_path, monkeypatch):
+    client = TestClient(app)
+    _, owner_token = _new_account(client)
+    _, other_token = _new_account(client)
+    owner_headers = {"Authorization": f"Bearer {owner_token}"}
+    owner = client.get("/billing/me", headers=owner_headers).json()["account"]["user"]
+    job_id = f"ask-{uuid.uuid4()}"
+    (tmp_path / "result.json").write_text(
+        '{"options":{"output_language":"tr"},"summary":"Test"}',
+        encoding="utf-8",
+    )
+    JOBS.create(job_id, tmp_path, {"billing_user_id": owner["id"], "output_language": "tr"})
+    JOBS.update(job_id, status="done")
+    monkeypatch.setattr(
+        app_module,
+        "answer_lesson_question",
+        lambda result, question, language: {
+            "answer": "Yalnızca ders içeriğinden yanıt.",
+            "citations": [{"timestamp": "00:01:00", "excerpt": "Dayanak"}],
+            "insufficient": False,
+        },
+    )
+
+    response = client.post(
+        f"/jobs/{job_id}/ask",
+        headers=owner_headers,
+        json={"question": "Bu konu nedir?"},
+    )
+    assert response.status_code == 200
+    assert response.json()["citations"][0]["timestamp"] == "00:01:00"
+    assert client.post(
+        f"/jobs/{job_id}/ask",
+        headers={"Authorization": f"Bearer {other_token}"},
+        json={"question": "Bu konu nedir?"},
+    ).status_code == 404

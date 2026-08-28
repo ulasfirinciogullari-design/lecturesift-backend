@@ -12,6 +12,7 @@ _CLIENT = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 LONG_TRANSCRIPT_THRESHOLD = 85_000
 STUDY_SECTION_CHARACTERS = 28_000
 MAX_SYNTHESIS_CHARACTERS = 85_000
+QUESTION_CONTEXT_SEGMENTS = 18
 
 
 def _client() -> OpenAI:
@@ -92,6 +93,114 @@ def _safe_json(value: str) -> dict:
     cleaned = re.sub(r"^```(?:json)?\s*", "", value.strip(), flags=re.I)
     cleaned = re.sub(r"\s*```$", "", cleaned)
     return json.loads(cleaned)
+
+
+def answer_lesson_question(result: dict, question: str, output_language: str) -> dict:
+    """Answer from one completed lesson and return only validated source markers."""
+    normalized_question = " ".join(question.strip().split())
+    if len(normalized_question) < 3 or len(normalized_question) > 500:
+        raise LectureSiftError(
+            "LS-AI-06",
+            "Sorun 3 ile 500 karakter arasında olmalı.",
+            "Lesson question length is outside the accepted range.",
+            400,
+        )
+
+    raw_segments = result.get("transcript_segments") or []
+    candidates: list[dict] = []
+    for index, item in enumerate(raw_segments):
+        text = " ".join(str(item.get("text") or "").split())
+        if text:
+            candidates.append(
+                {
+                    "id": f"S{index + 1}",
+                    "timestamp": str(item.get("timestamp") or "00:00:00"),
+                    "speaker": str(item.get("speaker") or "") or None,
+                    "text": text[:1800],
+                }
+            )
+    if not candidates:
+        for index, chunk in enumerate(_chunk_text(str(result.get("transcript_original") or ""), 1600)):
+            candidates.append(
+                {"id": f"S{index + 1}", "timestamp": "00:00:00", "speaker": None, "text": chunk}
+            )
+
+    terms = {
+        token.casefold()
+        for token in re.findall(r"[^\W_]{3,}", normalized_question, flags=re.UNICODE)
+    }
+    ranked = sorted(
+        candidates,
+        key=lambda item: (
+            sum(item["text"].casefold().count(term) for term in terms),
+            -int(item["id"][1:]),
+        ),
+        reverse=True,
+    )
+    selected = ranked[:QUESTION_CONTEXT_SEGMENTS]
+    selected.sort(key=lambda item: int(item["id"][1:]))
+    allowed = {item["id"]: item for item in selected}
+    study_context = {
+        "summary": str(result.get("summary") or "")[:12000],
+        "key_points": list(result.get("key_points") or [])[:40],
+        "important_terms": list(result.get("important_terms") or [])[:40],
+        "notes": list(result.get("notes") or [])[:30],
+        "transcript_sources": selected,
+    }
+    language_name = LANGUAGE_NAMES.get(output_language, "English")
+    response = _client().chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You answer questions about one lecture. Use only the supplied lesson context; never add "
+                    "outside facts. If the answer is not supported, say that the lesson does not contain enough "
+                    "information. Answer in " + language_name + ". Return JSON only with keys answer (string), "
+                    "source_ids (array of supplied S identifiers), and insufficient (boolean). Cite only sources "
+                    "that directly support the answer."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"QUESTION:\n{normalized_question}\n\nLESSON CONTEXT:\n"
+                    + json.dumps(study_context, ensure_ascii=False, separators=(",", ":"))
+                ),
+            },
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.1,
+        max_tokens=1200,
+    )
+    value = _safe_json(response.choices[0].message.content or "{}")
+    answer = " ".join(str(value.get("answer") or "").split())
+    if not answer:
+        raise LectureSiftError(
+            "LS-AI-07",
+            "Bu ders için yanıt oluşturulamadı.",
+            "Lesson Q&A returned an empty answer.",
+            502,
+        )
+    source_ids = []
+    for source_id in value.get("source_ids") or []:
+        selected_id = str(source_id).strip().upper()
+        if selected_id in allowed and selected_id not in source_ids:
+            source_ids.append(selected_id)
+    citations = [
+        {
+            "id": source_id,
+            "timestamp": allowed[source_id]["timestamp"],
+            "speaker": allowed[source_id]["speaker"],
+            "excerpt": allowed[source_id]["text"][:220],
+        }
+        for source_id in source_ids[:6]
+    ]
+    return {
+        "answer": answer,
+        "citations": citations,
+        "insufficient": bool(value.get("insufficient")),
+    }
 
 
 def _translate_chunk(chunk: str, language_name: str, attempt: int) -> tuple[str, bool]:

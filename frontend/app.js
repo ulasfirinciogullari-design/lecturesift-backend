@@ -704,6 +704,7 @@ function renderResult(data) {
     } catch { image.alt = t("noSlides"); }
   });
   renderQuiz(data.quiz || []); renderCards(); renderFiles(data.artifacts || [], canDownload);
+  $("lessonQuestionForm").reset(); $("lessonAnswer").hidden = true; $("lessonAnswer").replaceChildren();
   document.querySelectorAll(".result-tab").forEach(button => { button.hidden = utilityResult && button.dataset.pane !== "files"; button.classList.toggle("active", utilityResult ? button.dataset.pane === "files" : button.dataset.pane === "summary"); });
   document.querySelectorAll(".result-pane").forEach(pane => pane.classList.remove("active"));
   $(utilityResult ? "pane-files" : "pane-summary").classList.add("active");
@@ -721,6 +722,29 @@ function renderTranscript(translated) {
   const value = translated ? (latestResult.transcript_translated || latestResult.transcript_original) : (timestamped || latestResult.transcript_original);
   $("transcriptContent").textContent = value || t("noContent");
 }
+
+$("lessonQuestionForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!jobId || !latestResult) return;
+  const question = $("lessonQuestion").value.trim();
+  if (question.length < 3) return;
+  const button = $("lessonQuestionButton");
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = window.LectureSiftI18n?.t("ask.thinking", "Yanıt hazırlanıyor…") || "Yanıt hazırlanıyor…";
+  try {
+    const body = await billingRequest(`/jobs/${encodeURIComponent(jobId)}/ask`, {
+      method:"POST", body:JSON.stringify({question}),
+    });
+    const citations = (body.citations || []).map(item => `<li><strong>${escapeHtml(item.timestamp || "00:00:00")}</strong>${item.speaker ? ` · ${escapeHtml(item.speaker)}` : ""}<span>${escapeHtml(item.excerpt || "")}</span></li>`).join("");
+    $("lessonAnswer").innerHTML = `<h4>${escapeHtml(window.LectureSiftI18n?.t("ask.answer", "Yanıt") || "Yanıt")}</h4><p>${escapeHtml(body.answer)}</p>${citations ? `<h4>${escapeHtml(window.LectureSiftI18n?.t("ask.sources", "Ders içindeki dayanaklar") || "Ders içindeki dayanaklar")}</h4><ol>${citations}</ol>` : ""}`;
+    $("lessonAnswer").hidden = false;
+  } catch (error) {
+    showError(error.message, error.code || "LS-AI-07");
+  } finally {
+    button.disabled = false; button.textContent = original;
+  }
+});
 $("showTranslated").onclick = () => renderTranscript(true); $("showOriginal").onclick = () => renderTranscript(false);
 
 function renderQuiz(items) {

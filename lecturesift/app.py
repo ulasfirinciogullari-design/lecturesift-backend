@@ -15,6 +15,7 @@ from pydantic import BaseModel, HttpUrl
 
 from . import config
 from .billing import public_catalog, public_providers
+from .ai import answer_lesson_question
 from .billing_service import (
     BillingAuthenticationError,
     BillingConfigurationError,
@@ -284,6 +285,10 @@ class BillingCheckoutRequest(BaseModel):
     billing_address: str
     phone: str = ""
     language: str = "tr"
+
+
+class LessonQuestionRequest(BaseModel):
+    question: str
 
 
 def _send_verification_email(email: str, token: str, code: str) -> None:
@@ -902,6 +907,29 @@ def get_result(job_id: str, user: dict = Depends(_billing_user)) -> dict:
     result = json.loads(path.read_text(encoding="utf-8"))
     result["download_enabled"] = _job_download_allowed(data, user)
     return result
+
+
+@app.post("/jobs/{job_id}/ask")
+def ask_lesson_question(
+    job_id: str,
+    payload: LessonQuestionRequest,
+    request: Request,
+    user: dict = Depends(_billing_user),
+) -> dict:
+    data = _owned_job(job_id, user)
+    if data.get("status") != "done":
+        raise HTTPException(409, detail={"code": "LS-JOB-02", "message": "Ders analizi henüz tamamlanmadı."})
+    _rate_limit(request, "lesson-question", user["id"], limit=30, window_seconds=60 * 60)
+    result_path = Path(data["job_dir"]) / "result.json"
+    if not result_path.exists():
+        raise HTTPException(404, detail={"code": "LS-JOB-03", "message": "Sonuç dosyası bulunamadı."})
+    try:
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+        language = str(result.get("options", {}).get("output_language") or "tr")
+        answer = answer_lesson_question(result, payload.question, language)
+    except LectureSiftError as exc:
+        raise HTTPException(exc.status_code, detail=exc.public()) from exc
+    return {"ok": True, **answer}
 
 
 @app.get("/jobs/{job_id}/slide/{filename}")

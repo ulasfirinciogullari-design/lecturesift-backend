@@ -144,6 +144,7 @@ def test_profile_admin_bank_and_full_comparison_interfaces_are_present():
     assert "adminReadiness" in admin
     assert "restoreRequestedJob" in workspace_script
     assert 'new URLSearchParams(location.search).get("job")' in workspace_script
+    assert "/ask" in workspace_script and "lessonQuestionForm" in workspace_script
 
 
 def test_secure_card_checkout_is_prepared_without_collecting_card_details():
