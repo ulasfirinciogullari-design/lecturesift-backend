@@ -100,6 +100,12 @@ services:
         sync: false
       - key: S3_SECRET_ACCESS_KEY
         sync: false
+      - key: LECTURESIFT_DATABASE_RECOVERY_CONFIRMED
+        value: "false"
+      - key: LECTURESIFT_OBJECT_RETENTION_CONFIRMED
+        value: "false"
+      - key: LECTURESIFT_RECOVERY_DRILL_CONFIRMED
+        value: "false"
 
   - type: worker
     name: lecturesift-worker

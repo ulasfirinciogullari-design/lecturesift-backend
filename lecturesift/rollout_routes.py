@@ -15,16 +15,22 @@ from .mailer import EmailDeliveryError
 from .queue import worker_health
 from .security import RATE_LIMITER, RateLimitExceeded
 from .rollout_service import (
+    adjust_admin_credit,
     claim_instagram_reward,
     close_user_account,
+    create_refund_request,
     create_or_resume_guest,
     decide_admin_order,
     decide_instagram_reward,
+    decide_refund_request,
     export_account_data,
     instagram_reward_for_user,
     is_guest_user,
     list_admin_orders,
+    list_admin_credit_events,
+    list_admin_refund_requests,
     list_admin_rewards,
+    refund_requests_for_user,
     request_email_change,
     issue_rewarded_ad_session,
     redeem_rewarded_ad_session,
@@ -75,6 +81,21 @@ class DecisionRequest(BaseModel):
     approve: bool
 
 
+class RefundRequest(BaseModel):
+    order_reference: str
+    reason: str
+
+
+class RefundDecisionRequest(BaseModel):
+    action: str
+    note: str = ""
+
+
+class CreditAdjustmentRequest(BaseModel):
+    minutes_delta: int
+    reason: str
+
+
 def _user(authorization: str | None = Header(None)) -> dict:
     scheme, _, token = (authorization or "").partition(" ")
     if scheme.casefold() != "bearer" or not token:
@@ -87,17 +108,17 @@ def _user(authorization: str | None = Header(None)) -> dict:
         raise HTTPException(401, detail={"code": "LS-BILL-02", "message": str(exc)}) from exc
 
 
-def _admin(authorization: str | None = Header(None)) -> None:
+def _admin(authorization: str | None = Header(None)) -> dict:
     scheme, _, token = (authorization or "").partition(" ")
     if not config.BILLING_ADMIN_TOKEN and not config.BILLING_ADMIN_EMAILS:
         raise HTTPException(503, detail={"code": "LS-BILL-03", "message": "Admin paneli henüz etkin değil."})
     if scheme.casefold() == "bearer" and token:
         if config.BILLING_ADMIN_TOKEN and hmac.compare_digest(token, config.BILLING_ADMIN_TOKEN):
-            return
+            return {"actor": "admin_token"}
         try:
             user = authenticate_session(token)
             if user["email"].casefold() in config.BILLING_ADMIN_EMAILS:
-                return
+                return {"actor": f"user:{user['id']}"}
         except (BillingAuthenticationError, BillingConfigurationError):
             pass
     raise HTTPException(401, detail={"code": "LS-BILL-04", "message": "Admin yetkisi gerekli."})
@@ -139,6 +160,16 @@ def rollout_health() -> dict:
             and storage["connected"]
             and worker["reachable"]
         ),
+        "recovery": {
+            "database_managed_backup_confirmed": config.DATABASE_RECOVERY_CONFIRMED,
+            "object_retention_confirmed": config.OBJECT_RETENTION_CONFIRMED,
+            "restore_drill_confirmed": config.RECOVERY_DRILL_CONFIRMED,
+            "ready": bool(
+                config.DATABASE_RECOVERY_CONFIRMED
+                and config.OBJECT_RETENTION_CONFIRMED
+                and config.RECOVERY_DRILL_CONFIRMED
+            ),
+        },
     }
 
 
@@ -201,6 +232,28 @@ def billing_export_account(user: dict = Depends(_user)) -> dict:
             jobs.append(public)
     exported["jobs"] = jobs
     return {"ok": True, "export": exported}
+
+
+@router.get("/billing/me/refund-requests")
+def billing_refund_requests(user: dict = Depends(_user)) -> dict:
+    if is_guest_user(user["id"]):
+        raise HTTPException(403, detail={"code": "LS-GUEST-03", "message": "İade talebi için hesap oluştur."})
+    return {"ok": True, "requests": refund_requests_for_user(user["id"])}
+
+
+@router.post("/billing/me/refund-requests")
+def billing_create_refund_request(payload: RefundRequest, user: dict = Depends(_user)) -> dict:
+    if is_guest_user(user["id"]):
+        raise HTTPException(403, detail={"code": "LS-GUEST-03", "message": "İade talebi için hesap oluştur."})
+    try:
+        result = create_refund_request(user["id"], payload.order_reference, payload.reason)
+    except (BillingError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-REFUND-01")
+    return {
+        "ok": True,
+        "message": "İade talebin oluşturuldu. Sonucu hesabından takip edebilirsin.",
+        "request": result,
+    }
 
 
 @router.post("/billing/me/close-account")
@@ -317,6 +370,47 @@ def admin_manual_order_decision(reference: str, payload: DecisionRequest) -> dic
     except (BillingError, BillingConfigurationError) as exc:
         _billing_failure(exc, "LS-BILL-09")
     return {"ok": True, "result": result}
+
+
+@router.get("/billing/admin/refund-requests")
+def admin_refund_requests(
+    status: str = Query(""),
+    admin: dict = Depends(_admin),
+) -> dict:
+    del admin
+    return {"ok": True, "requests": list_admin_refund_requests(status.strip())}
+
+
+@router.post("/billing/admin/refund-requests/{request_id}/decision")
+def admin_refund_request_decision(
+    request_id: str,
+    payload: RefundDecisionRequest,
+    admin: dict = Depends(_admin),
+) -> dict:
+    try:
+        result = decide_refund_request(request_id, payload.action, payload.note, admin["actor"])
+    except (BillingError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-REFUND-02")
+    return {"ok": True, "result": result}
+
+
+@router.get("/billing/admin/credit-events")
+def admin_credit_events(limit: int = Query(100, ge=1, le=250), admin: dict = Depends(_admin)) -> dict:
+    del admin
+    return {"ok": True, "events": list_admin_credit_events(limit)}
+
+
+@router.post("/billing/admin/users/{user_id}/credit-adjustment")
+def admin_credit_adjustment(
+    user_id: str,
+    payload: CreditAdjustmentRequest,
+    admin: dict = Depends(_admin),
+) -> dict:
+    try:
+        result = adjust_admin_credit(user_id, payload.minutes_delta, payload.reason, admin["actor"])
+    except (BillingError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-ADMIN-01")
+    return {"ok": True, "message": "Dakika bakiyesi güncellendi ve işlem kaydedildi.", "event": result}
 
 
 @router.get("/admin/instagram-rewards", dependencies=[Depends(_admin)])

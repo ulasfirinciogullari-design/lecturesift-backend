@@ -149,6 +149,97 @@ def test_manual_order_admin_rejection_and_instagram_approval(monkeypatch):
     assert duplicate.status_code == 400
 
 
+def test_refund_request_requires_paid_owned_order_and_tracks_manual_completion(monkeypatch):
+    _, token = new_account()
+    _, other_token = new_account()
+    monkeypatch.setattr(config, "BILLING_BANK_IBAN", "TR000000000000000000000000")
+    monkeypatch.setattr(config, "BILLING_BANK_ACCOUNT_HOLDER", "Test Holder")
+    monkeypatch.setattr(config, "BILLING_SUPPORT_EMAIL", "support@example.com")
+    monkeypatch.setattr(config, "BILLING_ADMIN_TOKEN", "admin-secret")
+
+    created = client.post(
+        "/billing/manual-transfer/orders",
+        headers=auth(token),
+        json={"plan_code": "plus", "interval": "monthly"},
+    ).json()["order"]
+    reference = created["reference"]
+    unpaid = client.post(
+        "/billing/me/refund-requests",
+        headers=auth(token),
+        json={"order_reference": reference, "reason": "The service did not meet my needs."},
+    )
+    assert unpaid.status_code == 400
+    assert client.post(
+        f"/admin/manual-orders/{reference}/decision",
+        headers=auth("admin-secret"),
+        json={"approve": True},
+    ).status_code == 200
+    not_owner = client.post(
+        "/billing/me/refund-requests",
+        headers=auth(other_token),
+        json={"order_reference": reference, "reason": "This order should not belong to me."},
+    )
+    assert not_owner.status_code == 400
+
+    requested = client.post(
+        "/billing/me/refund-requests",
+        headers=auth(token),
+        json={"order_reference": reference, "reason": "The service did not meet my needs."},
+    )
+    assert requested.status_code == 200
+    request_id = requested.json()["request"]["id"]
+    duplicate = client.post(
+        "/billing/me/refund-requests",
+        headers=auth(token),
+        json={"order_reference": reference, "reason": "A second duplicate request reason."},
+    )
+    assert duplicate.json()["request"]["id"] == request_id
+
+    listed = client.get("/billing/admin/refund-requests", headers=auth("admin-secret"))
+    assert request_id in {item["id"] for item in listed.json()["requests"]}
+    approved = client.post(
+        f"/billing/admin/refund-requests/{request_id}/decision",
+        headers=auth("admin-secret"),
+        json={"action": "approve", "note": "Eligible; refund through bank."},
+    )
+    assert approved.json()["result"]["status"] == "approved_pending_refund"
+    completed = client.post(
+        f"/billing/admin/refund-requests/{request_id}/decision",
+        headers=auth("admin-secret"),
+        json={"action": "complete", "note": "Bank transfer completed."},
+    )
+    assert completed.json()["result"]["status"] == "completed"
+    mine = client.get("/billing/me/refund-requests", headers=auth(token)).json()["requests"]
+    assert mine[0]["status"] == "completed"
+
+
+def test_admin_credit_adjustment_is_bounded_and_audited(monkeypatch):
+    _, token = new_account()
+    monkeypatch.setattr(config, "BILLING_ADMIN_TOKEN", "admin-secret")
+    account = client.get("/billing/me", headers=auth(token)).json()["account"]
+    user_id = account["user"]["id"]
+    before = account["credit_minutes"]
+    added = client.post(
+        f"/billing/admin/users/{user_id}/credit-adjustment",
+        headers=auth("admin-secret"),
+        json={"minutes_delta": 25, "reason": "Support compensation"},
+    )
+    assert added.status_code == 200
+    assert added.json()["event"]["balance_after"] == before + 25
+    too_much_removed = client.post(
+        f"/billing/admin/users/{user_id}/credit-adjustment",
+        headers=auth("admin-secret"),
+        json={"minutes_delta": -(before + 26), "reason": "Invalid reversal check"},
+    )
+    assert too_much_removed.status_code == 400
+    current = client.get("/billing/me", headers=auth(token)).json()["account"]
+    assert current["credit_minutes"] == before + 25
+    events = client.get("/billing/admin/credit-events", headers=auth("admin-secret")).json()["events"]
+    event = next(item for item in events if item["user_id"] == user_id)
+    assert event["reason"] == "Support compensation"
+    assert "actor" not in event
+
+
 def test_rewarded_ad_sessions_are_opt_in_capped_and_single_use(monkeypatch):
     _, token = new_account()
     monkeypatch.setattr(config, "REWARDED_ADS_ENABLED", True)

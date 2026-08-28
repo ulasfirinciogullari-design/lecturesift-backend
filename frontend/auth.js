@@ -200,6 +200,16 @@ async function initAccount() {
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     $("ordersList").innerHTML = orders.length ? orders.map(order => `
       <div class="order-row"><span><strong>${order.order_number || order.reference}</strong><br><small>${planName(order.plan_code)} · ${new Intl.DateTimeFormat(I18N.locale, {dateStyle:"medium"}).format(new Date(order.created_at))}</small></span><strong>${t(`order.${order.status}`, order.status)}</strong></div>`).join("") : `<p class="empty-copy">${t("payment.noOrders", "Henüz ödeme siparişin yok.")}</p>`;
+    const paidOrders = orders.filter(order => order.status === "paid");
+    $("refundOrderSelect").replaceChildren(
+      ...(
+        paidOrders.length
+          ? paidOrders.map(order => new Option(`${order.order_number || order.reference} · ${planName(order.plan_code)}`, order.reference))
+          : [new Option(t("refund.noEligibleOrders", "İadeye uygun ödenmiş sipariş yok"), "")]
+      ),
+    );
+    $("refundOrderSelect").disabled = !paidOrders.length;
+    $("refundSubmit").disabled = !paidOrders.length;
   };
 
   const renderJobHistory = jobs => {
@@ -220,6 +230,21 @@ async function initAccount() {
       renderJobHistory(body.jobs || []);
     } catch (error) {
       $("jobHistory").innerHTML = `<p class="empty-copy">${adminSafe(error.message)}</p>`;
+    }
+  };
+
+  const renderRefundRequests = requests => {
+    $("refundRequestsList").innerHTML = requests.length ? requests.map(item => `
+      <div class="order-row"><span><strong>${adminSafe(item.order_reference)}</strong><br><small>${adminSafe(new Intl.DateTimeFormat(I18N.locale, {dateStyle:"medium"}).format(new Date(item.created_at)))}</small></span><strong>${adminSafe(t(`refund.status.${item.status}`, item.status))}</strong></div>
+    `).join("") : `<p class="empty-copy">${t("refund.noRequests", "Henüz iade talebin yok.")}</p>`;
+  };
+
+  const loadRefundRequests = async () => {
+    try {
+      const body = await request("/billing/me/refund-requests", {}, token);
+      renderRefundRequests(body.requests || []);
+    } catch (error) {
+      $("refundRequestsList").innerHTML = `<p class="empty-copy">${adminSafe(error.message)}</p>`;
     }
   };
 
@@ -271,6 +296,7 @@ async function initAccount() {
     renderOrders(account);
     $("accountPage").hidden = false;
     void loadJobHistory();
+    void loadRefundRequests();
   };
 
   const reconcilePaymentRedirect = async () => {
@@ -370,6 +396,27 @@ async function initAccount() {
     } catch (error) {
       showFormNotice("subscriptionNotice", error.message, true);
       setBusy(button, false, t("account.cancelSubscription", "Abonelik yenilemesini durdur"));
+    }
+  });
+  $("refundRequestForm").addEventListener("submit", async event => {
+    event.preventDefault();
+    const button = $("refundSubmit");
+    setBusy(button, true, t("state.saving", "Kaydediliyor…"));
+    try {
+      const body = await request("/billing/me/refund-requests", {
+        method:"POST",
+        body:JSON.stringify({
+          order_reference:$("refundOrderSelect").value,
+          reason:$("refundReason").value.trim(),
+        }),
+      }, token);
+      $("refundReason").value = "";
+      showFormNotice("refundNotice", body.message);
+      await loadRefundRequests();
+    } catch (error) {
+      showFormNotice("refundNotice", error.message, true);
+    } finally {
+      setBusy(button, false, t("refund.submit", "Talep oluştur"));
     }
   });
   $("exportDataButton").addEventListener("click", async () => {

@@ -101,6 +101,34 @@ RUNTIME_METRICS = Table(
     Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
+ADMIN_CREDIT_EVENTS = Table(
+    "lecturesift_admin_credit_events",
+    METADATA,
+    Column("id", String(36), primary_key=True),
+    Column("user_id", String(36), ForeignKey("billing_users.id"), nullable=False, index=True),
+    Column("minutes_delta", Integer, nullable=False),
+    Column("balance_before", Integer, nullable=False),
+    Column("balance_after", Integer, nullable=False),
+    Column("reason", String(240), nullable=False),
+    Column("actor", String(80), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+)
+
+REFUND_REQUESTS = Table(
+    "lecturesift_refund_requests",
+    METADATA,
+    Column("id", String(36), primary_key=True),
+    Column("user_id", String(36), ForeignKey("billing_users.id"), nullable=False, index=True),
+    Column("order_reference", String(64), nullable=False, index=True),
+    Column("provider", String(24), nullable=False),
+    Column("reason", String(500), nullable=False),
+    Column("status", String(32), nullable=False),
+    Column("admin_note", String(500), nullable=True),
+    Column("reviewed_by", String(80), nullable=True),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+)
+
 
 # Guest accounts must never fall back to the 60-minute registered free plan.
 # They receive a hidden, persistent five-minute plan instead.
@@ -123,7 +151,15 @@ PLAN_BY_CODE.setdefault(
 
 def init_rollout_database() -> None:
     init_billing_database()
-    for table in (GUEST_TRIALS, INSTAGRAM_REWARDS, REWARDED_AD_CLAIMS, EMAIL_CHANGE_REQUESTS, RUNTIME_METRICS):
+    for table in (
+        GUEST_TRIALS,
+        INSTAGRAM_REWARDS,
+        REWARDED_AD_CLAIMS,
+        EMAIL_CHANGE_REQUESTS,
+        RUNTIME_METRICS,
+        ADMIN_CREDIT_EVENTS,
+        REFUND_REQUESTS,
+    ):
         table.create(bind=ENGINE, checkfirst=True)
 
 
@@ -181,6 +217,32 @@ def export_account_data(user_id: str) -> dict[str, Any]:
             .where(REWARDED_AD_CLAIMS.c.user_id == user_id)
             .order_by(REWARDED_AD_CLAIMS.c.created_at.desc())
         ).all()
+        credit_events = connection.execute(
+            select(
+                ADMIN_CREDIT_EVENTS.c.id,
+                ADMIN_CREDIT_EVENTS.c.minutes_delta,
+                ADMIN_CREDIT_EVENTS.c.balance_before,
+                ADMIN_CREDIT_EVENTS.c.balance_after,
+                ADMIN_CREDIT_EVENTS.c.reason,
+                ADMIN_CREDIT_EVENTS.c.created_at,
+            )
+            .where(ADMIN_CREDIT_EVENTS.c.user_id == user_id)
+            .order_by(ADMIN_CREDIT_EVENTS.c.created_at.desc())
+        ).all()
+        refund_requests = connection.execute(
+            select(
+                REFUND_REQUESTS.c.id,
+                REFUND_REQUESTS.c.order_reference,
+                REFUND_REQUESTS.c.provider,
+                REFUND_REQUESTS.c.reason,
+                REFUND_REQUESTS.c.status,
+                REFUND_REQUESTS.c.admin_note,
+                REFUND_REQUESTS.c.created_at,
+                REFUND_REQUESTS.c.updated_at,
+            )
+            .where(REFUND_REQUESTS.c.user_id == user_id)
+            .order_by(REFUND_REQUESTS.c.created_at.desc())
+        ).all()
     return {
         "generated_at": utcnow().isoformat(),
         "account": account,
@@ -223,6 +285,30 @@ def export_account_data(user_id: str) -> dict[str, Any]:
                 "redeemed_at": row.redeemed_at.isoformat() if row.redeemed_at else None,
             }
             for row in rewarded_claims
+        ],
+        "credit_adjustments": [
+            {
+                "id": row.id,
+                "minutes_delta": row.minutes_delta,
+                "balance_before": row.balance_before,
+                "balance_after": row.balance_after,
+                "reason": row.reason,
+                "created_at": row.created_at.isoformat(),
+            }
+            for row in credit_events
+        ],
+        "refund_requests": [
+            {
+                "id": row.id,
+                "order_reference": row.order_reference,
+                "provider": row.provider,
+                "reason": row.reason,
+                "status": row.status,
+                "admin_note": row.admin_note,
+                "created_at": row.created_at.isoformat(),
+                "updated_at": row.updated_at.isoformat(),
+            }
+            for row in refund_requests
         ],
     }
 
@@ -717,6 +803,228 @@ def redeem_rewarded_ad_session(user_id: str, session_id: str, claim_token: str) 
         "rewarded_ads": rewarded_ads_for_user(user_id),
         "account": account_status(user_id),
     }
+
+
+def _public_refund_request(row: Any) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "user_id": row.user_id,
+        "order_reference": row.order_reference,
+        "provider": row.provider,
+        "reason": row.reason,
+        "status": row.status,
+        "admin_note": row.admin_note,
+        "created_at": row.created_at.isoformat(),
+        "updated_at": row.updated_at.isoformat(),
+    }
+
+
+def refund_requests_for_user(user_id: str) -> list[dict[str, Any]]:
+    init_rollout_database()
+    with ENGINE.connect() as connection:
+        rows = connection.execute(
+            select(REFUND_REQUESTS)
+            .where(REFUND_REQUESTS.c.user_id == user_id)
+            .order_by(REFUND_REQUESTS.c.created_at.desc())
+        ).all()
+    return [_public_refund_request(row) for row in rows]
+
+
+def create_refund_request(user_id: str, order_reference: str, reason: str) -> dict[str, Any]:
+    reference = order_reference.strip()
+    normalized_reason = " ".join(reason.strip().split())
+    if not reference or len(reference) > 64:
+        raise BillingError("Geçerli bir sipariş numarası seç.")
+    if len(normalized_reason) < 10 or len(normalized_reason) > 500:
+        raise BillingError("İade nedenini 10 ile 500 karakter arasında açıkla.")
+    init_rollout_database()
+    now = utcnow()
+    with ENGINE.begin() as connection:
+        manual_order = connection.execute(
+            select(MANUAL_ORDERS).where(
+                MANUAL_ORDERS.c.reference == reference,
+                MANUAL_ORDERS.c.user_id == user_id,
+            )
+        ).first()
+        payment_order_row = None if manual_order else connection.execute(
+            select(PAYMENT_ORDERS).where(
+                PAYMENT_ORDERS.c.reference == reference,
+                PAYMENT_ORDERS.c.user_id == user_id,
+            )
+        ).first()
+        order = manual_order or payment_order_row
+        if not order:
+            raise BillingError("Bu sipariş hesabında bulunamadı.")
+        if order.status != "paid":
+            raise BillingError("Yalnızca ödenmiş siparişler için iade talebi oluşturulabilir.")
+        existing = connection.execute(
+            select(REFUND_REQUESTS).where(
+                REFUND_REQUESTS.c.user_id == user_id,
+                REFUND_REQUESTS.c.order_reference == reference,
+            )
+        ).first()
+        if existing:
+            return _public_refund_request(existing)
+        request_id = str(uuid.uuid4())
+        provider = "bank_transfer" if manual_order else str(payment_order_row.provider)
+        connection.execute(
+            REFUND_REQUESTS.insert().values(
+                id=request_id,
+                user_id=user_id,
+                order_reference=reference,
+                provider=provider,
+                reason=normalized_reason,
+                status="requested",
+                admin_note=None,
+                reviewed_by=None,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        created = connection.execute(
+            select(REFUND_REQUESTS).where(REFUND_REQUESTS.c.id == request_id)
+        ).first()
+    return _public_refund_request(created)
+
+
+def list_admin_refund_requests(status: str = "requested") -> list[dict[str, Any]]:
+    init_rollout_database()
+    with ENGINE.connect() as connection:
+        query = (
+            select(
+                REFUND_REQUESTS,
+                USERS.c.email.label("user_email"),
+                USER_PROFILES.c.first_name,
+                USER_PROFILES.c.last_name,
+            )
+            .join(USERS, USERS.c.id == REFUND_REQUESTS.c.user_id)
+            .outerjoin(USER_PROFILES, USER_PROFILES.c.user_id == USERS.c.id)
+            .order_by(REFUND_REQUESTS.c.created_at.desc())
+        )
+        if status:
+            query = query.where(REFUND_REQUESTS.c.status == status)
+        rows = connection.execute(query).all()
+    return [
+        {
+            **_public_refund_request(row),
+            "user": {
+                "email": row.user_email,
+                "name": " ".join(part for part in (row.first_name, row.last_name) if part),
+            },
+        }
+        for row in rows
+    ]
+
+
+def decide_refund_request(request_id: str, action: str, note: str, actor: str) -> dict[str, Any]:
+    selected_action = action.strip().lower()
+    normalized_note = " ".join(note.strip().split())
+    if selected_action not in {"approve", "reject", "complete"}:
+        raise BillingError("Geçersiz iade işlemi.")
+    if len(normalized_note) > 500:
+        raise BillingError("Yönetici notu en fazla 500 karakter olabilir.")
+    init_rollout_database()
+    with ENGINE.begin() as connection:
+        request = connection.execute(
+            select(REFUND_REQUESTS)
+            .where(REFUND_REQUESTS.c.id == request_id)
+            .with_for_update()
+        ).first()
+        if not request:
+            raise BillingError("İade talebi bulunamadı.")
+        if selected_action == "complete":
+            if request.status != "approved_pending_refund":
+                raise BillingError("İade, tamamlandı olarak işaretlenmeden önce onaylanmalıdır.")
+            next_status = "completed"
+        else:
+            if request.status != "requested":
+                raise BillingError("Bu iade talebi daha önce incelenmiş.")
+            next_status = "approved_pending_refund" if selected_action == "approve" else "rejected"
+        connection.execute(
+            update(REFUND_REQUESTS)
+            .where(REFUND_REQUESTS.c.id == request_id)
+            .values(
+                status=next_status,
+                admin_note=normalized_note or None,
+                reviewed_by=actor[:80],
+                updated_at=utcnow(),
+            )
+        )
+        updated = connection.execute(
+            select(REFUND_REQUESTS).where(REFUND_REQUESTS.c.id == request_id)
+        ).first()
+    return _public_refund_request(updated)
+
+
+def adjust_admin_credit(user_id: str, minutes_delta: int, reason: str, actor: str) -> dict[str, Any]:
+    delta = int(minutes_delta)
+    normalized_reason = " ".join(reason.strip().split())
+    if delta == 0 or abs(delta) > 10_000:
+        raise BillingError("Dakika değişikliği -10.000 ile 10.000 arasında ve sıfırdan farklı olmalı.")
+    if len(normalized_reason) < 4 or len(normalized_reason) > 240:
+        raise BillingError("İşlem nedenini 4 ile 240 karakter arasında yaz.")
+    init_rollout_database()
+    event_id = str(uuid.uuid4())
+    now = utcnow()
+    with ENGINE.begin() as connection:
+        user = connection.execute(
+            select(USERS).where(USERS.c.id == user_id).with_for_update()
+        ).first()
+        if not user:
+            raise BillingError("Kullanıcı bulunamadı.")
+        before = int(user.credit_minutes)
+        after = before + delta
+        if after < 0:
+            raise BillingError("Kredi bakiyesi sıfırın altına düşürülemez.")
+        connection.execute(
+            update(USERS).where(USERS.c.id == user_id).values(credit_minutes=after)
+        )
+        connection.execute(
+            ADMIN_CREDIT_EVENTS.insert().values(
+                id=event_id,
+                user_id=user_id,
+                minutes_delta=delta,
+                balance_before=before,
+                balance_after=after,
+                reason=normalized_reason,
+                actor=actor[:80],
+                created_at=now,
+            )
+        )
+    return {
+        "id": event_id,
+        "user_id": user_id,
+        "minutes_delta": delta,
+        "balance_before": before,
+        "balance_after": after,
+        "reason": normalized_reason,
+        "created_at": now.isoformat(),
+    }
+
+
+def list_admin_credit_events(limit: int = 100) -> list[dict[str, Any]]:
+    init_rollout_database()
+    safe_limit = max(1, min(int(limit), 250))
+    with ENGINE.connect() as connection:
+        rows = connection.execute(
+            select(ADMIN_CREDIT_EVENTS, USERS.c.email)
+            .join(USERS, USERS.c.id == ADMIN_CREDIT_EVENTS.c.user_id)
+            .order_by(ADMIN_CREDIT_EVENTS.c.created_at.desc())
+            .limit(safe_limit)
+        ).all()
+    return [
+        {
+            "id": row.id,
+            "user_id": row.user_id,
+            "email": row.email,
+            "minutes_delta": row.minutes_delta,
+            "balance_before": row.balance_before,
+            "balance_after": row.balance_after,
+            "reason": row.reason,
+            "created_at": row.created_at.isoformat(),
+        }
+        for row in rows
+    ]
 
 
 def list_admin_orders(status: str = "pending") -> list[dict]:

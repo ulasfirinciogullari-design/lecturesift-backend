@@ -66,6 +66,15 @@ S3_REGION = os.getenv("S3_REGION", "auto")
 S3_BUCKET = os.getenv("S3_BUCKET", "")
 S3_ACCESS_KEY_ID = os.getenv("S3_ACCESS_KEY_ID", "")
 S3_SECRET_ACCESS_KEY = os.getenv("S3_SECRET_ACCESS_KEY", "")
+DATABASE_RECOVERY_CONFIRMED = os.getenv(
+    "LECTURESIFT_DATABASE_RECOVERY_CONFIRMED", "false"
+).lower() == "true"
+OBJECT_RETENTION_CONFIRMED = os.getenv(
+    "LECTURESIFT_OBJECT_RETENTION_CONFIRMED", "false"
+).lower() == "true"
+RECOVERY_DRILL_CONFIRMED = os.getenv(
+    "LECTURESIFT_RECOVERY_DRILL_CONFIRMED", "false"
+).lower() == "true"
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".webm", ".mpeg", ".mpg", ".m4v"}
 
