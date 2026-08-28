@@ -1,8 +1,9 @@
-"""Small public, read-only social endpoints plus launch image serving."""
+"""Public social-media assets and safe Instagram rollout status endpoints."""
 
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -14,6 +15,7 @@ from .config import (
     INSTAGRAM_APP_SECRET,
     INSTAGRAM_GRAPH_API_VERSION,
 )
+from .daily_social import render_daily_image, render_daily_reel, render_daily_reel_cover
 from .instagram import InstagramAPIError, InstagramClient, InstagramConfigurationError
 from .launch_social import LAUNCH_POSTS, completed_indices, next_pending_post, render_launch_image
 
@@ -29,6 +31,13 @@ def _client() -> InstagramClient:
     )
 
 
+def _parse_day(value: str) -> date:
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise HTTPException(404, detail={"code": "LS-IG-07", "message": "Sosyal medya içeriği bulunamadı."}) from exc
+
+
 def install_social_routes(app: FastAPI) -> None:
     @app.get("/instagram/launch/image/{index}.jpg")
     def instagram_launch_image(index: int) -> Response:
@@ -39,6 +48,37 @@ def install_social_routes(app: FastAPI) -> None:
         return Response(
             content=content,
             media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+
+    @app.get("/instagram/daily/image/{day}.jpg")
+    def instagram_daily_image(day: str) -> Response:
+        selected_day = _parse_day(day)
+        return Response(
+            content=render_daily_image(selected_day),
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+
+    @app.get("/instagram/daily/reel/{day}.jpg")
+    def instagram_daily_reel_cover(day: str) -> Response:
+        selected_day = _parse_day(day)
+        return Response(
+            content=render_daily_reel_cover(selected_day),
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+
+    @app.get("/instagram/daily/reel/{day}.mp4")
+    def instagram_daily_reel(day: str) -> Response:
+        selected_day = _parse_day(day)
+        try:
+            content = render_daily_reel(selected_day)
+        except RuntimeError as exc:
+            raise HTTPException(503, detail={"code": "LS-IG-08", "message": "Reel içeriği şu anda hazırlanamadı."}) from exc
+        return Response(
+            content=content,
+            media_type="video/mp4",
             headers={"Cache-Control": "public, max-age=86400"},
         )
 
