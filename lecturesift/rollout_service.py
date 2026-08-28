@@ -21,9 +21,12 @@ from . import config
 from .billing import PLAN_BY_CODE, Plan
 from .billing_service import (
     ENGINE,
+    AUTH_TOKENS,
     MANUAL_ORDERS,
     METADATA,
+    PAYMENT_ORDERS,
     SUBSCRIPTIONS,
+    USAGE_EVENTS,
     USERS,
     USER_PREFERENCES,
     USER_PROFILES,
@@ -134,6 +137,133 @@ def _normalize_name(value: str, label: str, *, optional: bool = False) -> str:
 
 def _hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def export_account_data(user_id: str) -> dict[str, Any]:
+    """Return a portable, secret-free snapshot of one user's stored account data."""
+    init_rollout_database()
+    account = account_status(user_id)
+    with ENGINE.connect() as connection:
+        subscriptions = connection.execute(
+            select(SUBSCRIPTIONS)
+            .where(SUBSCRIPTIONS.c.user_id == user_id)
+            .order_by(SUBSCRIPTIONS.c.created_at.desc())
+        ).all()
+        usage = connection.execute(
+            select(USAGE_EVENTS)
+            .where(USAGE_EVENTS.c.user_id == user_id)
+            .order_by(USAGE_EVENTS.c.occurred_at.desc())
+        ).all()
+        reward = connection.execute(
+            select(INSTAGRAM_REWARDS).where(INSTAGRAM_REWARDS.c.user_id == user_id)
+        ).first()
+    return {
+        "generated_at": utcnow().isoformat(),
+        "account": account,
+        "subscriptions": [
+            {
+                "plan_code": row.plan_code,
+                "interval": row.interval,
+                "status": row.status,
+                "starts_at": row.starts_at.isoformat(),
+                "ends_at": row.ends_at.isoformat(),
+                "created_at": row.created_at.isoformat(),
+            }
+            for row in subscriptions
+        ],
+        "usage": [
+            {
+                "job_id": row.job_id,
+                "plan_code": row.plan_code,
+                "minutes": row.minutes,
+                "occurred_at": row.occurred_at.isoformat(),
+            }
+            for row in usage
+        ],
+        "instagram_reward": (
+            {
+                "handle": reward.handle,
+                "status": reward.status,
+                "minutes": reward.minutes,
+                "created_at": reward.created_at.isoformat(),
+            }
+            if reward
+            else None
+        ),
+    }
+
+
+def close_user_account(
+    user_id: str,
+    current_password: str,
+    email_confirmation: str,
+) -> dict[str, str]:
+    """Close access and anonymize identity while retaining required payment records."""
+    init_rollout_database()
+    now = utcnow()
+    with ENGINE.begin() as connection:
+        user = connection.execute(select(USERS).where(USERS.c.id == user_id)).first()
+        profile = connection.execute(
+            select(USER_PROFILES).where(USER_PROFILES.c.user_id == user_id)
+        ).first()
+        if not user or not profile:
+            raise BillingAuthenticationError("Hesap bulunamadı.")
+        if email_confirmation.strip().casefold() != user.email.casefold():
+            raise BillingAuthenticationError("Hesap e-posta adresi eşleşmiyor.")
+        candidate = _hash_password(current_password, bytes.fromhex(user.password_salt))
+        if not secrets.compare_digest(candidate, user.password_hash):
+            raise BillingAuthenticationError("Mevcut parola hatalı.")
+
+        anonymized_email = f"deleted+{uuid.uuid4().hex}@users.invalid"
+        salt = secrets.token_bytes(16)
+        connection.execute(
+            update(USERS)
+            .where(USERS.c.id == user_id)
+            .values(
+                email=anonymized_email,
+                password_salt=salt.hex(),
+                password_hash=_hash_password(secrets.token_urlsafe(48), salt),
+                credit_minutes=0,
+            )
+        )
+        connection.execute(
+            update(USER_PROFILES)
+            .where(USER_PROFILES.c.user_id == user_id)
+            .values(
+                first_name="Deleted",
+                last_name="User",
+                phone=None,
+                country_code="ZZ",
+                email_verified_at=None,
+                phone_verified_at=None,
+                session_version=USER_PROFILES.c.session_version + 1,
+                updated_at=now,
+            )
+        )
+        connection.execute(delete(USER_PREFERENCES).where(USER_PREFERENCES.c.user_id == user_id))
+        connection.execute(delete(AUTH_TOKENS).where(AUTH_TOKENS.c.user_id == user_id))
+        connection.execute(delete(EMAIL_CHANGE_REQUESTS).where(EMAIL_CHANGE_REQUESTS.c.user_id == user_id))
+        connection.execute(delete(INSTAGRAM_REWARDS).where(INSTAGRAM_REWARDS.c.user_id == user_id))
+        connection.execute(delete(GUEST_TRIALS).where(GUEST_TRIALS.c.user_id == user_id))
+        connection.execute(
+            update(SUBSCRIPTIONS)
+            .where(SUBSCRIPTIONS.c.user_id == user_id, SUBSCRIPTIONS.c.status == "active")
+            .values(status="cancelled")
+        )
+        connection.execute(
+            update(MANUAL_ORDERS)
+            .where(MANUAL_ORDERS.c.user_id == user_id, MANUAL_ORDERS.c.status == "pending")
+            .values(status="cancelled", updated_at=now)
+        )
+        connection.execute(
+            update(PAYMENT_ORDERS)
+            .where(
+                PAYMENT_ORDERS.c.user_id == user_id,
+                PAYMENT_ORDERS.c.status.in_(("created", "token_failed")),
+            )
+            .values(status="cancelled", updated_at=now)
+        )
+    return {"closed_at": now.isoformat(), "status": "closed"}
 
 
 def create_or_resume_guest(fingerprint: str) -> dict[str, Any]:

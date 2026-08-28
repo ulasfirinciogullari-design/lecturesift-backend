@@ -15,9 +15,11 @@ from .mailer import EmailDeliveryError
 from .queue import worker_health
 from .rollout_service import (
     claim_instagram_reward,
+    close_user_account,
     create_or_resume_guest,
     decide_admin_order,
     decide_instagram_reward,
+    export_account_data,
     instagram_reward_for_user,
     is_guest_user,
     list_admin_orders,
@@ -49,6 +51,11 @@ class EmailChangeRequest(BaseModel):
 class EmailChangeVerifyRequest(BaseModel):
     code: str = ""
     token: str = ""
+
+
+class CloseAccountRequest(BaseModel):
+    current_password: str
+    email_confirmation: str
 
 
 class InstagramRewardRequest(BaseModel):
@@ -145,6 +152,39 @@ def billing_rollout_account(user: dict = Depends(_user)) -> dict:
         "instagram_reward": instagram_reward_for_user(user["id"]),
         "contact_email": config.CONTACT_EMAIL,
     }
+
+
+@router.get("/billing/me/export")
+def billing_export_account(user: dict = Depends(_user)) -> dict:
+    if is_guest_user(user["id"]):
+        raise HTTPException(403, detail={"code": "LS-GUEST-03", "message": "Veri dışa aktarma için hesap oluştur."})
+    try:
+        exported = export_account_data(user["id"])
+    except (BillingError, BillingAuthenticationError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-BILL-26")
+    jobs = []
+    for item in JOBS.list_for_user(user["id"], limit=100):
+        public = JOBS.public(str(item.get("job_id", "")))
+        if public:
+            jobs.append(public)
+    exported["jobs"] = jobs
+    return {"ok": True, "export": exported}
+
+
+@router.post("/billing/me/close-account")
+def billing_close_account(payload: CloseAccountRequest, user: dict = Depends(_user)) -> dict:
+    if is_guest_user(user["id"]):
+        raise HTTPException(403, detail={"code": "LS-GUEST-03", "message": "Misafir oturumu hesap kapatma gerektirmez."})
+    try:
+        result = close_user_account(
+            user["id"],
+            payload.current_password,
+            payload.email_confirmation,
+        )
+    except (BillingError, BillingAuthenticationError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-BILL-27")
+    cleanup = JOBS.delete_for_user(user["id"])
+    return {"ok": True, **result, "deleted_jobs": cleanup["jobs"]}
 
 
 @router.patch("/billing/me/profile")

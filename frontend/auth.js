@@ -310,6 +310,42 @@ async function initAccount() {
     } catch (error) { showFormNotice("passwordNotice", error.message, true); }
     finally { setBusy(button, false, t("security.changePassword", "Parolayı değiştir")); }
   });
+  $("exportDataButton").addEventListener("click", async () => {
+    const button = $("exportDataButton");
+    setBusy(button, true, t("account.exporting", "Veriler hazırlanıyor…"));
+    try {
+      const body = await request("/billing/me/export", {}, token);
+      const blob = new Blob([JSON.stringify(body.export, null, 2)], {type:"application/json"});
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = href;
+      link.download = `lecturesift-account-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(href);
+      showFormNotice("accountDataNotice", t("account.exportReady", "Veri dosyan indirildi."));
+    } catch (error) { showFormNotice("accountDataNotice", error.message, true); }
+    finally { setBusy(button, false, t("account.exportData", "Verilerimi indir")); }
+  });
+  $("closeAccountForm").addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!confirm(t("account.closeConfirm", "Hesabını ve ders dosyalarını kalıcı olarak kapatmak istediğine emin misin?"))) return;
+    const button = $("closeAccountButton");
+    setBusy(button, true, t("account.closing", "Hesap kapatılıyor…"));
+    try {
+      await request("/billing/me/close-account", {
+        method:"POST",
+        body:JSON.stringify({
+          email_confirmation:$("closeAccountEmail").value.trim(),
+          current_password:$("closeAccountPassword").value,
+        }),
+      }, token);
+      localStorage.removeItem(TOKEN_KEY);
+      location.replace("/?account=closed");
+    } catch (error) {
+      showFormNotice("accountDataNotice", error.message, true);
+      setBusy(button, false, t("account.closeButton", "Hesabımı kalıcı olarak kapat"));
+    }
+  });
   $("logoutButton").addEventListener("click", async () => {
     try { await request("/billing/logout", {method:"POST"}, token); } catch {}
     localStorage.removeItem(TOKEN_KEY);

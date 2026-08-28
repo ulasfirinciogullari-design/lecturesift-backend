@@ -1046,7 +1046,7 @@ def complete_payment_order(
         ).first()
         if not order:
             raise BillingError("Ödeme siparişi bulunamadı.")
-        if order.status in {"paid", "failed"}:
+        if order.status in {"paid", "failed", "cancelled"}:
             return _public_payment_order(order)
         next_status = "paid" if succeeded else "failed"
         connection.execute(

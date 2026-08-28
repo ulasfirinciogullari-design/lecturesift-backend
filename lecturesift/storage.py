@@ -106,5 +106,28 @@ class ObjectStorage:
                 count += 1
         return count
 
+    def delete_job(self, job_id: str) -> int:
+        """Delete every stored object for one job without exposing object keys."""
+        if not self.remote or self._client is None:
+            return 0
+        prefix = f"jobs/{job_id}/"
+        paginator = self._client.get_paginator("list_objects_v2")
+        deleted = 0
+        for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
+            keys = [
+                {"Key": str(item.get("Key", ""))}
+                for item in page.get("Contents", [])
+                if str(item.get("Key", ""))
+            ]
+            for offset in range(0, len(keys), 1000):
+                batch = keys[offset:offset + 1000]
+                if batch:
+                    self._client.delete_objects(
+                        Bucket=self.bucket,
+                        Delete={"Objects": batch, "Quiet": True},
+                    )
+                    deleted += len(batch)
+        return deleted
+
 
 STORAGE = ObjectStorage()

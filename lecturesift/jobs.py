@@ -229,8 +229,19 @@ class JobStore:
         data = self.get(job_id)
         if not data:
             return None
-        for key in ("job_dir", "result_path", "technical_error", "source_keys"):
+        for key in (
+            "job_dir",
+            "result_path",
+            "technical_error",
+            "source_keys",
+            "celery_task_id",
+            "queue_error",
+            "recovery_error",
+        ):
             data.pop(key, None)
+        options = dict(data.get("options") or {})
+        options.pop("billing_user_id", None)
+        data["options"] = options
         return data
 
     def list_for_user(self, user_id: str, limit: int = 50) -> list[dict[str, Any]]:
@@ -243,6 +254,29 @@ class JobStore:
             ]
         owned.sort(key=lambda item: float(item.get("created", 0)), reverse=True)
         return owned[: max(1, min(100, int(limit)))]
+
+    def delete_for_user(self, user_id: str) -> dict[str, int]:
+        removed: list[tuple[str, Path]] = []
+        with self._lock, self._distributed_write_lock():
+            self._refresh_locked()
+            for job_id, data in list(self._jobs.items()):
+                if data.get("options", {}).get("billing_user_id") != user_id:
+                    continue
+                removed.append((job_id, Path(data.get("job_dir", WORK_DIR / job_id))))
+                del self._jobs[job_id]
+            if removed:
+                self._flush_locked()
+        remote_files = 0
+        for job_id, path in removed:
+            if path.is_dir() and path.parent == WORK_DIR:
+                shutil.rmtree(path, ignore_errors=True)
+            try:
+                remote_files += STORAGE.delete_job(job_id)
+            except Exception:
+                # Account closure must still invalidate access immediately;
+                # remote deletion can be completed by the retention process.
+                pass
+        return {"jobs": len(removed), "remote_files": remote_files}
 
     def redis_health(self) -> dict[str, bool]:
         if self._redis is None:

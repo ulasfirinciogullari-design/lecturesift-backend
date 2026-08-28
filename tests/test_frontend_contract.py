@@ -116,8 +116,19 @@ def test_profile_admin_bank_and_full_comparison_interfaces_are_present():
     plans = (FRONTEND / "plans.html").read_text(encoding="utf-8")
     plan_script = (FRONTEND / "plans.js").read_text(encoding="utf-8")
     admin = (FRONTEND / "admin.html").read_text(encoding="utf-8")
-    assert all(value in account for value in ("profileForm", "passwordForm", "accountBankHolder"))
+    assert all(
+        value in account
+        for value in (
+            "profileForm",
+            "passwordForm",
+            "accountBankHolder",
+            "exportDataButton",
+            "closeAccountForm",
+        )
+    )
     assert "/billing/me/profile" in auth and "/billing/me/change-password" in auth
+    assert "/billing/me/export" in auth and "/billing/me/close-account" in auth
+    assert 'href="/admin.html"' not in account
     assert all(value in plans for value in ("compareHead", "compareBody", "publicBankHolder"))
     assert "renderCompare" in plan_script and "/billing/manual-transfer" in plan_script
     assert "adminTokenForm" in admin and "adminOrders" in admin
