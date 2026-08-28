@@ -658,7 +658,10 @@ async function loadResult() {
 function renderResult(data) {
   $("resultHeading").textContent = data.title || "LectureSift";
   const utilityResult = data.job_type && data.job_type !== "study_pack";
-  $("resultMeta").textContent = utilityResult ? `${data.artifacts?.length || 0} ${t("tabFiles")}` : `${data.slides?.length || 0} ${t("tabSlides")} · ${data.quiz?.length || 0} Quiz · ${data.flashcards?.length || 0} ${t("tabCards")}`;
+  const timestampLabel = data.transcript_timestamps_mode === "provider_segments"
+    ? window.LectureSiftI18n?.t("transcript.preciseTimestamps", "Hassas zaman damgaları")
+    : window.LectureSiftI18n?.t("transcript.estimatedTimestamps", "Bölüm başlangıç zamanları");
+  $("resultMeta").textContent = utilityResult ? `${data.artifacts?.length || 0} ${t("tabFiles")}` : `${data.slides?.length || 0} ${t("tabSlides")} · ${data.quiz?.length || 0} Quiz · ${data.flashcards?.length || 0} ${t("tabCards")} · ${timestampLabel}`;
   const canDownload = data.download_enabled !== false;
   const unlockText = window.LectureSiftI18n?.t("plans.unlockDownload", "Dosyaları indirmek için paket seç") || "Dosyaları indirmek için paket seç";
   $("downloadAll").href = canDownload ? "#" : (window.LectureSiftI18n?.localizedPath?.(currentLanguage, "/plans.html") || "/plans.html");
@@ -693,7 +696,9 @@ function renderTranscript(translated) {
   document.querySelector(".transcript-tools").hidden = !hasTranslation;
   translated = hasTranslation && translated;
   $("showTranslated").classList.toggle("active", translated); $("showOriginal").classList.toggle("active", !translated);
-  const value = translated ? (latestResult.transcript_translated || latestResult.transcript_original) : latestResult.transcript_original;
+  const segments = latestResult.transcript_segments || [];
+  const timestamped = segments.map(segment => `[${segment.timestamp || "00:00:00"}]${segment.speaker ? ` ${segment.speaker}` : ""}  ${segment.text || ""}`).join("\n\n");
+  const value = translated ? (latestResult.transcript_translated || latestResult.transcript_original) : (timestamped || latestResult.transcript_original);
   $("transcriptContent").textContent = value || t("noContent");
 }
 $("showTranslated").onclick = () => renderTranscript(true); $("showOriginal").onclick = () => renderTranscript(false);

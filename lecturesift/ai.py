@@ -34,6 +34,44 @@ def transcribe(audio_path: Path, language: str) -> str:
     return getattr(response, "text", str(response)).strip()
 
 
+def transcribe_timed(audio_path: Path, language: str) -> dict:
+    """Transcribe with provider-reported speaker and segment timestamps.
+
+    This uses the diarization model only when the separately costed precise
+    timestamp feature is enabled by the caller.
+    """
+    with open(audio_path, "rb") as stream:
+        arguments = {
+            "model": "gpt-4o-transcribe-diarize",
+            "file": stream,
+            "response_format": "diarized_json",
+            "chunking_strategy": "auto",
+        }
+        if language and language != "auto":
+            arguments["language"] = language
+        response = _client().audio.transcriptions.create(**arguments)
+    segments = []
+    for item in getattr(response, "segments", None) or []:
+        text = str(getattr(item, "text", "") or "").strip()
+        if not text:
+            continue
+        segments.append(
+            {
+                "start": max(0.0, float(getattr(item, "start", 0) or 0)),
+                "end": max(0.0, float(getattr(item, "end", 0) or 0)),
+                "speaker": str(getattr(item, "speaker", "") or "") or None,
+                "text": text,
+                "precision": "provider_segment",
+            }
+        )
+    return {
+        "text": str(getattr(response, "text", "") or "").strip(),
+        "segments": segments,
+        "duration": max(0.0, float(getattr(response, "duration", 0) or 0)),
+        "mode": "provider_segments",
+    }
+
+
 def _chunk_text(text: str, maximum: int = 12000) -> list[str]:
     remaining = text.strip()
     chunks: list[str] = []

@@ -5,9 +5,9 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from .ai import make_study_pack, transcribe, translate_transcript
+from .ai import make_study_pack, transcribe, transcribe_timed, translate_transcript
 from .billing_service import record_usage
-from .config import APP_VERSION
+from .config import APP_VERSION, PRECISE_TRANSCRIPT_TIMESTAMPS
 from .duration import media_duration_seconds
 from .errors import normalize_error
 from .exports import build_artifacts, build_binary_artifact
@@ -45,7 +45,19 @@ def _record_billing_usage(job_id: str, options: dict, paths: list[Path]) -> None
         print("BILLING USAGE ERROR: metering is temporarily unavailable", flush=True)
 
 
-def _audio_pipeline(job_id: str, video_paths: list[Path], job_dir: Path, options: dict) -> tuple[str, str]:
+def _transcript_timestamp(second: float) -> str:
+    total = max(0, int(second))
+    hours, remainder = divmod(total, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
+def _audio_pipeline(
+    job_id: str,
+    video_paths: list[Path],
+    job_dir: Path,
+    options: dict,
+) -> tuple[str, str, list[dict], str]:
     audio_chunks: list[Path] = []
     for index, video_path in enumerate(video_paths, 1):
         JOBS.update_task(job_id, "audio", 5 + 18 * (index - 1) / max(1, len(video_paths)), "audio_extract")
@@ -54,9 +66,12 @@ def _audio_pipeline(job_id: str, video_paths: list[Path], job_dir: Path, options
 
     if not audio_chunks:
         JOBS.update_task(job_id, "audio", 100, "no_audio")
-        return "", ""
+        return "", "", [], "none"
 
     transcripts: list[str] = []
+    transcript_segments: list[dict] = []
+    timeline_cursor = 0.0
+    timestamp_mode = "provider_segments" if PRECISE_TRANSCRIPT_TIMESTAMPS else "chunk_estimate"
     for index, audio_path in enumerate(audio_chunks, 1):
         JOBS.update_task(
             job_id,
@@ -64,9 +79,37 @@ def _audio_pipeline(job_id: str, video_paths: list[Path], job_dir: Path, options
             24 + 50 * (index - 1) / max(1, len(audio_chunks)),
             "transcription",
         )
-        text = transcribe(audio_path, options["source_language"])
+        chunk_duration = _source_duration_seconds([audio_path])
+        if PRECISE_TRANSCRIPT_TIMESTAMPS:
+            timed = transcribe_timed(audio_path, options["source_language"])
+            text = timed["text"]
+            for segment in timed["segments"]:
+                start = timeline_cursor + float(segment["start"])
+                end = timeline_cursor + float(segment["end"])
+                transcript_segments.append(
+                    {
+                        **segment,
+                        "start": round(start, 2),
+                        "end": round(max(start, end), 2),
+                        "timestamp": _transcript_timestamp(start),
+                    }
+                )
+        else:
+            text = transcribe(audio_path, options["source_language"])
+            if text.strip():
+                transcript_segments.append(
+                    {
+                        "start": round(timeline_cursor, 2),
+                        "end": round(timeline_cursor + chunk_duration, 2),
+                        "timestamp": _transcript_timestamp(timeline_cursor),
+                        "speaker": None,
+                        "text": text.strip(),
+                        "precision": "chunk_estimate",
+                    }
+                )
         if text.strip():
             transcripts.append(text.strip())
+        timeline_cursor += chunk_duration
     original = "\n\n".join(transcripts)
     JOBS.update_task(job_id, "audio", 76, "transcript_ready")
 
@@ -77,7 +120,7 @@ def _audio_pipeline(job_id: str, video_paths: list[Path], job_dir: Path, options
         if candidate.strip() and not _same_text(original, candidate):
             translated = candidate.strip()
     JOBS.update_task(job_id, "audio", 100, "audio_done")
-    return original, translated
+    return original, translated, transcript_segments, timestamp_mode
 
 
 def _aligned_timestamp(second: float) -> str:
@@ -245,7 +288,7 @@ def process_job(
                 slides_dir,
                 float(options.get("slides_offset_seconds", 0) or 0),
             )
-            original_transcript, translated_transcript = audio_future.result()
+            original_transcript, translated_transcript, transcript_segments, timestamp_mode = audio_future.result()
 
         diagnostics["source_mode"] = source_mode
 
@@ -276,6 +319,30 @@ def process_job(
             "transcript_original": original_transcript,
             "transcript_translated": translated_transcript,
             "transcript": translated_transcript or original_transcript,
+            "transcript_segments": transcript_segments,
+            "transcript_timestamps_mode": timestamp_mode,
+            "timeline": sorted(
+                [
+                    {
+                        "type": "transcript",
+                        "second": item["start"],
+                        "timestamp": item["timestamp"],
+                        "speaker": item.get("speaker"),
+                        "text": item["text"],
+                    }
+                    for item in transcript_segments
+                ]
+                + [
+                    {
+                        "type": "slide",
+                        "second": item["second"],
+                        "timestamp": item["timestamp"],
+                        "file": item["file"],
+                    }
+                    for item in slides
+                ],
+                key=lambda item: float(item["second"]),
+            ),
             **study_pack,
         }
         artifacts, zip_path = build_artifacts(job_dir, result, slides_dir)

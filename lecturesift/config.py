@@ -8,6 +8,9 @@ WORK_DIR = Path(os.getenv("LECTURESIFT_WORK_DIR", str(Path(tempfile.gettempdir()
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+PRECISE_TRANSCRIPT_TIMESTAMPS = os.getenv(
+    "LECTURESIFT_PRECISE_TRANSCRIPT_TIMESTAMPS", "false"
+).lower() == "true"
 INSTAGRAM_ACCESS_TOKEN = os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
 INSTAGRAM_ACCOUNT_ID = os.getenv("INSTAGRAM_ACCOUNT_ID", "")
 INSTAGRAM_APP_SECRET = os.getenv("INSTAGRAM_APP_SECRET", "")

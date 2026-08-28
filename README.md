@@ -63,6 +63,8 @@ Account, bank-transfer, credit-pack, and admin approval data is stored in the co
 
 Set `BILLING_ADMIN_EMAILS` to a comma-separated list of verified owner emails so those normal user sessions can open `/admin.html`; `BILLING_ADMIN_TOKEN` remains the emergency fallback and must never be committed or stored in the browser.
 
+Transcript timelines always include clearly labeled audio-chunk start times. Set `LECTURESIFT_PRECISE_TRANSCRIPT_TIMESTAMPS=true` on both the web service and worker only after approving the higher transcription cost; this switches transcription to `gpt-4o-transcribe-diarize` and stores provider-reported segment start/end times and speaker labels. The safe default is `false`.
+
 Configure the PayTR notification URL as:
 
 `https://lecturesift-backend.onrender.com/billing/paytr/callback`

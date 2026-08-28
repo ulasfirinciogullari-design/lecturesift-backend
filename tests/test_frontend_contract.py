@@ -246,6 +246,15 @@ def test_free_results_show_a_localized_download_paywall():
     assert '"plans.unlockDownload"' in catalog
 
 
+def test_transcript_timeline_is_rendered_with_localized_precision_status():
+    app = (FRONTEND / "app.js").read_text(encoding="utf-8")
+    catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    assert "data.transcript_timestamps_mode" in app
+    assert "latestResult.transcript_segments" in app
+    assert '"transcript.preciseTimestamps"' in catalog
+    assert '"transcript.estimatedTimestamps"' in catalog
+
+
 def test_contact_form_has_a_branded_noindex_success_page():
     i18n = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
     thanks = (FRONTEND / "thanks.html").read_text(encoding="utf-8")

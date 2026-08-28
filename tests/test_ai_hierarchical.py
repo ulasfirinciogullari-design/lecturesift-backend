@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from lecturesift import ai
 
 
@@ -72,3 +74,38 @@ def test_source_code_does_not_silently_slice_long_transcripts():
         content = stream.read()
     assert "transcript[:100000]" not in content
     assert "transcript[:100_000]" not in content
+
+
+def test_precise_transcription_requests_diarized_segments(monkeypatch, tmp_path):
+    captured = {}
+
+    class Transcriptions:
+        @staticmethod
+        def create(**kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(
+                text="Opening explanation.",
+                duration=12.5,
+                segments=[
+                    SimpleNamespace(start=0.4, end=4.8, speaker="A", text="Opening explanation."),
+                ],
+            )
+
+    fake_client = SimpleNamespace(audio=SimpleNamespace(transcriptions=Transcriptions()))
+    monkeypatch.setattr(ai, "_CLIENT", fake_client)
+    audio = tmp_path / "sample.mp3"
+    audio.write_bytes(b"audio")
+
+    result = ai.transcribe_timed(audio, "en")
+
+    assert captured["model"] == "gpt-4o-transcribe-diarize"
+    assert captured["response_format"] == "diarized_json"
+    assert captured["chunking_strategy"] == "auto"
+    assert captured["language"] == "en"
+    assert result["segments"][0] == {
+        "start": 0.4,
+        "end": 4.8,
+        "speaker": "A",
+        "text": "Opening explanation.",
+        "precision": "provider_segment",
+    }
