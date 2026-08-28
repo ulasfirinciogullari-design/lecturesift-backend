@@ -199,7 +199,7 @@ services:
     name: lecturesift-instagram-daily
     runtime: docker
     plan: starter
-    schedule: "0 8 * * *"
+    schedule: "0 17 * * *"
     dockerCommand: python -m lecturesift.daily_social
     envVars:
       - key: INSTAGRAM_ACCESS_TOKEN
