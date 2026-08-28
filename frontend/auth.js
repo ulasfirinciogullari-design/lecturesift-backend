@@ -208,6 +208,9 @@ async function initAccount() {
     $("accountName").textContent = user.name || user.email;
     $("accountEmail").textContent = user.email;
     $("accountPlan").textContent = planName(account.plan.code);
+    $("accountAdMode").textContent = account.plan.entitlements?.ad_free
+      ? t("plans.adFree", "Reklamsız kullanım")
+      : t("plans.rewardedOption", "İsteğe bağlı reklamla ek dakika");
     $("remainingMinutes").textContent = account.remaining_minutes == null ? t("account.unlimited", "Sınırsız") : account.remaining_minutes.toLocaleString(I18N.locale);
     $("creditMinutes").textContent = `${(account.credit_minutes || 0).toLocaleString(I18N.locale)} dk`;
     $("usedMinutes").textContent = t("account.usedMinutes", "{count} dk kullanıldı").replace("{count}", account.used_minutes.toLocaleString(I18N.locale));

@@ -27,6 +27,9 @@ def test_plan_page_preserves_learning_entitlements_and_zero_decimal_prices():
     assert "quiz_questions: 30" in script
     assert "flashcards: 60" in script
     assert "summary_profiles: ALL_SUMMARIES" in script
+    assert "rewarded_minutes_eligible" in script
+    assert 'pt("plans.adExperience", "Reklam deneyimi")' in script
+    assert "accountAdMode" in (FRONTEND / "account.html").read_text(encoding="utf-8")
 
 
 def test_owner_only_netlify_toolbar_is_hidden_on_every_site_layout():

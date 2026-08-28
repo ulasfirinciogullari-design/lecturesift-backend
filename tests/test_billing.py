@@ -28,6 +28,10 @@ def test_billing_catalog_has_hybrid_plans_and_translation_keys():
     assert plans["plus"]["entitlements"]["quiz_questions"] == 30
     assert plans["plus"]["entitlements"]["flashcards"] == 60
     assert plans["plus"]["entitlements"]["export_formats"] == ["pdf", "docx", "txt"]
+    assert plans["free"]["entitlements"]["ad_free"] is False
+    assert plans["free"]["entitlements"]["rewarded_minutes_eligible"] is True
+    assert plans["plus"]["entitlements"]["ad_free"] is True
+    assert plans["plus"]["entitlements"]["rewarded_minutes_eligible"] is False
 
     usd = TestClient(app).get("/billing/plans?currency=USD").json()
     usd_plans = {plan["code"]: plan for plan in usd["plans"]}

@@ -31,6 +31,10 @@ class Plan:
     def export_enabled(self) -> bool:
         return len(self.export_formats) > 1
 
+    @property
+    def ad_free(self) -> bool:
+        return self.code in {"lite", "plus", "pro", "max", "business"}
+
     def public(self, currency: str = "TRY") -> dict:
         selected_currency = currency if currency in SUPPORTED_CURRENCIES else "TRY"
         regional = REGIONAL_PRICES.get(self.code, {})
@@ -60,6 +64,8 @@ class Plan:
                 "history_days": self.history_days,
                 "team_seats": self.team_seats,
                 "priority": self.priority,
+                "ad_free": self.ad_free,
+                "rewarded_minutes_eligible": not self.ad_free,
             },
         }
 
