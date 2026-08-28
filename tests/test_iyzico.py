@@ -204,6 +204,75 @@ def test_iyzico_one_lira_test_pack_uses_exact_live_amount(monkeypatch):
     assert captured["payload"]["basketItems"][0]["name"] == "LectureSift test"
 
 
+def test_iyzico_decline_is_recorded_instead_of_staying_created(monkeypatch):
+    _configure(monkeypatch)
+    state = {"reference": ""}
+    token = "declined-checkout-token"
+
+    class FakeResponse:
+        def __init__(self, body):
+            self._body = body
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._body
+
+    def fake_post(url, *, content, headers, timeout):
+        payload = json.loads(content)
+        reference = payload["conversationId"]
+        if url.endswith(payments.IYZICO_INITIALIZE_PATH):
+            state["reference"] = reference
+            return FakeResponse({
+                "status": "success",
+                "conversationId": reference,
+                "token": token,
+                "paymentPageUrl": f"https://api.iyzipay.com/checkoutform/{token}",
+                "signature": _response_signature([reference, token]),
+            })
+        return FakeResponse({
+            "status": "failure",
+            "conversationId": reference,
+            "errorCode": "10220",
+            "errorGroup": "DECLINED",
+            "errorMessage": "Ödeme alınamadı",
+        })
+
+    monkeypatch.setattr(payments.httpx, "post", fake_post)
+    _, session = _account()
+    client = TestClient(app)
+    checkout = client.post(
+        "/billing/checkout",
+        headers={"Authorization": f"Bearer {session}", "X-Forwarded-For": "203.0.113.45"},
+        json={
+            "plan_code": "test", "interval": "one_time", "currency": "TRY",
+            "billing_address": "Örnek Mahallesi No 4", "billing_city": "Hatay",
+            "billing_zip_code": "31800", "phone": "+905551112233", "language": "tr",
+            "terms_accepted": True, "early_performance_requested": True,
+        },
+    )
+    assert checkout.status_code == 200, checkout.text
+    callback = client.post(
+        f"/billing/iyzico/callback?order={state['reference']}",
+        data={"token": token},
+        follow_redirects=False,
+    )
+    assert callback.status_code == 303
+    assert callback.headers["location"].endswith(
+        f"/plans.html?payment=failed&order={state['reference']}"
+    )
+    account = client.get(
+        "/billing/me", headers={"Authorization": f"Bearer {session}"}
+    ).json()["account"]
+    order = account["payment_orders"][0]
+    assert order["status"] == "failed"
+    assert order["provider_amount_minor"] == 0
+    assert order["failure_code"] == "10220"
+    assert order["failure_message"] == "Ödeme alınamadı"
+    assert account["credit_minutes"] == 0
+
+
 def test_iyzico_callback_rejects_tampered_response(monkeypatch):
     _configure(monkeypatch)
     token = "tamper-test-token"

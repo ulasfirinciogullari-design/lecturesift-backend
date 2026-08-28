@@ -198,8 +198,12 @@ async function initAccount() {
   const renderOrders = account => {
     const orders = [...(account.manual_orders || []), ...(account.payment_orders || [])]
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    $("ordersList").innerHTML = orders.length ? orders.map(order => `
-      <div class="order-row"><span><strong>${order.order_number || order.reference}</strong><br><small>${planName(order.plan_code)} · ${new Intl.DateTimeFormat(I18N.locale, {dateStyle:"medium"}).format(new Date(order.created_at))}</small></span><strong>${t(`order.${order.status}`, order.status)}</strong></div>`).join("") : `<p class="empty-copy">${t("payment.noOrders", "Henüz ödeme siparişin yok.")}</p>`;
+    $("ordersList").innerHTML = orders.length ? orders.map(order => {
+      const failure = ["failed", "token_failed"].includes(order.status) && (order.failure_message || order.failure_code)
+        ? `<br><small>${adminSafe(order.failure_message || t("payment.declined", "Ödeme onaylanmadı."))}${order.failure_code ? ` · ${adminSafe(order.failure_code)}` : ""}</small>`
+        : "";
+      return `<div class="order-row"><span><strong>${adminSafe(order.order_number || order.reference)}</strong><br><small>${adminSafe(planName(order.plan_code))} · ${adminSafe(new Intl.DateTimeFormat(I18N.locale, {dateStyle:"medium"}).format(new Date(order.created_at)))}</small>${failure}</span><strong>${adminSafe(t(`order.${order.status}`, order.status))}</strong></div>`;
+    }).join("") : `<p class="empty-copy">${t("payment.noOrders", "Henüz ödeme siparişin yok.")}</p>`;
     const paidOrders = orders.filter(order => order.status === "paid");
     $("refundOrderSelect").replaceChildren(
       ...(
@@ -305,7 +309,16 @@ async function initAccount() {
     const result = params.get("payment");
     if (!reference || !result) return;
     if (result === "failed") {
-      showFormNotice("paymentResultNotice", t("order.failed", "Ödeme başarısız"), true);
+      try {
+        const body = await request("/billing/me", {}, token);
+        renderAccount(body.account);
+        const order = (body.account.payment_orders || []).find(item => item.reference === reference);
+        const reason = order?.failure_message || t("payment.declined", "Ödeme banka veya iyzico tarafından onaylanmadı.");
+        const code = order?.failure_code ? ` (${order.failure_code})` : "";
+        showFormNotice("paymentResultNotice", `${reason}${code}`, true);
+      } catch {
+        showFormNotice("paymentResultNotice", t("order.failed", "Ödeme başarısız"), true);
+      }
       return;
     }
     showFormNotice("paymentResultNotice", t("payment.verifying", "Ödeme sonucu güvenli bildirimle doğrulanıyor…"));
