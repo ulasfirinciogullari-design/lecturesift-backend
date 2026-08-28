@@ -1,7 +1,7 @@
 """One-time launch-step publisher used after a web deployment.
 
 This deployment is intentionally gated to advance the launch grid from exactly
-three completed cards to the fourth card. Marker checks keep retries idempotent,
+four completed cards to the fifth card. Marker checks keep retries idempotent,
 and later unrelated deploys cannot advance the grid again.
 """
 
@@ -17,7 +17,7 @@ from .instagram import InstagramAPIError, InstagramConfigurationError
 from .launch_social import completed_indices
 
 _STATUS_PATH = Path("/tmp/lecturesift-launch-bootstrap.json")
-_EXPECTED_COMPLETED = [1, 2, 3]
+_EXPECTED_COMPLETED = [1, 2, 3, 4]
 
 
 def _write_status(payload: dict) -> None:
@@ -28,7 +28,7 @@ def _write_status(payload: dict) -> None:
 
 
 def main() -> int:
-    _write_status({"status": "waiting", "target_index": 4})
+    _write_status({"status": "waiting", "target_index": 5})
     time.sleep(30)
     last_error: Exception | None = None
     for attempt in range(4):
@@ -41,7 +41,7 @@ def main() -> int:
                         "status": "launch_step_not_ready",
                         "completed": completed,
                         "expected_completed": _EXPECTED_COMPLETED,
-                        "target_index": 4,
+                        "target_index": 5,
                     }
                 )
                 print(f"Launch bootstrap skipped: completed={completed}", flush=True)
@@ -53,7 +53,7 @@ def main() -> int:
                 for key, value in result.items()
                 if key in {"status", "kind", "index", "completed"}
             }
-            safe_result["target_index"] = 4
+            safe_result["target_index"] = 5
             _write_status(safe_result)
             print(f"Launch bootstrap: {result.get('status')}", flush=True)
             return 0
@@ -63,7 +63,7 @@ def main() -> int:
                 {
                     "status": "retrying" if attempt < 3 else "error",
                     "attempt": attempt + 1,
-                    "target_index": 4,
+                    "target_index": 5,
                     "error_type": getattr(exc, "error_type", type(exc).__name__),
                 }
             )
