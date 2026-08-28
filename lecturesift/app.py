@@ -66,15 +66,21 @@ from .payments import (
     paytr_public_status,
     process_paytr_callback,
 )
+from .security import RATE_LIMITER, RateLimitExceeded
 
 
 app = FastAPI(title=f"LectureSift Backend V{APP_VERSION}")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        FRONTEND_BASE_URL,
+        "https://www.lecturesift.com",
+        "https://clever-horse-22b1a8.netlify.app",
+    ],
+    allow_origin_regex=r"^https://deploy-preview-[0-9]+--clever-horse-22b1a8\.netlify\.app$|^http://(localhost|127\.0\.0\.1)(:[0-9]+)?$",
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 
@@ -358,6 +364,30 @@ def _client_ip(request: Request) -> str:
     return ""
 
 
+def _rate_limit(
+    request: Request,
+    scope: str,
+    discriminator: str,
+    *,
+    limit: int,
+    window_seconds: int,
+) -> None:
+    client = _client_ip(request) or (request.client.host if request.client else "unknown")
+    try:
+        RATE_LIMITER.check(
+            scope,
+            f"{client}|{discriminator.strip().casefold()}",
+            limit=limit,
+            window_seconds=window_seconds,
+        )
+    except RateLimitExceeded as exc:
+        raise HTTPException(
+            429,
+            detail={"code": "LS-SEC-01", "message": str(exc)},
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
+
+
 def _upload_extension(file: UploadFile) -> str:
     extension = Path(file.filename or "video.mp4").suffix.lower()
     if extension not in VIDEO_EXTENSIONS:
@@ -472,7 +502,8 @@ def billing_health() -> dict:
 
 
 @app.post("/billing/register")
-def billing_register(payload: BillingRegisterRequest) -> dict:
+def billing_register(payload: BillingRegisterRequest, request: Request) -> dict:
+    _rate_limit(request, "register", payload.email, limit=5, window_seconds=60 * 60)
     if not email_delivery_configured():
         raise HTTPException(
             503,
@@ -507,7 +538,8 @@ def billing_register(payload: BillingRegisterRequest) -> dict:
 
 
 @app.post("/billing/verify-email")
-def billing_verify_email(payload: BillingTokenRequest) -> dict:
+def billing_verify_email(payload: BillingTokenRequest, request: Request) -> dict:
+    _rate_limit(request, "verify-link", payload.token[:16], limit=12, window_seconds=15 * 60)
     try:
         result = verify_email(payload.token)
     except BillingAuthenticationError as exc:
@@ -516,7 +548,8 @@ def billing_verify_email(payload: BillingTokenRequest) -> dict:
 
 
 @app.post("/billing/verify-email-code")
-def billing_verify_email_code(payload: BillingVerificationCodeRequest) -> dict:
+def billing_verify_email_code(payload: BillingVerificationCodeRequest, request: Request) -> dict:
+    _rate_limit(request, "verify-code", payload.email, limit=10, window_seconds=15 * 60)
     try:
         result = verify_email_code(payload.email, payload.code)
     except BillingAuthenticationError as exc:
@@ -525,7 +558,8 @@ def billing_verify_email_code(payload: BillingVerificationCodeRequest) -> dict:
 
 
 @app.post("/billing/resend-verification")
-def billing_resend_verification(payload: BillingEmailRequest) -> dict:
+def billing_resend_verification(payload: BillingEmailRequest, request: Request) -> dict:
+    _rate_limit(request, "resend-verification", payload.email, limit=5, window_seconds=60 * 60)
     if not email_delivery_configured():
         raise HTTPException(503, detail={"code": "LS-BILL-15", "message": "E-posta doğrulama hizmeti henüz etkinleştirilmemiş."})
     try:
@@ -538,7 +572,8 @@ def billing_resend_verification(payload: BillingEmailRequest) -> dict:
 
 
 @app.post("/billing/forgot-password")
-def billing_forgot_password(payload: BillingEmailRequest) -> dict:
+def billing_forgot_password(payload: BillingEmailRequest, request: Request) -> dict:
+    _rate_limit(request, "forgot-password", payload.email, limit=5, window_seconds=60 * 60)
     if not email_delivery_configured():
         raise HTTPException(503, detail={"code": "LS-BILL-15", "message": "E-posta hizmeti henüz etkinleştirilmemiş."})
     try:
@@ -551,7 +586,8 @@ def billing_forgot_password(payload: BillingEmailRequest) -> dict:
 
 
 @app.post("/billing/reset-password")
-def billing_reset_password(payload: BillingPasswordResetRequest) -> dict:
+def billing_reset_password(payload: BillingPasswordResetRequest, request: Request) -> dict:
+    _rate_limit(request, "reset-password", payload.token[:16], limit=10, window_seconds=60 * 60)
     try:
         reset_password(payload.token, payload.new_password)
     except BillingAuthenticationError as exc:
@@ -562,7 +598,8 @@ def billing_reset_password(payload: BillingPasswordResetRequest) -> dict:
 
 
 @app.post("/billing/login")
-def billing_login(payload: BillingAuthRequest) -> dict:
+def billing_login(payload: BillingAuthRequest, request: Request) -> dict:
+    _rate_limit(request, "login", payload.email, limit=10, window_seconds=15 * 60)
     try:
         result = login_user(payload.email, payload.password)
     except BillingConfigurationError as exc:
@@ -651,6 +688,7 @@ def billing_create_checkout(
     request: Request,
     user: dict = Depends(_billing_user),
 ) -> dict:
+    _rate_limit(request, "checkout", user["id"], limit=10, window_seconds=10 * 60)
     try:
         checkout = create_paytr_checkout(
             user,

@@ -13,6 +13,7 @@ from .billing_service import BillingAuthenticationError, BillingConfigurationErr
 from .jobs import JOBS
 from .mailer import EmailDeliveryError
 from .queue import worker_health
+from .security import RATE_LIMITER, RateLimitExceeded
 from .rollout_service import (
     claim_instagram_reward,
     close_user_account,
@@ -129,6 +130,19 @@ def billing_guest_session(payload: GuestSessionRequest, request: Request) -> dic
     device_id = payload.device_id.strip()
     if len(device_id) < 8 or len(device_id) > 200:
         raise HTTPException(400, detail={"code": "LS-GUEST-01", "message": "Misafir cihaz kimliği geçersiz."})
+    try:
+        RATE_LIMITER.check(
+            "guest-session",
+            device_id,
+            limit=12,
+            window_seconds=60 * 60,
+        )
+    except RateLimitExceeded as exc:
+        raise HTTPException(
+            429,
+            detail={"code": "LS-SEC-01", "message": str(exc)},
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
     user_agent = request.headers.get("user-agent", "unknown")[:300]
     # Keep the trial tied to this browser/device even when the user changes Wi-Fi or mobile network.
     fingerprint = hashlib.sha256(f"{device_id}|{user_agent}".encode("utf-8")).hexdigest()
