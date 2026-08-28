@@ -17,8 +17,8 @@ from .instagram import InstagramAPIError, InstagramConfigurationError
 from .launch_social import completed_indices
 
 _STATUS_PATH = Path("/tmp/lecturesift-launch-bootstrap.json")
-_EXPECTED_COMPLETED: list[int] = [1, 2, 3, 4]
-_TARGET_INDEX = 5
+_EXPECTED_COMPLETED: list[int] = [1, 2, 3, 4, 5]
+_TARGET_INDEX = 6
 
 
 def _write_status(payload: dict) -> None:
