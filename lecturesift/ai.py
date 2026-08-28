@@ -9,6 +9,10 @@ from .errors import LectureSiftError
 
 
 _CLIENT = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+LONG_TRANSCRIPT_THRESHOLD = 85_000
+STUDY_SECTION_CHARACTERS = 28_000
+MAX_SYNTHESIS_CHARACTERS = 85_000
+QUESTION_CONTEXT_SEGMENTS = 18
 
 
 def _client() -> OpenAI:
@@ -31,6 +35,44 @@ def transcribe(audio_path: Path, language: str) -> str:
     return getattr(response, "text", str(response)).strip()
 
 
+def transcribe_timed(audio_path: Path, language: str) -> dict:
+    """Transcribe with provider-reported speaker and segment timestamps.
+
+    This uses the diarization model only when the separately costed precise
+    timestamp feature is enabled by the caller.
+    """
+    with open(audio_path, "rb") as stream:
+        arguments = {
+            "model": "gpt-4o-transcribe-diarize",
+            "file": stream,
+            "response_format": "diarized_json",
+            "chunking_strategy": "auto",
+        }
+        if language and language != "auto":
+            arguments["language"] = language
+        response = _client().audio.transcriptions.create(**arguments)
+    segments = []
+    for item in getattr(response, "segments", None) or []:
+        text = str(getattr(item, "text", "") or "").strip()
+        if not text:
+            continue
+        segments.append(
+            {
+                "start": max(0.0, float(getattr(item, "start", 0) or 0)),
+                "end": max(0.0, float(getattr(item, "end", 0) or 0)),
+                "speaker": str(getattr(item, "speaker", "") or "") or None,
+                "text": text,
+                "precision": "provider_segment",
+            }
+        )
+    return {
+        "text": str(getattr(response, "text", "") or "").strip(),
+        "segments": segments,
+        "duration": max(0.0, float(getattr(response, "duration", 0) or 0)),
+        "mode": "provider_segments",
+    }
+
+
 def _chunk_text(text: str, maximum: int = 12000) -> list[str]:
     remaining = text.strip()
     chunks: list[str] = []
@@ -51,6 +93,114 @@ def _safe_json(value: str) -> dict:
     cleaned = re.sub(r"^```(?:json)?\s*", "", value.strip(), flags=re.I)
     cleaned = re.sub(r"\s*```$", "", cleaned)
     return json.loads(cleaned)
+
+
+def answer_lesson_question(result: dict, question: str, output_language: str) -> dict:
+    """Answer from one completed lesson and return only validated source markers."""
+    normalized_question = " ".join(question.strip().split())
+    if len(normalized_question) < 3 or len(normalized_question) > 500:
+        raise LectureSiftError(
+            "LS-AI-06",
+            "Sorun 3 ile 500 karakter arasında olmalı.",
+            "Lesson question length is outside the accepted range.",
+            400,
+        )
+
+    raw_segments = result.get("transcript_segments") or []
+    candidates: list[dict] = []
+    for index, item in enumerate(raw_segments):
+        text = " ".join(str(item.get("text") or "").split())
+        if text:
+            candidates.append(
+                {
+                    "id": f"S{index + 1}",
+                    "timestamp": str(item.get("timestamp") or "00:00:00"),
+                    "speaker": str(item.get("speaker") or "") or None,
+                    "text": text[:1800],
+                }
+            )
+    if not candidates:
+        for index, chunk in enumerate(_chunk_text(str(result.get("transcript_original") or ""), 1600)):
+            candidates.append(
+                {"id": f"S{index + 1}", "timestamp": "00:00:00", "speaker": None, "text": chunk}
+            )
+
+    terms = {
+        token.casefold()
+        for token in re.findall(r"[^\W_]{3,}", normalized_question, flags=re.UNICODE)
+    }
+    ranked = sorted(
+        candidates,
+        key=lambda item: (
+            sum(item["text"].casefold().count(term) for term in terms),
+            -int(item["id"][1:]),
+        ),
+        reverse=True,
+    )
+    selected = ranked[:QUESTION_CONTEXT_SEGMENTS]
+    selected.sort(key=lambda item: int(item["id"][1:]))
+    allowed = {item["id"]: item for item in selected}
+    study_context = {
+        "summary": str(result.get("summary") or "")[:12000],
+        "key_points": list(result.get("key_points") or [])[:40],
+        "important_terms": list(result.get("important_terms") or [])[:40],
+        "notes": list(result.get("notes") or [])[:30],
+        "transcript_sources": selected,
+    }
+    language_name = LANGUAGE_NAMES.get(output_language, "English")
+    response = _client().chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You answer questions about one lecture. Use only the supplied lesson context; never add "
+                    "outside facts. If the answer is not supported, say that the lesson does not contain enough "
+                    "information. Answer in " + language_name + ". Return JSON only with keys answer (string), "
+                    "source_ids (array of supplied S identifiers), and insufficient (boolean). Cite only sources "
+                    "that directly support the answer."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"QUESTION:\n{normalized_question}\n\nLESSON CONTEXT:\n"
+                    + json.dumps(study_context, ensure_ascii=False, separators=(",", ":"))
+                ),
+            },
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.1,
+        max_tokens=1200,
+    )
+    value = _safe_json(response.choices[0].message.content or "{}")
+    answer = " ".join(str(value.get("answer") or "").split())
+    if not answer:
+        raise LectureSiftError(
+            "LS-AI-07",
+            "Bu ders için yanıt oluşturulamadı.",
+            "Lesson Q&A returned an empty answer.",
+            502,
+        )
+    source_ids = []
+    for source_id in value.get("source_ids") or []:
+        selected_id = str(source_id).strip().upper()
+        if selected_id in allowed and selected_id not in source_ids:
+            source_ids.append(selected_id)
+    citations = [
+        {
+            "id": source_id,
+            "timestamp": allowed[source_id]["timestamp"],
+            "speaker": allowed[source_id]["speaker"],
+            "excerpt": allowed[source_id]["text"][:220],
+        }
+        for source_id in source_ids[:6]
+    ]
+    return {
+        "answer": answer,
+        "citations": citations,
+        "insufficient": bool(value.get("insufficient")),
+    }
 
 
 def _translate_chunk(chunk: str, language_name: str, attempt: int) -> tuple[str, bool]:
@@ -142,19 +292,22 @@ def _normalize_flashcards(items: object, language: str, maximum: int) -> list[di
     return normalized
 
 
-def make_study_pack(
-    transcript: str,
+def _request_study_pack(
+    source: str,
     output_language: str,
     summary_style: str,
     quiz_count: int,
     flashcard_count: int,
+    *,
+    source_label: str = "TRANSCRIPT",
+    source_context: str = "Use ONLY the lecture transcript below. Never invent facts that are absent.",
+    summary_target: str | None = None,
+    extra_requirements: str = "",
+    max_tokens: int = 6000,
 ) -> dict:
-    if not transcript.strip():
-        return empty_study_pack()
-
     language_name = LANGUAGE_NAMES.get(output_language, "English")
     style = SUMMARY_STYLES.get(summary_style, SUMMARY_STYLES["standard"])
-    target_words = {
+    target_words = summary_target or {
         "short": "about 250-450 words when the source is substantial",
         "standard": "about 700-1400 words when the source is substantial",
         "detailed": "about 1400-2600 words when the source is substantial",
@@ -163,7 +316,7 @@ def make_study_pack(
     }.get(summary_style, "about 700-1400 words when the source is substantial")
     prompt = f"""
 You are LectureSift, an academic study-pack generator.
-Use ONLY the lecture transcript below. Never invent facts that are absent.
+{source_context}
 Output language: {language_name}.
 Summary profile: {style}.
 Summary target: {target_words}. Scale down only when the source is genuinely short; never pad with invented material.
@@ -185,21 +338,156 @@ Requirements:
 - Create exactly {quiz_count} non-redundant quiz questions when the source supports them.
 - Create up to {flashcard_count} useful, non-redundant question-and-answer flashcards. Every front must be a real question; never output a bare term as the front.
 - Separate definitions, important distinctions, examples, lecturer emphasis, likely exam points, and difficult concepts.
-- Preserve important terminology from the transcript.
-- Mark unclear transcript statements as unclear instead of silently correcting them.
+- Preserve important terminology and the order of the source.
+- Mark unclear source statements as unclear instead of silently correcting them.
 - Do not include markdown fences or commentary outside the JSON.
+{extra_requirements}
 
-TRANSCRIPT:
-{transcript[:100000]}
+{source_label}:
+{source}
 """
     response = _client().chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
         response_format={"type": "json_object"},
         temperature=0.2,
+        max_tokens=max_tokens,
     )
     value = _safe_json(response.choices[0].message.content or "{}")
     base = empty_study_pack()
     base.update({key: value.get(key, default) for key, default in base.items()})
     base["flashcards"] = _normalize_flashcards(base.get("flashcards"), output_language, flashcard_count)
     return base
+
+
+def _digest_source(digests: list[dict]) -> str:
+    return json.dumps(digests, ensure_ascii=False, separators=(",", ":"))
+
+
+def _digest_groups(digests: list[dict], maximum: int = 52_000) -> list[list[dict]]:
+    groups: list[list[dict]] = []
+    current: list[dict] = []
+    current_size = 2
+    for digest in digests:
+        size = len(json.dumps(digest, ensure_ascii=False, separators=(",", ":"))) + 1
+        if current and current_size + size > maximum:
+            groups.append(current)
+            current = []
+            current_size = 2
+        current.append(digest)
+        current_size += size
+    if current:
+        groups.append(current)
+    return groups
+
+
+def _compact_digests(
+    digests: list[dict],
+    output_language: str,
+    summary_style: str,
+    quiz_count: int,
+    flashcard_count: int,
+) -> list[dict]:
+    compacted = digests
+    for _ in range(3):
+        if len(_digest_source(compacted)) <= MAX_SYNTHESIS_CHARACTERS:
+            return compacted
+        groups = _digest_groups(compacted)
+        next_level: list[dict] = []
+        for index, group in enumerate(groups, 1):
+            next_level.append(
+                _request_study_pack(
+                    _digest_source(group),
+                    output_language,
+                    summary_style,
+                    max(2, min(quiz_count, 8)),
+                    max(4, min(flashcard_count, 12)),
+                    source_label=f"ORDERED DIGEST GROUP {index} OF {len(groups)}",
+                    source_context=(
+                        "The source contains faithful digests of consecutive lecture sections. "
+                        "Merge them without omitting unique facts and without adding outside knowledge."
+                    ),
+                    summary_target="about 700-1200 words",
+                    extra_requirements="Keep the entire JSON concise enough for a later final synthesis.",
+                    max_tokens=4000,
+                )
+            )
+        if len(next_level) >= len(compacted) and len(next_level) == 1:
+            compacted = next_level
+            break
+        compacted = next_level
+    if len(_digest_source(compacted)) > MAX_SYNTHESIS_CHARACTERS:
+        raise LectureSiftError(
+            "LS-AI-05",
+            "Uzun dersin tüm bölümleri güvenli sınırlar içinde birleştirilemedi. Hiçbir bölümü kesmeden işlem durduruldu.",
+            "Hierarchical study-pack digests exceeded the safe synthesis input size.",
+            502,
+        )
+    return compacted
+
+
+def make_study_pack(
+    transcript: str,
+    output_language: str,
+    summary_style: str,
+    quiz_count: int,
+    flashcard_count: int,
+) -> dict:
+    if not transcript.strip():
+        return empty_study_pack()
+    if len(transcript) <= LONG_TRANSCRIPT_THRESHOLD:
+        return _request_study_pack(
+            transcript,
+            output_language,
+            summary_style,
+            quiz_count,
+            flashcard_count,
+        )
+
+    sections = _chunk_text(transcript, STUDY_SECTION_CHARACTERS)
+    section_quiz = max(2, (quiz_count + len(sections) - 1) // len(sections) + 1)
+    section_cards = max(4, (flashcard_count + len(sections) - 1) // len(sections) + 2)
+    digests: list[dict] = []
+    for index, section in enumerate(sections, 1):
+        digests.append(
+            _request_study_pack(
+                section,
+                output_language,
+                summary_style,
+                section_quiz,
+                section_cards,
+                source_label=f"TRANSCRIPT SECTION {index} OF {len(sections)}",
+                source_context=(
+                    "Use ONLY this consecutive lecture section. Preserve every distinct topic needed for a later "
+                    "whole-lecture synthesis; never assume that another section will recover omitted facts."
+                ),
+                summary_target="about 350-700 words",
+                extra_requirements="Keep the entire section JSON under roughly 1800 words.",
+                max_tokens=3500,
+            )
+        )
+
+    compacted = _compact_digests(
+        digests,
+        output_language,
+        summary_style,
+        quiz_count,
+        flashcard_count,
+    )
+    return _request_study_pack(
+        _digest_source(compacted),
+        output_language,
+        summary_style,
+        quiz_count,
+        flashcard_count,
+        source_label="ORDERED SECTION DIGESTS",
+        source_context=(
+            "The source contains faithful digests of every consecutive section of one lecture. Synthesize one "
+            "coherent study pack in the original order. Preserve unique facts from every section, remove only true "
+            "duplicates, and never add outside knowledge."
+        ),
+        extra_requirements=(
+            "Distribute quiz questions and flashcards across the whole lecture rather than concentrating on the "
+            "opening sections."
+        ),
+    )

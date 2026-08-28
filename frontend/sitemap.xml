@@ -1,14 +1,2343 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://lecturesift.com/</loc></url>
-  <url><loc>https://lecturesift.com/register.html</loc></url>
-  <url><loc>https://lecturesift.com/login.html</loc></url>
-  <url><loc>https://lecturesift.com/features.html</loc></url>
-  <url><loc>https://lecturesift.com/plans.html</loc></url>
-  <url><loc>https://lecturesift.com/about.html</loc></url>
-  <url><loc>https://lecturesift.com/contact.html</loc></url>
-  <url><loc>https://lecturesift.com/privacy.html</loc></url>
-  <url><loc>https://lecturesift.com/terms.html</loc></url>
-  <url><loc>https://lecturesift.com/cookies.html</loc></url>
-  <url><loc>https://lecturesift.com/refund.html</loc></url>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://lecturesift.com/</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/features.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/features.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/features.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/features.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/features.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/features.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/features.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/features.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/features.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/features.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/features.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/plans.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/plans.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/about.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/about.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/about.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/about.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/about.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/about.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/about.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/about.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/about.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/about.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/about.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/contact.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/contact.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/privacy.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/privacy.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/terms.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/terms.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/distance-sales.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/distance-sales.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/cookies.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/cookies.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/refund.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/refund.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/en/</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/en/features.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/features.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/features.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/features.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/features.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/features.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/features.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/features.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/features.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/features.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/features.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/en/plans.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/plans.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/en/about.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/about.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/about.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/about.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/about.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/about.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/about.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/about.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/about.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/about.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/about.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/en/contact.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/contact.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/en/privacy.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/privacy.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/en/terms.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/terms.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/en/distance-sales.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/distance-sales.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/en/cookies.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/cookies.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/en/refund.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/refund.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/de/</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/de/features.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/features.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/features.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/features.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/features.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/features.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/features.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/features.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/features.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/features.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/features.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/de/plans.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/plans.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/de/about.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/about.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/about.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/about.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/about.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/about.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/about.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/about.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/about.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/about.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/about.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/de/contact.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/contact.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/de/privacy.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/privacy.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/de/terms.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/terms.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/de/distance-sales.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/distance-sales.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/de/cookies.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/cookies.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/de/refund.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/refund.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/fr/</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/fr/features.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/features.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/features.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/features.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/features.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/features.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/features.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/features.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/features.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/features.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/features.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/fr/plans.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/plans.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/fr/about.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/about.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/about.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/about.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/about.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/about.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/about.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/about.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/about.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/about.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/about.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/fr/contact.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/contact.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/fr/privacy.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/privacy.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/fr/terms.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/terms.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/fr/distance-sales.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/distance-sales.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/fr/cookies.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/cookies.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/fr/refund.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/refund.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/es/</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/es/features.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/features.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/features.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/features.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/features.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/features.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/features.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/features.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/features.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/features.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/features.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/es/plans.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/plans.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/es/about.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/about.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/about.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/about.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/about.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/about.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/about.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/about.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/about.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/about.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/about.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/es/contact.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/contact.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/es/privacy.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/privacy.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/es/terms.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/terms.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/es/distance-sales.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/distance-sales.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/es/cookies.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/cookies.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/es/refund.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/refund.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/it/</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/it/features.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/features.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/features.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/features.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/features.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/features.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/features.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/features.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/features.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/features.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/features.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/it/plans.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/plans.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/it/about.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/about.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/about.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/about.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/about.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/about.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/about.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/about.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/about.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/about.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/about.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/it/contact.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/contact.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/it/privacy.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/privacy.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/it/terms.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/terms.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/it/distance-sales.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/distance-sales.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/it/cookies.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/cookies.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/it/refund.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/refund.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/pt/</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/pt/features.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/features.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/features.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/features.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/features.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/features.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/features.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/features.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/features.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/features.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/features.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/pt/plans.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/plans.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/pt/about.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/about.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/about.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/about.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/about.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/about.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/about.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/about.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/about.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/about.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/about.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/pt/contact.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/contact.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/pt/privacy.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/privacy.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/pt/terms.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/terms.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/pt/distance-sales.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/distance-sales.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/pt/cookies.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/cookies.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/pt/refund.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/refund.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ru/</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ru/features.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/features.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/features.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/features.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/features.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/features.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/features.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/features.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/features.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/features.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/features.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ru/plans.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/plans.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ru/about.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/about.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/about.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/about.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/about.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/about.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/about.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/about.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/about.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/about.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/about.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ru/contact.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/contact.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ru/privacy.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/privacy.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ru/terms.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/terms.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ru/distance-sales.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/distance-sales.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ru/cookies.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/cookies.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ru/refund.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/refund.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ar/</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ar/features.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/features.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/features.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/features.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/features.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/features.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/features.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/features.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/features.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/features.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/features.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ar/plans.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/plans.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ar/about.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/about.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/about.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/about.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/about.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/about.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/about.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/about.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/about.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/about.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/about.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ar/contact.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/contact.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ar/privacy.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/privacy.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ar/terms.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/terms.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ar/distance-sales.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/distance-sales.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ar/cookies.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/cookies.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ar/refund.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/refund.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/zh/</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/zh/features.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/features.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/features.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/features.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/features.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/features.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/features.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/features.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/features.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/features.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/features.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/zh/plans.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/plans.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/zh/about.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/about.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/about.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/about.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/about.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/about.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/about.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/about.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/about.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/about.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/about.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/zh/contact.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/contact.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/zh/privacy.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/privacy.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/zh/terms.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/terms.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/zh/distance-sales.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/distance-sales.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/zh/cookies.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/cookies.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/zh/refund.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/refund.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ja/</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ja/features.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/features.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/features.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/features.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/features.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/features.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/features.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/features.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/features.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/features.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/features.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ja/plans.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/plans.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ja/about.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/about.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/about.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/about.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/about.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/about.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/about.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/about.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/about.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/about.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/about.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ja/contact.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/contact.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ja/privacy.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/privacy.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ja/terms.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/terms.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ja/distance-sales.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/distance-sales.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ja/cookies.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/cookies.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ja/refund.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/refund.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ko/</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ko/features.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/features.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/features.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/features.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/features.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/features.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/features.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/features.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/features.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/features.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/features.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ko/plans.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/plans.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ko/about.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/about.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/about.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/about.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/about.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/about.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/about.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/about.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/about.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/about.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/about.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ko/contact.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/contact.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ko/privacy.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/privacy.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ko/terms.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/terms.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ko/distance-sales.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/distance-sales.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ko/cookies.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/cookies.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/ko/refund.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/refund.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/hi/</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/hi/features.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/features.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/features.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/features.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/features.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/features.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/features.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/features.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/features.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/features.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/features.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/features.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/hi/plans.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/plans.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/plans.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/hi/about.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/about.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/about.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/about.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/about.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/about.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/about.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/about.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/about.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/about.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/about.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/about.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/hi/contact.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/contact.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/contact.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/hi/privacy.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/privacy.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/hi/terms.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/terms.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/hi/distance-sales.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/distance-sales.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/distance-sales.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/hi/cookies.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/cookies.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/cookies.html"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/hi/refund.html</loc>
+    <lastmod>2026-08-28</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://lecturesift.com/de/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://lecturesift.com/fr/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://lecturesift.com/es/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://lecturesift.com/it/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://lecturesift.com/pt/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://lecturesift.com/ru/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://lecturesift.com/ar/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://lecturesift.com/zh/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://lecturesift.com/ja/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://lecturesift.com/ko/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="hi" href="https://lecturesift.com/hi/refund.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/refund.html"/>
+  </url>
 </urlset>

@@ -14,16 +14,20 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Table, delete, select, update
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Table, delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from . import config
 from .billing import PLAN_BY_CODE, Plan
 from .billing_service import (
     ENGINE,
+    AUTH_TOKENS,
     MANUAL_ORDERS,
     METADATA,
+    PAYMENT_ORDERS,
+    PAYMENT_CONSENTS,
     SUBSCRIPTIONS,
+    USAGE_EVENTS,
     USERS,
     USER_PREFERENCES,
     USER_PROFILES,
@@ -63,6 +67,19 @@ INSTAGRAM_REWARDS = Table(
     Column("updated_at", DateTime(timezone=True), nullable=False),
 )
 
+REWARDED_AD_CLAIMS = Table(
+    "lecturesift_rewarded_ad_claims",
+    METADATA,
+    Column("id", String(36), primary_key=True),
+    Column("user_id", String(36), ForeignKey("billing_users.id"), nullable=False, index=True),
+    Column("token_hash", String(64), nullable=False, unique=True),
+    Column("status", String(16), nullable=False),
+    Column("minutes", Integer, nullable=False),
+    Column("expires_at", DateTime(timezone=True), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("redeemed_at", DateTime(timezone=True), nullable=True),
+)
+
 EMAIL_CHANGE_REQUESTS = Table(
     "lecturesift_email_change_requests",
     METADATA,
@@ -83,6 +100,34 @@ RUNTIME_METRICS = Table(
     Column("elapsed_seconds", Float, nullable=False),
     Column("size_bytes", Integer, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
+)
+
+ADMIN_CREDIT_EVENTS = Table(
+    "lecturesift_admin_credit_events",
+    METADATA,
+    Column("id", String(36), primary_key=True),
+    Column("user_id", String(36), ForeignKey("billing_users.id"), nullable=False, index=True),
+    Column("minutes_delta", Integer, nullable=False),
+    Column("balance_before", Integer, nullable=False),
+    Column("balance_after", Integer, nullable=False),
+    Column("reason", String(240), nullable=False),
+    Column("actor", String(80), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+)
+
+REFUND_REQUESTS = Table(
+    "lecturesift_refund_requests",
+    METADATA,
+    Column("id", String(36), primary_key=True),
+    Column("user_id", String(36), ForeignKey("billing_users.id"), nullable=False, index=True),
+    Column("order_reference", String(64), nullable=False, index=True),
+    Column("provider", String(24), nullable=False),
+    Column("reason", String(500), nullable=False),
+    Column("status", String(32), nullable=False),
+    Column("admin_note", String(500), nullable=True),
+    Column("reviewed_by", String(80), nullable=True),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
 )
 
 
@@ -107,7 +152,15 @@ PLAN_BY_CODE.setdefault(
 
 def init_rollout_database() -> None:
     init_billing_database()
-    for table in (GUEST_TRIALS, INSTAGRAM_REWARDS, EMAIL_CHANGE_REQUESTS, RUNTIME_METRICS):
+    for table in (
+        GUEST_TRIALS,
+        INSTAGRAM_REWARDS,
+        REWARDED_AD_CLAIMS,
+        EMAIL_CHANGE_REQUESTS,
+        RUNTIME_METRICS,
+        ADMIN_CREDIT_EVENTS,
+        REFUND_REQUESTS,
+    ):
         table.create(bind=ENGINE, checkfirst=True)
 
 
@@ -134,6 +187,233 @@ def _normalize_name(value: str, label: str, *, optional: bool = False) -> str:
 
 def _hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def export_account_data(user_id: str) -> dict[str, Any]:
+    """Return a portable, secret-free snapshot of one user's stored account data."""
+    init_rollout_database()
+    account = account_status(user_id)
+    with ENGINE.connect() as connection:
+        subscriptions = connection.execute(
+            select(SUBSCRIPTIONS)
+            .where(SUBSCRIPTIONS.c.user_id == user_id)
+            .order_by(SUBSCRIPTIONS.c.created_at.desc())
+        ).all()
+        usage = connection.execute(
+            select(USAGE_EVENTS)
+            .where(USAGE_EVENTS.c.user_id == user_id)
+            .order_by(USAGE_EVENTS.c.occurred_at.desc())
+        ).all()
+        reward = connection.execute(
+            select(INSTAGRAM_REWARDS).where(INSTAGRAM_REWARDS.c.user_id == user_id)
+        ).first()
+        rewarded_claims = connection.execute(
+            select(
+                REWARDED_AD_CLAIMS.c.id,
+                REWARDED_AD_CLAIMS.c.status,
+                REWARDED_AD_CLAIMS.c.minutes,
+                REWARDED_AD_CLAIMS.c.created_at,
+                REWARDED_AD_CLAIMS.c.redeemed_at,
+            )
+            .where(REWARDED_AD_CLAIMS.c.user_id == user_id)
+            .order_by(REWARDED_AD_CLAIMS.c.created_at.desc())
+        ).all()
+        credit_events = connection.execute(
+            select(
+                ADMIN_CREDIT_EVENTS.c.id,
+                ADMIN_CREDIT_EVENTS.c.minutes_delta,
+                ADMIN_CREDIT_EVENTS.c.balance_before,
+                ADMIN_CREDIT_EVENTS.c.balance_after,
+                ADMIN_CREDIT_EVENTS.c.reason,
+                ADMIN_CREDIT_EVENTS.c.created_at,
+            )
+            .where(ADMIN_CREDIT_EVENTS.c.user_id == user_id)
+            .order_by(ADMIN_CREDIT_EVENTS.c.created_at.desc())
+        ).all()
+        refund_requests = connection.execute(
+            select(
+                REFUND_REQUESTS.c.id,
+                REFUND_REQUESTS.c.order_reference,
+                REFUND_REQUESTS.c.provider,
+                REFUND_REQUESTS.c.reason,
+                REFUND_REQUESTS.c.status,
+                REFUND_REQUESTS.c.admin_note,
+                REFUND_REQUESTS.c.created_at,
+                REFUND_REQUESTS.c.updated_at,
+            )
+            .where(REFUND_REQUESTS.c.user_id == user_id)
+            .order_by(REFUND_REQUESTS.c.created_at.desc())
+        ).all()
+        payment_consents = connection.execute(
+            select(
+                PAYMENT_CONSENTS.c.order_reference,
+                PAYMENT_CONSENTS.c.terms_version,
+                PAYMENT_CONSENTS.c.privacy_version,
+                PAYMENT_CONSENTS.c.terms_accepted,
+                PAYMENT_CONSENTS.c.early_performance_requested,
+                PAYMENT_CONSENTS.c.language,
+                PAYMENT_CONSENTS.c.accepted_at,
+            )
+            .where(PAYMENT_CONSENTS.c.user_id == user_id)
+            .order_by(PAYMENT_CONSENTS.c.accepted_at.desc())
+        ).all()
+    return {
+        "generated_at": utcnow().isoformat(),
+        "account": account,
+        "subscriptions": [
+            {
+                "plan_code": row.plan_code,
+                "interval": row.interval,
+                "status": row.status,
+                "starts_at": row.starts_at.isoformat(),
+                "ends_at": row.ends_at.isoformat(),
+                "created_at": row.created_at.isoformat(),
+            }
+            for row in subscriptions
+        ],
+        "usage": [
+            {
+                "job_id": row.job_id,
+                "plan_code": row.plan_code,
+                "minutes": row.minutes,
+                "occurred_at": row.occurred_at.isoformat(),
+            }
+            for row in usage
+        ],
+        "instagram_reward": (
+            {
+                "handle": reward.handle,
+                "status": reward.status,
+                "minutes": reward.minutes,
+                "created_at": reward.created_at.isoformat(),
+            }
+            if reward
+            else None
+        ),
+        "rewarded_ad_claims": [
+            {
+                "id": row.id,
+                "status": row.status,
+                "minutes": row.minutes,
+                "created_at": row.created_at.isoformat(),
+                "redeemed_at": row.redeemed_at.isoformat() if row.redeemed_at else None,
+            }
+            for row in rewarded_claims
+        ],
+        "credit_adjustments": [
+            {
+                "id": row.id,
+                "minutes_delta": row.minutes_delta,
+                "balance_before": row.balance_before,
+                "balance_after": row.balance_after,
+                "reason": row.reason,
+                "created_at": row.created_at.isoformat(),
+            }
+            for row in credit_events
+        ],
+        "refund_requests": [
+            {
+                "id": row.id,
+                "order_reference": row.order_reference,
+                "provider": row.provider,
+                "reason": row.reason,
+                "status": row.status,
+                "admin_note": row.admin_note,
+                "created_at": row.created_at.isoformat(),
+                "updated_at": row.updated_at.isoformat(),
+            }
+            for row in refund_requests
+        ],
+        "payment_consents": [
+            {
+                "order_reference": row.order_reference,
+                "terms_version": row.terms_version,
+                "privacy_version": row.privacy_version,
+                "terms_accepted": bool(row.terms_accepted),
+                "early_performance_requested": bool(row.early_performance_requested),
+                "language": row.language,
+                "accepted_at": row.accepted_at.isoformat(),
+            }
+            for row in payment_consents
+        ],
+    }
+
+
+def close_user_account(
+    user_id: str,
+    current_password: str,
+    email_confirmation: str,
+) -> dict[str, str]:
+    """Close access and anonymize identity while retaining required payment records."""
+    init_rollout_database()
+    now = utcnow()
+    with ENGINE.begin() as connection:
+        user = connection.execute(select(USERS).where(USERS.c.id == user_id)).first()
+        profile = connection.execute(
+            select(USER_PROFILES).where(USER_PROFILES.c.user_id == user_id)
+        ).first()
+        if not user or not profile:
+            raise BillingAuthenticationError("Hesap bulunamadı.")
+        if email_confirmation.strip().casefold() != user.email.casefold():
+            raise BillingAuthenticationError("Hesap e-posta adresi eşleşmiyor.")
+        candidate = _hash_password(current_password, bytes.fromhex(user.password_salt))
+        if not secrets.compare_digest(candidate, user.password_hash):
+            raise BillingAuthenticationError("Mevcut parola hatalı.")
+
+        anonymized_email = f"deleted+{uuid.uuid4().hex}@users.invalid"
+        salt = secrets.token_bytes(16)
+        connection.execute(
+            update(USERS)
+            .where(USERS.c.id == user_id)
+            .values(
+                email=anonymized_email,
+                password_salt=salt.hex(),
+                password_hash=_hash_password(secrets.token_urlsafe(48), salt),
+                credit_minutes=0,
+            )
+        )
+        connection.execute(
+            update(USER_PROFILES)
+            .where(USER_PROFILES.c.user_id == user_id)
+            .values(
+                first_name="Deleted",
+                last_name="User",
+                phone=None,
+                country_code="ZZ",
+                email_verified_at=None,
+                phone_verified_at=None,
+                session_version=USER_PROFILES.c.session_version + 1,
+                updated_at=now,
+            )
+        )
+        connection.execute(delete(USER_PREFERENCES).where(USER_PREFERENCES.c.user_id == user_id))
+        connection.execute(delete(AUTH_TOKENS).where(AUTH_TOKENS.c.user_id == user_id))
+        connection.execute(delete(EMAIL_CHANGE_REQUESTS).where(EMAIL_CHANGE_REQUESTS.c.user_id == user_id))
+        connection.execute(delete(INSTAGRAM_REWARDS).where(INSTAGRAM_REWARDS.c.user_id == user_id))
+        connection.execute(delete(REWARDED_AD_CLAIMS).where(REWARDED_AD_CLAIMS.c.user_id == user_id))
+        connection.execute(delete(GUEST_TRIALS).where(GUEST_TRIALS.c.user_id == user_id))
+        connection.execute(
+            update(SUBSCRIPTIONS)
+            .where(
+                SUBSCRIPTIONS.c.user_id == user_id,
+                SUBSCRIPTIONS.c.status.in_(("active", "cancel_at_end")),
+            )
+            .values(status="cancelled")
+        )
+        connection.execute(
+            update(MANUAL_ORDERS)
+            .where(MANUAL_ORDERS.c.user_id == user_id, MANUAL_ORDERS.c.status == "pending")
+            .values(status="cancelled", updated_at=now)
+        )
+        connection.execute(
+            update(PAYMENT_ORDERS)
+            .where(
+                PAYMENT_ORDERS.c.user_id == user_id,
+                PAYMENT_ORDERS.c.status.in_(("created", "token_failed")),
+            )
+            .values(status="cancelled", updated_at=now)
+        )
+    return {"closed_at": now.isoformat(), "status": "closed"}
 
 
 def create_or_resume_guest(fingerprint: str) -> dict[str, Any]:
@@ -403,6 +683,374 @@ def instagram_reward_for_user(user_id: str) -> dict | None:
             select(INSTAGRAM_REWARDS).where(INSTAGRAM_REWARDS.c.user_id == user_id)
         ).first()
     return dict(row._mapping) if row else None
+
+
+def rewarded_ads_for_user(user_id: str) -> dict[str, Any]:
+    """Return a provider-neutral, privacy-safe rewarded-ad allowance."""
+    init_rollout_database()
+    account = account_status(user_id)
+    plan = account.get("plan") or {}
+    entitlements = plan.get("entitlements") or {}
+    plan_ad_free = bool(entitlements.get("ad_free"))
+    configured = bool(config.REWARDED_ADS_ENABLED and config.REWARDED_AD_UNIT_PATH)
+    now = utcnow()
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    with ENGINE.begin() as connection:
+        connection.execute(
+            delete(REWARDED_AD_CLAIMS).where(
+                REWARDED_AD_CLAIMS.c.user_id == user_id,
+                (
+                    (REWARDED_AD_CLAIMS.c.status == "issued")
+                    & (REWARDED_AD_CLAIMS.c.expires_at < now)
+                )
+                | (
+                    (REWARDED_AD_CLAIMS.c.status == "redeemed")
+                    & (REWARDED_AD_CLAIMS.c.redeemed_at < now - timedelta(days=90))
+                ),
+            )
+        )
+        earned = connection.execute(
+            select(func.coalesce(func.sum(REWARDED_AD_CLAIMS.c.minutes), 0)).where(
+                REWARDED_AD_CLAIMS.c.user_id == user_id,
+                REWARDED_AD_CLAIMS.c.status == "redeemed",
+                REWARDED_AD_CLAIMS.c.redeemed_at >= day_start,
+            )
+        ).scalar_one()
+    earned_today = int(earned or 0)
+    remaining_today = max(0, config.REWARDED_AD_DAILY_LIMIT_MINUTES - earned_today)
+    guest = is_guest_user(user_id)
+    return {
+        "configured": configured,
+        "enabled": bool(
+            configured
+            and not guest
+            and not plan_ad_free
+            and remaining_today >= config.REWARDED_AD_MINUTES_PER_VIEW
+        ),
+        "provider": "google_gpt" if configured else None,
+        "ad_unit_path": config.REWARDED_AD_UNIT_PATH if configured else None,
+        "minutes_per_view": config.REWARDED_AD_MINUTES_PER_VIEW,
+        "daily_limit_minutes": config.REWARDED_AD_DAILY_LIMIT_MINUTES,
+        "earned_today": earned_today,
+        "remaining_today": remaining_today,
+        "plan_ad_free": plan_ad_free,
+        "guest": guest,
+    }
+
+
+def issue_rewarded_ad_session(user_id: str) -> dict[str, Any]:
+    state = rewarded_ads_for_user(user_id)
+    if not state["configured"]:
+        raise BillingConfigurationError("Ödüllü reklam özelliği henüz etkinleştirilmemiş.")
+    if state["guest"]:
+        raise BillingError("Dakika kazanmak için ücretsiz hesabını oluştur.")
+    if state["plan_ad_free"]:
+        raise BillingError("Mevcut planın reklamsız kullanım içeriyor.")
+    if not state["enabled"]:
+        raise BillingError("Bugünkü reklamla dakika kazanma sınırına ulaştın.")
+    now = utcnow()
+    token = secrets.token_urlsafe(32)
+    session_id = str(uuid.uuid4())
+    with ENGINE.begin() as connection:
+        connection.execute(
+            REWARDED_AD_CLAIMS.insert().values(
+                id=session_id,
+                user_id=user_id,
+                token_hash=_hash(token),
+                status="issued",
+                minutes=config.REWARDED_AD_MINUTES_PER_VIEW,
+                expires_at=now + timedelta(minutes=10),
+                created_at=now,
+                redeemed_at=None,
+            )
+        )
+    return {
+        "session_id": session_id,
+        "claim_token": token,
+        "expires_in_seconds": 10 * 60,
+        "ad_unit_path": state["ad_unit_path"],
+        "minutes": config.REWARDED_AD_MINUTES_PER_VIEW,
+    }
+
+
+def redeem_rewarded_ad_session(user_id: str, session_id: str, claim_token: str) -> dict[str, Any]:
+    init_rollout_database()
+    now = utcnow()
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    with ENGINE.begin() as connection:
+        user = connection.execute(
+            select(USERS.c.id).where(USERS.c.id == user_id).with_for_update()
+        ).first()
+        if not user:
+            raise BillingAuthenticationError("Hesap bulunamadı.")
+        claim = connection.execute(
+            select(REWARDED_AD_CLAIMS).where(
+                REWARDED_AD_CLAIMS.c.id == session_id,
+                REWARDED_AD_CLAIMS.c.user_id == user_id,
+            )
+        ).first()
+        if not claim or claim.status != "issued":
+            raise BillingError("Bu reklam ödülü geçersiz veya daha önce kullanılmış.")
+        if _as_utc(claim.expires_at) <= now:
+            connection.execute(
+                update(REWARDED_AD_CLAIMS)
+                .where(REWARDED_AD_CLAIMS.c.id == session_id)
+                .values(status="expired")
+            )
+            raise BillingError("Reklam ödülü oturumunun süresi doldu.")
+        if not claim_token or not secrets.compare_digest(_hash(claim_token), claim.token_hash):
+            raise BillingAuthenticationError("Reklam ödülü doğrulanamadı.")
+        earned = int(connection.execute(
+            select(func.coalesce(func.sum(REWARDED_AD_CLAIMS.c.minutes), 0)).where(
+                REWARDED_AD_CLAIMS.c.user_id == user_id,
+                REWARDED_AD_CLAIMS.c.status == "redeemed",
+                REWARDED_AD_CLAIMS.c.redeemed_at >= day_start,
+            )
+        ).scalar_one() or 0)
+        if earned + int(claim.minutes) > config.REWARDED_AD_DAILY_LIMIT_MINUTES:
+            raise BillingError("Bugünkü reklamla dakika kazanma sınırına ulaştın.")
+        changed = connection.execute(
+            update(REWARDED_AD_CLAIMS)
+            .where(
+                REWARDED_AD_CLAIMS.c.id == session_id,
+                REWARDED_AD_CLAIMS.c.status == "issued",
+            )
+            .values(status="redeemed", redeemed_at=now)
+        )
+        if changed.rowcount != 1:
+            raise BillingError("Bu reklam ödülü daha önce kullanılmış.")
+        connection.execute(
+            update(USERS)
+            .where(USERS.c.id == user_id)
+            .values(credit_minutes=USERS.c.credit_minutes + int(claim.minutes))
+        )
+    return {
+        "minutes_added": int(claim.minutes),
+        "rewarded_ads": rewarded_ads_for_user(user_id),
+        "account": account_status(user_id),
+    }
+
+
+def _public_refund_request(row: Any) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "user_id": row.user_id,
+        "order_reference": row.order_reference,
+        "provider": row.provider,
+        "reason": row.reason,
+        "status": row.status,
+        "admin_note": row.admin_note,
+        "created_at": row.created_at.isoformat(),
+        "updated_at": row.updated_at.isoformat(),
+    }
+
+
+def refund_requests_for_user(user_id: str) -> list[dict[str, Any]]:
+    init_rollout_database()
+    with ENGINE.connect() as connection:
+        rows = connection.execute(
+            select(REFUND_REQUESTS)
+            .where(REFUND_REQUESTS.c.user_id == user_id)
+            .order_by(REFUND_REQUESTS.c.created_at.desc())
+        ).all()
+    return [_public_refund_request(row) for row in rows]
+
+
+def create_refund_request(user_id: str, order_reference: str, reason: str) -> dict[str, Any]:
+    reference = order_reference.strip()
+    normalized_reason = " ".join(reason.strip().split())
+    if not reference or len(reference) > 64:
+        raise BillingError("Geçerli bir sipariş numarası seç.")
+    if len(normalized_reason) < 10 or len(normalized_reason) > 500:
+        raise BillingError("İade nedenini 10 ile 500 karakter arasında açıkla.")
+    init_rollout_database()
+    now = utcnow()
+    with ENGINE.begin() as connection:
+        manual_order = connection.execute(
+            select(MANUAL_ORDERS).where(
+                MANUAL_ORDERS.c.reference == reference,
+                MANUAL_ORDERS.c.user_id == user_id,
+            )
+        ).first()
+        payment_order_row = None if manual_order else connection.execute(
+            select(PAYMENT_ORDERS).where(
+                PAYMENT_ORDERS.c.reference == reference,
+                PAYMENT_ORDERS.c.user_id == user_id,
+            )
+        ).first()
+        order = manual_order or payment_order_row
+        if not order:
+            raise BillingError("Bu sipariş hesabında bulunamadı.")
+        if order.status != "paid":
+            raise BillingError("Yalnızca ödenmiş siparişler için iade talebi oluşturulabilir.")
+        existing = connection.execute(
+            select(REFUND_REQUESTS).where(
+                REFUND_REQUESTS.c.user_id == user_id,
+                REFUND_REQUESTS.c.order_reference == reference,
+            )
+        ).first()
+        if existing:
+            return _public_refund_request(existing)
+        request_id = str(uuid.uuid4())
+        provider = "bank_transfer" if manual_order else str(payment_order_row.provider)
+        connection.execute(
+            REFUND_REQUESTS.insert().values(
+                id=request_id,
+                user_id=user_id,
+                order_reference=reference,
+                provider=provider,
+                reason=normalized_reason,
+                status="requested",
+                admin_note=None,
+                reviewed_by=None,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        created = connection.execute(
+            select(REFUND_REQUESTS).where(REFUND_REQUESTS.c.id == request_id)
+        ).first()
+    return _public_refund_request(created)
+
+
+def list_admin_refund_requests(status: str = "requested") -> list[dict[str, Any]]:
+    init_rollout_database()
+    with ENGINE.connect() as connection:
+        query = (
+            select(
+                REFUND_REQUESTS,
+                USERS.c.email.label("user_email"),
+                USER_PROFILES.c.first_name,
+                USER_PROFILES.c.last_name,
+            )
+            .join(USERS, USERS.c.id == REFUND_REQUESTS.c.user_id)
+            .outerjoin(USER_PROFILES, USER_PROFILES.c.user_id == USERS.c.id)
+            .order_by(REFUND_REQUESTS.c.created_at.desc())
+        )
+        if status:
+            query = query.where(REFUND_REQUESTS.c.status == status)
+        rows = connection.execute(query).all()
+    return [
+        {
+            **_public_refund_request(row),
+            "user": {
+                "email": row.user_email,
+                "name": " ".join(part for part in (row.first_name, row.last_name) if part),
+            },
+        }
+        for row in rows
+    ]
+
+
+def decide_refund_request(request_id: str, action: str, note: str, actor: str) -> dict[str, Any]:
+    selected_action = action.strip().lower()
+    normalized_note = " ".join(note.strip().split())
+    if selected_action not in {"approve", "reject", "complete"}:
+        raise BillingError("Geçersiz iade işlemi.")
+    if len(normalized_note) > 500:
+        raise BillingError("Yönetici notu en fazla 500 karakter olabilir.")
+    init_rollout_database()
+    with ENGINE.begin() as connection:
+        request = connection.execute(
+            select(REFUND_REQUESTS)
+            .where(REFUND_REQUESTS.c.id == request_id)
+            .with_for_update()
+        ).first()
+        if not request:
+            raise BillingError("İade talebi bulunamadı.")
+        if selected_action == "complete":
+            if request.status != "approved_pending_refund":
+                raise BillingError("İade, tamamlandı olarak işaretlenmeden önce onaylanmalıdır.")
+            next_status = "completed"
+        else:
+            if request.status != "requested":
+                raise BillingError("Bu iade talebi daha önce incelenmiş.")
+            next_status = "approved_pending_refund" if selected_action == "approve" else "rejected"
+        connection.execute(
+            update(REFUND_REQUESTS)
+            .where(REFUND_REQUESTS.c.id == request_id)
+            .values(
+                status=next_status,
+                admin_note=normalized_note or None,
+                reviewed_by=actor[:80],
+                updated_at=utcnow(),
+            )
+        )
+        updated = connection.execute(
+            select(REFUND_REQUESTS).where(REFUND_REQUESTS.c.id == request_id)
+        ).first()
+    return _public_refund_request(updated)
+
+
+def adjust_admin_credit(user_id: str, minutes_delta: int, reason: str, actor: str) -> dict[str, Any]:
+    delta = int(minutes_delta)
+    normalized_reason = " ".join(reason.strip().split())
+    if delta == 0 or abs(delta) > 10_000:
+        raise BillingError("Dakika değişikliği -10.000 ile 10.000 arasında ve sıfırdan farklı olmalı.")
+    if len(normalized_reason) < 4 or len(normalized_reason) > 240:
+        raise BillingError("İşlem nedenini 4 ile 240 karakter arasında yaz.")
+    init_rollout_database()
+    event_id = str(uuid.uuid4())
+    now = utcnow()
+    with ENGINE.begin() as connection:
+        user = connection.execute(
+            select(USERS).where(USERS.c.id == user_id).with_for_update()
+        ).first()
+        if not user:
+            raise BillingError("Kullanıcı bulunamadı.")
+        before = int(user.credit_minutes)
+        after = before + delta
+        if after < 0:
+            raise BillingError("Kredi bakiyesi sıfırın altına düşürülemez.")
+        connection.execute(
+            update(USERS).where(USERS.c.id == user_id).values(credit_minutes=after)
+        )
+        connection.execute(
+            ADMIN_CREDIT_EVENTS.insert().values(
+                id=event_id,
+                user_id=user_id,
+                minutes_delta=delta,
+                balance_before=before,
+                balance_after=after,
+                reason=normalized_reason,
+                actor=actor[:80],
+                created_at=now,
+            )
+        )
+    return {
+        "id": event_id,
+        "user_id": user_id,
+        "minutes_delta": delta,
+        "balance_before": before,
+        "balance_after": after,
+        "reason": normalized_reason,
+        "created_at": now.isoformat(),
+    }
+
+
+def list_admin_credit_events(limit: int = 100) -> list[dict[str, Any]]:
+    init_rollout_database()
+    safe_limit = max(1, min(int(limit), 250))
+    with ENGINE.connect() as connection:
+        rows = connection.execute(
+            select(ADMIN_CREDIT_EVENTS, USERS.c.email)
+            .join(USERS, USERS.c.id == ADMIN_CREDIT_EVENTS.c.user_id)
+            .order_by(ADMIN_CREDIT_EVENTS.c.created_at.desc())
+            .limit(safe_limit)
+        ).all()
+    return [
+        {
+            "id": row.id,
+            "user_id": row.user_id,
+            "email": row.email,
+            "minutes_delta": row.minutes_delta,
+            "balance_before": row.balance_before,
+            "balance_after": row.balance_after,
+            "reason": row.reason,
+            "created_at": row.created_at.isoformat(),
+        }
+        for row in rows
+    ]
 
 
 def list_admin_orders(status: str = "pending") -> list[dict]:

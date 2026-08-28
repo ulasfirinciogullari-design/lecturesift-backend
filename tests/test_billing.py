@@ -5,6 +5,8 @@ import lecturesift.app as app_module
 from lecturesift import config
 from lecturesift.app import app
 from lecturesift.billing_service import (
+    approve_manual_order,
+    create_manual_order,
     create_password_reset_token,
     login_user,
     register_user,
@@ -28,6 +30,12 @@ def test_billing_catalog_has_hybrid_plans_and_translation_keys():
     assert plans["plus"]["entitlements"]["quiz_questions"] == 30
     assert plans["plus"]["entitlements"]["flashcards"] == 60
     assert plans["plus"]["entitlements"]["export_formats"] == ["pdf", "docx", "txt"]
+    assert plans["free"]["entitlements"]["ad_free"] is False
+    assert plans["free"]["entitlements"]["rewarded_minutes_eligible"] is True
+    assert plans["free"]["entitlements"]["download_enabled"] is False
+    assert plans["credit"]["entitlements"]["download_enabled"] is True
+    assert plans["plus"]["entitlements"]["ad_free"] is True
+    assert plans["plus"]["entitlements"]["rewarded_minutes_eligible"] is False
 
     usd = TestClient(app).get("/billing/plans?currency=USD").json()
     usd_plans = {plan["code"]: plan for plan in usd["plans"]}
@@ -187,23 +195,65 @@ def test_account_country_and_language_preferences_are_saved():
     assert refreshed.json()["account"]["user"]["preferred_language"] == "de"
 
 
+def test_account_profile_and_password_can_be_updated():
+    client = TestClient(app)
+    email, token = _new_account(client)
+    profile = client.patch(
+        "/billing/me/profile",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"first_name": "Ada", "last_name": "Lovelace", "phone": "+905551112233"},
+    )
+    assert profile.status_code == 200
+    assert profile.json()["account"]["user"]["name"] == "Ada Lovelace"
+    assert profile.json()["account"]["user"]["phone"] == "+905551112233"
+
+    changed = client.post(
+        "/billing/me/change-password",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "current_password": "Strong-test-password1",
+            "new_password": "Updated-strong-password2",
+        },
+    )
+    assert changed.status_code == 200
+    new_token = changed.json()["token"]
+    assert new_token and new_token != token
+    assert client.get("/billing/me", headers={"Authorization": f"Bearer {token}"}).status_code == 401
+    assert client.get("/billing/me", headers={"Authorization": f"Bearer {new_token}"}).status_code == 200
+    assert client.post(
+        "/billing/login", json={"email": email, "password": "Updated-strong-password2"}
+    ).status_code == 200
+
+
 def test_manual_transfer_order_and_admin_approval(monkeypatch):
     client = TestClient(app)
     _, token = _new_account(client)
     monkeypatch.setattr(config, "BILLING_BANK_IBAN", "TR000000000000000000000000")
     monkeypatch.setattr(config, "BILLING_BANK_ACCOUNT_HOLDER", "LectureSift Test")
     monkeypatch.setattr(config, "BILLING_SUPPORT_EMAIL", "billing@example.com")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_NAME", "LectureSift Test")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_ADDRESS", "Test Address 1")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_COUNTRY", "TR")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_PHONE", "+905551112233")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_EMAIL", "billing@example.com")
     monkeypatch.setattr(app_module, "BILLING_ADMIN_TOKEN", "test-admin-token")
 
     response = client.post(
         "/billing/manual-transfer/orders",
-        json={"plan_code": "plus", "interval": "monthly"},
+        json={"plan_code": "plus", "interval": "monthly", "terms_accepted": True, "early_performance_requested": True},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
     order = response.json()["order"]
+    assert order["order_number"] == order["reference"]
+    assert order["reference"].startswith("LS-20")
     assert order["amount_minor"] == 69900
     assert order["bank"]["iban"].startswith("TR")
+    assert order["bank"]["account_holder"] == "LectureSift Test"
+
+    public_details = client.get("/billing/manual-transfer")
+    assert public_details.status_code == 200
+    assert public_details.json()["bank"]["account_holder"] == "LectureSift Test"
 
     approval = client.post(
         f"/billing/manual-transfer/orders/{order['reference']}/approve",
@@ -220,11 +270,105 @@ def test_manual_transfer_order_and_admin_approval(monkeypatch):
     assert repeated.status_code == 200
     assert repeated.json()["account"]["plan"]["code"] == "plus"
 
+    overview = client.get(
+        "/billing/admin/overview",
+        headers={"Authorization": "Bearer test-admin-token"},
+    )
+    assert overview.status_code == 200
+    assert overview.json()["counts"]["users"] >= 1
+    assert any(item["order_number"] == order["order_number"] for item in overview.json()["orders"])
+
+    cancelled = client.post(
+        "/billing/me/subscription/cancel",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert cancelled.status_code == 200
+    cancelled_account = cancelled.json()["account"]
+    assert cancelled_account["plan"]["code"] == "plus"
+    assert cancelled_account["subscription"]["status"] == "cancel_at_end"
+    assert cancelled_account["subscription"]["cancel_at_period_end"] is True
+    assert cancelled_account["remaining_minutes"] > 0
+
+    repeated_cancel = client.post(
+        "/billing/me/subscription/cancel",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert repeated_cancel.status_code == 200
+    assert repeated_cancel.json()["account"]["plan"]["code"] == "plus"
+
+
+def test_payment_orders_fail_closed_without_identity_or_explicit_consent(monkeypatch):
+    client = TestClient(app)
+    _, token = _new_account(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    monkeypatch.setattr(config, "BILLING_BANK_IBAN", "TR000000000000000000000000")
+    monkeypatch.setattr(config, "BILLING_BANK_ACCOUNT_HOLDER", "LectureSift Test")
+    monkeypatch.setattr(config, "BILLING_SUPPORT_EMAIL", "billing@example.com")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_NAME", "")
+    missing_identity = client.post(
+        "/billing/manual-transfer/orders",
+        headers=headers,
+        json={"plan_code": "plus", "interval": "monthly", "terms_accepted": True, "early_performance_requested": True},
+    )
+    assert missing_identity.status_code == 503
+
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_NAME", "LectureSift Test")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_ADDRESS", "Test Address 1")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_COUNTRY", "TR")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_PHONE", "+905551112233")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_EMAIL", "billing@example.com")
+    missing_consent = client.post(
+        "/billing/manual-transfer/orders",
+        headers=headers,
+        json={"plan_code": "plus", "interval": "monthly"},
+    )
+    assert missing_consent.status_code == 400
 
 def test_job_creation_requires_account():
     response = TestClient(app).post("/jobs", files={"file": ("notes.txt", b"not a video", "text/plain")})
     assert response.status_code == 401
     assert response.json()["detail"]["code"] == "LS-BILL-01"
+
+
+def test_free_results_are_preview_only_until_a_paid_credit_purchase(tmp_path, monkeypatch):
+    client = TestClient(app)
+    _, token = _new_account(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    user_id = client.get("/billing/me", headers=headers).json()["account"]["user"]["id"]
+    job_id = f"preview-{uuid.uuid4()}"
+    package = tmp_path / "package"
+    package.mkdir()
+    (package / "notes.pdf").write_bytes(b"pdf-preview")
+    (tmp_path / "result.json").write_text(
+        '{"title":"Preview","artifacts":[{"file":"notes.pdf","format":"pdf","label":"Notes","size_bytes":11}]}',
+        encoding="utf-8",
+    )
+    archive = tmp_path / "LectureSift_Paketi.zip"
+    archive.write_bytes(b"zip-preview")
+    JOBS.create(job_id, tmp_path, {"billing_user_id": user_id, "download_entitled": False})
+    JOBS.update(job_id, status="done", result_path=str(archive))
+
+    result = client.get(f"/jobs/{job_id}/result", headers=headers)
+    assert result.status_code == 200
+    assert result.json()["download_enabled"] is False
+    assert client.get(f"/jobs/{job_id}/artifact/notes.pdf", headers=headers).status_code == 402
+    assert client.get(f"/jobs/{job_id}/download", headers=headers).status_code == 402
+
+    monkeypatch.setattr(config, "BILLING_BANK_IBAN", "TR000000000000000000000000")
+    monkeypatch.setattr(config, "BILLING_BANK_ACCOUNT_HOLDER", "LectureSift Test")
+    monkeypatch.setattr(config, "BILLING_SUPPORT_EMAIL", "billing@example.com")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_NAME", "LectureSift Test")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_ADDRESS", "Test Address 1")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_COUNTRY", "TR")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_PHONE", "+905551112233")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_EMAIL", "billing@example.com")
+    order = create_manual_order(user_id, "credit", "one_time")
+    approve_manual_order(order["reference"])
+
+    unlocked = client.get(f"/jobs/{job_id}/result", headers=headers)
+    assert unlocked.json()["download_enabled"] is True
+    assert client.get(f"/jobs/{job_id}/artifact/notes.pdf", headers=headers).status_code == 200
+    assert client.get(f"/jobs/{job_id}/download", headers=headers).status_code == 200
 
 
 def test_job_status_is_visible_only_to_its_owner(tmp_path):
@@ -241,4 +385,41 @@ def test_job_status_is_visible_only_to_its_owner(tmp_path):
     assert client.get(f"/jobs/{job_id}").status_code == 401
     assert client.get(
         f"/jobs/{job_id}", headers={"Authorization": f"Bearer {other_token}"}
+    ).status_code == 404
+
+
+def test_lesson_question_is_scoped_to_completed_job_owner(tmp_path, monkeypatch):
+    client = TestClient(app)
+    _, owner_token = _new_account(client)
+    _, other_token = _new_account(client)
+    owner_headers = {"Authorization": f"Bearer {owner_token}"}
+    owner = client.get("/billing/me", headers=owner_headers).json()["account"]["user"]
+    job_id = f"ask-{uuid.uuid4()}"
+    (tmp_path / "result.json").write_text(
+        '{"options":{"output_language":"tr"},"summary":"Test"}',
+        encoding="utf-8",
+    )
+    JOBS.create(job_id, tmp_path, {"billing_user_id": owner["id"], "output_language": "tr"})
+    JOBS.update(job_id, status="done")
+    monkeypatch.setattr(
+        app_module,
+        "answer_lesson_question",
+        lambda result, question, language: {
+            "answer": "Yalnızca ders içeriğinden yanıt.",
+            "citations": [{"timestamp": "00:01:00", "excerpt": "Dayanak"}],
+            "insufficient": False,
+        },
+    )
+
+    response = client.post(
+        f"/jobs/{job_id}/ask",
+        headers=owner_headers,
+        json={"question": "Bu konu nedir?"},
+    )
+    assert response.status_code == 200
+    assert response.json()["citations"][0]["timestamp"] == "00:01:00"
+    assert client.post(
+        f"/jobs/{job_id}/ask",
+        headers={"Authorization": f"Bearer {other_token}"},
+        json={"question": "Bu konu nedir?"},
     ).status_code == 404

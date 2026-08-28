@@ -8,22 +8,47 @@ WORK_DIR = Path(os.getenv("LECTURESIFT_WORK_DIR", str(Path(tempfile.gettempdir()
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+PRECISE_TRANSCRIPT_TIMESTAMPS = os.getenv(
+    "LECTURESIFT_PRECISE_TRANSCRIPT_TIMESTAMPS", "false"
+).lower() == "true"
 INSTAGRAM_ACCESS_TOKEN = os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
 INSTAGRAM_ACCOUNT_ID = os.getenv("INSTAGRAM_ACCOUNT_ID", "")
 INSTAGRAM_APP_SECRET = os.getenv("INSTAGRAM_APP_SECRET", "")
 INSTAGRAM_ADMIN_TOKEN = os.getenv("INSTAGRAM_ADMIN_TOKEN", "")
 INSTAGRAM_GRAPH_API_VERSION = os.getenv("INSTAGRAM_GRAPH_API_VERSION", "v23.0")
 INSTAGRAM_DAILY_AUTOMATION_ENABLED = os.getenv("INSTAGRAM_DAILY_AUTOMATION_ENABLED", "false").lower() == "true"
+INSTAGRAM_DAILY_MEDIA_TYPE = os.getenv("INSTAGRAM_DAILY_MEDIA_TYPE", "IMAGE").strip().upper()
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
 FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "https://lecturesift.com").rstrip("/")
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{WORK_DIR / 'billing.db'}")
 BILLING_SESSION_SECRET = os.getenv("BILLING_SESSION_SECRET", "")
 BILLING_ADMIN_TOKEN = os.getenv("BILLING_ADMIN_TOKEN", "")
+BILLING_ADMIN_EMAILS = {
+    email.strip().casefold()
+    for email in os.getenv("BILLING_ADMIN_EMAILS", "").split(",")
+    if email.strip()
+}
 BILLING_BANK_IBAN = os.getenv("BILLING_BANK_IBAN", "").replace(" ", "").upper()
 BILLING_BANK_ACCOUNT_HOLDER = os.getenv("BILLING_BANK_ACCOUNT_HOLDER", "").strip()
 BILLING_BANK_NAME = os.getenv("BILLING_BANK_NAME", "").strip()
+PAYTR_MERCHANT_ID = os.getenv("PAYTR_MERCHANT_ID", "").strip()
+PAYTR_MERCHANT_KEY = os.getenv("PAYTR_MERCHANT_KEY", "")
+PAYTR_MERCHANT_SALT = os.getenv("PAYTR_MERCHANT_SALT", "")
+PAYTR_TEST_MODE = os.getenv("PAYTR_TEST_MODE", "true").lower() == "true"
+PAYTR_DEBUG = os.getenv("PAYTR_DEBUG", "false").lower() == "true"
 CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "support@lecturesift.com").strip()
 BILLING_SUPPORT_EMAIL = os.getenv("BILLING_SUPPORT_EMAIL", CONTACT_EMAIL).strip()
+LEGAL_OPERATOR_NAME = os.getenv("LEGAL_OPERATOR_NAME", "").strip()
+LEGAL_OPERATOR_ADDRESS = os.getenv("LEGAL_OPERATOR_ADDRESS", "").strip()
+LEGAL_OPERATOR_COUNTRY = os.getenv("LEGAL_OPERATOR_COUNTRY", "").strip()
+LEGAL_OPERATOR_PHONE = os.getenv("LEGAL_OPERATOR_PHONE", "").strip()
+LEGAL_OPERATOR_EMAIL = os.getenv("LEGAL_OPERATOR_EMAIL", BILLING_SUPPORT_EMAIL).strip()
+LEGAL_TAX_ID = os.getenv("LEGAL_TAX_ID", "").strip()
+LEGAL_REGISTRATION_ID = os.getenv("LEGAL_REGISTRATION_ID", "").strip()
+LEGAL_MERSIS_ID = os.getenv("LEGAL_MERSIS_ID", "").strip()
+LEGAL_TRADE_REGISTRY = os.getenv("LEGAL_TRADE_REGISTRY", "").strip()
+LEGAL_KEP_ADDRESS = os.getenv("LEGAL_KEP_ADDRESS", "").strip()
+LEGAL_CHAMBER_NAME = os.getenv("LEGAL_CHAMBER_NAME", "").strip()
 EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "none").strip().lower()
 EMAIL_FROM = os.getenv("EMAIL_FROM", "").strip()
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
@@ -37,14 +62,33 @@ MAX_SOURCE_FILES = int(os.getenv("LECTURESIFT_MAX_SOURCE_FILES", "24"))
 JOB_TTL_SECONDS = int(os.getenv("LECTURESIFT_JOB_TTL_SECONDS", str(6 * 60 * 60)))
 GUEST_TRIAL_MAX_MINUTES = float(os.getenv("LECTURESIFT_GUEST_TRIAL_MINUTES", "5"))
 INSTAGRAM_BONUS_MINUTES = int(os.getenv("LECTURESIFT_INSTAGRAM_BONUS_MINUTES", "30"))
+REWARDED_ADS_ENABLED = os.getenv("LECTURESIFT_REWARDED_ADS_ENABLED", "false").lower() == "true"
+REWARDED_AD_UNIT_PATH = os.getenv("LECTURESIFT_REWARDED_AD_UNIT_PATH", "").strip()
+REWARDED_AD_MINUTES_PER_VIEW = max(1, int(os.getenv("LECTURESIFT_REWARDED_AD_MINUTES_PER_VIEW", "1")))
+REWARDED_AD_DAILY_LIMIT_MINUTES = max(
+    REWARDED_AD_MINUTES_PER_VIEW,
+    int(os.getenv("LECTURESIFT_REWARDED_AD_DAILY_LIMIT_MINUTES", "3")),
+)
+DISPLAY_ADS_ENABLED = os.getenv("LECTURESIFT_DISPLAY_ADS_ENABLED", "false").lower() == "true"
+DISPLAY_AD_UNIT_PATH = os.getenv("LECTURESIFT_DISPLAY_AD_UNIT_PATH", "").strip()
 
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "")
 REDIS_URL = os.getenv("REDIS_URL", CELERY_BROKER_URL)
+REQUIRE_DURABLE_PROCESSING = os.getenv("LECTURESIFT_REQUIRE_DURABLE_PROCESSING", "false").lower() == "true"
 S3_ENDPOINT_URL = os.getenv("S3_ENDPOINT_URL", "")
 S3_REGION = os.getenv("S3_REGION", "auto")
 S3_BUCKET = os.getenv("S3_BUCKET", "")
 S3_ACCESS_KEY_ID = os.getenv("S3_ACCESS_KEY_ID", "")
 S3_SECRET_ACCESS_KEY = os.getenv("S3_SECRET_ACCESS_KEY", "")
+DATABASE_RECOVERY_CONFIRMED = os.getenv(
+    "LECTURESIFT_DATABASE_RECOVERY_CONFIRMED", "false"
+).lower() == "true"
+OBJECT_RETENTION_CONFIRMED = os.getenv(
+    "LECTURESIFT_OBJECT_RETENTION_CONFIRMED", "false"
+).lower() == "true"
+RECOVERY_DRILL_CONFIRMED = os.getenv(
+    "LECTURESIFT_RECOVERY_DRILL_CONFIRMED", "false"
+).lower() == "true"
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".webm", ".mpeg", ".mpg", ".m4v"}
 

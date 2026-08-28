@@ -51,3 +51,17 @@ ofis kareleri elendi; 01:13, 02:42 ve 04:15'teki üç gerçek slayt korundu.
 NOT
 Render ücretsiz servisleri boşta kaldığında uyuyabilir; ilk istek daha yavaş
 başlayabilir. OPENAI_API_KEY yalnızca Render Environment alanında saklanmalıdır.
+
+PAYTR TEST KURULUMU
+Render'da PAYTR_MERCHANT_ID, PAYTR_MERCHANT_KEY ve PAYTR_MERCHANT_SALT gizli
+ortam değişkenleri tanımlanana kadar kartlı ödeme kapalı kalır. Test sırasında
+PAYTR_TEST_MODE=true kullanılmalıdır. PayTR Bildirim URL adresi:
+https://lecturesift-backend.onrender.com/billing/paytr/callback
+Bu adres kullanıcı sayfası değildir; PayTR'ın imzalı ödeme sonucunu gönderdiği
+sunucu adresidir. Anahtarlar koda, GitHub'a veya uygulama kayıtlarına yazılmaz.
+
+YÖNETİCİ ERİŞİMİ
+Render'daki BILLING_ADMIN_EMAILS değerine doğrulanmış sahip e-posta adresleri
+virgülle ayrılarak yazılır. Bu hesaplar normal giriş yaptıktan sonra yönetici
+panelini otomatik açabilir. BILLING_ADMIN_TOKEN yalnızca acil durum yedeğidir;
+koda veya tarayıcıya kalıcı olarak kaydedilmez.

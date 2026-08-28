@@ -1,6 +1,12 @@
 User-agent: *
 Allow: /
+Disallow: /404.html
+Disallow: /thanks.html
 Disallow: /account.html
+Disallow: /admin.html
+Disallow: /login.html
+Disallow: /register.html
+Disallow: /forgot-password.html
 Disallow: /verify.html
 Disallow: /reset-password.html
 Sitemap: https://lecturesift.com/sitemap.xml

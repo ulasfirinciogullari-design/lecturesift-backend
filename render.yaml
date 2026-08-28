@@ -14,6 +14,8 @@ services:
     envVars:
       - key: OPENAI_API_KEY
         sync: false
+      - key: LECTURESIFT_PRECISE_TRANSCRIPT_TIMESTAMPS
+        value: "false"
       - key: INSTAGRAM_ACCESS_TOKEN
         sync: false
       - key: INSTAGRAM_ACCOUNT_ID
@@ -30,16 +32,50 @@ services:
         generateValue: true
       - key: BILLING_ADMIN_TOKEN
         generateValue: true
+      - key: BILLING_ADMIN_EMAILS
+        sync: false
       - key: BILLING_BANK_IBAN
         sync: false
       - key: BILLING_BANK_ACCOUNT_HOLDER
         sync: false
       - key: BILLING_BANK_NAME
         sync: false
+      - key: PAYTR_MERCHANT_ID
+        sync: false
+      - key: PAYTR_MERCHANT_KEY
+        sync: false
+      - key: PAYTR_MERCHANT_SALT
+        sync: false
+      - key: PAYTR_TEST_MODE
+        value: "true"
+      - key: PAYTR_DEBUG
+        value: "false"
       - key: CONTACT_EMAIL
         value: support@lecturesift.com
       - key: BILLING_SUPPORT_EMAIL
         value: support@lecturesift.com
+      - key: LEGAL_OPERATOR_NAME
+        sync: false
+      - key: LEGAL_OPERATOR_ADDRESS
+        sync: false
+      - key: LEGAL_OPERATOR_COUNTRY
+        sync: false
+      - key: LEGAL_OPERATOR_PHONE
+        sync: false
+      - key: LEGAL_OPERATOR_EMAIL
+        sync: false
+      - key: LEGAL_TAX_ID
+        sync: false
+      - key: LEGAL_REGISTRATION_ID
+        sync: false
+      - key: LEGAL_MERSIS_ID
+        sync: false
+      - key: LEGAL_TRADE_REGISTRY
+        sync: false
+      - key: LEGAL_KEP_ADDRESS
+        sync: false
+      - key: LEGAL_CHAMBER_NAME
+        sync: false
       - key: EMAIL_PROVIDER
         value: resend
       - key: EMAIL_FROM
@@ -50,12 +86,28 @@ services:
         value: https://lecturesift.com
       - key: INSTAGRAM_DAILY_AUTOMATION_ENABLED
         value: true
+      - key: INSTAGRAM_DAILY_MEDIA_TYPE
+        value: REELS
       - key: PUBLIC_BASE_URL
         value: https://lecturesift-backend.onrender.com
       - key: LECTURESIFT_GUEST_TRIAL_MINUTES
         value: "5"
+      - key: LECTURESIFT_REQUIRE_DURABLE_PROCESSING
+        value: "true"
       - key: LECTURESIFT_INSTAGRAM_BONUS_MINUTES
         value: "30"
+      - key: LECTURESIFT_REWARDED_ADS_ENABLED
+        value: "false"
+      - key: LECTURESIFT_REWARDED_AD_UNIT_PATH
+        sync: false
+      - key: LECTURESIFT_REWARDED_AD_MINUTES_PER_VIEW
+        value: "1"
+      - key: LECTURESIFT_REWARDED_AD_DAILY_LIMIT_MINUTES
+        value: "3"
+      - key: LECTURESIFT_DISPLAY_ADS_ENABLED
+        value: "false"
+      - key: LECTURESIFT_DISPLAY_AD_UNIT_PATH
+        sync: false
       - key: CELERY_BROKER_URL
         fromService:
           type: keyvalue
@@ -76,6 +128,12 @@ services:
         sync: false
       - key: S3_SECRET_ACCESS_KEY
         sync: false
+      - key: LECTURESIFT_DATABASE_RECOVERY_CONFIRMED
+        value: "false"
+      - key: LECTURESIFT_OBJECT_RETENTION_CONFIRMED
+        value: "false"
+      - key: LECTURESIFT_RECOVERY_DRILL_CONFIRMED
+        value: "false"
 
   - type: worker
     name: lecturesift-worker
@@ -88,6 +146,8 @@ services:
         value: "1"
       - key: OPENAI_API_KEY
         sync: false
+      - key: LECTURESIFT_PRECISE_TRANSCRIPT_TIMESTAMPS
+        value: "false"
       - key: DATABASE_URL
         fromDatabase:
           name: lecturesift-postgres
@@ -132,5 +192,7 @@ services:
         sync: false
       - key: INSTAGRAM_DAILY_AUTOMATION_ENABLED
         value: true
+      - key: INSTAGRAM_DAILY_MEDIA_TYPE
+        value: REELS
       - key: PUBLIC_BASE_URL
         value: https://lecturesift-backend.onrender.com

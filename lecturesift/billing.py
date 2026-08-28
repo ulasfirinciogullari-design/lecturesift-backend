@@ -29,7 +29,15 @@ class Plan:
 
     @property
     def export_enabled(self) -> bool:
-        return len(self.export_formats) > 1
+        return self.download_enabled
+
+    @property
+    def download_enabled(self) -> bool:
+        return self.code != "free"
+
+    @property
+    def ad_free(self) -> bool:
+        return self.code in {"lite", "plus", "pro", "max", "business"}
 
     def public(self, currency: str = "TRY") -> dict:
         selected_currency = currency if currency in SUPPORTED_CURRENCIES else "TRY"
@@ -60,6 +68,9 @@ class Plan:
                 "history_days": self.history_days,
                 "team_seats": self.team_seats,
                 "priority": self.priority,
+                "ad_free": self.ad_free,
+                "rewarded_minutes_eligible": not self.ad_free,
+                "download_enabled": self.download_enabled,
             },
         }
 
@@ -135,7 +146,7 @@ PROVIDERS = (
         "regions": ["TR"],
         "currencies": ["TRY", "USD", "EUR"],
         "capabilities": ["cards", "one_time", "monthly", "annual", "saved_card"],
-        "status": "fallback",
+        "status": "application_review",
     },
 )
 

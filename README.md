@@ -18,6 +18,8 @@ Production services:
 
 The production deployment stays on `main`.
 
+Long-running production media jobs require the separate queue, worker, and private object-storage setup described in [DURABLE_PROCESSING.md](DURABLE_PROCESSING.md). Do not enable paid processing until its health and restart-recovery checks pass in preview.
+
 ## Local development
 
 Requirements: Python 3.11+, FFmpeg, system DejaVu fonts, and an OpenAI API key.
@@ -54,6 +56,21 @@ The automated suite covers human-readable API errors, SSRF/private-URL rejection
 - `POST /instagram/media`: create an image, Reel, or Story media container
 - `GET /instagram/media/{container_id}`: inspect container processing status
 - `POST /instagram/media/publish`: publish a ready media container
+- `GET /instagram/daily/reel/{date}.mp4`: serve the cached 9:16 video used by the daily cloud scheduler
+
+## Billing and PayTR
+
+Account, bank-transfer, credit-pack, and admin approval data is stored in the configured PostgreSQL database. PayTR checkout remains disabled until all three runtime-only values are present: `PAYTR_MERCHANT_ID`, `PAYTR_MERCHANT_KEY`, and `PAYTR_MERCHANT_SALT`. `PAYTR_TEST_MODE=true` is the safe default while merchant approval and test payments are in progress.
+
+Set `BILLING_ADMIN_EMAILS` to a comma-separated list of verified owner emails so those normal user sessions can open `/admin.html`; `BILLING_ADMIN_TOKEN` remains the emergency fallback and must never be committed or stored in the browser.
+
+Transcript timelines always include clearly labeled audio-chunk start times. Set `LECTURESIFT_PRECISE_TRANSCRIPT_TIMESTAMPS=true` on both the web service and worker only after approving the higher transcription cost; this switches transcription to `gpt-4o-transcribe-diarize` and stores provider-reported segment start/end times and speaker labels. The safe default is `false`.
+
+Configure the PayTR notification URL as:
+
+`https://lecturesift-backend.onrender.com/billing/paytr/callback`
+
+The callback validates PayTR's HMAC signature and the original order amount, and processes repeated notifications idempotently. It must remain public and return plain `OK` only after the verified order state has been recorded. Never commit PayTR credentials or include them in logs.
 
 Instagram credentials are read only from `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_ACCOUNT_ID`, and
 `INSTAGRAM_APP_SECRET`. Publishing routes additionally require `INSTAGRAM_ADMIN_TOKEN` as a Bearer

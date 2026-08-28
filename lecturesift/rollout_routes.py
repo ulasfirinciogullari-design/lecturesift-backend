@@ -13,16 +13,28 @@ from .billing_service import BillingAuthenticationError, BillingConfigurationErr
 from .jobs import JOBS
 from .mailer import EmailDeliveryError
 from .queue import worker_health
+from .security import RATE_LIMITER, RateLimitExceeded
 from .rollout_service import (
+    adjust_admin_credit,
     claim_instagram_reward,
+    close_user_account,
+    create_refund_request,
     create_or_resume_guest,
     decide_admin_order,
     decide_instagram_reward,
+    decide_refund_request,
+    export_account_data,
     instagram_reward_for_user,
     is_guest_user,
     list_admin_orders,
+    list_admin_credit_events,
+    list_admin_refund_requests,
     list_admin_rewards,
+    refund_requests_for_user,
     request_email_change,
+    issue_rewarded_ad_session,
+    redeem_rewarded_ad_session,
+    rewarded_ads_for_user,
     update_profile,
     verify_email_change,
 )
@@ -51,12 +63,37 @@ class EmailChangeVerifyRequest(BaseModel):
     token: str = ""
 
 
+class CloseAccountRequest(BaseModel):
+    current_password: str
+    email_confirmation: str
+
+
 class InstagramRewardRequest(BaseModel):
     handle: str
 
 
+class RewardedAdClaimRequest(BaseModel):
+    session_id: str
+    claim_token: str
+
+
 class DecisionRequest(BaseModel):
     approve: bool
+
+
+class RefundRequest(BaseModel):
+    order_reference: str
+    reason: str
+
+
+class RefundDecisionRequest(BaseModel):
+    action: str
+    note: str = ""
+
+
+class CreditAdjustmentRequest(BaseModel):
+    minutes_delta: int
+    reason: str
 
 
 def _user(authorization: str | None = Header(None)) -> dict:
@@ -71,12 +108,20 @@ def _user(authorization: str | None = Header(None)) -> dict:
         raise HTTPException(401, detail={"code": "LS-BILL-02", "message": str(exc)}) from exc
 
 
-def _admin(authorization: str | None = Header(None)) -> None:
+def _admin(authorization: str | None = Header(None)) -> dict:
     scheme, _, token = (authorization or "").partition(" ")
-    if not config.BILLING_ADMIN_TOKEN:
+    if not config.BILLING_ADMIN_TOKEN and not config.BILLING_ADMIN_EMAILS:
         raise HTTPException(503, detail={"code": "LS-BILL-03", "message": "Admin paneli henüz etkin değil."})
-    if scheme.casefold() != "bearer" or not hmac.compare_digest(token, config.BILLING_ADMIN_TOKEN):
-        raise HTTPException(401, detail={"code": "LS-BILL-04", "message": "Admin yetkisi gerekli."})
+    if scheme.casefold() == "bearer" and token:
+        if config.BILLING_ADMIN_TOKEN and hmac.compare_digest(token, config.BILLING_ADMIN_TOKEN):
+            return {"actor": "admin_token"}
+        try:
+            user = authenticate_session(token)
+            if user["email"].casefold() in config.BILLING_ADMIN_EMAILS:
+                return {"actor": f"user:{user['id']}"}
+        except (BillingAuthenticationError, BillingConfigurationError):
+            pass
+    raise HTTPException(401, detail={"code": "LS-BILL-04", "message": "Admin yetkisi gerekli."})
 
 
 def _billing_failure(exc: Exception, code: str = "LS-BILL-22") -> None:
@@ -97,8 +142,10 @@ def rollout_health() -> dict:
         "ok": True,
         "guest_trial_minutes": config.GUEST_TRIAL_MAX_MINUTES,
         "instagram_bonus_minutes": config.INSTAGRAM_BONUS_MINUTES,
+        "display_ads_configured": bool(config.DISPLAY_ADS_ENABLED and config.DISPLAY_AD_UNIT_PATH),
         "contact_email": config.CONTACT_EMAIL,
         "durable_queue_configured": bool(config.CELERY_BROKER_URL),
+        "durable_processing_required": config.REQUIRE_DURABLE_PROCESSING,
         "object_storage_configured": bool(
             config.S3_ENDPOINT_URL
             and config.S3_BUCKET
@@ -114,6 +161,28 @@ def rollout_health() -> dict:
             and storage["connected"]
             and worker["reachable"]
         ),
+        "recovery": {
+            "database_managed_backup_confirmed": config.DATABASE_RECOVERY_CONFIRMED,
+            "object_retention_confirmed": config.OBJECT_RETENTION_CONFIRMED,
+            "restore_drill_confirmed": config.RECOVERY_DRILL_CONFIRMED,
+            "ready": bool(
+                config.DATABASE_RECOVERY_CONFIRMED
+                and config.OBJECT_RETENTION_CONFIRMED
+                and config.RECOVERY_DRILL_CONFIRMED
+            ),
+        },
+    }
+
+
+@router.get("/ads/config")
+def ads_config() -> dict:
+    configured = bool(config.DISPLAY_ADS_ENABLED and config.DISPLAY_AD_UNIT_PATH)
+    return {
+        "enabled": configured,
+        "provider": "google_gpt" if configured else None,
+        "banner_unit_path": config.DISPLAY_AD_UNIT_PATH if configured else None,
+        "consent_required": True,
+        "paid_plans_ad_free": True,
     }
 
 
@@ -122,6 +191,19 @@ def billing_guest_session(payload: GuestSessionRequest, request: Request) -> dic
     device_id = payload.device_id.strip()
     if len(device_id) < 8 or len(device_id) > 200:
         raise HTTPException(400, detail={"code": "LS-GUEST-01", "message": "Misafir cihaz kimliği geçersiz."})
+    try:
+        RATE_LIMITER.check(
+            "guest-session",
+            device_id,
+            limit=12,
+            window_seconds=60 * 60,
+        )
+    except RateLimitExceeded as exc:
+        raise HTTPException(
+            429,
+            detail={"code": "LS-SEC-01", "message": str(exc)},
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
     user_agent = request.headers.get("user-agent", "unknown")[:300]
     # Keep the trial tied to this browser/device even when the user changes Wi-Fi or mobile network.
     fingerprint = hashlib.sha256(f"{device_id}|{user_agent}".encode("utf-8")).hexdigest()
@@ -143,8 +225,64 @@ def billing_rollout_account(user: dict = Depends(_user)) -> dict:
         "ok": True,
         "guest": is_guest_user(user["id"]),
         "instagram_reward": instagram_reward_for_user(user["id"]),
+        "rewarded_ads": rewarded_ads_for_user(user["id"]),
         "contact_email": config.CONTACT_EMAIL,
     }
+
+
+@router.get("/billing/me/export")
+def billing_export_account(user: dict = Depends(_user)) -> dict:
+    if is_guest_user(user["id"]):
+        raise HTTPException(403, detail={"code": "LS-GUEST-03", "message": "Veri dışa aktarma için hesap oluştur."})
+    try:
+        exported = export_account_data(user["id"])
+    except (BillingError, BillingAuthenticationError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-BILL-26")
+    jobs = []
+    for item in JOBS.list_for_user(user["id"], limit=100):
+        public = JOBS.public(str(item.get("job_id", "")))
+        if public:
+            jobs.append(public)
+    exported["jobs"] = jobs
+    return {"ok": True, "export": exported}
+
+
+@router.get("/billing/me/refund-requests")
+def billing_refund_requests(user: dict = Depends(_user)) -> dict:
+    if is_guest_user(user["id"]):
+        raise HTTPException(403, detail={"code": "LS-GUEST-03", "message": "İade talebi için hesap oluştur."})
+    return {"ok": True, "requests": refund_requests_for_user(user["id"])}
+
+
+@router.post("/billing/me/refund-requests")
+def billing_create_refund_request(payload: RefundRequest, user: dict = Depends(_user)) -> dict:
+    if is_guest_user(user["id"]):
+        raise HTTPException(403, detail={"code": "LS-GUEST-03", "message": "İade talebi için hesap oluştur."})
+    try:
+        result = create_refund_request(user["id"], payload.order_reference, payload.reason)
+    except (BillingError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-REFUND-01")
+    return {
+        "ok": True,
+        "message": "İade talebin oluşturuldu. Sonucu hesabından takip edebilirsin.",
+        "request": result,
+    }
+
+
+@router.post("/billing/me/close-account")
+def billing_close_account(payload: CloseAccountRequest, user: dict = Depends(_user)) -> dict:
+    if is_guest_user(user["id"]):
+        raise HTTPException(403, detail={"code": "LS-GUEST-03", "message": "Misafir oturumu hesap kapatma gerektirmez."})
+    try:
+        result = close_user_account(
+            user["id"],
+            payload.current_password,
+            payload.email_confirmation,
+        )
+    except (BillingError, BillingAuthenticationError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-BILL-27")
+    cleanup = JOBS.delete_for_user(user["id"])
+    return {"ok": True, **result, "deleted_jobs": cleanup["jobs"]}
 
 
 @router.patch("/billing/me/profile")
@@ -203,6 +341,36 @@ def billing_claim_instagram_reward(payload: InstagramRewardRequest, user: dict =
     }
 
 
+@router.get("/billing/rewarded-ads")
+def billing_rewarded_ads(user: dict = Depends(_user)) -> dict:
+    return {"ok": True, "rewarded_ads": rewarded_ads_for_user(user["id"])}
+
+
+@router.post("/billing/rewarded-ads/session")
+def billing_rewarded_ad_session(user: dict = Depends(_user)) -> dict:
+    try:
+        RATE_LIMITER.check("rewarded-ad-session", user["id"], limit=20, window_seconds=24 * 60 * 60)
+        session = issue_rewarded_ad_session(user["id"])
+    except RateLimitExceeded as exc:
+        raise HTTPException(
+            429,
+            detail={"code": "LS-ADS-03", "message": str(exc)},
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
+    except (BillingError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-ADS-01")
+    return {"ok": True, "session": session}
+
+
+@router.post("/billing/rewarded-ads/claim")
+def billing_rewarded_ad_claim(payload: RewardedAdClaimRequest, user: dict = Depends(_user)) -> dict:
+    try:
+        result = redeem_rewarded_ad_session(user["id"], payload.session_id, payload.claim_token)
+    except (BillingError, BillingAuthenticationError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-ADS-02")
+    return {"ok": True, "message": f"{result['minutes_added']} dakika hesabına eklendi.", **result}
+
+
 @router.get("/admin/manual-orders", dependencies=[Depends(_admin)])
 def admin_manual_orders(status: str = Query("pending")) -> dict:
     return {"ok": True, "orders": list_admin_orders(status.strip())}
@@ -215,6 +383,47 @@ def admin_manual_order_decision(reference: str, payload: DecisionRequest) -> dic
     except (BillingError, BillingConfigurationError) as exc:
         _billing_failure(exc, "LS-BILL-09")
     return {"ok": True, "result": result}
+
+
+@router.get("/billing/admin/refund-requests")
+def admin_refund_requests(
+    status: str = Query(""),
+    admin: dict = Depends(_admin),
+) -> dict:
+    del admin
+    return {"ok": True, "requests": list_admin_refund_requests(status.strip())}
+
+
+@router.post("/billing/admin/refund-requests/{request_id}/decision")
+def admin_refund_request_decision(
+    request_id: str,
+    payload: RefundDecisionRequest,
+    admin: dict = Depends(_admin),
+) -> dict:
+    try:
+        result = decide_refund_request(request_id, payload.action, payload.note, admin["actor"])
+    except (BillingError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-REFUND-02")
+    return {"ok": True, "result": result}
+
+
+@router.get("/billing/admin/credit-events")
+def admin_credit_events(limit: int = Query(100, ge=1, le=250), admin: dict = Depends(_admin)) -> dict:
+    del admin
+    return {"ok": True, "events": list_admin_credit_events(limit)}
+
+
+@router.post("/billing/admin/users/{user_id}/credit-adjustment")
+def admin_credit_adjustment(
+    user_id: str,
+    payload: CreditAdjustmentRequest,
+    admin: dict = Depends(_admin),
+) -> dict:
+    try:
+        result = adjust_admin_credit(user_id, payload.minutes_delta, payload.reason, admin["actor"])
+    except (BillingError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-ADMIN-01")
+    return {"ok": True, "message": "Dakika bakiyesi güncellendi ve işlem kaydedildi.", "event": result}
 
 
 @router.get("/admin/instagram-rewards", dependencies=[Depends(_admin)])

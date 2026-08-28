@@ -1,4 +1,5 @@
 import hmac
+import ipaddress
 import json
 import shutil
 import threading
@@ -7,29 +8,38 @@ import traceback
 import uuid
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, HttpUrl
 
+from . import config
 from .billing import public_catalog, public_providers
+from .ai import answer_lesson_question
 from .billing_service import (
     BillingAuthenticationError,
     BillingConfigurationError,
     BillingError,
     account_status,
+    admin_billing_overview,
     approve_manual_order,
     authenticate_session,
-    bank_transfer_available,
     billing_database_health,
+    cancel_active_subscription,
+    change_account_password,
+    commerce_identity,
     create_password_reset_token,
     create_verification_token,
     create_manual_order,
     login_user,
     logout_user,
+    manual_transfer_details,
+    record_payment_consent,
     register_user,
+    require_download_entitlement,
     reset_password,
     update_account_preferences,
+    update_account_profile,
     validate_job_features,
     verify_email,
     verify_email_code,
@@ -50,21 +60,33 @@ from .config import (
     WORK_DIR,
 )
 from .errors import LectureSiftError, normalize_error
-from .daily_social import render_daily_image
+from .daily_social import render_daily_image, render_daily_reel, render_daily_reel_cover
 from .instagram import InstagramAPIError, InstagramClient, InstagramConfigurationError
 from .jobs import JOBS
 from .media import download_remote_video, validate_remote_url
 from .mailer import EmailDeliveryError, email_delivery_configured, send_transactional_email
 from .pipeline import process_job
+from .payments import (
+    PaymentProviderError,
+    create_paytr_checkout,
+    paytr_public_status,
+    process_paytr_callback,
+)
+from .security import RATE_LIMITER, RateLimitExceeded
 
 
 app = FastAPI(title=f"LectureSift Backend V{APP_VERSION}")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        FRONTEND_BASE_URL,
+        "https://www.lecturesift.com",
+        "https://clever-horse-22b1a8.netlify.app",
+    ],
+    allow_origin_regex=r"^https://deploy-preview-[0-9]+--clever-horse-22b1a8\.netlify\.app$|^http://(localhost|127\.0\.0\.1)(:[0-9]+)?$",
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 
@@ -101,11 +123,19 @@ def _billing_user(authorization: str | None = Header(None)) -> dict:
 
 
 def _billing_admin(authorization: str | None = Header(None)) -> None:
-    if not BILLING_ADMIN_TOKEN:
+    if not BILLING_ADMIN_TOKEN and not config.BILLING_ADMIN_EMAILS:
         raise HTTPException(503, detail={"code": "LS-BILL-03", "message": "Ödeme onayı yönetimi etkin değil."})
     scheme, _, value = (authorization or "").partition(" ")
-    if scheme.lower() != "bearer" or not hmac.compare_digest(value, BILLING_ADMIN_TOKEN):
-        raise HTTPException(401, detail={"code": "LS-BILL-04", "message": "Yetkisiz istek."})
+    if scheme.lower() == "bearer" and value:
+        if BILLING_ADMIN_TOKEN and hmac.compare_digest(value, BILLING_ADMIN_TOKEN):
+            return
+        try:
+            user = authenticate_session(value)
+            if user["email"].casefold() in config.BILLING_ADMIN_EMAILS:
+                return
+        except (BillingAuthenticationError, BillingConfigurationError):
+            pass
+    raise HTTPException(401, detail={"code": "LS-BILL-04", "message": "Yetkisiz istek."})
 
 
 def _owned_job(job_id: str, user: dict) -> dict:
@@ -136,6 +166,30 @@ def _public_job(data: dict) -> dict:
         key: value for key, value in result.get("options", {}).items() if key != "billing_user_id"
     }
     return result
+
+
+def _job_download_allowed(data: dict, user: dict) -> bool:
+    if bool((data.get("options") or {}).get("download_entitled")):
+        return True
+    try:
+        require_download_entitlement(user["id"])
+        return True
+    except BillingError:
+        return False
+
+
+def _require_job_download(data: dict, user: dict) -> None:
+    if not _job_download_allowed(data, user):
+        raise HTTPException(
+            402,
+            detail={
+                "code": "LS-BILL-11",
+                "message": (
+                    "Dosya indirmek için tek kullanımlık dakika paketi veya ücretli plan seç. "
+                    "Ücretsiz hesapta sonuçları sitede önizleyebilirsin."
+                ),
+            },
+        )
 
 
 def start_url_job(job_id: str, url: str, job_dir: Path, options: dict) -> str:
@@ -208,11 +262,40 @@ class BillingPasswordResetRequest(BillingTokenRequest):
 class ManualOrderRequest(BaseModel):
     plan_code: str
     interval: str = "monthly"
+    terms_accepted: bool = False
+    early_performance_requested: bool = False
+    language: str = "tr"
 
 
 class BillingPreferencesRequest(BaseModel):
     country_code: str
     preferred_language: str
+
+
+class BillingProfileRequest(BaseModel):
+    first_name: str
+    last_name: str
+    phone: str = ""
+
+
+class BillingPasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class BillingCheckoutRequest(BaseModel):
+    plan_code: str
+    interval: str = "monthly"
+    currency: str = "TRY"
+    billing_address: str
+    phone: str = ""
+    language: str = "tr"
+    terms_accepted: bool = False
+    early_performance_requested: bool = False
+
+
+class LessonQuestionRequest(BaseModel):
+    question: str
 
 
 def _send_verification_email(email: str, token: str, code: str) -> None:
@@ -313,6 +396,45 @@ def _raise_public(error: LectureSiftError) -> None:
     raise HTTPException(status_code=error.status_code, detail=error.public())
 
 
+def _client_ip(request: Request) -> str:
+    candidates = []
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        candidates.extend(part.strip() for part in forwarded.split(","))
+    if request.client:
+        candidates.append(request.client.host)
+    for candidate in candidates:
+        try:
+            return str(ipaddress.ip_address(candidate))
+        except ValueError:
+            continue
+    return ""
+
+
+def _rate_limit(
+    request: Request,
+    scope: str,
+    discriminator: str,
+    *,
+    limit: int,
+    window_seconds: int,
+) -> None:
+    client = _client_ip(request) or (request.client.host if request.client else "unknown")
+    try:
+        RATE_LIMITER.check(
+            scope,
+            f"{client}|{discriminator.strip().casefold()}",
+            limit=limit,
+            window_seconds=window_seconds,
+        )
+    except RateLimitExceeded as exc:
+        raise HTTPException(
+            429,
+            detail={"code": "LS-SEC-01", "message": str(exc)},
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
+
+
 def _upload_extension(file: UploadFile) -> str:
     extension = Path(file.filename or "video.mp4").suffix.lower()
     if extension not in VIDEO_EXTENSIONS:
@@ -398,16 +520,24 @@ def billing_plans(currency: str = "TRY") -> dict:
 
 @app.get("/billing/providers")
 def billing_providers() -> dict:
-    return public_providers()
+    body = public_providers()
+    paytr = paytr_public_status()
+    body["providers"] = [
+        {**provider, **paytr} if provider.get("code") == "paytr" else provider
+        for provider in body["providers"]
+    ]
+    body["commerce_identity"] = commerce_identity()
+    return body
+
+
+@app.get("/billing/operator")
+def billing_operator() -> dict:
+    return commerce_identity()
 
 
 @app.get("/billing/manual-transfer")
 def billing_manual_transfer_status() -> dict:
-    return {
-        "available": bank_transfer_available(),
-        "requires_account": True,
-        "activation": "manual_after_bank_confirmation",
-    }
+    return manual_transfer_details()
 
 
 @app.get("/billing/health")
@@ -416,11 +546,21 @@ def billing_health() -> dict:
         database = billing_database_health()
     except BillingConfigurationError as exc:
         raise HTTPException(503, detail={"code": "LS-BILL-00", "message": str(exc)}) from exc
-    return {"ok": True, "database": database, "email_delivery_configured": email_delivery_configured()}
+    return {
+        "ok": True,
+        "database": database,
+        "email_delivery_configured": email_delivery_configured(),
+        "payments": {
+            "paytr": paytr_public_status(),
+            "bank_transfer": {"configured": manual_transfer_details()["available"]},
+        },
+        "commerce_identity": commerce_identity(),
+    }
 
 
 @app.post("/billing/register")
-def billing_register(payload: BillingRegisterRequest) -> dict:
+def billing_register(payload: BillingRegisterRequest, request: Request) -> dict:
+    _rate_limit(request, "register", payload.email, limit=5, window_seconds=60 * 60)
     if not email_delivery_configured():
         raise HTTPException(
             503,
@@ -455,7 +595,8 @@ def billing_register(payload: BillingRegisterRequest) -> dict:
 
 
 @app.post("/billing/verify-email")
-def billing_verify_email(payload: BillingTokenRequest) -> dict:
+def billing_verify_email(payload: BillingTokenRequest, request: Request) -> dict:
+    _rate_limit(request, "verify-link", payload.token[:16], limit=12, window_seconds=15 * 60)
     try:
         result = verify_email(payload.token)
     except BillingAuthenticationError as exc:
@@ -464,7 +605,8 @@ def billing_verify_email(payload: BillingTokenRequest) -> dict:
 
 
 @app.post("/billing/verify-email-code")
-def billing_verify_email_code(payload: BillingVerificationCodeRequest) -> dict:
+def billing_verify_email_code(payload: BillingVerificationCodeRequest, request: Request) -> dict:
+    _rate_limit(request, "verify-code", payload.email, limit=10, window_seconds=15 * 60)
     try:
         result = verify_email_code(payload.email, payload.code)
     except BillingAuthenticationError as exc:
@@ -473,7 +615,8 @@ def billing_verify_email_code(payload: BillingVerificationCodeRequest) -> dict:
 
 
 @app.post("/billing/resend-verification")
-def billing_resend_verification(payload: BillingEmailRequest) -> dict:
+def billing_resend_verification(payload: BillingEmailRequest, request: Request) -> dict:
+    _rate_limit(request, "resend-verification", payload.email, limit=5, window_seconds=60 * 60)
     if not email_delivery_configured():
         raise HTTPException(503, detail={"code": "LS-BILL-15", "message": "E-posta doğrulama hizmeti henüz etkinleştirilmemiş."})
     try:
@@ -486,7 +629,8 @@ def billing_resend_verification(payload: BillingEmailRequest) -> dict:
 
 
 @app.post("/billing/forgot-password")
-def billing_forgot_password(payload: BillingEmailRequest) -> dict:
+def billing_forgot_password(payload: BillingEmailRequest, request: Request) -> dict:
+    _rate_limit(request, "forgot-password", payload.email, limit=5, window_seconds=60 * 60)
     if not email_delivery_configured():
         raise HTTPException(503, detail={"code": "LS-BILL-15", "message": "E-posta hizmeti henüz etkinleştirilmemiş."})
     try:
@@ -499,7 +643,8 @@ def billing_forgot_password(payload: BillingEmailRequest) -> dict:
 
 
 @app.post("/billing/reset-password")
-def billing_reset_password(payload: BillingPasswordResetRequest) -> dict:
+def billing_reset_password(payload: BillingPasswordResetRequest, request: Request) -> dict:
+    _rate_limit(request, "reset-password", payload.token[:16], limit=10, window_seconds=60 * 60)
     try:
         reset_password(payload.token, payload.new_password)
     except BillingAuthenticationError as exc:
@@ -510,7 +655,8 @@ def billing_reset_password(payload: BillingPasswordResetRequest) -> dict:
 
 
 @app.post("/billing/login")
-def billing_login(payload: BillingAuthRequest) -> dict:
+def billing_login(payload: BillingAuthRequest, request: Request) -> dict:
+    _rate_limit(request, "login", payload.email, limit=10, window_seconds=15 * 60)
     try:
         result = login_user(payload.email, payload.password)
     except BillingConfigurationError as exc:
@@ -547,18 +693,130 @@ def billing_update_preferences(
     return {"ok": True, "message": "Hesap tercihlerin kaydedildi.", "account": account}
 
 
-@app.post("/billing/manual-transfer/orders")
-def billing_create_manual_order(
-    payload: ManualOrderRequest,
+@app.patch("/billing/me/profile")
+def billing_update_profile(
+    payload: BillingProfileRequest,
     user: dict = Depends(_billing_user),
 ) -> dict:
     try:
+        account = update_account_profile(
+            user["id"], payload.first_name, payload.last_name, payload.phone
+        )
+    except BillingAuthenticationError as exc:
+        raise HTTPException(401, detail={"code": "LS-BILL-06", "message": str(exc)}) from exc
+    except BillingError as exc:
+        raise HTTPException(400, detail={"code": "LS-BILL-22", "message": str(exc)}) from exc
+    return {"ok": True, "message": "Profil bilgilerin güncellendi.", "account": account}
+
+
+@app.post("/billing/me/change-password")
+def billing_change_password(
+    payload: BillingPasswordChangeRequest,
+    user: dict = Depends(_billing_user),
+) -> dict:
+    try:
+        result = change_account_password(
+            user["id"], payload.current_password, payload.new_password
+        )
+    except BillingAuthenticationError as exc:
+        raise HTTPException(401, detail={"code": "LS-BILL-23", "message": str(exc)}) from exc
+    except BillingError as exc:
+        raise HTTPException(400, detail={"code": "LS-BILL-19", "message": str(exc)}) from exc
+    return {"ok": True, "message": "Parolan güncellendi.", **result}
+
+
+@app.post("/billing/me/subscription/cancel")
+def billing_cancel_subscription(user: dict = Depends(_billing_user)) -> dict:
+    try:
+        account = cancel_active_subscription(user["id"])
+    except BillingAuthenticationError as exc:
+        raise HTTPException(401, detail={"code": "LS-BILL-06", "message": str(exc)}) from exc
+    except BillingError as exc:
+        raise HTTPException(400, detail={"code": "LS-BILL-28", "message": str(exc)}) from exc
+    return {
+        "ok": True,
+        "message": "Yenileme durduruldu. Ücretli hakların mevcut dönemin sonuna kadar devam edecek.",
+        "account": account,
+    }
+
+
+@app.post("/billing/manual-transfer/orders")
+def billing_create_manual_order(
+    payload: ManualOrderRequest,
+    request: Request,
+    user: dict = Depends(_billing_user),
+) -> dict:
+    try:
+        if not payload.terms_accepted or not payload.early_performance_requested:
+            raise BillingError("Ödeme öncesi bilgilendirmeyi ve hizmetin hemen başlamasını açıkça onaylamalısın.")
         order = create_manual_order(user["id"], payload.plan_code, payload.interval)
+        record_payment_consent(
+            order["reference"],
+            user["id"],
+            terms_accepted=payload.terms_accepted,
+            early_performance_requested=payload.early_performance_requested,
+            language=payload.language,
+            client_ip=_client_ip(request),
+            user_agent=request.headers.get("user-agent", ""),
+        )
     except BillingConfigurationError as exc:
         raise HTTPException(503, detail={"code": "LS-BILL-07", "message": str(exc)}) from exc
     except BillingError as exc:
         raise HTTPException(400, detail={"code": "LS-BILL-08", "message": str(exc)}) from exc
     return {"ok": True, "order": order}
+
+
+@app.post("/billing/checkout")
+def billing_create_checkout(
+    payload: BillingCheckoutRequest,
+    request: Request,
+    user: dict = Depends(_billing_user),
+) -> dict:
+    _rate_limit(request, "checkout", user["id"], limit=10, window_seconds=10 * 60)
+    try:
+        checkout = create_paytr_checkout(
+            user,
+            plan_code=payload.plan_code,
+            interval=payload.interval,
+            currency=payload.currency,
+            user_ip=_client_ip(request),
+            billing_address=payload.billing_address,
+            phone=payload.phone,
+            language=payload.language,
+            terms_accepted=payload.terms_accepted,
+            early_performance_requested=payload.early_performance_requested,
+            user_agent=request.headers.get("user-agent", ""),
+        )
+    except BillingConfigurationError as exc:
+        raise HTTPException(503, detail={"code": "LS-PAY-01", "message": str(exc)}) from exc
+    except (BillingAuthenticationError, BillingError, PaymentProviderError) as exc:
+        raise HTTPException(400, detail={"code": "LS-PAY-02", "message": str(exc)}) from exc
+    return {"ok": True, **checkout}
+
+
+@app.post("/billing/paytr/callback")
+def billing_paytr_callback(
+    merchant_oid: str = Form(...),
+    status: str = Form(...),
+    total_amount: str = Form(...),
+    payment_amount: str = Form(...),
+    hash: str = Form(...),
+    failed_reason_code: str = Form(""),
+    failed_reason_msg: str = Form(""),
+) -> Response:
+    try:
+        process_paytr_callback(
+            merchant_oid=merchant_oid,
+            status=status,
+            total_amount=total_amount,
+            payment_amount=payment_amount,
+            callback_hash=hash,
+            failed_reason_code=failed_reason_code,
+            failed_reason_msg=failed_reason_msg,
+        )
+    except (BillingConfigurationError, BillingError, PaymentProviderError):
+        return Response("PAYTR notification failed", status_code=400, media_type="text/plain")
+    return Response("OK", media_type="text/plain")
 
 
 @app.post(
@@ -573,6 +831,18 @@ def billing_approve_manual_order(reference: str) -> dict:
     except BillingError as exc:
         raise HTTPException(404, detail={"code": "LS-BILL-09", "message": str(exc)}) from exc
     return {"ok": True, "account": account}
+
+
+@app.get(
+    "/billing/admin/overview",
+    dependencies=[Depends(_billing_admin)],
+)
+def billing_admin_overview(limit: int = 100) -> dict:
+    try:
+        overview = admin_billing_overview(limit)
+    except BillingConfigurationError as exc:
+        raise HTTPException(503, detail={"code": "LS-BILL-00", "message": str(exc)}) from exc
+    return {"ok": True, **overview}
 
 
 @app.get("/instagram/health")
@@ -648,6 +918,43 @@ def instagram_daily_image(day: str) -> Response:
     )
 
 
+@app.get("/instagram/daily/reel/{day}.jpg")
+def instagram_daily_reel_cover(day: str) -> Response:
+    """Public deterministic 9:16 cover fetched by Instagram."""
+    from datetime import date
+
+    try:
+        selected_day = date.fromisoformat(day)
+    except ValueError:
+        raise HTTPException(400, detail={"code": "LS-IG-06", "message": "Geçersiz tarih."})
+    return Response(
+        content=render_daily_reel_cover(selected_day),
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+@app.get("/instagram/daily/reel/{day}.mp4")
+def instagram_daily_reel_video(day: str) -> Response:
+    """Public deterministic MP4 fetched by Instagram for scheduled publishing."""
+    from datetime import date
+
+    try:
+        selected_day = date.fromisoformat(day)
+        if abs((selected_day - date.today()).days) > 2:
+            raise HTTPException(404, detail={"code": "LS-IG-06", "message": "Gönderi videosu bulunamadı."})
+        content = render_daily_reel(selected_day)
+    except ValueError:
+        raise HTTPException(400, detail={"code": "LS-IG-06", "message": "Geçersiz tarih."})
+    except RuntimeError as exc:
+        raise HTTPException(503, detail={"code": "LS-IG-07", "message": str(exc)}) from exc
+    return Response(
+        content=content,
+        media_type="video/mp4",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
 @app.get("/jobs/{job_id}")
 def get_job(job_id: str, user: dict = Depends(_billing_user)) -> dict:
     return _public_job(_owned_job(job_id, user))
@@ -666,7 +973,32 @@ def get_result(job_id: str, user: dict = Depends(_billing_user)) -> dict:
     path = Path(data["job_dir"]) / "result.json"
     if not path.exists():
         raise HTTPException(404, detail={"code": "LS-JOB-03", "message": "Sonuç dosyası bulunamadı."})
-    return json.loads(path.read_text(encoding="utf-8"))
+    result = json.loads(path.read_text(encoding="utf-8"))
+    result["download_enabled"] = _job_download_allowed(data, user)
+    return result
+
+
+@app.post("/jobs/{job_id}/ask")
+def ask_lesson_question(
+    job_id: str,
+    payload: LessonQuestionRequest,
+    request: Request,
+    user: dict = Depends(_billing_user),
+) -> dict:
+    data = _owned_job(job_id, user)
+    if data.get("status") != "done":
+        raise HTTPException(409, detail={"code": "LS-JOB-02", "message": "Ders analizi henüz tamamlanmadı."})
+    _rate_limit(request, "lesson-question", user["id"], limit=30, window_seconds=60 * 60)
+    result_path = Path(data["job_dir"]) / "result.json"
+    if not result_path.exists():
+        raise HTTPException(404, detail={"code": "LS-JOB-03", "message": "Sonuç dosyası bulunamadı."})
+    try:
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+        language = str(result.get("options", {}).get("output_language") or "tr")
+        answer = answer_lesson_question(result, payload.question, language)
+    except LectureSiftError as exc:
+        raise HTTPException(exc.status_code, detail=exc.public()) from exc
+    return {"ok": True, **answer}
 
 
 @app.get("/jobs/{job_id}/slide/{filename}")
@@ -685,6 +1017,7 @@ def get_artifact(job_id: str, filename: str, user: dict = Depends(_billing_user)
     data = _owned_job(job_id, user)
     if data.get("status") != "done":
         raise HTTPException(409, detail={"code": "LS-JOB-02", "message": "Ders analizi henüz tamamlanmadı."})
+    _require_job_download(data, user)
     if Path(filename).name != filename:
         raise HTTPException(400, detail={"code": "LS-FILE-01", "message": "Geçersiz dosya adı."})
     path = Path(data["job_dir"]) / "package" / filename
@@ -698,6 +1031,7 @@ def download(job_id: str, user: dict = Depends(_billing_user)) -> FileResponse:
     data = _owned_job(job_id, user)
     if data.get("status") != "done":
         raise HTTPException(409, detail={"code": "LS-JOB-02", "message": "Ders analizi henüz tamamlanmadı."})
+    _require_job_download(data, user)
     return FileResponse(
         data["result_path"],
         media_type="application/zip",
@@ -742,6 +1076,7 @@ async def create_job(
             flashcard_count=options["flashcard_count"],
             output_formats=options["output_formats"],
             summary_style=options["summary_style"],
+            job_type=options["job_type"],
         )
     except BillingError as exc:
         raise HTTPException(402, detail={"code": "LS-BILL-10", "message": str(exc)}) from exc
@@ -778,6 +1113,7 @@ async def create_job(
         raise
 
     options["billing_user_id"] = billing_user["id"]
+    options["download_entitled"] = bool(entitlement.get("download_enabled"))
     source_type = "upload_separate" if layout == "separate" else ("upload_multi" if len(audio_paths) > 1 else "upload")
     JOBS.create(
         job_id,
@@ -831,6 +1167,7 @@ def create_url_job(
             flashcard_count=options["flashcard_count"],
             output_formats=options["output_formats"],
             summary_style=options["summary_style"],
+            job_type=options["job_type"],
         )
     except BillingError as exc:
         raise HTTPException(402, detail={"code": "LS-BILL-10", "message": str(exc)}) from exc
@@ -843,6 +1180,7 @@ def create_url_job(
     job_id = str(uuid.uuid4())
     job_dir = _job_path(job_id)
     options["billing_user_id"] = billing_user["id"]
+    options["download_entitled"] = bool(entitlement.get("download_enabled"))
     JOBS.create(
         job_id,
         job_dir,

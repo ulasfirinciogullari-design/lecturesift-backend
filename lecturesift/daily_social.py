@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import io
+import shutil
+import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass
 from datetime import date
+from functools import lru_cache
 from hashlib import sha256
 
 from PIL import Image, ImageDraw, ImageFont
@@ -16,6 +20,7 @@ from .config import (
     INSTAGRAM_ACCOUNT_ID,
     INSTAGRAM_APP_SECRET,
     INSTAGRAM_DAILY_AUTOMATION_ENABLED,
+    INSTAGRAM_DAILY_MEDIA_TYPE,
     INSTAGRAM_GRAPH_API_VERSION,
     PUBLIC_BASE_URL,
 )
@@ -83,13 +88,63 @@ def render_daily_image(day: date) -> bytes:
     return output.getvalue()
 
 
+def render_daily_reel_cover(day: date) -> bytes:
+    """Render a vertical, readable 9:16 cover without using customer content."""
+    tip = daily_tip(day)
+    image = Image.new("RGB", (1080, 1920), "#071429")
+    draw = ImageDraw.Draw(image)
+    draw.ellipse((620, -180, 1220, 420), fill="#17376d")
+    draw.rounded_rectangle((70, 90, 1010, 1830), radius=58, fill="#0d2244", outline="#39a6ff", width=4)
+    draw.rounded_rectangle((118, 150, 430, 226), radius=30, fill="#18385f")
+    draw.text((154, 171), "LECTURESIFT", fill="#4ce0a3", font=_font(31, True))
+    draw.text((118, 390), "Günün çalışma notu", fill="#a9c9ef", font=_font(44))
+    draw.multiline_text((118, 505), tip.title, fill="white", font=_font(78, True), spacing=14)
+    draw.line((118, 750, 962, 750), fill="#264d78", width=3)
+    draw.multiline_text((118, 860), tip.body, fill="#d9e9ff", font=_font(52), spacing=28)
+    draw.rounded_rectangle((118, 1525, 750, 1612), radius=30, fill="#39a6ff")
+    draw.text((154, 1548), "Daha akıllı çalış.", fill="#061022", font=_font(35, True))
+    draw.text((118, 1705), "lecturesift.com", fill="#4ce0a3", font=_font(31, True))
+    output = io.BytesIO()
+    image.save(output, format="JPEG", quality=92, optimize=True)
+    return output.getvalue()
+
+
+@lru_cache(maxsize=4)
+def render_daily_reel(day: date) -> bytes:
+    """Create a short MP4 Reel with a subtle, deterministic motion effect."""
+    work = tempfile.mkdtemp(prefix="lecturesift-reel-")
+    try:
+        cover_path = f"{work}/cover.jpg"
+        output_path = f"{work}/reel.mp4"
+        with open(cover_path, "wb") as cover:
+            cover.write(render_daily_reel_cover(day))
+        command = [
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-loop", "1", "-i", cover_path, "-t", "9",
+            "-vf", "zoompan=z='min(zoom+0.00025,1.05)':d=270:s=1080x1920:fps=30,format=yuv420p",
+            "-c:v", "libx264", "-preset", "medium", "-movflags", "+faststart", "-an", output_path,
+        ]
+        completed = subprocess.run(command, capture_output=True, timeout=75, check=False)
+        if completed.returncode != 0:
+            raise RuntimeError("Instagram Reel could not be rendered")
+        with open(output_path, "rb") as reel:
+            data = reel.read()
+        if len(data) < 10_000:
+            raise RuntimeError("Instagram Reel output is invalid")
+        return data
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("Instagram Reel renderer is unavailable") from exc
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
 def is_already_published(client: InstagramClient, day: date) -> bool:
     marker = f"#LectureSiftGununNotu{day:%Y%m%d}"
     return any(marker in (item.get("caption") or "") for item in client.get_recent_media().get("data", []))
 
 
 def _wait_until_ready(client: InstagramClient, container_id: str) -> None:
-    for _ in range(12):
+    for _ in range(48):
         status = client.get_container_status(container_id).get("status_code")
         if status == "FINISHED":
             return
@@ -155,11 +210,32 @@ def publish_daily_post(day: date | None = None) -> dict:
         return {"status": "already_published", "kind": "daily", "date": selected_day.isoformat()}
     tip = daily_tip(selected_day)
     base_url = PUBLIC_BASE_URL or "https://lecturesift-backend.onrender.com"
-    media_url = f"{base_url}/instagram/daily/image/{selected_day.isoformat()}.jpg"
-    container = client.create_media_container(media_url=media_url, caption=tip.caption)
+    media_type = INSTAGRAM_DAILY_MEDIA_TYPE.upper()
+    if media_type == "REELS":
+        media_url = f"{base_url}/instagram/daily/reel/{selected_day.isoformat()}.mp4"
+        cover_url = f"{base_url}/instagram/daily/reel/{selected_day.isoformat()}.jpg"
+        container = client.create_media_container(
+            media_url=media_url,
+            caption=tip.caption,
+            media_type="REELS",
+            cover_url=cover_url,
+        )
+    elif media_type == "IMAGE":
+        container = client.create_media_container(
+            media_url=f"{base_url}/instagram/daily/image/{selected_day.isoformat()}.jpg",
+            caption=tip.caption,
+        )
+    else:
+        raise InstagramConfigurationError("INSTAGRAM_DAILY_MEDIA_TYPE must be IMAGE or REELS")
     _wait_until_ready(client, container["id"])
     published = client.publish_media(container["id"])
-    return {"status": "published", "kind": "daily", "date": selected_day.isoformat(), "media_id": published.get("id")}
+    return {
+        "status": "published",
+        "kind": "daily",
+        "media_type": media_type,
+        "date": selected_day.isoformat(),
+        "media_id": published.get("id"),
+    }
 
 
 def main() -> int:

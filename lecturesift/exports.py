@@ -207,12 +207,24 @@ def _save_result(job_dir: Path, result: dict, artifacts: list[dict]) -> None:
     (job_dir / "result.json").write_text(json.dumps(complete_result, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _timestamped_transcript(result: dict) -> str:
+    segments = result.get("transcript_segments") or []
+    if not segments:
+        return result.get("transcript_original", "") or "Videoda ses parçası bulunamadı."
+    rows = []
+    for segment in segments:
+        speaker = str(segment.get("speaker") or "").strip()
+        label = f" {speaker}" if speaker else ""
+        rows.append(f"[{segment.get('timestamp', '00:00:00')}]{label}  {segment.get('text', '')}".strip())
+    return "\n\n".join(rows)
+
+
 def build_artifacts(job_dir: Path, result: dict, slides_dir: Path) -> tuple[list[dict], Path]:
     package_dir = job_dir / "package"
     package_dir.mkdir(parents=True, exist_ok=True)
     formats = set(result.get("options", {}).get("output_formats") or ["pdf"])
     title = result.get("title") or "LectureSift Ders Paketi"
-    original = result.get("transcript_original", "") or "Videoda ses parçası bulunamadı."
+    original = _timestamped_transcript(result)
     translated = result.get("transcript_translated", "")
     documents = [
         ("Ozet", "Özet", f"{title} - Özet", [("Özet", [result.get("summary", "")])], result.get("summary", "")),

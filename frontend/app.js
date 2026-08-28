@@ -132,32 +132,33 @@ const ERRORS = {
     "LS-UPLOAD-02": "The video is larger than the allowed file size.",
     "LS-VIDEO-02": "The video could not be read. It may be damaged or use an unsupported codec."
   },
-  tr: {}
+  tr: {
+    "LS-AI-01": "Yapay zekâ kullanım kotası doldu. Hesap kotası yenilendikten sonra tekrar dene.",
+    "LS-AI-02": "Yapay zekâ hizmeti yoğun. Birkaç dakika sonra tekrar dene.",
+    "LS-URL-02": "Video sağlayıcısı sunucu üzerinden indirmeyi engelledi. Dosyayı yükle veya doğrudan MP4/WebM bağlantısı kullan.",
+    "LS-URL-03": "Bu sayfada indirilebilir video bulunamadı. Doğrudan video bağlantısı kullan veya dosyayı yükle.",
+    "LS-UPLOAD-02": "Video izin verilen dosya boyutundan büyük.",
+    "LS-VIDEO-02": "Video okunamadı. Dosya bozuk olabilir veya desteklenmeyen bir codec kullanıyor olabilir."
+  }
 };
 
 const $ = (id) => document.getElementById(id);
 const uiLanguage = $("uiLanguage"), sourceLanguage = $("sourceLanguage"), outputLanguage = $("outputLanguage");
 const summaryStyle = $("summaryStyle"), videoUrl = $("videoUrl"), jobType = $("jobType");
-let currentLanguage = localStorage.getItem("lecturesift-ui") || "tr";
+let currentLanguage = window.LectureSiftI18n?.language || localStorage.getItem("lecturesift-ui") || "tr";
 let sourceMode = "upload", sourceLayout = "classic", classicVideos = [], audioVideos = [], visualVideos = [];
 let jobId = null, timerStarted = null, timerHandle = null, pollHandle = null;
 let latestResult = null, cardIndex = 0, cardRevealed = false, quizScore = 0, quizAnswered = 0;
 let billingToken = localStorage.getItem("lecturesift-billing-token") || "";
 let billingAccount = null, billingCatalog = null;
 let billingCurrency = localStorage.getItem("lecturesift-currency") || "";
+let requestedJobLoaded = false;
 
 function stringsFor(language) {
   if (language === "tr") return TR;
   if (language === "en") return EN;
-  const values = LEGACY[language] || [];
-  return {
-    ...EN,
-    sourceTitle: values[0] || EN.sourceTitle, uploadTab: values[1] || EN.uploadTab, linkTab: values[2] || EN.linkTab,
-    analyze: values[3] || EN.analyze, sourceLanguage: values[4] || EN.sourceLanguage, outputLanguage: values[5] || EN.outputLanguage,
-    summaryStyle: values[6] || EN.summaryStyle, quizCount: values[7] || EN.quizCount, cardCount: values[8] || EN.cardCount,
-    tabSummary: values[9] || EN.tabSummary, tabNotes: values[10] || EN.tabNotes, tabTranscript: values[11] || EN.tabTranscript,
-    tabSlides: values[12] || EN.tabSlides, downloadAll: values[13] || EN.downloadAll
-  };
+  const exact = window.LectureSiftI18n?.exact;
+  return Object.fromEntries(Object.entries(TR).map(([key, value]) => [key, exact?.(value) || value]));
 }
 function t(key) { return stringsFor(currentLanguage)[key] || EN[key] || key; }
 function escapeHtml(value) { return String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"})[char]); }
@@ -168,11 +169,21 @@ function applyLanguage() {
   const strings = stringsFor(currentLanguage);
   document.documentElement.lang = currentLanguage;
   document.documentElement.dir = currentLanguage === "ar" ? "rtl" : "ltr";
-  document.querySelectorAll("[data-i18n]").forEach(node => { const key = node.dataset.i18n; node.textContent = strings[key] || EN[key] || node.textContent; });
+  document.querySelectorAll("[data-i18n]").forEach(node => {
+    const key = node.dataset.i18n;
+    node.textContent = strings[key] || EN[key] || node.textContent;
+  });
+  const central = window.LectureSiftI18n;
   summaryStyle.innerHTML = [
-    ["short", t("summaryShort")], ["standard", t("summaryStandard")], ["detailed", t("summaryDetailed")], ["exam", t("summaryExam")], ["five_minute", t("summaryFive")]
+    ["short", central?.t("summary.short", t("summaryShort")) || t("summaryShort")],
+    ["standard", central?.t("summary.standard", t("summaryStandard")) || t("summaryStandard")],
+    ["detailed", central?.t("summary.detailed", t("summaryDetailed")) || t("summaryDetailed")],
+    ["exam", central?.t("summary.exam", t("summaryExam")) || t("summaryExam")],
+    ["five_minute", central?.t("summary.fiveMinute", t("summaryFive")) || t("summaryFive")]
   ].map(([value, label]) => `<option value="${value}">${escapeHtml(label)}</option>`).join("");
   summaryStyle.value = "standard";
+  const autoOption = [...sourceLanguage.options].find(option => option.value === "auto");
+  if (autoOption) autoOption.textContent = t("auto");
   localStorage.setItem("lecturesift-ui", currentLanguage);
   ["classic", "audio", "visual"].forEach(renderFileList);
   syncTranslationChoice(); updateOperationUI();
@@ -189,7 +200,18 @@ sourceLanguage.add(new Option(TR.auto, "auto"), 0);
 uiLanguage.value = currentLanguage;
 sourceLanguage.value = "auto";
 outputLanguage.value = currentLanguage in LANGUAGES ? currentLanguage : "tr";
-uiLanguage.addEventListener("change", () => { currentLanguage = uiLanguage.value; applyLanguage(); if (!latestResult) outputLanguage.value = currentLanguage; syncTranslationChoice(); });
+uiLanguage.addEventListener("change", () => {
+  currentLanguage = uiLanguage.value;
+  localStorage.setItem("lecturesift-ui", currentLanguage);
+  const nextPath = window.LectureSiftI18n?.localizedPath?.(currentLanguage);
+  if (nextPath && nextPath !== location.pathname) {
+    location.assign(`${nextPath}${location.search}${location.hash}`);
+    return;
+  }
+  applyLanguage();
+  if (!latestResult) outputLanguage.value = currentLanguage;
+  syncTranslationChoice();
+});
 applyLanguage();
 
 const PLAN_ORDER = ["free", "credit", "lite", "plus", "pro", "max", "business"];
@@ -221,12 +243,26 @@ function fallbackCatalog(currency) {
   return {selected_currency:selected, supported_currencies:Object.keys(FALLBACK_PRICES), plans:PLAN_ORDER.map((code, index) => {
     const [kind, minutes, quiz, cards, formats, summaries, priority, featured] = PLAN_FALLBACK[code];
     const amount = FALLBACK_PRICES[selected][index];
-    return {code, kind, minutes, priority, featured, display_price:amount == null ? null : {currency:selected, amount_minor:amount}, entitlements:{minutes, quiz_questions:quiz, flashcards:cards, export_formats:formats, summary_profiles:summaries, priority}};
+    return {code, kind, minutes, priority, featured, display_price:amount == null ? null : {currency:selected, amount_minor:amount}, entitlements:{minutes, quiz_questions:quiz, flashcards:cards, export_formats:formats, summary_profiles:summaries, priority, download_enabled:code !== "free"}};
   })};
 }
 
 function planCopy(code) {
-  return (PLAN_COPY[currentLanguage] || PLAN_COPY.en)[code] || PLAN_COPY.en[code] || [code, "", ""];
+  const fallback = PLAN_COPY.tr[code] || [code, "", ""];
+  if (currentLanguage === "tr") return fallback;
+  if (currentLanguage === "en") return PLAN_COPY.en[code] || fallback;
+  const central = window.LectureSiftI18n;
+  const amount = {free:60, credit:180, lite:600, plus:2400, pro:6000, max:15000, business:10}[code];
+  const units = code === "business"
+    ? central?.t("plans.userUnit", "kullanıcı")
+    : code === "credit"
+      ? central?.t("plans.minuteUnit", "dakika")
+      : central?.t("plans.minutesPerMonth", "dk / ay");
+  return [
+    central?.t(`plan.${code}`, fallback[0]) || fallback[0],
+    central?.t(`plan.${code}.description`, fallback[1]) || fallback[1],
+    `${Number(amount).toLocaleString(central?.locale || navigator.language)} ${units}`,
+  ];
 }
 
 function detectedCurrency() {
@@ -347,14 +383,16 @@ function renderPlans() {
       export_formats: plan.export_formats || fallback[4],
     };
     const priceInfo = plan.display_price || plan.manual_price;
-    const price = priceInfo ? formatPrice(priceInfo.amount_minor, priceInfo.currency || billingCatalog.selected_currency) : (code === "free" ? formatPrice(0, billingCatalog.selected_currency) : (currentLanguage === "tr" ? "Teklif" : "Quote"));
+    const price = priceInfo ? formatPrice(priceInfo.amount_minor, priceInfo.currency || billingCatalog.selected_currency) : (code === "free" ? formatPrice(0, billingCatalog.selected_currency) : (window.LectureSiftI18n?.t("plans.quote", "Teklif") || "Teklif"));
     const suffix = plan.kind === "subscription" ? t("perMonth") : (plan.kind === "one_time" ? t("oneTime") : "");
-    const buttonLabel = current ? t("currentPlan") : (code === "business" ? (currentLanguage === "tr" ? "Bize ulaş" : "Contact us") : t("choosePlan"));
+    const buttonLabel = current ? t("currentPlan") : (code === "business" ? (window.LectureSiftI18n?.t("plans.contact", "Bize ulaş") || "Bize ulaş") : t("choosePlan"));
+    const summaryNames = {short:"summary.short",standard:"summary.standard",detailed:"summary.detailed",exam:"summary.exam",five_minute:"summary.fiveMinute"};
+    const local = (key, fallback) => window.LectureSiftI18n?.t(key, fallback) || fallback;
     return `<article class="plan-card ${plan.featured ? "featured" : ""}">
       ${plan.featured ? `<span class="plan-badge">${escapeHtml(t("popular"))}</span>` : ""}
       <h3>${escapeHtml(copy[0])}</h3><p>${escapeHtml(copy[1])}</p>
       <div class="plan-price">${escapeHtml(price)} <small>${escapeHtml(suffix)}</small></div>
-      <ul class="plan-features"><li>${escapeHtml(copy[2])}</li><li>${entitlements.quiz_questions ?? "∞"} ${currentLanguage === "tr" ? "quiz sorusu" : "quiz questions"}</li><li>${entitlements.flashcards ?? "∞"} ${currentLanguage === "tr" ? "bilgi kartı" : "flashcards"}</li><li>${escapeHtml((entitlements.summary_profiles || []).map(profile => ({short:"Hızlı",standard:"Standart",detailed:"Ayrıntılı",exam:"Sınav",five_minute:"5 dakika"}[profile] || profile)).join(", "))} ${currentLanguage === "tr" ? "özet" : "summary"}</li><li>${escapeHtml((entitlements.export_formats || []).join(", ").toUpperCase())}</li><li>${plan.priority === "priority" ? (currentLanguage === "tr" ? "Öncelikli işleme" : "Priority processing") : (currentLanguage === "tr" ? "Standart işleme" : "Standard processing")}</li></ul>
+      <ul class="plan-features"><li>${escapeHtml(copy[2])}</li><li>${entitlements.quiz_questions ?? "∞"} ${escapeHtml(local("plans.quizShort", "quiz sorusu"))}</li><li>${entitlements.flashcards ?? "∞"} ${escapeHtml(local("plans.cardsShort", "bilgi kartı"))}</li><li>${escapeHtml((entitlements.summary_profiles || []).map(profile => local(summaryNames[profile], profile)).join(", "))} ${escapeHtml(local("plans.summaryShort", "özet"))}</li><li>${escapeHtml(entitlements.download_enabled === false ? local("plans.previewOnly", "Sitede önizleme · dosya indirme yok") : (entitlements.export_formats || []).join(", ").toUpperCase())}</li><li>${escapeHtml(local(plan.priority === "priority" ? "priority.priority" : "priority.standard", plan.priority === "priority" ? "Öncelikli" : "Standart"))} ${escapeHtml(local("plans.processingSuffix", "işleme"))}</li></ul>
       <button class="plan-action" type="button" data-plan="${escapeHtml(code)}" ${current || code === "free" || code === "business" ? "disabled" : ""}>${escapeHtml(buttonLabel)}</button>
     </article>`;
   }).join("");
@@ -363,7 +401,7 @@ function renderPlans() {
 
 async function createTransferOrder(planCode) {
   if (!billingToken) { location.href = `/login.html?next=${encodeURIComponent("/#plans")}`; return; }
-  if (billingCurrency !== "TRY") { showError(currentLanguage === "tr" ? "Global kart ödemeleri PayTR etkinleştiğinde açılacak. Şimdilik havale için TRY seçebilirsin." : "Global card payments will open with the payment provider. Select TRY to use bank transfer for now.", "LS-BILL-20"); return; }
+  if (billingCurrency !== "TRY") { showError(window.LectureSiftI18n?.t("plans.globalPending", "Global kart ödemeleri PayTR etkinleştiğinde açılacak. Şimdilik havale için TRY seçebilirsin.") || "Global kart ödemeleri PayTR etkinleştiğinde açılacak. Şimdilik havale için TRY seçebilirsin.", "LS-BILL-20"); return; }
   const plan = billingCatalog.plans.find(item => item.code === planCode);
   const interval = plan?.kind === "one_time" ? "one_time" : "monthly";
   try {
@@ -389,13 +427,32 @@ async function loadBilling() {
     billingCurrency = selected;
     localStorage.setItem("lecturesift-currency", billingCurrency);
     if ($("billingCurrency")) $("billingCurrency").value = billingCurrency;
-    renderPlans(); await refreshBillingAccount();
+    renderPlans(); await refreshBillingAccount(); await restoreRequestedJob();
   } catch {
     billingCatalog = fallbackCatalog(detectedCurrency());
     billingCurrency = billingCatalog.selected_currency;
     if ($("billingCurrency")) $("billingCurrency").value = billingCurrency;
     renderPlans();
-    await refreshBillingAccount();
+    await refreshBillingAccount(); await restoreRequestedJob();
+  }
+}
+
+async function restoreRequestedJob() {
+  if (requestedJobLoaded || !billingToken || !billingAccount) return;
+  const requested = new URLSearchParams(location.search).get("job") || "";
+  if (!/^[A-Za-z0-9-]{8,80}$/.test(requested)) return;
+  requestedJobLoaded = true;
+  jobId = requested;
+  try {
+    const response = await fetch(`${API}/jobs/${encodeURIComponent(jobId)}`, {cache:"no-store", headers:{Authorization:`Bearer ${billingToken}`}});
+    if (!response.ok) { const error = await responseError(response); showError(error.message, error.code); return; }
+    const job = await response.json();
+    updateJobView(job);
+    if (job.status === "done") await loadResult();
+    else if (job.status === "error") showError(job.error, job.error_code);
+    else { startTimer(); pollJob(); }
+  } catch (error) {
+    showError(error.message, "LS-NETWORK-01");
   }
 }
 
@@ -531,8 +588,12 @@ function updateJobView(job) {
 }
 
 function showError(message, code = "LS-SYSTEM-01") {
-  const translated = (ERRORS[currentLanguage] || ERRORS.en)[code] || message || t("errorFallback");
-  $("errorMessage").textContent = translated; $("errorCode").textContent = `Hata kodu: ${code}`; $("errorBox").hidden = false;
+  const known = ERRORS.tr[code];
+  const translated = known
+    ? (currentLanguage === "tr" ? known : currentLanguage === "en" ? ERRORS.en[code] : window.LectureSiftI18n?.exact(known))
+    : message || t("errorFallback");
+  $("errorMessage").textContent = translated || message || t("errorFallback");
+  $("errorCode").textContent = `${window.LectureSiftI18n?.exact("Hata kodu") || "Hata kodu"}: ${code}`; $("errorBox").hidden = false;
   $("analyzeButton").disabled = false; clearTimeout(pollHandle); clearInterval(timerHandle);
 }
 $("closeError").onclick = () => { $("errorBox").hidden = true; };
@@ -617,9 +678,15 @@ async function loadResult() {
 function renderResult(data) {
   $("resultHeading").textContent = data.title || "LectureSift";
   const utilityResult = data.job_type && data.job_type !== "study_pack";
-  $("resultMeta").textContent = utilityResult ? `${data.artifacts?.length || 0} ${t("tabFiles")}` : `${data.slides?.length || 0} ${t("tabSlides")} · ${data.quiz?.length || 0} Quiz · ${data.flashcards?.length || 0} ${t("tabCards")}`;
-  $("downloadAll").href = "#";
-  $("downloadAll").onclick = event => { event.preventDefault(); downloadProtected(`/jobs/${jobId}/download`, "LectureSift_Paketi.zip"); };
+  const timestampLabel = data.transcript_timestamps_mode === "provider_segments"
+    ? window.LectureSiftI18n?.t("transcript.preciseTimestamps", "Hassas zaman damgaları")
+    : window.LectureSiftI18n?.t("transcript.estimatedTimestamps", "Bölüm başlangıç zamanları");
+  $("resultMeta").textContent = utilityResult ? `${data.artifacts?.length || 0} ${t("tabFiles")}` : `${data.slides?.length || 0} ${t("tabSlides")} · ${data.quiz?.length || 0} Quiz · ${data.flashcards?.length || 0} ${t("tabCards")} · ${timestampLabel}`;
+  const canDownload = data.download_enabled !== false;
+  const unlockText = window.LectureSiftI18n?.t("plans.unlockDownload", "Dosyaları indirmek için paket seç") || "Dosyaları indirmek için paket seç";
+  $("downloadAll").href = canDownload ? "#" : (window.LectureSiftI18n?.localizedPath?.(currentLanguage, "/plans.html") || "/plans.html");
+  $("downloadAll").textContent = canDownload ? t("downloadAll") : unlockText;
+  $("downloadAll").onclick = canDownload ? (event => { event.preventDefault(); downloadProtected(`/jobs/${jobId}/download`, "LectureSift_Paketi.zip"); }) : null;
   $("summaryContent").textContent = data.summary || t("noContent");
   $("keyPoints").innerHTML = (data.key_points || []).map(point => `<div class="key-item"><i>✦</i><span>${escapeHtml(point)}</span></div>`).join("");
   const terms = (data.important_terms || []).map(item => `<div class="note-item"><h3>${escapeHtml(item.term)}</h3><p>${escapeHtml(item.definition)}</p></div>`).join("");
@@ -636,7 +703,8 @@ function renderResult(data) {
       image.src = objectUrl;
     } catch { image.alt = t("noSlides"); }
   });
-  renderQuiz(data.quiz || []); renderCards(); renderFiles(data.artifacts || []);
+  renderQuiz(data.quiz || []); renderExamPrep(data); renderCards(); renderFiles(data.artifacts || [], canDownload);
+  $("lessonQuestionForm").reset(); $("lessonAnswer").hidden = true; $("lessonAnswer").replaceChildren();
   document.querySelectorAll(".result-tab").forEach(button => { button.hidden = utilityResult && button.dataset.pane !== "files"; button.classList.toggle("active", utilityResult ? button.dataset.pane === "files" : button.dataset.pane === "summary"); });
   document.querySelectorAll(".result-pane").forEach(pane => pane.classList.remove("active"));
   $(utilityResult ? "pane-files" : "pane-summary").classList.add("active");
@@ -649,9 +717,34 @@ function renderTranscript(translated) {
   document.querySelector(".transcript-tools").hidden = !hasTranslation;
   translated = hasTranslation && translated;
   $("showTranslated").classList.toggle("active", translated); $("showOriginal").classList.toggle("active", !translated);
-  const value = translated ? (latestResult.transcript_translated || latestResult.transcript_original) : latestResult.transcript_original;
+  const segments = latestResult.transcript_segments || [];
+  const timestamped = segments.map(segment => `[${segment.timestamp || "00:00:00"}]${segment.speaker ? ` ${segment.speaker}` : ""}  ${segment.text || ""}`).join("\n\n");
+  const value = translated ? (latestResult.transcript_translated || latestResult.transcript_original) : (timestamped || latestResult.transcript_original);
   $("transcriptContent").textContent = value || t("noContent");
 }
+
+$("lessonQuestionForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!jobId || !latestResult) return;
+  const question = $("lessonQuestion").value.trim();
+  if (question.length < 3) return;
+  const button = $("lessonQuestionButton");
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = window.LectureSiftI18n?.t("ask.thinking", "Yanıt hazırlanıyor…") || "Yanıt hazırlanıyor…";
+  try {
+    const body = await billingRequest(`/jobs/${encodeURIComponent(jobId)}/ask`, {
+      method:"POST", body:JSON.stringify({question}),
+    });
+    const citations = (body.citations || []).map(item => `<li><strong>${escapeHtml(item.timestamp || "00:00:00")}</strong>${item.speaker ? ` · ${escapeHtml(item.speaker)}` : ""}<span>${escapeHtml(item.excerpt || "")}</span></li>`).join("");
+    $("lessonAnswer").innerHTML = `<h4>${escapeHtml(window.LectureSiftI18n?.t("ask.answer", "Yanıt") || "Yanıt")}</h4><p>${escapeHtml(body.answer)}</p>${citations ? `<h4>${escapeHtml(window.LectureSiftI18n?.t("ask.sources", "Ders içindeki dayanaklar") || "Ders içindeki dayanaklar")}</h4><ol>${citations}</ol>` : ""}`;
+    $("lessonAnswer").hidden = false;
+  } catch (error) {
+    showError(error.message, error.code || "LS-AI-07");
+  } finally {
+    button.disabled = false; button.textContent = original;
+  }
+});
 $("showTranslated").onclick = () => renderTranscript(true); $("showOriginal").onclick = () => renderTranscript(false);
 
 function renderQuiz(items) {
@@ -663,9 +756,43 @@ function renderQuiz(items) {
     shell.classList.add("answered"); quizAnswered += 1;
     shell.querySelectorAll(".quiz-option").forEach(option => { option.disabled = true; if (Number(option.dataset.option) === correct) option.classList.add("correct"); });
     if (selected === correct) quizScore += 1; else button.classList.add("wrong");
-    $("quizStatus").textContent = `${t("score")}: ${quizScore}/${items.length} · ${quizAnswered}/${items.length}`;
+    $("quizStatus").textContent = `${t("score")}: ${quizScore}/${items.length} · ${quizAnswered}/${items.length}`; updateExamReadiness(items.length);
   });
 }
+
+function updateExamReadiness(total = latestResult?.quiz?.length || 0) {
+  const answered = Math.min(quizAnswered, total);
+  const score = answered ? Math.round(quizScore / answered * 100) : 0;
+  $("examReadiness").textContent = answered ? `%${score} · ${answered}/${total}` : window.LectureSiftI18n?.t("exam.notStarted", "Henüz deneme çözülmedi") || "Henüz deneme çözülmedi";
+  $("examRecommendation").textContent = !answered
+    ? (window.LectureSiftI18n?.t("exam.startHelp", "Önce önemli konuları gözden geçir, ardından karışık denemeyi başlat.") || "Önce önemli konuları gözden geçir, ardından karışık denemeyi başlat.")
+    : score >= 80
+      ? (window.LectureSiftI18n?.t("exam.strong", "Bu derste güçlü görünüyorsun; yanlışlarını son kez gözden geçir.") || "Bu derste güçlü görünüyorsun; yanlışlarını son kez gözden geçir.")
+      : (window.LectureSiftI18n?.t("exam.review", "Sınav odaklarını ve yanlış yanıt açıklamalarını tekrar et.") || "Sınav odaklarını ve yanlış yanıt açıklamalarını tekrar et.");
+}
+
+function renderExamPrep(data) {
+  const focus = data.exam_focus || [];
+  $("examFocusList").innerHTML = focus.length ? focus.map((item, index) => `<div class="note-item"><h3>${index + 1}</h3><p>${escapeHtml(item)}</p></div>`).join("") : `<div class="empty-state">${escapeHtml(window.LectureSiftI18n?.t("exam.noFocus", "Bu ders için ayrı sınav odağı oluşmadı; quiz ve bilgi kartlarını kullanabilirsin.") || "Bu ders için ayrı sınav odağı oluşmadı; quiz ve bilgi kartlarını kullanabilirsin.")}</div>`;
+  $("startExamButton").disabled = !(data.quiz || []).length;
+  updateExamReadiness((data.quiz || []).length);
+}
+
+function shuffledExamQuestions(items) {
+  return [...items].sort(() => Math.random() - .5).map(item => {
+    const options = (item.options || []).map((value, index) => ({value, correct:index === Number(item.answer_index)})).sort(() => Math.random() - .5);
+    return {...item, options:options.map(option => option.value), answer_index:options.findIndex(option => option.correct)};
+  });
+}
+
+$("startExamButton").addEventListener("click", () => {
+  const items = latestResult?.quiz || [];
+  if (!items.length) return;
+  renderQuiz(shuffledExamQuestions(items));
+  document.querySelectorAll(".result-tab").forEach(item => item.classList.toggle("active", item.dataset.pane === "quiz"));
+  document.querySelectorAll(".result-pane").forEach(item => item.classList.toggle("active", item.id === "pane-quiz"));
+  $("pane-quiz").scrollIntoView({behavior:"smooth", block:"start"});
+});
 
 function renderCards() {
   const cards = latestResult?.flashcards || [];
@@ -678,8 +805,10 @@ function renderCards() {
   $("repeatCard").onclick = () => { cardRevealed = false; renderCards(); };
 }
 
-function renderFiles(files) {
-  $("filesContent").innerHTML = files.map(file => `<div class="file-item"><div><strong>${escapeHtml(file.label)}</strong><small>${escapeHtml(file.format)} · ${formatBytes(file.size_bytes)}</small></div><a href="#" data-artifact="${encodeURIComponent(file.file)}" data-filename="${escapeHtml(file.file)}">${escapeHtml(t("download"))}</a></div>`).join("") || `<div class="empty-state">${escapeHtml(t("noContent"))}</div>`;
+function renderFiles(files, canDownload = true) {
+  const plansPath = window.LectureSiftI18n?.localizedPath?.(currentLanguage, "/plans.html") || "/plans.html";
+  const unlockText = window.LectureSiftI18n?.t("plans.unlockDownload", "Dosyaları indirmek için paket seç") || "Dosyaları indirmek için paket seç";
+  $("filesContent").innerHTML = files.map(file => `<div class="file-item"><div><strong>${escapeHtml(file.label)}</strong><small>${escapeHtml(file.format)} · ${formatBytes(file.size_bytes)}</small></div><a href="${canDownload ? "#" : plansPath}" ${canDownload ? `data-artifact="${encodeURIComponent(file.file)}" data-filename="${escapeHtml(file.file)}"` : ""}>${escapeHtml(canDownload ? t("download") : unlockText)}</a></div>`).join("") || `<div class="empty-state">${escapeHtml(t("noContent"))}</div>`;
   document.querySelectorAll("a[data-artifact]").forEach(anchor => anchor.onclick = event => {
     event.preventDefault();
     downloadProtected(`/jobs/${jobId}/artifact/${anchor.dataset.artifact}`, anchor.dataset.filename);

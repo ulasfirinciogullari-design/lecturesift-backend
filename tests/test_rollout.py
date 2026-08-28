@@ -29,6 +29,26 @@ def auth(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
+def test_display_ads_are_disabled_by_default_and_hide_unit_details(monkeypatch):
+    monkeypatch.setattr(config, "DISPLAY_ADS_ENABLED", False)
+    monkeypatch.setattr(config, "DISPLAY_AD_UNIT_PATH", "/1234567/lecturesift_banner")
+    disabled = client.get("/ads/config")
+    assert disabled.status_code == 200
+    assert disabled.json() == {
+        "enabled": False,
+        "provider": None,
+        "banner_unit_path": None,
+        "consent_required": True,
+        "paid_plans_ad_free": True,
+    }
+
+    monkeypatch.setattr(config, "DISPLAY_ADS_ENABLED", True)
+    enabled = client.get("/ads/config").json()
+    assert enabled["enabled"] is True
+    assert enabled["provider"] == "google_gpt"
+    assert enabled["banner_unit_path"] == "/1234567/lecturesift_banner"
+
+
 def test_guest_trial_is_five_minutes_resumable_and_single_job():
     device = f"device-{uuid.uuid4()}"
     first = client.post("/billing/guest-session", json={"device_id": device})
@@ -98,12 +118,17 @@ def test_manual_order_admin_rejection_and_instagram_approval(monkeypatch):
     monkeypatch.setattr(config, "BILLING_BANK_IBAN", "TR000000000000000000000000")
     monkeypatch.setattr(config, "BILLING_BANK_ACCOUNT_HOLDER", "Test Holder")
     monkeypatch.setattr(config, "BILLING_SUPPORT_EMAIL", "support@example.com")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_NAME", "LectureSift Test")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_ADDRESS", "Test Address 1")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_COUNTRY", "TR")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_PHONE", "+905551112233")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_EMAIL", "support@example.com")
     monkeypatch.setattr(config, "BILLING_ADMIN_TOKEN", "admin-secret")
 
     order = client.post(
         "/billing/manual-transfer/orders",
         headers=auth(token),
-        json={"plan_code": "plus", "interval": "annual"},
+        json={"plan_code": "plus", "interval": "annual", "terms_accepted": True, "early_performance_requested": True},
     )
     assert order.status_code == 200
     reference = order.json()["order"]["reference"]
@@ -147,6 +172,144 @@ def test_manual_order_admin_rejection_and_instagram_approval(monkeypatch):
         json={"handle": instagram_handle},
     )
     assert duplicate.status_code == 400
+
+
+def test_refund_request_requires_paid_owned_order_and_tracks_manual_completion(monkeypatch):
+    _, token = new_account()
+    _, other_token = new_account()
+    monkeypatch.setattr(config, "BILLING_BANK_IBAN", "TR000000000000000000000000")
+    monkeypatch.setattr(config, "BILLING_BANK_ACCOUNT_HOLDER", "Test Holder")
+    monkeypatch.setattr(config, "BILLING_SUPPORT_EMAIL", "support@example.com")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_NAME", "LectureSift Test")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_ADDRESS", "Test Address 1")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_COUNTRY", "TR")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_PHONE", "+905551112233")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_EMAIL", "support@example.com")
+    monkeypatch.setattr(config, "BILLING_ADMIN_TOKEN", "admin-secret")
+
+    created = client.post(
+        "/billing/manual-transfer/orders",
+        headers=auth(token),
+        json={"plan_code": "plus", "interval": "monthly", "terms_accepted": True, "early_performance_requested": True},
+    ).json()["order"]
+    reference = created["reference"]
+    unpaid = client.post(
+        "/billing/me/refund-requests",
+        headers=auth(token),
+        json={"order_reference": reference, "reason": "The service did not meet my needs."},
+    )
+    assert unpaid.status_code == 400
+    assert client.post(
+        f"/admin/manual-orders/{reference}/decision",
+        headers=auth("admin-secret"),
+        json={"approve": True},
+    ).status_code == 200
+    not_owner = client.post(
+        "/billing/me/refund-requests",
+        headers=auth(other_token),
+        json={"order_reference": reference, "reason": "This order should not belong to me."},
+    )
+    assert not_owner.status_code == 400
+
+    requested = client.post(
+        "/billing/me/refund-requests",
+        headers=auth(token),
+        json={"order_reference": reference, "reason": "The service did not meet my needs."},
+    )
+    assert requested.status_code == 200
+    request_id = requested.json()["request"]["id"]
+    duplicate = client.post(
+        "/billing/me/refund-requests",
+        headers=auth(token),
+        json={"order_reference": reference, "reason": "A second duplicate request reason."},
+    )
+    assert duplicate.json()["request"]["id"] == request_id
+
+    listed = client.get("/billing/admin/refund-requests", headers=auth("admin-secret"))
+    assert request_id in {item["id"] for item in listed.json()["requests"]}
+    approved = client.post(
+        f"/billing/admin/refund-requests/{request_id}/decision",
+        headers=auth("admin-secret"),
+        json={"action": "approve", "note": "Eligible; refund through bank."},
+    )
+    assert approved.json()["result"]["status"] == "approved_pending_refund"
+    completed = client.post(
+        f"/billing/admin/refund-requests/{request_id}/decision",
+        headers=auth("admin-secret"),
+        json={"action": "complete", "note": "Bank transfer completed."},
+    )
+    assert completed.json()["result"]["status"] == "completed"
+    mine = client.get("/billing/me/refund-requests", headers=auth(token)).json()["requests"]
+    assert mine[0]["status"] == "completed"
+
+
+def test_admin_credit_adjustment_is_bounded_and_audited(monkeypatch):
+    _, token = new_account()
+    monkeypatch.setattr(config, "BILLING_ADMIN_TOKEN", "admin-secret")
+    account = client.get("/billing/me", headers=auth(token)).json()["account"]
+    user_id = account["user"]["id"]
+    before = account["credit_minutes"]
+    added = client.post(
+        f"/billing/admin/users/{user_id}/credit-adjustment",
+        headers=auth("admin-secret"),
+        json={"minutes_delta": 25, "reason": "Support compensation"},
+    )
+    assert added.status_code == 200
+    assert added.json()["event"]["balance_after"] == before + 25
+    too_much_removed = client.post(
+        f"/billing/admin/users/{user_id}/credit-adjustment",
+        headers=auth("admin-secret"),
+        json={"minutes_delta": -(before + 26), "reason": "Invalid reversal check"},
+    )
+    assert too_much_removed.status_code == 400
+    current = client.get("/billing/me", headers=auth(token)).json()["account"]
+    assert current["credit_minutes"] == before + 25
+    events = client.get("/billing/admin/credit-events", headers=auth("admin-secret")).json()["events"]
+    event = next(item for item in events if item["user_id"] == user_id)
+    assert event["reason"] == "Support compensation"
+    assert "actor" not in event
+
+
+def test_rewarded_ad_sessions_are_opt_in_capped_and_single_use(monkeypatch):
+    _, token = new_account()
+    monkeypatch.setattr(config, "REWARDED_ADS_ENABLED", True)
+    monkeypatch.setattr(config, "REWARDED_AD_UNIT_PATH", "/1234567/lecturesift_rewarded")
+    monkeypatch.setattr(config, "REWARDED_AD_MINUTES_PER_VIEW", 3)
+    monkeypatch.setattr(config, "REWARDED_AD_DAILY_LIMIT_MINUTES", 6)
+
+    state = client.get("/billing/rewarded-ads", headers=auth(token))
+    assert state.status_code == 200
+    assert state.json()["rewarded_ads"]["enabled"] is True
+
+    issued = client.post("/billing/rewarded-ads/session", headers=auth(token)).json()["session"]
+    claim_payload = {
+        "session_id": issued["session_id"],
+        "claim_token": issued["claim_token"],
+    }
+    claimed = client.post("/billing/rewarded-ads/claim", headers=auth(token), json=claim_payload)
+    assert claimed.status_code == 200
+    assert claimed.json()["minutes_added"] == 3
+    duplicate = client.post("/billing/rewarded-ads/claim", headers=auth(token), json=claim_payload)
+    assert duplicate.status_code == 400
+
+    second = client.post("/billing/rewarded-ads/session", headers=auth(token)).json()["session"]
+    claimed_again = client.post(
+        "/billing/rewarded-ads/claim",
+        headers=auth(token),
+        json={"session_id": second["session_id"], "claim_token": second["claim_token"]},
+    )
+    assert claimed_again.status_code == 200
+    assert claimed_again.json()["rewarded_ads"]["earned_today"] == 6
+    assert claimed_again.json()["rewarded_ads"]["enabled"] is False
+    assert client.post("/billing/rewarded-ads/session", headers=auth(token)).status_code == 400
+
+    account = client.get("/billing/me", headers=auth(token)).json()["account"]
+    assert account["credit_minutes"] >= 6
+    exported = client.get("/billing/me/export", headers=auth(token)).json()["export"]
+    assert len(exported["rewarded_ad_claims"]) == 2
+    serialized = json.dumps(exported)
+    assert "claim_token" not in serialized
+    assert "token_hash" not in serialized
 
 
 def test_eta_learns_from_completed_jobs():
@@ -212,3 +375,4 @@ def test_rollout_frontend_and_blueprint_contracts():
     assert "type: worker" in blueprint
     assert "journal-snapshot" in blueprint
     assert "S3_BUCKET" in blueprint
+    assert "LECTURESIFT_REQUIRE_DURABLE_PROCESSING" in blueprint
