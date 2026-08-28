@@ -29,7 +29,7 @@ jobs:
             sleep 15
           done
 
-      - name: Verify Instagram connection and second launch marker
+      - name: Verify Instagram connection and third launch marker
         shell: bash
         run: |
           set -euo pipefail
@@ -44,12 +44,12 @@ jobs:
             if body=$(curl --silent --show-error --fail --max-time 25 "$launch_status"); then
               echo "Launch status: $body"
               count=$(python -c 'import json,sys; print(json.loads(sys.argv[1]).get("completed_count", 0))' "$body")
-              if [ "$count" -ge 2 ]; then
+              if [ "$count" -ge 3 ]; then
                 exit 0
               fi
             fi
             if [ "$attempt" -eq 32 ]; then
-              echo "Second Instagram launch marker was not observed in time." >&2
+              echo "Third Instagram launch marker was not observed in time." >&2
               exit 1
             fi
             sleep 15
