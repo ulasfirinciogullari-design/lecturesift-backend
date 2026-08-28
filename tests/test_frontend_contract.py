@@ -547,3 +547,15 @@ def test_every_supported_language_has_a_stable_indexable_url():
     assert "window.LectureSiftI18n?.language" in app
     assert "localizedPath?.(currentLanguage)" in app
     assert "I18N.localizedPath(body.account.user.preferred_language)" in auth
+
+
+def test_adsense_site_ownership_and_ads_txt_are_published():
+    publisher_id = "ca-pub-7608481350058806"
+    index = (FRONTEND / "index.html").read_text(encoding="utf-8")
+    seo = (FRONTEND / "seo.js").read_text(encoding="utf-8")
+    ads_txt = (FRONTEND / "ads.txt").read_text(encoding="utf-8").strip()
+
+    assert f'<meta name="google-adsense-account" content="{publisher_id}">' in index
+    assert f'const ADSENSE_ACCOUNT = "{publisher_id}"' in seo
+    assert 'meta[name="google-adsense-account"]' in seo
+    assert ads_txt == "google.com, pub-7608481350058806, DIRECT, f08c47fec0942fa0"
