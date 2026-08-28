@@ -158,11 +158,11 @@ def test_runtime_translation_keys_exist_for_every_dynamic_message():
     runtime = (FRONTEND / "rollout.js").read_text(encoding="utf-8")
     catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
     used_keys = set(re.findall(r'rt\(["\']([^"\']+)["\']', runtime))
-    catalog_keys = set(re.findall(r'^\s*["\']([^"\']+)["\']\s*:\s*\[', catalog, re.MULTILINE))
+    catalog_keys = set(re.findall(r'^\s*,?["\']([^"\']+)["\']\s*:\s*\[', catalog, re.MULTILINE))
     assert used_keys
     assert used_keys <= catalog_keys
 
-    translation_rows = re.findall(r'^\s*["\'][^"\']+["\']\s*:\s*(\[[^\n]+\])', catalog, re.MULTILINE)
+    translation_rows = re.findall(r'^\s*,?["\'][^"\']+["\']\s*:\s*(\[[^\n]+\])', catalog, re.MULTILINE)
     assert translation_rows
     assert all(len(json.loads(row)) == 13 for row in translation_rows)
     assert all(all(str(value).strip() for value in json.loads(row)) for row in translation_rows)
@@ -221,6 +221,19 @@ def test_optional_analytics_and_advertising_are_consent_gated():
     assert 'category === "necessary"' in consent
     assert "lecturesift-consent-v1" in cookies
     assert "consent.storageContent" in cookies
+    rewarded = (FRONTEND / "rewarded-ads.js").read_text(encoding="utf-8")
+    rollout = (FRONTEND / "rollout.js").read_text(encoding="utf-8")
+    assert 'LectureSiftConsent?.allows("advertising")' in rewarded
+    assert "securepubads.g.doubleclick.net/tag/js/gpt.js" in rewarded
+    assert 'OutOfPageFormat.REWARDED' in rewarded
+    assert 'event.makeRewardedVisible()' in rewarded
+    assert "/billing/rewarded-ads/session" in rollout
+    assert "/billing/rewarded-ads/claim" in rollout
+    assert "cookies.adPolicy" in cookies
+    assert 'basePath === "/privacy.html"' in i18n
+    assert 'basePath === "/terms.html"' in i18n
+    assert 't("privacy.adsDisclosure")' in i18n
+    assert 't("terms.rewardPolicy")' in i18n
 
 
 def test_contact_form_has_a_branded_noindex_success_page():

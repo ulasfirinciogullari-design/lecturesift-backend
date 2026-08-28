@@ -26,6 +26,9 @@ from .rollout_service import (
     list_admin_orders,
     list_admin_rewards,
     request_email_change,
+    issue_rewarded_ad_session,
+    redeem_rewarded_ad_session,
+    rewarded_ads_for_user,
     update_profile,
     verify_email_change,
 )
@@ -61,6 +64,11 @@ class CloseAccountRequest(BaseModel):
 
 class InstagramRewardRequest(BaseModel):
     handle: str
+
+
+class RewardedAdClaimRequest(BaseModel):
+    session_id: str
+    claim_token: str
 
 
 class DecisionRequest(BaseModel):
@@ -173,6 +181,7 @@ def billing_rollout_account(user: dict = Depends(_user)) -> dict:
         "ok": True,
         "guest": is_guest_user(user["id"]),
         "instagram_reward": instagram_reward_for_user(user["id"]),
+        "rewarded_ads": rewarded_ads_for_user(user["id"]),
         "contact_email": config.CONTACT_EMAIL,
     }
 
@@ -264,6 +273,36 @@ def billing_claim_instagram_reward(payload: InstagramRewardRequest, user: dict =
         "message": "Takip talebin doğrulama sırasına alındı. Onaylanınca dakika bakiyene eklenecek.",
         "reward": reward,
     }
+
+
+@router.get("/billing/rewarded-ads")
+def billing_rewarded_ads(user: dict = Depends(_user)) -> dict:
+    return {"ok": True, "rewarded_ads": rewarded_ads_for_user(user["id"])}
+
+
+@router.post("/billing/rewarded-ads/session")
+def billing_rewarded_ad_session(user: dict = Depends(_user)) -> dict:
+    try:
+        RATE_LIMITER.check("rewarded-ad-session", user["id"], limit=20, window_seconds=24 * 60 * 60)
+        session = issue_rewarded_ad_session(user["id"])
+    except RateLimitExceeded as exc:
+        raise HTTPException(
+            429,
+            detail={"code": "LS-ADS-03", "message": str(exc)},
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
+    except (BillingError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-ADS-01")
+    return {"ok": True, "session": session}
+
+
+@router.post("/billing/rewarded-ads/claim")
+def billing_rewarded_ad_claim(payload: RewardedAdClaimRequest, user: dict = Depends(_user)) -> dict:
+    try:
+        result = redeem_rewarded_ad_session(user["id"], payload.session_id, payload.claim_token)
+    except (BillingError, BillingAuthenticationError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-ADS-02")
+    return {"ok": True, "message": f"{result['minutes_added']} dakika hesabına eklendi.", **result}
 
 
 @router.get("/admin/manual-orders", dependencies=[Depends(_admin)])

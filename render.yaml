@@ -70,6 +70,14 @@ services:
         value: "true"
       - key: LECTURESIFT_INSTAGRAM_BONUS_MINUTES
         value: "30"
+      - key: LECTURESIFT_REWARDED_ADS_ENABLED
+        value: "false"
+      - key: LECTURESIFT_REWARDED_AD_UNIT_PATH
+        sync: false
+      - key: LECTURESIFT_REWARDED_AD_MINUTES_PER_VIEW
+        value: "1"
+      - key: LECTURESIFT_REWARDED_AD_DAILY_LIMIT_MINUTES
+        value: "3"
       - key: CELERY_BROKER_URL
         fromService:
           type: keyvalue

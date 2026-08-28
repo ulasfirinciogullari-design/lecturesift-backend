@@ -322,9 +322,18 @@
       if (!grid || $("rolloutEmailCard")) return false;
       try {
         const [me, rollout] = await Promise.all([api("/billing/me", {}, token), api("/billing/me/rollout", {}, token)]);
+        const rewarded = rollout.rewarded_ads;
+        const rewardedToday = rewarded
+          ? rt("ads.today", "Bugün kazanılan: {earned} / {limit} dakika")
+              .replace("{earned}", rewarded.earned_today)
+              .replace("{limit}", rewarded.daily_limit_minutes)
+          : "";
+        const rewardedCard = rewarded?.configured && !rewarded.plan_ad_free && !rewarded.guest ? `
+          <section class="dashboard-card rollout-card"><h2>${esc(rt("ads.title", "Reklamla dakika kazan"))}</h2><p>${esc(rt("ads.help", "İstersen kısa bir ödüllü reklam izle. Atlayabilir ve LectureSift'i normal biçimde kullanmaya devam edebilirsin."))}</p><p id="rewardedAdsToday" class="rollout-muted">${esc(rewardedToday)}</p><button id="rewardedAdsButton" class="rollout-action" type="button" ${rewarded.enabled ? "" : "disabled"}>${esc(rt("ads.cta", "Reklamı izle ve dakika kazan"))}</button><div id="rewardedAdsStatus" class="rollout-status" hidden></div></section>` : "";
         grid.insertAdjacentHTML("beforeend", `
           <section id="rolloutEmailCard" class="dashboard-card rollout-card"><h2>${esc(rt("rollout.changeEmail", "E-posta adresini değiştir"))}</h2><form id="rolloutEmailForm" class="rollout-form"><label>${esc(rt("rollout.newEmail", "Yeni e-posta"))}<input id="rolloutNewEmail" type="email" autocomplete="email"></label><button type="submit">${esc(rt("rollout.sendVerification", "Doğrulama kodu gönder"))}</button></form><form id="rolloutEmailVerifyForm" class="rollout-form" hidden><label>${esc(rt("rollout.sixDigitCode", "6 haneli kod"))}<input id="rolloutEmailCode" class="code-input" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6"></label><button type="submit">${esc(rt("rollout.finishEmailChange", "E-posta değişikliğini tamamla"))}</button></form><div id="rolloutEmailStatus" class="rollout-status" hidden></div></section>
-          <section class="dashboard-card rollout-card"><h2>${esc(rt("rollout.instagramBonus", "Instagram takip bonusu"))}</h2><p>${esc(rt("rollout.instagramHelp", "LectureSift Instagram hesabını takip et, kullanıcı adını gönder. Takip doğrulandıktan sonra hesabına bir kez 30 dakika eklenir."))}</p><form id="rolloutInstagramForm" class="rollout-form"><label>${esc(rt("rollout.instagramHandle", "Instagram kullanıcı adı"))}<input id="rolloutInstagramHandle" placeholder="@kullanici"></label><button type="submit" ${rollout.instagram_reward ? "disabled" : ""}>${esc(rollout.instagram_reward ? rt("rollout.requestCreated", "Talep oluşturuldu") : rt("rollout.requestMinutes", "+30 dakika talep et"))}</button></form><div id="rolloutInstagramStatus" class="rollout-status" ${rollout.instagram_reward ? "" : "hidden"}>${esc(rollout.instagram_reward ? `${rt("admin.status", "Durum")}: ${rt(`order.${rollout.instagram_reward.status}`, rollout.instagram_reward.status)}` : "")}</div></section>`);
+          <section class="dashboard-card rollout-card"><h2>${esc(rt("rollout.instagramBonus", "Instagram takip bonusu"))}</h2><p>${esc(rt("rollout.instagramHelp", "LectureSift Instagram hesabını takip et, kullanıcı adını gönder. Takip doğrulandıktan sonra hesabına bir kez 30 dakika eklenir."))}</p><form id="rolloutInstagramForm" class="rollout-form"><label>${esc(rt("rollout.instagramHandle", "Instagram kullanıcı adı"))}<input id="rolloutInstagramHandle" placeholder="@kullanici"></label><button type="submit" ${rollout.instagram_reward ? "disabled" : ""}>${esc(rollout.instagram_reward ? rt("rollout.requestCreated", "Talep oluşturuldu") : rt("rollout.requestMinutes", "+30 dakika talep et"))}</button></form><div id="rolloutInstagramStatus" class="rollout-status" ${rollout.instagram_reward ? "" : "hidden"}>${esc(rollout.instagram_reward ? `${rt("admin.status", "Durum")}: ${rt(`order.${rollout.instagram_reward.status}`, rollout.instagram_reward.status)}` : "")}</div></section>
+          ${rewardedCard}`);
         $("rolloutEmailForm").onsubmit = async event => {
           event.preventDefault(); const status = $("rolloutEmailStatus");
           try {
@@ -346,6 +355,35 @@
             const body = await api("/billing/instagram-reward", {method:"POST", body:JSON.stringify({handle:$("rolloutInstagramHandle").value})}, token);
             status.textContent = rt("rollout.bonusRequested", body.message); status.hidden = false; status.classList.remove("error"); event.submitter.disabled = true;
           } catch (error) { status.textContent = error.message; status.hidden = false; status.classList.add("error"); }
+        };
+        if ($("rewardedAdsButton")) $("rewardedAdsButton").onclick = async event => {
+          const button = event.currentTarget;
+          const status = $("rewardedAdsStatus");
+          status.hidden = false;
+          status.classList.remove("error");
+          if (!window.LectureSiftConsent?.allows("advertising")) {
+            status.textContent = rt("ads.consent", "Reklamı gösterebilmek için gizlilik tercihlerinden reklam izni vermelisin.");
+            window.LectureSiftConsent?.open();
+            return;
+          }
+          button.disabled = true;
+          status.textContent = rt("ads.loading", "Reklam hazırlanıyor…");
+          try {
+            const issued = await api("/billing/rewarded-ads/session", {method:"POST"}, token);
+            const completed = await window.LectureSiftRewardedAds?.show(issued.session.ad_unit_path);
+            if (!completed) throw new Error(rt("ads.unavailable", "Şu anda uygun reklam bulunamadı. Daha sonra yeniden deneyebilirsin."));
+            const body = await api("/billing/rewarded-ads/claim", {method:"POST", body:JSON.stringify({session_id:issued.session.session_id, claim_token:issued.session.claim_token})}, token);
+            status.textContent = rt("ads.rewarded", "{minutes} dakika hesabına eklendi.").replace("{minutes}", body.minutes_added);
+            if ($("creditMinutes")) $("creditMinutes").textContent = body.account.credit_minutes;
+            if ($("remainingMinutes")) $("remainingMinutes").textContent = body.account.remaining_minutes ?? "∞";
+            const state = body.rewarded_ads;
+            $("rewardedAdsToday").textContent = rt("ads.today", "Bugün kazanılan: {earned} / {limit} dakika").replace("{earned}", state.earned_today).replace("{limit}", state.daily_limit_minutes);
+            button.disabled = !state.enabled;
+          } catch (error) {
+            status.textContent = error.message?.startsWith("rewarded-ad-") ? rt("ads.unavailable", "Şu anda uygun reklam bulunamadı. Daha sonra yeniden deneyebilirsin.") : error.message;
+            status.classList.add("error");
+            button.disabled = false;
+          }
         };
         return true;
       } catch { return false; }

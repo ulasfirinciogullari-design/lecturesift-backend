@@ -19,6 +19,7 @@
     hi: ["आपकी गोपनीयता पसंद", "ज़रूरी स्टोरेज साइट को चलाता है। एनालिटिक्स और विज्ञापन तकनीकें केवल आपकी अनुमति और प्रदाता सक्रिय होने पर चलती हैं।", "केवल ज़रूरी", "सभी की अनुमति", "पसंद प्रबंधित करें", "ज़रूरी", "साइन-इन, सुरक्षा, भाषा और भुगतान के लिए आवश्यक।", "एनालिटिक्स", "साइट उपयोग को समग्र रूप से समझने में मदद करता है।", "विज्ञापन", "विज्ञापन दिखाने और कन्वर्ज़न मापने के लिए।", "पसंद सहेजें", "बंद करें", "कुकी और स्टोरेज नीति खोलें"],
   }[language] || null;
   const text = copy || ["Your privacy choices", "Essential storage keeps the site working. Analytics and advertising technologies run only if you allow them and the providers are enabled.", "Essential only", "Allow all", "Manage choices", "Essential", "Required for sign-in, security, language, and payment flows.", "Analytics", "Helps us understand site usage in aggregate.", "Advertising", "Used for ad delivery and conversion measurement.", "Save choices", "Close", "Open the cookie and storage policy"];
+  const cookiesPath = window.LectureSiftI18n?.localizedPath?.(language, "/cookies.html") || "/cookies.html";
 
   const read = () => {
     try {
@@ -39,7 +40,7 @@
   root.className = "consent-root";
   root.innerHTML = `
     <section class="consent-banner" role="region" aria-label="${text[0]}">
-      <div><strong>${text[0]}</strong><p>${text[1]} <a href="/cookies.html">${text[13]}</a>.</p></div>
+      <div><strong>${text[0]}</strong><p>${text[1]} <a href="${cookiesPath}">${text[13]}</a>.</p></div>
       <div class="consent-actions"><button type="button" data-consent="essential">${text[2]}</button><button type="button" data-consent="manage">${text[4]}</button><button class="primary" type="button" data-consent="all">${text[3]}</button></div>
     </section>
     <button class="consent-manage" type="button" data-consent="manage" aria-label="${text[4]}">${text[4]}</button>
@@ -49,7 +50,7 @@
         <label><span><b>${text[5]}</b><small>${text[6]}</small></span><input type="checkbox" checked disabled></label>
         <label><span><b>${text[7]}</b><small>${text[8]}</small></span><input id="consentAnalytics" type="checkbox"></label>
         <label><span><b>${text[9]}</b><small>${text[10]}</small></span><input id="consentAdvertising" type="checkbox"></label>
-        <div class="consent-actions"><a href="/cookies.html">${text[13]}</a><button class="primary" type="button" data-consent="save">${text[11]}</button></div>
+        <div class="consent-actions"><a href="${cookiesPath}">${text[13]}</a><button class="primary" type="button" data-consent="save">${text[11]}</button></div>
       </div>
     </section>`;
   document.body.append(root);

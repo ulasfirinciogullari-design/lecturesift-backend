@@ -149,6 +149,48 @@ def test_manual_order_admin_rejection_and_instagram_approval(monkeypatch):
     assert duplicate.status_code == 400
 
 
+def test_rewarded_ad_sessions_are_opt_in_capped_and_single_use(monkeypatch):
+    _, token = new_account()
+    monkeypatch.setattr(config, "REWARDED_ADS_ENABLED", True)
+    monkeypatch.setattr(config, "REWARDED_AD_UNIT_PATH", "/1234567/lecturesift_rewarded")
+    monkeypatch.setattr(config, "REWARDED_AD_MINUTES_PER_VIEW", 3)
+    monkeypatch.setattr(config, "REWARDED_AD_DAILY_LIMIT_MINUTES", 6)
+
+    state = client.get("/billing/rewarded-ads", headers=auth(token))
+    assert state.status_code == 200
+    assert state.json()["rewarded_ads"]["enabled"] is True
+
+    issued = client.post("/billing/rewarded-ads/session", headers=auth(token)).json()["session"]
+    claim_payload = {
+        "session_id": issued["session_id"],
+        "claim_token": issued["claim_token"],
+    }
+    claimed = client.post("/billing/rewarded-ads/claim", headers=auth(token), json=claim_payload)
+    assert claimed.status_code == 200
+    assert claimed.json()["minutes_added"] == 3
+    duplicate = client.post("/billing/rewarded-ads/claim", headers=auth(token), json=claim_payload)
+    assert duplicate.status_code == 400
+
+    second = client.post("/billing/rewarded-ads/session", headers=auth(token)).json()["session"]
+    claimed_again = client.post(
+        "/billing/rewarded-ads/claim",
+        headers=auth(token),
+        json={"session_id": second["session_id"], "claim_token": second["claim_token"]},
+    )
+    assert claimed_again.status_code == 200
+    assert claimed_again.json()["rewarded_ads"]["earned_today"] == 6
+    assert claimed_again.json()["rewarded_ads"]["enabled"] is False
+    assert client.post("/billing/rewarded-ads/session", headers=auth(token)).status_code == 400
+
+    account = client.get("/billing/me", headers=auth(token)).json()["account"]
+    assert account["credit_minutes"] >= 6
+    exported = client.get("/billing/me/export", headers=auth(token)).json()["export"]
+    assert len(exported["rewarded_ad_claims"]) == 2
+    serialized = json.dumps(exported)
+    assert "claim_token" not in serialized
+    assert "token_hash" not in serialized
+
+
 def test_eta_learns_from_completed_jobs():
     baseline = rollout_service.estimate_eta_seconds(10, 0)
     rollout_service.record_runtime(f"eta-{uuid.uuid4()}", 10, 200, 1000)

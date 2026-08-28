@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Table, delete, select, update
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Table, delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from . import config
@@ -66,6 +66,19 @@ INSTAGRAM_REWARDS = Table(
     Column("updated_at", DateTime(timezone=True), nullable=False),
 )
 
+REWARDED_AD_CLAIMS = Table(
+    "lecturesift_rewarded_ad_claims",
+    METADATA,
+    Column("id", String(36), primary_key=True),
+    Column("user_id", String(36), ForeignKey("billing_users.id"), nullable=False, index=True),
+    Column("token_hash", String(64), nullable=False, unique=True),
+    Column("status", String(16), nullable=False),
+    Column("minutes", Integer, nullable=False),
+    Column("expires_at", DateTime(timezone=True), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("redeemed_at", DateTime(timezone=True), nullable=True),
+)
+
 EMAIL_CHANGE_REQUESTS = Table(
     "lecturesift_email_change_requests",
     METADATA,
@@ -110,7 +123,7 @@ PLAN_BY_CODE.setdefault(
 
 def init_rollout_database() -> None:
     init_billing_database()
-    for table in (GUEST_TRIALS, INSTAGRAM_REWARDS, EMAIL_CHANGE_REQUESTS, RUNTIME_METRICS):
+    for table in (GUEST_TRIALS, INSTAGRAM_REWARDS, REWARDED_AD_CLAIMS, EMAIL_CHANGE_REQUESTS, RUNTIME_METRICS):
         table.create(bind=ENGINE, checkfirst=True)
 
 
@@ -157,6 +170,17 @@ def export_account_data(user_id: str) -> dict[str, Any]:
         reward = connection.execute(
             select(INSTAGRAM_REWARDS).where(INSTAGRAM_REWARDS.c.user_id == user_id)
         ).first()
+        rewarded_claims = connection.execute(
+            select(
+                REWARDED_AD_CLAIMS.c.id,
+                REWARDED_AD_CLAIMS.c.status,
+                REWARDED_AD_CLAIMS.c.minutes,
+                REWARDED_AD_CLAIMS.c.created_at,
+                REWARDED_AD_CLAIMS.c.redeemed_at,
+            )
+            .where(REWARDED_AD_CLAIMS.c.user_id == user_id)
+            .order_by(REWARDED_AD_CLAIMS.c.created_at.desc())
+        ).all()
     return {
         "generated_at": utcnow().isoformat(),
         "account": account,
@@ -190,6 +214,16 @@ def export_account_data(user_id: str) -> dict[str, Any]:
             if reward
             else None
         ),
+        "rewarded_ad_claims": [
+            {
+                "id": row.id,
+                "status": row.status,
+                "minutes": row.minutes,
+                "created_at": row.created_at.isoformat(),
+                "redeemed_at": row.redeemed_at.isoformat() if row.redeemed_at else None,
+            }
+            for row in rewarded_claims
+        ],
     }
 
 
@@ -244,6 +278,7 @@ def close_user_account(
         connection.execute(delete(AUTH_TOKENS).where(AUTH_TOKENS.c.user_id == user_id))
         connection.execute(delete(EMAIL_CHANGE_REQUESTS).where(EMAIL_CHANGE_REQUESTS.c.user_id == user_id))
         connection.execute(delete(INSTAGRAM_REWARDS).where(INSTAGRAM_REWARDS.c.user_id == user_id))
+        connection.execute(delete(REWARDED_AD_CLAIMS).where(REWARDED_AD_CLAIMS.c.user_id == user_id))
         connection.execute(delete(GUEST_TRIALS).where(GUEST_TRIALS.c.user_id == user_id))
         connection.execute(
             update(SUBSCRIPTIONS)
@@ -533,6 +568,152 @@ def instagram_reward_for_user(user_id: str) -> dict | None:
             select(INSTAGRAM_REWARDS).where(INSTAGRAM_REWARDS.c.user_id == user_id)
         ).first()
     return dict(row._mapping) if row else None
+
+
+def rewarded_ads_for_user(user_id: str) -> dict[str, Any]:
+    """Return a provider-neutral, privacy-safe rewarded-ad allowance."""
+    init_rollout_database()
+    account = account_status(user_id)
+    plan = account.get("plan") or {}
+    entitlements = plan.get("entitlements") or {}
+    plan_ad_free = bool(entitlements.get("ad_free"))
+    configured = bool(config.REWARDED_ADS_ENABLED and config.REWARDED_AD_UNIT_PATH)
+    now = utcnow()
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    with ENGINE.begin() as connection:
+        connection.execute(
+            delete(REWARDED_AD_CLAIMS).where(
+                REWARDED_AD_CLAIMS.c.user_id == user_id,
+                (
+                    (REWARDED_AD_CLAIMS.c.status == "issued")
+                    & (REWARDED_AD_CLAIMS.c.expires_at < now)
+                )
+                | (
+                    (REWARDED_AD_CLAIMS.c.status == "redeemed")
+                    & (REWARDED_AD_CLAIMS.c.redeemed_at < now - timedelta(days=90))
+                ),
+            )
+        )
+        earned = connection.execute(
+            select(func.coalesce(func.sum(REWARDED_AD_CLAIMS.c.minutes), 0)).where(
+                REWARDED_AD_CLAIMS.c.user_id == user_id,
+                REWARDED_AD_CLAIMS.c.status == "redeemed",
+                REWARDED_AD_CLAIMS.c.redeemed_at >= day_start,
+            )
+        ).scalar_one()
+    earned_today = int(earned or 0)
+    remaining_today = max(0, config.REWARDED_AD_DAILY_LIMIT_MINUTES - earned_today)
+    guest = is_guest_user(user_id)
+    return {
+        "configured": configured,
+        "enabled": bool(
+            configured
+            and not guest
+            and not plan_ad_free
+            and remaining_today >= config.REWARDED_AD_MINUTES_PER_VIEW
+        ),
+        "provider": "google_gpt" if configured else None,
+        "ad_unit_path": config.REWARDED_AD_UNIT_PATH if configured else None,
+        "minutes_per_view": config.REWARDED_AD_MINUTES_PER_VIEW,
+        "daily_limit_minutes": config.REWARDED_AD_DAILY_LIMIT_MINUTES,
+        "earned_today": earned_today,
+        "remaining_today": remaining_today,
+        "plan_ad_free": plan_ad_free,
+        "guest": guest,
+    }
+
+
+def issue_rewarded_ad_session(user_id: str) -> dict[str, Any]:
+    state = rewarded_ads_for_user(user_id)
+    if not state["configured"]:
+        raise BillingConfigurationError("Ödüllü reklam özelliği henüz etkinleştirilmemiş.")
+    if state["guest"]:
+        raise BillingError("Dakika kazanmak için ücretsiz hesabını oluştur.")
+    if state["plan_ad_free"]:
+        raise BillingError("Mevcut planın reklamsız kullanım içeriyor.")
+    if not state["enabled"]:
+        raise BillingError("Bugünkü reklamla dakika kazanma sınırına ulaştın.")
+    now = utcnow()
+    token = secrets.token_urlsafe(32)
+    session_id = str(uuid.uuid4())
+    with ENGINE.begin() as connection:
+        connection.execute(
+            REWARDED_AD_CLAIMS.insert().values(
+                id=session_id,
+                user_id=user_id,
+                token_hash=_hash(token),
+                status="issued",
+                minutes=config.REWARDED_AD_MINUTES_PER_VIEW,
+                expires_at=now + timedelta(minutes=10),
+                created_at=now,
+                redeemed_at=None,
+            )
+        )
+    return {
+        "session_id": session_id,
+        "claim_token": token,
+        "expires_in_seconds": 10 * 60,
+        "ad_unit_path": state["ad_unit_path"],
+        "minutes": config.REWARDED_AD_MINUTES_PER_VIEW,
+    }
+
+
+def redeem_rewarded_ad_session(user_id: str, session_id: str, claim_token: str) -> dict[str, Any]:
+    init_rollout_database()
+    now = utcnow()
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    with ENGINE.begin() as connection:
+        user = connection.execute(
+            select(USERS.c.id).where(USERS.c.id == user_id).with_for_update()
+        ).first()
+        if not user:
+            raise BillingAuthenticationError("Hesap bulunamadı.")
+        claim = connection.execute(
+            select(REWARDED_AD_CLAIMS).where(
+                REWARDED_AD_CLAIMS.c.id == session_id,
+                REWARDED_AD_CLAIMS.c.user_id == user_id,
+            )
+        ).first()
+        if not claim or claim.status != "issued":
+            raise BillingError("Bu reklam ödülü geçersiz veya daha önce kullanılmış.")
+        if _as_utc(claim.expires_at) <= now:
+            connection.execute(
+                update(REWARDED_AD_CLAIMS)
+                .where(REWARDED_AD_CLAIMS.c.id == session_id)
+                .values(status="expired")
+            )
+            raise BillingError("Reklam ödülü oturumunun süresi doldu.")
+        if not claim_token or not secrets.compare_digest(_hash(claim_token), claim.token_hash):
+            raise BillingAuthenticationError("Reklam ödülü doğrulanamadı.")
+        earned = int(connection.execute(
+            select(func.coalesce(func.sum(REWARDED_AD_CLAIMS.c.minutes), 0)).where(
+                REWARDED_AD_CLAIMS.c.user_id == user_id,
+                REWARDED_AD_CLAIMS.c.status == "redeemed",
+                REWARDED_AD_CLAIMS.c.redeemed_at >= day_start,
+            )
+        ).scalar_one() or 0)
+        if earned + int(claim.minutes) > config.REWARDED_AD_DAILY_LIMIT_MINUTES:
+            raise BillingError("Bugünkü reklamla dakika kazanma sınırına ulaştın.")
+        changed = connection.execute(
+            update(REWARDED_AD_CLAIMS)
+            .where(
+                REWARDED_AD_CLAIMS.c.id == session_id,
+                REWARDED_AD_CLAIMS.c.status == "issued",
+            )
+            .values(status="redeemed", redeemed_at=now)
+        )
+        if changed.rowcount != 1:
+            raise BillingError("Bu reklam ödülü daha önce kullanılmış.")
+        connection.execute(
+            update(USERS)
+            .where(USERS.c.id == user_id)
+            .values(credit_minutes=USERS.c.credit_minutes + int(claim.minutes))
+        )
+    return {
+        "minutes_added": int(claim.minutes),
+        "rewarded_ads": rewarded_ads_for_user(user_id),
+        "account": account_status(user_id),
+    }
 
 
 def list_admin_orders(status: str = "pending") -> list[dict]:
