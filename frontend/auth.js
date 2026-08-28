@@ -6,6 +6,14 @@ const page = document.body.dataset.page || "login";
 const $ = id => document.getElementById(id);
 const t = (key, fallback) => I18N.t(key, fallback);
 
+function recordAnalytics(type, name, parameters = {}) {
+  const analytics = window.LectureSiftAnalytics;
+  if (type === "conversion" && analytics?.trackConversion) return void analytics.trackConversion(name, parameters);
+  if (type === "event" && analytics?.track) return void analytics.track(name, parameters);
+  window.__lecturesiftAnalyticsQueue = window.__lecturesiftAnalyticsQueue || [];
+  window.__lecturesiftAnalyticsQueue.push({type, name, parameters});
+}
+
 function errorMessage(body, fallback) {
   return body?.detail?.message || body?.message || fallback;
 }
@@ -85,6 +93,8 @@ async function initRegister() {
       localStorage.setItem("lecturesift-country", body.user.country_code);
       const suggestedCurrency = LOCALE_DATA.currencyForCountry[body.user.country_code];
       if (suggestedCurrency) localStorage.setItem("lecturesift-currency", suggestedCurrency);
+      recordAnalytics("event", "sign_up", {method: "email"});
+      recordAnalytics("conversion", "signup", {});
     } catch (error) { showNotice(error.message, true); }
     finally { setBusy(button, false, t("auth.create", "Hesap oluştur")); }
   });
@@ -329,6 +339,18 @@ async function initAccount() {
         const order = (body.account.payment_orders || []).find(item => item.reference === reference);
         if (order?.status === "paid") {
           showFormNotice("paymentResultNotice", t("payment.confirmed", "Ödeme doğrulandı; plan veya kredilerin hesabına eklendi."));
+          const conversionKey = `lecturesift-purchase-${reference}`;
+          if (!sessionStorage.getItem(conversionKey)) {
+            const purchase = {
+              transaction_id: reference,
+              value: Number(order.amount_minor || 0) / 100,
+              currency: order.currency || "TRY",
+              items: [{item_id: order.plan_code, item_name: planName(order.plan_code), quantity: 1}],
+            };
+            sessionStorage.setItem(conversionKey, "1");
+            recordAnalytics("event", "purchase", purchase);
+            recordAnalytics("conversion", "purchase", purchase);
+          }
           return;
         }
         if (["failed", "token_failed"].includes(order?.status)) {

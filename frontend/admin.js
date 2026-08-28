@@ -5,7 +5,7 @@ const adminLocale = () => window.LectureSiftI18n?.locale || "tr-TR";
 const adminMinuteShort = () => adminT("unit.minuteShort", "dk");
 let adminAccessToken = localStorage.getItem("lecturesift-billing-token") || "";
 let adminLoading = false;
-let adminState = {overview:{counts:{}}, rewards:[], refunds:[], credits:[], contacts:[], jobs:[], billing:null, runtime:null};
+let adminState = {overview:{counts:{}}, rewards:[], refunds:[], credits:[], accountEvents:[], contacts:[], jobs:[], billing:null, runtime:null};
 
 function adminEscape(value) {
   return String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"})[char]);
@@ -40,7 +40,8 @@ function adminRelativeDate(value) {
 }
 
 function adminNotice(message, error = false) {
-  const node = admin$("adminNotice");
+  const panelNotice = admin$("adminOperationNotice");
+  const node = panelNotice && !admin$("adminPanel")?.hidden ? panelNotice : admin$("adminNotice");
   node.textContent = message;
   node.classList.toggle("error", error);
   node.hidden = false;
@@ -99,14 +100,59 @@ function renderAdminRefunds(refunds) {
 }
 
 function renderAdminUsers(users) {
-  const rows = users.map(user => `<tr><td>${adminEscape(user.name || "—")}<br><small>${adminEscape(user.email)}</small></td><td>${adminEscape(user.phone || "—")}</td><td>${adminEscape(user.country_code || "—")}</td><td>${user.email_verified ? '<span class="status-pill paid">Doğrulandı</span>' : '<span class="status-pill">Bekliyor</span>'}</td><td>${Number(user.credit_minutes || 0).toLocaleString(adminLocale())} dk</td><td title="${adminEscape(adminDate(user.created_at))}">${adminEscape(adminRelativeDate(user.created_at))}</td><td><div class="admin-credit-editor"><input class="admin-inline-input compact" type="number" min="-10000" max="10000" step="1" data-credit-delta="${adminEscape(user.id)}" placeholder="+ / - dk"><input class="admin-inline-input" maxlength="240" data-credit-reason="${adminEscape(user.id)}" placeholder="İşlem nedeni"><button class="admin-action approve" data-user-credit="${adminEscape(user.id)}">Uygula</button></div></td></tr>`).join("");
-  admin$("adminUserList").innerHTML = `<table class="admin-table"><thead><tr><th>Müşteri</th><th>Telefon</th><th>Ülke</th><th>Doğrulama</th><th>Ek kredi</th><th>Kayıt</th><th>Dakika işlemi</th></tr></thead><tbody>${rows || '<tr><td colspan="7">Kullanıcı bulunamadı.</td></tr>'}</tbody></table>`;
-  document.querySelectorAll("[data-user-credit]").forEach(button => button.addEventListener("click", () => adjustCredit(button)));
+  const languages = [["tr","Türkçe"],["en","English"],["de","Deutsch"],["fr","Français"],["es","Español"],["it","Italiano"],["pt","Português"],["ru","Русский"],["ar","العربية"],["zh","中文"],["ja","日本語"],["ko","한국어"],["hi","हिन्दी"]];
+  const plans = [["free","Ücretsiz"],["lite","Lite"],["plus","Plus"],["pro","Pro"],["max","Max"],["business","Business"]];
+  const cards = users.map(user => {
+    const subscription = user.subscription || null;
+    const languageOptions = languages.map(([value,label]) => `<option value="${value}" ${value === (user.preferred_language || "tr") ? "selected" : ""}>${label}</option>`).join("");
+    const planOptions = plans.map(([value,label]) => `<option value="${value}" ${value === (user.plan_code || "free") ? "selected" : ""}>${label}</option>`).join("");
+    return `<article class="admin-user-card" data-user-card="${adminEscape(user.id)}">
+      <header><div><strong>${adminEscape(user.name || "İsimsiz kullanıcı")}</strong><small>${adminEscape(user.email)}</small></div><span class="status-pill ${user.email_verified ? "paid" : ""}">${user.email_verified ? "Doğrulandı" : "Doğrulama bekliyor"}</span></header>
+      <div class="admin-user-stats"><span><small>Plan</small><b>${adminEscape(user.plan_code || "free")}</b></span><span><small>Ek dakika</small><b>${Number(user.credit_minutes || 0).toLocaleString(adminLocale())} ${adminEscape(adminMinuteShort())}</b></span><span><small>Toplam kullanım</small><b>${Number(user.total_usage_minutes || 0).toLocaleString(adminLocale())} ${adminEscape(adminMinuteShort())}</b></span><span><small>Kayıt</small><b>${adminEscape(adminRelativeDate(user.created_at))}</b></span></div>
+      ${subscription ? `<p class="admin-user-subscription">${adminEscape(subscription.interval)} · ${adminEscape(adminStatusLabel(subscription.status))} · ${adminEscape(adminDate(subscription.ends_at))} tarihinde biter</p>` : '<p class="admin-user-subscription">Aktif ücretli abonelik yok.</p>'}
+      <details class="admin-user-manager"><summary>Kullanıcıyı yönet</summary>
+        <div class="admin-user-tools">
+          <form class="admin-user-form" data-user-profile-form="${adminEscape(user.id)}">
+            <h3>Profil ve doğrulama</h3><div class="admin-form-grid">
+              <label><span>Ad</span><input name="first_name" value="${adminEscape(user.first_name || "")}" minlength="2" maxlength="80" required></label>
+              <label><span>Soyad</span><input name="last_name" value="${adminEscape(user.last_name || "")}" minlength="2" maxlength="80" required></label>
+              <label class="wide"><span>E-posta</span><input name="email" type="email" value="${adminEscape(user.email)}" required></label>
+              <label><span>Telefon</span><input name="phone" value="${adminEscape(user.phone || "")}" maxlength="32"></label>
+              <label><span>Ülke kodu</span><input name="country_code" value="${adminEscape(user.country_code || "TR")}" minlength="2" maxlength="2" required></label>
+              <label><span>Arayüz dili</span><select name="preferred_language">${languageOptions}</select></label>
+              <label class="admin-check"><input name="email_verified" type="checkbox" ${user.email_verified ? "checked" : ""}><span>E-posta doğrulandı</span></label>
+            </div><button class="admin-action approve" type="submit">Profili kaydet</button>
+          </form>
+          <form class="admin-user-form" data-user-credit-form="${adminEscape(user.id)}">
+            <h3>Dakika bakiyesi</h3><p>Artı değer ekler, eksi değer düşer. Her işlem gerekçesiyle kaydedilir.</p><div class="admin-form-grid compact-grid"><label><span>Dakika</span><input name="minutes_delta" type="number" min="-10000" max="10000" step="1" placeholder="Örn. 120" required></label><label class="wide"><span>İşlem nedeni</span><input name="reason" minlength="4" maxlength="240" placeholder="Destek telafisi, kampanya, düzeltme…" required></label></div><button class="admin-action approve" type="submit">Dakikayı uygula</button>
+          </form>
+          <form class="admin-user-form" data-user-subscription-form="${adminEscape(user.id)}">
+            <h3>Abonelik ve plan</h3><div class="admin-form-grid"><label><span>Plan</span><select name="plan_code">${planOptions}</select></label><label><span>Dönem</span><select name="interval"><option value="monthly" ${subscription?.interval !== "annual" ? "selected" : ""}>Aylık</option><option value="annual" ${subscription?.interval === "annual" ? "selected" : ""}>Yıllık</option></select></label><label><span>Erişim süresi (gün)</span><input name="duration_days" type="number" min="1" max="3660" value="${subscription?.interval === "annual" ? 365 : 30}" required></label></div><button class="admin-action approve" type="submit">Planı kaydet</button>
+          </form>
+          <section class="admin-user-form admin-security-tools"><h3>Güvenlik</h3><p>Oturum kapatma, kullanıcının tüm cihazlarda yeniden giriş yapmasını gerektirir.</p><button class="admin-action" type="button" data-user-revoke="${adminEscape(user.id)}">Tüm oturumları kapat</button></section>
+          <form class="admin-user-form danger-zone" data-user-close-form="${adminEscape(user.id)}">
+            <h3>Hesabı kapat ve anonimleştir</h3><p>Profil ve erişim silinir; yasal saklama zorunluluğu bulunan ödeme kayıtları anonim kullanıcı kimliğiyle korunur.</p><div class="admin-form-grid"><label class="wide"><span>Onay için e-postayı aynen yaz</span><input name="confirmation_email" type="email" autocomplete="off" required></label><label class="wide"><span>Kapatma nedeni</span><input name="reason" minlength="4" maxlength="500" required></label></div><button class="admin-action reject" type="submit">Hesabı kapat</button>
+          </form>
+        </div>
+      </details>
+    </article>`;
+  }).join("");
+  admin$("adminUserList").innerHTML = `<div class="admin-user-grid">${cards || '<p class="empty-copy">Kullanıcı bulunamadı.</p>'}</div>`;
+  document.querySelectorAll("[data-user-profile-form]").forEach(form => form.addEventListener("submit", event => saveAdminUser(event, form)));
+  document.querySelectorAll("[data-user-credit-form]").forEach(form => form.addEventListener("submit", event => adjustAdminUserCredit(event, form)));
+  document.querySelectorAll("[data-user-subscription-form]").forEach(form => form.addEventListener("submit", event => saveAdminSubscription(event, form)));
+  document.querySelectorAll("[data-user-revoke]").forEach(button => button.addEventListener("click", () => revokeAdminSessions(button)));
+  document.querySelectorAll("[data-user-close-form]").forEach(form => form.addEventListener("submit", event => closeAdminUser(event, form)));
 }
 
 function renderAdminCreditEvents(events) {
   const rows = events.map(item => `<tr><td title="${adminEscape(adminDate(item.created_at))}">${adminEscape(adminRelativeDate(item.created_at))}</td><td>${adminEscape(item.email)}</td><td><strong>${item.minutes_delta > 0 ? "+" : ""}${Number(item.minutes_delta).toLocaleString()}</strong></td><td>${Number(item.balance_before).toLocaleString()} → ${Number(item.balance_after).toLocaleString()}</td><td>${adminEscape(item.reason)}</td></tr>`).join("");
   admin$("adminCreditEvents").innerHTML = `<table class="admin-table"><thead><tr><th>Tarih</th><th>Müşteri</th><th>Dakika</th><th>Bakiye değişimi</th><th>Neden</th></tr></thead><tbody>${rows || '<tr><td colspan="5">Henüz yönetici dakika işlemi yok.</td></tr>'}</tbody></table>`;
+}
+
+function renderAdminAccountEvents(events) {
+  const rows = events.map(item => `<tr><td title="${adminEscape(adminDate(item.created_at))}">${adminEscape(adminRelativeDate(item.created_at))}</td><td>${adminEscape(item.subject_email)}</td><td>${adminEscape(item.action)}</td><td>${adminEscape(item.summary)}</td><td>${adminEscape(item.actor)}</td></tr>`).join("");
+  admin$("adminAccountEvents").innerHTML = `<table class="admin-table"><thead><tr><th>Tarih</th><th>Kullanıcı</th><th>İşlem</th><th>Açıklama</th><th>Yapan</th></tr></thead><tbody>${rows || '<tr><td colspan="5">Henüz yönetici hesap işlemi yok.</td></tr>'}</tbody></table>`;
 }
 
 function renderAdminContactMessages(messages) {
@@ -128,6 +174,8 @@ function adminReadinessChecks(billing, runtime) {
     {label:"Dosya saklama kuralı", ready:Boolean(runtime?.recovery?.object_retention_confirmed), severity:"planned", detail:"Özel depodaki çıktıların yaşam döngüsü", action:"Özel depo açıldıktan sonra saklama kuralını doğrula"},
     {label:"Geri yükleme tatbikatı", ready:Boolean(runtime?.recovery?.restore_drill_confirmed), severity:"planned", detail:"Gerçek kurtarma testi ve kayıt tarihi", action:"Altyapı tamamlanınca kontrollü test yap"},
     {label:"Ücretsiz planda banner reklam", ready:Boolean(runtime?.display_ads_configured), severity:"optional", detail:"Ücretli planlar her durumda reklamsız", action:"Google Ad Manager birimi hazır olduğunda aç"},
+    {label:"GA4 ölçümü", ready:Boolean(runtime?.analytics_configured), severity:"recommended", detail:"İzin veren ziyaretçiler için toplu site ölçümü", action:"GA4 ölçüm kimliğini Render’da doğrula"},
+    {label:"Google Ads dönüşümleri", ready:Boolean(runtime?.google_ads_conversion_configured), severity:"optional", detail:"Kayıt ve doğrulanmış satın alma dönüşümleri", action:"Google Ads hesabı ve dönüşüm etiketleri hazır olunca Render’a ekle"},
   ];
 }
 
@@ -210,6 +258,17 @@ function renderMetrics() {
   admin$("adminUsers24h").textContent = users24h;
   admin$("adminRefundBadge").textContent = `${openRefunds} açık`;
   admin$("adminRewardBadge").textContent = `${adminState.rewards.filter(item => item.status === "pending_verification").length} bekliyor`;
+  renderPlanDistribution();
+}
+
+function renderPlanDistribution() {
+  const distribution = adminState.overview.plan_distribution || {};
+  const entries = Object.entries(distribution).sort((left, right) => Number(right[1]) - Number(left[1]));
+  const total = Math.max(1, entries.reduce((sum, [, count]) => sum + Number(count || 0), 0));
+  admin$("adminPlanDistribution").innerHTML = entries.map(([plan, count]) => {
+    const percent = Math.round(Number(count || 0) / total * 100);
+    return `<article><div><strong>${adminEscape(plan)}</strong><span>${Number(count).toLocaleString(adminLocale())} hesap · %${percent}</span></div><i><b style="width:${percent}%"></b></i></article>`;
+  }).join("") || '<p class="empty-copy">Henüz plan verisi yok.</p>';
 }
 
 function normalizeSearch(value) { return String(value || "").toLocaleLowerCase("tr-TR"); }
@@ -254,13 +313,15 @@ async function loadAdmin({silent = false} = {}) {
       adminRequest("/billing/admin/credit-events?limit=250").catch(() => ({events:[]})),
       adminRequest("/billing/admin/contact-messages?limit=250").catch(() => ({messages:[]})),
       adminRequest("/billing/admin/jobs?limit=250").catch(() => ({jobs:[], counts:{}})),
+      adminRequest("/billing/admin/account-events?limit=250").catch(() => ({events:[]})),
       adminPublicRequest("/billing/health"), adminPublicRequest("/rollout/health"),
     ]);
-    adminState = {overview, rewards:optional[0].rewards || [], refunds:optional[1].requests || [], credits:optional[2].events || [], contacts:optional[3].messages || [], jobs:optional[4].jobs || [], billing:optional[5], runtime:optional[6]};
+    adminState = {overview, rewards:optional[0].rewards || [], refunds:optional[1].requests || [], credits:optional[2].events || [], contacts:optional[3].messages || [], jobs:optional[4].jobs || [], accountEvents:optional[5].events || [], billing:optional[6], runtime:optional[7]};
     renderMetrics();
     renderAdminRewards(adminState.rewards.filter(item => item.status === "pending_verification"));
     renderAdminRefunds(adminState.refunds);
     renderAdminCreditEvents(adminState.credits);
+    renderAdminAccountEvents(adminState.accountEvents);
     applyAdminFilters();
     const checks = renderAdminReadiness(adminState.billing, adminState.runtime);
     renderAdminAlerts(checks);
@@ -301,6 +362,95 @@ async function adjustCredit(button) {
   button.disabled = true;
   try { const body = await adminRequest(`/billing/admin/users/${encodeURIComponent(userId)}/credit-adjustment`, {method:"POST", body:JSON.stringify({minutes_delta:delta, reason})}); adminNotice(body.message); await loadAdmin({silent:true}); }
   catch (error) { adminNotice(error.message, true); button.disabled = false; }
+}
+
+async function saveAdminUser(event, form) {
+  event.preventDefault();
+  const userId = form.dataset.userProfileForm;
+  const submit = form.querySelector('button[type="submit"]');
+  const data = new FormData(form);
+  submit.disabled = true;
+  try {
+    const body = await adminRequest(`/billing/admin/users/${encodeURIComponent(userId)}`, {
+      method:"PATCH",
+      body:JSON.stringify({
+        email:String(data.get("email") || "").trim(),
+        first_name:String(data.get("first_name") || "").trim(),
+        last_name:String(data.get("last_name") || "").trim(),
+        phone:String(data.get("phone") || "").trim(),
+        country_code:String(data.get("country_code") || "TR").trim().toUpperCase(),
+        preferred_language:String(data.get("preferred_language") || "tr"),
+        email_verified:data.get("email_verified") === "on",
+      }),
+    });
+    adminNotice(body.message);
+    await loadAdmin({silent:true});
+  } catch (error) { adminNotice(error.message, true); submit.disabled = false; }
+}
+
+async function adjustAdminUserCredit(event, form) {
+  event.preventDefault();
+  const userId = form.dataset.userCreditForm;
+  const submit = form.querySelector('button[type="submit"]');
+  const data = new FormData(form);
+  submit.disabled = true;
+  try {
+    const body = await adminRequest(`/billing/admin/users/${encodeURIComponent(userId)}/credit-adjustment`, {
+      method:"POST",
+      body:JSON.stringify({minutes_delta:Number(data.get("minutes_delta") || 0), reason:String(data.get("reason") || "").trim()}),
+    });
+    adminNotice(body.message);
+    await loadAdmin({silent:true});
+  } catch (error) { adminNotice(error.message, true); submit.disabled = false; }
+}
+
+async function saveAdminSubscription(event, form) {
+  event.preventDefault();
+  const userId = form.dataset.userSubscriptionForm;
+  const submit = form.querySelector('button[type="submit"]');
+  const data = new FormData(form);
+  const planCode = String(data.get("plan_code") || "free");
+  const confirmation = planCode === "free"
+    ? "Aktif ücretli abonelik hemen kapatılacak ve kullanıcı ücretsiz plana geçirilecek. Devam edilsin mi?"
+    : `${planCode.toUpperCase()} planı kullanıcıya hemen atanacak. Devam edilsin mi?`;
+  if (!window.confirm(confirmation)) return;
+  submit.disabled = true;
+  try {
+    const body = await adminRequest(`/billing/admin/users/${encodeURIComponent(userId)}/subscription`, {
+      method:"POST",
+      body:JSON.stringify({plan_code:planCode, interval:String(data.get("interval") || "monthly"), duration_days:Number(data.get("duration_days") || 30)}),
+    });
+    adminNotice(body.message);
+    await loadAdmin({silent:true});
+  } catch (error) { adminNotice(error.message, true); submit.disabled = false; }
+}
+
+async function revokeAdminSessions(button) {
+  if (!window.confirm("Bu kullanıcının tüm cihazlardaki oturumları kapatılsın mı?")) return;
+  button.disabled = true;
+  try {
+    const body = await adminRequest(`/billing/admin/users/${encodeURIComponent(button.dataset.userRevoke)}/revoke-sessions`, {method:"POST", body:"{}"});
+    adminNotice(body.message);
+    await loadAdmin({silent:true});
+  } catch (error) { adminNotice(error.message, true); button.disabled = false; }
+}
+
+async function closeAdminUser(event, form) {
+  event.preventDefault();
+  const userId = form.dataset.userCloseForm;
+  const submit = form.querySelector('button[type="submit"]');
+  const data = new FormData(form);
+  const email = String(data.get("confirmation_email") || "").trim();
+  if (!window.confirm(`${email} hesabı kapatılacak, oturumları iptal edilecek ve ders dosyaları silinecek. Bu işlem geri alınamaz. Devam edilsin mi?`)) return;
+  submit.disabled = true;
+  try {
+    const body = await adminRequest(`/billing/admin/users/${encodeURIComponent(userId)}`, {
+      method:"DELETE",
+      body:JSON.stringify({confirmation_email:email, reason:String(data.get("reason") || "").trim()}),
+    });
+    adminNotice(body.message);
+    await loadAdmin({silent:true});
+  } catch (error) { adminNotice(error.message, true); submit.disabled = false; }
 }
 
 async function updateContactMessage(button) {

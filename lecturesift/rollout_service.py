@@ -115,6 +115,20 @@ ADMIN_CREDIT_EVENTS = Table(
     Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
+ADMIN_ACCOUNT_EVENTS = Table(
+    "lecturesift_admin_account_events",
+    METADATA,
+    Column("id", String(36), primary_key=True),
+    # Intentionally not a foreign key: the audit record must survive account
+    # anonymisation so an operator can explain privileged changes later.
+    Column("subject_user_id", String(36), nullable=False, index=True),
+    Column("subject_email", String(320), nullable=False),
+    Column("action", String(48), nullable=False, index=True),
+    Column("summary", String(500), nullable=False),
+    Column("actor", String(80), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+)
+
 REFUND_REQUESTS = Table(
     "lecturesift_refund_requests",
     METADATA,
@@ -174,6 +188,7 @@ def init_rollout_database() -> None:
         EMAIL_CHANGE_REQUESTS,
         RUNTIME_METRICS,
         ADMIN_CREDIT_EVENTS,
+        ADMIN_ACCOUNT_EVENTS,
         REFUND_REQUESTS,
         CONTACT_MESSAGES,
     ):
@@ -1014,6 +1029,332 @@ def decide_refund_request(request_id: str, action: str, note: str, actor: str) -
             select(REFUND_REQUESTS).where(REFUND_REQUESTS.c.id == request_id)
         ).first()
     return _public_refund_request(updated)
+
+
+def _record_admin_account_event(
+    connection,
+    *,
+    user_id: str,
+    email: str,
+    action: str,
+    summary: str,
+    actor: str,
+) -> None:
+    connection.execute(
+        ADMIN_ACCOUNT_EVENTS.insert().values(
+            id=str(uuid.uuid4()),
+            subject_user_id=user_id,
+            subject_email=email[:320],
+            action=action[:48],
+            summary=summary[:500],
+            actor=actor[:80],
+            created_at=utcnow(),
+        )
+    )
+
+
+def admin_update_user(
+    user_id: str,
+    *,
+    email: str,
+    first_name: str,
+    last_name: str,
+    phone: str,
+    country_code: str,
+    preferred_language: str,
+    email_verified: bool,
+    actor: str,
+) -> dict[str, Any]:
+    """Update identity fields while invalidating previously issued sessions."""
+    init_rollout_database()
+    normalized_email = _normalize_email(email)
+    first = _normalize_name(first_name, "Ad")
+    last = _normalize_name(last_name, "Soyad")
+    normalized_phone = "".join(
+        char for char in phone.strip() if char.isdigit() or char == "+"
+    )[:32] or None
+    country = country_code.strip().upper()
+    language = preferred_language.strip().lower().replace("_", "-")
+    supported_languages = {"tr", "en", "de", "fr", "es", "it", "pt", "ru", "ar", "zh", "ja", "ko", "hi"}
+    if len(country) != 2 or not country.isalpha():
+        raise BillingError("Geçerli bir ülke kodu gir.")
+    if language not in supported_languages:
+        raise BillingError("Seçilen arayüz dili desteklenmiyor.")
+    if normalized_phone and not 7 <= sum(char.isdigit() for char in normalized_phone) <= 15:
+        raise BillingError("Telefon numarası 7 ile 15 rakam arasında olmalı.")
+
+    now = utcnow()
+    try:
+        with ENGINE.begin() as connection:
+            user = connection.execute(
+                select(USERS).where(USERS.c.id == user_id).with_for_update()
+            ).first()
+            profile = connection.execute(
+                select(USER_PROFILES).where(USER_PROFILES.c.user_id == user_id)
+            ).first()
+            if not user or not profile:
+                raise BillingError("Kullanıcı bulunamadı.")
+            old_email = str(user.email)
+            connection.execute(
+                update(USERS).where(USERS.c.id == user_id).values(email=normalized_email)
+            )
+            connection.execute(
+                update(USER_PROFILES)
+                .where(USER_PROFILES.c.user_id == user_id)
+                .values(
+                    first_name=first,
+                    last_name=last,
+                    phone=normalized_phone,
+                    country_code=country,
+                    email_verified_at=now if email_verified else None,
+                    session_version=USER_PROFILES.c.session_version + 1,
+                    updated_at=now,
+                )
+            )
+            preference = connection.execute(
+                select(USER_PREFERENCES).where(USER_PREFERENCES.c.user_id == user_id)
+            ).first()
+            if preference:
+                connection.execute(
+                    update(USER_PREFERENCES)
+                    .where(USER_PREFERENCES.c.user_id == user_id)
+                    .values(preferred_language=language, updated_at=now)
+                )
+            else:
+                connection.execute(
+                    USER_PREFERENCES.insert().values(
+                        user_id=user_id,
+                        preferred_language=language,
+                        updated_at=now,
+                    )
+                )
+            _record_admin_account_event(
+                connection,
+                user_id=user_id,
+                email=normalized_email,
+                action="user_updated",
+                summary=(
+                    f"Profil güncellendi; e-posta {old_email} -> {normalized_email}; "
+                    f"doğrulama={'açık' if email_verified else 'kapalı'}"
+                ),
+                actor=actor,
+            )
+    except IntegrityError as exc:
+        raise BillingError("Bu e-posta adresi başka bir hesap tarafından kullanılıyor.") from exc
+    return account_status(user_id)
+
+
+def admin_set_user_subscription(
+    user_id: str,
+    *,
+    plan_code: str,
+    interval: str,
+    duration_days: int,
+    actor: str,
+) -> dict[str, Any]:
+    """Replace the active entitlement with a time-bounded admin grant."""
+    init_rollout_database()
+    selected_plan = plan_code.strip().casefold()
+    selected_interval = interval.strip().casefold()
+    allowed_plans = {"free", "lite", "plus", "pro", "max", "business"}
+    if selected_plan not in allowed_plans or selected_plan not in PLAN_BY_CODE:
+        raise BillingError("Yönetilebilir bir plan seç.")
+    if selected_interval not in {"monthly", "annual"}:
+        raise BillingError("Abonelik dönemi aylık veya yıllık olmalı.")
+    days = int(duration_days)
+    if days < 1 or days > 3660:
+        raise BillingError("Abonelik süresi 1 ile 3660 gün arasında olmalı.")
+
+    now = utcnow()
+    with ENGINE.begin() as connection:
+        user = connection.execute(
+            select(USERS).where(USERS.c.id == user_id).with_for_update()
+        ).first()
+        if not user:
+            raise BillingError("Kullanıcı bulunamadı.")
+        connection.execute(
+            update(SUBSCRIPTIONS)
+            .where(
+                SUBSCRIPTIONS.c.user_id == user_id,
+                SUBSCRIPTIONS.c.status.in_(("active", "cancel_at_end")),
+            )
+            .values(status="cancelled")
+        )
+        if selected_plan != "free":
+            connection.execute(
+                SUBSCRIPTIONS.insert().values(
+                    id=str(uuid.uuid4()),
+                    user_id=user_id,
+                    plan_code=selected_plan,
+                    interval=selected_interval,
+                    status="active",
+                    starts_at=now,
+                    ends_at=now + timedelta(days=days),
+                    source_reference=f"ADMIN-{uuid.uuid4().hex.upper()}",
+                    created_at=now,
+                )
+            )
+        _record_admin_account_event(
+            connection,
+            user_id=user_id,
+            email=user.email,
+            action="subscription_changed",
+            summary=(
+                "Aktif abonelik kaldırıldı; ücretsiz plan etkin"
+                if selected_plan == "free"
+                else f"{selected_plan} planı {days} gün / {selected_interval} olarak atandı"
+            ),
+            actor=actor,
+        )
+    return account_status(user_id)
+
+
+def admin_revoke_user_sessions(user_id: str, actor: str) -> dict[str, Any]:
+    init_rollout_database()
+    with ENGINE.begin() as connection:
+        user = connection.execute(select(USERS).where(USERS.c.id == user_id)).first()
+        if not user:
+            raise BillingError("Kullanıcı bulunamadı.")
+        result = connection.execute(
+            update(USER_PROFILES)
+            .where(USER_PROFILES.c.user_id == user_id)
+            .values(session_version=USER_PROFILES.c.session_version + 1, updated_at=utcnow())
+        )
+        if not result.rowcount:
+            raise BillingError("Kullanıcı profili bulunamadı.")
+        _record_admin_account_event(
+            connection,
+            user_id=user_id,
+            email=user.email,
+            action="sessions_revoked",
+            summary="Tüm açık kullanıcı oturumları kapatıldı",
+            actor=actor,
+        )
+    return {"user_id": user_id, "sessions_revoked": True}
+
+
+def admin_close_user_account(
+    user_id: str,
+    *,
+    confirmation_email: str,
+    reason: str,
+    actor: str,
+) -> dict[str, Any]:
+    """Anonymise access while retaining legally required commerce records."""
+    init_rollout_database()
+    normalized_reason = " ".join(reason.strip().split())
+    if len(normalized_reason) < 4 or len(normalized_reason) > 500:
+        raise BillingError("Hesap kapatma nedenini 4 ile 500 karakter arasında yaz.")
+    now = utcnow()
+    with ENGINE.begin() as connection:
+        user = connection.execute(
+            select(USERS).where(USERS.c.id == user_id).with_for_update()
+        ).first()
+        profile = connection.execute(
+            select(USER_PROFILES).where(USER_PROFILES.c.user_id == user_id)
+        ).first()
+        if not user or not profile:
+            raise BillingError("Kullanıcı bulunamadı.")
+        if confirmation_email.strip().casefold() != user.email.casefold():
+            raise BillingError("Onay e-postası kullanıcı hesabıyla eşleşmiyor.")
+        protected_admin_emails = set(config.BILLING_ADMIN_EMAILS)
+        if config.LEGAL_OPERATOR_EMAIL:
+            protected_admin_emails.add(config.LEGAL_OPERATOR_EMAIL.casefold())
+        if user.email.casefold() in protected_admin_emails:
+            raise BillingError("Yönetici hesabı panelden kapatılamaz.")
+
+        anonymized_audit_email = f"deleted-account-{user_id[:8]}@users.invalid"
+        connection.execute(
+            update(ADMIN_ACCOUNT_EVENTS)
+            .where(ADMIN_ACCOUNT_EVENTS.c.subject_user_id == user_id)
+            .values(
+                subject_email=anonymized_audit_email,
+                summary="Önceki yönetici işlemi hesap anonimleştirildikten sonra kimliksiz olarak saklandı",
+            )
+        )
+        _record_admin_account_event(
+            connection,
+            user_id=user_id,
+            email=anonymized_audit_email,
+            action="account_closed",
+            summary=f"Hesap kapatıldı ve kimlikten arındırıldı: {normalized_reason}",
+            actor=actor,
+        )
+        anonymized_email = f"deleted+{uuid.uuid4().hex}@users.invalid"
+        salt = secrets.token_bytes(16)
+        connection.execute(
+            update(USERS)
+            .where(USERS.c.id == user_id)
+            .values(
+                email=anonymized_email,
+                password_salt=salt.hex(),
+                password_hash=_hash_password(secrets.token_urlsafe(48), salt),
+                credit_minutes=0,
+            )
+        )
+        connection.execute(
+            update(USER_PROFILES)
+            .where(USER_PROFILES.c.user_id == user_id)
+            .values(
+                first_name="Deleted",
+                last_name="User",
+                phone=None,
+                country_code="ZZ",
+                email_verified_at=None,
+                phone_verified_at=None,
+                session_version=USER_PROFILES.c.session_version + 1,
+                updated_at=now,
+            )
+        )
+        for table in (
+            USER_PREFERENCES,
+            AUTH_TOKENS,
+            EMAIL_CHANGE_REQUESTS,
+            INSTAGRAM_REWARDS,
+            REWARDED_AD_CLAIMS,
+            GUEST_TRIALS,
+        ):
+            connection.execute(delete(table).where(table.c.user_id == user_id))
+        connection.execute(
+            update(SUBSCRIPTIONS)
+            .where(
+                SUBSCRIPTIONS.c.user_id == user_id,
+                SUBSCRIPTIONS.c.status.in_(("active", "cancel_at_end")),
+            )
+            .values(status="cancelled")
+        )
+        connection.execute(
+            update(MANUAL_ORDERS)
+            .where(MANUAL_ORDERS.c.user_id == user_id, MANUAL_ORDERS.c.status == "pending")
+            .values(status="cancelled", updated_at=now)
+        )
+        connection.execute(
+            update(PAYMENT_ORDERS)
+            .where(
+                PAYMENT_ORDERS.c.user_id == user_id,
+                PAYMENT_ORDERS.c.status.in_(("created", "token_failed")),
+            )
+            .values(status="cancelled", updated_at=now)
+        )
+    return {"user_id": user_id, "status": "closed", "closed_at": now.isoformat()}
+
+
+def list_admin_account_events(limit: int = 100) -> list[dict[str, Any]]:
+    init_rollout_database()
+    safe_limit = max(1, min(int(limit), 500))
+    with ENGINE.connect() as connection:
+        rows = connection.execute(
+            select(ADMIN_ACCOUNT_EVENTS)
+            .order_by(ADMIN_ACCOUNT_EVENTS.c.created_at.desc())
+            .limit(safe_limit)
+        ).all()
+    return [
+        {
+            **dict(row._mapping),
+            "created_at": row.created_at.isoformat(),
+        }
+        for row in rows
+    ]
 
 
 def adjust_admin_credit(user_id: str, minutes_delta: int, reason: str, actor: str) -> dict[str, Any]:

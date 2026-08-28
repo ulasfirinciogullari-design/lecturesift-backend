@@ -59,6 +59,7 @@ def test_analytics_config_requires_opt_in_and_a_valid_public_measurement_id(monk
         "measurement_id": None,
         "consent_required": True,
         "advertising_signals": False,
+        "google_ads": {"enabled": False, "id": None, "signup_label": None, "purchase_label": None},
     }
 
     monkeypatch.setattr(config, "ANALYTICS_ENABLED", True)
@@ -71,6 +72,17 @@ def test_analytics_config_requires_opt_in_and_a_valid_public_measurement_id(monk
     assert enabled["provider"] == "google_analytics_4"
     assert enabled["measurement_id"] == "G-4L2CBDSZ48"
     assert enabled["advertising_signals"] is False
+
+    monkeypatch.setattr(config, "GOOGLE_ADS_ID", "AW-123456789")
+    monkeypatch.setattr(config, "GOOGLE_ADS_SIGNUP_LABEL", "signup-label")
+    monkeypatch.setattr(config, "GOOGLE_ADS_PURCHASE_LABEL", "purchase-label")
+    ads = client.get("/analytics/config").json()["google_ads"]
+    assert ads == {
+        "enabled": True,
+        "id": "AW-123456789",
+        "signup_label": "signup-label",
+        "purchase_label": "purchase-label",
+    }
 
 
 def test_guest_trial_is_five_minutes_resumable_and_single_job():
@@ -333,6 +345,86 @@ def test_admin_credit_adjustment_is_bounded_and_audited(monkeypatch):
     event = next(item for item in events if item["user_id"] == user_id)
     assert event["reason"] == "Support compensation"
     assert "actor" not in event
+
+
+def test_admin_can_manage_profile_subscription_sessions_and_close_account(monkeypatch):
+    email, token = new_account()
+    monkeypatch.setattr(config, "BILLING_ADMIN_TOKEN", "admin-secret")
+    monkeypatch.setattr(config, "INSTAGRAM_ADMIN_TOKEN", "admin-secret")
+    user_id = client.get("/billing/me", headers=auth(token)).json()["account"]["user"]["id"]
+    changed_email = f"managed-{uuid.uuid4()}@example.com"
+
+    updated = client.patch(
+        f"/billing/admin/users/{user_id}",
+        headers=auth("admin-secret"),
+        json={
+            "email": changed_email,
+            "first_name": "Yönetilen",
+            "last_name": "Kullanıcı",
+            "phone": "+905551112233",
+            "country_code": "DE",
+            "preferred_language": "de",
+            "email_verified": True,
+        },
+    )
+    assert updated.status_code == 200
+    assert updated.json()["account"]["user"]["email"] == changed_email
+    assert updated.json()["account"]["user"]["preferred_language"] == "de"
+    assert client.get("/billing/me", headers=auth(token)).status_code == 401
+
+    granted = client.post(
+        f"/billing/admin/users/{user_id}/subscription",
+        headers=auth("admin-secret"),
+        json={"plan_code": "plus", "interval": "monthly", "duration_days": 45},
+    )
+    assert granted.status_code == 200
+    assert granted.json()["account"]["plan"]["code"] == "plus"
+
+    overview = client.get(
+        "/billing/admin/overview?limit=250", headers=auth("admin-secret")
+    ).json()
+    managed = next(item for item in overview["users"] if item["id"] == user_id)
+    assert managed["first_name"] == "Yönetilen"
+    assert managed["preferred_language"] == "de"
+    assert managed["plan_code"] == "plus"
+    assert managed["subscription"]["status"] == "active"
+
+    revoked = client.post(
+        f"/billing/admin/users/{user_id}/revoke-sessions",
+        headers=auth("admin-secret"),
+    )
+    assert revoked.status_code == 200
+    assert revoked.json()["sessions_revoked"] is True
+
+    wrong_confirmation = client.request(
+        "DELETE",
+        f"/billing/admin/users/{user_id}",
+        headers=auth("admin-secret"),
+        json={"confirmation_email": email, "reason": "Kullanıcı talebi"},
+    )
+    assert wrong_confirmation.status_code == 400
+
+    closed = client.request(
+        "DELETE",
+        f"/billing/admin/users/{user_id}",
+        headers=auth("admin-secret"),
+        json={"confirmation_email": changed_email, "reason": "Kullanıcı talebi"},
+    )
+    assert closed.status_code == 200
+    assert closed.json()["status"] == "closed"
+    after_close = client.get(
+        "/billing/admin/overview?limit=250", headers=auth("admin-secret")
+    ).json()
+    assert user_id not in {item["id"] for item in after_close["users"]}
+
+    events = client.get(
+        "/billing/admin/account-events?limit=100", headers=auth("admin-secret")
+    ).json()["events"]
+    actions = {item["action"] for item in events if item["subject_user_id"] == user_id}
+    assert {"user_updated", "subscription_changed", "sessions_revoked", "account_closed"} <= actions
+    closed_events = [item for item in events if item["subject_user_id"] == user_id]
+    assert all(item["subject_email"].endswith("@users.invalid") for item in closed_events)
+    assert all(changed_email not in item["summary"] for item in closed_events)
 
 
 def test_rewarded_ad_sessions_are_opt_in_capped_and_single_use(monkeypatch):

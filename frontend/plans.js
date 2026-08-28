@@ -7,6 +7,12 @@ const LOCALE_DATA = window.LECTURESIFT_LOCALE_DATA || {
 const ZERO_DECIMAL_CURRENCIES = new Set(["JPY", "KRW"]);
 const PLANS_I18N = window.LectureSiftI18n || {language:"tr",locale:"tr-TR",t:(key,fallback)=>fallback || key};
 const pt = (key, fallback) => PLANS_I18N.t(key, fallback);
+
+function recordPlanAnalytics(name, parameters = {}) {
+  if (window.LectureSiftAnalytics?.track) return void window.LectureSiftAnalytics.track(name, parameters);
+  window.__lecturesiftAnalyticsQueue = window.__lecturesiftAnalyticsQueue || [];
+  window.__lecturesiftAnalyticsQueue.push({type:"event", name, parameters});
+}
 const COPY = {
   free: ["Ücretsiz", "Denemek ve kısa dersler için"],
   test: ["1 TL Test Paketi", "Canlı kart ödemesini küçük tutarla denemek için"],
@@ -296,6 +302,11 @@ async function buy(planCode, interval = "monthly") {
   const plan = catalog?.plans?.find(item => item.code === planCode);
   const price = plan?.display_price || plan?.manual_price;
   const multiplier = interval === "annual" ? 10 : 1;
+  recordPlanAnalytics("begin_checkout", {
+    currency: price?.currency || currency,
+    value: price ? Number(price.amount_minor * multiplier) / 100 : 0,
+    items: [{item_id: planCode, item_name: planLabel(planCode), quantity: 1}],
+  });
   $("checkoutSummaryPlan").textContent = planLabel(planCode);
   $("checkoutSummaryInterval").textContent = interval === "annual"
     ? pt("rollout.annual", "Yıllık")

@@ -120,6 +120,12 @@ services:
         value: "false"
       - key: LECTURESIFT_GA_MEASUREMENT_ID
         sync: false
+      - key: LECTURESIFT_GOOGLE_ADS_ID
+        sync: false
+      - key: LECTURESIFT_GOOGLE_ADS_SIGNUP_LABEL
+        sync: false
+      - key: LECTURESIFT_GOOGLE_ADS_PURCHASE_LABEL
+        sync: false
       - key: CELERY_BROKER_URL
         fromService:
           type: keyvalue

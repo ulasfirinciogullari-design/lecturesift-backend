@@ -231,8 +231,21 @@ def test_profile_admin_bank_and_full_comparison_interfaces_are_present():
     assert "adminTokenForm" in admin and "adminOrders" in admin
     assert "adminReadiness" in admin
     assert "adminContactMessages" in admin
-    assert all(value in admin for value in ("adminTimeline", "adminJobs", "adminAlerts", "adminExportOrders"))
+    assert all(value in admin for value in ("adminTimeline", "adminJobs", "adminAlerts", "adminExportOrders", "adminOperationNotice", "adminAccountEvents", "adminPlanDistribution"))
     assert "/billing/admin/jobs" in admin_script
+    assert all(
+        value in admin_script
+        for value in (
+            "data-user-profile-form",
+            "data-user-credit-form",
+            "data-user-subscription-form",
+            "data-user-revoke",
+            "data-user-close-form",
+            "/billing/admin/account-events",
+            "renderPlanDistribution",
+            "google_ads_conversion_configured",
+        )
+    )
     assert "adminReadinessChecks" in admin_script and "Opsiyonel · kapalı" in admin_script
     assert "restoreRequestedJob" in workspace_script
     assert 'new URLSearchParams(location.search).get("job")' in workspace_script
@@ -253,6 +266,16 @@ def test_checkout_names_contact_inbox_and_mobile_plan_navigation_are_wired():
     assert "contactForm" in contact_html and "/contact/messages" in contact_js
     assert "/billing/admin/contact-messages" in admin_js
     assert ".topbar .top-actions .top-link" in rollout_css
+    assert all(
+        value in rollout_css
+        for value in (
+            ".admin-user-grid",
+            ".admin-user-card",
+            ".admin-user-tools",
+            ".admin-form-grid",
+            "@media(max-width:620px)",
+        )
+    )
 
 
 def test_secure_card_checkout_is_prepared_without_collecting_card_details():
@@ -422,7 +445,7 @@ def test_public_pages_have_share_metadata_canonical_urls_and_structured_data():
     seo = (FRONTEND / "seo.js").read_text(encoding="utf-8")
     sitemap = (FRONTEND / "sitemap.xml").read_text(encoding="utf-8")
 
-    assert 'seoScript.src = "/seo.js?v=1"' in i18n
+    assert 'seoScript.src = "/seo.js?v=2"' in i18n
     assert 'link[rel="canonical"]' in seo
     assert 'meta[property="og:image"]' in seo
     assert 'meta[name="twitter:card"]' in seo
@@ -436,6 +459,7 @@ def test_public_pages_have_share_metadata_canonical_urls_and_structured_data():
     assert "noindex,nofollow,noarchive" in seo
     assert "max-image-preview:large" in seo
     assert 'url: `${PRODUCTION_ORIGIN}/`' in seo
+    assert '"/distance-sales.html"' in seo
     assert (FRONTEND / "og-image.png").stat().st_size > 100_000
     assert sitemap.count("<lastmod>2026-08-28</lastmod>") == 10 * 13
 
@@ -451,15 +475,19 @@ def test_optional_analytics_and_advertising_are_consent_gated():
     assert 'const STORAGE_KEY = "lecturesift-consent-v1"' in consent
     assert 'analytics: false, advertising: false' in consent
     assert 'category === "necessary"' in consent
-    assert 'analyticsScript.src = "/analytics.js?v=1"' in i18n
-    assert 'LectureSiftConsent?.allows("analytics")' in analytics
+    assert 'analyticsScript.src = "/analytics.js?v=2"' in i18n
+    assert 'window.LectureSiftConsent?.get?.()' in analytics
     assert "/analytics/config" in analytics
     assert "googletagmanager.com/gtag/js" in analytics
     assert 'ad_storage: "denied"' in analytics
     assert "allow_google_signals: false" in analytics
-    assert 'new Set([\n    "/", "/index.html", "/features.html"' in analytics
+    assert 'const PUBLIC_PATHS = new Set([' in analytics
     assert "reset-password.html" not in analytics
     assert "verify.html" not in analytics
+    assert 'ad_storage: "denied"' in analytics
+    assert 'ad_user_data: "denied"' in analytics
+    assert 'trackConversion' in analytics
+    assert '`${ads.id}/${label}`' in analytics
     assert "lecturesift-consent-v1" in cookies
     assert "consent.storageContent" in cookies
     rewarded = (FRONTEND / "rewarded-ads.js").read_text(encoding="utf-8")
@@ -559,3 +587,28 @@ def test_adsense_site_ownership_and_ads_txt_are_published():
     assert f'const ADSENSE_ACCOUNT = "{publisher_id}"' in seo
     assert 'meta[name="google-adsense-account"]' in seo
     assert ads_txt == "google.com, pub-7608481350058806, DIRECT, f08c47fec0942fa0"
+
+
+def test_google_ads_conversions_are_consent_gated_and_csp_allows_measurement():
+    auth = (FRONTEND / "auth.js").read_text(encoding="utf-8")
+    plans = (FRONTEND / "plans.js").read_text(encoding="utf-8")
+    analytics = (FRONTEND / "analytics.js").read_text(encoding="utf-8")
+    headers = (FRONTEND.parent / "netlify.toml").read_text(encoding="utf-8")
+    blueprint = (FRONTEND.parent / "render.yaml").read_text(encoding="utf-8")
+    assert 'choices().advertising' in analytics
+    assert 'recordAnalytics("conversion", "signup"' in auth
+    assert 'recordAnalytics("conversion", "purchase"' in auth
+    assert 'recordPlanAnalytics("begin_checkout"' in plans
+    assert "lecturesift-purchase-${reference}" in auth
+    assert "https://www.googletagmanager.com" in headers
+    assert "https://www.google-analytics.com" in headers
+    assert all(
+        key in blueprint
+        for key in (
+            "LECTURESIFT_GOOGLE_ADS_ID",
+            "LECTURESIFT_GOOGLE_ADS_SIGNUP_LABEL",
+            "LECTURESIFT_GOOGLE_ADS_PURCHASE_LABEL",
+        )
+    )
+    backend = (FRONTEND.parent / "lecturesift" / "app.py").read_text(encoding="utf-8")
+    assert 'allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"]' in backend

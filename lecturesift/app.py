@@ -90,7 +90,7 @@ app.add_middleware(
     ],
     allow_origin_regex=r"^https://deploy-preview-[0-9]+--clever-horse-22b1a8\.netlify\.app$|^http://(localhost|127\.0\.0\.1)(:[0-9]+)?$",
     allow_credentials=False,
-    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
