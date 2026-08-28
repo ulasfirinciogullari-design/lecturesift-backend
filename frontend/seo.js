@@ -2,6 +2,7 @@
   "use strict";
 
   const PRODUCTION_ORIGIN = "https://lecturesift.com";
+  const ADSENSE_ACCOUNT = "ca-pub-7608481350058806";
   const LANGUAGES = ["tr", "en", "de", "fr", "es", "it", "pt", "ru", "ar", "zh", "ja", "ko", "hi"];
   const OG_LOCALES = {tr:"tr_TR",en:"en_US",de:"de_DE",fr:"fr_FR",es:"es_ES",it:"it_IT",pt:"pt_BR",ru:"ru_RU",ar:"ar_SA",zh:"zh_CN",ja:"ja_JP",ko:"ko_KR",hi:"hi_IN"};
   const PUBLIC_PATHS = new Set([
@@ -32,6 +33,13 @@
   const language = LANGUAGES.includes(parts[0]) ? parts.shift() : (document.documentElement.lang || "tr");
   const unlocalizedPath = `/${parts.join("/")}` || "/";
   const path = unlocalizedPath === "/index.html" ? "/" : unlocalizedPath;
+  let adsenseAccountMeta = document.head.querySelector('meta[name="google-adsense-account"]');
+  if (!adsenseAccountMeta) {
+    adsenseAccountMeta = document.createElement("meta");
+    adsenseAccountMeta.name = "google-adsense-account";
+    document.head.append(adsenseAccountMeta);
+  }
+  adsenseAccountMeta.content = ADSENSE_ACCOUNT;
   if (!PUBLIC_PATHS.has(path)) return;
 
   const localizedPath = locale => locale === "tr" ? path : `/${locale}${path === "/" ? "/" : path}`;
