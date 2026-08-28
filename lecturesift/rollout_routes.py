@@ -115,6 +115,7 @@ def rollout_health() -> dict:
         "instagram_bonus_minutes": config.INSTAGRAM_BONUS_MINUTES,
         "contact_email": config.CONTACT_EMAIL,
         "durable_queue_configured": bool(config.CELERY_BROKER_URL),
+        "durable_processing_required": config.REQUIRE_DURABLE_PROCESSING,
         "object_storage_configured": bool(
             config.S3_ENDPOINT_URL
             and config.S3_BUCKET

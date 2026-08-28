@@ -73,3 +73,22 @@ def test_output_publication_excludes_original_source_media(tmp_path: Path):
     assert ObjectStorage._is_source_media(remote, job_dir, remote.name) is True
     assert ObjectStorage._is_source_media(nested, job_dir, "sources/audio_001.mp4") is True
     assert ObjectStorage._is_source_media(output, job_dir, output.name) is False
+
+
+def test_object_storage_deletes_private_source_keys_in_batches():
+    class FakeClient:
+        def __init__(self):
+            self.calls = []
+
+        def delete_objects(self, **kwargs):
+            self.calls.append(kwargs)
+
+    storage = ObjectStorage.__new__(ObjectStorage)
+    storage.bucket = "private-bucket"
+    storage.remote = True
+    storage._client = FakeClient()
+
+    keys = [f"jobs/one/sources/audio_{index:04d}.mp4" for index in range(1001)]
+    assert storage.delete_keys(keys + [keys[0], ""]) == 1001
+    assert [len(call["Delete"]["Objects"]) for call in storage._client.calls] == [1000, 1]
+    assert all(call["Bucket"] == "private-bucket" for call in storage._client.calls)

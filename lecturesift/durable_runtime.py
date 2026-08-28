@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 from .billing_service import require_duration_entitlement
-from .config import CELERY_BROKER_URL
+from .config import CELERY_BROKER_URL, REQUIRE_DURABLE_PROCESSING
 from .duration import media_duration_seconds
 from .jobs import JOBS
 from .pipeline_enhancements import install_pipeline_enhancements
@@ -21,6 +21,19 @@ _INSTALLED = False
 
 def _queue_ready() -> bool:
     return bool(CELERY_BROKER_URL and STORAGE.remote and os.getenv("LECTURESIFT_WORKER") != "1")
+
+
+def _durability_unavailable(job_id: str) -> None:
+    JOBS.update(
+        job_id,
+        status="error",
+        percent=0,
+        stage="error",
+        queue_mode="required_unavailable",
+        worker_state="unavailable",
+        error_code="LS-SYSTEM-01",
+        error="Güvenli işleme altyapısı geçici olarak kullanılamıyor. Lütfen biraz sonra yeniden dene.",
+    )
 
 
 def _paths(value) -> list[Path]:
@@ -97,6 +110,10 @@ def install_durable_runtime() -> None:
             eta_started_at=time.time(),
         )
 
+        if REQUIRE_DURABLE_PROCESSING and not _queue_ready():
+            _durability_unavailable(job_id)
+            return
+
         if _queue_ready():
             try:
                 from .tasks import process_uploaded_job
@@ -124,6 +141,10 @@ def install_durable_runtime() -> None:
                 JOBS.update(job_id, celery_task_id=task.id)
                 return
             except Exception as exc:
+                if REQUIRE_DURABLE_PROCESSING:
+                    _durability_unavailable(job_id)
+                    JOBS.update(job_id, technical_error=str(exc))
+                    return
                 # The current in-process path remains available if the queue or
                 # object store has a transient configuration problem.
                 JOBS.update(
@@ -148,6 +169,9 @@ def install_durable_runtime() -> None:
 
     def dispatch_url(job_id: str, url: str, job_dir: Path, options: dict) -> str:
         if not _queue_ready():
+            if REQUIRE_DURABLE_PROCESSING:
+                _durability_unavailable(job_id)
+                return "error"
             return local_start_url_job(job_id, url, job_dir, options)
         try:
             from .tasks import process_url_job
@@ -164,6 +188,10 @@ def install_durable_runtime() -> None:
             JOBS.update(job_id, celery_task_id=task.id)
             return "queued"
         except Exception as exc:
+            if REQUIRE_DURABLE_PROCESSING:
+                _durability_unavailable(job_id)
+                JOBS.update(job_id, technical_error=str(exc))
+                return "error"
             JOBS.update(
                 job_id,
                 queue_mode="fallback",

@@ -18,6 +18,8 @@ Production services:
 
 The production deployment stays on `main`.
 
+Long-running production media jobs require the separate queue, worker, and private object-storage setup described in [DURABLE_PROCESSING.md](DURABLE_PROCESSING.md). Do not enable paid processing until its health and restart-recovery checks pass in preview.
+
 ## Local development
 
 Requirements: Python 3.11+, FFmpeg, system DejaVu fonts, and an OpenAI API key.

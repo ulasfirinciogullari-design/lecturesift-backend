@@ -212,3 +212,4 @@ def test_rollout_frontend_and_blueprint_contracts():
     assert "type: worker" in blueprint
     assert "journal-snapshot" in blueprint
     assert "S3_BUCKET" in blueprint
+    assert "LECTURESIFT_REQUIRE_DURABLE_PROCESSING" in blueprint

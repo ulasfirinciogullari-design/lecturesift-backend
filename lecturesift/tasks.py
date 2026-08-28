@@ -103,12 +103,24 @@ def _cleanup_sources(job_dir: Path) -> None:
             path.unlink(missing_ok=True)
 
 
+def _delete_remote_sources(data: dict) -> int:
+    source_keys = data.get("source_keys") or {}
+    keys = [
+        str(key)
+        for role in ("audio", "visual")
+        for key in list(source_keys.get(role) or [])
+        if str(key)
+    ]
+    return STORAGE.delete_keys(keys)
+
+
 def _resume_publish(job_id: str, data: dict) -> dict | None:
     result_path = Path(str(data.get("result_path") or ""))
     job_dir = Path(str(data.get("job_dir") or ""))
     if data.get("worker_state") != "retrying" or not result_path.is_file() or not job_dir.is_dir():
         return None
     remote = STORAGE.publish_job(job_id, job_dir)
+    _delete_remote_sources(data)
     _cleanup_sources(job_dir)
     JOBS.update(job_id, status="done", stage="done", worker_state="done", **remote)
     return {"job_id": job_id, "status": "done", **remote}
@@ -180,6 +192,7 @@ def process_uploaded_job(
                 return {"job_id": job_id, "status": finished.get("status", "error")}
 
             remote = STORAGE.publish_job(job_id, job_dir)
+            _delete_remote_sources(finished)
             elapsed = float(finished.get("elapsed_seconds") or (time.time() - started))
             record_runtime(job_id, media_minutes, elapsed, source_size)
             _cleanup_sources(job_dir)

@@ -297,19 +297,25 @@ class JobStore:
 
     def cleanup_expired(self) -> int:
         now = time.time()
-        removed: list[Path] = []
+        removed: list[tuple[str, Path]] = []
         with self._lock, self._distributed_write_lock():
             self._refresh_locked()
             for job_id, data in list(self._jobs.items()):
                 retention_seconds = max(60, int(data.get("retention_seconds", JOB_TTL_SECONDS)))
                 if float(data.get("updated", 0)) < now - retention_seconds:
-                    removed.append(Path(data.get("job_dir", WORK_DIR / job_id)))
+                    removed.append((job_id, Path(data.get("job_dir", WORK_DIR / job_id))))
                     del self._jobs[job_id]
             if removed:
                 self._flush_locked()
-        for path in removed:
+        for job_id, path in removed:
             if path.is_dir() and path.parent == WORK_DIR:
                 shutil.rmtree(path, ignore_errors=True)
+            try:
+                STORAGE.delete_job(job_id)
+            except Exception:
+                # The metadata is already inaccessible. A bucket lifecycle rule
+                # remains the final safety net if the provider is unavailable.
+                pass
         return len(removed)
 
 

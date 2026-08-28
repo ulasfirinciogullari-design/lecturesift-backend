@@ -60,6 +60,7 @@ def test_subscription_overflow_spends_extra_minutes(monkeypatch):
 
 def test_rollout_health_checks_connections_and_worker(monkeypatch):
     monkeypatch.setattr(config, "CELERY_BROKER_URL", "redis://queue")
+    monkeypatch.setattr(config, "REQUIRE_DURABLE_PROCESSING", True)
     monkeypatch.setattr(rollout_routes.JOBS, "redis_health", lambda: {"configured": True, "connected": True})
     monkeypatch.setattr(rollout_routes.STORAGE, "health", lambda: {"configured": True, "connected": True})
     monkeypatch.setattr(
@@ -69,6 +70,7 @@ def test_rollout_health_checks_connections_and_worker(monkeypatch):
     )
     body = rollout_routes.rollout_health()
     assert body["durable_processing_ready"] is True
+    assert body["durable_processing_required"] is True
     assert body["worker"]["workers"] == 1
 
 
@@ -117,3 +119,21 @@ def test_transient_pipeline_errors_are_retryable():
     assert _processing_error(
         {"status": "error", "error_code": "LS-VIDEO-02", "technical_error": "bad codec"}
     ) is None
+
+
+def test_expired_job_cleanup_removes_local_and_remote_files(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(jobs_module, "WORK_DIR", tmp_path)
+    monkeypatch.setattr(jobs_module, "REDIS_URL", "")
+    deleted = []
+    monkeypatch.setattr(jobs_module.STORAGE, "delete_job", lambda job_id: deleted.append(job_id) or 2)
+    store = jobs_module.JobStore()
+    job_id = "expired-job"
+    job_dir = tmp_path / job_id
+    job_dir.mkdir()
+    store.create(job_id, job_dir, {}, retention_seconds=60)
+    store._jobs[job_id]["updated"] = 0
+    store._flush_locked()
+
+    assert store.cleanup_expired() == 1
+    assert deleted == [job_id]
+    assert not job_dir.exists()

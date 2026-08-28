@@ -66,6 +66,8 @@ services:
         value: https://lecturesift-backend.onrender.com
       - key: LECTURESIFT_GUEST_TRIAL_MINUTES
         value: "5"
+      - key: LECTURESIFT_REQUIRE_DURABLE_PROCESSING
+        value: "true"
       - key: LECTURESIFT_INSTAGRAM_BONUS_MINUTES
         value: "30"
       - key: CELERY_BROKER_URL

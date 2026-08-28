@@ -129,5 +129,22 @@ class ObjectStorage:
                     deleted += len(batch)
         return deleted
 
+    def delete_keys(self, keys: list[str]) -> int:
+        """Delete an explicit set of private objects in API-sized batches."""
+        if not self.remote or self._client is None:
+            return 0
+        normalized = [{"Key": str(key)} for key in dict.fromkeys(keys) if str(key)]
+        deleted = 0
+        for offset in range(0, len(normalized), 1000):
+            batch = normalized[offset:offset + 1000]
+            if not batch:
+                continue
+            self._client.delete_objects(
+                Bucket=self.bucket,
+                Delete={"Objects": batch, "Quiet": True},
+            )
+            deleted += len(batch)
+        return deleted
+
 
 STORAGE = ObjectStorage()
