@@ -595,6 +595,22 @@ def test_free_results_show_a_localized_download_paywall():
     assert '"plans.unlockDownload"' in catalog
 
 
+def test_guest_trial_becomes_a_single_use_membership_gate():
+    rollout = (FRONTEND / "rollout.js").read_text(encoding="utf-8")
+    app = (FRONTEND / "app.js").read_text(encoding="utf-8")
+    catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    index = (FRONTEND / "index.html").read_text(encoding="utf-8")
+
+    assert 'rollout.guest_trial || null' in rollout
+    assert 'guestTrialState?.used' in rollout
+    assert 'window.LectureSiftGuestTrial' in rollout
+    assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
+    assert '"rollout.guestUsed"' in catalog
+    assert '"rollout.createFreeAccount"' in catalog
+    assert 'src="./app.js?v=10"' in index
+    assert 'src="/rollout.js?v=3"' in index
+
+
 def test_transcript_timeline_is_rendered_with_localized_precision_status():
     app = (FRONTEND / "app.js").read_text(encoding="utf-8")
     catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")

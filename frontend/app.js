@@ -636,7 +636,8 @@ $("analyzeButton").onclick = async () => {
     try {
       const response = await fetch(`${API}/jobs/url`, {method: "POST", body: data, headers:{Authorization:`Bearer ${billingToken}`}});
       if (!response.ok) { const error = await responseError(response); showError(error.message, error.code); return; }
-      jobId = (await response.json()).job_id; pollJob();
+      jobId = (await response.json()).job_id;
+      pollJob();
     } catch (error) { showError(error.message, "LS-NETWORK-01"); }
     return;
   }
@@ -650,7 +651,10 @@ $("analyzeButton").onclick = async () => {
   request.setRequestHeader("Authorization", `Bearer ${billingToken}`);
   request.upload.onprogress = event => { if (event.lengthComputable) updateProgress(Math.min(7, event.loaded / event.total * 7), t("processing")); };
   request.onload = async () => {
-    if (request.status < 300) { jobId = JSON.parse(request.responseText).job_id; pollJob(); }
+    if (request.status < 300) {
+      jobId = JSON.parse(request.responseText).job_id;
+      pollJob();
+    }
     else { try { const body = JSON.parse(request.responseText); showError(body.detail?.message, body.detail?.code); } catch { showError(request.responseText); } }
   };
   request.onerror = () => showError("", "LS-NETWORK-01"); request.send(data);
@@ -660,7 +664,11 @@ async function pollJob() {
   try {
     const response = await fetch(`${API}/jobs/${jobId}`, {cache: "no-store", headers:{Authorization:`Bearer ${billingToken}`}});
     if (!response.ok) { const error = await responseError(response); showError(error.message, error.code); return; }
-    const job = await response.json(); updateJobView(job);
+    const job = await response.json();
+    updateJobView(job);
+    if (job.status === "processing" || job.status === "done") {
+      window.LectureSiftGuestTrial?.markUsed?.(jobId);
+    }
     if (job.status === "done") { clearInterval(timerHandle); await loadResult(); await refreshBillingAccount(); return; }
     if (job.status === "error") { showError(job.error, job.error_code); return; }
     pollHandle = setTimeout(pollJob, 1300);
@@ -671,7 +679,10 @@ async function loadResult() {
   try {
     const response = await fetch(`${API}/jobs/${jobId}/result`, {cache: "no-store", headers:{Authorization:`Bearer ${billingToken}`}});
     if (!response.ok) { const error = await responseError(response); showError(error.message, error.code); return; }
-    latestResult = await response.json(); renderResult(latestResult); $("analyzeButton").disabled = false;
+    latestResult = await response.json();
+    renderResult(latestResult);
+    $("analyzeButton").disabled = false;
+    window.LectureSiftGuestTrial?.markUsed?.(jobId);
   } catch (error) { showError(error.message, "LS-NETWORK-01"); }
 }
 

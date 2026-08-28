@@ -488,6 +488,12 @@ def create_or_resume_guest(fingerprint: str) -> dict[str, Any]:
                 "token": issue_session(user.id, user.email, int(profile.session_version)),
                 "account": account_status(user.id),
                 "resumed": True,
+                "trial": {
+                    "used": bool(trial.job_id),
+                    "max_minutes": config.GUEST_TRIAL_MAX_MINUTES,
+                    "remaining_minutes": 0 if trial.job_id else config.GUEST_TRIAL_MAX_MINUTES,
+                    "job_id": trial.job_id,
+                },
             }
 
         user_id = str(uuid.uuid4())
@@ -550,6 +556,12 @@ def create_or_resume_guest(fingerprint: str) -> dict[str, Any]:
         "token": issue_session(user_id, guest_email, 1),
         "account": account_status(user_id),
         "resumed": False,
+        "trial": {
+            "used": False,
+            "max_minutes": config.GUEST_TRIAL_MAX_MINUTES,
+            "remaining_minutes": config.GUEST_TRIAL_MAX_MINUTES,
+            "job_id": None,
+        },
     }
 
 
@@ -559,6 +571,24 @@ def is_guest_user(user_id: str) -> bool:
         return connection.execute(
             select(GUEST_TRIALS.c.user_id).where(GUEST_TRIALS.c.user_id == user_id)
         ).first() is not None
+
+
+def guest_trial_status(user_id: str) -> dict[str, Any] | None:
+    """Return the authoritative single-use trial state without exposing its fingerprint."""
+    init_rollout_database()
+    with ENGINE.connect() as connection:
+        trial = connection.execute(
+            select(GUEST_TRIALS).where(GUEST_TRIALS.c.user_id == user_id)
+        ).first()
+    if not trial:
+        return None
+    used = bool(trial.job_id)
+    return {
+        "used": used,
+        "max_minutes": config.GUEST_TRIAL_MAX_MINUTES,
+        "remaining_minutes": 0 if used else config.GUEST_TRIAL_MAX_MINUTES,
+        "job_id": trial.job_id,
+    }
 
 
 def reserve_guest_job(user_id: str, job_id: str, media_minutes: float) -> None:

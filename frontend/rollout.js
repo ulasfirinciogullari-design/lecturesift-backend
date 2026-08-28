@@ -4,6 +4,7 @@
   const GUEST_TOKEN_KEY = "lecturesift-guest-token";
   const DEVICE_KEY = "lecturesift-guest-device";
   const ZERO_DECIMAL = new Set(["JPY", "KRW"]);
+  let guestTrialState = null;
   const $ = id => document.getElementById(id);
   const rt = (key, fallback) => window.LectureSiftI18n?.t(key) || fallback || key;
   const rolloutLocale = () => window.LectureSiftI18n?.locale || navigator.language || "tr-TR";
@@ -44,12 +45,16 @@
     return value;
   }
 
-  function setWorkspaceIdentity(token, account, guest = false) {
+  function setWorkspaceIdentity(token, account, guest = false, trial = null) {
     if (typeof billingToken !== "undefined") billingToken = token;
     if (typeof billingAccount !== "undefined") billingAccount = account;
-    if (guest) sessionStorage.setItem(GUEST_TOKEN_KEY, token);
+    if (guest) {
+      sessionStorage.setItem(GUEST_TOKEN_KEY, token);
+      guestTrialState = trial;
+    }
     if (typeof renderBillingAccount === "function") renderBillingAccount();
     if (typeof renderPlans === "function") renderPlans();
+    updateGuestTrialUi();
   }
 
   async function ensureGuestIdentity() {
@@ -58,7 +63,7 @@
       method: "POST",
       body: JSON.stringify({device_id: deviceId()}),
     }, "");
-    setWorkspaceIdentity(body.token, body.account, true);
+    setWorkspaceIdentity(body.token, body.account, true, body.trial || null);
     return body.token;
   }
 
@@ -70,12 +75,58 @@
     const token = sessionStorage.getItem(GUEST_TOKEN_KEY);
     if (!token) return;
     try {
-      const body = await api("/billing/me", {}, token);
-      setWorkspaceIdentity(token, body.account, true);
+      const [body, rollout] = await Promise.all([
+        api("/billing/me", {}, token),
+        api("/billing/me/rollout", {}, token),
+      ]);
+      setWorkspaceIdentity(token, body.account, true, rollout.guest_trial || null);
     } catch {
       sessionStorage.removeItem(GUEST_TOKEN_KEY);
     }
   }
+
+  function updateGuestTrialUi() {
+    const button = $("analyzeButton");
+    const note = document.querySelector(".rollout-guest-note");
+    const guest = typeof billingAccount !== "undefined" && billingAccount?.plan?.code === "guest";
+    const used = guest && guestTrialState?.used === true;
+    if (button && used) button.disabled = true;
+    if (note && used) {
+      note.textContent = rt(
+        "rollout.guestUsed",
+        "Tek seferlik 5 dakikalık denemen kullanıldı. Devam etmek için ücretsiz hesap oluştur.",
+      );
+    }
+    let signup = $("guestTrialSignup");
+    if (used && note && !signup) {
+      signup = document.createElement("a");
+      signup.id = "guestTrialSignup";
+      signup.className = "rollout-guest-signup";
+      signup.href = window.LectureSiftI18n?.localizedPath?.(
+        window.LectureSiftI18n?.language || "tr",
+        "/register.html",
+      ) || "/register.html";
+      signup.textContent = rt("rollout.createFreeAccount", "Ücretsiz hesap oluştur");
+      note.insertAdjacentElement("afterend", signup);
+    } else if (!used && signup) {
+      signup.remove();
+    }
+  }
+
+  window.LectureSiftGuestTrial = {
+    markUsed(jobId) {
+      const guest = typeof billingAccount !== "undefined" && billingAccount?.plan?.code === "guest";
+      if (!guest) return;
+      guestTrialState = {
+        ...(guestTrialState || {}),
+        used: true,
+        remaining_minutes: 0,
+        job_id: jobId || guestTrialState?.job_id || null,
+      };
+      updateGuestTrialUi();
+    },
+    state() { return guestTrialState ? {...guestTrialState} : null; },
+  };
 
   function formatCurrency(amountMinor, currency) {
     const divisor = ZERO_DECIMAL.has(currency) ? 1 : 100;
@@ -259,6 +310,14 @@
     if (button?.onclick && !button.dataset.guestWrapped) {
       const original = button.onclick;
       button.onclick = async function(event) {
+        if (typeof billingAccount !== "undefined" && billingAccount?.plan?.code === "guest" && guestTrialState?.used) {
+          updateGuestTrialUi();
+          showInlineMessage(
+            rt("rollout.guestUsed", "Tek seferlik 5 dakikalık denemen kullanıldı. Devam etmek için ücretsiz hesap oluştur."),
+            true,
+          );
+          return;
+        }
         if (!activeToken()) {
           try { await ensureGuestIdentity(); }
           catch (error) { showInlineMessage(error.message, true); return; }
@@ -270,6 +329,7 @@
       note.className = "rollout-guest-note";
       note.textContent = rt("rollout.guestNote", "Hesapsız kullanım: bu cihazda tek seferlik, en fazla 5 dakikalık kaynak. Daha uzun işlemler için ücretsiz hesap oluştur.");
       button.insertAdjacentElement("afterend", note);
+      updateGuestTrialUi();
     }
     if (typeof renderBillingAccount === "function") {
       const originalRender = renderBillingAccount;

@@ -105,6 +105,12 @@ def test_guest_trial_is_five_minutes_resumable_and_single_job():
     assert body["guest"] is True
     assert body["account"]["plan"]["code"] == "guest"
     assert body["account"]["remaining_minutes"] == 5
+    assert body["trial"] == {
+        "used": False,
+        "max_minutes": 5.0,
+        "remaining_minutes": 5.0,
+        "job_id": None,
+    }
 
     resumed = client.post("/billing/guest-session", json={"device_id": device})
     assert resumed.status_code == 200
@@ -114,6 +120,17 @@ def test_guest_trial_is_five_minutes_resumable_and_single_job():
     user_id = body["account"]["user"]["id"]
     first_job = f"job-{uuid.uuid4()}"
     rollout_service.reserve_guest_job(user_id, first_job, 4.9)
+    used = client.post("/billing/guest-session", json={"device_id": device}).json()
+    assert used["trial"] == {
+        "used": True,
+        "max_minutes": 5.0,
+        "remaining_minutes": 0,
+        "job_id": first_job,
+    }
+    rollout_status = client.get("/billing/me/rollout", headers=auth(used["token"])).json()
+    assert rollout_status["guest"] is True
+    assert rollout_status["guest_trial"]["used"] is True
+    assert rollout_status["guest_trial"]["remaining_minutes"] == 0
     with pytest.raises(Exception, match="daha önce"):
         rollout_service.reserve_guest_job(user_id, f"job-{uuid.uuid4()}", 1.0)
     other = client.post("/billing/guest-session", json={"device_id": f"device-{uuid.uuid4()}"}).json()
