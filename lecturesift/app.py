@@ -1090,8 +1090,17 @@ def download(job_id: str, user: dict = Depends(_billing_user)) -> FileResponse:
     if data.get("status") != "done":
         raise HTTPException(409, detail={"code": "LS-JOB-02", "message": "Ders analizi henüz tamamlanmadı."})
     _require_job_download(data, user)
+    result_path = Path(str(data.get("result_path") or ""))
+    if not result_path.is_file():
+        raise HTTPException(
+            409,
+            detail={
+                "code": "LS-JOB-04",
+                "message": "İndirme paketi güvenli depodan hazırlanıyor. Birkaç saniye sonra tekrar dene.",
+            },
+        )
     return FileResponse(
-        data["result_path"],
+        result_path,
         media_type="application/zip",
         filename="LectureSift_Paketi.zip",
     )

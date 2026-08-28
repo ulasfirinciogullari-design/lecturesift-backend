@@ -142,3 +142,28 @@ def test_expired_job_cleanup_removes_local_and_remote_files(tmp_path: Path, monk
     assert store.cleanup_expired() == 1
     assert deleted == [job_id]
     assert not job_dir.exists()
+
+
+def test_missing_completed_archive_returns_retryable_response(tmp_path: Path):
+    user_id, token = _account()
+    job_id = f"download-race-{uuid.uuid4()}"
+    job_dir = tmp_path / job_id
+    job_dir.mkdir()
+    JOBS.create(
+        job_id,
+        job_dir,
+        {"billing_user_id": user_id, "download_entitled": True},
+    )
+    JOBS.update(
+        job_id,
+        status="done",
+        result_path=str(job_dir / "missing.zip"),
+    )
+
+    response = TestClient(app).get(
+        f"/jobs/{job_id}/download",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "LS-JOB-04"
