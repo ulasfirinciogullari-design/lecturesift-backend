@@ -5,6 +5,8 @@ import lecturesift.app as app_module
 from lecturesift import config
 from lecturesift.app import app
 from lecturesift.billing_service import (
+    approve_manual_order,
+    create_manual_order,
     create_password_reset_token,
     login_user,
     register_user,
@@ -30,6 +32,8 @@ def test_billing_catalog_has_hybrid_plans_and_translation_keys():
     assert plans["plus"]["entitlements"]["export_formats"] == ["pdf", "docx", "txt"]
     assert plans["free"]["entitlements"]["ad_free"] is False
     assert plans["free"]["entitlements"]["rewarded_minutes_eligible"] is True
+    assert plans["free"]["entitlements"]["download_enabled"] is False
+    assert plans["credit"]["entitlements"]["download_enabled"] is True
     assert plans["plus"]["entitlements"]["ad_free"] is True
     assert plans["plus"]["entitlements"]["rewarded_minutes_eligible"] is False
 
@@ -274,6 +278,42 @@ def test_job_creation_requires_account():
     response = TestClient(app).post("/jobs", files={"file": ("notes.txt", b"not a video", "text/plain")})
     assert response.status_code == 401
     assert response.json()["detail"]["code"] == "LS-BILL-01"
+
+
+def test_free_results_are_preview_only_until_a_paid_credit_purchase(tmp_path, monkeypatch):
+    client = TestClient(app)
+    _, token = _new_account(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    user_id = client.get("/billing/me", headers=headers).json()["account"]["user"]["id"]
+    job_id = f"preview-{uuid.uuid4()}"
+    package = tmp_path / "package"
+    package.mkdir()
+    (package / "notes.pdf").write_bytes(b"pdf-preview")
+    (tmp_path / "result.json").write_text(
+        '{"title":"Preview","artifacts":[{"file":"notes.pdf","format":"pdf","label":"Notes","size_bytes":11}]}',
+        encoding="utf-8",
+    )
+    archive = tmp_path / "LectureSift_Paketi.zip"
+    archive.write_bytes(b"zip-preview")
+    JOBS.create(job_id, tmp_path, {"billing_user_id": user_id, "download_entitled": False})
+    JOBS.update(job_id, status="done", result_path=str(archive))
+
+    result = client.get(f"/jobs/{job_id}/result", headers=headers)
+    assert result.status_code == 200
+    assert result.json()["download_enabled"] is False
+    assert client.get(f"/jobs/{job_id}/artifact/notes.pdf", headers=headers).status_code == 402
+    assert client.get(f"/jobs/{job_id}/download", headers=headers).status_code == 402
+
+    monkeypatch.setattr(config, "BILLING_BANK_IBAN", "TR000000000000000000000000")
+    monkeypatch.setattr(config, "BILLING_BANK_ACCOUNT_HOLDER", "LectureSift Test")
+    monkeypatch.setattr(config, "BILLING_SUPPORT_EMAIL", "billing@example.com")
+    order = create_manual_order(user_id, "credit", "one_time")
+    approve_manual_order(order["reference"])
+
+    unlocked = client.get(f"/jobs/{job_id}/result", headers=headers)
+    assert unlocked.json()["download_enabled"] is True
+    assert client.get(f"/jobs/{job_id}/artifact/notes.pdf", headers=headers).status_code == 200
+    assert client.get(f"/jobs/{job_id}/download", headers=headers).status_code == 200
 
 
 def test_job_status_is_visible_only_to_its_owner(tmp_path):

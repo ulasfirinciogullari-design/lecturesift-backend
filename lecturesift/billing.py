@@ -29,7 +29,11 @@ class Plan:
 
     @property
     def export_enabled(self) -> bool:
-        return len(self.export_formats) > 1
+        return self.download_enabled
+
+    @property
+    def download_enabled(self) -> bool:
+        return self.code != "free"
 
     @property
     def ad_free(self) -> bool:
@@ -66,6 +70,7 @@ class Plan:
                 "priority": self.priority,
                 "ad_free": self.ad_free,
                 "rewarded_minutes_eligible": not self.ad_free,
+                "download_enabled": self.download_enabled,
             },
         }
 

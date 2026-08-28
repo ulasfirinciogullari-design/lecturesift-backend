@@ -24,6 +24,8 @@ def test_plan_page_preserves_learning_entitlements_and_zero_decimal_prices():
     script = (FRONTEND / "plans.js").read_text(encoding="utf-8")
     assert 'new Set(["JPY", "KRW"])' in script
     assert "entitlements.minutes ?? plan.minutes" in script
+    assert 'entitlements.download_enabled === false' in script
+    assert 'plans.previewOnly' in script
     assert "quiz_questions: 30" in script
     assert "flashcards: 60" in script
     assert "summary_profiles: ALL_SUMMARIES" in script
@@ -234,6 +236,14 @@ def test_optional_analytics_and_advertising_are_consent_gated():
     assert 'basePath === "/terms.html"' in i18n
     assert 't("privacy.adsDisclosure")' in i18n
     assert 't("terms.rewardPolicy")' in i18n
+
+
+def test_free_results_show_a_localized_download_paywall():
+    app = (FRONTEND / "app.js").read_text(encoding="utf-8")
+    catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    assert "data.download_enabled !== false" in app
+    assert 't("plans.unlockDownload"' in app
+    assert '"plans.unlockDownload"' in catalog
 
 
 def test_contact_form_has_a_branded_noindex_success_page():

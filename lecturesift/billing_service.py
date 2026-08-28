@@ -693,9 +693,28 @@ def account_status(user_id: str) -> dict:
             .order_by(PAYMENT_ORDERS.c.created_at.desc())
             .limit(10)
         ).all()
+        paid_credit_purchases = int(
+            connection.execute(
+                select(func.count()).select_from(MANUAL_ORDERS).where(
+                    MANUAL_ORDERS.c.user_id == user_id,
+                    MANUAL_ORDERS.c.plan_code == "credit",
+                    MANUAL_ORDERS.c.status == "paid",
+                )
+            ).scalar_one()
+        ) + int(
+            connection.execute(
+                select(func.count()).select_from(PAYMENT_ORDERS).where(
+                    PAYMENT_ORDERS.c.user_id == user_id,
+                    PAYMENT_ORDERS.c.plan_code == "credit",
+                    PAYMENT_ORDERS.c.status == "paid",
+                )
+            ).scalar_one()
+        )
     base_remaining = None if plan.minutes is None else max(0, int(plan.minutes) - int(used))
     credit_minutes = int(user.credit_minutes)
     remaining = None if base_remaining is None else base_remaining + credit_minutes
+    paid_credit_access = credit_minutes > 0 and paid_credit_purchases > 0
+    download_enabled = bool(plan.download_enabled or paid_credit_access)
     return {
         "user": _public_user(user, profile, preference),
         "plan": plan.public(),
@@ -713,6 +732,10 @@ def account_status(user_id: str) -> dict:
         "credit_minutes": credit_minutes,
         "remaining_minutes": remaining,
         "can_create_job": remaining is None or remaining > 0,
+        "download_enabled": download_enabled,
+        "download_access_source": (
+            "plan" if plan.download_enabled else "credit" if paid_credit_access else None
+        ),
         "is_admin": user.email.casefold() in config.BILLING_ADMIN_EMAILS,
         "manual_orders": [_public_manual_order(order) for order in orders],
         "payment_orders": [_public_payment_order(order) for order in payment_orders],
@@ -830,6 +853,16 @@ def require_job_entitlement(user_id: str) -> dict:
     return status
 
 
+def require_download_entitlement(user_id: str) -> dict:
+    status = account_status(user_id)
+    if not status["download_enabled"]:
+        raise BillingError(
+            "Dosya indirmek için tek kullanımlık dakika paketi veya ücretli plan seç. "
+            "Ücretsiz hesapta sonuçları sitede önizleyebilirsin."
+        )
+    return status
+
+
 def require_duration_entitlement(user_id: str, duration_seconds: float) -> dict:
     """Reject media that cannot fit in the user's currently available minutes."""
     status = require_job_entitlement(user_id)
@@ -850,8 +883,11 @@ def validate_job_features(
     flashcard_count: int,
     output_formats: list[str],
     summary_style: str,
+    job_type: str = "study_pack",
 ) -> dict:
     status = require_job_entitlement(user_id)
+    if job_type in {"audio_export", "download_video"} and not status["download_enabled"]:
+        raise BillingError("MP3 ve video indirme araçları dakika paketi veya ücretli plan gerektirir.")
     plan = PLAN_BY_CODE[status["plan"]["code"]]
     if plan.quiz_questions is not None and quiz_count > plan.quiz_questions:
         raise BillingError(f"Planın en fazla {plan.quiz_questions} quiz sorusuna izin veriyor.")

@@ -242,7 +242,7 @@ function fallbackCatalog(currency) {
   return {selected_currency:selected, supported_currencies:Object.keys(FALLBACK_PRICES), plans:PLAN_ORDER.map((code, index) => {
     const [kind, minutes, quiz, cards, formats, summaries, priority, featured] = PLAN_FALLBACK[code];
     const amount = FALLBACK_PRICES[selected][index];
-    return {code, kind, minutes, priority, featured, display_price:amount == null ? null : {currency:selected, amount_minor:amount}, entitlements:{minutes, quiz_questions:quiz, flashcards:cards, export_formats:formats, summary_profiles:summaries, priority}};
+    return {code, kind, minutes, priority, featured, display_price:amount == null ? null : {currency:selected, amount_minor:amount}, entitlements:{minutes, quiz_questions:quiz, flashcards:cards, export_formats:formats, summary_profiles:summaries, priority, download_enabled:code !== "free"}};
   })};
 }
 
@@ -391,7 +391,7 @@ function renderPlans() {
       ${plan.featured ? `<span class="plan-badge">${escapeHtml(t("popular"))}</span>` : ""}
       <h3>${escapeHtml(copy[0])}</h3><p>${escapeHtml(copy[1])}</p>
       <div class="plan-price">${escapeHtml(price)} <small>${escapeHtml(suffix)}</small></div>
-      <ul class="plan-features"><li>${escapeHtml(copy[2])}</li><li>${entitlements.quiz_questions ?? "∞"} ${escapeHtml(local("plans.quizShort", "quiz sorusu"))}</li><li>${entitlements.flashcards ?? "∞"} ${escapeHtml(local("plans.cardsShort", "bilgi kartı"))}</li><li>${escapeHtml((entitlements.summary_profiles || []).map(profile => local(summaryNames[profile], profile)).join(", "))} ${escapeHtml(local("plans.summaryShort", "özet"))}</li><li>${escapeHtml((entitlements.export_formats || []).join(", ").toUpperCase())}</li><li>${escapeHtml(local(plan.priority === "priority" ? "priority.priority" : "priority.standard", plan.priority === "priority" ? "Öncelikli" : "Standart"))} ${escapeHtml(local("plans.processingSuffix", "işleme"))}</li></ul>
+      <ul class="plan-features"><li>${escapeHtml(copy[2])}</li><li>${entitlements.quiz_questions ?? "∞"} ${escapeHtml(local("plans.quizShort", "quiz sorusu"))}</li><li>${entitlements.flashcards ?? "∞"} ${escapeHtml(local("plans.cardsShort", "bilgi kartı"))}</li><li>${escapeHtml((entitlements.summary_profiles || []).map(profile => local(summaryNames[profile], profile)).join(", "))} ${escapeHtml(local("plans.summaryShort", "özet"))}</li><li>${escapeHtml(entitlements.download_enabled === false ? local("plans.previewOnly", "Sitede önizleme · dosya indirme yok") : (entitlements.export_formats || []).join(", ").toUpperCase())}</li><li>${escapeHtml(local(plan.priority === "priority" ? "priority.priority" : "priority.standard", plan.priority === "priority" ? "Öncelikli" : "Standart"))} ${escapeHtml(local("plans.processingSuffix", "işleme"))}</li></ul>
       <button class="plan-action" type="button" data-plan="${escapeHtml(code)}" ${current || code === "free" || code === "business" ? "disabled" : ""}>${escapeHtml(buttonLabel)}</button>
     </article>`;
   }).join("");
@@ -659,8 +659,11 @@ function renderResult(data) {
   $("resultHeading").textContent = data.title || "LectureSift";
   const utilityResult = data.job_type && data.job_type !== "study_pack";
   $("resultMeta").textContent = utilityResult ? `${data.artifacts?.length || 0} ${t("tabFiles")}` : `${data.slides?.length || 0} ${t("tabSlides")} · ${data.quiz?.length || 0} Quiz · ${data.flashcards?.length || 0} ${t("tabCards")}`;
-  $("downloadAll").href = "#";
-  $("downloadAll").onclick = event => { event.preventDefault(); downloadProtected(`/jobs/${jobId}/download`, "LectureSift_Paketi.zip"); };
+  const canDownload = data.download_enabled !== false;
+  const unlockText = window.LectureSiftI18n?.t("plans.unlockDownload", "Dosyaları indirmek için paket seç") || "Dosyaları indirmek için paket seç";
+  $("downloadAll").href = canDownload ? "#" : (window.LectureSiftI18n?.localizedPath?.(currentLanguage, "/plans.html") || "/plans.html");
+  $("downloadAll").textContent = canDownload ? t("downloadAll") : unlockText;
+  $("downloadAll").onclick = canDownload ? (event => { event.preventDefault(); downloadProtected(`/jobs/${jobId}/download`, "LectureSift_Paketi.zip"); }) : null;
   $("summaryContent").textContent = data.summary || t("noContent");
   $("keyPoints").innerHTML = (data.key_points || []).map(point => `<div class="key-item"><i>✦</i><span>${escapeHtml(point)}</span></div>`).join("");
   const terms = (data.important_terms || []).map(item => `<div class="note-item"><h3>${escapeHtml(item.term)}</h3><p>${escapeHtml(item.definition)}</p></div>`).join("");
@@ -677,7 +680,7 @@ function renderResult(data) {
       image.src = objectUrl;
     } catch { image.alt = t("noSlides"); }
   });
-  renderQuiz(data.quiz || []); renderCards(); renderFiles(data.artifacts || []);
+  renderQuiz(data.quiz || []); renderCards(); renderFiles(data.artifacts || [], canDownload);
   document.querySelectorAll(".result-tab").forEach(button => { button.hidden = utilityResult && button.dataset.pane !== "files"; button.classList.toggle("active", utilityResult ? button.dataset.pane === "files" : button.dataset.pane === "summary"); });
   document.querySelectorAll(".result-pane").forEach(pane => pane.classList.remove("active"));
   $(utilityResult ? "pane-files" : "pane-summary").classList.add("active");
@@ -719,8 +722,10 @@ function renderCards() {
   $("repeatCard").onclick = () => { cardRevealed = false; renderCards(); };
 }
 
-function renderFiles(files) {
-  $("filesContent").innerHTML = files.map(file => `<div class="file-item"><div><strong>${escapeHtml(file.label)}</strong><small>${escapeHtml(file.format)} · ${formatBytes(file.size_bytes)}</small></div><a href="#" data-artifact="${encodeURIComponent(file.file)}" data-filename="${escapeHtml(file.file)}">${escapeHtml(t("download"))}</a></div>`).join("") || `<div class="empty-state">${escapeHtml(t("noContent"))}</div>`;
+function renderFiles(files, canDownload = true) {
+  const plansPath = window.LectureSiftI18n?.localizedPath?.(currentLanguage, "/plans.html") || "/plans.html";
+  const unlockText = window.LectureSiftI18n?.t("plans.unlockDownload", "Dosyaları indirmek için paket seç") || "Dosyaları indirmek için paket seç";
+  $("filesContent").innerHTML = files.map(file => `<div class="file-item"><div><strong>${escapeHtml(file.label)}</strong><small>${escapeHtml(file.format)} · ${formatBytes(file.size_bytes)}</small></div><a href="${canDownload ? "#" : plansPath}" ${canDownload ? `data-artifact="${encodeURIComponent(file.file)}" data-filename="${escapeHtml(file.file)}"` : ""}>${escapeHtml(canDownload ? t("download") : unlockText)}</a></div>`).join("") || `<div class="empty-state">${escapeHtml(t("noContent"))}</div>`;
   document.querySelectorAll("a[data-artifact]").forEach(anchor => anchor.onclick = event => {
     event.preventDefault();
     downloadProtected(`/jobs/${jobId}/artifact/${anchor.dataset.artifact}`, anchor.dataset.filename);

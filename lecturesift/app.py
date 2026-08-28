@@ -32,6 +32,7 @@ from .billing_service import (
     logout_user,
     manual_transfer_details,
     register_user,
+    require_download_entitlement,
     reset_password,
     update_account_preferences,
     update_account_profile,
@@ -161,6 +162,30 @@ def _public_job(data: dict) -> dict:
         key: value for key, value in result.get("options", {}).items() if key != "billing_user_id"
     }
     return result
+
+
+def _job_download_allowed(data: dict, user: dict) -> bool:
+    if bool((data.get("options") or {}).get("download_entitled")):
+        return True
+    try:
+        require_download_entitlement(user["id"])
+        return True
+    except BillingError:
+        return False
+
+
+def _require_job_download(data: dict, user: dict) -> None:
+    if not _job_download_allowed(data, user):
+        raise HTTPException(
+            402,
+            detail={
+                "code": "LS-BILL-11",
+                "message": (
+                    "Dosya indirmek için tek kullanımlık dakika paketi veya ücretli plan seç. "
+                    "Ücretsiz hesapta sonuçları sitede önizleyebilirsin."
+                ),
+            },
+        )
 
 
 def start_url_job(job_id: str, url: str, job_dir: Path, options: dict) -> str:
@@ -858,7 +883,9 @@ def get_result(job_id: str, user: dict = Depends(_billing_user)) -> dict:
     path = Path(data["job_dir"]) / "result.json"
     if not path.exists():
         raise HTTPException(404, detail={"code": "LS-JOB-03", "message": "Sonuç dosyası bulunamadı."})
-    return json.loads(path.read_text(encoding="utf-8"))
+    result = json.loads(path.read_text(encoding="utf-8"))
+    result["download_enabled"] = _job_download_allowed(data, user)
+    return result
 
 
 @app.get("/jobs/{job_id}/slide/{filename}")
@@ -877,6 +904,7 @@ def get_artifact(job_id: str, filename: str, user: dict = Depends(_billing_user)
     data = _owned_job(job_id, user)
     if data.get("status") != "done":
         raise HTTPException(409, detail={"code": "LS-JOB-02", "message": "Ders analizi henüz tamamlanmadı."})
+    _require_job_download(data, user)
     if Path(filename).name != filename:
         raise HTTPException(400, detail={"code": "LS-FILE-01", "message": "Geçersiz dosya adı."})
     path = Path(data["job_dir"]) / "package" / filename
@@ -890,6 +918,7 @@ def download(job_id: str, user: dict = Depends(_billing_user)) -> FileResponse:
     data = _owned_job(job_id, user)
     if data.get("status") != "done":
         raise HTTPException(409, detail={"code": "LS-JOB-02", "message": "Ders analizi henüz tamamlanmadı."})
+    _require_job_download(data, user)
     return FileResponse(
         data["result_path"],
         media_type="application/zip",
@@ -934,6 +963,7 @@ async def create_job(
             flashcard_count=options["flashcard_count"],
             output_formats=options["output_formats"],
             summary_style=options["summary_style"],
+            job_type=options["job_type"],
         )
     except BillingError as exc:
         raise HTTPException(402, detail={"code": "LS-BILL-10", "message": str(exc)}) from exc
@@ -970,6 +1000,7 @@ async def create_job(
         raise
 
     options["billing_user_id"] = billing_user["id"]
+    options["download_entitled"] = bool(entitlement.get("download_enabled"))
     source_type = "upload_separate" if layout == "separate" else ("upload_multi" if len(audio_paths) > 1 else "upload")
     JOBS.create(
         job_id,
@@ -1023,6 +1054,7 @@ def create_url_job(
             flashcard_count=options["flashcard_count"],
             output_formats=options["output_formats"],
             summary_style=options["summary_style"],
+            job_type=options["job_type"],
         )
     except BillingError as exc:
         raise HTTPException(402, detail={"code": "LS-BILL-10", "message": str(exc)}) from exc
@@ -1035,6 +1067,7 @@ def create_url_job(
     job_id = str(uuid.uuid4())
     job_dir = _job_path(job_id)
     options["billing_user_id"] = billing_user["id"]
+    options["download_entitled"] = bool(entitlement.get("download_enabled"))
     JOBS.create(
         job_id,
         job_dir,
