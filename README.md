@@ -22,15 +22,23 @@ Long-running production media jobs require the separate queue, worker, and priva
 
 ## Local development
 
-Requirements: Python 3.11+, FFmpeg, system DejaVu fonts, and an OpenAI API key.
+Requirements: Python 3.11+ (3.12 recommended), FFmpeg/FFprobe, Tesseract OCR with English and Turkish language data, system DejaVu fonts on Linux (Windows uses Arial), and an OpenAI API key for real AI processing.
 
 ```bash
 python -m venv .venv
 . .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 export OPENAI_API_KEY="..."
 uvicorn main:app --reload
 ```
+
+On Windows, the repository includes a complete environment and test check after `.venv` is created:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/test_windows.ps1
+```
+
+Use `-SkipTests` to check installed packages, FFmpeg/FFprobe, OCR languages, 7-Zip, and optional NVIDIA encoders without running pytest. The script never prints application secrets.
 
 Open `frontend/index.html` through a static web server. The frontend currently points to the production backend; change the `API` constant in `frontend/app.js` for local API testing.
 

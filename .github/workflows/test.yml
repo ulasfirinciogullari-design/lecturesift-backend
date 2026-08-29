@@ -44,7 +44,7 @@ jobs:
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core tesseract-ocr tesseract-ocr-eng tesseract-ocr-tur
       - name: Install Python dependencies
-        run: pip install -r requirements.txt pytest pyyaml
+        run: pip install -r requirements-dev.txt
       - name: Validate Render blueprint YAML
         run: python -c "import yaml; yaml.safe_load(open('render.yaml', encoding='utf-8'))"
       - name: Run tests
