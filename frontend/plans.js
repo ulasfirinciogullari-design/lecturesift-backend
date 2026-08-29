@@ -226,6 +226,18 @@ function iyzicoStatus() {
   return providers.find(provider => provider.code === "iyzico") || {configured: false, currencies: []};
 }
 
+function automaticBankTransferStatus() {
+  const iyzico = iyzicoStatus();
+  return {
+    ...iyzico,
+    configured: Boolean(
+      iyzico.configured
+      && iyzico.capabilities?.includes("bank_transfer")
+      && iyzico.currencies?.includes("TRY")
+    ),
+  };
+}
+
 function cardProviderStatus() {
   const iyzico = iyzicoStatus();
   if (iyzico.configured) return iyzico;
@@ -244,6 +256,9 @@ function renderPaymentStatus() {
   $('cardAvailability').textContent = provider.configured
     ? `${provider.code === "iyzico" ? "iyzico" : "PayTR"} · ${pt("payment.providerReady", "Kart ve güvenli ödeme yöntemleri kullanıma hazır.")}`
     : pendingCardMessage();
+  $("protectedBankAvailability").textContent = automaticBankTransferStatus().configured
+    ? pt("payment.protectedAvailable", "iyzico siparişle otomatik eşleştirir; onay geldiğinde paket otomatik etkinleşir.")
+    : pt("payment.protectedNotConfigured", "iyzico Korumalı Havale/EFT henüz kullanıma açık değil.");
   $("bankAvailability").textContent = manualTransfer.available
     ? pt("payment.available", "IBAN havalesi kullanılabilir; sipariş ödeme kontrolünden sonra etkinleşir.")
     : pt("payment.notConfigured", "IBAN havale bilgileri henüz etkin değil.");
@@ -297,8 +312,9 @@ async function buy(planCode, interval = "monthly") {
   }
   const provider = cardProviderStatus();
   const cardAvailable = Boolean(provider.configured && provider.currencies?.includes(currency));
+  const protectedAvailable = Boolean(automaticBankTransferStatus().configured && currency === "TRY");
   const manualAvailable = Boolean(manualTransfer.available && currency === "TRY");
-  if (!cardAvailable && !manualAvailable) {
+  if (!cardAvailable && !protectedAvailable && !manualAvailable) {
     showError(pt("plans.globalPending", "Global kart ve yerel ödeme yöntemleri ödeme sağlayıcısı etkinleştiğinde açılacak. Şimdilik havale için TRY seçebilirsin."));
     return;
   }
@@ -328,6 +344,7 @@ async function buy(planCode, interval = "monthly") {
   $("checkoutTerms").checked = false;
   $("checkoutEarlyPerformance").checked = false;
   $("checkoutCardButton").disabled = !commerceIdentity.configured || !cardAvailable;
+  $("checkoutProtectedBankButton").disabled = !commerceIdentity.configured || !protectedAvailable;
   $("checkoutBankButton").disabled = !commerceIdentity.configured || !manualAvailable;
   $("checkoutNotice").textContent = !commerceIdentity.configured
     ? pt("payment.commercePending", "Satıcı/sağlayıcı kimliği ve iletişim bilgileri tamamlanmadan ödeme açılamaz.")
@@ -335,22 +352,30 @@ async function buy(planCode, interval = "monthly") {
     ? pt("payment.providerReady", "Kart ve güvenli ödeme yöntemleri kullanıma hazır.")
     : pendingCardMessage();
   $("checkoutForm").hidden = false;
+  $("bankTransferGuide").hidden = true;
   $("paytrFrame").hidden = true;
   $("checkoutPanel").hidden = false;
 }
 
-async function startHostedCheckout() {
+async function startHostedCheckout(preferredMethod = "card") {
   if (!$("checkoutForm").reportValidity()) return;
   const cardButton = $("checkoutCardButton");
-  const bankButton = $("checkoutBankButton");
-  if (cardButton.disabled) return;
+  const protectedButton = $("checkoutProtectedBankButton");
+  const manualButton = $("checkoutBankButton");
+  const continueButton = $("bankTransferContinue");
+  if ((preferredMethod === "card" && cardButton.disabled)
+    || (preferredMethod === "bank_transfer" && protectedButton.disabled)) return;
   cardButton.disabled = true;
-  bankButton.disabled = true;
-  $("checkoutNotice").textContent = pt("payment.opening", "Güvenli ödeme açılıyor…");
+  protectedButton.disabled = true;
+  manualButton.disabled = true;
+  continueButton.disabled = true;
+  $("checkoutNotice").textContent = preferredMethod === "bank_transfer"
+    ? pt("payment.openingTransfer", "iyzico açılıyor; güvenli sayfada Havale/EFT seçeneğini seç.")
+    : pt("payment.opening", "Güvenli ödeme açılıyor…");
   try {
     const planCode = $("checkoutPlanCode").value;
     recordPlanAnalytics("add_payment_info", {
-      payment_type: "card",
+      payment_type: preferredMethod === "bank_transfer" ? "iyzico_protected_bank_transfer" : "card",
       items: [{item_id: planCode, item_name: planLabel(planCode), quantity: 1}],
     });
     const body = await api("/billing/checkout", {
@@ -382,16 +407,33 @@ async function startHostedCheckout() {
     $("checkoutNotice").textContent = error.message;
     const provider = cardProviderStatus();
     cardButton.disabled = !commerceIdentity.configured || !provider.configured || !provider.currencies?.includes(currency);
-    bankButton.disabled = !commerceIdentity.configured || currency !== "TRY" || !manualTransfer.available;
+    protectedButton.disabled = !commerceIdentity.configured || !automaticBankTransferStatus().configured || currency !== "TRY";
+    manualButton.disabled = !commerceIdentity.configured || currency !== "TRY" || !manualTransfer.available;
+    continueButton.disabled = false;
   }
+}
+
+function showBankTransferGuide() {
+  if (!$("checkoutForm").reportValidity() || $("checkoutProtectedBankButton").disabled) return;
+  $("checkoutForm").hidden = true;
+  $("bankTransferGuide").hidden = false;
+  $("bankTransferContinue").focus();
+}
+
+function hideBankTransferGuide() {
+  $("bankTransferGuide").hidden = true;
+  $("checkoutForm").hidden = false;
+  $("checkoutProtectedBankButton").focus();
 }
 
 async function createTransfer() {
   const bankButton = $("checkoutBankButton");
   if (bankButton.disabled || !$("checkoutForm").reportValidity()) return;
   const cardButton = $("checkoutCardButton");
+  const protectedButton = $("checkoutProtectedBankButton");
   bankButton.disabled = true;
   cardButton.disabled = true;
+  protectedButton.disabled = true;
   $("checkoutNotice").textContent = pt("payment.creatingTransfer", "Havale siparişi oluşturuluyor…");
   try {
     const body = await api("/billing/manual-transfer/orders", {
@@ -438,6 +480,7 @@ async function createTransfer() {
     showError(error.message, error.code);
     const provider = cardProviderStatus();
     cardButton.disabled = !commerceIdentity.configured || !provider.configured || !provider.currencies?.includes(currency);
+    protectedButton.disabled = !commerceIdentity.configured || !automaticBankTransferStatus().configured || currency !== "TRY";
     bankButton.disabled = !commerceIdentity.configured || currency !== "TRY" || !manualTransfer.available;
   }
 }
@@ -475,12 +518,16 @@ $("closeError").onclick = () => { $("errorBox").hidden = true; };
 $("checkoutClose").onclick = $("checkoutCancel").onclick = () => {
   $("checkoutPanel").hidden = true;
   $("checkoutForm").hidden = false;
+  $("bankTransferGuide").hidden = true;
   $("paytrFrame").src = "about:blank";
 };
 $("checkoutBankButton").onclick = createTransfer;
+$("checkoutProtectedBankButton").onclick = showBankTransferGuide;
+$("bankTransferBack").onclick = hideBankTransferGuide;
+$("bankTransferContinue").onclick = () => startHostedCheckout("bank_transfer");
 $("checkoutForm").addEventListener("submit", async event => {
   event.preventDefault();
-  await startHostedCheckout();
+  await startHostedCheckout("card");
 });
 document.querySelectorAll("[data-copy-target]").forEach(button => {
   button.addEventListener("click", async () => {
