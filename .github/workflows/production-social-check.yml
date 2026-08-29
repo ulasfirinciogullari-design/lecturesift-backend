@@ -55,6 +55,26 @@ jobs:
             sleep 15
           done
 
+      - name: Read deployment-time Instagram repair status
+        shell: bash
+        run: |
+          set -euo pipefail
+          bootstrap="https://lecturesift-backend.onrender.com/instagram/launch/bootstrap"
+          for attempt in $(seq 1 24); do
+            if body=$(curl --silent --show-error --fail --max-time 25 "$bootstrap"); then
+              echo "Instagram repair status: $body"
+              status=$(python -c 'import json,sys; print(json.loads(sys.argv[1]).get("status", "unknown"))' "$body")
+              if [ "$status" != "waiting" ] && [ "$status" != "retrying" ] && [ "$status" != "not_started" ]; then
+                break
+              fi
+            fi
+            if [ "$attempt" -eq 24 ]; then
+              echo "Instagram repair helper did not settle in time." >&2
+              exit 1
+            fi
+            sleep 10
+          done
+
       - name: Verify today's bilingual Reel after publishing window
         shell: bash
         run: |
