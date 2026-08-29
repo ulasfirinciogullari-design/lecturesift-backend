@@ -705,7 +705,10 @@ function updateJobView(job) {
 
 function showError(message, code = "LS-SYSTEM-01") {
   const known = ERRORS.tr[code];
-  const translated = known
+  const centralKey = ({"LS-AI-03":"error.ai03","LS-AI-04":"error.ai04","LS-AI-05":"error.ai05","LS-AI-06":"error.ai06","LS-AI-07":"error.ai07","LS-AI-08":"error.ai08"})[code];
+  const translated = centralKey
+    ? window.LectureSiftI18n?.t(centralKey, message)
+    : known
     ? (currentLanguage === "tr" ? known : currentLanguage === "en" ? ERRORS.en[code] : window.LectureSiftI18n?.exact(known))
     : message || t("errorFallback");
   $("errorMessage").textContent = translated || message || t("errorFallback");

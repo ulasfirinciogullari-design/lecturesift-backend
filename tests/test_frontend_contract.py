@@ -173,7 +173,7 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         content = page.read_text(encoding="utf-8")
         assert "/theme.css?v=11" in content, page.name
         assert "/theme.js?v=2" in content, page.name
-        assert "i18n.js?v=22" in content, page.name
+        assert "i18n.js?v=23" in content, page.name
         assert "page-i18n.js?v=6" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
@@ -319,6 +319,18 @@ def test_document_errors_are_localized_for_every_supported_language():
         assert app.count(f'"{code}"') >= 2
     source = "OCR tamamlandı ancak okunabilir metin bulunamadı. Daha net bir tarama veya doğru kaynak diliyle yeniden dene."
     assert len(catalog[source]) == 13
+
+
+def test_all_ai_processing_errors_have_thirteen_interface_translations():
+    app = (FRONTEND / "app.js").read_text(encoding="utf-8")
+    script = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    for index in range(3, 9):
+        code = f"LS-AI-{index:02d}"
+        key = f"error.ai{index:02d}"
+        assert f'"{code}":"{key}"' in app
+        payload = re.search(rf'^\s*"{re.escape(key)}":\[(.*?)\],?$', script, re.MULTILINE)
+        assert payload, key
+        assert len(json.loads(f"[{payload.group(1)}]")) == 13
 
 
 def test_every_declared_interface_key_has_thirteen_translations():
@@ -810,7 +822,7 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=20"' in index
+    assert 'src="./app.js?v=21"' in index
     assert 'src="/rollout.js?v=5"' in index
     assert '$("plans").scrollIntoView' not in app
 
