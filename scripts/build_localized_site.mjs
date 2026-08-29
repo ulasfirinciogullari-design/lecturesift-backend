@@ -197,6 +197,26 @@ ${alternates}
   return html.replace(/<\/head>/i, `${metadata}</head>`);
 }
 
+function validateLocalizedPage(html, language, publicPath) {
+  const expectedCanonical = `${ORIGIN}${localizedPath(language, publicPath)}`;
+  const requirements = [
+    [new RegExp(`<html\\s+lang="${language}"`, "i"), "document language"],
+    [/<meta\s+name="description"\s+content="[^"]+"/i, "meta description"],
+    [new RegExp(`<link\\s+rel="canonical"\\s+href="${expectedCanonical.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`, "i"), "canonical URL"],
+    [/<h1\b[^>]*>[\s\S]*?<\/h1>/i, "visible H1"],
+    [/<script\s+type="application\/ld\+json"\s+data-lecturesift-seo>/i, "JSON-LD graph"],
+  ];
+  for (const [pattern, label] of requirements) {
+    if (!pattern.test(html)) throw new Error(`${localizedPath(language, publicPath)} has no ${label}`);
+  }
+  const alternateCount = (html.match(/<link\s+rel="alternate"\s+hreflang=/gi) || []).length;
+  if (alternateCount !== LANGUAGES.length + 1) {
+    throw new Error(`${localizedPath(language, publicPath)} has ${alternateCount} hreflang links`);
+  }
+  const schemaSource = html.match(/<script\s+type="application\/ld\+json"\s+data-lecturesift-seo>([\s\S]*?)<\/script>/i)?.[1];
+  JSON.parse(schemaSource || "");
+}
+
 await rm(OUTPUT, {recursive: true, force: true});
 await cp(SOURCE, OUTPUT, {recursive: true});
 
@@ -207,6 +227,7 @@ for (const language of LANGUAGES) {
     html = translateDocument(html, language);
     html = deferNonCriticalScripts(html);
     html = staticSeo(html, language, publicPath);
+    validateLocalizedPage(html, language, publicPath);
     const target = language === "tr"
       ? path.join(OUTPUT, sourceName)
       : path.join(OUTPUT, language, sourceName);
