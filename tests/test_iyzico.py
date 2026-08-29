@@ -375,10 +375,12 @@ def test_iyzico_bank_transfer_waits_for_signed_webhook_before_activation(monkeyp
         json=webhook,
     )
     assert rejected.status_code == 400
+    missing_signature = client.post("/billing/iyzico/webhook", json=webhook)
+    assert missing_signature.status_code == 400
     state["matched"] = True
     accepted = client.post(
         "/billing/iyzico/webhook",
-        headers={"X-IYZ-SIGNATURE-V3": _webhook_signature(webhook)},
+        headers={"X-IYZ-SIGNATURE-V3": _webhook_signature(webhook).upper()},
         json=webhook,
     )
     repeated = client.post(
