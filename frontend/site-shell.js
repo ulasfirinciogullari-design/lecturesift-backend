@@ -5,6 +5,7 @@
   const COPY = {
     menu: ["Ana menü", "Main menu", "Hauptmenü", "Menu principal", "Menú principal", "Menu principale", "Menu principal", "Главное меню", "القائمة الرئيسية", "主菜单", "メインメニュー", "기본 메뉴", "मुख्य मेन्यू"],
     home: ["Ana sayfa", "Home", "Startseite", "Accueil", "Inicio", "Home", "Início", "Главная", "الرئيسية", "首页", "ホーム", "홈", "होम"],
+    workspace: ["Çalışma Alanı", "Workspace", "Arbeitsbereich", "Espace de travail", "Área de trabajo", "Area di lavoro", "Área de trabalho", "Рабочая область", "مساحة العمل", "工作区", "ワークスペース", "작업 공간", "कार्य क्षेत्र"],
     features: ["Özellikler", "Features", "Funktionen", "Fonctionnalités", "Funciones", "Funzionalità", "Recursos", "Возможности", "الميزات", "功能", "機能", "기능", "विशेषताएँ"],
     plans: ["Planlar", "Plans", "Tarife", "Forfaits", "Planes", "Piani", "Planos", "Тарифы", "الخطط", "套餐", "プラン", "요금제", "प्लान"],
     about: ["Hakkımızda", "About", "Über uns", "À propos", "Nosotros", "Chi siamo", "Sobre", "О нас", "من نحن", "关于我们", "私たちについて", "소개", "हमारे बारे में"],
@@ -42,6 +43,7 @@
 
   const links = [
     ["home", "/"],
+    ["workspace", "/workspace.html"],
     ["features", "/features.html"],
     ["plans", "/plans.html"],
     ["about", "/about.html"],
@@ -91,7 +93,7 @@
     if (![...corporatePages, ...legalPages].includes(currentBasePath)) return;
     const groups = [
       ["LectureSift", [["Hakkımızda", "/about.html"], ["İletişim", "/contact.html"]]],
-      ["Ürün", [["Özellikler", "/features.html"], ["Planlar", "/plans.html"]]],
+      ["Ürün", [["Çalışma Alanı", "/workspace.html"], ["Özellikler", "/features.html"], ["Planlar", "/plans.html"]]],
       ["Yasal belgeler", [
         ["Gizlilik ve KVKK", "/privacy.html"], ["Kullanım koşulları", "/terms.html"],
         ["Çerez ve depolama", "/cookies.html"], ["Teslimat, iptal ve iade", "/refund.html"],

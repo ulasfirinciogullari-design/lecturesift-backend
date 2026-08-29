@@ -142,6 +142,7 @@ const ERRORS = {
     "LS-URL-02": "The video provider blocked server-side downloading. Upload the file or use a direct MP4/WebM link.",
     "LS-URL-03": "No downloadable video was found on this page. Use a direct video link or upload the file.",
     "LS-UPLOAD-02": "The video is larger than the allowed file size.",
+    "LS-UPLOAD-04": "The file-processing request could not be completed. Try again, or upload a smaller copy of the document.",
     "LS-UPLOAD-05": "Video and document sources cannot be mixed in one job. Upload them separately.",
     "LS-DOC-01": "The document is empty.",
     "LS-DOC-02": "The document is larger than the allowed file size.",
@@ -164,6 +165,7 @@ const ERRORS = {
     "LS-URL-02": "Video sağlayıcısı sunucu üzerinden indirmeyi engelledi. Dosyayı yükle veya doğrudan MP4/WebM bağlantısı kullan.",
     "LS-URL-03": "Bu sayfada indirilebilir video bulunamadı. Doğrudan video bağlantısı kullan veya dosyayı yükle.",
     "LS-UPLOAD-02": "Video izin verilen dosya boyutundan büyük.",
+    "LS-UPLOAD-04": "Dosya işleme isteği tamamlanamadı. Yeniden dene veya belgenin daha küçük bir kopyasını yükle.",
     "LS-UPLOAD-05": "Video ve belge kaynakları aynı işte karıştırılamaz. Ayrı ayrı yükle.",
     "LS-DOC-01": "Belge boş görünüyor.",
     "LS-DOC-02": "Belge izin verilen dosya boyutundan büyük.",
@@ -232,6 +234,9 @@ function applyLanguage() {
   renderBillingAccount();
 }
 
+uiLanguage.replaceChildren();
+sourceLanguage.replaceChildren();
+outputLanguage.replaceChildren();
 Object.entries(LANGUAGES).forEach(([code, label]) => {
   uiLanguage.add(new Option(label, code));
   sourceLanguage.add(new Option(label, code));
@@ -567,15 +572,21 @@ function addFiles(role, incoming) {
 }
 function renderFileList(role) {
   const files = filesFor(role), list = $(`${role}FileList`);
-  list.innerHTML = files.map((file, index) => `
-    <div class="source-file-row" draggable="true" data-role="${role}" data-index="${index}">
-      <b>${index + 1}</b><div><strong>${escapeHtml(file.name)}</strong><small>${formatBytes(file.size)}</small></div>
+  list.innerHTML = files.map((file, index) => {
+    const documentFile = isDocumentFile(file);
+    const kind = fileExtension(file).toUpperCase();
+    const readyLabel = documentFile ? "Belge analizi hazır" : "Medya kaynağı hazır";
+    const localizedReadyLabel = window.LectureSiftI18n?.exact?.(readyLabel) || readyLabel;
+    return `
+    <div class="source-file-row ${documentFile ? "document-file" : ""}" draggable="true" data-role="${role}" data-index="${index}">
+      <b>${index + 1}</b><div><strong>${escapeHtml(file.name)}${documentFile ? `<span class="file-kind">${escapeHtml(kind)}</span>` : ""}</strong><small>${formatBytes(file.size)} · ${escapeHtml(localizedReadyLabel)}</small></div>
       <span class="file-order-actions">
         <button type="button" data-action="up" title="${escapeHtml(t("moveUp"))}" ${index === 0 ? "disabled" : ""}>↑</button>
         <button type="button" data-action="down" title="${escapeHtml(t("moveDown"))}" ${index === files.length - 1 ? "disabled" : ""}>↓</button>
         <button type="button" data-action="remove" title="${escapeHtml(t("remove"))}">×</button>
       </span>
-    </div>`).join("");
+    </div>`;
+  }).join("");
   list.querySelectorAll(".source-file-row").forEach(row => {
     row.addEventListener("dragstart", event => event.dataTransfer.setData("text/plain", `${role}:${row.dataset.index}`));
     row.addEventListener("dragover", event => event.preventDefault());
@@ -724,7 +735,23 @@ function formData() {
 
 $("analyzeButton").onclick = async () => {
   $("errorBox").hidden = true;
-  if (!billingToken || !billingAccount) { $("plans").scrollIntoView({behavior:"smooth"}); showError(t("loginRequired"), "LS-BILL-01"); return; }
+  if (!billingToken || !billingAccount) {
+    try {
+      const access = await window.LectureSiftGuestTrial?.ensureAccess?.();
+      if (access?.token && access?.account) {
+        billingToken = access.token;
+        billingAccount = access.account;
+        renderBillingAccount();
+      }
+    } catch (error) {
+      showError(error.message || t("loginRequired"), error.code || "LS-BILL-01");
+      return;
+    }
+  }
+  if (!billingToken || !billingAccount) {
+    showError(t("loginRequired"), "LS-BILL-01");
+    return;
+  }
   const uploadFiles = sourceLayout === "separate" ? [...audioVideos, ...visualVideos] : classicVideos;
   if (sourceMode === "upload" && sourceLayout === "classic" && !classicVideos.length) { $("classicFiles").click(); return; }
   if (sourceMode === "upload" && sourceLayout === "separate" && (!audioVideos.length || !visualVideos.length)) {
@@ -764,7 +791,15 @@ $("analyzeButton").onclick = async () => {
       jobId = JSON.parse(request.responseText).job_id;
       pollJob();
     }
-    else { try { const body = JSON.parse(request.responseText); showError(body.detail?.message, body.detail?.code); } catch { showError(request.responseText); } }
+    else {
+      try {
+        const body = JSON.parse(request.responseText);
+        const detail = body.detail || body;
+        showError(detail.message || ERRORS.tr["LS-UPLOAD-04"], detail.code || "LS-UPLOAD-04");
+      } catch {
+        showError(request.responseText || "Sunucu dosya yükleme isteğine yanıt veremedi.", "LS-NETWORK-01");
+      }
+    }
   };
   request.onerror = () => showError("", "LS-NETWORK-01"); request.send(data);
 };

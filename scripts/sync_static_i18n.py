@@ -63,6 +63,8 @@ RUNTIME_COPY = {
     "Bu belge biçimi desteklenmiyor.",
     "Belgeden metin çıkarılamadı. Taranmış PDF ise OCR uygulanmış bir sürüm yükle.",
     "Belgelerin toplam metni tek bir güvenli işlem için fazla. Kaynağı bölerek yeniden dene.",
+    "Belge analizi hazır",
+    "Medya kaynağı hazır",
 }
 
 

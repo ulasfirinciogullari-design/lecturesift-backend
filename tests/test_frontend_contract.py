@@ -38,16 +38,13 @@ def test_plan_page_preserves_learning_entitlements_and_zero_decimal_prices():
 
 def test_homepage_promotes_campaigns_without_duplicating_plan_checkout():
     homepage = (FRONTEND / "index.html").read_text(encoding="utf-8")
+    workspace = (FRONTEND / "workspace.html").read_text(encoding="utf-8")
     assert 'id="campaigns"' in homepage
-    assert all(
-        key in homepage
-        for key in (
-            "campaigns.freeTitle",
-            "campaigns.annualTitle",
-            "campaigns.flexTitle",
-        )
-    )
+    assert "Hesapsız 5 dakika deneme" in homepage
     assert 'id="plansGrid"' not in homepage
+    assert 'id="workspace"' not in homepage
+    assert 'id="workspace"' in workspace
+    assert 'data-page="workspace"' in workspace
     assert 'id="transferPanel"' not in homepage
     assert 'href="/plans.html"' in homepage
 
@@ -76,6 +73,7 @@ def test_account_identity_and_localized_minutes_do_not_overflow_rtl_mobile():
 def test_required_product_and_legal_pages_exist():
     for page in (
         "features.html",
+        "workspace.html",
         "document-summary.html",
         "lecture-video-summary.html",
         "quiz-flashcards.html",
@@ -112,6 +110,7 @@ def test_every_page_loads_global_language_switcher_and_all_locales_exist():
 def test_public_navigation_is_consistent_localized_and_session_aware():
     public_pages = (
         "index.html",
+        "workspace.html",
         "features.html",
         "document-summary.html",
         "lecture-video-summary.html",
@@ -127,7 +126,7 @@ def test_public_navigation_is_consistent_localized_and_session_aware():
     )
     for page in public_pages:
         content = (FRONTEND / page).read_text(encoding="utf-8")
-        assert "/site-shell.js?v=3" in content, page
+        assert "/site-shell.js?v=4" in content, page
         assert "/rollout.css?v=8" in content, page
 
     shell = (FRONTEND / "site-shell.js").read_text(encoding="utf-8")
@@ -139,7 +138,7 @@ def test_public_navigation_is_consistent_localized_and_session_aware():
     assert 'account.href = pathFor(signedIn ? "/account.html" : "/login.html")' in shell
     assert 'anchor.setAttribute("aria-current", "page")' in shell
     assert 'https://www.instagram.com/lecturesift/' in shell
-    for key in ("menu", "home", "features", "plans", "about", "login", "account", "instagram"):
+    for key in ("menu", "home", "workspace", "features", "plans", "about", "login", "account", "instagram"):
         row = re.search(rf'^\s*{key}: \[(.*?)\],?$', shell, re.MULTILINE)
         assert row, key
         assert len(json.loads(f"[{row.group(1)}]")) == 13
@@ -171,10 +170,10 @@ def test_processing_center_uses_operation_specific_progress_profiles():
 def test_every_page_supports_persistent_light_and_dark_themes():
     for page in FRONTEND.glob("*.html"):
         content = page.read_text(encoding="utf-8")
-        assert "/theme.css?v=10" in content, page.name
+        assert "/theme.css?v=11" in content, page.name
         assert "/theme.js?v=2" in content, page.name
-        assert "i18n.js?v=18" in content, page.name
-        assert "page-i18n.js?v=5" in content, page.name
+        assert "i18n.js?v=20" in content, page.name
+        assert "page-i18n.js?v=6" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
     style = (FRONTEND / "theme.css").read_text(encoding="utf-8")
@@ -192,15 +191,15 @@ def test_every_page_supports_persistent_light_and_dark_themes():
     assert '@media(prefers-reduced-motion:reduce)' in style
     for surface in (".feature-band", ".campaign-section", ".format-choices", ".account-section-nav"):
         assert surface in style
-    index = (FRONTEND / "index.html").read_text(encoding="utf-8")
-    assert 'id="formatChoices" class="format-choices" role="group"' in index
-    assert '<fieldset id="formatChoices"' not in index
+    workspace = (FRONTEND / "workspace.html").read_text(encoding="utf-8")
+    assert 'id="formatChoices" class="format-choices" role="group"' in workspace
+    assert '<fieldset id="formatChoices"' not in workspace
     assert "lecturesift-theme" in cookies
     assert all(f'data-i18n="theme.{key}"' in cookies for key in ("storageContent", "storagePurpose", "storageControl"))
 
 
 def test_keyboard_navigation_and_admin_filters_have_accessible_names():
-    index = (FRONTEND / "index.html").read_text(encoding="utf-8")
+    index = (FRONTEND / "workspace.html").read_text(encoding="utf-8")
     app = (FRONTEND / "app.js").read_text(encoding="utf-8")
     admin = (FRONTEND / "admin.html").read_text(encoding="utf-8")
     assert 'role="tablist" aria-label="Ders paketi bölümleri"' in index
@@ -678,9 +677,13 @@ def test_optional_analytics_and_advertising_are_consent_gated():
     analytics = (FRONTEND / "analytics.js").read_text(encoding="utf-8")
     cookies = (FRONTEND / "cookies.html").read_text(encoding="utf-8")
 
-    assert 'consentScript.src = "/consent.js?v=1"' in i18n
-    assert 'consentStyle.href = "/consent.css?v=1"' in i18n
+    consent_css = (FRONTEND / "consent.css").read_text(encoding="utf-8")
+    assert 'consentScript.src = "/consent.js?v=2"' in i18n
+    assert 'consentStyle.href = "/consent.css?v=2"' in i18n
     assert 'const STORAGE_KEY = "lecturesift-consent-v1"' in consent
+    assert 'footerTarget = document.querySelector(".footer-bottom,.legal-footer,.site-footer,footer")' in consent
+    assert ".consent-manage{position:static" in consent_css
+    assert ".consent-manage{position:fixed" not in consent_css
     assert 'analytics: false, advertising: false' in consent
     assert 'category === "necessary"' in consent
     assert 'analyticsScript.src = "/analytics.js?v=2"' in i18n
@@ -749,16 +752,18 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     rollout = (FRONTEND / "rollout.js").read_text(encoding="utf-8")
     app = (FRONTEND / "app.js").read_text(encoding="utf-8")
     catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
-    index = (FRONTEND / "index.html").read_text(encoding="utf-8")
+    index = (FRONTEND / "workspace.html").read_text(encoding="utf-8")
 
     assert 'rollout.guest_trial || null' in rollout
     assert 'guestTrialState?.used' in rollout
     assert 'window.LectureSiftGuestTrial' in rollout
+    assert "async ensureAccess()" in rollout
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=15"' in index
-    assert 'src="/rollout.js?v=3"' in index
+    assert 'src="./app.js?v=18"' in index
+    assert 'src="/rollout.js?v=4"' in index
+    assert '$("plans").scrollIntoView' not in app
 
 
 def test_transcript_timeline_is_rendered_with_localized_precision_status():

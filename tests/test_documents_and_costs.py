@@ -111,6 +111,45 @@ def test_document_upload_records_document_quota_before_background_processing(tmp
     shutil.rmtree(Path(job["job_dir"]), ignore_errors=True)
 
 
+def test_guest_workspace_accepts_a_text_pdf_without_registered_account(tmp_path: Path, monkeypatch):
+    captured: dict = {}
+
+    class DeferredThread:
+        def __init__(self, target, args, daemon):
+            captured.update(target=target, args=args, daemon=daemon)
+
+        def start(self):
+            captured["started"] = True
+
+    monkeypatch.setattr(app_module.threading, "Thread", DeferredThread)
+    pdf_path = tmp_path / "guest-lecture.pdf"
+    pdf = canvas.Canvas(str(pdf_path))
+    pdf.drawString(72, 760, "Energy is conserved and work transfers energy between systems.")
+    pdf.save()
+
+    client = TestClient(app)
+    guest = client.post(
+        "/billing/guest-session",
+        json={"device_id": f"document-browser-{uuid.uuid4()}"},
+    )
+    assert guest.status_code == 200, guest.text
+    with pdf_path.open("rb") as stream:
+        response = client.post(
+            "/jobs",
+            files={"files": (pdf_path.name, stream, "application/pdf")},
+            headers={"Authorization": f"Bearer {guest.json()['token']}"},
+        )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["source_layout"] == "documents"
+    assert body["document_words"] >= 8
+    assert body["billable_minutes"] == 1
+    assert captured["started"] is True
+    job = JOBS.get(body["job_id"])
+    shutil.rmtree(Path(job["job_dir"]), ignore_errors=True)
+
+
 def test_document_and_video_cannot_be_mixed_in_one_job():
     response = TestClient(app).post(
         "/jobs",
