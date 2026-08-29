@@ -7,9 +7,12 @@
   <meta name="description" content="Video, ses, PDF, Word ve PowerPoint ders kaynaklarını özet, transkript, quiz, bilgi kartı ve indirilebilir çalışma paketine dönüştür.">
   <title>LectureSift - Video, PDF ve Ders Özeti Oluşturucu</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=11">
-<link rel="stylesheet" href="/rollout.css?v=8"><link rel="stylesheet" href="/theme.css?v=10"><script src="/theme.js?v=2"></script></head>
-<body>
+  <link rel="stylesheet" href="/styles.css?v=12">
+  <link rel="stylesheet" href="/rollout.css?v=8">
+  <link rel="stylesheet" href="/theme.css?v=11">
+  <script src="/theme.js?v=2"></script>
+</head>
+<body class="home-page">
   <div class="ambient ambient-one"></div>
   <div class="ambient ambient-two"></div>
 
@@ -19,28 +22,23 @@
       <span>Lecture<span>Sift</span></span>
     </a>
     <nav class="top-actions" aria-label="Ana menü">
+      <a class="top-link" href="/workspace.html">Çalışma Alanı</a>
       <a class="top-link" href="/features.html">Özellikler</a>
-      <a class="top-link" href="/plans.html" data-i18n="plansNav">Planlar</a>
+      <a class="top-link" href="/plans.html">Planlar</a>
       <a class="top-link" href="/about.html">Hakkımızda</a>
-      <a class="social-link" href="https://www.instagram.com/lecturesift/" target="_blank" rel="noopener noreferrer" aria-label="LectureSift Instagram hesabı">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".8"/></svg>
-      </a>
-      <a id="accountButton" class="account-button" href="/login.html" data-i18n="login">Giriş</a>
-      <label class="language-picker">
-        <span class="sr-only">Arayüz dili</span>
-        <select id="uiLanguage"></select>
-      </label>
+      <a id="accountButton" class="account-button" href="/login.html">Giriş</a>
+      <label class="language-picker"><span class="sr-only">Arayüz dili</span><select id="uiLanguage"></select></label>
     </nav>
   </header>
 
   <main id="app" class="page-shell">
     <section class="intro hero" aria-labelledby="pageTitle">
       <div class="hero-copy">
-        <p class="eyebrow" data-i18n="eyebrow">Yapay zekâ destekli ders çalışma alanı</p>
-        <h1 id="pageTitle" data-i18n="title">Bir ders videosundan çalışmaya hazır her şey.</h1>
-        <p class="intro-copy" data-i18n="subtitle">Videoyu yükle veya bağlantıyı yapıştır. LectureSift transkript, akıllı notlar, özet, slaytlar, quiz ve bilgi kartlarını tek pakette hazırlar.</p>
-        <div class="hero-actions"><a class="hero-primary" href="/register.html">Ücretsiz başla</a><a class="hero-secondary" href="#workspace">Nasıl çalışır?</a></div>
-        <div class="trust-row"><span>✓ 60 dakika ücretsiz</span><span>✓ 13 dil</span><span>✓ PDF, Word ve TXT</span></div>
+        <p class="eyebrow">Yapay zekâ destekli ders çalışma alanı</p>
+        <h1 id="pageTitle">Bir ders kaynağından çalışmaya hazır her şey.</h1>
+        <p class="intro-copy">Video, ses, PDF, Word veya PowerPoint kaynağını ekle. LectureSift transkript, akıllı notlar, özet, quiz ve bilgi kartlarını tek pakette hazırlar.</p>
+        <div class="hero-actions"><a class="hero-primary" href="/workspace.html">Çalışma alanını aç</a><a class="hero-secondary" href="/features.html">Nasıl çalışır?</a></div>
+        <div class="trust-row"><span>✓ Hesapsız 5 dakika deneme</span><span>✓ 13 dil</span><span>✓ PDF, Word ve TXT</span></div>
       </div>
       <div class="hero-visual" aria-label="LectureSift çalışma paketi önizlemesi">
         <div class="visual-window"><div class="visual-bar"><i></i><i></i><i></i><span>Ders paketi · Biyoloji 101</span></div><div class="visual-content"><div class="visual-menu"><b>Özet</b><span>Transkript</span><span>Quiz</span><span>Kartlar</span></div><div class="visual-summary"><small>ANA FİKİR</small><h3>Hücre enerji üretimini nasıl düzenler?</h3><p>Konunun temel kavramları, örnekleri ve sınavda çıkabilecek bağlantıları tek bir akışta.</p><div class="visual-chips"><span>20 soru</span><span>40 kart</span><span>PDF</span></div></div></div></div>
@@ -50,10 +48,10 @@
     </section>
 
     <section id="features" class="feature-band" aria-labelledby="featuresTitle">
-      <div class="section-lead"><p class="eyebrow">Videodan çalışma sistemine</p><h2 id="featuresTitle">İzlemekle kalma; anla, hatırla ve ölç.</h2><p>LectureSift dağınık ders kayıtlarını tekrar edilebilir bir öğrenme akışına dönüştürür.</p></div>
+      <div class="section-lead"><p class="eyebrow">Kaynaklardan çalışma sistemine</p><h2 id="featuresTitle">İzlemekle veya okumakla kalma; anla, hatırla ve ölç.</h2><p>LectureSift dağınık ders kayıtlarını ve belgeleri tekrar edilebilir bir öğrenme akışına dönüştürür.</p></div>
       <div class="feature-grid">
         <article><span>01</span><h3>Akıllı transkript</h3><p>Zaman damgalı konuşma dökümü, kaynak dili koruma ve seçtiğin dile çeviri.</p></article>
-        <article><span>02</span><h3>Özet ve notlar</h3><p>Hızlı, ayrıntılı, sınav odaklı veya beş dakikalık öğrenme profilleri.</p></article>
+        <article><span>02</span><h3>Belge ve ders özeti</h3><p>PDF, Word ve PowerPoint dahil kaynaklardan kısa, ayrıntılı veya sınav odaklı özetler.</p></article>
         <article><span>03</span><h3>Quiz ve bilgi kartları</h3><p>İçeriğe göre üretilen sorularla bilgini ölç, kartlarla aralıklı tekrar yap.</p></article>
         <article><span>04</span><h3>Paylaşılabilir çıktılar</h3><p>Çalışma paketini PDF, Word ve TXT olarak indir; kaynaklarını düzenli tut.</p></article>
       </div>
@@ -61,208 +59,25 @@
       <a class="section-detail-link" href="/features.html">Tüm özellikleri ayrıntılı incele →</a>
     </section>
 
-    <section id="workspace" class="workspace" aria-label="Ders analizi">
-      <div class="panel input-panel">
-        <div class="panel-heading">
-          <div>
-            <span class="step-number">01</span>
-            <h2 data-i18n="sourceTitle">Ders kaynağını ekle</h2>
-          </div>
-          <span class="secure-note" data-i18n="secure">Güvenli işlem</span>
-        </div>
-
-        <div class="source-tabs" role="tablist" aria-label="Video kaynağı">
-          <button class="source-tab active" id="uploadTab" type="button" role="tab" aria-selected="true" aria-controls="uploadPanel" data-i18n="uploadTab">Dosya yükle</button>
-          <button class="source-tab" id="linkTab" type="button" role="tab" aria-selected="false" aria-controls="linkPanel" data-i18n="linkTab">Bağlantı kullan</button>
-        </div>
-
-        <div id="uploadPanel" class="source-panel active" role="tabpanel" aria-labelledby="uploadTab">
-          <div id="recordingModeTabs" class="recording-mode-tabs">
-            <button id="classicMode" class="active" type="button" data-i18n="classicMode">Video, ses veya belge</button>
-            <button id="separateMode" type="button" data-i18n="separateMode">Ses ve görüntü ayrı</button>
-          </div>
-
-          <div id="classicSources" class="source-builder">
-            <input id="classicFiles" class="file-input" type="file" multiple accept="video/mp4,video/webm,video/quicktime,video/x-matroska,.pdf,.docx,.pptx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/markdown">
-            <label id="classicDropZone" class="drop-zone compact" for="classicFiles">
-              <span class="upload-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15.5v2.25A2.25 2.25 0 0 0 7.25 20h9.5A2.25 2.25 0 0 0 19 17.75V15.5"/></svg></span>
-              <strong data-i18n="addVideos">Video, ses veya belge ekle</strong>
-              <span data-i18n="sortHelp">PDF, Word, PowerPoint, TXT ve Markdown belgelerini de özetleyebilirsin</span>
-            </label>
-            <div id="classicFileList" class="source-file-list"></div>
-          </div>
-
-          <div id="separateSources" class="separate-source-grid" hidden>
-            <div class="upload-source-card">
-              <div class="upload-source-head"><strong data-i18n="audioSourceTitle">Ses kaynakları</strong><span data-i18n="required">Zorunlu</span></div>
-              <p data-i18n="audioSourceHelp">Sesli videoları veya kayıtları ders sırasına göre ekle.</p>
-              <input id="audioFiles" class="file-input" type="file" multiple accept="video/mp4,video/webm,video/quicktime,video/x-matroska">
-              <label id="audioDropZone" class="mini-drop-zone" for="audioFiles" data-i18n="addAudioFiles">Ses videolarını ekle</label>
-              <div id="audioFileList" class="source-file-list compact-list"></div>
-            </div>
-            <div class="upload-source-card optional">
-              <div class="upload-source-head"><strong data-i18n="slidesSourceTitle">Görüntü / slayt kaynakları</strong><span data-i18n="required">Zorunlu</span></div>
-              <p data-i18n="slidesSourceHelp">Slayt videolarını ders sırasına göre ekle.</p>
-              <input id="visualFiles" class="file-input" type="file" multiple accept="video/mp4,video/webm,video/quicktime,video/x-matroska">
-              <label id="visualDropZone" class="mini-drop-zone secondary" for="visualFiles" data-i18n="addVisualFiles">Slayt videolarını ekle</label>
-              <div id="visualFileList" class="source-file-list compact-list"></div>
-              <label id="syncControl" class="sync-control">
-                <span><b data-i18n="syncOffset">Slayt zaman farkı</b><small data-i18n="syncOffsetHelp">Aynı anda başladıysa 0 bırak.</small></span>
-                <span><input id="slidesOffset" type="number" min="-3600" max="3600" step="0.1" value="0"><i>sn</i></span>
-              </label>
-            </div>
-          </div>
-          <p class="combined-limit" data-i18n="fileHelp">Video: toplam 1 GB · Belgeler: toplam 50 MB · Video ve belgeyi ayrı işler halinde yükle</p>
-        </div>
-
-        <div id="linkPanel" class="source-panel" role="tabpanel" aria-labelledby="linkTab" hidden>
-          <label class="field-label" for="videoUrl" data-i18n="urlLabel">Video veya eğitim sayfası bağlantısı</label>
-          <div class="url-field">
-            <span aria-hidden="true">↗</span>
-            <input id="videoUrl" type="url" inputmode="url" placeholder="https://site.com/lecture/video.mp4" autocomplete="url">
-          </div>
-          <p class="field-help" data-i18n="urlHelp">Doğrudan MP4/WebM bağlantıları ve desteklenen eğitim sayfaları kabul edilir. YouTube bazı sunucularda indirmeyi kısıtlayabilir.</p>
-        </div>
-
-        <div class="divider"></div>
-
-        <div class="panel-heading compact">
-          <div><span class="step-number">02</span><h2 data-i18n="settingsTitle">Çalışma paketini ayarla</h2></div>
-        </div>
-
-        <div class="operation-grid">
-          <label class="control"><span data-i18n="operationType">İşlem türü</span><select id="jobType">
-            <option value="study_pack" data-i18n="studyPackOption">Ders çalışma paketi hazırla</option>
-            <option value="audio_export" data-i18n="audioExportOption">Videoyu MP3'e çevir</option>
-            <option value="download_video" data-i18n="downloadVideoOption">URL'den video indir</option>
-          </select></label>
-          <div id="formatChoices" class="format-choices" role="group" aria-labelledby="formatChoicesLabel">
-            <span id="formatChoicesLabel" class="format-legend" data-i18n="outputFormats">Çıktı biçimleri</span>
-            <label><input id="formatPdf" type="checkbox" value="pdf" checked><span>PDF</span></label>
-            <label><input id="formatDocx" type="checkbox" value="docx"><span>Word</span></label>
-            <label><input id="formatTxt" type="checkbox" value="txt"><span>TXT</span></label>
-          </div>
-        </div>
-
-        <div id="studySettings" class="settings-grid">
-          <label class="control"><span data-i18n="sourceLanguage">Kaynak dili</span><select id="sourceLanguage"></select></label>
-          <label class="control"><span data-i18n="outputLanguage">Çıktı dili</span><select id="outputLanguage"></select></label>
-          <label class="control"><span data-i18n="summaryStyle">Özet profili</span><select id="summaryStyle"></select></label>
-          <label class="control"><span data-i18n="quizCount">Quiz sorusu</span><select id="quizCount"><option>5</option><option selected>10</option><option>20</option><option>30</option></select></label>
-          <label class="control"><span data-i18n="cardCount">Bilgi kartı</span><select id="cardCount"><option>10</option><option selected>20</option><option>40</option><option>60</option></select></label>
-          <label id="translateControl" class="toggle-control"><span><b data-i18n="translateTitle">Transkripti çevir</b><small id="translateHelp" data-i18n="translateHelp">Orijinali de korunur</small></span><input id="translateTranscript" type="checkbox" checked><i aria-hidden="true"></i></label>
-        </div>
-
-        <button id="analyzeButton" class="primary-button" type="button">
-          <span data-i18n="analyze">Dersi analiz et</span>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg>
-        </button>
-      </div>
-
-      <aside class="panel process-panel" aria-live="polite">
-        <div class="process-head">
-          <div>
-            <p class="eyebrow" data-i18n="processEyebrow">Canlı işlem merkezi</p>
-            <h2 id="processTitle" data-i18n="readyTitle">Analize hazır</h2>
-          </div>
-          <span id="elapsedTime" class="elapsed">00:00</span>
-        </div>
-
-        <div class="progress-visual">
-          <div id="progressRing" class="progress-ring" style="--progress:0deg"><span id="progressPercent">0%</span></div>
-          <div><strong id="currentStage" data-i18n="readyStage">Video bekleniyor</strong><p id="stageDetail" data-i18n="readyDetail">Kaynağı ekleyip ayarlarını seçtiğinde işlem adımlarını burada canlı göreceksin.</p></div>
-        </div>
-
-        <ol id="stageList" class="stage-list">
-          <li data-stage="url_download"><i></i><span data-i18n="stageReceive">Video alınıyor</span><b>--</b></li>
-          <li data-stage="audio"><i></i><span data-i18n="stageAudio">Ses ayrıştırılıyor</span><b>--</b></li>
-          <li data-stage="transcription"><i></i><span data-i18n="stageTranscript">Konuşma çözümleniyor</span><b>--</b></li>
-          <li data-stage="scene_scan"><i></i><span data-i18n="stageVisual">Görsel içerik taranıyor</span><b>--</b></li>
-          <li data-stage="slide_validation"><i></i><span data-i18n="stageSlides">Slaytlar doğrulanıyor</span><b>--</b></li>
-          <li data-stage="study_pack"><i></i><span data-i18n="stageStudy">Ders yapılandırılıyor</span><b>--</b></li>
-          <li data-stage="exports"><i></i><span data-i18n="stageExport">Çıktılar hazırlanıyor</span><b>--</b></li>
-        </ol>
-
-        <div class="promise-card">
-          <span aria-hidden="true">✦</span>
-          <p><strong data-i18n="promiseTitle">Tek videodan tam çalışma paketi</strong><small data-i18n="promiseText">Slaytlar, iki dilde transkript, notlar, özet, quiz, bilgi kartları ve PDF/TXT dosyaları.</small></p>
-        </div>
-      </aside>
-    </section>
-
     <section id="campaigns" class="campaign-section" aria-labelledby="campaignsTitle">
-      <div class="section-lead campaign-lead">
-        <p class="eyebrow" data-i18n="campaigns.eyebrow">Güncel fırsatlar</p>
-        <h2 id="campaignsTitle" data-i18n="campaigns.title">Çalışmaya avantajlı başla.</h2>
-        <a class="section-detail-link" href="/plans.html" data-i18n="nav.plans">Planlar</a>
-      </div>
+      <div class="section-lead campaign-lead"><p class="eyebrow">Güncel fırsatlar</p><h2 id="campaignsTitle">Çalışmaya avantajlı başla.</h2><a class="section-detail-link" href="/plans.html">Planlar</a></div>
       <div class="campaign-grid">
-        <article class="campaign-card featured">
-          <span class="campaign-value">60</span>
-          <h3 data-i18n="campaigns.freeTitle">İlk 60 dakika ücretsiz</h3>
-          <p data-i18n="campaigns.freeText">Doğrulanmış hesabını oluştur; kısa derslerini kart bilgisi girmeden işle.</p>
-          <a href="/register.html" data-i18n="auth.create">Hesap oluştur</a>
-        </article>
-        <article class="campaign-card">
-          <span class="campaign-value">12 → 10</span>
-          <h3 data-i18n="campaigns.annualTitle">Yıllık seçimde 2 ay avantaj</h3>
-          <p data-i18n="campaigns.annualText">Desteklenen ücretli planlarda 12 aylık kullanım için 10 aylık tutar gösterilir.</p>
-          <a href="/plans.html#compare" data-i18n="nav.plans">Planlar</a>
-        </article>
-        <article class="campaign-card">
-          <span class="campaign-value">+180</span>
-          <h3 data-i18n="campaigns.flexTitle">Abonelik olmadan ek dakika</h3>
-          <p data-i18n="campaigns.flexText">Dakika Paketiyle yalnızca ihtiyacın kadar tek seferlik kredi ekle.</p>
-          <a href="/plans.html" data-i18n="nav.plans">Planlar</a>
-        </article>
-      </div>
-    </section>
-
-    <section id="results" class="results" hidden aria-labelledby="resultHeading">
-      <div class="result-header">
-        <div><p class="eyebrow" data-i18n="resultEyebrow">Ders paketi hazır</p><h2 id="resultHeading">LectureSift</h2><p id="resultMeta"></p></div>
-        <a id="downloadAll" class="download-button" href="#"><span data-i18n="downloadAll">Tüm paketi indir</span><b>ZIP</b></a>
-      </div>
-      <div class="result-tabs" role="tablist" aria-label="Ders paketi bölümleri" data-i18n-aria-label="result.sectionsLabel">
-        <button id="resultTab-summary" type="button" role="tab" aria-selected="true" aria-controls="pane-summary" class="result-tab active" data-pane="summary" data-i18n="tabSummary">Özet</button>
-        <button id="resultTab-notes" type="button" role="tab" aria-selected="false" aria-controls="pane-notes" tabindex="-1" class="result-tab" data-pane="notes" data-i18n="tabNotes">Akıllı notlar</button>
-        <button id="resultTab-transcript" type="button" role="tab" aria-selected="false" aria-controls="pane-transcript" tabindex="-1" class="result-tab" data-pane="transcript" data-i18n="tabTranscript">Transkript</button>
-        <button id="resultTab-slides" type="button" role="tab" aria-selected="false" aria-controls="pane-slides" tabindex="-1" class="result-tab" data-pane="slides" data-i18n="tabSlides">Slaytlar</button>
-        <button id="resultTab-quiz" type="button" role="tab" aria-selected="false" aria-controls="pane-quiz" tabindex="-1" class="result-tab" data-pane="quiz">Quiz</button>
-        <button id="resultTab-exam" type="button" role="tab" aria-selected="false" aria-controls="pane-exam" tabindex="-1" class="result-tab" data-pane="exam" data-i18n="exam.title">Sınava hazırlan</button>
-        <button id="resultTab-cards" type="button" role="tab" aria-selected="false" aria-controls="pane-cards" tabindex="-1" class="result-tab" data-pane="cards" data-i18n="tabCards">Bilgi kartları</button>
-        <button id="resultTab-ask" type="button" role="tab" aria-selected="false" aria-controls="pane-ask" tabindex="-1" class="result-tab" data-pane="ask" data-i18n="ask.title">Bu derse sor</button>
-        <button id="resultTab-files" type="button" role="tab" aria-selected="false" aria-controls="pane-files" tabindex="-1" class="result-tab" data-pane="files" data-i18n="tabFiles">Dosyalar</button>
-      </div>
-      <div class="result-body">
-        <article id="pane-summary" role="tabpanel" aria-labelledby="resultTab-summary" class="result-pane active"><div id="summaryContent" class="prose"></div><div id="keyPoints" class="key-grid"></div></article>
-        <article id="pane-notes" role="tabpanel" aria-labelledby="resultTab-notes" class="result-pane" hidden><div id="notesContent" class="notes-grid"></div></article>
-        <article id="pane-transcript" role="tabpanel" aria-labelledby="resultTab-transcript" class="result-pane" hidden><div class="transcript-tools"><button id="showTranslated" type="button" class="chip active" data-i18n="translated">Çevrilmiş</button><button id="showOriginal" type="button" class="chip" data-i18n="original">Orijinal</button></div><div id="transcriptContent" class="transcript-box"></div></article>
-        <article id="pane-slides" role="tabpanel" aria-labelledby="resultTab-slides" class="result-pane" hidden><div id="slidesContent" class="slides-grid"></div></article>
-        <article id="pane-quiz" role="tabpanel" aria-labelledby="resultTab-quiz" class="result-pane" hidden><div id="quizStatus" class="quiz-status" aria-live="polite"></div><div id="quizContent"></div></article>
-        <article id="pane-exam" role="tabpanel" aria-labelledby="resultTab-exam" class="result-pane" hidden><div class="exam-prep"><div class="exam-readiness"><span data-i18n="exam.readiness">Hazırlık durumu</span><strong id="examReadiness">—</strong><p id="examRecommendation"></p></div><div><h3 data-i18n="exam.focusTitle">Sınavda öne çıkabilecek konular</h3><div id="examFocusList" class="notes-grid"></div></div><button id="startExamButton" type="button" data-i18n="exam.start">Karışık deneme başlat</button></div></article>
-        <article id="pane-cards" role="tabpanel" aria-labelledby="resultTab-cards" class="result-pane" hidden><div id="cardContent"></div></article>
-        <article id="pane-ask" role="tabpanel" aria-labelledby="resultTab-ask" class="result-pane" hidden><div class="lesson-ask"><div><h3 data-i18n="ask.heading">Ders içeriğine dayalı yanıt al</h3><p data-i18n="ask.help">LectureSift yalnızca bu dersin özet, not ve transkriptini kullanır; destekleyen zaman damgalarını yanıtın altında gösterir.</p></div><form id="lessonQuestionForm"><textarea id="lessonQuestion" maxlength="500" required aria-label="Örneğin: Öğretmen bu kavramı hangi örnekle açıkladı?" data-i18n-aria-label="ask.placeholder" data-i18n-placeholder="ask.placeholder" placeholder="Örneğin: Öğretmen bu kavramı hangi örnekle açıkladı?"></textarea><button id="lessonQuestionButton" type="submit" data-i18n="ask.button">Derse sor</button></form><div id="lessonAnswer" class="lesson-answer" hidden aria-live="polite"></div></div></article>
-        <article id="pane-files" role="tabpanel" aria-labelledby="resultTab-files" class="result-pane" hidden><div id="filesContent" class="files-grid"></div></article>
+        <article class="campaign-card featured"><span class="campaign-value">5</span><h3>Hesapsız 5 dakika deneme</h3><p>Bir kısa kaynağı üyelik açmadan işle; devam etmek istediğinde ücretsiz hesap oluştur.</p><a href="/workspace.html">Şimdi dene</a></article>
+        <article class="campaign-card"><span class="campaign-value">60</span><h3>Doğrulanmış hesaba 60 dakika</h3><p>E-posta adresini doğrula; kısa derslerini kart bilgisi girmeden işlemeye devam et.</p><a href="/register.html">Hesap oluştur</a></article>
+        <article class="campaign-card"><span class="campaign-value">12 → 10</span><h3>Yıllık seçimde 2 ay avantaj</h3><p>Desteklenen ücretli planlarda 12 aylık kullanım için 10 aylık tutar gösterilir.</p><a href="/plans.html#compare">Planları karşılaştır</a></article>
       </div>
     </section>
   </main>
 
   <footer class="site-footer">
     <div class="footer-main"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>Lecture<span>Sift</span></span></a><p>Ders kaynaklarını anlaşılır, ölçülebilir ve tekrar edilebilir çalışma paketlerine dönüştür.</p><a class="footer-instagram" href="https://www.instagram.com/lecturesift/" target="_blank" rel="noopener noreferrer" aria-label="LectureSift Instagram hesabını aç"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".8"/></svg><span>@lecturesift</span></a></div>
-    <div class="footer-links"><div><strong>Ürün</strong><a href="/features.html">Özellikler</a><a href="/plans.html">Planlar</a><a href="/account.html">Hesabım</a></div><div><strong>LectureSift</strong><a href="/about.html">Hakkımızda</a><a href="/contact.html">İletişim</a><a href="/refund.html">İptal ve iade</a></div><div><strong>Yasal</strong><a href="/privacy.html">Gizlilik ve KVKK</a><a href="/terms.html">Kullanım koşulları</a><a href="/distance-sales.html">Mesafeli Satış Sözleşmesi</a><a href="/cookies.html">Çerez ve depolama</a></div></div>
+    <div class="footer-links"><div><strong>Ürün</strong><a href="/workspace.html">Çalışma Alanı</a><a href="/features.html">Özellikler</a><a href="/plans.html">Planlar</a><a href="/account.html">Hesabım</a></div><div><strong>LectureSift</strong><a href="/about.html">Hakkımızda</a><a href="/contact.html">İletişim</a><a href="/refund.html">İptal ve iade</a></div><div><strong>Yasal</strong><a href="/privacy.html">Gizlilik ve KVKK</a><a href="/terms.html">Kullanım koşulları</a><a href="/distance-sales.html">Mesafeli Satış Sözleşmesi</a><a href="/cookies.html">Çerez ve depolama</a></div></div>
     <div class="footer-bottom"><span>© 2026 LectureSift. Tüm hakları saklıdır.</span><span>Yapay zekâ çıktıları önemli kararlar için doğrulanmalıdır.</span><img class="footer-payment-band" src="/assets/payments/iyzico-card-brands-white.png" alt="iyzico ile Öde, Mastercard, Visa, American Express ve TROY"></div>
   </footer>
 
-  <div id="errorBox" class="error-box" hidden role="alert">
-    <button id="closeError" type="button" aria-label="Kapat">×</button>
-    <span aria-hidden="true">!</span>
-    <div><strong id="errorTitle" data-i18n="errorTitle">İşlem tamamlanamadı</strong><p id="errorMessage"></p><small id="errorCode"></small></div>
-  </div>
-
-  <script src="./locale-data.js?v=3"></script>
-  <script src="./page-i18n.js?v=5"></script><script src="/i18n.js?v=18"></script><script src="/site-shell.js?v=3"></script>
-  <script src="./app.js?v=15"></script>
-  <script src="/rollout.js?v=3"></script>
+  <script src="/locale-data.js?v=3"></script>
+  <script src="/page-i18n.js?v=6"></script>
+  <script src="/i18n.js?v=20"></script>
+  <script src="/site-shell.js?v=4"></script>
 </body>
 </html>

@@ -522,18 +522,21 @@
   });
 
   const host = document.querySelector(".auth-topbar,.topbar,.legal-topbar");
-  if (host && !host.querySelector(".language-switcher,#uiLanguage")) {
-    const picker = document.createElement("select");
-    picker.className = "language-switcher";
+  if (host) {
+    const existingPicker = host.querySelector(".language-switcher,#uiLanguage");
+    const picker = existingPicker || document.createElement("select");
+    if (!existingPicker) picker.className = "language-switcher";
     picker.setAttribute("aria-label", t("language.label", "Site language"));
-    Object.entries(languages).forEach(([code, label]) => picker.add(new Option(label, code)));
+    if (!picker.options.length) Object.entries(languages).forEach(([code, label]) => picker.add(new Option(label, code)));
     picker.value = selected;
     picker.addEventListener("change", () => {
       localStorage.setItem("lecturesift-ui", picker.value);
       location.assign(`${localizedPath(picker.value)}${location.search}${location.hash}`);
     });
-    const nav = host.querySelector("nav,.top-actions");
-    host.insertBefore(picker, nav || host.lastElementChild);
+    if (!existingPicker) {
+      const nav = host.querySelector("nav,.top-actions");
+      host.insertBefore(picker, nav || host.lastElementChild);
+    }
   }
 
   window.LectureSiftI18n = Object.freeze({language:selected, locale:locales[selected], languages, t, exact, localizedPath, keys:Object.keys(rows)});
@@ -549,10 +552,10 @@
   document.head.append(seoScript);
   const consentStyle = document.createElement("link");
   consentStyle.rel = "stylesheet";
-  consentStyle.href = "/consent.css?v=1";
+  consentStyle.href = "/consent.css?v=2";
   document.head.append(consentStyle);
   const consentScript = document.createElement("script");
-  consentScript.src = "/consent.js?v=1";
+  consentScript.src = "/consent.js?v=2";
   consentScript.defer = true;
   document.head.append(consentScript);
   const analyticsScript = document.createElement("script");

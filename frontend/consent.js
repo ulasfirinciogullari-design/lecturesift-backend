@@ -54,6 +54,9 @@
       </div>
     </section>`;
   document.body.append(root);
+  const footerTarget = document.querySelector(".footer-bottom,.legal-footer,.site-footer,footer");
+  root.classList.add("consent-root--footer");
+  if (footerTarget) footerTarget.append(root);
 
   const banner = root.querySelector(".consent-banner");
   const modal = root.querySelector(".consent-modal");

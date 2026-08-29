@@ -114,6 +114,14 @@
   }
 
   window.LectureSiftGuestTrial = {
+    async ensureAccess() {
+      if (!activeToken()) await ensureGuestIdentity();
+      return {
+        token: activeToken(),
+        account: typeof billingAccount !== "undefined" ? billingAccount : null,
+        trial: guestTrialState ? {...guestTrialState} : null,
+      };
+    },
     markUsed(jobId) {
       const guest = typeof billingAccount !== "undefined" && billingAccount?.plan?.code === "guest";
       if (!guest) return;
@@ -454,7 +462,7 @@
   }
 
   const path = location.pathname;
-  if (path === "/" || path.endsWith("/index.html")) installWorkspace();
+  if (path === "/workspace.html" || path.endsWith("/workspace.html")) installWorkspace();
   if (path.endsWith("/plans.html")) installPlansPage();
   installAccountExtensions();
 })();
