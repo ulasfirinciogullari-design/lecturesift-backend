@@ -88,3 +88,45 @@ html[data-theme="light"] ::selection{background:rgba(8,107,191,.22);color:#071a3
 @media (max-width:700px){html[data-theme="light"] :is(.field-help,.control>span,.control small,.upload-source-card p,.combined-limit,.source-file-list small,.stage-list p,.process-metric small,.result-card p,.legal-note,.admin-section-note,.admin-command-bar small,.admin-growth-grid p,.empty-copy,.footer-links,.site-footer,.legal-footer){font-size:12px}}
 @media(max-width:860px){.theme-toggle-label{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}.auth-topbar{flex-wrap:wrap;gap:8px}.auth-topbar>.theme-toggle{margin-inline-start:auto}}
 @media(prefers-reduced-motion:reduce){.theme-toggle,.skip-link{transition:none}}
+
+/* Cost centre readability. Cost data is dense and often inspected for long
+   periods, so it uses a larger type floor and stronger semantic colours than
+   the compact operational tables elsewhere in the admin panel. */
+#adminCostsView{--cost-text:#f4f8ff;--cost-muted:#bdcbe0;--cost-subtle:#9fb2cf;--cost-row:rgba(10,30,58,.62);--cost-row-alt:rgba(14,39,73,.72);--cost-row-hover:rgba(28,68,116,.5);--cost-source:#79cdff;--cost-warning-bg:rgba(255,190,79,.16);--cost-warning-border:rgba(255,203,111,.46);--cost-warning-text:#ffe1a3;--cost-ok-bg:rgba(51,207,145,.16);--cost-ok-border:rgba(92,229,171,.42);--cost-ok-text:#b4f5d8}
+#adminCostsView .dashboard-card{color:var(--cost-text)}
+#adminCostsView :is(.admin-view-heading>p,.admin-section-note,.admin-metrics span,.admin-metrics small,.admin-cost-period,.admin-growth-grid p,.empty-copy){color:var(--cost-muted);font-size:12px;line-height:1.6}
+#adminCostsView :is(h2,h3,.admin-metrics strong,.admin-growth-grid strong,.admin-table strong){color:var(--cost-text)}
+#adminCostsView .admin-metrics article{background:linear-gradient(145deg,rgba(12,35,67,.94),rgba(7,24,49,.96));border-color:rgba(140,182,238,.24)}
+#adminCostsView .admin-metrics span{white-space:normal;overflow:visible;text-overflow:clip}
+#adminCostsView .admin-cost-period{font-weight:800}
+#adminCostsView .admin-cost-form .field>span{color:var(--cost-muted);font-size:12px;line-height:1.45}
+#adminCostsView .admin-cost-form :is(input,select){font-size:12px}
+#adminCostsView .admin-growth-grid article{background:var(--cost-row);border-color:rgba(140,182,238,.22)}
+#adminCostsView .admin-growth-grid p{margin:0}
+#adminCostsView .admin-growth-grid code{background:rgba(1,9,20,.72);color:var(--cost-source);font-size:11px;line-height:1.55}
+#adminCostsView .admin-table{border-collapse:separate;border-spacing:0}
+#adminCostsView .admin-table :is(th,td){font-size:12px;line-height:1.55}
+#adminCostsView .admin-table th{background:rgba(20,48,84,.94);color:#d4e2f5}
+#adminCostsView .admin-table td{background:var(--cost-row);color:#e8f0fb}
+#adminCostsView .admin-table tbody tr:nth-child(even) td{background:var(--cost-row-alt)}
+#adminCostsView .admin-table tbody tr:hover td{background:var(--cost-row-hover)}
+#adminCostsView .admin-cost-source{color:var(--cost-source);font-weight:750;text-decoration-color:rgba(121,205,255,.55)}
+#adminCostsView :is(.admin-cost-status,.admin-growth-grid header span,.admin-count-badge){border:1px solid var(--cost-warning-border);background:var(--cost-warning-bg);color:var(--cost-warning-text);font-size:11px;line-height:1.35;font-weight:850}
+#adminCostsView :is(.admin-cost-status.verified,.admin-growth-grid .ready header span){border-color:var(--cost-ok-border);background:var(--cost-ok-bg);color:var(--cost-ok-text)}
+
+html[data-theme="light"] #adminCostsView{--cost-text:#091c34;--cost-muted:#334d6d;--cost-subtle:#425d7e;--cost-row:#f8fbff;--cost-row-alt:#edf4fb;--cost-row-hover:#dfedfa;--cost-source:#075a9e;--cost-warning-bg:#fff0ce;--cost-warning-border:#b96c08;--cost-warning-text:#754100;--cost-ok-bg:#d9f3e7;--cost-ok-border:#16835f;--cost-ok-text:#075b42}
+html[data-theme="light"] #adminCostsView .dashboard-card{background:#fff!important;color:var(--cost-text)!important;border-color:rgba(26,56,94,.26)!important}
+html[data-theme="light"] #adminCostsView :is(.admin-view-heading>p,.admin-section-note,.admin-metrics span,.admin-metrics small,.admin-cost-period,.admin-growth-grid p,.empty-copy,.admin-cost-form .field>span){color:var(--cost-muted)!important}
+html[data-theme="light"] #adminCostsView :is(h2,h3,.admin-metrics strong,.admin-growth-grid strong,.admin-table strong){color:var(--cost-text)!important}
+html[data-theme="light"] #adminCostsView .admin-metrics article{background:linear-gradient(145deg,#f8fbff,#eaf3fc)!important;border-color:rgba(26,56,94,.26)!important;box-shadow:none!important}
+html[data-theme="light"] #adminCostsView .admin-growth-grid article{background:var(--cost-row-alt)!important;color:var(--cost-text)!important;border-color:rgba(26,56,94,.24)!important}
+html[data-theme="light"] #adminCostsView .admin-growth-grid code{background:#dceaf8!important;color:#064f8b!important;border:1px solid rgba(7,90,158,.2)}
+html[data-theme="light"] #adminCostsView .admin-table th{background:#d9e8f6!important;color:#123b63!important}
+html[data-theme="light"] #adminCostsView .admin-table td{background:var(--cost-row)!important;color:#263f5f!important}
+html[data-theme="light"] #adminCostsView .admin-table tbody tr:nth-child(even) td{background:var(--cost-row-alt)!important}
+html[data-theme="light"] #adminCostsView .admin-table tbody tr:hover td{background:var(--cost-row-hover)!important}
+html[data-theme="light"] #adminCostsView .admin-cost-source{color:var(--cost-source)!important}
+html[data-theme="light"] #adminCostsView :is(.admin-cost-status,.admin-growth-grid header span,.admin-count-badge){border-color:var(--cost-warning-border)!important;background:var(--cost-warning-bg)!important;color:var(--cost-warning-text)!important}
+html[data-theme="light"] #adminCostsView :is(.admin-cost-status.verified,.admin-growth-grid .ready header span){border-color:var(--cost-ok-border)!important;background:var(--cost-ok-bg)!important;color:var(--cost-ok-text)!important}
+
+@media(max-width:620px){#adminCostsView .admin-section-head{gap:10px}#adminCostsView .admin-cost-period{width:100%;justify-content:space-between}#adminCostsView .admin-cost-period .admin-filter{min-width:132px}#adminCostsView .admin-table :is(th,td){font-size:12px}}

@@ -311,19 +311,51 @@ function renderAdminCosts() {
   const data = adminState.costs || {};
   const totals = data.totals || {};
   const fx = data.currency || {};
+  const accuracy = data.accuracy || {};
+  const economics = data.unit_economics || {};
+  const percent = value => value == null ? "—" : `%${Number(value).toLocaleString(adminLocale(), {maximumFractionDigits:2})}`;
+  const compactUsd = value => value == null ? "—" : adminUsd(value, 8);
+  const actualNativeTotal = (data.actual_by_currency || []).map(item => `${(Number(item.total_minor || 0) / 100).toLocaleString(adminLocale(), {style:"currency", currency:item.currency})}`).join(" + ") || "—";
   const metrics = [
-    ["Değişken kullanım", adminUsd(totals.variable_usd, 6), `${Number(data.period_days || 30)} günlük API ve depolama işlemleri`],
-    ["Dönem sabit gideri", adminUsd(totals.period_fixed_usd), `Aylık sabit: ${adminUsd(totals.monthly_fixed_usd)}`],
-    ["Toplam tahmin", adminUsd(totals.combined_usd), `${Number(totals.combined_try || 0).toLocaleString(adminLocale(), {maximumFractionDigits:2})} TL`],
+    ["Operasyon tahmini", adminUsd(totals.combined_usd), `${Number(totals.combined_try || 0).toLocaleString(adminLocale(), {maximumFractionDigits:2})} TL · fatura değildir`],
+    ["Örtüşen fatura kayıtları", actualNativeTotal, `${adminUsd(totals.actual_invoice_usd)} güncel kurla gösterge · dönem tahminiyle kıyaslanmaz`],
+    ["Değişken liste maliyeti", adminUsd(totals.variable_usd, 6), `${Number(data.period_days || 30)} günlük ölçülen kullanım`],
+    ["Sabit bütçe", adminUsd(totals.period_fixed_usd), `${adminUsd(totals.period_confirmed_fixed_usd)} doğrulandı`],
     ["USD / TRY", Number(fx.usd_try || 0).toLocaleString(adminLocale(), {maximumFractionDigits:4}), fx.source || "Kur bilgisi yok"],
   ];
   admin$("adminCostMetrics").innerHTML = metrics.map(([label,value,note]) => `<article><small>${adminEscape(label)}</small><strong>${adminEscape(value)}</strong><span>${adminEscape(note)}</span></article>`).join("");
   admin$("adminCostDisclaimer").textContent = data.disclaimer || "Sağlayıcı faturaları kesin kaynaktır.";
-  const providers = (data.by_provider || []).map(item => `<tr><td data-label="Sağlayıcı"><strong>${adminEscape(item.provider)}</strong></td><td data-label="Hizmet">${adminEscape(item.service)}</td><td data-label="Kayıt">${Number(item.events || 0).toLocaleString(adminLocale())}</td><td data-label="Maliyet">${adminEscape(adminUsd(item.cost_usd, 6))}</td></tr>`).join("");
-  admin$("adminProviderCosts").innerHTML = `<table class="admin-table admin-record-table"><thead><tr><th>Sağlayıcı</th><th>Hizmet</th><th>Ölçüm kaydı</th><th>Tahmini maliyet</th></tr></thead><tbody>${providers || '<tr><td colspan="4">Bu dönemde ölçülmüş değişken kullanım yok.</td></tr>'}</tbody></table>`;
+  admin$("adminCostAccuracyBadge").textContent = `%${Number(accuracy.coverage_percent || 0).toLocaleString(adminLocale(), {maximumFractionDigits:1})} doğrulandı`;
+  const accuracyCards = [
+    ["Durum", accuracy.status === "verified" ? "Faturalar eşleşti" : accuracy.status === "partial" ? "Kısmen doğrulandı" : "Doğrulanmadı", accuracy.rule || ""],
+    ["Aktif sağlayıcı", Number((accuracy.active_providers || []).length).toLocaleString(adminLocale()), (accuracy.active_providers || []).join(", ") || "Dönemde aktif sağlayıcı yok"],
+    ["Doğrulanan", Number((accuracy.verified_providers || []).length).toLocaleString(adminLocale()), (accuracy.verified_providers || []).join(", ") || "Henüz fatura girilmedi"],
+    ["Kısmi dönem", Number((accuracy.partially_verified_providers || []).length).toLocaleString(adminLocale()), (accuracy.partially_verified_providers || []).join(", ") || "Kısmi fatura kapsamı yok"],
+    ["Mutabakat bekleyen", Number((accuracy.unreconciled_providers || []).length).toLocaleString(adminLocale()), (accuracy.unreconciled_providers || []).join(", ") || "Eksik sağlayıcı yok"],
+    ["Sağlayıcı ölçümü", Number(accuracy.provider_reported_events || 0).toLocaleString(adminLocale()), "API tarafından bildirilen kullanım kayıtları"],
+    ["Tahmini/uygulama ölçümü", Number(accuracy.estimated_events || 0).toLocaleString(adminLocale()), "Fatura değildir; ücretsiz kota ve yuvarlama farklı olabilir"],
+  ];
+  admin$("adminCostAccuracy").innerHTML = accuracyCards.map(([label,value,note], index) => `<article class="${index === 0 && accuracy.status === "verified" ? "ready" : accuracy.status === "unverified" ? "missing" : ""}"><header><strong>${adminEscape(label)}</strong><span>${adminEscape(value)}</span></header><p>${adminEscape(note)}</p></article>`).join("");
+  const economyMetrics = [
+    ["İşlenen dakika", Number(economics.processed_minutes || 0).toLocaleString(adminLocale()), "Üyelik kullanım kayıtları"],
+    ["Değişken / dakika", compactUsd(economics.variable_cost_per_minute_usd), "Sadece ölçülen değişken gider"],
+    ["Toplam / dakika", compactUsd(economics.operating_cost_per_minute_usd), "Sabit gider dağıtılmış tahmin"],
+    ["Toplam / iş", compactUsd(economics.operating_cost_per_job_usd), `${Number(economics.costed_jobs || 0).toLocaleString(adminLocale())} maliyetlendirilmiş iş`],
+    ["Bilinen gelir", adminUsd(economics.known_revenue_usd), "TRY gelir güncel kurla USD'ye çevrilir"],
+    ["Komisyon öncesi katkı", adminUsd(economics.contribution_before_fees_tax_usd), percent(economics.contribution_margin_percent)],
+  ];
+  admin$("adminCostEconomics").innerHTML = economyMetrics.map(([label,value,note]) => `<article><small>${adminEscape(label)}</small><strong>${adminEscape(value)}</strong><span>${adminEscape(note)}</span></article>`).join("");
+  admin$("adminCostEconomicsNote").textContent = economics.warning || "Bu değer muhasebe kârı değildir.";
+  const providers = (data.by_provider || []).map(item => `<tr><td data-label="Sağlayıcı"><strong>${adminEscape(item.provider)}</strong></td><td data-label="Hizmet">${adminEscape(item.service)}</td><td data-label="Kayıt">${Number(item.events || 0).toLocaleString(adminLocale())}</td><td data-label="Brüt liste maliyeti">${adminEscape(adminUsd(item.cost_usd, 6))}</td></tr>`).join("");
+  admin$("adminProviderCosts").innerHTML = `<table class="admin-table admin-record-table"><thead><tr><th>Sağlayıcı</th><th>Hizmet</th><th>Ölçüm kaydı</th><th>Brüt liste maliyeti</th></tr></thead><tbody>${providers || '<tr><td colspan="4">Bu dönemde ölçülmüş değişken kullanım yok.</td></tr>'}</tbody></table>`;
+  const resources = (data.by_resource || []).map(item => `<tr><td data-label="Kaynak"><strong>${adminEscape(item.resource)}</strong><br><small>${adminEscape(`${item.provider} / ${item.service}`)}</small></td><td data-label="Miktar">${Number(item.quantity || 0).toLocaleString(adminLocale(), {maximumFractionDigits:6})} ${adminEscape(item.unit)}</td><td data-label="Ölçüm"><span class="admin-cost-status ${item.estimation === "provider_usage" ? "verified" : ""}">${adminEscape(item.estimation)}</span></td><td data-label="Kayıt">${Number(item.events || 0).toLocaleString(adminLocale())}</td><td data-label="Maliyet">${adminEscape(adminUsd(item.cost_usd, 6))}</td><td data-label="Fiyat kaynağı"><span class="admin-cost-source">${adminEscape(item.pricing_source)}</span><small>${adminEscape(item.pricing_effective_at || "")}</small></td></tr>`).join("");
+  admin$("adminResourceCosts").innerHTML = `<table class="admin-table admin-record-table"><thead><tr><th>Kaynak / model</th><th>Miktar</th><th>Ölçüm türü</th><th>Kayıt</th><th>Brüt maliyet</th><th>Fiyat kaynağı</th></tr></thead><tbody>${resources || '<tr><td colspan="6">Kaynak bazlı kullanım oluşmadı.</td></tr>'}</tbody></table>`;
   const jobs = (data.jobs || []).map(item => `<tr><td data-label="İş kimliği"><strong>${adminEscape(item.job_id)}</strong></td><td data-label="İlk kullanım">${adminEscape(adminDate(item.started_at))}</td><td data-label="Ölçüm">${Number(item.events || 0).toLocaleString(adminLocale())}</td><td data-label="USD">${adminEscape(adminUsd(item.cost_usd, 6))}</td><td data-label="TRY">${Number(item.cost_try || 0).toLocaleString(adminLocale(), {style:"currency",currency:"TRY",maximumFractionDigits:4})}</td></tr>`).join("");
   admin$("adminJobCosts").innerHTML = `<table class="admin-table admin-record-table"><thead><tr><th>İş kimliği</th><th>İlk kullanım</th><th>Ölçüm</th><th>USD</th><th>TRY</th></tr></thead><tbody>${jobs || '<tr><td colspan="5">Henüz iş bazlı maliyet oluşmadı.</td></tr>'}</tbody></table>`;
-  admin$("adminFixedCosts").innerHTML = (data.fixed_services || []).map(item => `<article class="${Number(item.monthly_usd || 0) ? "ready" : "missing"}"><header><strong>${adminEscape(item.provider)}</strong><span>${adminEscape(adminUsd(item.monthly_usd))}/ay</span></header><p>${adminEscape(item.label)}</p><code>${adminEscape(item.source)}</code></article>`).join("");
+  admin$("adminFixedCosts").innerHTML = (data.fixed_services || []).map(item => `<article class="${item.confirmed ? "ready" : "missing"}"><header><strong>${adminEscape(item.provider)}</strong><span>${item.confirmed ? "Doğrulandı" : "Doğrulama gerekli"}</span></header><p>${adminEscape(item.label)} · ${adminEscape(adminUsd(item.monthly_usd))}/ay</p><code>${adminEscape(item.configuration_key)} + ${adminEscape(item.confirmation_key)}</code></article>`).join("");
+  const actuals = (data.actual_costs || []).map(item => `<tr><td data-label="Sağlayıcı"><strong>${adminEscape(item.provider)}</strong><br><small>${adminEscape(item.service)}</small></td><td data-label="Dönem">${adminEscape(item.period_start)} – ${adminEscape(item.period_end)}</td><td data-label="Tutar">${(Number(item.total_minor || 0) / 100).toLocaleString(adminLocale(), {style:"currency",currency:item.currency})}<br><small>Vergi: ${(Number(item.tax_minor || 0) / 100).toLocaleString(adminLocale(), {style:"currency",currency:item.currency})}</small></td><td data-label="USD karşılığı">${adminEscape(adminUsd(item.total_usd, 4))}</td><td data-label="Kaynak">${adminEscape(item.label)}<br><small>${adminEscape(item.source_reference)}</small></td><td data-label="İşlem"><button type="button" class="admin-action reject" data-delete-actual-cost="${adminEscape(item.id)}">Sil</button></td></tr>`).join("");
+  admin$("adminActualCostCount").textContent = `${Number((data.actual_costs || []).length).toLocaleString(adminLocale())} kayıt`;
+  admin$("adminActualCosts").innerHTML = `<table class="admin-table admin-record-table"><thead><tr><th>Sağlayıcı</th><th>Dönem</th><th>Fatura toplamı</th><th>USD karşılığı</th><th>Referans</th><th>İşlem</th></tr></thead><tbody>${actuals || '<tr><td colspan="6">Bu dönemle örtüşen doğrulanmış fatura/mutabakat kaydı yok.</td></tr>'}</tbody></table>`;
   admin$("adminExternalCosts").innerHTML = (data.external_invoice_sources || []).map(item => `<article class="missing"><header><strong>${adminEscape(item.provider)}</strong><span>Fatura / mutabakat</span></header><p>${adminEscape(item.label)}</p><small>${adminEscape(item.reason)}</small></article>`).join("");
 }
 
@@ -331,6 +363,46 @@ async function loadAdminCosts() {
   const days = Number(admin$("adminCostDays")?.value || 30);
   adminState.costs = await adminRequest(`/billing/admin/costs?days=${encodeURIComponent(days)}&limit=250`);
   renderAdminCosts();
+}
+
+async function saveAdminActualCost(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const submit = form.querySelector('button[type="submit"]');
+  const values = new FormData(form);
+  const toMinor = name => Math.round(Number(values.get(name) || 0) * 100);
+  submit.disabled = true;
+  try {
+    const body = await adminRequest("/billing/admin/costs/actuals", {
+      method:"POST",
+      body:JSON.stringify({
+        provider:String(values.get("provider") || "").trim(),
+        service:String(values.get("service") || "").trim(),
+        period_start:String(values.get("period_start") || ""),
+        period_end:String(values.get("period_end") || ""),
+        currency:String(values.get("currency") || "USD"),
+        subtotal_minor:toMinor("subtotal"),
+        tax_minor:toMinor("tax"),
+        label:String(values.get("label") || "").trim(),
+        source_reference:String(values.get("source_reference") || "").trim(),
+      }),
+    });
+    adminNotice(body.message);
+    form.reset();
+    form.querySelector('[name="tax"]').value = "0";
+    await loadAdminCosts();
+  } catch (error) { adminNotice(error.message, true); }
+  finally { submit.disabled = false; }
+}
+
+async function deleteAdminActualCost(button) {
+  if (!window.confirm("Bu fatura/mutabakat gideri silinsin mi?")) return;
+  button.disabled = true;
+  try {
+    const body = await adminRequest(`/billing/admin/costs/actuals/${encodeURIComponent(button.dataset.deleteActualCost)}`, {method:"DELETE"});
+    adminNotice(body.message);
+    await loadAdminCosts();
+  } catch (error) { adminNotice(error.message, true); button.disabled = false; }
 }
 
 function buildTimeline() {
@@ -734,6 +806,11 @@ admin$("adminTokenForm").addEventListener("submit", async event => {
 admin$("adminRefresh").addEventListener("click", () => loadAdmin().catch(error => adminNotice(error.message, true)));
 ["adminMessageSearch","adminMessageStatus","adminJobStatus","adminTimelineFilter"].forEach(id => admin$(id)?.addEventListener(id.includes("Search") ? "input" : "change", applyAdminFilters));
 admin$("adminCostDays")?.addEventListener("change", () => loadAdminCosts().catch(error => adminNotice(error.message, true)));
+admin$("adminActualCostForm")?.addEventListener("submit", saveAdminActualCost);
+admin$("adminActualCosts")?.addEventListener("click", event => {
+  const button = event.target.closest("[data-delete-actual-cost]");
+  if (button) deleteAdminActualCost(button);
+});
 admin$("adminUserSearch").addEventListener("input", () => { clearTimeout(adminUserSearchTimer); adminUserSearchTimer = setTimeout(() => loadAdminUsers(1).catch(error => adminNotice(error.message, true)), 350); });
 ["adminUserStatus","adminUserPlan","adminUserSort","adminUserPageSize"].forEach(id => admin$(id)?.addEventListener("change", () => loadAdminUsers(1).catch(error => adminNotice(error.message, true))));
 admin$("adminOrderSearch").addEventListener("input", () => { clearTimeout(adminOrderSearchTimer); adminOrderSearchTimer = setTimeout(() => loadAdminOrders(1).catch(error => adminNotice(error.message, true)), 350); });

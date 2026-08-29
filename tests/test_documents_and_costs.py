@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import threading
 import time
 import uuid
+from datetime import date, datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -23,6 +25,7 @@ from lecturesift import config
 from lecturesift.app import app
 from lecturesift.billing_service import register_user, verify_email
 from lecturesift.documents import extract_documents
+from lecturesift.durable_runtime import _preflight_documents
 from lecturesift.errors import LectureSiftError
 from lecturesift.jobs import JOBS
 from lecturesift.rollout_routes import install_rollout_routes
@@ -120,7 +123,12 @@ def test_real_tesseract_reads_a_scanned_pdf(tmp_path: Path):
     image_path = tmp_path / "scan.png"
     image = Image.new("RGB", (1800, 1200), "white")
     draw = ImageDraw.Draw(image)
-    font = ImageFont.truetype("DejaVuSans.ttf", 58)
+    font_name = (
+        str(Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts" / "arial.ttf")
+        if os.name == "nt"
+        else "DejaVuSans.ttf"
+    )
+    font = ImageFont.truetype(font_name, 58)
     draw.text((120, 220), "ENERGY IS CONSERVED IN A CLOSED SYSTEM", fill="black", font=font)
     draw.text((120, 330), "WORK TRANSFERS ENERGY BETWEEN OBJECTS", fill="black", font=font)
     image.save(image_path)
@@ -218,6 +226,15 @@ def test_pdf_ocr_uses_bounded_parallel_pages_and_preserves_page_order(tmp_path: 
     assert progress[-1] == (4, 4)
 
 
+def test_ocr_parallelism_is_memory_safe_on_small_workers(monkeypatch):
+    monkeypatch.setattr(document_service, "OCR_PARALLELISM", 4)
+    monkeypatch.setattr(document_service, "_container_memory_limit_bytes", lambda: 512 * 1024 * 1024)
+    assert document_service.effective_ocr_parallelism() == 1
+
+    monkeypatch.setattr(document_service, "_container_memory_limit_bytes", lambda: 2 * 1024 * 1024 * 1024)
+    assert document_service.effective_ocr_parallelism() == 4
+
+
 def test_pdf_auto_ocr_uses_bounded_representative_language_samples(tmp_path: Path, monkeypatch):
     path = tmp_path / "multilingual-scan.pdf"
     writer = PdfWriter()
@@ -305,7 +322,7 @@ def test_ocr_page_budget_applies_across_all_uploaded_documents(tmp_path: Path, m
     assert caught.value.code == "LS-OCR-02"
 
 
-def test_document_upload_records_document_quota_before_background_processing(tmp_path: Path, monkeypatch):
+def test_document_upload_releases_response_before_background_quota_preflight(tmp_path: Path, monkeypatch):
     captured: dict = {}
 
     class DeferredThread:
@@ -326,11 +343,17 @@ def test_document_upload_records_document_quota_before_background_processing(tmp
     body = response.json()
     job = JOBS.get(body["job_id"])
     assert body["source_layout"] == "documents"
-    assert body["document_words"] >= 300
-    assert body["billable_minutes"] >= 2
+    assert body["document_words"] is None
+    assert body["billable_minutes"] is None
     assert job["source_type"] == "document"
     assert captured["started"] is True
-    assert captured["args"][2]["document_credit_seconds"] == body["billable_minutes"] * 60
+    assert captured["args"][2]["document_mode"] is True
+    seconds = _preflight_documents(body["job_id"], list(captured["args"][1]), captured["args"][2])
+    assert seconds is not None and seconds >= 120
+    inspected = JOBS.get(body["job_id"])
+    assert inspected["document_words"] >= 300
+    assert inspected["billable_minutes"] >= 2
+    assert captured["args"][2]["document_credit_seconds"] == seconds
     shutil.rmtree(Path(job["job_dir"]), ignore_errors=True)
 
 
@@ -361,11 +384,15 @@ def test_scanned_pdf_upload_queues_background_ocr(tmp_path: Path, monkeypatch):
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["ocr_required"] is True
-    assert body["ocr_pages"] == 1
+    assert body["ocr_required"] is False
+    assert body["ocr_pages"] == 0
     assert body["usage_estimated"] is True
     assert captured["started"] is True
+    seconds = _preflight_documents(body["job_id"], list(captured["args"][1]), captured["args"][2])
+    assert seconds is not None
     assert captured["args"][2]["document_ocr_required"] is True
+    inspected = JOBS.get(body["job_id"])
+    assert inspected["document_ocr_pages"] == 1
     job = JOBS.get(body["job_id"])
     shutil.rmtree(Path(job["job_dir"]), ignore_errors=True)
 
@@ -403,9 +430,14 @@ def test_guest_workspace_accepts_a_text_pdf_without_registered_account(tmp_path:
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["source_layout"] == "documents"
-    assert body["document_words"] >= 8
-    assert body["billable_minutes"] == 1
+    assert body["document_words"] is None
+    assert body["billable_minutes"] is None
     assert captured["started"] is True
+    seconds = _preflight_documents(body["job_id"], list(captured["args"][1]), captured["args"][2])
+    assert seconds == 60
+    inspected = JOBS.get(body["job_id"])
+    assert inspected["document_words"] >= 8
+    assert inspected["billable_minutes"] == 1
     job = JOBS.get(body["job_id"])
     shutil.rmtree(Path(job["job_dir"]), ignore_errors=True)
 
@@ -480,3 +512,83 @@ def test_admin_cost_endpoint_is_protected_and_separates_external_invoices(monkey
         "Cloudflare R2",
     }
     assert "kesin kaynaktır" in body["disclaimer"]
+    assert body["accuracy"]["required_provider_days"] == len(body["accuracy"]["active_providers"]) * 30
+    assert "by_resource" in body and "unit_economics" in body and "actual_costs" in body
+
+
+def test_invoice_cost_records_are_admin_only_idempotent_and_deletable(monkeypatch):
+    install_rollout_routes(app)
+    monkeypatch.setattr(config, "ADMIN_ADMIN", "actual-cost-secret")
+    monkeypatch.setattr(costs, "_fx_rate", lambda: (40.0, "test rate"))
+    client = TestClient(app)
+    today = datetime.now(timezone.utc).astimezone(costs._BUSINESS_TIMEZONE).date()
+    provider = f"test_{uuid.uuid4().hex[:12]}"
+    payload = {
+        "provider": provider,
+        "service": "monthly_invoice",
+        "period_start": today.isoformat(),
+        "period_end": today.isoformat(),
+        "currency": "TRY",
+        "subtotal_minor": 10000,
+        "tax_minor": 2000,
+        "label": "Test faturası",
+        "source_reference": f"INV-{uuid.uuid4().hex[:8]}",
+    }
+    assert client.post("/billing/admin/costs/actuals", json=payload).status_code == 401
+    headers = {"Authorization": "Bearer actual-cost-secret"}
+    created = client.post("/billing/admin/costs/actuals", json=payload, headers=headers)
+    assert created.status_code == 200, created.text
+    actual_id = created.json()["id"]
+    try:
+        payload["tax_minor"] = 2500
+        updated = client.post("/billing/admin/costs/actuals", json=payload, headers=headers)
+        assert updated.status_code == 200
+        assert updated.json() == {
+            "ok": True,
+            "id": actual_id,
+            "updated": True,
+            "message": "Fatura/mutabakat gideri kaydedildi.",
+        }
+        overview = client.get("/billing/admin/costs?days=1", headers=headers).json()
+        saved = next(item for item in overview["actual_costs"] if item["id"] == actual_id)
+        assert saved["total_minor"] == 12500
+        assert saved["total_usd"] == 3.125
+        assert {item["currency"]: item["total_minor"] for item in overview["actual_by_currency"]}["TRY"] >= 12500
+    finally:
+        deleted = client.delete(f"/billing/admin/costs/actuals/{actual_id}", headers=headers)
+        assert deleted.status_code == 200
+    assert client.delete(f"/billing/admin/costs/actuals/{actual_id}", headers=headers).status_code == 404
+
+
+def test_invoice_coverage_merges_overlaps_without_double_counting():
+    start = date(2026, 8, 1)
+    end = date(2026, 8, 10)
+    rows = [
+        {"provider": "render", "period_start": "2026-07-25", "period_end": "2026-08-03"},
+        {"provider": "render", "period_start": "2026-08-03", "period_end": "2026-08-07"},
+        {"provider": "render", "period_start": "2026-08-09", "period_end": "2026-08-20"},
+        {"provider": "netlify", "period_start": "2026-08-01", "period_end": "2026-08-10"},
+    ]
+    assert costs._covered_days(rows, "render", start, end) == 9
+    assert costs._covered_days(rows, "netlify", start, end) == 10
+    assert costs._covered_days(rows, "resend", start, end) == 0
+
+
+def test_cost_report_uses_turkiye_calendar_date_near_utc_midnight(monkeypatch):
+    class FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            value = cls(2026, 8, 29, 21, 30, tzinfo=timezone.utc)
+            return value if tz is None else value.astimezone(tz)
+
+    monkeypatch.setattr(costs, "datetime", FixedDatetime)
+    monkeypatch.setattr(costs, "_fx_rate", lambda: (40.0, "test rate"))
+    overview = costs.cost_overview(days=1, limit=1)
+    assert overview["period"]["invoice_start"] == "2026-08-30"
+    assert overview["period"]["invoice_end"] == "2026-08-30"
+
+
+def test_fixed_cost_confirmation_keys_match_render_configuration():
+    services = {item["provider"]: item for item in costs._fixed_services()}
+    assert services["domain"]["confirmation_key"] == "LECTURESIFT_COST_DOMAIN_CONFIRMED"
+    assert services["render"]["confirmation_key"] == "LECTURESIFT_COST_RENDER_CONFIRMED"

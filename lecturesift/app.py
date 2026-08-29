@@ -101,7 +101,7 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 from .costs import cost_context
-from .documents import extract_documents
+from .documents import effective_ocr_parallelism
 
 
 @app.middleware("http")
@@ -485,7 +485,10 @@ async def _save_upload(
 ) -> int:
     total = bytes_used
     with open(destination, "wb") as output:
-        while chunk := await file.read(1024 * 1024):
+        # Larger application chunks reduce Python/ASGI overhead without
+        # buffering the whole upload in memory. The client connection remains
+        # fully streamed and can use all available bandwidth.
+        while chunk := await file.read(8 * 1024 * 1024):
             total += len(chunk)
             if total > max_bytes:
                 _raise_public(
@@ -557,7 +560,8 @@ def health() -> dict:
             "engine": "tesseract-local",
             "available": bool(OCR_ENABLED and shutil.which(OCR_COMMAND)),
             "max_pages_per_job": OCR_MAX_PAGES,
-            "parallel_pages": OCR_PARALLELISM,
+            "parallel_pages": effective_ocr_parallelism(),
+            "configured_parallel_pages": OCR_PARALLELISM,
         },
         "output_formats": ["pdf", "docx", "txt"],
         "audio_export": True,
@@ -1274,7 +1278,6 @@ async def create_job(
     job_id = str(uuid.uuid4())
     job_dir = _job_path(job_id)
     total = 0
-    document_data = None
     try:
         if layout == "separate":
             audio_paths, total, audio_sizes = await _save_upload_list(
@@ -1294,16 +1297,6 @@ async def create_job(
             )
             visual_paths = []
             visual_sizes = []
-        document_data = (
-            extract_documents(
-                audio_paths,
-                source_language=options["source_language"],
-                enable_ocr=False,
-                allow_ocr_pending=True,
-            )
-            if document_mode
-            else None
-        )
     except LectureSiftError as exc:
         shutil.rmtree(job_dir, ignore_errors=True)
         _raise_public(exc)
@@ -1313,12 +1306,7 @@ async def create_job(
 
     options["billing_user_id"] = billing_user["id"]
     options["download_entitled"] = bool(entitlement.get("download_enabled"))
-    if document_data:
-        options["document_credit_seconds"] = float(document_data["credit_seconds"])
-        options["document_words"] = int(document_data["words"])
-        options["document_ocr_required"] = bool(document_data["ocr_required"])
-        options["document_ocr_pages"] = int(document_data["ocr_pages"])
-        options["document_estimated"] = bool(document_data["estimated"])
+    options["document_mode"] = document_mode
     source_type = (
         ("document_multi" if len(audio_paths) > 1 else "document")
         if document_mode
@@ -1334,8 +1322,8 @@ async def create_job(
         audio_file_sizes=audio_sizes,
         visual_file_sizes=visual_sizes,
         source_file_count=len(audio_paths) + len(visual_paths),
-        document_words=int(document_data["words"]) if document_data else None,
-        billable_minutes=int(document_data["credit_minutes"]) if document_data else None,
+        document_words=None,
+        billable_minutes=None,
         retention_seconds=max(1, int(entitlement["plan"]["history_days"])) * 24 * 60 * 60,
     )
     threading.Thread(
@@ -1348,11 +1336,15 @@ async def create_job(
         "status": "queued",
         "version": APP_VERSION,
         "source_layout": "documents" if document_mode else layout,
-        "document_words": int(document_data["words"]) if document_data else None,
-        "billable_minutes": int(document_data["credit_minutes"]) if document_data else None,
-        "ocr_required": bool(document_data["ocr_required"]) if document_data else False,
-        "ocr_pages": int(document_data["ocr_pages"]) if document_data else 0,
-        "usage_estimated": bool(document_data["estimated"]) if document_data else False,
+        # Document inspection is intentionally performed by the background
+        # dispatcher.  The upload request can therefore finish as soon as the
+        # streamed bytes are safely on disk instead of making the browser wait
+        # while every PDF page is inspected.
+        "document_words": None,
+        "billable_minutes": None,
+        "ocr_required": False,
+        "ocr_pages": 0,
+        "usage_estimated": bool(document_mode),
     }
 
 

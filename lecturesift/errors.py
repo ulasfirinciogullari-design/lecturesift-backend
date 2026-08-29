@@ -22,6 +22,13 @@ def normalize_error(exc: Exception) -> LectureSiftError:
     raw = str(exc)
     low = raw.lower()
 
+    if "invalid_api_key" in low or "incorrect api key" in low or "401 unauthorized" in low:
+        return LectureSiftError(
+            "LS-AI-01",
+            "Yapay zekâ bağlantısı sunucu tarafında doğrulanamadı. Yönetici yapılandırmayı kontrol etmeli.",
+            raw,
+            503,
+        )
     if "insufficient_quota" in low or "exceeded your current quota" in low:
         return LectureSiftError(
             "LS-AI-01",

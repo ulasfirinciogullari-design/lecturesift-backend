@@ -114,6 +114,12 @@ def test_quota_error_is_human_readable():
     assert "kota" in error.user_message.lower()
 
 
+def test_invalid_api_key_is_not_classified_as_a_retryable_system_error():
+    error = normalize_error(RuntimeError("401 Unauthorized: invalid_api_key"))
+    assert error.code == "LS-AI-01"
+    assert error.status_code == 503
+
+
 def test_health_and_unsupported_upload():
     client = TestClient(app)
     health = client.get("/health")

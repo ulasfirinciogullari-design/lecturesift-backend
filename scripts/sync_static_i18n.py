@@ -21,6 +21,7 @@ PROTECTED_COPY = {
     "Visa", "Mastercard", "Google", "GA4", "API", "URL", "IBAN", "IP", "CSV",
     "PDF", "DOCX", "TXT", "JSON", "MP3", "MP4", "WebM", "TRY", "EUR", "USD",
     "Lite", "Plus", "Pro", "Max", "Business", "ADMIN_ADMIN", "Cloudflare R2",
+    "render", "web_service",
 }
 SENSITIVE_FRAGMENTS = (
     "ulaş fırıncıoğulları", "ataturk mahallesi", "atatürk mahallesi", "4495 sokak",
@@ -70,6 +71,35 @@ RUNTIME_COPY = {
     "taranmış sayfa",
     "Belge analizi hazır",
     "Medya kaynağı hazır",
+}
+
+# Curated admin/accounting copy remains available when the development-time
+# translation endpoint is unavailable or rate-limited. Keep the same language
+# order as LANGUAGES and review financial terminology rather than accepting a
+# blind machine translation.
+CURATED_TRANSLATIONS = {
+    "%0 doğrulandı": ["%0 doğrulandı", "%0 verified", "%0 bestätigt", "%0 vérifié", "%0 verificado", "%0 verificato", "%0 verificado", "%0 подтверждено", "تم التحقق من %0", "已核对 %0", "%0 確認済み", "%0 확인됨", "%0 सत्यापित"],
+    "API anahtarı, kart bilgisi veya fatura içeriği yükleme. Yalnızca toplam tutarı ve fatura/ekstre referansını kaydet.": ["API anahtarı, kart bilgisi veya fatura içeriği yükleme. Yalnızca toplam tutarı ve fatura/ekstre referansını kaydet.", "Do not upload API keys, card details, or invoice content. Record only the total and invoice or statement reference.", "Keine API-Schlüssel, Kartendaten oder Rechnungsinhalte hochladen. Nur Gesamtbetrag und Rechnungs- oder Abrechnungsreferenz erfassen.", "Ne téléversez pas de clé API, de données de carte ni de contenu de facture. Enregistrez uniquement le total et la référence de facture ou de relevé.", "No subas claves API, datos de tarjeta ni contenido de facturas. Registra solo el total y la referencia de factura o extracto.", "Non caricare chiavi API, dati della carta o contenuti della fattura. Registra solo il totale e il riferimento della fattura o dell'estratto.", "Não envie chaves de API, dados de cartão ou conteúdo da fatura. Registre apenas o total e a referência da fatura ou do extrato.", "Не загружайте ключи API, данные карт или содержимое счетов. Укажите только итоговую сумму и номер счёта или выписки.", "لا ترفع مفاتيح API أو بيانات البطاقة أو محتوى الفاتورة. سجّل فقط الإجمالي ومرجع الفاتورة أو الكشف.", "请勿上传 API 密钥、银行卡信息或发票内容。仅记录总额以及发票或对账单编号。", "APIキー、カード情報、請求書の内容はアップロードしないでください。合計額と請求書または明細の参照番号のみを記録します。", "API 키, 카드 정보 또는 청구서 내용을 업로드하지 마세요. 총액과 청구서 또는 명세서 참조 번호만 기록하세요.", "API कुंजी, कार्ड विवरण या चालान की सामग्री अपलोड न करें। केवल कुल राशि और चालान या विवरण संदर्भ दर्ज करें।"],
+    "Ara toplam": ["Ara toplam", "Subtotal", "Zwischensumme", "Sous-total", "Subtotal", "Subtotale", "Subtotal", "Промежуточный итог", "المجموع الفرعي", "小计", "小計", "소계", "उप-योग"],
+    "Açıklama": ["Açıklama", "Description", "Beschreibung", "Description", "Descripción", "Descrizione", "Descrição", "Описание", "الوصف", "说明", "説明", "설명", "विवरण"],
+    "Ağustos 2026 faturası": ["Ağustos 2026 faturası", "August 2026 invoice", "Rechnung August 2026", "Facture d’août 2026", "Factura de agosto de 2026", "Fattura di agosto 2026", "Fatura de agosto de 2026", "Счёт за август 2026 г.", "فاتورة أغسطس 2026", "2026 年 8 月发票", "2026年8月の請求書", "2026년 8월 청구서", "अगस्त 2026 का चालान"],
+    "BİRİM EKONOMİ": ["BİRİM EKONOMİ", "UNIT ECONOMICS", "STÜCKÖKONOMIE", "ÉCONOMIE UNITAIRE", "ECONOMÍA UNITARIA", "ECONOMIA UNITARIA", "ECONOMIA UNITÁRIA", "ЮНИТ-ЭКОНОМИКА", "اقتصاديات الوحدة", "单位经济", "ユニットエコノミクス", "단위 경제성", "इकाई अर्थशास्त्र"],
+    "Dakika, iş ve gelir karşılığı": ["Dakika, iş ve gelir karşılığı", "Minutes, jobs, and revenue comparison", "Vergleich von Minuten, Aufträgen und Umsatz", "Comparaison des minutes, tâches et revenus", "Comparación de minutos, tareas e ingresos", "Confronto tra minuti, attività e ricavi", "Comparação de minutos, trabalhos e receita", "Сопоставление минут, задач и выручки", "مقارنة الدقائق والمهام والإيرادات", "分钟、任务和收入对比", "分数・ジョブ・収益の比較", "시간·작업·수익 비교", "मिनट, कार्य और आय की तुलना"],
+    "DOĞRULUK": ["DOĞRULUK", "ACCURACY", "GENAUIGKEIT", "EXACTITUDE", "EXACTITUD", "ACCURATEZZA", "EXATIDÃO", "ТОЧНОСТЬ", "الدقة", "准确性", "正確性", "정확성", "सटीकता"],
+    "Dönem başlangıcı": ["Dönem başlangıcı", "Period start", "Periodenbeginn", "Début de période", "Inicio del período", "Inizio del periodo", "Início do período", "Начало периода", "بداية الفترة", "期间开始", "期間開始", "기간 시작", "अवधि प्रारंभ"],
+    "Fatura / mutabakat no": ["Fatura / mutabakat no", "Invoice / reconciliation no.", "Rechnungs-/Abgleichnummer", "N° de facture / rapprochement", "N.º de factura / conciliación", "N. fattura / riconciliazione", "N.º da fatura / conciliação", "№ счёта / сверки", "رقم الفاتورة / المطابقة", "发票/核对编号", "請求書／照合番号", "청구서/대사 번호", "चालान / मिलान संख्या"],
+    "Fatura numarası veya ekstre referansı": ["Fatura numarası veya ekstre referansı", "Invoice number or statement reference", "Rechnungsnummer oder Abrechnungsreferenz", "Numéro de facture ou référence de relevé", "Número de factura o referencia de extracto", "Numero fattura o riferimento estratto", "Número da fatura ou referência do extrato", "Номер счёта или ссылка на выписку", "رقم الفاتورة أو مرجع الكشف", "发票编号或对账单编号", "請求書番号または明細参照番号", "청구서 번호 또는 명세서 참조", "चालान संख्या या विवरण संदर्भ"],
+    "Fatura ve mutabakat kayıtları": ["Fatura ve mutabakat kayıtları", "Invoice and reconciliation records", "Rechnungs- und Abgleichsdaten", "Factures et rapprochements", "Registros de facturas y conciliación", "Registri di fatture e riconciliazione", "Registros de faturas e conciliação", "Счета и акты сверки", "سجلات الفواتير والمطابقة", "发票与核对记录", "請求書と照合記録", "청구서 및 대사 기록", "चालान और मिलान रिकॉर्ड"],
+    "Gider, fatura ve birim ekonomi": ["Gider, fatura ve birim ekonomi", "Costs, invoices, and unit economics", "Kosten, Rechnungen und Stückökonomie", "Coûts, factures et économie unitaire", "Costes, facturas y economía unitaria", "Costi, fatture ed economia unitaria", "Custos, faturas e economia unitária", "Расходы, счета и юнит-экономика", "التكاليف والفواتير واقتصاديات الوحدة", "成本、发票与单位经济", "コスト・請求書・ユニットエコノミクス", "비용·청구서·단위 경제성", "लागत, चालान और इकाई अर्थशास्त्र"],
+    "Hizmet": ["Hizmet", "Service", "Dienst", "Service", "Servicio", "Servizio", "Serviço", "Услуга", "الخدمة", "服务", "サービス", "서비스", "सेवा"],
+    "KAYNAK / MODEL": ["KAYNAK / MODEL", "RESOURCE / MODEL", "RESSOURCE / MODELL", "RESSOURCE / MODÈLE", "RECURSO / MODELO", "RISORSA / MODELLO", "RECURSO / MODELO", "РЕСУРС / МОДЕЛЬ", "المورد / النموذج", "资源 / 模型", "リソース／モデル", "리소스/모델", "संसाधन / मॉडल"],
+    "Kesin gideri kaydet": ["Kesin gideri kaydet", "Save actual cost", "Ist-Kosten speichern", "Enregistrer le coût réel", "Guardar coste real", "Salva costo effettivo", "Salvar custo real", "Сохранить фактический расход", "حفظ التكلفة الفعلية", "保存实际成本", "実コストを保存", "실제 비용 저장", "वास्तविक लागत सहेजें"],
+    "KESİN GİDER": ["KESİN GİDER", "ACTUAL COST", "IST-KOSTEN", "COÛT RÉEL", "COSTE REAL", "COSTO EFFETTIVO", "CUSTO REAL", "ФАКТИЧЕСКИЙ РАСХОД", "التكلفة الفعلية", "实际成本", "実コスト", "실제 비용", "वास्तविक लागत"],
+    "Kullanım ve fiyat kaynağı kırılımı": ["Kullanım ve fiyat kaynağı kırılımı", "Breakdown by usage and pricing source", "Aufschlüsselung nach Nutzung und Preisquelle", "Ventilation par utilisation et source tarifaire", "Desglose por uso y fuente de precios", "Dettaglio per utilizzo e fonte dei prezzi", "Detalhamento por uso e fonte de preços", "Разбивка по использованию и источнику цен", "تفصيل حسب الاستخدام ومصدر التسعير", "按用量和价格来源细分", "利用量と価格情報源の内訳", "사용량 및 가격 출처별 분석", "उपयोग और मूल्य स्रोत के अनुसार विवरण"],
+    "Mutabakat kapsamı": ["Mutabakat kapsamı", "Reconciliation coverage", "Abgleichsabdeckung", "Couverture du rapprochement", "Cobertura de conciliación", "Copertura della riconciliazione", "Cobertura da conciliação", "Охват сверки", "تغطية المطابقة", "核对覆盖率", "照合範囲", "대사 범위", "मिलान कवरेज"],
+    "Sağlayıcı": ["Sağlayıcı", "Provider", "Anbieter", "Fournisseur", "Proveedor", "Fornitore", "Fornecedor", "Поставщик", "المزوّد", "服务商", "プロバイダー", "공급자", "प्रदाता"],
+    "Tahmini operasyon giderini faturayla doğrulanmış gerçek giderden ayır; her tutarın kaynağını, dönemini ve doğruluk durumunu gör.": ["Tahmini operasyon giderini faturayla doğrulanmış gerçek giderden ayır; her tutarın kaynağını, dönemini ve doğruluk durumunu gör.", "Separate estimated operating costs from invoice-verified actual costs; see the source, period, and verification status of every amount.", "Trenne geschätzte Betriebskosten von durch Rechnungen belegten Ist-Kosten; sieh Quelle, Zeitraum und Prüfstatus jedes Betrags.", "Distinguez les coûts d’exploitation estimés des coûts réels vérifiés par facture ; consultez la source, la période et le statut de vérification de chaque montant.", "Separa los costes operativos estimados de los costes reales verificados por factura; consulta la fuente, el período y el estado de verificación de cada importe.", "Separa i costi operativi stimati dai costi effettivi verificati tramite fattura; consulta fonte, periodo e stato di verifica di ogni importo.", "Separe os custos operacionais estimados dos custos reais verificados por fatura; veja a fonte, o período e o estado de verificação de cada valor.", "Отделяйте оценочные операционные расходы от фактических, подтверждённых счетами; смотрите источник, период и статус проверки каждой суммы.", "افصل تكاليف التشغيل التقديرية عن التكاليف الفعلية المثبتة بالفواتير، واطّلع على مصدر كل مبلغ وفترته وحالة التحقق منه.", "将运营成本估算与经发票核实的实际成本分开；查看每笔金额的来源、期间和核实状态。", "運用コストの見積もりと請求書で確認済みの実コストを分け、各金額の出典・期間・確認状況を表示します。", "예상 운영 비용과 청구서로 확인된 실제 비용을 구분하고 각 금액의 출처, 기간, 확인 상태를 확인하세요.", "अनुमानित संचालन लागत को चालान से सत्यापित वास्तविक लागत से अलग रखें; हर राशि का स्रोत, अवधि और सत्यापन स्थिति देखें।"],
+    "Vergi": ["Vergi", "Tax", "Steuer", "Taxe", "Impuesto", "Imposta", "Imposto", "Налог", "الضريبة", "税费", "税", "세금", "कर"],
 }
 
 
@@ -260,15 +290,17 @@ def main() -> int:
         missing = missing[: args.limit]
     if missing and args.sync:
         total = len(missing)
-        translated = {source: [source] for source in missing}
+        translated = {source: list(CURATED_TRANSLATIONS.get(source, [source])) for source in missing}
+        network_missing = [source for source, values in translated.items() if len(values) == 1]
         completed = 0
-        grouped = list(batches(missing))
-        for language in LANGUAGES[1:]:
-            for batch in grouped:
-                for source, value in zip(batch, translate_batch(batch, language), strict=True):
-                    translated[source].append(value)
-                time.sleep(0.08)
-            print(f"Translated {total} strings to {language}.", flush=True)
+        grouped = list(batches(network_missing))
+        if network_missing:
+            for language in LANGUAGES[1:]:
+                for batch in grouped:
+                    for source, value in zip(batch, translate_batch(batch, language), strict=True):
+                        translated[source].append(value)
+                    time.sleep(0.08)
+                print(f"Translated {len(network_missing)} strings to {language}.", flush=True)
         for source, values in translated.items():
             catalog[source] = values
             completed += 1

@@ -159,7 +159,7 @@ def test_public_navigation_is_consistent_localized_and_session_aware():
 def test_processing_center_uses_operation_specific_progress_profiles():
     script = (FRONTEND / "app.js").read_text(encoding="utf-8")
     assert "const PROGRESS_PROFILES" in script
-    assert 'document: [["source", "stageSource"], ["document_extraction", "stageDocument"]' in script
+    assert 'document: [["source", "stageSource"], ["document_preflight", "stageDocument"], ["document_extraction", "stageDocument"]' in script
     assert 'document_ocr: "stageDocument"' in script
     assert 'audio_export: [["source", "stageSource"], ["audio_extract", "stageMp3"]' in script
     assert 'download_video: [["source", "stageSource"], ["worker_download", "url_download"]' in script
@@ -485,6 +485,38 @@ def test_admin_large_dataset_controls_and_compact_account_tabs_are_wired():
     assert '@router.get("/billing/admin/users")' in rollout
     assert '@router.get("/billing/admin/orders")' in rollout
     assert '@router.post("/billing/admin/users/bulk-action")' in rollout
+
+
+def test_admin_cost_reconciliation_controls_are_wired():
+    admin = (FRONTEND / "admin.html").read_text(encoding="utf-8")
+    admin_script = (FRONTEND / "admin.js").read_text(encoding="utf-8")
+    rollout = (FRONTEND.parent / "lecturesift" / "rollout_routes.py").read_text(encoding="utf-8")
+    assert all(
+        value in admin
+        for value in (
+            "adminCostAccuracy",
+            "adminCostEconomics",
+            "adminResourceCosts",
+            "adminActualCostForm",
+            "adminActualCosts",
+        )
+    )
+    assert "saveAdminActualCost" in admin_script
+    assert "deleteAdminActualCost" in admin_script
+    assert "Number(item.total_minor || 0) / 100" in admin_script
+    assert '@router.post("/billing/admin/costs/actuals")' in rollout
+    assert '@router.delete("/billing/admin/costs/actuals/{actual_id}")' in rollout
+
+
+def test_admin_cost_centre_has_theme_specific_readability_rules():
+    admin = (FRONTEND / "admin.html").read_text(encoding="utf-8")
+    theme = (FRONTEND / "theme.css").read_text(encoding="utf-8")
+    assert 'href="/theme.css?v=11"' in admin
+    assert "#adminCostsView" in theme
+    assert 'html[data-theme="light"] #adminCostsView' in theme
+    assert "--cost-warning-text:#754100" in theme
+    assert "--cost-ok-text:#075b42" in theme
+    assert "font-size:12px" in theme
 
 
 def test_checkout_names_contact_inbox_and_mobile_plan_navigation_are_wired():
