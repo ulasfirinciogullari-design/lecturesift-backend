@@ -521,7 +521,7 @@ def test_invoice_cost_records_are_admin_only_idempotent_and_deletable(monkeypatc
     monkeypatch.setattr(config, "ADMIN_ADMIN", "actual-cost-secret")
     monkeypatch.setattr(costs, "_fx_rate", lambda: (40.0, "test rate"))
     client = TestClient(app)
-    today = date.today()
+    today = datetime.now(timezone.utc).astimezone(costs._BUSINESS_TIMEZONE).date()
     provider = f"test_{uuid.uuid4().hex[:12]}"
     payload = {
         "provider": provider,
