@@ -2083,7 +2083,14 @@ def record_runtime(job_id: str, media_minutes: float, elapsed_seconds: float, si
         return
 
 
-def estimate_eta_seconds(media_minutes: float, size_bytes: int = 0) -> int:
+def estimate_eta_seconds(
+    media_minutes: float,
+    size_bytes: int = 0,
+    *,
+    job_type: str = "study_pack",
+    summary_style: str = "standard",
+    source_kind: str = "media",
+) -> int:
     media_minutes = max(0.1, float(media_minutes or 0.1))
     init_rollout_database()
     with ENGINE.connect() as connection:
@@ -2096,5 +2103,18 @@ def estimate_eta_seconds(media_minutes: float, size_bytes: int = 0) -> int:
     ratios = [float(row.elapsed_seconds) / float(row.media_minutes) for row in rows]
     seconds_per_minute = statistics.median(ratios) if ratios else 30.0
     processing = 45.0 + media_minutes * max(8.0, min(seconds_per_minute, 180.0))
+    type_multiplier = {
+        "audio_export": 0.22,
+        "download_video": 0.12,
+    }.get(str(job_type or "study_pack"), 1.0)
+    source_multiplier = 0.62 if source_kind == "document" else 1.0
+    style_multiplier = {
+        "short": 0.9,
+        "detailed": 1.15,
+        "exam": 1.08,
+        "five_minute": 0.92,
+    }.get(str(summary_style or "standard"), 1.0)
+    processing *= type_multiplier * source_multiplier * style_multiplier
     size_overhead = max(0, int(size_bytes)) / (40 * 1024 * 1024)
-    return max(45, int(round(processing + size_overhead)))
+    minimum = 15 if job_type == "download_video" else 20 if job_type == "audio_export" else 35
+    return max(minimum, int(round(processing + size_overhead)))

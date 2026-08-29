@@ -30,6 +30,12 @@ const EN = {
   readyDetail: "Add a source and choose your settings to see every processing step here.",
   stageReceive: "Receiving video", stageAudio: "Separating audio", stageTranscript: "Transcribing speech", stageVisual: "Scanning visual content",
   stageSlides: "Validating slides", stageStudy: "Structuring the lecture", stageExport: "Preparing files",
+  stageSource: "Receiving the source", stageDocument: "Extracting document text", stageMp3: "Converting audio to MP3", stagePackage: "Packaging the file",
+  detailMedia: "Audio, transcript, visuals, study content, and exports advance in visible stages.",
+  detailDocument: "Document text, study content, and selected exports are prepared in order.",
+  detailMp3: "The source is uploaded, its audio is converted, and the MP3 download is packaged.",
+  detailDownload: "The video is downloaded from its source and prepared as a protected file.",
+  uploadingSource: "Uploading the source", queuedForWorker: "Waiting in the processing queue", publishingResult: "Securing the result files",
   promiseTitle: "One organized result from every source", promiseText: "Choose PDF, Word, or TXT. PDF-only is the default ZIP package.",
   resultEyebrow: "Study pack ready", downloadAll: "Download complete pack", tabSummary: "Summary", tabNotes: "Smart notes", tabTranscript: "Transcript",
   tabSlides: "Slides", tabCards: "Flashcards", tabFiles: "Files", translated: "Translated", original: "Original", errorTitle: "Analysis could not finish",
@@ -69,6 +75,12 @@ const TR = {
   readyDetail: "Kaynağı ekleyip ayarlarını seçtiğinde işlem adımlarını burada canlı göreceksin.",
   stageReceive: "Video alınıyor", stageAudio: "Ses ayrıştırılıyor", stageTranscript: "Konuşma çözümleniyor", stageVisual: "Görsel içerik taranıyor",
   stageSlides: "Slaytlar doğrulanıyor", stageStudy: "Ders yapılandırılıyor", stageExport: "Çıktılar hazırlanıyor",
+  stageSource: "Kaynak alınıyor", stageDocument: "Belge metni çıkarılıyor", stageMp3: "Ses MP3'e dönüştürülüyor", stagePackage: "Dosya paketleniyor",
+  detailMedia: "Ses, transkript, görseller, ders içeriği ve çıktılar ayrı adımlarda ilerler.",
+  detailDocument: "Belge metni, ders içeriği ve seçilen çıktılar sırayla hazırlanır.",
+  detailMp3: "Kaynak yüklenir, sesi dönüştürülür ve MP3 indirmesi paketlenir.",
+  detailDownload: "Video kaynağından indirilir ve korumalı dosya olarak hazırlanır.",
+  uploadingSource: "Kaynak yükleniyor", queuedForWorker: "İşlem sırasında bekliyor", publishingResult: "Sonuç dosyaları güvenceye alınıyor",
   promiseTitle: "Tüm kaynaklardan tek düzenli sonuç", promiseText: "PDF, Word veya TXT seçebilirsin. Varsayılan ZIP yalnızca PDF içerir.",
   resultEyebrow: "Ders paketi hazır", downloadAll: "Tüm paketi indir", tabSummary: "Özet", tabNotes: "Akıllı notlar", tabTranscript: "Transkript",
   tabSlides: "Slaytlar", tabCards: "Bilgi kartları", tabFiles: "Dosyalar", translated: "Çevrilmiş", original: "Orijinal", errorTitle: "İşlem tamamlanamadı",
@@ -181,6 +193,7 @@ let billingToken = localStorage.getItem("lecturesift-billing-token") || "";
 let billingAccount = null, billingCatalog = null;
 let billingCurrency = localStorage.getItem("lecturesift-currency") || "";
 let requestedJobLoaded = false;
+let activeProgressProfile = "";
 
 function stringsFor(language) {
   if (language === "tr") return TR;
@@ -240,8 +253,6 @@ uiLanguage.addEventListener("change", () => {
   if (!latestResult) outputLanguage.value = currentLanguage;
   syncTranslationChoice();
 });
-applyLanguage();
-
 const PLAN_ORDER = ["free", "credit", "lite", "plus", "pro", "max", "business"];
 const PLAN_FALLBACK = {
   free: ["free", 60, 10, 20, ["pdf"], ["short", "standard"], "standard", false],
@@ -511,8 +522,33 @@ function filesFor(role) {
 }
 const DOCUMENT_EXTENSIONS = new Set(["pdf", "docx", "pptx", "txt", "md"]);
 const MEDIA_EXTENSIONS = new Set(["mp4", "mov", "mkv", "webm", "mpeg", "mpg", "m4v"]);
+const PROGRESS_PROFILES = {
+  media: [
+    ["source", "stageSource"], ["audio", "stageAudio"], ["transcription", "stageTranscript"],
+    ["scene_scan", "stageVisual"], ["slide_validation", "stageSlides"], ["study_pack", "stageStudy"], ["exports", "stageExport"],
+  ],
+  document: [["source", "stageSource"], ["document_extraction", "stageDocument"], ["study_pack", "stageStudy"], ["exports", "stageExport"]],
+  audio_export: [["source", "stageSource"], ["audio_extract", "stageMp3"], ["exports", "stagePackage"]],
+  download_video: [["source", "stageSource"], ["worker_download", "url_download"], ["exports", "stagePackage"]],
+};
 function fileExtension(file) { return String(file?.name || "").split(".").pop().toLowerCase(); }
 function isDocumentFile(file) { return DOCUMENT_EXTENSIONS.has(fileExtension(file)); }
+function selectedDocumentJob() { return sourceLayout === "classic" && classicVideos.length > 0 && classicVideos.every(isDocumentFile); }
+function progressProfileFor(job = null) {
+  const type = job?.options?.job_type || jobType.value;
+  if (type === "audio_export" || type === "download_video") return type;
+  const documentJob = String(job?.source_type || "").startsWith("document") || job?.source_layout === "documents" || (!job && selectedDocumentJob());
+  return documentJob ? "document" : "media";
+}
+function configureProgressProfile(job = null, force = false) {
+  const profile = progressProfileFor(job), signature = `${profile}:${currentLanguage}`;
+  if (!force && activeProgressProfile === signature) return profile;
+  activeProgressProfile = signature;
+  $("stageList").innerHTML = PROGRESS_PROFILES[profile].map(([stage, label]) =>
+    `<li data-stage="${stage}"><i></i><span>${escapeHtml(t(label))}</span><b>--</b></li>`
+  ).join("");
+  return profile;
+}
 function addFiles(role, incoming) {
   const current = filesFor(role), known = new Set(current.map(file => `${file.name}:${file.size}:${file.lastModified}`));
   for (const file of incoming) {
@@ -527,6 +563,7 @@ function addFiles(role, incoming) {
     if (!known.has(key)) { current.push(file); known.add(key); }
   }
   renderFileList(role);
+  configureProgressProfile(null, true);
 }
 function renderFileList(role) {
   const files = filesFor(role), list = $(`${role}FileList`);
@@ -595,9 +632,10 @@ function updateOperationUI() {
   if (type === "audio_export") setSourceLayout("classic");
   if (type === "download_video") setSourceMode("link");
   $("analyzeButton").querySelector("span").textContent = type === "audio_export" ? t("audioExportOption") : type === "download_video" ? t("downloadVideoOption") : t("analyze");
+  configureProgressProfile(null, true);
 }
 jobType.addEventListener("change", updateOperationUI);
-syncTranslationChoice(); updateOperationUI();
+applyLanguage();
 
 function startTimer() {
   timerStarted = Date.now(); clearInterval(timerHandle);
@@ -610,26 +648,48 @@ function updateProgress(percent, label, detail = "") {
   $("progressPercent").textContent = `${value}%`; $("progressRing").style.setProperty("--progress", `${value * 3.6}deg`);
   $("currentStage").textContent = label; $("stageDetail").textContent = detail || t("processing");
 }
+function jobPhaseLabel(job, profile) {
+  const labels = {
+    queued: "queuedForWorker", queued_worker: "queuedForWorker", worker_download: "url_download",
+    worker_publish: "publishingResult", document_extraction: "stageDocument", audio_extract: "stageMp3",
+    transcription: "stageTranscript", transcript_translation: "stageTranscript", parallel_analysis: profile === "document" ? "stageDocument" : "processing",
+    study_pack: "study_pack", exports: "exports", done: "done",
+  };
+  return t(labels[job.stage] || job.stage || "processing");
+}
+function profileDetail(profile) {
+  return t({media:"detailMedia", document:"detailDocument", audio_export:"detailMp3", download_video:"detailDownload"}[profile]);
+}
 function updateJobView(job) {
+  const profile = configureProgressProfile(job);
   $("processTitle").textContent = job.status === "done" ? t("done") : t("processing");
-  updateProgress(job.percent, t(job.stage) || t("processing"), t("parallel_analysis"));
-  resetStages(); setItemState("url_download", "done");
-  const documentJob = String(job.source_type || "").startsWith("document") || job.source_layout === "documents";
+  updateProgress(job.percent, jobPhaseLabel(job, profile), profileDetail(profile));
+  resetStages();
+  if (Number(job.percent || 0) >= 8 || ["working", "processing", "done"].includes(job.status)) setItemState("source", "done");
+  else setItemState("source", "active");
+  if (profile === "document") {
+    if (job.percent >= 62) setItemState("document_extraction", "done");
+    else if (job.percent >= 8) setItemState("document_extraction", "active");
+    if (job.percent >= 90) { setItemState("study_pack", "done"); setItemState("exports", job.status === "done" ? "done" : "active"); }
+    else if (job.percent >= 62) setItemState("study_pack", "active");
+  } else if (profile === "audio_export") {
+    if (job.status === "done") { setItemState("audio_extract", "done"); setItemState("exports", "done"); }
+    else if (job.stage === "exports") { setItemState("audio_extract", "done"); setItemState("exports", "active"); }
+    else if (job.percent >= 35) setItemState("audio_extract", "active");
+  } else if (profile === "download_video") {
+    if (["worker_publish", "exports", "done"].includes(job.stage) || job.status === "done") { setItemState("worker_download", "done"); setItemState("exports", job.status === "done" ? "done" : "active"); }
+    else setItemState("worker_download", "active");
+  } else {
   const audio = job.tasks?.audio?.percent || 0, visual = job.tasks?.visual?.percent || 0;
-  if (documentJob) {
-    setItemState("audio", "done"); setItemState("transcription", "done");
-    setItemState("scene_scan", "done"); setItemState("slide_validation", "done");
-  }
-  else if (audio >= 100) { setItemState("audio", "done"); setItemState("transcription", "done"); }
+  if (audio >= 100) { setItemState("audio", "done"); setItemState("transcription", "done"); }
   else if (audio >= 35) { setItemState("audio", "done"); setItemState("transcription", "active"); }
   else if (job.status === "working") setItemState("audio", "active");
-  if (!documentJob) {
-    if (visual >= 100) { setItemState("scene_scan", "done"); setItemState("slide_validation", "done"); }
-    else if (visual >= 55) { setItemState("scene_scan", "done"); setItemState("slide_validation", "active"); }
-    else if (job.status === "working") setItemState("scene_scan", "active");
-  }
+  if (visual >= 100) { setItemState("scene_scan", "done"); setItemState("slide_validation", "done"); }
+  else if (visual >= 55) { setItemState("scene_scan", "done"); setItemState("slide_validation", "active"); }
+  else if (job.status === "working") setItemState("scene_scan", "active");
   if (job.percent >= 90) { setItemState("study_pack", "done"); setItemState("exports", job.status === "done" ? "done" : "active"); }
   else if (job.percent >= 70) setItemState("study_pack", "active");
+  }
   if (job.status === "done") document.querySelectorAll(".stage-list li").forEach(item => { item.className = "done"; item.querySelector("b").textContent = "OK"; });
 }
 
@@ -676,8 +736,9 @@ $("analyzeButton").onclick = async () => {
   }
   if (documentUpload && jobType.value !== "study_pack") { showError("Belge kaynakları çalışma paketi işleminde kullanılabilir.", "LS-UPLOAD-05"); return; }
   if (sourceMode === "link" && !videoUrl.value.trim()) { showError(TR.urlLabel, "LS-URL-01"); return; }
-  $("analyzeButton").disabled = true; $("results").hidden = true; latestResult = null; jobId = null; resetStages(); startTimer();
-  updateProgress(2, sourceMode === "link" ? t("url_download") : t("processing"));
+  $("analyzeButton").disabled = true; $("results").hidden = true; latestResult = null; jobId = null; configureProgressProfile(null, true); resetStages(); startTimer();
+  setItemState("source", "active");
+  updateProgress(2, sourceMode === "link" ? t("url_download") : t("uploadingSource"), profileDetail(progressProfileFor()));
   const data = formData();
   if (sourceMode === "link") {
     data.append("video_url", videoUrl.value.trim());
@@ -697,7 +758,7 @@ $("analyzeButton").onclick = async () => {
   }
   const request = new XMLHttpRequest(); request.open("POST", `${API}/jobs`);
   request.setRequestHeader("Authorization", `Bearer ${billingToken}`);
-  request.upload.onprogress = event => { if (event.lengthComputable) updateProgress(Math.min(7, event.loaded / event.total * 7), t("processing")); };
+  request.upload.onprogress = event => { if (event.lengthComputable) updateProgress(Math.min(7, event.loaded / event.total * 7), t("uploadingSource"), profileDetail(progressProfileFor())); };
   request.onload = async () => {
     if (request.status < 300) {
       jobId = JSON.parse(request.responseText).job_id;

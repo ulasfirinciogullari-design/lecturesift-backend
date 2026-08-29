@@ -68,6 +68,39 @@ def test_long_study_pack_processes_every_section_before_final_synthesis(monkeypa
     assert result["title"] == "ORDERED SECTION DIGESTS"
 
 
+def test_detailed_study_pack_splits_content_and_exercises_then_merges(monkeypatch):
+    calls = []
+
+    def fake(source, output_language, summary_style, quiz_count, flashcard_count, **kwargs):
+        calls.append((summary_style, quiz_count, flashcard_count, kwargs))
+        pack = _pack("content" if quiz_count == 0 else "exercises")
+        if quiz_count == 0:
+            pack["summary"] = "Complete detailed explanation."
+            pack["notes"] = [{"heading": "Deep note", "content": "All concepts", "bullets": []}]
+        else:
+            pack["quiz"] = [{"question": f"Q{index}"} for index in range(quiz_count)]
+            pack["flashcards"] = [
+                {"front": f"Concept {index}?", "back": f"Answer {index}"}
+                for index in range(flashcard_count)
+            ]
+        return pack
+
+    monkeypatch.setattr(ai, "_request_study_pack", fake)
+    result = ai.make_study_pack("Detailed source " * 100, "en", "detailed", 20, 40)
+
+    assert len(calls) == 2
+    assert {(quiz, cards) for _, quiz, cards, _ in calls} == {(0, 0), (20, 40)}
+    assert result["summary"] == "Complete detailed explanation."
+    assert result["notes"][0]["heading"] == "Deep note"
+    assert len(result["quiz"]) == 20
+    assert len(result["flashcards"]) == 40
+    assert max(call[3]["max_tokens"] for call in calls) >= 8500
+
+
+def test_zero_requested_flashcards_stays_empty():
+    assert ai._normalize_flashcards([{"front": "Term", "back": "Definition"}], "en", 0) == []
+
+
 def test_source_code_does_not_silently_slice_long_transcripts():
     source = ai.__file__
     with open(source, encoding="utf-8") as stream:

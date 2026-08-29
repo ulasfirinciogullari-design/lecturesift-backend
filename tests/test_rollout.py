@@ -609,6 +609,19 @@ def test_eta_learns_from_completed_jobs():
     assert 150 <= learned <= 350
 
 
+def test_eta_accounts_for_job_type_source_and_detailed_profile():
+    standard = rollout_service.estimate_eta_seconds(20, 0)
+    detailed = rollout_service.estimate_eta_seconds(20, 0, summary_style="detailed")
+    document = rollout_service.estimate_eta_seconds(20, 0, source_kind="document")
+    mp3 = rollout_service.estimate_eta_seconds(20, 0, job_type="audio_export")
+    download = rollout_service.estimate_eta_seconds(20, 0, job_type="download_video")
+
+    assert detailed > standard
+    assert document < standard
+    assert mp3 < document
+    assert download <= mp3
+
+
 def test_job_store_persists_and_reloads(tmp_path, monkeypatch):
     monkeypatch.setattr(jobs_module, "WORK_DIR", tmp_path)
     monkeypatch.setattr(jobs_module, "REDIS_URL", "")
