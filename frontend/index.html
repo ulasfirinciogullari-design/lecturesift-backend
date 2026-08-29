@@ -7,8 +7,8 @@
   <meta name="description" content="Video, ses, PDF, Word ve PowerPoint ders kaynaklarını özet, transkript, quiz, bilgi kartı ve indirilebilir çalışma paketine dönüştür.">
   <title>LectureSift - Video, PDF ve Ders Özeti Oluşturucu</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css">
-<link rel="stylesheet" href="/rollout.css?v=8"><link rel="stylesheet" href="/theme.css?v=9"><script src="/theme.js?v=2"></script></head>
+  <link rel="stylesheet" href="./styles.css?v=11">
+<link rel="stylesheet" href="/rollout.css?v=8"><link rel="stylesheet" href="/theme.css?v=10"><script src="/theme.js?v=2"></script></head>
 <body>
   <div class="ambient ambient-one"></div>
   <div class="ambient ambient-two"></div>
@@ -136,12 +136,12 @@
             <option value="audio_export" data-i18n="audioExportOption">Videoyu MP3'e çevir</option>
             <option value="download_video" data-i18n="downloadVideoOption">URL'den video indir</option>
           </select></label>
-          <fieldset id="formatChoices" class="format-choices">
-            <legend data-i18n="outputFormats">Çıktı biçimleri</legend>
+          <div id="formatChoices" class="format-choices" role="group" aria-labelledby="formatChoicesLabel">
+            <span id="formatChoicesLabel" class="format-legend" data-i18n="outputFormats">Çıktı biçimleri</span>
             <label><input id="formatPdf" type="checkbox" value="pdf" checked><span>PDF</span></label>
             <label><input id="formatDocx" type="checkbox" value="docx"><span>Word</span></label>
             <label><input id="formatTxt" type="checkbox" value="txt"><span>TXT</span></label>
-          </fieldset>
+          </div>
         </div>
 
         <div id="studySettings" class="settings-grid">
@@ -261,7 +261,7 @@
   </div>
 
   <script src="./locale-data.js?v=3"></script>
-  <script src="./page-i18n.js?v=5"></script><script src="/i18n.js?v=18"></script><script src="/site-shell.js?v=2"></script>
+  <script src="./page-i18n.js?v=5"></script><script src="/i18n.js?v=18"></script><script src="/site-shell.js?v=3"></script>
   <script src="./app.js?v=15"></script>
   <script src="/rollout.js?v=3"></script>
 </body>

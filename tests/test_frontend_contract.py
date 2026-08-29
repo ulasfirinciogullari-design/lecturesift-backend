@@ -127,7 +127,7 @@ def test_public_navigation_is_consistent_localized_and_session_aware():
     )
     for page in public_pages:
         content = (FRONTEND / page).read_text(encoding="utf-8")
-        assert "/site-shell.js?v=2" in content, page
+        assert "/site-shell.js?v=3" in content, page
         assert "/rollout.css?v=8" in content, page
 
     shell = (FRONTEND / "site-shell.js").read_text(encoding="utf-8")
@@ -151,7 +151,10 @@ def test_public_navigation_is_consistent_localized_and_session_aware():
     assert 'grid-template-areas:"theme language" "navigation navigation"' in rollout
     assert "rebuildInformationNavigation" in shell
     assert 'corporatePages = ["/about.html", "/contact.html"]' in shell
-    assert 'script.src = "/legal-operator.js?v=1"' in shell
+    assert '"Yasal belgeler"' in shell
+    assert '["Gizlilik ve KVKK", "/privacy.html"]' in shell
+    assert '["Mesafeli Satış Sözleşmesi", "/distance-sales.html"]' in shell
+    assert 'script.src = "/legal-operator.js?v=1"' not in shell
 
 
 def test_processing_center_uses_operation_specific_progress_profiles():
@@ -168,7 +171,7 @@ def test_processing_center_uses_operation_specific_progress_profiles():
 def test_every_page_supports_persistent_light_and_dark_themes():
     for page in FRONTEND.glob("*.html"):
         content = page.read_text(encoding="utf-8")
-        assert "/theme.css?v=9" in content, page.name
+        assert "/theme.css?v=10" in content, page.name
         assert "/theme.js?v=2" in content, page.name
         assert "i18n.js?v=18" in content, page.name
         assert "page-i18n.js?v=5" in content, page.name
@@ -187,6 +190,11 @@ def test_every_page_supports_persistent_light_and_dark_themes():
     assert ".skip-link:focus" in style
     assert ":focus-visible" in style
     assert '@media(prefers-reduced-motion:reduce)' in style
+    for surface in (".feature-band", ".campaign-section", ".format-choices", ".account-section-nav"):
+        assert surface in style
+    index = (FRONTEND / "index.html").read_text(encoding="utf-8")
+    assert 'id="formatChoices" class="format-choices" role="group"' in index
+    assert '<fieldset id="formatChoices"' not in index
     assert "lecturesift-theme" in cookies
     assert all(f'data-i18n="theme.{key}"' in cookies for key in ("storageContent", "storagePurpose", "storageControl"))
 
@@ -550,11 +558,12 @@ def test_legal_operator_identity_is_public_only_after_configuration():
     i18n = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
     operator = (FRONTEND / "legal-operator.js").read_text(encoding="utf-8")
     blueprint = (FRONTEND.parent / "render.yaml").read_text(encoding="utf-8")
-    assert 'legalOperatorScript.src = "/legal-operator.js?v=3"' in i18n
+    assert 'legalOperatorScript.src = "/legal-operator.js?v=4"' in i18n
     assert "/billing/operator" in operator
     assert "if (!operator?.configured) return" in operator
     assert '"/distance-sales.html", "/contact.html"' in operator
     assert "if (!showOperatorDetails) return" in operator
+    assert 'card.dataset.legalOperatorLoading === "true"' in operator
     assert all(
         key in blueprint
         for key in (
