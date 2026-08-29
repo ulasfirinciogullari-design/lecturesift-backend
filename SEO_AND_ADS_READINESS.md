@@ -3,7 +3,7 @@
 ## Verified account state (29 August 2026)
 
 - The `lecturesift.com` domain property is verified in Google Search Console.
-- `https://lecturesift.com/sitemap.xml` is successful and Google reports 130 discovered pages. Performance and indexing data are still being processed.
+- `https://lecturesift.com/sitemap.xml` is successful. The current release contains 169 indexable language/page combinations; Search Console may take time to refresh its discovered-page total.
 - The AdSense site is connected, `ads.txt` is authorised, and Auto ads are enabled for consented visitors on selected public pages.
 - One European-regulations consent message is active in AdSense Privacy & Messaging.
 - The current legal payment address has been submitted in Google Payments and is under review. Do not submit the older verified address to AdSense while this review is pending.
@@ -13,9 +13,11 @@
 
 ## Already implemented in the application
 
-- One canonical URL and 13 language alternates for every public page, including the distance-sales contract.
-- A 130-URL sitemap and robots rules that keep account, payment-result, verification, and admin pages out of search.
-- Open Graph, Twitter cards, Organization, WebSite, WebPage, SoftwareApplication, breadcrumb, and eligible FAQ structured data.
+- One canonical URL and 13 reciprocal language alternates for every public page, including the distance-sales contract.
+- A 169-URL sitemap and robots rules that keep account, payment-result, verification, and admin pages out of search.
+- Search-visible content is prerendered in all 13 languages instead of depending on client-side translation.
+- Open Graph, Twitter cards, Organization, WebSite, WebPage, SoftwareApplication, Article, breadcrumb, and eligible FAQ structured data.
+- The production build fails automatically when a generated language page is missing its title, description, canonical URL, H1, language alternates, or valid JSON-LD.
 - Search previews are blocked from indexing; the production domain is indexable.
 - Analytics and advertising code is consent-gated.
 - Google Analytics 4 loads only after analytics consent, limits automatic page views to public pages, and disables advertising signals. Token-bearing verification and password-reset pages are excluded.
