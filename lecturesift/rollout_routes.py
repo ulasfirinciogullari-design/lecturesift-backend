@@ -6,13 +6,14 @@ import hashlib
 import hmac
 import re
 import unicodedata
+from datetime import date
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from . import config
 from .billing_service import BillingAuthenticationError, BillingConfigurationError, BillingError, authenticate_session
-from .costs import cost_overview
+from .costs import cost_overview, delete_actual_cost, save_actual_cost
 from .jobs import JOBS
 from .mailer import EmailDeliveryError
 from .queue import worker_health
@@ -154,6 +155,18 @@ class AdminBulkUserRequest(BaseModel):
     plan_code: str = "free"
     interval: str = "monthly"
     duration_days: int = 30
+
+
+class AdminActualCostRequest(BaseModel):
+    provider: str
+    service: str
+    period_start: date
+    period_end: date
+    currency: str
+    subtotal_minor: int
+    tax_minor: int = 0
+    label: str
+    source_reference: str
 
 
 def _user(authorization: str | None = Header(None)) -> dict:
@@ -706,6 +719,31 @@ def admin_costs(
 ) -> dict:
     del admin
     return {"ok": True, **cost_overview(days=days, limit=limit)}
+
+
+@router.post("/billing/admin/costs/actuals")
+def admin_save_actual_cost(
+    payload: AdminActualCostRequest,
+    admin: dict = Depends(_admin),
+) -> dict:
+    del admin
+    try:
+        values = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+        result = save_actual_cost(**values)
+    except ValueError as exc:
+        raise HTTPException(400, detail={"code": "LS-COST-01", "message": str(exc)}) from exc
+    return {"ok": True, **result, "message": "Fatura/mutabakat gideri kaydedildi."}
+
+
+@router.delete("/billing/admin/costs/actuals/{actual_id}")
+def admin_delete_actual_cost(
+    actual_id: str,
+    admin: dict = Depends(_admin),
+) -> dict:
+    del admin
+    if not delete_actual_cost(actual_id):
+        raise HTTPException(404, detail={"code": "LS-COST-02", "message": "Gider kaydı bulunamadı."})
+    return {"ok": True, "message": "Fatura/mutabakat gideri silindi."}
 
 
 @router.get("/billing/admin/contact-messages")

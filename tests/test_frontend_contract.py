@@ -487,6 +487,27 @@ def test_admin_large_dataset_controls_and_compact_account_tabs_are_wired():
     assert '@router.post("/billing/admin/users/bulk-action")' in rollout
 
 
+def test_admin_cost_reconciliation_controls_are_wired():
+    admin = (FRONTEND / "admin.html").read_text(encoding="utf-8")
+    admin_script = (FRONTEND / "admin.js").read_text(encoding="utf-8")
+    rollout = (FRONTEND.parent / "lecturesift" / "rollout_routes.py").read_text(encoding="utf-8")
+    assert all(
+        value in admin
+        for value in (
+            "adminCostAccuracy",
+            "adminCostEconomics",
+            "adminResourceCosts",
+            "adminActualCostForm",
+            "adminActualCosts",
+        )
+    )
+    assert "saveAdminActualCost" in admin_script
+    assert "deleteAdminActualCost" in admin_script
+    assert "Number(item.total_minor || 0) / 100" in admin_script
+    assert '@router.post("/billing/admin/costs/actuals")' in rollout
+    assert '@router.delete("/billing/admin/costs/actuals/{actual_id}")' in rollout
+
+
 def test_checkout_names_contact_inbox_and_mobile_plan_navigation_are_wired():
     plans_html = (FRONTEND / "plans.html").read_text(encoding="utf-8")
     plans_js = (FRONTEND / "plans.js").read_text(encoding="utf-8")

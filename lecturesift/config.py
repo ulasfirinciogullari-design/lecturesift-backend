@@ -157,13 +157,32 @@ RECOVERY_DRILL_CONFIRMED = os.getenv(
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".webm", ".mpeg", ".mpg", ".m4v"}
 DOCUMENT_EXTENSIONS = {".pdf", ".docx", ".pptx", ".txt", ".md", ".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff"}
 
-# Cost rates are estimates used for operational visibility, never substitutes
-# for provider invoices. Every value can be overridden without a code deploy.
-COST_USD_TRY_FALLBACK = float(os.getenv("LECTURESIFT_COST_USD_TRY_FALLBACK", "42"))
-COST_RENDER_MONTHLY_USD = float(os.getenv("LECTURESIFT_COST_RENDER_MONTHLY_USD", "0"))
-COST_NETLIFY_MONTHLY_USD = float(os.getenv("LECTURESIFT_COST_NETLIFY_MONTHLY_USD", "20"))
-COST_RESEND_MONTHLY_USD = float(os.getenv("LECTURESIFT_COST_RESEND_MONTHLY_USD", "0"))
-COST_OTHER_MONTHLY_USD = float(os.getenv("LECTURESIFT_COST_OTHER_MONTHLY_USD", "0"))
+# Cost inputs are deliberately separated from invoice confirmation. A numeric
+# value is a planning input; it becomes a verified fixed expense only when the
+# matching *_CONFIRMED flag is true. This prevents a missing value or an old
+# plan price from being presented as an exact accounting total.
+def _cost_float(name: str, default: str = "0") -> float:
+    try:
+        return max(0.0, float(os.getenv(name, default)))
+    except (TypeError, ValueError):
+        return max(0.0, float(default))
+
+
+def _cost_confirmed(name: str, default: str = "false") -> bool:
+    return os.getenv(name, default).strip().lower() == "true"
+
+
+COST_USD_TRY_FALLBACK = _cost_float("LECTURESIFT_COST_USD_TRY_FALLBACK", "42")
+COST_RENDER_MONTHLY_USD = _cost_float("LECTURESIFT_COST_RENDER_MONTHLY_USD")
+COST_RENDER_CONFIRMED = _cost_confirmed("LECTURESIFT_COST_RENDER_CONFIRMED")
+COST_NETLIFY_MONTHLY_USD = _cost_float("LECTURESIFT_COST_NETLIFY_MONTHLY_USD", "20")
+COST_NETLIFY_CONFIRMED = _cost_confirmed("LECTURESIFT_COST_NETLIFY_CONFIRMED")
+COST_RESEND_MONTHLY_USD = _cost_float("LECTURESIFT_COST_RESEND_MONTHLY_USD")
+COST_RESEND_CONFIRMED = _cost_confirmed("LECTURESIFT_COST_RESEND_CONFIRMED")
+COST_DOMAIN_ANNUAL_USD = _cost_float("LECTURESIFT_COST_DOMAIN_ANNUAL_USD")
+COST_DOMAIN_CONFIRMED = _cost_confirmed("LECTURESIFT_COST_DOMAIN_CONFIRMED")
+COST_OTHER_MONTHLY_USD = _cost_float("LECTURESIFT_COST_OTHER_MONTHLY_USD")
+COST_OTHER_CONFIRMED = _cost_confirmed("LECTURESIFT_COST_OTHER_CONFIRMED")
 
 LANGUAGE_NAMES = {
     "tr": "Turkish",

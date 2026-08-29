@@ -5,6 +5,7 @@ import shutil
 import threading
 import time
 import uuid
+from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -480,3 +481,69 @@ def test_admin_cost_endpoint_is_protected_and_separates_external_invoices(monkey
         "Cloudflare R2",
     }
     assert "kesin kaynaktır" in body["disclaimer"]
+    assert body["accuracy"]["required_provider_days"] == len(body["accuracy"]["active_providers"]) * 30
+    assert "by_resource" in body and "unit_economics" in body and "actual_costs" in body
+
+
+def test_invoice_cost_records_are_admin_only_idempotent_and_deletable(monkeypatch):
+    install_rollout_routes(app)
+    monkeypatch.setattr(config, "ADMIN_ADMIN", "actual-cost-secret")
+    monkeypatch.setattr(costs, "_fx_rate", lambda: (40.0, "test rate"))
+    client = TestClient(app)
+    today = date.today()
+    provider = f"test_{uuid.uuid4().hex[:12]}"
+    payload = {
+        "provider": provider,
+        "service": "monthly_invoice",
+        "period_start": today.isoformat(),
+        "period_end": today.isoformat(),
+        "currency": "TRY",
+        "subtotal_minor": 10000,
+        "tax_minor": 2000,
+        "label": "Test faturası",
+        "source_reference": f"INV-{uuid.uuid4().hex[:8]}",
+    }
+    assert client.post("/billing/admin/costs/actuals", json=payload).status_code == 401
+    headers = {"Authorization": "Bearer actual-cost-secret"}
+    created = client.post("/billing/admin/costs/actuals", json=payload, headers=headers)
+    assert created.status_code == 200, created.text
+    actual_id = created.json()["id"]
+    try:
+        payload["tax_minor"] = 2500
+        updated = client.post("/billing/admin/costs/actuals", json=payload, headers=headers)
+        assert updated.status_code == 200
+        assert updated.json() == {
+            "ok": True,
+            "id": actual_id,
+            "updated": True,
+            "message": "Fatura/mutabakat gideri kaydedildi.",
+        }
+        overview = client.get("/billing/admin/costs?days=1", headers=headers).json()
+        saved = next(item for item in overview["actual_costs"] if item["id"] == actual_id)
+        assert saved["total_minor"] == 12500
+        assert saved["total_usd"] == 3.125
+        assert {item["currency"]: item["total_minor"] for item in overview["actual_by_currency"]}["TRY"] >= 12500
+    finally:
+        deleted = client.delete(f"/billing/admin/costs/actuals/{actual_id}", headers=headers)
+        assert deleted.status_code == 200
+    assert client.delete(f"/billing/admin/costs/actuals/{actual_id}", headers=headers).status_code == 404
+
+
+def test_invoice_coverage_merges_overlaps_without_double_counting():
+    start = date(2026, 8, 1)
+    end = date(2026, 8, 10)
+    rows = [
+        {"provider": "render", "period_start": "2026-07-25", "period_end": "2026-08-03"},
+        {"provider": "render", "period_start": "2026-08-03", "period_end": "2026-08-07"},
+        {"provider": "render", "period_start": "2026-08-09", "period_end": "2026-08-20"},
+        {"provider": "netlify", "period_start": "2026-08-01", "period_end": "2026-08-10"},
+    ]
+    assert costs._covered_days(rows, "render", start, end) == 9
+    assert costs._covered_days(rows, "netlify", start, end) == 10
+    assert costs._covered_days(rows, "resend", start, end) == 0
+
+
+def test_fixed_cost_confirmation_keys_match_render_configuration():
+    services = {item["provider"]: item for item in costs._fixed_services()}
+    assert services["domain"]["confirmation_key"] == "LECTURESIFT_COST_DOMAIN_CONFIRMED"
+    assert services["render"]["confirmation_key"] == "LECTURESIFT_COST_RENDER_CONFIRMED"

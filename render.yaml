@@ -50,12 +50,24 @@ services:
         value: "400"
       - key: LECTURESIFT_COST_RENDER_MONTHLY_USD
         sync: false
+      - key: LECTURESIFT_COST_RENDER_CONFIRMED
+        value: "false"
       - key: LECTURESIFT_COST_NETLIFY_MONTHLY_USD
         value: "20"
+      - key: LECTURESIFT_COST_NETLIFY_CONFIRMED
+        value: "false"
       - key: LECTURESIFT_COST_RESEND_MONTHLY_USD
         value: "0"
+      - key: LECTURESIFT_COST_RESEND_CONFIRMED
+        value: "false"
+      - key: LECTURESIFT_COST_DOMAIN_ANNUAL_USD
+        sync: false
+      - key: LECTURESIFT_COST_DOMAIN_CONFIRMED
+        value: "false"
       - key: LECTURESIFT_COST_OTHER_MONTHLY_USD
         value: "0"
+      - key: LECTURESIFT_COST_OTHER_CONFIRMED
+        value: "false"
       - key: LECTURESIFT_COST_USD_TRY_FALLBACK
         value: "42"
       - key: INSTAGRAM_ACCESS_TOKEN
