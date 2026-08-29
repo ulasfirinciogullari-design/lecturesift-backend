@@ -121,6 +121,7 @@ def test_audio_chunks_transcribe_concurrently_but_keep_timeline_order(tmp_path, 
 def test_study_pack_and_transcript_translation_run_concurrently(monkeypatch):
     gate = threading.Barrier(2, timeout=3)
     completed: list[str] = []
+    progress: list[int] = []
 
     def fake_study(*_args):
         gate.wait()
@@ -136,6 +137,11 @@ def test_study_pack_and_transcript_translation_run_concurrently(monkeypatch):
 
     monkeypatch.setattr(pipeline, "make_study_pack", fake_study)
     monkeypatch.setattr(pipeline, "translate_transcript", fake_translation)
+    monkeypatch.setattr(
+        pipeline,
+        "JOBS",
+        type("ProgressRecorder", (), {"update": staticmethod(lambda _job_id, **values: progress.append(values["percent"]))})(),
+    )
     pack, translated = pipeline._build_text_outputs(
         "parallel-job",
         "Original transcript",
@@ -151,6 +157,7 @@ def test_study_pack_and_transcript_translation_run_concurrently(monkeypatch):
     assert pack["title"] == "Parallel pack"
     assert translated == "Translated transcript"
     assert sorted(completed) == ["study", "translation"]
+    assert progress == [80, 89]
 
 
 def test_explicit_same_language_skips_redundant_full_translation(monkeypatch):
