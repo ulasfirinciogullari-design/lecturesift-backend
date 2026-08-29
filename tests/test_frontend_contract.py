@@ -173,7 +173,7 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         content = page.read_text(encoding="utf-8")
         assert "/theme.css?v=11" in content, page.name
         assert "/theme.js?v=2" in content, page.name
-        assert "i18n.js?v=20" in content, page.name
+        assert "i18n.js?v=21" in content, page.name
         assert "page-i18n.js?v=6" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
@@ -351,7 +351,7 @@ def test_dynamic_plan_descriptions_are_localized_and_account_uses_plan_label():
     assert '$("accountPlan").textContent = planLabel(account.plan.code);' in plans
 
 
-def test_profile_admin_bank_and_full_comparison_interfaces_are_present():
+def test_profile_admin_automatic_payment_and_full_comparison_interfaces_are_present():
     account = (FRONTEND / "account.html").read_text(encoding="utf-8")
     auth = (FRONTEND / "auth.js").read_text(encoding="utf-8")
     plans = (FRONTEND / "plans.html").read_text(encoding="utf-8")
@@ -359,12 +359,13 @@ def test_profile_admin_bank_and_full_comparison_interfaces_are_present():
     admin = (FRONTEND / "admin.html").read_text(encoding="utf-8")
     admin_script = (FRONTEND / "admin.js").read_text(encoding="utf-8")
     workspace_script = (FRONTEND / "app.js").read_text(encoding="utf-8")
+    rollout_script = (FRONTEND / "rollout.js").read_text(encoding="utf-8")
     assert all(
         value in account
         for value in (
             "profileForm",
             "passwordForm",
-            "accountBankHolder",
+            "ordersList",
             "exportDataButton",
             "closeAccountForm",
         )
@@ -374,9 +375,14 @@ def test_profile_admin_bank_and_full_comparison_interfaces_are_present():
     assert "/jobs?limit=30" in auth and "jobHistory" in account
     assert "/billing/me/export" in auth and "/billing/me/close-account" in auth
     assert 'href="/admin.html"' not in account
-    assert all(value in plans for value in ("compareHead", "compareBody", "publicBankHolder"))
-    assert "renderCompare" in plan_script and "/billing/manual-transfer" in plan_script
-    assert 'payment.sendReceiptTo' in plan_script
+    assert all(value in plans for value in ("compareHead", "compareBody", "bankAvailability", "checkoutBankButton"))
+    assert "renderCompare" in plan_script and 'startHostedCheckout("bank_transfer")' in plan_script
+    assert "/billing/checkout" in plan_script
+    assert "/billing/manual-transfer" not in plan_script
+    assert "publicBankIban" not in plans and "transferPanel" not in plans
+    assert "/billing/manual-transfer" not in auth
+    assert "/billing/manual-transfer" not in workspace_script
+    assert "/billing/manual-transfer" not in rollout_script
     assert 'code !== "test" || currency === "TRY"' in plan_script
     assert "adminTokenForm" in admin and "adminOrders" in admin
     assert "ADMIN_ADMIN" in admin
@@ -766,8 +772,8 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=19"' in index
-    assert 'src="/rollout.js?v=4"' in index
+    assert 'src="./app.js?v=20"' in index
+    assert 'src="/rollout.js?v=5"' in index
     assert '$("plans").scrollIntoView' not in app
 
 

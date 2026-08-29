@@ -238,7 +238,7 @@
     return rt(`plan.${code}`, names[code] || code);
   }
 
-  async function createLocalizedTransferOrder(planCode, interval) {
+  function openLocalizedCheckout(planCode, interval) {
     const token = activeToken();
     const guest = typeof billingAccount !== "undefined" && billingAccount?.plan?.code === "guest";
     if (!token || guest) {
@@ -246,20 +246,8 @@
       showInlineMessage(rt("rollout.loginToBuy", "Plan satın almak için doğrulanmış hesabınla giriş yap."), true);
       return;
     }
-    try {
-      const body = await api("/billing/manual-transfer/orders", {
-        method:"POST", body:JSON.stringify({plan_code:planCode, interval}),
-      }, token);
-      const order = body.order;
-      if ($("transferReference")) $("transferReference").textContent = order.reference;
-      if ($("transferAmount")) $("transferAmount").textContent = formatCurrency(order.amount_minor, order.currency || "TRY");
-      if ($("transferIban")) $("transferIban").textContent = String(order.bank.iban || "").replace(/(.{4})/g, "$1 ").trim();
-      if ($("transferHolder")) $("transferHolder").textContent = order.bank.account_holder || "";
-      if ($("transferInstruction")) $("transferInstruction").textContent = `${order.instruction} ${rt("rollout.orderNumber", "Sipariş numaran")}: ${order.reference}`;
-      if ($("transferStatus")) $("transferStatus").textContent = rt("rollout.transferPending", "Havale/EFT onayı bekliyor");
-      if ($("transferSupport")) $("transferSupport").href = `mailto:${encodeURIComponent(order.support_email)}?subject=${encodeURIComponent(`LectureSift ${order.reference}`)}`;
-      if ($("transferPanel")) { $("transferPanel").hidden = false; $("transferPanel").scrollIntoView({behavior:"smooth", block:"center"}); }
-    } catch (error) { showInlineMessage(error.message, true); }
+    const query = new URLSearchParams({plan: planCode, interval});
+    location.href = `/plans.html?${query}`;
   }
 
   function workspacePlanCard(plan, currency, currentCode) {
@@ -292,7 +280,7 @@
     if (!document.querySelector("#plans .rollout-guest-note")) {
       const note = document.createElement("p");
       note.className = "rollout-guest-note";
-      note.textContent = rt("rollout.pricingNote", "Fiyatlar seçilen para biriminde gösterilir. Havale/EFT siparişi, oluşturulduğunda ekranda görünen kesin TRY tutarıyla ödenir; açıklamaya sipariş numarası yazılır.");
+      note.textContent = rt("rollout.pricingNote", "Fiyatlar seçilen para biriminde gösterilir. Kart ve Havale/EFT iyzico’nun güvenli sayfasında tamamlanır; eşleşen ödeme otomatik etkinleştirilir.");
       grid.insertAdjacentElement("beforebegin", note);
     }
     async function load() {
@@ -303,7 +291,7 @@
         const currentCode = typeof billingAccount !== "undefined" ? billingAccount?.plan?.code : "";
         grid.innerHTML = (body.plans || []).map(plan => workspacePlanCard(plan, currency, currentCode)).join("");
         grid.querySelectorAll("[data-rollout-plan]").forEach(button => {
-          button.onclick = () => createLocalizedTransferOrder(button.dataset.rolloutPlan, button.dataset.rolloutCycle);
+          button.onclick = () => openLocalizedCheckout(button.dataset.rolloutPlan, button.dataset.rolloutCycle);
         });
       } catch (error) { showInlineMessage(error.message, true); }
     }

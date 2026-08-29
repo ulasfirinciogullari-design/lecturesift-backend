@@ -47,7 +47,7 @@ const EN = {
   errorFallback: "The request could not be completed. Check the video or link and try again.",
   plansNav: "Plans", login: "Sign in", register: "Create account", logout: "Sign out",
   plansEyebrow: "Transparent usage plans", plansTitle: "Process what you need and upgrade anytime.",
-  plansSubtitle: "Bank transfers activate after payment review. Cards and automatic renewal will be added when PayTR is ready.",
+  plansSubtitle: "Cards and bank transfers are completed on iyzico's secure page; matched payments activate automatically.",
   accountTitle: "Create an account or sign in", accountHelp: "Your plan, minutes, and payments are linked to this account.",
   remainingMinutes: "Processing minutes remaining", transferEyebrow: "Bank transfer details", transferTitle: "Your order is ready",
   orderReference: "Order reference", amount: "Amount", accountHolder: "Account holder", sendReceipt: "Email the receipt",
@@ -92,7 +92,7 @@ const TR = {
   errorFallback: "İşlem tamamlanamadı. Videoyu veya bağlantıyı kontrol edip yeniden deneyebilirsin.",
   plansNav: "Planlar", login: "Giriş", register: "Hesap oluştur", logout: "Çıkış",
   plansEyebrow: "Şeffaf kullanım planları", plansTitle: "İhtiyacın kadar işle, istediğin zaman yükselt.",
-  plansSubtitle: "Havale ödemeleri ödeme kontrolünden sonra etkinleştirilir. PayTR açıldığında kart ve otomatik yenileme eklenecek.",
+  plansSubtitle: "Kart ve Havale/EFT, iyzico’nun güvenli sayfasında tamamlanır; eşleşen ödeme otomatik etkinleştirilir.",
   accountTitle: "Hesabını oluştur veya giriş yap", accountHelp: "Planın, dakikaların ve ödemelerin bu hesaba bağlanır.",
   remainingMinutes: "Kalan işlem dakikası", transferEyebrow: "Havale bilgileri", transferTitle: "Siparişin oluşturuldu",
   orderReference: "Sipariş referansı", amount: "Tutar", accountHolder: "Hesap sahibi", sendReceipt: "Dekontu e-postayla gönder",
@@ -448,27 +448,15 @@ function renderPlans() {
       <button class="plan-action" type="button" data-plan="${escapeHtml(code)}" ${current || code === "free" || code === "business" ? "disabled" : ""}>${escapeHtml(buttonLabel)}</button>
     </article>`;
   }).join("");
-  document.querySelectorAll(".plan-action[data-plan]").forEach(button => button.onclick = () => createTransferOrder(button.dataset.plan));
+  document.querySelectorAll(".plan-action[data-plan]").forEach(button => button.onclick = () => openPlanCheckout(button.dataset.plan));
 }
 
-async function createTransferOrder(planCode) {
+function openPlanCheckout(planCode) {
   if (!billingToken) { location.href = `/login.html?next=${encodeURIComponent("/plans.html")}`; return; }
-  if (billingCurrency !== "TRY") { showError(window.LectureSiftI18n?.t("plans.globalPending", "Global kart ödemeleri PayTR etkinleştiğinde açılacak. Şimdilik havale için TRY seçebilirsin.") || "Global kart ödemeleri PayTR etkinleştiğinde açılacak. Şimdilik havale için TRY seçebilirsin.", "LS-BILL-20"); return; }
   const plan = billingCatalog.plans.find(item => item.code === planCode);
   const interval = plan?.kind === "one_time" ? "one_time" : "monthly";
-  try {
-    const body = await billingRequest("/billing/manual-transfer/orders", {method:"POST", body:JSON.stringify({plan_code:planCode, interval})});
-    const order = body.order;
-    $("transferReference").textContent = order.reference;
-    $("transferAmount").textContent = formatPrice(order.amount_minor, order.currency || "TRY");
-    $("transferIban").textContent = order.bank.iban.replace(/(.{4})/g, "$1 ").trim();
-    $("transferHolder").textContent = order.bank.account_holder;
-    $("transferInstruction").textContent = order.instruction;
-    $("transferStatus").textContent = t("pendingApproval");
-    $("transferSupport").href = `mailto:${encodeURIComponent(order.support_email)}?subject=${encodeURIComponent(`LectureSift ${order.reference}`)}`;
-    $("transferPanel").hidden = false;
-    $("transferPanel").scrollIntoView({behavior:"smooth", block:"center"});
-  } catch (error) { showError(error.message, error.code || "LS-BILL-13"); }
+  const query = new URLSearchParams({plan: planCode, interval});
+  location.href = `/plans.html?${query}`;
 }
 
 async function loadBilling() {

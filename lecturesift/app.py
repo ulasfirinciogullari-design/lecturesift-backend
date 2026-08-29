@@ -603,14 +603,25 @@ def billing_health() -> dict:
         database = billing_database_health()
     except BillingConfigurationError as exc:
         raise HTTPException(503, detail={"code": "LS-BILL-00", "message": str(exc)}) from exc
+    iyzico = iyzico_public_status()
+    automatic_bank_transfer = bool(
+        iyzico["configured"]
+        and "bank_transfer" in iyzico["capabilities"]
+        and "TRY" in iyzico["currencies"]
+    )
     return {
         "ok": True,
         "database": database,
         "email_delivery_configured": email_delivery_configured(),
         "payments": {
-            "iyzico": iyzico_public_status(),
+            "iyzico": iyzico,
             "paytr": paytr_public_status(),
-            "bank_transfer": {"configured": manual_transfer_details()["available"]},
+            "bank_transfer": {
+                "configured": automatic_bank_transfer,
+                "provider": "iyzico",
+                "automatic": True,
+                "legacy_manual_configured": manual_transfer_details()["available"],
+            },
         },
         "commerce_identity": commerce_identity(),
     }

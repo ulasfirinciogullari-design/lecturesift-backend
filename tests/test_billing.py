@@ -75,8 +75,21 @@ def test_billing_health_reports_local_database_and_fails_closed_on_render(monkey
     client = TestClient(app)
     response = client.get("/billing/health")
     assert response.status_code == 200
-    assert response.json()["database"]["backend"] == "sqlite"
-    assert response.json()["database"]["persistent"] is False
+    health = response.json()
+    assert health["database"]["backend"] == "sqlite"
+    assert health["database"]["persistent"] is False
+    assert health["payments"]["bank_transfer"] == {
+        "configured": False,
+        "provider": "iyzico",
+        "automatic": True,
+        "legacy_manual_configured": False,
+    }
+
+    monkeypatch.setattr(config, "IYZICO_API_KEY", "live-api-key")
+    monkeypatch.setattr(config, "IYZICO_SECRET_KEY", "live-secret-key")
+    response = client.get("/billing/health")
+    assert response.status_code == 200
+    assert response.json()["payments"]["bank_transfer"]["configured"] is True
 
     monkeypatch.setenv("RENDER", "true")
     response = client.get("/billing/health")

@@ -414,13 +414,6 @@ async function initAccount() {
   try {
     const body = await request("/billing/me", {}, token);
     renderAccount(body.account);
-    const transfer = await request("/billing/manual-transfer");
-    if (transfer.available && transfer.bank) {
-      $("accountBankIban").textContent = transfer.bank.iban.replace(/(.{4})/g, "$1 ").trim();
-      $("accountBankHolder").textContent = transfer.bank.account_holder;
-      $("accountBankName").textContent = transfer.bank.bank_name || "—";
-      $("bankDetails").hidden = false;
-    }
   } catch {
     localStorage.removeItem(TOKEN_KEY);
     location.replace("/login.html?next=/account.html");
