@@ -18,6 +18,12 @@ services:
         value: "false"
       - key: LECTURESIFT_TRANSCRIPTION_PARALLELISM
         value: "3"
+      - key: LECTURESIFT_MEDIA_PREP_PARALLELISM
+        value: "2"
+      - key: LECTURESIFT_SLIDE_ANALYSIS_PARALLELISM
+        value: "2"
+      - key: LECTURESIFT_SLIDE_EXPORT_PARALLELISM
+        value: "2"
       - key: LECTURESIFT_TRANSLATION_PARALLELISM
         value: "3"
       - key: LECTURESIFT_STUDY_PACK_PARALLELISM
@@ -212,6 +218,12 @@ services:
         value: "false"
       - key: LECTURESIFT_TRANSCRIPTION_PARALLELISM
         value: "3"
+      - key: LECTURESIFT_MEDIA_PREP_PARALLELISM
+        value: "2"
+      - key: LECTURESIFT_SLIDE_ANALYSIS_PARALLELISM
+        value: "2"
+      - key: LECTURESIFT_SLIDE_EXPORT_PARALLELISM
+        value: "2"
       - key: LECTURESIFT_TRANSLATION_PARALLELISM
         value: "3"
       - key: LECTURESIFT_STUDY_PACK_PARALLELISM

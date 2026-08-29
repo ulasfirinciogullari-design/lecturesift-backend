@@ -10,6 +10,7 @@ from .billing_service import record_usage
 from .config import (
     APP_VERSION,
     DOCUMENT_EXTENSIONS,
+    MEDIA_PREP_PARALLELISM,
     PRECISE_TRANSCRIPT_TIMESTAMPS,
     TRANSCRIPTION_PARALLELISM,
 )
@@ -75,11 +76,41 @@ def _audio_pipeline(
     job_dir: Path,
     options: dict,
 ) -> tuple[str, str, list[dict], str]:
-    audio_chunks: list[Path] = []
-    for index, video_path in enumerate(video_paths, 1):
-        JOBS.update_task(job_id, "audio", 5 + 18 * (index - 1) / max(1, len(video_paths)), "audio_extract")
-        if has_audio_stream(video_path):
-            audio_chunks.extend(extract_audio_chunks(video_path, job_dir, prefix=f"audio_{index:03d}"))
+    def prepare_audio(index: int, video_path: Path) -> tuple[int, list[Path]]:
+        if not has_audio_stream(video_path):
+            return index, []
+        return index, extract_audio_chunks(video_path, job_dir, prefix=f"audio_{index + 1:03d}")
+
+    prepared: list[list[Path] | None] = [None] * len(video_paths)
+    workers = min(MEDIA_PREP_PARALLELISM, len(video_paths))
+    if workers <= 1:
+        for index, video_path in enumerate(video_paths):
+            prepared[index] = prepare_audio(index, video_path)[1]
+            JOBS.update_task(
+                job_id,
+                "audio",
+                5 + 18 * (index + 1) / max(1, len(video_paths)),
+                "audio_extract",
+            )
+    else:
+        completed_sources = 0
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="lecturesift-audio-prep") as executor:
+            futures = {
+                executor.submit(prepare_audio, index, video_path): index
+                for index, video_path in enumerate(video_paths)
+            }
+            for future in as_completed(futures):
+                index, chunks = future.result()
+                prepared[index] = chunks
+                completed_sources += 1
+                JOBS.update_task(
+                    job_id,
+                    "audio",
+                    5 + 18 * completed_sources / max(1, len(video_paths)),
+                    "audio_extract",
+                )
+
+    audio_chunks = [chunk for source_chunks in prepared if source_chunks for chunk in source_chunks]
 
     if not audio_chunks:
         JOBS.update_task(job_id, "audio", 100, "no_audio")

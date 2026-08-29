@@ -255,6 +255,35 @@ def test_pdf_auto_ocr_uses_bounded_representative_language_samples(tmp_path: Pat
     assert result["documents"][0]["ocr_language"] == "eng+tur"
 
 
+def test_pdf_language_samples_are_detected_concurrently_with_a_bound(tmp_path: Path, monkeypatch):
+    path = tmp_path / "language-samples.pdf"
+    path.write_bytes(b"%PDF-placeholder")
+    state = {"active": 0, "maximum": 0}
+    lock = threading.Lock()
+    gate = threading.Barrier(2, timeout=3)
+
+    def fake_detect(_path, page_index):
+        with lock:
+            state["active"] += 1
+            state["maximum"] = max(state["maximum"], state["active"])
+        if page_index in {0, 4}:
+            gate.wait()
+        time.sleep(0.02)
+        with lock:
+            state["active"] -= 1
+        return f"lang-{page_index}"
+
+    monkeypatch.setattr(document_service, "OCR_PARALLELISM", 2)
+    monkeypatch.setattr(document_service, "_detect_pdf_ocr_language", fake_detect)
+
+    detected = document_service._detect_pdf_ocr_languages(path, list(range(9)))
+
+    assert state["maximum"] == 2
+    assert detected[0] == "lang-0"
+    assert detected[4] == "lang-4"
+    assert detected[8] == "lang-8"
+
+
 def test_ocr_page_budget_applies_across_all_uploaded_documents(tmp_path: Path, monkeypatch):
     paths = []
     for index in range(2):

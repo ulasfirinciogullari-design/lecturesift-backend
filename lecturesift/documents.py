@@ -258,10 +258,20 @@ def _detect_pdf_ocr_languages(path: Path, page_indexes: list[int]) -> dict[int, 
     if not page_indexes:
         return {}
     positions = sorted({0, len(page_indexes) // 2, len(page_indexes) - 1})
-    samples = {
-        page_indexes[position]: _detect_pdf_ocr_language(path, page_indexes[position])
-        for position in positions
-    }
+    sample_pages = [page_indexes[position] for position in positions]
+    workers = min(OCR_PARALLELISM, len(sample_pages))
+    if workers <= 1:
+        samples = {
+            page_index: _detect_pdf_ocr_language(path, page_index)
+            for page_index in sample_pages
+        }
+    else:
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="lecturesift-ocr-language") as executor:
+            futures = {
+                executor.submit(_detect_pdf_ocr_language, path, page_index): page_index
+                for page_index in sample_pages
+            }
+            samples = {futures[future]: future.result() for future in as_completed(futures)}
     return {
         page_index: samples[min(samples, key=lambda sampled: abs(sampled - page_index))]
         for page_index in page_indexes
@@ -306,6 +316,34 @@ def _ocr_pdf_page(path: Path, page_index: int, source_language: str) -> tuple[in
     return page_index, text, language
 
 
+def _extract_pdf_native_pages(path: Path, page_count: int) -> tuple[list[str], str]:
+    """Use PDFium's native text engine, with pypdf as a compatibility fallback."""
+    try:
+        import pypdfium2 as pdfium
+
+        document = pdfium.PdfDocument(str(path))
+        try:
+            if len(document) != page_count:
+                raise ValueError("PDF page count changed between readers")
+            parts: list[str] = []
+            for page_index in range(page_count):
+                page = document[page_index]
+                try:
+                    text_page = page.get_textpage()
+                    try:
+                        parts.append(_normalize_text(text_page.get_text_range() or ""))
+                    finally:
+                        text_page.close()
+                finally:
+                    page.close()
+            return parts, "pdfium"
+        finally:
+            document.close()
+    except Exception:
+        reader = PdfReader(str(path), strict=False)
+        return [_normalize_text(page.extract_text() or "") for page in reader.pages], "pypdf"
+
+
 def _extract_pdf(
     path: Path,
     source_language: str = "auto",
@@ -329,7 +367,8 @@ def _extract_pdf(
                 f"PDF page limit exceeded: {len(reader.pages)}",
                 413,
             )
-        parts = [_normalize_text(page.extract_text() or "") for page in reader.pages]
+        page_count = len(reader.pages)
+        parts, text_engine = _extract_pdf_native_pages(path, page_count)
     except LectureSiftError:
         raise
     except Exception as exc:
@@ -385,6 +424,7 @@ def _extract_pdf(
         "ocr_used": bool(enable_ocr and ocr_indexes),
         "ocr_required": bool(not enable_ocr and ocr_indexes),
         "ocr_language": ocr_language,
+        "text_engine": text_engine,
     }
 
 

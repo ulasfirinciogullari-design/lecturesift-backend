@@ -1,6 +1,7 @@
 import json
 import shutil
 import subprocess
+import threading
 import uuid
 import zipfile
 from pathlib import Path
@@ -476,3 +477,50 @@ def test_webm_sampling_keeps_real_timestamps(tmp_path: Path):
     assert before is not None and after is not None
     assert float(before.mean()) > 200
     assert float(after.mean()) < 30
+
+
+def test_slide_scoring_and_full_resolution_exports_run_concurrently_in_timeline_order(tmp_path, monkeypatch):
+    import lecturesift.slides as slide_service
+
+    analysis_gate = threading.Barrier(2, timeout=3)
+    export_gate = threading.Barrier(2, timeout=3)
+    frames = [np.full((12, 20, 3), value, dtype=np.uint8) for value in (20, 60, 100, 140)]
+
+    def fake_scan(_video_path, _progress, callback):
+        for index, frame in enumerate(frames):
+            callback(float(index * 20), frame)
+        return [0.0, 20.0, 40.0, 60.0], 80.0
+
+    def fake_score(frame):
+        if int(frame[0, 0, 0]) in {20, 60}:
+            analysis_gate.wait()
+        return 9, {
+            "has_layout": True,
+            "face_ratio": 0.0,
+            "skin_ratio": 0.0,
+            "skin_band_max": 0.0,
+            "natural_scene": False,
+        }
+
+    def fake_read(_video_path, second):
+        if second in {0.0, 20.0}:
+            export_gate.wait()
+        return np.full((24, 40, 3), int(second) + 10, dtype=np.uint8)
+
+    monkeypatch.setattr(slide_service, "SLIDE_ANALYSIS_PARALLELISM", 2)
+    monkeypatch.setattr(slide_service, "SLIDE_EXPORT_PARALLELISM", 2)
+    monkeypatch.setattr(slide_service, "scan_candidate_timestamps", fake_scan)
+    monkeypatch.setattr(slide_service, "presentation_score", fake_score)
+    monkeypatch.setattr(slide_service, "dhash", lambda frame: np.array([int(frame[0, 0, 0])], dtype=np.uint8))
+    monkeypatch.setattr(slide_service, "fullness_score", lambda frame: float(frame[0, 0, 0]))
+    monkeypatch.setattr(slide_service, "read_frame_at", fake_read)
+    monkeypatch.setattr(slide_service.cv2, "imwrite", lambda *_args, **_kwargs: True)
+
+    manifest, diagnostics = slide_service.extract_slides(
+        tmp_path / "source.mp4",
+        tmp_path / "slides",
+        lambda *_args: None,
+    )
+
+    assert [item["second"] for item in manifest] == [0.0, 20.0, 40.0, 60.0]
+    assert diagnostics["final_unique_slides"] == 4

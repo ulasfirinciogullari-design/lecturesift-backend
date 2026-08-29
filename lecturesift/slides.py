@@ -1,10 +1,13 @@
 from collections import Counter
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, as_completed, wait
 from pathlib import Path
 import subprocess
 from typing import Callable
 
 import cv2
 import numpy as np
+
+from .config import SLIDE_ANALYSIS_PARALLELISM, SLIDE_EXPORT_PARALLELISM
 
 
 ProgressCallback = Callable[[float, str], None]
@@ -310,7 +313,7 @@ def extract_slides(
     accepted: list[dict] = []
     rejection_counts: Counter[str] = Counter()
 
-    def validate_candidate(second: float, frame: np.ndarray) -> None:
+    def analyze_candidate(second: float, frame: np.ndarray) -> tuple[dict | None, list[str]]:
         score, metrics = presentation_score(frame)
         reasons: list[str] = []
         if not metrics["has_layout"]:
@@ -324,20 +327,53 @@ def extract_slides(
         if score < 7:
             reasons.append("low_score")
 
-        if not reasons:
-            accepted.append(
-                {
-                    "time": second,
-                    "hash": dhash(frame),
-                    "fullness": fullness_score(frame),
-                    "score": score,
-                    "metrics": metrics,
-                }
-            )
+        if reasons:
+            return None, reasons
+        return {
+            "time": second,
+            "hash": dhash(frame),
+            "fullness": fullness_score(frame),
+            "score": score,
+            "metrics": metrics,
+        }, []
+
+    def collect_candidate(result: tuple[dict | None, list[str]]) -> None:
+        item, reasons = result
+        if item is not None:
+            accepted.append(item)
         else:
             rejection_counts.update(reasons)
 
-    timestamps, duration = scan_candidate_timestamps(video_path, progress, validate_candidate)
+    analysis_workers = max(1, SLIDE_ANALYSIS_PARALLELISM)
+    if analysis_workers == 1:
+        timestamps, duration = scan_candidate_timestamps(
+            video_path,
+            progress,
+            lambda second, frame: collect_candidate(analyze_candidate(second, frame)),
+        )
+    else:
+        # Keep decoding moving while OpenCV scores the previous candidates, but
+        # cap the in-flight frames so long videos retain the timestamp-only
+        # memory behavior.
+        maximum_pending = analysis_workers * 2
+        pending = set()
+        with ThreadPoolExecutor(
+            max_workers=analysis_workers,
+            thread_name_prefix="lecturesift-slide-score",
+        ) as executor:
+            def schedule_candidate(second: float, frame: np.ndarray) -> None:
+                nonlocal pending
+                if len(pending) >= maximum_pending:
+                    completed, pending = wait(pending, return_when=FIRST_COMPLETED)
+                    for future in completed:
+                        collect_candidate(future.result())
+                pending.add(executor.submit(analyze_candidate, second, frame))
+
+            timestamps, duration = scan_candidate_timestamps(video_path, progress, schedule_candidate)
+            for future in as_completed(pending):
+                collect_candidate(future.result())
+
+    accepted.sort(key=lambda item: item["time"])
     progress(82, "slide_validation")
 
     groups: list[list[dict]] = []
@@ -369,25 +405,48 @@ def extract_slides(
             unique[duplicate_index] = item
 
     unique.sort(key=lambda item: item["time"])
-    manifest: list[dict] = []
-    for index, item in enumerate(unique, 1):
+    def export_slide(index: int, item: dict) -> tuple[int, dict | None]:
         frame = read_frame_at(video_path, item["time"])
         if frame is None:
-            continue
+            return index, None
         second = item["time"]
         filename = f"slide_{index:03d}_{int(second // 60):02d}m{int(second % 60):02d}s.jpg"
-        cv2.imwrite(str(slides_dir / filename), frame, [int(cv2.IMWRITE_JPEG_QUALITY), 88])
-        del frame
-        manifest.append(
-            {
-                "file": filename,
-                "second": round(second, 1),
-                "timestamp": f"{int(second // 60):02d}:{int(second % 60):02d}",
-                "slide_score": item["score"],
-                **item["metrics"],
+        try:
+            written = cv2.imwrite(str(slides_dir / filename), frame, [int(cv2.IMWRITE_JPEG_QUALITY), 88])
+        finally:
+            del frame
+        if not written:
+            return index, None
+        return index, {
+            "file": filename,
+            "second": round(second, 1),
+            "timestamp": f"{int(second // 60):02d}:{int(second % 60):02d}",
+            "slide_score": item["score"],
+            **item["metrics"],
+        }
+
+    exported: list[dict | None] = [None] * len(unique)
+    export_workers = min(max(1, SLIDE_EXPORT_PARALLELISM), len(unique))
+    if export_workers <= 1:
+        for index, item in enumerate(unique, 1):
+            _, exported[index - 1] = export_slide(index, item)
+            progress(83 + 17 * index / max(1, len(unique)), "slide_export")
+    else:
+        completed_exports = 0
+        with ThreadPoolExecutor(
+            max_workers=export_workers,
+            thread_name_prefix="lecturesift-slide-export",
+        ) as executor:
+            futures = {
+                executor.submit(export_slide, index, item): index
+                for index, item in enumerate(unique, 1)
             }
-        )
-        progress(83 + 17 * index / max(1, len(unique)), "slide_export")
+            for future in as_completed(futures):
+                index, slide = future.result()
+                exported[index - 1] = slide
+                completed_exports += 1
+                progress(83 + 17 * completed_exports / max(1, len(unique)), "slide_export")
+    manifest = [item for item in exported if item is not None]
 
     diagnostics = {
         "engine": "v4-layout-persistence",

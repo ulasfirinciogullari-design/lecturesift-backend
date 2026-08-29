@@ -118,6 +118,47 @@ def test_audio_chunks_transcribe_concurrently_but_keep_timeline_order(tmp_path, 
     assert [item["end"] for item in segments] == [60.0, 150.0]
 
 
+def test_multiple_media_sources_prepare_audio_concurrently_and_keep_source_order(tmp_path, monkeypatch):
+    job_id, first_source, first_chunk = _job(tmp_path)
+    second_source = tmp_path / "source-two.mp4"
+    second_source.write_bytes(b"source-two")
+    second_chunk = tmp_path / "audio_002_000.mp3"
+    second_chunk.write_bytes(b"audio-two")
+    gate = threading.Barrier(2, timeout=3)
+
+    monkeypatch.setattr(pipeline, "PRECISE_TRANSCRIPT_TIMESTAMPS", False)
+    monkeypatch.setattr(pipeline, "MEDIA_PREP_PARALLELISM", 2)
+    monkeypatch.setattr(pipeline, "has_audio_stream", lambda _path: True)
+
+    def fake_extract(path, _job_dir, prefix):
+        gate.wait()
+        assert prefix in {"audio_001", "audio_002"}
+        return [first_chunk if path == first_source else second_chunk]
+
+    monkeypatch.setattr(pipeline, "extract_audio_chunks", fake_extract)
+    monkeypatch.setattr(
+        pipeline,
+        "_source_duration_seconds",
+        lambda paths: 40.0 if paths[0] == first_chunk else 50.0,
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "transcribe",
+        lambda path, _language: "First source" if path == first_chunk else "Second source",
+    )
+
+    original, _, segments, _ = pipeline._audio_pipeline(
+        job_id,
+        [first_source, second_source],
+        tmp_path,
+        {"source_language": "en", "output_language": "en", "translate_transcript": False},
+    )
+
+    assert original == "First source\n\nSecond source"
+    assert [item["start"] for item in segments] == [0.0, 40.0]
+    assert [item["end"] for item in segments] == [40.0, 90.0]
+
+
 def test_study_pack_and_transcript_translation_run_concurrently(monkeypatch):
     gate = threading.Barrier(2, timeout=3)
     completed: list[str] = []
