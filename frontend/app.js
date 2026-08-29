@@ -35,7 +35,7 @@ const EN = {
   detailDocument: "Native text and scanned pages are processed with OCR before the study pack is prepared.",
   detailMp3: "The source is uploaded, its audio is converted, and the MP3 download is packaged.",
   detailDownload: "The video is downloaded from its source and prepared as a protected file.",
-  uploadingSource: "Uploading the source", queuedForWorker: "Waiting in the processing queue", publishingResult: "Securing the result files",
+  uploadingSource: "Uploading the source", uploadAccepted: "Upload complete; preparing the processing job", queuedForWorker: "Waiting in the processing queue", publishingResult: "Securing the result files",
   promiseTitle: "One organized result from every source", promiseText: "Choose PDF, Word, or TXT. PDF-only is the default ZIP package.",
   resultEyebrow: "Study pack ready", downloadAll: "Download complete pack", tabSummary: "Summary", tabNotes: "Smart notes", tabTranscript: "Transcript",
   tabSlides: "Slides", tabCards: "Flashcards", tabFiles: "Files", translated: "Translated", original: "Original", errorTitle: "Analysis could not finish",
@@ -80,7 +80,7 @@ const TR = {
   detailDocument: "Seçilebilir metin ve taranmış sayfalar OCR ile işlenir; ardından çalışma paketi hazırlanır.",
   detailMp3: "Kaynak yüklenir, sesi dönüştürülür ve MP3 indirmesi paketlenir.",
   detailDownload: "Video kaynağından indirilir ve korumalı dosya olarak hazırlanır.",
-  uploadingSource: "Kaynak yükleniyor", queuedForWorker: "İşlem sırasında bekliyor", publishingResult: "Sonuç dosyaları güvenceye alınıyor",
+  uploadingSource: "Kaynak yükleniyor", uploadAccepted: "Yükleme tamamlandı; işlem işi hazırlanıyor", queuedForWorker: "İşlem sırasında bekliyor", publishingResult: "Sonuç dosyaları güvenceye alınıyor",
   promiseTitle: "Tüm kaynaklardan tek düzenli sonuç", promiseText: "PDF, Word veya TXT seçebilirsin. Varsayılan ZIP yalnızca PDF içerir.",
   resultEyebrow: "Ders paketi hazır", downloadAll: "Tüm paketi indir", tabSummary: "Özet", tabNotes: "Akıllı notlar", tabTranscript: "Transkript",
   tabSlides: "Slaytlar", tabCards: "Bilgi kartları", tabFiles: "Dosyalar", translated: "Çevrilmiş", original: "Orijinal", errorTitle: "İşlem tamamlanamadı",
@@ -528,7 +528,7 @@ const PROGRESS_PROFILES = {
     ["source", "stageSource"], ["audio", "stageAudio"], ["transcription", "stageTranscript"],
     ["scene_scan", "stageVisual"], ["slide_validation", "stageSlides"], ["study_pack", "stageStudy"], ["exports", "stageExport"],
   ],
-  document: [["source", "stageSource"], ["document_extraction", "stageDocument"], ["study_pack", "stageStudy"], ["exports", "stageExport"]],
+  document: [["source", "stageSource"], ["document_preflight", "stageDocument"], ["document_extraction", "stageDocument"], ["study_pack", "stageStudy"], ["exports", "stageExport"]],
   audio_export: [["source", "stageSource"], ["audio_extract", "stageMp3"], ["exports", "stagePackage"]],
   download_video: [["source", "stageSource"], ["worker_download", "url_download"], ["exports", "stagePackage"]],
 };
@@ -658,7 +658,7 @@ function updateProgress(percent, label, detail = "") {
 function jobPhaseLabel(job, profile) {
   const labels = {
     queued: "queuedForWorker", queued_worker: "queuedForWorker", worker_download: "url_download",
-    worker_publish: "publishingResult", document_extraction: "stageDocument", document_ocr: "stageDocument", audio_extract: "stageMp3",
+    worker_publish: "publishingResult", document_preflight: "stageDocument", document_extraction: "stageDocument", document_ocr: "stageDocument", audio_extract: "stageMp3",
     transcription: "stageTranscript", transcript_translation: "stageTranscript", parallel_analysis: profile === "document" ? "stageDocument" : "processing",
     study_pack: "study_pack", exports: "exports", done: "done",
   };
@@ -787,7 +787,21 @@ $("analyzeButton").onclick = async () => {
   }
   const request = new XMLHttpRequest(); request.open("POST", `${API}/jobs`);
   request.setRequestHeader("Authorization", `Bearer ${billingToken}`);
-  request.upload.onprogress = event => { if (event.lengthComputable) updateProgress(Math.min(7, event.loaded / event.total * 7), t("uploadingSource"), profileDetail(progressProfileFor())); };
+  const uploadStartedAt = performance.now();
+  request.upload.onprogress = event => {
+    if (!event.lengthComputable) return;
+    const elapsedSeconds = Math.max(.25, (performance.now() - uploadStartedAt) / 1000);
+    const bytesPerSecond = event.loaded / elapsedSeconds;
+    const remainingSeconds = bytesPerSecond > 0 ? Math.max(0, (event.total - event.loaded) / bytesPerSecond) : 0;
+    const speed = `${(bytesPerSecond / 1024 ** 2).toFixed(1)} MB/s`;
+    const remaining = remainingSeconds >= 1 ? ` · ~${Math.ceil(remainingSeconds)} sn` : "";
+    updateProgress(
+      Math.min(7, event.loaded / event.total * 7),
+      t("uploadingSource"),
+      `${(event.loaded / 1024 ** 2).toFixed(1)} / ${(event.total / 1024 ** 2).toFixed(1)} MB · ${speed}${remaining}`,
+    );
+  };
+  request.upload.onload = () => updateProgress(7, t("uploadAccepted"), profileDetail(progressProfileFor()));
   request.onload = async () => {
     if (request.status < 300) {
       const created = JSON.parse(request.responseText);

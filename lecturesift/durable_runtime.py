@@ -10,6 +10,8 @@ from pathlib import Path
 from .billing_service import require_duration_entitlement
 from .config import CELERY_BROKER_URL, REQUIRE_DURABLE_PROCESSING
 from .duration import media_duration_seconds
+from .documents import extract_documents
+from .errors import normalize_error
 from .jobs import JOBS
 from .pipeline_enhancements import install_pipeline_enhancements
 from .rollout_service import BillingError, estimate_eta_seconds, is_guest_user, record_runtime, reserve_guest_job
@@ -55,6 +57,49 @@ def _publish_if_configured(job_id: str, job_dir: Path) -> None:
         JOBS.update(job_id, **remote)
 
 
+def _preflight_documents(job_id: str, paths: list[Path], options: dict) -> float | None:
+    """Inspect documents after the HTTP upload response has been released."""
+    try:
+        document_data = extract_documents(
+            paths,
+            source_language=str(options.get("source_language") or "auto"),
+            enable_ocr=False,
+            allow_ocr_pending=True,
+        )
+    except Exception as exc:
+        normalized = normalize_error(exc)
+        JOBS.update(
+            job_id,
+            status="error",
+            percent=0,
+            stage="error",
+            worker_state="rejected",
+            error_code=normalized.code,
+            error=normalized.user_message,
+            technical_error=normalized.technical_message,
+        )
+        return None
+
+    options.update(
+        document_credit_seconds=float(document_data["credit_seconds"]),
+        document_words=int(document_data["words"]),
+        document_ocr_required=bool(document_data["ocr_required"]),
+        document_ocr_pages=int(document_data["ocr_pages"]),
+        document_estimated=bool(document_data["estimated"]),
+    )
+    JOBS.update(
+        job_id,
+        options=options,
+        document_words=int(document_data["words"]),
+        billable_minutes=int(document_data["credit_minutes"]),
+        document_ocr_required=bool(document_data["ocr_required"]),
+        document_ocr_pages=int(document_data["ocr_pages"]),
+        usage_estimated=bool(document_data["estimated"]),
+        stage="document_preflight",
+    )
+    return float(document_data["credit_seconds"])
+
+
 def install_durable_runtime() -> None:
     global _INSTALLED
     if _INSTALLED:
@@ -73,7 +118,13 @@ def install_durable_runtime() -> None:
         data = JOBS.get(job_id)
         if not data:
             return
+        document_mode = bool(options.get("document_mode"))
         document_seconds = max(0.0, float(options.get("document_credit_seconds") or 0))
+        if document_mode and not document_seconds:
+            preflight_seconds = _preflight_documents(job_id, audio_paths, options)
+            if preflight_seconds is None:
+                return
+            document_seconds = preflight_seconds
         duration = document_seconds or max(
             media_duration_seconds(audio_paths),
             media_duration_seconds(visual_paths) if visual_paths else 0.0,
@@ -107,7 +158,7 @@ def install_durable_runtime() -> None:
             size_bytes,
             job_type=str(options.get("job_type") or "study_pack"),
             summary_style=str(options.get("summary_style") or "standard"),
-            source_kind="document" if document_seconds else "media",
+            source_kind="document" if document_mode else "media",
         )
         JOBS.update(
             job_id,

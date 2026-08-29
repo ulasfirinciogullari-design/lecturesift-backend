@@ -62,6 +62,38 @@ _OCR_SCRIPT_LANGUAGES = {
     "Latin": "eng+tur+deu+fra+spa+ita+por",
 }
 _MAX_IMAGE_PIXELS = 40_000_000
+_ONE_GIB = 1024 * 1024 * 1024
+
+
+def _container_memory_limit_bytes() -> int | None:
+    """Return the container memory limit without depending on psutil.
+
+    Render uses cgroup v2 today, while older/local Linux installations may
+    still expose the v1 path.  An unbounded value is treated as unknown.
+    """
+    candidates = (
+        Path("/sys/fs/cgroup/memory.max"),
+        Path("/sys/fs/cgroup/memory/memory.limit_in_bytes"),
+    )
+    for candidate in candidates:
+        try:
+            raw = candidate.read_text(encoding="ascii").strip()
+            if raw == "max":
+                return None
+            value = int(raw)
+            if 0 < value < 1 << 60:
+                return value
+        except (OSError, ValueError):
+            continue
+    return None
+
+
+def effective_ocr_parallelism() -> int:
+    """Keep OCR parallel on capable workers and memory-safe on small ones."""
+    memory_limit = _container_memory_limit_bytes()
+    if memory_limit is not None and memory_limit < _ONE_GIB:
+        return 1
+    return OCR_PARALLELISM
 
 
 def _normalize_text(value: str) -> str:
@@ -179,8 +211,11 @@ def _run_tesseract_image(image: Image.Image, source_language: str = "auto") -> t
     prepared = _safe_image(image)
     try:
         with tempfile.TemporaryDirectory(prefix="lecturesift-ocr-") as directory:
-            image_path = Path(directory) / "page.png"
-            prepared.save(image_path, format="PNG", optimize=True)
+            # Tesseract accepts portable graymap directly.  It avoids the
+            # relatively expensive PNG compression pass for every page and
+            # keeps peak memory lower on small workers.
+            image_path = Path(directory) / "page.pgm"
+            prepared.save(image_path, format="PPM")
             # PDF extraction can pass a Tesseract language expression that was
             # detected once for the whole document. This avoids one relatively
             # expensive OSD process for every scanned page.
@@ -239,8 +274,8 @@ def _detect_pdf_ocr_language(path: Path, page_index: int) -> str:
     try:
         prepared = _safe_image(image)
         with tempfile.TemporaryDirectory(prefix="lecturesift-ocr-language-") as directory:
-            image_path = Path(directory) / "sample.png"
-            prepared.save(image_path, format="PNG", optimize=True)
+            image_path = Path(directory) / "sample.pgm"
+            prepared.save(image_path, format="PPM")
             return _auto_ocr_languages(image_path)
     finally:
         if prepared is not None:
@@ -259,7 +294,7 @@ def _detect_pdf_ocr_languages(path: Path, page_indexes: list[int]) -> dict[int, 
         return {}
     positions = sorted({0, len(page_indexes) // 2, len(page_indexes) - 1})
     sample_pages = [page_indexes[position] for position in positions]
-    workers = min(OCR_PARALLELISM, len(sample_pages))
+    workers = min(effective_ocr_parallelism(), len(sample_pages))
     if workers <= 1:
         samples = {
             page_index: _detect_pdf_ocr_language(path, page_index)
@@ -391,7 +426,7 @@ def _extract_pdf(
             if source_language == "auto" and len(ocr_indexes) > 1
             else {page_index: source_language for page_index in ocr_indexes}
         )
-        workers = min(OCR_PARALLELISM, len(ocr_indexes))
+        workers = min(effective_ocr_parallelism(), len(ocr_indexes))
         if workers == 1:
             completed_results = (
                 _ocr_pdf_page(path, page_index, ocr_languages[page_index]) for page_index in ocr_indexes

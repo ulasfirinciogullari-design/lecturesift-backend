@@ -159,7 +159,7 @@ def test_public_navigation_is_consistent_localized_and_session_aware():
 def test_processing_center_uses_operation_specific_progress_profiles():
     script = (FRONTEND / "app.js").read_text(encoding="utf-8")
     assert "const PROGRESS_PROFILES" in script
-    assert 'document: [["source", "stageSource"], ["document_extraction", "stageDocument"]' in script
+    assert 'document: [["source", "stageSource"], ["document_preflight", "stageDocument"], ["document_extraction", "stageDocument"]' in script
     assert 'document_ocr: "stageDocument"' in script
     assert 'audio_export: [["source", "stageSource"], ["audio_extract", "stageMp3"]' in script
     assert 'download_video: [["source", "stageSource"], ["worker_download", "url_download"]' in script

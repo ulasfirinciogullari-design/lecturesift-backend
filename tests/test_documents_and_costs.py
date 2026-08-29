@@ -25,6 +25,7 @@ from lecturesift import config
 from lecturesift.app import app
 from lecturesift.billing_service import register_user, verify_email
 from lecturesift.documents import extract_documents
+from lecturesift.durable_runtime import _preflight_documents
 from lecturesift.errors import LectureSiftError
 from lecturesift.jobs import JOBS
 from lecturesift.rollout_routes import install_rollout_routes
@@ -225,6 +226,15 @@ def test_pdf_ocr_uses_bounded_parallel_pages_and_preserves_page_order(tmp_path: 
     assert progress[-1] == (4, 4)
 
 
+def test_ocr_parallelism_is_memory_safe_on_small_workers(monkeypatch):
+    monkeypatch.setattr(document_service, "OCR_PARALLELISM", 4)
+    monkeypatch.setattr(document_service, "_container_memory_limit_bytes", lambda: 512 * 1024 * 1024)
+    assert document_service.effective_ocr_parallelism() == 1
+
+    monkeypatch.setattr(document_service, "_container_memory_limit_bytes", lambda: 2 * 1024 * 1024 * 1024)
+    assert document_service.effective_ocr_parallelism() == 4
+
+
 def test_pdf_auto_ocr_uses_bounded_representative_language_samples(tmp_path: Path, monkeypatch):
     path = tmp_path / "multilingual-scan.pdf"
     writer = PdfWriter()
@@ -312,7 +322,7 @@ def test_ocr_page_budget_applies_across_all_uploaded_documents(tmp_path: Path, m
     assert caught.value.code == "LS-OCR-02"
 
 
-def test_document_upload_records_document_quota_before_background_processing(tmp_path: Path, monkeypatch):
+def test_document_upload_releases_response_before_background_quota_preflight(tmp_path: Path, monkeypatch):
     captured: dict = {}
 
     class DeferredThread:
@@ -333,11 +343,17 @@ def test_document_upload_records_document_quota_before_background_processing(tmp
     body = response.json()
     job = JOBS.get(body["job_id"])
     assert body["source_layout"] == "documents"
-    assert body["document_words"] >= 300
-    assert body["billable_minutes"] >= 2
+    assert body["document_words"] is None
+    assert body["billable_minutes"] is None
     assert job["source_type"] == "document"
     assert captured["started"] is True
-    assert captured["args"][2]["document_credit_seconds"] == body["billable_minutes"] * 60
+    assert captured["args"][2]["document_mode"] is True
+    seconds = _preflight_documents(body["job_id"], list(captured["args"][1]), captured["args"][2])
+    assert seconds is not None and seconds >= 120
+    inspected = JOBS.get(body["job_id"])
+    assert inspected["document_words"] >= 300
+    assert inspected["billable_minutes"] >= 2
+    assert captured["args"][2]["document_credit_seconds"] == seconds
     shutil.rmtree(Path(job["job_dir"]), ignore_errors=True)
 
 
@@ -368,11 +384,15 @@ def test_scanned_pdf_upload_queues_background_ocr(tmp_path: Path, monkeypatch):
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["ocr_required"] is True
-    assert body["ocr_pages"] == 1
+    assert body["ocr_required"] is False
+    assert body["ocr_pages"] == 0
     assert body["usage_estimated"] is True
     assert captured["started"] is True
+    seconds = _preflight_documents(body["job_id"], list(captured["args"][1]), captured["args"][2])
+    assert seconds is not None
     assert captured["args"][2]["document_ocr_required"] is True
+    inspected = JOBS.get(body["job_id"])
+    assert inspected["document_ocr_pages"] == 1
     job = JOBS.get(body["job_id"])
     shutil.rmtree(Path(job["job_dir"]), ignore_errors=True)
 
@@ -410,9 +430,14 @@ def test_guest_workspace_accepts_a_text_pdf_without_registered_account(tmp_path:
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["source_layout"] == "documents"
-    assert body["document_words"] >= 8
-    assert body["billable_minutes"] == 1
+    assert body["document_words"] is None
+    assert body["billable_minutes"] is None
     assert captured["started"] is True
+    seconds = _preflight_documents(body["job_id"], list(captured["args"][1]), captured["args"][2])
+    assert seconds == 60
+    inspected = JOBS.get(body["job_id"])
+    assert inspected["document_words"] >= 8
+    assert inspected["billable_minutes"] == 1
     job = JOBS.get(body["job_id"])
     shutil.rmtree(Path(job["job_dir"]), ignore_errors=True)
 
