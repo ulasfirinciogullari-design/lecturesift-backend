@@ -56,6 +56,7 @@
     || document.querySelector(".lead,.detail-hero > p:not(.eyebrow)")?.textContent?.trim()
     || "LectureSift ders videolarını transkript, özet, quiz ve bilgi kartlarına dönüştürür.";
   const imageUrl = `${PRODUCTION_ORIGIN}/og-image.png`;
+  const imageAlt = document.title;
 
   const setMeta = (selector, attributes) => {
     let node = document.head.querySelector(selector);
@@ -93,11 +94,15 @@
     document.head.append(node);
   });
   setMeta('meta[property="og:image"]', {property: "og:image", content: imageUrl});
-  setMeta('meta[property="og:image:alt"]', {property: "og:image:alt", content: "LectureSift yapay zekâ destekli ders çalışma platformu"});
+  setMeta('meta[property="og:image:type"]', {property: "og:image:type", content: "image/png"});
+  setMeta('meta[property="og:image:width"]', {property: "og:image:width", content: "1731"});
+  setMeta('meta[property="og:image:height"]', {property: "og:image:height", content: "909"});
+  setMeta('meta[property="og:image:alt"]', {property: "og:image:alt", content: imageAlt});
   setMeta('meta[name="twitter:card"]', {name: "twitter:card", content: "summary_large_image"});
   setMeta('meta[name="twitter:title"]', {name: "twitter:title", content: document.title});
   setMeta('meta[name="twitter:description"]', {name: "twitter:description", content: description});
   setMeta('meta[name="twitter:image"]', {name: "twitter:image", content: imageUrl});
+  setMeta('meta[name="twitter:image:alt"]', {name: "twitter:image:alt", content: imageAlt});
 
   const productionHost = new Set(["lecturesift.com", "www.lecturesift.com"]).has(location.hostname);
   if (!new Set(["lecturesift.com", "www.lecturesift.com", "localhost", "127.0.0.1"]).has(location.hostname)) {
@@ -113,6 +118,7 @@
       name: "LectureSift",
       url: `${PRODUCTION_ORIGIN}/`,
       logo: `${PRODUCTION_ORIGIN}/favicon.svg`,
+      image: imageUrl,
       sameAs: ["https://www.instagram.com/lecturesift/"],
     },
     {
@@ -132,6 +138,7 @@
       inLanguage: document.documentElement.lang || "tr",
       isPartOf: {"@id": `${PRODUCTION_ORIGIN}/#website`},
       about: {"@id": `${PRODUCTION_ORIGIN}/#application`},
+      primaryImageOfPage: {"@type": "ImageObject", url: imageUrl, width: 1731, height: 909},
     },
     {
       "@type": "SoftwareApplication",
@@ -139,7 +146,10 @@
       name: "LectureSift",
       url: `${PRODUCTION_ORIGIN}/`,
       applicationCategory: "EducationalApplication",
+      applicationSubCategory: "Study tools and educational content summarization",
       operatingSystem: "Web",
+      isAccessibleForFree: true,
+      availableLanguage: LANGUAGES,
       description,
       image: imageUrl,
       featureList: [
@@ -174,12 +184,31 @@
   }).filter(Boolean);
   if (questions.length) graph.push({"@type": "FAQPage", "@id": `${canonicalUrl}#faq`, mainEntity: questions});
 
+  if (new Set(["/features.html", "/document-summary.html", "/lecture-video-summary.html", "/quiz-flashcards.html"]).has(path)) {
+    graph.push({
+      "@type": "Article",
+      "@id": `${canonicalUrl}#article`,
+      headline: document.title,
+      description,
+      image: imageUrl,
+      inLanguage: document.documentElement.lang || "tr",
+      dateModified: "2026-08-29",
+      mainEntityOfPage: {"@id": `${canonicalUrl}#webpage`},
+      author: {"@id": `${PRODUCTION_ORIGIN}/#organization`},
+      publisher: {"@id": `${PRODUCTION_ORIGIN}/#organization`},
+    });
+  }
+
   const schema = {
     "@context": "https://schema.org",
     "@graph": graph,
   };
-  const jsonLd = document.createElement("script");
-  jsonLd.type = "application/ld+json";
+  let jsonLd = document.head.querySelector('script[type="application/ld+json"][data-lecturesift-seo]');
+  if (!jsonLd) {
+    jsonLd = document.createElement("script");
+    jsonLd.type = "application/ld+json";
+    jsonLd.dataset.lecturesiftSeo = "";
+    document.head.append(jsonLd);
+  }
   jsonLd.textContent = JSON.stringify(schema);
-  document.head.append(jsonLd);
 })();

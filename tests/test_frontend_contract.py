@@ -173,7 +173,7 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         content = page.read_text(encoding="utf-8")
         assert "/theme.css?v=11" in content, page.name
         assert "/theme.js?v=2" in content, page.name
-        assert "i18n.js?v=22" in content, page.name
+        assert "i18n.js?v=23" in content, page.name
         assert "page-i18n.js?v=6" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
@@ -277,6 +277,7 @@ def test_static_page_copy_covers_every_language_without_empty_entries():
         capture_output=True,
         text=True,
         encoding="utf-8",
+        errors="replace",
         check=False,
     )
     assert coverage.returncode == 0, coverage.stdout + coverage.stderr
@@ -318,6 +319,18 @@ def test_document_errors_are_localized_for_every_supported_language():
         assert app.count(f'"{code}"') >= 2
     source = "OCR tamamlandı ancak okunabilir metin bulunamadı. Daha net bir tarama veya doğru kaynak diliyle yeniden dene."
     assert len(catalog[source]) == 13
+
+
+def test_all_ai_processing_errors_have_thirteen_interface_translations():
+    app = (FRONTEND / "app.js").read_text(encoding="utf-8")
+    script = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    for index in range(3, 9):
+        code = f"LS-AI-{index:02d}"
+        key = f"error.ai{index:02d}"
+        assert f'"{code}":"{key}"' in app
+        payload = re.search(rf'^\s*"{re.escape(key)}":\[(.*?)\],?$', script, re.MULTILINE)
+        assert payload, key
+        assert len(json.loads(f"[{payload.group(1)}]")) == 13
 
 
 def test_every_declared_interface_key_has_thirteen_translations():
@@ -674,14 +687,17 @@ def test_public_pages_have_share_metadata_canonical_urls_and_structured_data():
     seo = (FRONTEND / "seo.js").read_text(encoding="utf-8")
     sitemap = (FRONTEND / "sitemap.xml").read_text(encoding="utf-8")
 
-    assert 'seoScript.src = "/seo.js?v=3"' in i18n
+    assert 'seoScript.src = "/seo.js?v=4"' in i18n
     assert 'link[rel="canonical"]' in seo
     assert 'meta[property="og:image"]' in seo
+    assert 'meta[property="og:image:width"]' in seo
+    assert 'meta[property="og:image:height"]' in seo
     assert 'meta[name="twitter:card"]' in seo
     assert '"@type": "SoftwareApplication"' in seo
     assert '"@type": "WebPage"' in seo
     assert '"@type": "BreadcrumbList"' in seo
     assert '"@type": "FAQPage"' in seo
+    assert '"@type": "Article"' in seo
     assert 'meta[property="og:locale:alternate"]' in seo
     assert 'applicationCategory: "EducationalApplication"' in seo
     assert 'price: "0"' in seo
@@ -691,6 +707,29 @@ def test_public_pages_have_share_metadata_canonical_urls_and_structured_data():
     assert '"/distance-sales.html"' in seo
     assert (FRONTEND / "og-image.png").stat().st_size > 100_000
     assert sitemap.count("<lastmod>2026-08-29</lastmod>") == 13 * 13
+
+
+def test_netlify_build_prerenders_every_public_language_with_static_seo():
+    config = (FRONTEND.parent / "netlify.toml").read_text(encoding="utf-8")
+    builder = (FRONTEND.parent / "scripts" / "build_localized_site.mjs").read_text(encoding="utf-8")
+    assert 'command = "node scripts/build_localized_site.mjs"' in config
+    assert 'publish = "dist"' in config
+    assert "Built ${LANGUAGES.length * PUBLIC_PATHS.length} indexable localized pages" in builder
+    assert 'rel="canonical"' in builder
+    assert 'hreflang="x-default"' in builder
+    assert 'data-lecturesift-seo' in builder
+    assert '"@type": "Article"' in builder
+    assert "deferNonCriticalScripts" in builder
+    assert 'staticDescription' in builder
+    assert 'validateLocalizedPage' in builder
+    assert 'meta name="robots" content="index,follow' not in builder
+
+
+def test_static_images_reserve_layout_space_to_avoid_content_shift():
+    for page in FRONTEND.glob("*.html"):
+        content = page.read_text(encoding="utf-8")
+        for image in re.findall(r"<img\b[^>]*>", content):
+            assert 'width="' in image and 'height="' in image, (page.name, image)
 
 
 def test_optional_analytics_and_advertising_are_consent_gated():
@@ -783,7 +822,7 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=20"' in index
+    assert 'src="./app.js?v=21"' in index
     assert 'src="/rollout.js?v=5"' in index
     assert '$("plans").scrollIntoView' not in app
 

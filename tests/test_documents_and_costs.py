@@ -218,6 +218,43 @@ def test_pdf_ocr_uses_bounded_parallel_pages_and_preserves_page_order(tmp_path: 
     assert progress[-1] == (4, 4)
 
 
+def test_pdf_auto_ocr_uses_bounded_representative_language_samples(tmp_path: Path, monkeypatch):
+    path = tmp_path / "multilingual-scan.pdf"
+    writer = PdfWriter()
+    for _ in range(9):
+        writer.add_blank_page(width=612, height=792)
+    with path.open("wb") as stream:
+        writer.write(stream)
+
+    detections: list[int] = []
+    languages: list[str] = []
+    monkeypatch.setattr(document_service, "OCR_PARALLELISM", 1)
+    monkeypatch.setattr(
+        document_service,
+        "_detect_pdf_ocr_language",
+        lambda _path, page_index: detections.append(page_index) or {
+            0: "eng+tur",
+            4: "jpn+eng",
+            8: "ara+eng",
+        }[page_index],
+    )
+
+    def fake_page(_path, page_index, language):
+        languages.append(language)
+        return page_index, f"PAGE {page_index + 1}", language
+
+    monkeypatch.setattr(document_service, "_ocr_pdf_page", fake_page)
+    result = extract_documents([path], source_language="auto")
+
+    assert detections == [0, 4, 8]
+    assert languages == [
+        "eng+tur", "eng+tur", "eng+tur",
+        "jpn+eng", "jpn+eng", "jpn+eng", "jpn+eng",
+        "ara+eng", "ara+eng",
+    ]
+    assert result["documents"][0]["ocr_language"] == "eng+tur"
+
+
 def test_ocr_page_budget_applies_across_all_uploaded_documents(tmp_path: Path, monkeypatch):
     paths = []
     for index in range(2):

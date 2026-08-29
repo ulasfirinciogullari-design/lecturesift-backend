@@ -1,6 +1,10 @@
+import json
 from types import SimpleNamespace
 
+import pytest
+
 from lecturesift import ai
+from lecturesift.errors import LectureSiftError
 
 
 def _pack(title: str) -> dict:
@@ -30,9 +34,9 @@ def test_short_study_pack_uses_the_complete_transcript(monkeypatch):
     result = ai.make_study_pack(transcript, "en", "standard", 10, 20)
 
     assert result["title"] == "short"
-    assert len(calls) == 1
-    assert calls[0][0] == transcript
-    assert calls[0][0].endswith("FINAL_SENTENCE_MARKER")
+    assert len(calls) == 2
+    assert all(call[0] == transcript for call in calls)
+    assert all(call[0].endswith("FINAL_SENTENCE_MARKER") for call in calls)
 
 
 def test_long_study_pack_processes_every_section_before_final_synthesis(monkeypatch):
@@ -58,13 +62,13 @@ def test_long_study_pack_processes_every_section_before_final_synthesis(monkeypa
     section_calls = [call for call in calls if call[1].startswith("TRANSCRIPT SECTION")]
     final_calls = [call for call in calls if call[1] == "ORDERED SECTION DIGESTS"]
     assert len(section_calls) >= 4
-    assert len(final_calls) == 1
+    assert len(final_calls) == 2
     assert max(len(source) for source, *_ in section_calls) <= ai.STUDY_SECTION_CHARACTERS
     assert any("START_MARKER" in source for source, *_ in section_calls)
     assert any("MIDDLE_MARKER" in source for source, *_ in section_calls)
     assert any("END_MARKER" in source for source, *_ in section_calls)
     for index in range(1, len(section_calls) + 1):
-        assert f"TRANSCRIPT SECTION {index} OF {len(section_calls)}" in final_calls[0][0]
+        assert all(f"TRANSCRIPT SECTION {index} OF {len(section_calls)}" in call[0] for call in final_calls)
     assert result["title"] == "ORDERED SECTION DIGESTS"
 
 
@@ -94,11 +98,67 @@ def test_detailed_study_pack_splits_content_and_exercises_then_merges(monkeypatc
     assert result["notes"][0]["heading"] == "Deep note"
     assert len(result["quiz"]) == 20
     assert len(result["flashcards"]) == 40
-    assert max(call[3]["max_tokens"] for call in calls) >= 8500
+    assert max(call[3]["max_tokens"] for call in calls) >= 14_000
 
 
 def test_zero_requested_flashcards_stays_empty():
     assert ai._normalize_flashcards([{"front": "Term", "back": "Definition"}], "en", 0) == []
+
+
+def test_incomplete_detailed_summary_is_retried_once(monkeypatch):
+    responses = [
+        _pack("too-short"),
+        {**_pack("complete"), "summary": " ".join(["complete"] * 720)},
+    ]
+    calls = []
+
+    class Completions:
+        @staticmethod
+        def create(**kwargs):
+            calls.append(kwargs)
+            value = responses.pop(0)
+            return SimpleNamespace(
+                choices=[SimpleNamespace(
+                    finish_reason="stop",
+                    message=SimpleNamespace(content=json.dumps(value)),
+                )]
+            )
+
+    monkeypatch.setattr(
+        ai,
+        "_CLIENT",
+        SimpleNamespace(chat=SimpleNamespace(completions=Completions())),
+    )
+    monkeypatch.setattr(ai, "record_openai_response", lambda *_args, **_kwargs: True)
+    result = ai._request_study_pack("source " * 1000, "en", "detailed", 0, 0)
+
+    assert result["title"] == "complete"
+    assert len(calls) == 2
+    assert "RETRY REQUIREMENT" in calls[1]["messages"][0]["content"]
+
+
+def test_study_pack_fails_closed_when_retry_is_still_incomplete(monkeypatch):
+    class Completions:
+        @staticmethod
+        def create(**_kwargs):
+            return SimpleNamespace(
+                choices=[SimpleNamespace(
+                    finish_reason="length",
+                    message=SimpleNamespace(content=json.dumps(_pack("incomplete"))),
+                )]
+            )
+
+    monkeypatch.setattr(
+        ai,
+        "_CLIENT",
+        SimpleNamespace(chat=SimpleNamespace(completions=Completions())),
+    )
+    monkeypatch.setattr(ai, "record_openai_response", lambda *_args, **_kwargs: True)
+
+    with pytest.raises(LectureSiftError) as caught:
+        ai._request_study_pack("source " * 1000, "en", "detailed", 0, 0)
+
+    assert caught.value.code == "LS-AI-08"
 
 
 def test_source_code_does_not_silently_slice_long_transcripts():
