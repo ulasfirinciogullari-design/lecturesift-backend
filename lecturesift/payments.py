@@ -103,21 +103,26 @@ def iyzico_configured() -> bool:
 def iyzico_public_status() -> dict:
     configured = iyzico_configured()
     sandbox = config.IYZICO_BASE_URL.rstrip("/") == "https://sandbox-api.iyzipay.com"
+    capabilities = [
+        "cards",
+        "foreign_cards",
+        "one_time",
+        "monthly",
+        "annual",
+        "3ds",
+        "signed_webhook",
+    ]
+    # A configured iyzico account does not imply that protected bank transfer
+    # was enabled for the merchant. Expose it only after iyzico confirms that
+    # separate activation and the runtime flag is deliberately enabled.
+    if configured and config.IYZICO_BANK_TRANSFER_ENABLED:
+        capabilities.append("bank_transfer")
     return {
         "code": "iyzico",
         "configured": configured,
         "status": "test_mode" if configured and sandbox else ("active" if configured else "pending_credentials"),
         "currencies": list(IYZICO_CURRENCIES),
-        "capabilities": [
-            "cards",
-            "foreign_cards",
-            "bank_transfer",
-            "one_time",
-            "monthly",
-            "annual",
-            "3ds",
-            "signed_webhook",
-        ],
+        "capabilities": capabilities,
         "checkout": "hosted_redirect",
         "recurring": False,
         "webhook_signature": {

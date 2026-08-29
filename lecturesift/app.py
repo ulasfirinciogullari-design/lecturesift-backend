@@ -35,6 +35,7 @@ from .billing_service import (
     logout_user,
     manual_transfer_details,
     record_payment_consent,
+    reject_manual_order,
     register_user,
     require_download_entitlement,
     reset_password,
@@ -620,6 +621,9 @@ def billing_health() -> dict:
                 "configured": automatic_bank_transfer,
                 "provider": "iyzico",
                 "automatic": True,
+                "manual_configured": manual_transfer_details()["available"],
+                # Kept for older monitoring clients until they migrate to the
+                # clearer manual_configured field.
                 "legacy_manual_configured": manual_transfer_details()["available"],
             },
         },
@@ -833,6 +837,7 @@ def billing_create_manual_order(
     request: Request,
     user: dict = Depends(_billing_user),
 ) -> dict:
+    _rate_limit(request, "manual-transfer-order", user["id"], limit=5, window_seconds=60 * 60)
     try:
         if not payload.terms_accepted or not payload.early_performance_requested:
             raise BillingError("Ödeme öncesi bilgilendirmeyi ve hizmetin hemen başlamasını açıkça onaylamalısın.")
@@ -968,6 +973,20 @@ def billing_approve_manual_order(reference: str) -> dict:
     except BillingError as exc:
         raise HTTPException(404, detail={"code": "LS-BILL-09", "message": str(exc)}) from exc
     return {"ok": True, "account": account}
+
+
+@app.post(
+    "/billing/manual-transfer/orders/{reference}/reject",
+    dependencies=[Depends(_billing_admin)],
+)
+def billing_reject_manual_order(reference: str) -> dict:
+    try:
+        result = reject_manual_order(reference)
+    except BillingConfigurationError as exc:
+        raise HTTPException(503, detail={"code": "LS-BILL-00", "message": str(exc)}) from exc
+    except BillingError as exc:
+        raise HTTPException(404, detail={"code": "LS-BILL-09", "message": str(exc)}) from exc
+    return {"ok": True, "message": "Havale siparişi reddedildi.", "result": result}
 
 
 @app.get(

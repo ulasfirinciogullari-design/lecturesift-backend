@@ -376,12 +376,12 @@ def test_profile_admin_automatic_payment_and_full_comparison_interfaces_are_pres
     assert "/billing/me/export" in auth and "/billing/me/close-account" in auth
     assert 'href="/admin.html"' not in account
     assert all(value in plans for value in ("compareHead", "compareBody", "bankAvailability", "checkoutBankButton"))
-    assert "renderCompare" in plan_script and 'startHostedCheckout("bank_transfer")' in plan_script
-    assert all(value in plans for value in ("bankTransferGuide", "bankTransferContinue", "bankTransferBack"))
-    assert "showBankTransferGuide" in plan_script and "bankTransferGuide" in plan_script
+    assert all(value in plans for value in ("transferPanel", "transferReference", "transferAmount", "transferIban", "transferHolder", "transferBank"))
+    assert "renderCompare" in plan_script and "createTransfer" in plan_script
     assert "/billing/checkout" in plan_script
-    assert "/billing/manual-transfer" not in plan_script
-    assert "publicBankIban" not in plans and "transferPanel" not in plans
+    assert "/billing/manual-transfer/orders" in plan_script
+    assert "manual_bank_transfer" in plan_script
+    assert "bankTransferGuide" not in plans and "startHostedCheckout(\"bank_transfer\")" not in plan_script
     assert "/billing/manual-transfer" not in auth
     assert "/billing/manual-transfer" not in workspace_script
     assert "/billing/manual-transfer" not in rollout_script
