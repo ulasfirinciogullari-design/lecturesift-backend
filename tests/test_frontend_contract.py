@@ -720,6 +720,7 @@ def test_netlify_build_prerenders_every_public_language_with_static_seo():
     assert 'data-lecturesift-seo' in builder
     assert '"@type": "Article"' in builder
     assert "deferNonCriticalScripts" in builder
+    assert "removeStaticTranslationCatalog" in builder
     assert 'staticDescription' in builder
     assert 'validateLocalizedPage' in builder
     assert 'meta name="robots" content="index,follow' not in builder

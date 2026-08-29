@@ -151,3 +151,30 @@ def test_study_pack_and_transcript_translation_run_concurrently(monkeypatch):
     assert pack["title"] == "Parallel pack"
     assert translated == "Translated transcript"
     assert sorted(completed) == ["study", "translation"]
+
+
+def test_explicit_same_language_skips_redundant_full_translation(monkeypatch):
+    calls = []
+    monkeypatch.setattr(pipeline, "make_study_pack", lambda *_args: {"title": "Same-language pack"})
+    monkeypatch.setattr(
+        pipeline,
+        "translate_transcript",
+        lambda *_args: calls.append("translation") or "should not run",
+    )
+
+    pack, translated = pipeline._build_text_outputs(
+        "same-language-job",
+        "Original English transcript",
+        {
+            "source_language": "en-US",
+            "output_language": "en",
+            "summary_style": "standard",
+            "quiz_count": 10,
+            "flashcard_count": 20,
+            "translate_transcript": True,
+        },
+    )
+
+    assert pack["title"] == "Same-language pack"
+    assert translated == ""
+    assert calls == []
