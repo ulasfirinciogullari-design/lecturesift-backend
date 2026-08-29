@@ -200,7 +200,19 @@ def _build_text_outputs(job_id: str, original_transcript: str, options: dict) ->
             return candidate.strip()
         return ""
 
-    should_translate = bool(options.get("translate_transcript", True) and original_transcript.strip())
+    source_language = str(options.get("source_language") or "").strip().casefold().split("-", 1)[0]
+    output_language = str(options.get("output_language") or "").strip().casefold().split("-", 1)[0]
+    explicitly_same_language = bool(
+        source_language
+        and source_language != "auto"
+        and output_language
+        and source_language == output_language
+    )
+    should_translate = bool(
+        options.get("translate_transcript", True)
+        and original_transcript.strip()
+        and not explicitly_same_language
+    )
     if not should_translate:
         return build_study_pack(), ""
 

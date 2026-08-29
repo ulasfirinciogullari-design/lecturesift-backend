@@ -91,6 +91,17 @@ function deferNonCriticalScripts(html) {
   });
 }
 
+function removeStaticTranslationCatalog(html) {
+  // Public pages are already translated before they are written to dist. The
+  // 1.1 MB all-language fallback catalog is still required by authenticated
+  // and workspace screens, but downloading and parsing it again on every
+  // indexable page only delays first interaction without changing the page.
+  return html.replace(
+    /<script\b[^>]*\bsrc="(?:\.\/|\/)?page-i18n\.js(?:\?[^\"]*)?"[^>]*><\/script>\s*/gi,
+    "",
+  );
+}
+
 function readHeadValue(html, pattern, label, publicPath) {
   const value = html.match(pattern)?.[1]?.trim();
   if (!value) throw new Error(`${publicPath} has no ${label}`);
@@ -215,6 +226,9 @@ function validateLocalizedPage(html, language, publicPath) {
   }
   const schemaSource = html.match(/<script\s+type="application\/ld\+json"\s+data-lecturesift-seo>([\s\S]*?)<\/script>/i)?.[1];
   JSON.parse(schemaSource || "");
+  if (/\bsrc="(?:\.\/|\/)?page-i18n\.js\b/i.test(html)) {
+    throw new Error(`${localizedPath(language, publicPath)} still loads the static translation catalog`);
+  }
 }
 
 await rm(OUTPUT, {recursive: true, force: true});
@@ -225,6 +239,7 @@ for (const language of LANGUAGES) {
     const sourceName = publicPath === "/" ? "index.html" : publicPath.slice(1);
     let html = await readFile(path.join(SOURCE, sourceName), "utf8");
     html = translateDocument(html, language);
+    html = removeStaticTranslationCatalog(html);
     html = deferNonCriticalScripts(html);
     html = staticSeo(html, language, publicPath);
     validateLocalizedPage(html, language, publicPath);
