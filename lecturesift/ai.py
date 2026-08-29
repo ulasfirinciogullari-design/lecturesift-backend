@@ -1,10 +1,19 @@
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextvars import copy_context
 from pathlib import Path
+from typing import Callable, TypeVar
 
 from openai import OpenAI
 
-from .config import LANGUAGE_NAMES, OPENAI_API_KEY, SUMMARY_STYLES
+from .config import (
+    LANGUAGE_NAMES,
+    OPENAI_API_KEY,
+    STUDY_PACK_PARALLELISM,
+    SUMMARY_STYLES,
+    TRANSLATION_PARALLELISM,
+)
 from .costs import record_openai_response, record_transcription_fallback
 from .duration import media_duration_seconds
 from .errors import LectureSiftError
@@ -15,6 +24,32 @@ LONG_TRANSCRIPT_THRESHOLD = 85_000
 STUDY_SECTION_CHARACTERS = 28_000
 MAX_SYNTHESIS_CHARACTERS = 85_000
 QUESTION_CONTEXT_SEGMENTS = 18
+T = TypeVar("T")
+R = TypeVar("R")
+
+
+def _parallel_map(values: list[T], callback: Callable[[int, T], R], maximum: int) -> list[R]:
+    """Run independent provider calls concurrently while preserving source order.
+
+    A fresh context copy per future keeps the sanitized cost attribution attached
+    to every OpenAI request without sharing one Context across worker threads.
+    """
+    if not values:
+        return []
+    if len(values) == 1 or maximum <= 1:
+        return [callback(index, value) for index, value in enumerate(values)]
+    results: list[R | None] = [None] * len(values)
+    with ThreadPoolExecutor(
+        max_workers=min(maximum, len(values)),
+        thread_name_prefix="lecturesift-ai",
+    ) as executor:
+        pending = {
+            executor.submit(copy_context().run, callback, index, value): index
+            for index, value in enumerate(values)
+        }
+        for future in as_completed(pending):
+            results[pending[future]] = future.result()
+    return [value for value in results if value is not None]
 
 
 def _client() -> OpenAI:
@@ -249,8 +284,9 @@ def translate_transcript(transcript: str, output_language: str) -> str:
     if not transcript.strip() or output_language not in LANGUAGE_NAMES:
         return ""
     language_name = LANGUAGE_NAMES[output_language]
-    translated_chunks: list[str] = []
-    for chunk in _chunk_text(transcript):
+    chunks = _chunk_text(transcript)
+
+    def translate_one(_index: int, chunk: str) -> str:
         translated = ""
         complete = False
         for attempt in range(2):
@@ -264,7 +300,9 @@ def translate_transcript(transcript: str, output_language: str) -> str:
                 "Translation chunk failed completeness validation.",
                 502,
             )
-        translated_chunks.append(translated)
+        return translated
+
+    translated_chunks = _parallel_map(chunks, translate_one, TRANSLATION_PARALLELISM)
     return "\n\n".join(translated_chunks).strip()
 
 
@@ -283,7 +321,7 @@ def empty_study_pack() -> dict:
 
 def _normalize_flashcards(items: object, language: str, maximum: int) -> list[dict]:
     normalized: list[dict] = []
-    if not isinstance(items, list):
+    if maximum <= 0 or not isinstance(items, list):
         return normalized
     for item in items:
         if not isinstance(item, dict):
@@ -298,6 +336,12 @@ def _normalize_flashcards(items: object, language: str, maximum: int) -> list[di
         if len(normalized) >= maximum:
             break
     return normalized
+
+
+def _normalize_quiz(items: object, maximum: int) -> list[dict]:
+    if maximum <= 0 or not isinstance(items, list):
+        return []
+    return [item for item in items if isinstance(item, dict)][:maximum]
 
 
 def _request_study_pack(
@@ -366,8 +410,83 @@ Requirements:
     value = _safe_json(response.choices[0].message.content or "{}")
     base = empty_study_pack()
     base.update({key: value.get(key, default) for key, default in base.items()})
+    base["quiz"] = _normalize_quiz(base.get("quiz"), quiz_count)
     base["flashcards"] = _normalize_flashcards(base.get("flashcards"), output_language, flashcard_count)
     return base
+
+
+def _request_final_study_pack(
+    source: str,
+    output_language: str,
+    summary_style: str,
+    quiz_count: int,
+    flashcard_count: int,
+    **kwargs,
+) -> dict:
+    """Keep large detailed packs reliable by separating prose from exercises.
+
+    One oversized JSON response could be truncated before its closing brace. Two
+    bounded responses fit comfortably, run at the same time, and are merged into
+    the exact public schema returned by the original endpoint.
+    """
+    split_output = summary_style == "detailed" or quiz_count > 15 or flashcard_count > 30
+    if not split_output:
+        return _request_study_pack(
+            source,
+            output_language,
+            summary_style,
+            quiz_count,
+            flashcard_count,
+            **kwargs,
+        )
+
+    def request_part(_index: int, part: str) -> dict:
+        shared = dict(kwargs)
+        requirements = str(shared.pop("extra_requirements", "") or "").strip()
+        if part == "content":
+            return _request_study_pack(
+                source,
+                output_language,
+                summary_style,
+                0,
+                0,
+                extra_requirements=(
+                    f"{requirements}\nPrioritize a complete summary, key points, terms, structured notes, and "
+                    "exam focus. Return empty quiz and flashcards arrays."
+                ).strip(),
+                max_tokens=8500,
+                **shared,
+            )
+        return _request_study_pack(
+            source,
+            output_language,
+            "standard",
+            quiz_count,
+            flashcard_count,
+            summary_target="about 120-220 words",
+            extra_requirements=(
+                f"{requirements}\nPrioritize exactly the requested quiz questions and flashcards. Keep title, "
+                "summary, key points, terms, notes, and exam focus intentionally concise because the full study "
+                "content is produced in a parallel response."
+            ).strip(),
+            max_tokens=7500,
+            **shared,
+        )
+
+    content, exercises = _parallel_map(
+        ["content", "exercises"],
+        request_part,
+        min(2, STUDY_PACK_PARALLELISM),
+    )
+    merged = empty_study_pack()
+    merged.update(content)
+    if not str(merged.get("title") or "").strip():
+        merged["title"] = exercises.get("title") or "LectureSift"
+    merged["quiz"] = _normalize_quiz(exercises.get("quiz"), quiz_count)
+    merged["flashcards"] = _normalize_flashcards(
+        exercises.get("flashcards"), output_language, flashcard_count
+    )
+    return merged
 
 
 def _digest_source(digests: list[dict]) -> str:
@@ -403,16 +522,14 @@ def _compact_digests(
         if len(_digest_source(compacted)) <= MAX_SYNTHESIS_CHARACTERS:
             return compacted
         groups = _digest_groups(compacted)
-        next_level: list[dict] = []
-        for index, group in enumerate(groups, 1):
-            next_level.append(
-                _request_study_pack(
+        def compact_group(index: int, group: list[dict]) -> dict:
+            return _request_study_pack(
                     _digest_source(group),
                     output_language,
                     summary_style,
                     max(2, min(quiz_count, 8)),
                     max(4, min(flashcard_count, 12)),
-                    source_label=f"ORDERED DIGEST GROUP {index} OF {len(groups)}",
+                    source_label=f"ORDERED DIGEST GROUP {index + 1} OF {len(groups)}",
                     source_context=(
                         "The source contains faithful digests of consecutive lecture sections. "
                         "Merge them without omitting unique facts and without adding outside knowledge."
@@ -421,7 +538,7 @@ def _compact_digests(
                     extra_requirements="Keep the entire JSON concise enough for a later final synthesis.",
                     max_tokens=4000,
                 )
-            )
+        next_level = _parallel_map(groups, compact_group, STUDY_PACK_PARALLELISM)
         if len(next_level) >= len(compacted) and len(next_level) == 1:
             compacted = next_level
             break
@@ -446,7 +563,7 @@ def make_study_pack(
     if not transcript.strip():
         return empty_study_pack()
     if len(transcript) <= LONG_TRANSCRIPT_THRESHOLD:
-        return _request_study_pack(
+        return _request_final_study_pack(
             transcript,
             output_language,
             summary_style,
@@ -457,16 +574,14 @@ def make_study_pack(
     sections = _chunk_text(transcript, STUDY_SECTION_CHARACTERS)
     section_quiz = max(2, (quiz_count + len(sections) - 1) // len(sections) + 1)
     section_cards = max(4, (flashcard_count + len(sections) - 1) // len(sections) + 2)
-    digests: list[dict] = []
-    for index, section in enumerate(sections, 1):
-        digests.append(
-            _request_study_pack(
+    def digest_section(index: int, section: str) -> dict:
+        return _request_study_pack(
                 section,
                 output_language,
                 summary_style,
                 section_quiz,
                 section_cards,
-                source_label=f"TRANSCRIPT SECTION {index} OF {len(sections)}",
+                source_label=f"TRANSCRIPT SECTION {index + 1} OF {len(sections)}",
                 source_context=(
                     "Use ONLY this consecutive lecture section. Preserve every distinct topic needed for a later "
                     "whole-lecture synthesis; never assume that another section will recover omitted facts."
@@ -475,7 +590,7 @@ def make_study_pack(
                 extra_requirements="Keep the entire section JSON under roughly 1800 words.",
                 max_tokens=3500,
             )
-        )
+    digests = _parallel_map(sections, digest_section, STUDY_PACK_PARALLELISM)
 
     compacted = _compact_digests(
         digests,
@@ -484,7 +599,7 @@ def make_study_pack(
         quiz_count,
         flashcard_count,
     )
-    return _request_study_pack(
+    return _request_final_study_pack(
         _digest_source(compacted),
         output_language,
         summary_style,

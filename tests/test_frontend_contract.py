@@ -127,8 +127,8 @@ def test_public_navigation_is_consistent_localized_and_session_aware():
     )
     for page in public_pages:
         content = (FRONTEND / page).read_text(encoding="utf-8")
-        assert "/site-shell.js?v=1" in content, page
-        assert "/rollout.css?v=7" in content, page
+        assert "/site-shell.js?v=2" in content, page
+        assert "/rollout.css?v=8" in content, page
 
     shell = (FRONTEND / "site-shell.js").read_text(encoding="utf-8")
     assert 'const TOKEN_KEY = "lecturesift-billing-token"' in shell
@@ -148,15 +148,30 @@ def test_public_navigation_is_consistent_localized_and_session_aware():
     assert ".public-header-tools" in rollout
     assert ".public-nav-link.active" in rollout
     assert '@media(max-width:860px)' in rollout
+    assert 'grid-template-areas:"theme language" "navigation navigation"' in rollout
+    assert "rebuildInformationNavigation" in shell
+    assert 'corporatePages = ["/about.html", "/contact.html"]' in shell
+    assert 'script.src = "/legal-operator.js?v=1"' in shell
+
+
+def test_processing_center_uses_operation_specific_progress_profiles():
+    script = (FRONTEND / "app.js").read_text(encoding="utf-8")
+    assert "const PROGRESS_PROFILES" in script
+    assert 'document: [["source", "stageSource"], ["document_extraction", "stageDocument"]' in script
+    assert 'audio_export: [["source", "stageSource"], ["audio_extract", "stageMp3"]' in script
+    assert 'download_video: [["source", "stageSource"], ["worker_download", "url_download"]' in script
+    assert "function configureProgressProfile" in script
+    assert "function profileDetail" in script
+    assert "uploadingSource" in script
 
 
 def test_every_page_supports_persistent_light_and_dark_themes():
     for page in FRONTEND.glob("*.html"):
         content = page.read_text(encoding="utf-8")
-        assert "/theme.css?v=8" in content, page.name
+        assert "/theme.css?v=9" in content, page.name
         assert "/theme.js?v=2" in content, page.name
-        assert "i18n.js?v=17" in content, page.name
-        assert "page-i18n.js?v=4" in content, page.name
+        assert "i18n.js?v=18" in content, page.name
+        assert "page-i18n.js?v=5" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
     style = (FRONTEND / "theme.css").read_text(encoding="utf-8")
@@ -535,7 +550,7 @@ def test_legal_operator_identity_is_public_only_after_configuration():
     i18n = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
     operator = (FRONTEND / "legal-operator.js").read_text(encoding="utf-8")
     blueprint = (FRONTEND.parent / "render.yaml").read_text(encoding="utf-8")
-    assert 'legalOperatorScript.src = "/legal-operator.js?v=2"' in i18n
+    assert 'legalOperatorScript.src = "/legal-operator.js?v=3"' in i18n
     assert "/billing/operator" in operator
     assert "if (!operator?.configured) return" in operator
     assert '"/distance-sales.html", "/contact.html"' in operator
@@ -733,7 +748,7 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=12"' in index
+    assert 'src="./app.js?v=15"' in index
     assert 'src="/rollout.js?v=3"' in index
 
 

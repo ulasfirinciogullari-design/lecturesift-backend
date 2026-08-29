@@ -539,7 +539,7 @@
   window.LectureSiftI18n = Object.freeze({language:selected, locale:locales[selected], languages, t, exact, localizedPath, keys:Object.keys(rows)});
   if (document.querySelector(".legal-card")) {
     const legalOperatorScript = document.createElement("script");
-    legalOperatorScript.src = "/legal-operator.js?v=2";
+    legalOperatorScript.src = "/legal-operator.js?v=3";
     legalOperatorScript.defer = true;
     document.head.append(legalOperatorScript);
   }

@@ -2,12 +2,17 @@ import shutil
 import time
 import traceback
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from .ai import make_study_pack, transcribe, transcribe_timed, translate_transcript
 from .billing_service import record_usage
-from .config import APP_VERSION, DOCUMENT_EXTENSIONS, PRECISE_TRANSCRIPT_TIMESTAMPS
+from .config import (
+    APP_VERSION,
+    DOCUMENT_EXTENSIONS,
+    PRECISE_TRANSCRIPT_TIMESTAMPS,
+    TRANSCRIPTION_PARALLELISM,
+)
 from .costs import cost_context
 from .documents import extract_documents
 from .duration import media_duration_seconds
@@ -80,25 +85,32 @@ def _audio_pipeline(
         JOBS.update_task(job_id, "audio", 100, "no_audio")
         return "", "", [], "none"
 
-    transcripts: list[str] = []
-    transcript_segments: list[dict] = []
+    chunk_durations = [_source_duration_seconds([path]) for path in audio_chunks]
+    chunk_offsets: list[float] = []
     timeline_cursor = 0.0
+    for duration in chunk_durations:
+        chunk_offsets.append(timeline_cursor)
+        timeline_cursor += duration
     timestamp_mode = "provider_segments" if PRECISE_TRANSCRIPT_TIMESTAMPS else "chunk_estimate"
-    for index, audio_path in enumerate(audio_chunks, 1):
-        JOBS.update_task(
-            job_id,
-            "audio",
-            24 + 50 * (index - 1) / max(1, len(audio_chunks)),
-            "transcription",
-        )
-        chunk_duration = _source_duration_seconds([audio_path])
+    user_id = str(options.get("billing_user_id") or "") or None
+
+    def transcribe_chunk(index: int, audio_path: Path) -> tuple[int, str, list[dict]]:
+        chunk_duration = chunk_durations[index]
+        offset = chunk_offsets[index]
+        segments: list[dict] = []
+        with cost_context(job_id, user_id):
+            timed = None
+            text = ""
+            if PRECISE_TRANSCRIPT_TIMESTAMPS:
+                timed = transcribe_timed(audio_path, options["source_language"])
+                text = timed["text"]
+            else:
+                text = transcribe(audio_path, options["source_language"])
         if PRECISE_TRANSCRIPT_TIMESTAMPS:
-            timed = transcribe_timed(audio_path, options["source_language"])
-            text = timed["text"]
-            for segment in timed["segments"]:
-                start = timeline_cursor + float(segment["start"])
-                end = timeline_cursor + float(segment["end"])
-                transcript_segments.append(
+            for segment in (timed or {}).get("segments", []):
+                start = offset + float(segment["start"])
+                end = offset + float(segment["end"])
+                segments.append(
                     {
                         **segment,
                         "start": round(start, 2),
@@ -107,21 +119,49 @@ def _audio_pipeline(
                     }
                 )
         else:
-            text = transcribe(audio_path, options["source_language"])
             if text.strip():
-                transcript_segments.append(
+                segments.append(
                     {
-                        "start": round(timeline_cursor, 2),
-                        "end": round(timeline_cursor + chunk_duration, 2),
-                        "timestamp": _transcript_timestamp(timeline_cursor),
+                        "start": round(offset, 2),
+                        "end": round(offset + chunk_duration, 2),
+                        "timestamp": _transcript_timestamp(offset),
                         "speaker": None,
                         "text": text.strip(),
                         "precision": "chunk_estimate",
                     }
                 )
-        if text.strip():
-            transcripts.append(text.strip())
-        timeline_cursor += chunk_duration
+        return index, text.strip(), segments
+
+    completed = 0
+    ordered: list[tuple[str, list[dict]] | None] = [None] * len(audio_chunks)
+    with ThreadPoolExecutor(
+        max_workers=min(TRANSCRIPTION_PARALLELISM, len(audio_chunks)),
+        thread_name_prefix="lecturesift-transcribe",
+    ) as executor:
+        futures = {
+            executor.submit(transcribe_chunk, index, path): index
+            for index, path in enumerate(audio_chunks)
+        }
+        for future in as_completed(futures):
+            index, text, segments = future.result()
+            ordered[index] = (text, segments)
+            completed += 1
+            JOBS.update_task(
+                job_id,
+                "audio",
+                24 + 50 * completed / max(1, len(audio_chunks)),
+                "transcription",
+            )
+
+    transcripts: list[str] = []
+    transcript_segments: list[dict] = []
+    for item in ordered:
+        if not item:
+            continue
+        text, segments = item
+        if text:
+            transcripts.append(text)
+        transcript_segments.extend(segments)
     original = "\n\n".join(transcripts)
     JOBS.update_task(job_id, "audio", 76, "transcript_ready")
 
@@ -296,6 +336,7 @@ def _process_job(
         if options.get("job_type") == "audio_export":
             JOBS.update(job_id, percent=35, stage="audio_extract")
             audio_path = convert_videos_to_mp3(audio_sources, job_dir)
+            JOBS.update(job_id, percent=88, stage="exports")
             result = {
                 "version": APP_VERSION,
                 "job_id": job_id,
@@ -328,6 +369,7 @@ def _process_job(
 
         if options.get("job_type") == "download_video":
             source = audio_sources[0]
+            JOBS.update(job_id, percent=88, stage="exports")
             filename = f"LectureSift_Indirilen_Video{source.suffix.lower() or '.mp4'}"
             result = {
                 "version": APP_VERSION,

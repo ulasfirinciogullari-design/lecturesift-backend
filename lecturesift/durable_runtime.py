@@ -102,7 +102,13 @@ def install_durable_runtime() -> None:
             )
             return
 
-        eta = estimate_eta_seconds(media_minutes, size_bytes)
+        eta = estimate_eta_seconds(
+            media_minutes,
+            size_bytes,
+            job_type=str(options.get("job_type") or "study_pack"),
+            summary_style=str(options.get("summary_style") or "standard"),
+            source_kind="document" if document_seconds else "media",
+        )
         JOBS.update(
             job_id,
             media_minutes=round(media_minutes, 2),

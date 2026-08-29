@@ -1,3 +1,4 @@
+import threading
 import uuid
 
 import lecturesift.pipeline as pipeline
@@ -82,3 +83,35 @@ def test_exported_original_transcript_includes_timestamps_and_speakers():
     })
     assert "[01:02:03] A  Exam detail." in text
     assert "[01:02:10]  Definition." in text
+
+
+def test_audio_chunks_transcribe_concurrently_but_keep_timeline_order(tmp_path, monkeypatch):
+    job_id, source, first = _job(tmp_path)
+    second = tmp_path / "audio_001_001.mp3"
+    second.write_bytes(b"audio-two")
+    gate = threading.Barrier(2, timeout=3)
+    monkeypatch.setattr(pipeline, "PRECISE_TRANSCRIPT_TIMESTAMPS", False)
+    monkeypatch.setattr(pipeline, "TRANSCRIPTION_PARALLELISM", 2)
+    monkeypatch.setattr(pipeline, "has_audio_stream", lambda _path: True)
+    monkeypatch.setattr(pipeline, "extract_audio_chunks", lambda *_args, **_kwargs: [first, second])
+    monkeypatch.setattr(
+        pipeline,
+        "_source_duration_seconds",
+        lambda paths: 60.0 if paths[0].name.endswith("000.mp3") else 90.0,
+    )
+
+    def fake_transcribe(path, _language):
+        gate.wait()
+        return "First chunk" if path == first else "Second chunk"
+
+    monkeypatch.setattr(pipeline, "transcribe", fake_transcribe)
+    original, _, segments, _ = pipeline._audio_pipeline(
+        job_id,
+        [source],
+        tmp_path,
+        {"source_language": "en", "output_language": "en", "translate_transcript": False},
+    )
+
+    assert original == "First chunk\n\nSecond chunk"
+    assert [item["start"] for item in segments] == [0.0, 60.0]
+    assert [item["end"] for item in segments] == [60.0, 150.0]

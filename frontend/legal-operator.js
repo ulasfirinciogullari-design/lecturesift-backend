@@ -11,8 +11,11 @@
     link.textContent = t("legal.distanceSales", "Mesafeli Satış Sözleşmesi");
     host.append(link);
   };
-  ensureDistanceSalesLink(document.querySelector(".legal-nav"));
-  ensureDistanceSalesLink(document.querySelector(".legal-footer nav"));
+  const legalDocumentPages = ["/privacy.html", "/terms.html", "/cookies.html", "/refund.html", "/distance-sales.html"];
+  if (legalDocumentPages.some(path => location.pathname.endsWith(path))) {
+    ensureDistanceSalesLink(document.querySelector(".legal-nav"));
+    ensureDistanceSalesLink(document.querySelector(".legal-footer nav"));
+  }
   const showOperatorDetails = ["/distance-sales.html", "/contact.html"]
     .some(path => location.pathname.endsWith(path));
   if (!showOperatorDetails) return;

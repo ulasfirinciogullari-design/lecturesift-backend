@@ -67,5 +67,5 @@ html[data-theme="light"] :is(.plan-card p,.plan-features li,.plan-action,.plan-b
 html[data-theme="light"] :is(.plan-action,.credit-callout a){color:#fff!important}
 html[data-theme="light"] ::selection{background:rgba(8,107,191,.22);color:#071a31}
 @media (max-width:700px){html[data-theme="light"] :is(.field-help,.control>span,.control small,.upload-source-card p,.combined-limit,.source-file-list small,.stage-list p,.process-metric small,.result-card p,.legal-note,.admin-section-note,.admin-command-bar small,.admin-growth-grid p,.empty-copy,.footer-links,.site-footer,.legal-footer){font-size:12px}}
-@media(max-width:860px){.theme-toggle-label{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}.public-header-tools>.theme-toggle{order:2}.public-header-tools>.language-picker,.public-header-tools>.language-switcher{order:3}.public-header-tools>.public-nav{order:1}.auth-topbar{flex-wrap:wrap;gap:8px}.auth-topbar>.theme-toggle{margin-inline-start:auto}}
+@media(max-width:860px){.theme-toggle-label{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}.auth-topbar{flex-wrap:wrap;gap:8px}.auth-topbar>.theme-toggle{margin-inline-start:auto}}
 @media(prefers-reduced-motion:reduce){.theme-toggle,.skip-link{transition:none}}

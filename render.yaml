@@ -16,6 +16,12 @@ services:
         sync: false
       - key: LECTURESIFT_PRECISE_TRANSCRIPT_TIMESTAMPS
         value: "false"
+      - key: LECTURESIFT_TRANSCRIPTION_PARALLELISM
+        value: "3"
+      - key: LECTURESIFT_TRANSLATION_PARALLELISM
+        value: "3"
+      - key: LECTURESIFT_STUDY_PACK_PARALLELISM
+        value: "3"
       - key: LECTURESIFT_MAX_DOCUMENT_BYTES
         value: "52428800"
       - key: LECTURESIFT_MAX_DOCUMENT_PAGES
@@ -190,6 +196,12 @@ services:
         sync: false
       - key: LECTURESIFT_PRECISE_TRANSCRIPT_TIMESTAMPS
         value: "false"
+      - key: LECTURESIFT_TRANSCRIPTION_PARALLELISM
+        value: "3"
+      - key: LECTURESIFT_TRANSLATION_PARALLELISM
+        value: "3"
+      - key: LECTURESIFT_STUDY_PACK_PARALLELISM
+        value: "3"
       - key: LECTURESIFT_MAX_DOCUMENT_BYTES
         value: "52428800"
       - key: LECTURESIFT_MAX_DOCUMENT_PAGES
