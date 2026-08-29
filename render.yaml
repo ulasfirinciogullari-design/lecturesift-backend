@@ -92,6 +92,8 @@ services:
         sync: false
       - key: IYZICO_BASE_URL
         value: https://api.iyzipay.com
+      - key: IYZICO_BANK_TRANSFER_ENABLED
+        value: "false"
       - key: CONTACT_EMAIL
         value: support@lecturesift.com
       - key: BILLING_SUPPORT_EMAIL

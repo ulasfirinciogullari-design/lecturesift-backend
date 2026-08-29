@@ -60,7 +60,7 @@ The automated suite covers human-readable API errors, SSRF/private-URL rejection
 
 ## Billing and hosted card payments
 
-Account, bank-transfer, credit-pack, and admin approval data is stored in the configured PostgreSQL database. iyzico is the preferred card provider when the runtime-only `IYZICO_API_KEY` and `IYZICO_SECRET_KEY` values are present. Production uses `IYZICO_BASE_URL=https://api.iyzipay.com`; sandbox testing may explicitly use `https://sandbox-api.iyzipay.com`. PayTR remains an optional fallback.
+Account, bank-transfer, credit-pack, and admin approval data is stored in the configured PostgreSQL database. iyzico is the preferred card provider when the runtime-only `IYZICO_API_KEY` and `IYZICO_SECRET_KEY` values are present. Production uses `IYZICO_BASE_URL=https://api.iyzipay.com`; sandbox testing may explicitly use `https://sandbox-api.iyzipay.com`. PayTR remains an optional fallback. Direct IBAN orders use `BILLING_BANK_IBAN`, `BILLING_BANK_ACCOUNT_HOLDER`, and `BILLING_BANK_NAME`; they remain pending until an administrator verifies the bank movement and approves or rejects the unique order reference.
 
 Set the independent `ADMIN_ADMIN` secret in Render to open `/admin.html`. Normal user sessions, legal contact addresses, billing credentials, and Instagram credentials never grant admin access. The secret must never be committed and is retained only for the current browser-tab session.
 
@@ -74,7 +74,7 @@ The callback validates PayTR's HMAC signature and the original order amount, and
 
 iyzico Checkout Form uses the application-generated callback URL under `/billing/iyzico/callback`. Every API request uses IYZWSv2 HMAC-SHA256 authentication. Initialize and retrieve response signatures, provider token, order reference, currency, basket amount, and paid amount must all match before a plan or credit pack is activated. Never commit or log iyzico credentials.
 
-Protected Bank Transfer/EFT uses the same Checkout Form after iyzico activates the payment method on the merchant account. Configure the Merchant Notifications URL as `https://lecturesift-backend.onrender.com/billing/iyzico/webhook` and ask iyzico to enable both Bank Transfer/EFT and `X-IYZ-SIGNATURE-V3`. The webhook verifies the ordered HPP signature fields, performs a second server-to-server Checkout Form retrieve, and activates access only when `paymentStatus` is `SUCCESS`; `INIT_BANK_TRANSFER` remains pending.
+Protected Bank Transfer/EFT is separate from the direct-IBAN/manual-review flow. It uses the same Checkout Form only after iyzico explicitly confirms that payment method on the merchant account. Configure the Merchant Notifications URL as `https://lecturesift-backend.onrender.com/billing/iyzico/webhook` and ask iyzico to enable both Bank Transfer/EFT and `X-IYZ-SIGNATURE-V3`. Set `IYZICO_BANK_TRANSFER_ENABLED=true` only after that separate activation is confirmed. The webhook verifies the ordered HPP signature fields, performs a second server-to-server Checkout Form retrieve, and activates access only when `paymentStatus` is `SUCCESS`; `INIT_BANK_TRANSFER` remains pending. Signature activation alone must not be treated as protected bank-transfer activation.
 
 Instagram credentials are read only from `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_ACCOUNT_ID`, and
 `INSTAGRAM_APP_SECRET`. Publishing routes additionally require `INSTAGRAM_ADMIN_TOKEN` as a Bearer

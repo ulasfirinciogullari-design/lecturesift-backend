@@ -82,11 +82,16 @@ def test_billing_health_reports_local_database_and_fails_closed_on_render(monkey
         "configured": False,
         "provider": "iyzico",
         "automatic": True,
+        "manual_configured": False,
         "legacy_manual_configured": False,
     }
 
     monkeypatch.setattr(config, "IYZICO_API_KEY", "live-api-key")
     monkeypatch.setattr(config, "IYZICO_SECRET_KEY", "live-secret-key")
+    response = client.get("/billing/health")
+    assert response.status_code == 200
+    assert response.json()["payments"]["bank_transfer"]["configured"] is False
+    monkeypatch.setattr(config, "IYZICO_BANK_TRANSFER_ENABLED", True)
     response = client.get("/billing/health")
     assert response.status_code == 200
     assert response.json()["payments"]["bank_transfer"]["configured"] is True
@@ -322,6 +327,28 @@ def test_manual_transfer_order_and_admin_approval(monkeypatch):
     )
     assert repeated.status_code == 200
     assert repeated.json()["account"]["plan"]["code"] == "plus"
+
+    rejected_order = client.post(
+        "/billing/manual-transfer/orders",
+        json={"plan_code": "credit", "interval": "one_time", "terms_accepted": True, "early_performance_requested": True},
+        headers={"Authorization": f"Bearer {token}"},
+    ).json()["order"]
+    rejected = client.post(
+        f"/billing/manual-transfer/orders/{rejected_order['reference']}/reject",
+        headers={"Authorization": "Bearer test-admin-token"},
+    )
+    assert rejected.status_code == 200
+    assert rejected.json()["result"] == {
+        "reference": rejected_order["reference"],
+        "status": "rejected",
+    }
+    account_after_rejection = client.get(
+        "/billing/me", headers={"Authorization": f"Bearer {token}"}
+    ).json()["account"]
+    assert any(
+        item["reference"] == rejected_order["reference"] and item["status"] == "rejected"
+        for item in account_after_rejection["manual_orders"]
+    )
 
     overview = client.get(
         "/billing/admin/overview",

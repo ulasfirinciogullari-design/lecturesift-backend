@@ -39,6 +39,7 @@ from .billing_service import (
     _hash_password,
     account_status,
     approve_manual_order,
+    reject_manual_order,
     init_billing_database,
     issue_session,
     utcnow,
@@ -2008,21 +2009,7 @@ def list_admin_orders(status: str = "pending") -> list[dict]:
 def decide_admin_order(reference: str, approve: bool) -> dict:
     if approve:
         return approve_manual_order(reference)
-    init_rollout_database()
-    with ENGINE.begin() as connection:
-        row = connection.execute(
-            select(MANUAL_ORDERS).where(MANUAL_ORDERS.c.reference == reference)
-        ).first()
-        if not row:
-            raise BillingError("Sipariş bulunamadı.")
-        if row.status == "paid":
-            raise BillingError("Onaylanmış sipariş reddedilemez.")
-        connection.execute(
-            update(MANUAL_ORDERS)
-            .where(MANUAL_ORDERS.c.reference == reference)
-            .values(status="rejected", updated_at=utcnow())
-        )
-    return {"reference": reference, "status": "rejected"}
+    return reject_manual_order(reference)
 
 
 def list_admin_rewards(status: str = "pending_verification") -> list[dict]:

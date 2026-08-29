@@ -63,6 +63,7 @@ let catalog = null;
 let account = null;
 let providers = [];
 let commerceIdentity = {configured: false};
+let manualTransfer = {available: false, bank: null};
 let currency = "TRY";
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({
@@ -233,18 +234,6 @@ function cardProviderStatus() {
   return iyzico;
 }
 
-function automaticBankTransferStatus() {
-  const iyzico = iyzicoStatus();
-  return {
-    ...iyzico,
-    configured: Boolean(
-      iyzico.configured
-      && iyzico.capabilities?.includes("bank_transfer")
-      && iyzico.currencies?.includes("TRY")
-    ),
-  };
-}
-
 function pendingCardMessage() {
   return pt("payment.cardPending", "iyzico canlı ödeme anahtarları güvenli sunucu ayarına eklendiğinde kartlı ödeme açılacak.");
 }
@@ -255,10 +244,9 @@ function renderPaymentStatus() {
   $('cardAvailability').textContent = provider.configured
     ? `${provider.code === "iyzico" ? "iyzico" : "PayTR"} · ${pt("payment.providerReady", "Kart ve güvenli ödeme yöntemleri kullanıma hazır.")}`
     : pendingCardMessage();
-  const bankTransfer = automaticBankTransferStatus();
-  $("bankAvailability").textContent = bankTransfer.configured
-    ? pt("payment.available", "iyzico sayfasında Havale/EFT seçilebilir; eşleşen ödeme otomatik onaylanır.")
-    : pt("payment.notConfigured", "iyzico Havale/EFT seçeneği henüz etkin değil.");
+  $("bankAvailability").textContent = manualTransfer.available
+    ? pt("payment.available", "IBAN havalesi kullanılabilir; sipariş ödeme kontrolünden sonra etkinleşir.")
+    : pt("payment.notConfigured", "IBAN havale bilgileri henüz etkin değil.");
 }
 
 function renderPlans() {
@@ -308,7 +296,9 @@ async function buy(planCode, interval = "monthly") {
     return;
   }
   const provider = cardProviderStatus();
-  if (!provider.configured || !provider.currencies?.includes(currency)) {
+  const cardAvailable = Boolean(provider.configured && provider.currencies?.includes(currency));
+  const manualAvailable = Boolean(manualTransfer.available && currency === "TRY");
+  if (!cardAvailable && !manualAvailable) {
     showError(pt("plans.globalPending", "Global kart ve yerel ödeme yöntemleri ödeme sağlayıcısı etkinleştiğinde açılacak. Şimdilik havale için TRY seçebilirsin."));
     return;
   }
@@ -337,36 +327,30 @@ async function buy(planCode, interval = "monthly") {
   $("checkoutLastName").value = account?.user?.last_name || "";
   $("checkoutTerms").checked = false;
   $("checkoutEarlyPerformance").checked = false;
-  const bankTransfer = automaticBankTransferStatus();
-  $("checkoutCardButton").disabled = !commerceIdentity.configured || !provider.configured || !provider.currencies?.includes(currency);
-  $("checkoutBankButton").disabled = !commerceIdentity.configured || currency !== "TRY" || !bankTransfer.configured;
+  $("checkoutCardButton").disabled = !commerceIdentity.configured || !cardAvailable;
+  $("checkoutBankButton").disabled = !commerceIdentity.configured || !manualAvailable;
   $("checkoutNotice").textContent = !commerceIdentity.configured
     ? pt("payment.commercePending", "Satıcı/sağlayıcı kimliği ve iletişim bilgileri tamamlanmadan ödeme açılamaz.")
     : provider.configured
     ? pt("payment.providerReady", "Kart ve güvenli ödeme yöntemleri kullanıma hazır.")
     : pendingCardMessage();
-  $("bankTransferGuide").hidden = true;
   $("checkoutForm").hidden = false;
   $("paytrFrame").hidden = true;
   $("checkoutPanel").hidden = false;
 }
 
-async function startHostedCheckout(preferredMethod = "card") {
+async function startHostedCheckout() {
   if (!$("checkoutForm").reportValidity()) return;
   const cardButton = $("checkoutCardButton");
   const bankButton = $("checkoutBankButton");
-  const bankContinueButton = $("bankTransferContinue");
-  if ((preferredMethod === "bank_transfer" ? bankButton : cardButton).disabled) return;
+  if (cardButton.disabled) return;
   cardButton.disabled = true;
   bankButton.disabled = true;
-  bankContinueButton.disabled = true;
-  $("checkoutNotice").textContent = preferredMethod === "bank_transfer"
-    ? pt("payment.openingTransfer", "iyzico açılıyor; güvenli sayfada Havale/EFT seçeneğini seç.")
-    : pt("payment.opening", "Güvenli ödeme açılıyor…");
+  $("checkoutNotice").textContent = pt("payment.opening", "Güvenli ödeme açılıyor…");
   try {
     const planCode = $("checkoutPlanCode").value;
     recordPlanAnalytics("add_payment_info", {
-      payment_type: preferredMethod,
+      payment_type: "card",
       items: [{item_id: planCode, item_name: planLabel(planCode), quantity: 1}],
     });
     const body = await api("/billing/checkout", {
@@ -398,24 +382,64 @@ async function startHostedCheckout(preferredMethod = "card") {
     $("checkoutNotice").textContent = error.message;
     const provider = cardProviderStatus();
     cardButton.disabled = !commerceIdentity.configured || !provider.configured || !provider.currencies?.includes(currency);
-    bankButton.disabled = !commerceIdentity.configured || currency !== "TRY" || !automaticBankTransferStatus().configured;
-    bankContinueButton.disabled = bankButton.disabled;
+    bankButton.disabled = !commerceIdentity.configured || currency !== "TRY" || !manualTransfer.available;
   }
 }
 
-function showBankTransferGuide() {
+async function createTransfer() {
   const bankButton = $("checkoutBankButton");
   if (bankButton.disabled || !$("checkoutForm").reportValidity()) return;
-  $("checkoutNotice").textContent = "";
-  $("checkoutForm").hidden = true;
-  $("bankTransferGuide").hidden = false;
-  $("bankTransferContinue").focus();
-}
-
-function hideBankTransferGuide() {
-  $("bankTransferGuide").hidden = true;
-  $("checkoutForm").hidden = false;
-  $("checkoutBankButton").focus();
+  const cardButton = $("checkoutCardButton");
+  bankButton.disabled = true;
+  cardButton.disabled = true;
+  $("checkoutNotice").textContent = pt("payment.creatingTransfer", "Havale siparişi oluşturuluyor…");
+  try {
+    const body = await api("/billing/manual-transfer/orders", {
+      method: "POST",
+      body: JSON.stringify({
+        plan_code: $("checkoutPlanCode").value,
+        interval: $("checkoutInterval").value,
+        first_name: $("checkoutFirstName").value.trim(),
+        last_name: $("checkoutLastName").value.trim(),
+        terms_accepted: $("checkoutTerms").checked,
+        early_performance_requested: $("checkoutEarlyPerformance").checked,
+        language: PLANS_I18N.language,
+      }),
+    });
+    const order = body.order;
+    $("transferReference").textContent = order.order_number || order.reference;
+    $("transferAmount").textContent = format(order.amount_minor, order.currency || "TRY");
+    $("transferIban").textContent = String(order.bank?.iban || "").replace(/(.{4})/g, "$1 ").trim();
+    $("transferHolder").textContent = order.bank?.account_holder || "—";
+    $("transferBank").textContent = order.bank?.bank_name || "—";
+    $("transferInstruction").textContent = pt(
+      "payment.transferReferenceInstruction",
+      "Havale açıklamasına yalnızca sipariş numarasını yaz. Tutar ve açıklama eşleşmezse onay gecikebilir.",
+    );
+    if (order.support_email) {
+      $("transferSupport").href = `mailto:${encodeURIComponent(order.support_email)}?subject=${encodeURIComponent(`LectureSift ${order.reference}`)}`;
+      $("transferSupport").textContent = `${pt("payment.sendReceiptTo", "Ödeme desteği")}: ${order.support_email}`;
+      $("transferSupport").hidden = false;
+    } else {
+      $("transferSupport").hidden = true;
+    }
+    recordPlanAnalytics("add_payment_info", {
+      payment_type: "manual_bank_transfer",
+      items: [{item_id: order.plan_code, item_name: planLabel(order.plan_code), quantity: 1}],
+    });
+    $("checkoutPanel").hidden = true;
+    $("transferPanel").hidden = false;
+    $("transferPanel").scrollIntoView({behavior: "smooth", block: "start"});
+    try {
+      account = (await api("/billing/me")).account;
+      renderAccount();
+    } catch { /* The order already exists; account refresh is non-critical. */ }
+  } catch (error) {
+    showError(error.message, error.code);
+    const provider = cardProviderStatus();
+    cardButton.disabled = !commerceIdentity.configured || !provider.configured || !provider.currencies?.includes(currency);
+    bankButton.disabled = !commerceIdentity.configured || currency !== "TRY" || !manualTransfer.available;
+  }
 }
 
 async function load() {
@@ -424,12 +448,14 @@ async function load() {
   populateCurrencies();
   $("billingCurrency").value = selected;
   try {
-    const [remote, providerBody] = await Promise.all([
+    const [remote, providerBody, transferBody] = await Promise.all([
       api(`/billing/plans?currency=${encodeURIComponent(selected)}`),
       api("/billing/providers"),
+      api("/billing/manual-transfer"),
     ]);
     providers = providerBody.providers || [];
     commerceIdentity = providerBody.commerce_identity || {configured:false};
+    manualTransfer = transferBody || {available:false, bank:null};
     catalog = normalizeCatalog(remote, selected);
     try { account = (await api("/billing/me")).account; } catch { account = null; }
     renderAccount();
@@ -448,16 +474,25 @@ $("billingCurrency").addEventListener("change", () => {
 $("closeError").onclick = () => { $("errorBox").hidden = true; };
 $("checkoutClose").onclick = $("checkoutCancel").onclick = () => {
   $("checkoutPanel").hidden = true;
-  $("bankTransferGuide").hidden = true;
   $("checkoutForm").hidden = false;
   $("paytrFrame").src = "about:blank";
 };
-$("checkoutBankButton").onclick = showBankTransferGuide;
-$("bankTransferBack").onclick = hideBankTransferGuide;
-$("bankTransferContinue").onclick = () => startHostedCheckout("bank_transfer");
+$("checkoutBankButton").onclick = createTransfer;
 $("checkoutForm").addEventListener("submit", async event => {
   event.preventDefault();
-  await startHostedCheckout("card");
+  await startHostedCheckout();
+});
+document.querySelectorAll("[data-copy-target]").forEach(button => {
+  button.addEventListener("click", async () => {
+    const target = $(button.dataset.copyTarget);
+    if (!target) return;
+    try {
+      await navigator.clipboard.writeText(target.textContent.replace(/\s+/g, "").trim());
+      const original = button.textContent;
+      button.textContent = pt("common.copied", "Kopyalandı");
+      setTimeout(() => { button.textContent = original; }, 1400);
+    } catch { showError(pt("error.copy", "Bilgi kopyalanamadı."), "LS-UI-COPY"); }
+  });
 });
 currency = detectedCurrency();
 load();

@@ -1603,3 +1603,24 @@ def approve_manual_order(reference: str) -> dict:
                 now=now,
             )
     return account_status(order.user_id)
+
+
+def reject_manual_order(reference: str) -> dict:
+    """Reject a pending direct-IBAN order without changing paid access."""
+    init_billing_database()
+    now = utcnow()
+    with ENGINE.begin() as connection:
+        order = connection.execute(
+            select(MANUAL_ORDERS).where(MANUAL_ORDERS.c.reference == reference)
+        ).first()
+        if not order:
+            raise BillingError("Sipariş bulunamadı.")
+        if order.status == "paid":
+            raise BillingError("Onaylanmış sipariş reddedilemez.")
+        if order.status != "rejected":
+            connection.execute(
+                update(MANUAL_ORDERS)
+                .where(MANUAL_ORDERS.c.reference == reference)
+                .values(status="rejected", updated_at=now)
+            )
+    return {"reference": reference, "status": "rejected"}
