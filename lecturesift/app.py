@@ -46,12 +46,14 @@ from .billing_service import (
 )
 from .config import (
     APP_VERSION,
+    DOCUMENT_EXTENSIONS,
     FRONTEND_BASE_URL,
     INSTAGRAM_ACCESS_TOKEN,
     INSTAGRAM_ACCOUNT_ID,
     INSTAGRAM_ADMIN_TOKEN,
     INSTAGRAM_APP_SECRET,
     INSTAGRAM_GRAPH_API_VERSION,
+    MAX_DOCUMENT_BYTES,
     MAX_SOURCE_FILES,
     MAX_VIDEO_BYTES,
     OPENAI_API_KEY,
@@ -93,6 +95,8 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
+from .costs import cost_context
+from .documents import extract_documents
 
 
 @app.middleware("http")
@@ -455,23 +459,34 @@ def _rate_limit(
         ) from exc
 
 
-def _upload_extension(file: UploadFile) -> str:
+def _upload_extension(file: UploadFile, allowed_extensions: set[str] | None = None) -> str:
     extension = Path(file.filename or "video.mp4").suffix.lower()
-    if extension not in VIDEO_EXTENSIONS:
-        _raise_public(LectureSiftError("LS-UPLOAD-01", "Bu video biçimi desteklenmiyor. MP4, MOV, MKV veya WebM kullan."))
+    allowed = allowed_extensions or VIDEO_EXTENSIONS
+    if extension not in allowed:
+        _raise_public(
+            LectureSiftError(
+                "LS-UPLOAD-01",
+                "Bu dosya biçimi desteklenmiyor. Video için MP4, MOV, MKV veya WebM; belge için PDF, Word, PowerPoint, TXT veya Markdown kullan.",
+            )
+        )
     return extension
 
 
-async def _save_upload(file: UploadFile, destination: Path, bytes_used: int = 0) -> int:
+async def _save_upload(
+    file: UploadFile,
+    destination: Path,
+    bytes_used: int = 0,
+    max_bytes: int = MAX_VIDEO_BYTES,
+) -> int:
     total = bytes_used
     with open(destination, "wb") as output:
         while chunk := await file.read(1024 * 1024):
             total += len(chunk)
-            if total > MAX_VIDEO_BYTES:
+            if total > max_bytes:
                 _raise_public(
                     LectureSiftError(
                         "LS-UPLOAD-02",
-                        "Yüklenen video dosyalarının toplam boyutu izin verilen sınırı aşıyor.",
+                        "Yüklenen kaynakların toplam boyutu izin verilen sınırı aşıyor.",
                         status_code=413,
                     )
                 )
@@ -479,12 +494,16 @@ async def _save_upload(file: UploadFile, destination: Path, bytes_used: int = 0)
     return total
 
 
-def _validate_upload_list(files: list[UploadFile], label: str) -> list[str]:
+def _validate_upload_list(
+    files: list[UploadFile],
+    label: str,
+    allowed_extensions: set[str] | None = None,
+) -> list[str]:
     if not files:
-        _raise_public(LectureSiftError("LS-UPLOAD-03", f"{label} için en az bir video ekle."))
+        _raise_public(LectureSiftError("LS-UPLOAD-03", f"{label} için en az bir kaynak ekle."))
     if len(files) > MAX_SOURCE_FILES:
-        _raise_public(LectureSiftError("LS-UPLOAD-04", f"{label} için en fazla {MAX_SOURCE_FILES} video eklenebilir."))
-    return [_upload_extension(file) for file in files]
+        _raise_public(LectureSiftError("LS-UPLOAD-04", f"{label} için en fazla {MAX_SOURCE_FILES} kaynak eklenebilir."))
+    return [_upload_extension(file, allowed_extensions) for file in files]
 
 
 async def _save_upload_list(
@@ -493,6 +512,7 @@ async def _save_upload_list(
     job_dir: Path,
     role: str,
     bytes_used: int,
+    max_bytes: int = MAX_VIDEO_BYTES,
 ) -> tuple[list[Path], int, list[int]]:
     paths: list[Path] = []
     sizes: list[int] = []
@@ -500,7 +520,7 @@ async def _save_upload_list(
     for index, (file, extension) in enumerate(zip(files, extensions), 1):
         destination = job_dir / f"{role}_{index:03d}{extension}"
         before = total
-        total = await _save_upload(file, destination, total)
+        total = await _save_upload(file, destination, total, max_bytes)
         paths.append(destination)
         sizes.append(total - before)
     return paths, total, sizes
@@ -526,6 +546,7 @@ def health() -> dict:
         "async_jobs": True,
         "dual_source_upload": True,
         "multi_source_upload": True,
+        "document_sources": sorted(DOCUMENT_EXTENSIONS),
         "output_formats": ["pdf", "docx", "txt"],
         "audio_export": True,
         "url_video_download": True,
@@ -1089,7 +1110,8 @@ def ask_lesson_question(
     try:
         result = json.loads(result_path.read_text(encoding="utf-8"))
         language = str(result.get("options", {}).get("output_language") or "tr")
-        answer = answer_lesson_question(result, payload.question, language)
+        with cost_context(job_id, user["id"]):
+            answer = answer_lesson_question(result, payload.question, language)
     except LectureSiftError as exc:
         raise HTTPException(exc.status_code, detail=exc.public()) from exc
     return {"ok": True, **answer}
@@ -1184,19 +1206,34 @@ async def create_job(
     except BillingError as exc:
         raise HTTPException(402, detail={"code": "LS-BILL-10", "message": str(exc)}) from exc
     layout = "separate" if source_layout == "separate" or slides_file or visual_files else "classic"
+    document_mode = False
     if layout == "separate":
         audio_uploads = list(audio_files or ([] if file is None else [file]))
         visual_uploads = list(visual_files or ([] if slides_file is None else [slides_file]))
-        audio_extensions = _validate_upload_list(audio_uploads, "Ses kaynağı")
-        visual_extensions = _validate_upload_list(visual_uploads, "Görüntü/slayt kaynağı")
+        audio_extensions = _validate_upload_list(audio_uploads, "Ses kaynağı", VIDEO_EXTENSIONS)
+        visual_extensions = _validate_upload_list(visual_uploads, "Görüntü/slayt kaynağı", VIDEO_EXTENSIONS)
     else:
         classic_uploads = list(files or ([] if file is None else [file]))
-        classic_extensions = _validate_upload_list(classic_uploads, "Ders kaynağı")
+        classic_extensions = _validate_upload_list(
+            classic_uploads,
+            "Ders kaynağı",
+            VIDEO_EXTENSIONS | DOCUMENT_EXTENSIONS,
+        )
+        document_mode = all(extension in DOCUMENT_EXTENSIONS for extension in classic_extensions)
+        if any(extension in DOCUMENT_EXTENSIONS for extension in classic_extensions) and not document_mode:
+            _raise_public(
+                LectureSiftError(
+                    "LS-UPLOAD-05",
+                    "Video ve belge kaynaklarını aynı işte karıştırma; ayrı ayrı yükle.",
+                    status_code=400,
+                )
+            )
 
     JOBS.cleanup_expired()
     job_id = str(uuid.uuid4())
     job_dir = _job_path(job_id)
     total = 0
+    document_data = None
     try:
         if layout == "separate":
             audio_paths, total, audio_sizes = await _save_upload_list(
@@ -1207,27 +1244,45 @@ async def create_job(
             )
         else:
             audio_paths, total, audio_sizes = await _save_upload_list(
-                classic_uploads, classic_extensions, job_dir, "part", total
+                classic_uploads,
+                classic_extensions,
+                job_dir,
+                "document" if document_mode else "part",
+                total,
+                MAX_DOCUMENT_BYTES if document_mode else MAX_VIDEO_BYTES,
             )
             visual_paths = []
             visual_sizes = []
+        document_data = extract_documents(audio_paths) if document_mode else None
+    except LectureSiftError as exc:
+        shutil.rmtree(job_dir, ignore_errors=True)
+        _raise_public(exc)
     except Exception:
         shutil.rmtree(job_dir, ignore_errors=True)
         raise
 
     options["billing_user_id"] = billing_user["id"]
     options["download_entitled"] = bool(entitlement.get("download_enabled"))
-    source_type = "upload_separate" if layout == "separate" else ("upload_multi" if len(audio_paths) > 1 else "upload")
+    if document_data:
+        options["document_credit_seconds"] = float(document_data["credit_seconds"])
+        options["document_words"] = int(document_data["words"])
+    source_type = (
+        ("document_multi" if len(audio_paths) > 1 else "document")
+        if document_mode
+        else ("upload_separate" if layout == "separate" else ("upload_multi" if len(audio_paths) > 1 else "upload"))
+    )
     JOBS.create(
         job_id,
         job_dir,
         options,
         source_type=source_type,
-        source_layout=layout,
+        source_layout="documents" if document_mode else layout,
         file_size_bytes=total,
         audio_file_sizes=audio_sizes,
         visual_file_sizes=visual_sizes,
         source_file_count=len(audio_paths) + len(visual_paths),
+        document_words=int(document_data["words"]) if document_data else None,
+        billable_minutes=int(document_data["credit_minutes"]) if document_data else None,
         retention_seconds=max(1, int(entitlement["plan"]["history_days"])) * 24 * 60 * 60,
     )
     threading.Thread(
@@ -1235,7 +1290,14 @@ async def create_job(
         args=(job_id, audio_paths, options, visual_paths if layout == "separate" else None),
         daemon=True,
     ).start()
-    return {"job_id": job_id, "status": "queued", "version": APP_VERSION, "source_layout": layout}
+    return {
+        "job_id": job_id,
+        "status": "queued",
+        "version": APP_VERSION,
+        "source_layout": "documents" if document_mode else layout,
+        "document_words": int(document_data["words"]) if document_data else None,
+        "billable_minutes": int(document_data["credit_minutes"]) if document_data else None,
+    }
 
 
 @app.post("/jobs/url")

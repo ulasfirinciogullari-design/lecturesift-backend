@@ -6,7 +6,9 @@ from pathlib import Path
 
 import boto3
 
+from .costs import record_r2_operation
 from .config import (
+    DOCUMENT_EXTENSIONS,
     S3_ACCESS_KEY_ID,
     S3_BUCKET,
     S3_ENDPOINT_URL,
@@ -40,6 +42,12 @@ class ObjectStorage:
         if not self.remote or self._client is None:
             raise RuntimeError("Kalıcı dosya deposu yapılandırılmamış.")
         self._client.upload_file(str(path), self.bucket, key)
+        parts = key.split("/")
+        record_r2_operation(
+            "write",
+            bytes_count=path.stat().st_size,
+            job_id=parts[1] if len(parts) > 2 and parts[0] == "jobs" else None,
+        )
         return key
 
     def download_file(self, key: str, destination: Path) -> Path:
@@ -47,6 +55,12 @@ class ObjectStorage:
             raise RuntimeError("Kalıcı dosya deposu yapılandırılmamış.")
         destination.parent.mkdir(parents=True, exist_ok=True)
         self._client.download_file(self.bucket, key, str(destination))
+        parts = key.split("/")
+        record_r2_operation(
+            "read",
+            bytes_count=destination.stat().st_size,
+            job_id=parts[1] if len(parts) > 2 and parts[0] == "jobs" else None,
+        )
         return destination
 
     def health(self) -> dict[str, bool]:
@@ -65,9 +79,9 @@ class ObjectStorage:
     def _is_source_media(path: Path, job_dir: Path, relative: str) -> bool:
         if relative.startswith(("sources/", "slide_segments/")):
             return True
-        if path.parent != job_dir or path.suffix.casefold() not in VIDEO_EXTENSIONS:
+        if path.parent != job_dir or path.suffix.casefold() not in (VIDEO_EXTENSIONS | DOCUMENT_EXTENSIONS):
             return False
-        return path.name.startswith(("part_", "audio_", "visual_", "remote."))
+        return path.name.startswith(("part_", "audio_", "visual_", "document_", "remote."))
 
     def publish_job(self, job_id: str, job_dir: Path) -> dict:
         if not self.remote:

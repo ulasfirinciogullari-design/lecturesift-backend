@@ -13,18 +13,18 @@ const LANGUAGES = {
 const EN = {
   eyebrow: "AI-powered lecture workspace",
   title: "Turn every lecture source into one organized study pack.",
-  subtitle: "Add ordered videos, use separate audio and slide recordings, convert video to MP3, or download a supported video URL.",
+  subtitle: "Add video, audio, PDF, Word, PowerPoint, TXT, or Markdown and turn it into one organized study pack.",
   sourceTitle: "Add the lecture source", secure: "Secure processing", uploadTab: "Upload file", linkTab: "Use a link",
-  dropTitle: "Drop your video here", dropText: "or choose from your device", fileHelp: "MP4, MOV, MKV, or WebM - 1 GB total",
+  dropTitle: "Drop a source here", dropText: "or choose from your device", fileHelp: "Video: 1 GB total · Documents: 50 MB total · Process media and documents separately",
   audioSourceTitle: "Audio sources", audioSourceHelp: "Add audio-bearing recordings in lecture order.",
   slidesSourceTitle: "Visual / slide sources", slidesSourceHelp: "Add slide recordings in lecture order.", addSlidesVideo: "Add slide video",
   required: "Required", optional: "Optional", syncOffset: "Slide time offset", syncOffsetHelp: "Leave at 0 if both recordings started together.",
-  classicMode: "Video and audio together", separateMode: "Separate audio and visuals", addVideos: "Add one or more videos", sortHelp: "Reorder files after adding them",
+  classicMode: "Video, audio, or document", separateMode: "Separate audio and visuals", addVideos: "Add video, audio, or documents", sortHelp: "PDF, Word, PowerPoint, TXT, and Markdown are supported",
   addAudioFiles: "Add audio videos", addVisualFiles: "Add slide videos", moveUp: "Move up", moveDown: "Move down", remove: "Remove",
   urlLabel: "Video or education-page URL", urlHelp: "LectureSift tries direct media discovery and provider extraction. Login, DRM, membership, or provider restrictions can still block a download.",
   operationType: "Operation", studyPackOption: "Create a study pack", audioExportOption: "Convert video to MP3", downloadVideoOption: "Download video from URL",
   outputFormats: "Output formats", sameLanguageHelp: "Source and output languages match; one transcript will be created.",
-  settingsTitle: "Configure the study pack", sourceLanguage: "Video language", outputLanguage: "Output language", summaryStyle: "Summary profile",
+  settingsTitle: "Configure the study pack", sourceLanguage: "Source language", outputLanguage: "Output language", summaryStyle: "Summary profile",
   quizCount: "Quiz questions", cardCount: "Flashcards", translateTitle: "Translate transcript", translateHelp: "The original is preserved", analyze: "Analyze lecture",
   processEyebrow: "Live processing center", readyTitle: "Ready to analyze", readyStage: "Waiting for a video",
   readyDetail: "Add a source and choose your settings to see every processing step here.",
@@ -52,18 +52,18 @@ const EN = {
 const TR = {
   eyebrow: "Yapay zekâ destekli ders çalışma alanı",
   title: "Tüm ders kaynaklarını tek düzenli çalışma paketine dönüştür.",
-  subtitle: "Sıralı videolar ekle, ses ve slayt kayıtlarını ayır, videoyu MP3'e çevir ya da desteklenen video bağlantısını indir.",
+  subtitle: "Video, ses, PDF, Word, PowerPoint, TXT veya Markdown ekle; tek düzenli çalışma paketine dönüştür.",
   sourceTitle: "Ders kaynağını ekle", secure: "Güvenli işlem", uploadTab: "Dosya yükle", linkTab: "Bağlantı kullan",
-  dropTitle: "Videoyu buraya bırak", dropText: "veya cihazından seç", fileHelp: "MP4, MOV, MKV veya WebM - toplam en fazla 1 GB",
+  dropTitle: "Kaynağı buraya bırak", dropText: "veya cihazından seç", fileHelp: "Video: toplam 1 GB · Belgeler: toplam 50 MB · Video ve belgeyi ayrı işle",
   audioSourceTitle: "Ses kaynakları", audioSourceHelp: "Sesli kayıtları ders sırasına göre ekle.",
   slidesSourceTitle: "Görüntü / slayt kaynakları", slidesSourceHelp: "Slayt kayıtlarını ders sırasına göre ekle.", addSlidesVideo: "Slayt videosu ekle",
   required: "Zorunlu", optional: "İsteğe bağlı", syncOffset: "Slayt zaman farkı", syncOffsetHelp: "Aynı anda başladıysa 0 bırak.",
-  classicMode: "Video ve ses birlikte", separateMode: "Ses ve görüntü ayrı", addVideos: "Bir veya birden fazla video ekle", sortHelp: "Dosyalar eklenince sıralarını değiştirebilirsin",
+  classicMode: "Video, ses veya belge", separateMode: "Ses ve görüntü ayrı", addVideos: "Video, ses veya belge ekle", sortHelp: "PDF, Word, PowerPoint, TXT ve Markdown desteklenir",
   addAudioFiles: "Ses videolarını ekle", addVisualFiles: "Slayt videolarını ekle", moveUp: "Yukarı taşı", moveDown: "Aşağı taşı", remove: "Kaldır",
   urlLabel: "Video veya eğitim sayfası bağlantısı", urlHelp: "LectureSift doğrudan medya bulmayı ve sağlayıcı indirmesini dener. Giriş, DRM, üyelik veya sağlayıcı engeli olan içerikler indirilemeyebilir.",
   operationType: "İşlem türü", studyPackOption: "Ders çalışma paketi hazırla", audioExportOption: "Videoyu MP3'e çevir", downloadVideoOption: "URL'den video indir",
   outputFormats: "Çıktı biçimleri", sameLanguageHelp: "Kaynak ve çıktı dili aynı; tek transkript oluşturulacak.",
-  settingsTitle: "Çalışma paketini ayarla", sourceLanguage: "Video dili", outputLanguage: "Çıktı dili", summaryStyle: "Özet profili",
+  settingsTitle: "Çalışma paketini ayarla", sourceLanguage: "Kaynak dili", outputLanguage: "Çıktı dili", summaryStyle: "Özet profili",
   quizCount: "Quiz sorusu", cardCount: "Bilgi kartı", translateTitle: "Transkripti çevir", translateHelp: "Orijinali de korunur", analyze: "Dersi analiz et",
   processEyebrow: "Canlı işlem merkezi", readyTitle: "Analize hazır", readyStage: "Video bekleniyor",
   readyDetail: "Kaynağı ekleyip ayarlarını seçtiğinde işlem adımlarını burada canlı göreceksin.",
@@ -130,6 +130,20 @@ const ERRORS = {
     "LS-URL-02": "The video provider blocked server-side downloading. Upload the file or use a direct MP4/WebM link.",
     "LS-URL-03": "No downloadable video was found on this page. Use a direct video link or upload the file.",
     "LS-UPLOAD-02": "The video is larger than the allowed file size.",
+    "LS-UPLOAD-05": "Video and document sources cannot be mixed in one job. Upload them separately.",
+    "LS-DOC-01": "The document is empty.",
+    "LS-DOC-02": "The document is larger than the allowed file size.",
+    "LS-DOC-03": "The Word or PowerPoint document is damaged or cannot be opened safely.",
+    "LS-DOC-04": "The PDF could not be read safely.",
+    "LS-DOC-05": "Password-protected PDF files are not supported.",
+    "LS-DOC-06": "The document or presentation exceeds the page limit.",
+    "LS-DOC-07": "The Word document could not be read.",
+    "LS-DOC-08": "The PowerPoint presentation could not be read.",
+    "LS-DOC-09": "The text file could not be read.",
+    "LS-DOC-10": "Add at least one document.",
+    "LS-DOC-11": "This document format is not supported.",
+    "LS-DOC-12": "No text could be extracted. If this is a scanned PDF, upload a version with OCR applied.",
+    "LS-DOC-13": "The documents contain too much text for one safe job. Split the source and try again.",
     "LS-VIDEO-02": "The video could not be read. It may be damaged or use an unsupported codec."
   },
   tr: {
@@ -138,6 +152,20 @@ const ERRORS = {
     "LS-URL-02": "Video sağlayıcısı sunucu üzerinden indirmeyi engelledi. Dosyayı yükle veya doğrudan MP4/WebM bağlantısı kullan.",
     "LS-URL-03": "Bu sayfada indirilebilir video bulunamadı. Doğrudan video bağlantısı kullan veya dosyayı yükle.",
     "LS-UPLOAD-02": "Video izin verilen dosya boyutundan büyük.",
+    "LS-UPLOAD-05": "Video ve belge kaynakları aynı işte karıştırılamaz. Ayrı ayrı yükle.",
+    "LS-DOC-01": "Belge boş görünüyor.",
+    "LS-DOC-02": "Belge izin verilen dosya boyutundan büyük.",
+    "LS-DOC-03": "Word veya PowerPoint belgesi bozuk ya da güvenli açılamıyor.",
+    "LS-DOC-04": "PDF güvenli biçimde okunamadı.",
+    "LS-DOC-05": "Şifreli PDF dosyaları desteklenmiyor.",
+    "LS-DOC-06": "Belge veya sunum izin verilen sayfa sınırını aşıyor.",
+    "LS-DOC-07": "Word belgesi okunamadı.",
+    "LS-DOC-08": "PowerPoint sunumu okunamadı.",
+    "LS-DOC-09": "Metin dosyası okunamadı.",
+    "LS-DOC-10": "En az bir belge ekle.",
+    "LS-DOC-11": "Bu belge biçimi desteklenmiyor.",
+    "LS-DOC-12": "Belgeden metin çıkarılamadı. Taranmış PDF ise OCR uygulanmış bir sürüm yükle.",
+    "LS-DOC-13": "Belgelerin toplam metni tek bir güvenli işlem için fazla. Kaynağı bölerek yeniden dene.",
     "LS-VIDEO-02": "Video okunamadı. Dosya bozuk olabilir veya desteklenmeyen bir codec kullanıyor olabilir."
   }
 };
@@ -481,9 +509,20 @@ function filesFor(role) {
   if (role === "audio") return audioVideos;
   return visualVideos;
 }
+const DOCUMENT_EXTENSIONS = new Set(["pdf", "docx", "pptx", "txt", "md"]);
+const MEDIA_EXTENSIONS = new Set(["mp4", "mov", "mkv", "webm", "mpeg", "mpg", "m4v"]);
+function fileExtension(file) { return String(file?.name || "").split(".").pop().toLowerCase(); }
+function isDocumentFile(file) { return DOCUMENT_EXTENSIONS.has(fileExtension(file)); }
 function addFiles(role, incoming) {
   const current = filesFor(role), known = new Set(current.map(file => `${file.name}:${file.size}:${file.lastModified}`));
   for (const file of incoming) {
+    const extension = fileExtension(file);
+    const allowed = role === "classic" ? (DOCUMENT_EXTENSIONS.has(extension) || MEDIA_EXTENSIONS.has(extension)) : MEDIA_EXTENSIONS.has(extension);
+    if (!allowed) { showError("Bu dosya biçimi desteklenmiyor.", "LS-UPLOAD-01"); continue; }
+    if (role === "classic" && current.length && current.some(isDocumentFile) !== isDocumentFile(file)) {
+      showError("Video ve belgeyi aynı işte karıştırma; ayrı ayrı yükle.", "LS-UPLOAD-05");
+      continue;
+    }
     const key = `${file.name}:${file.size}:${file.lastModified}`;
     if (!known.has(key)) { current.push(file); known.add(key); }
   }
@@ -575,13 +614,20 @@ function updateJobView(job) {
   $("processTitle").textContent = job.status === "done" ? t("done") : t("processing");
   updateProgress(job.percent, t(job.stage) || t("processing"), t("parallel_analysis"));
   resetStages(); setItemState("url_download", "done");
+  const documentJob = String(job.source_type || "").startsWith("document") || job.source_layout === "documents";
   const audio = job.tasks?.audio?.percent || 0, visual = job.tasks?.visual?.percent || 0;
-  if (audio >= 100) { setItemState("audio", "done"); setItemState("transcription", "done"); }
+  if (documentJob) {
+    setItemState("audio", "done"); setItemState("transcription", "done");
+    setItemState("scene_scan", "done"); setItemState("slide_validation", "done");
+  }
+  else if (audio >= 100) { setItemState("audio", "done"); setItemState("transcription", "done"); }
   else if (audio >= 35) { setItemState("audio", "done"); setItemState("transcription", "active"); }
   else if (job.status === "working") setItemState("audio", "active");
-  if (visual >= 100) { setItemState("scene_scan", "done"); setItemState("slide_validation", "done"); }
-  else if (visual >= 55) { setItemState("scene_scan", "done"); setItemState("slide_validation", "active"); }
-  else if (job.status === "working") setItemState("scene_scan", "active");
+  if (!documentJob) {
+    if (visual >= 100) { setItemState("scene_scan", "done"); setItemState("slide_validation", "done"); }
+    else if (visual >= 55) { setItemState("scene_scan", "done"); setItemState("slide_validation", "active"); }
+    else if (job.status === "working") setItemState("scene_scan", "active");
+  }
   if (job.percent >= 90) { setItemState("study_pack", "done"); setItemState("exports", job.status === "done" ? "done" : "active"); }
   else if (job.percent >= 70) setItemState("study_pack", "active");
   if (job.status === "done") document.querySelectorAll(".stage-list li").forEach(item => { item.className = "done"; item.querySelector("b").textContent = "OK"; });
@@ -624,9 +670,11 @@ $("analyzeButton").onclick = async () => {
   if (sourceMode === "upload" && sourceLayout === "separate" && (!audioVideos.length || !visualVideos.length)) {
     showError("Ses ve görüntü ayrı modunda her iki listeye de en az bir video ekle.", "LS-UPLOAD-03"); return;
   }
-  if (sourceMode === "upload" && uploadFiles.reduce((total, file) => total + file.size, 0) > 1024 ** 3) {
-    showError("Dosyaların toplam boyutu 1 GB sınırını aşıyor.", "LS-UPLOAD-02"); return;
+  const documentUpload = sourceLayout === "classic" && uploadFiles.length && uploadFiles.every(isDocumentFile);
+  if (sourceMode === "upload" && uploadFiles.reduce((total, file) => total + file.size, 0) > (documentUpload ? 50 * 1024 ** 2 : 1024 ** 3)) {
+    showError(documentUpload ? "Belgelerin toplam boyutu 50 MB sınırını aşıyor." : "Dosyaların toplam boyutu 1 GB sınırını aşıyor.", "LS-UPLOAD-02"); return;
   }
+  if (documentUpload && jobType.value !== "study_pack") { showError("Belge kaynakları çalışma paketi işleminde kullanılabilir.", "LS-UPLOAD-05"); return; }
   if (sourceMode === "link" && !videoUrl.value.trim()) { showError(TR.urlLabel, "LS-URL-01"); return; }
   $("analyzeButton").disabled = true; $("results").hidden = true; latestResult = null; jobId = null; resetStages(); startTimer();
   updateProgress(2, sourceMode === "link" ? t("url_download") : t("processing"));

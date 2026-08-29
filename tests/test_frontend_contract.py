@@ -76,6 +76,9 @@ def test_account_identity_and_localized_minutes_do_not_overflow_rtl_mobile():
 def test_required_product_and_legal_pages_exist():
     for page in (
         "features.html",
+        "document-summary.html",
+        "lecture-video-summary.html",
+        "quiz-flashcards.html",
         "plans.html",
         "about.html",
         "contact.html",
@@ -110,6 +113,9 @@ def test_public_navigation_is_consistent_localized_and_session_aware():
     public_pages = (
         "index.html",
         "features.html",
+        "document-summary.html",
+        "lecture-video-summary.html",
+        "quiz-flashcards.html",
         "plans.html",
         "about.html",
         "contact.html",
@@ -147,10 +153,10 @@ def test_public_navigation_is_consistent_localized_and_session_aware():
 def test_every_page_supports_persistent_light_and_dark_themes():
     for page in FRONTEND.glob("*.html"):
         content = page.read_text(encoding="utf-8")
-        assert "/theme.css?v=2" in content, page.name
+        assert "/theme.css?v=8" in content, page.name
         assert "/theme.js?v=2" in content, page.name
-        assert "i18n.js?v=15" in content, page.name
-        assert "page-i18n.js?v=2" in content, page.name
+        assert "i18n.js?v=17" in content, page.name
+        assert "page-i18n.js?v=4" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
     style = (FRONTEND / "theme.css").read_text(encoding="utf-8")
@@ -274,6 +280,17 @@ def test_static_page_copy_covers_every_language_without_empty_entries():
     bad_exact = {"Ripet", "Повторыть", "재교부"}
     assert not any(fragment in value for source in corrected_sources for value in central_rows[source] for fragment in bad_fragments)
     assert not any(value in bad_exact for source in corrected_sources for value in central_rows[source])
+
+
+def test_document_errors_are_localized_for_every_supported_language():
+    app = (FRONTEND / "app.js").read_text(encoding="utf-8")
+    script = (FRONTEND / "page-i18n.js").read_text(encoding="utf-8")
+    payload = script.split("window.LECTURESIFT_PAGE_COPY=", 1)[1].rstrip(";\n")
+    catalog = json.loads(payload)
+    for code in ("LS-UPLOAD-05", *(f"LS-DOC-{index:02d}" for index in range(1, 14))):
+        assert app.count(f'"{code}"') >= 2
+    source = "Belgeden metin çıkarılamadı. Taranmış PDF ise OCR uygulanmış bir sürüm yükle."
+    assert len(catalog[source]) == 13
 
 
 def test_every_declared_interface_key_has_thirteen_translations():
@@ -600,7 +617,10 @@ def test_private_pages_are_excluded_from_search_indexing():
         assert page not in sitemap
         assert f"Disallow: /{page}" in robots
 
-    for page in ("features.html", "plans.html", "about.html", "contact.html"):
+    for page in (
+        "features.html", "document-summary.html", "lecture-video-summary.html",
+        "quiz-flashcards.html", "plans.html", "about.html", "contact.html",
+    ):
         assert page in sitemap
 
 
@@ -609,7 +629,7 @@ def test_public_pages_have_share_metadata_canonical_urls_and_structured_data():
     seo = (FRONTEND / "seo.js").read_text(encoding="utf-8")
     sitemap = (FRONTEND / "sitemap.xml").read_text(encoding="utf-8")
 
-    assert 'seoScript.src = "/seo.js?v=2"' in i18n
+    assert 'seoScript.src = "/seo.js?v=3"' in i18n
     assert 'link[rel="canonical"]' in seo
     assert 'meta[property="og:image"]' in seo
     assert 'meta[name="twitter:card"]' in seo
@@ -625,7 +645,7 @@ def test_public_pages_have_share_metadata_canonical_urls_and_structured_data():
     assert 'url: `${PRODUCTION_ORIGIN}/`' in seo
     assert '"/distance-sales.html"' in seo
     assert (FRONTEND / "og-image.png").stat().st_size > 100_000
-    assert sitemap.count("<lastmod>2026-08-28</lastmod>") == 10 * 13
+    assert sitemap.count("<lastmod>2026-08-29</lastmod>") == 13 * 13
 
 
 def test_optional_analytics_and_advertising_are_consent_gated():
@@ -713,7 +733,7 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=11"' in index
+    assert 'src="./app.js?v=12"' in index
     assert 'src="/rollout.js?v=3"' in index
 
 
@@ -751,7 +771,7 @@ def test_every_supported_language_has_a_stable_indexable_url():
         assert f"/{language}/*" in redirects
         assert f"<loc>https://lecturesift.com/{language}/</loc>" in sitemap
         assert f'hreflang="{language}"' in sitemap
-    assert sitemap.count("<url>") == 10 * 13
+    assert sitemap.count("<url>") == 13 * 13
 
     app = (FRONTEND / "app.js").read_text(encoding="utf-8")
     auth = (FRONTEND / "auth.js").read_text(encoding="utf-8")

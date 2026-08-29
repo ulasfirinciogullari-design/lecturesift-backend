@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow"><title>Yönetim | LectureSift</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/auth.css"><link rel="stylesheet" href="/rollout.css?v=6">
-<link rel="stylesheet" href="/theme.css?v=2"><script src="/theme.js?v=2"></script></head>
+<link rel="stylesheet" href="/theme.css?v=8"><script src="/theme.js?v=2"></script></head>
 <body data-page="admin">
   <header class="auth-topbar"><a class="brand" href="/"><span class="brand-mark"><i></i><i></i><i></i></span><span>Lecture<span>Sift</span></span></a><a class="back-link" href="/" data-i18n="nav.workspace">Çalışma alanına dön</a></header>
   <main class="account-layout admin-layout">
@@ -25,6 +25,7 @@
             <button type="button" role="tab" data-admin-view-button="finance" aria-controls="adminFinanceView" aria-selected="false" tabindex="-1"><span class="admin-nav-icon" aria-hidden="true">₺</span><span><strong>Ödemeler</strong><small>Sipariş ve iadeler</small></span></button>
             <button type="button" role="tab" data-admin-view-button="support" aria-controls="adminSupportView" aria-selected="false" tabindex="-1"><span class="admin-nav-icon" aria-hidden="true">◇</span><span><strong>Destek</strong><small>Mesaj ve talepler</small></span></button>
             <button type="button" role="tab" data-admin-view-button="jobs" aria-controls="adminJobsView" aria-selected="false" tabindex="-1"><span class="admin-nav-icon" aria-hidden="true">▣</span><span><strong>İşleme</strong><small>Video ve belgeler</small></span></button>
+            <button type="button" role="tab" data-admin-view-button="costs" aria-controls="adminCostsView" aria-selected="false" tabindex="-1"><span class="admin-nav-icon" aria-hidden="true">$</span><span><strong>Maliyetler</strong><small>Servis ve iş başına</small></span></button>
             <button type="button" role="tab" data-admin-view-button="system" aria-controls="adminSystemView" aria-selected="false" tabindex="-1"><span class="admin-nav-icon" aria-hidden="true">⚙</span><span><strong>Sistem</strong><small>Altyapı sağlığı</small></span></button>
             <button type="button" role="tab" data-admin-view-button="growth" aria-controls="adminGrowthView" aria-selected="false" tabindex="-1"><span class="admin-nav-icon" aria-hidden="true">↗</span><span><strong>Büyüme</strong><small>Banner, reklam ve ölçüm</small></span></button>
             <button type="button" role="tab" data-admin-view-button="audit" aria-controls="adminAuditView" aria-selected="false" tabindex="-1"><span class="admin-nav-icon" aria-hidden="true">⌁</span><span><strong>Denetim</strong><small>Değişiklik kayıtları</small></span></button>
@@ -95,6 +96,15 @@
             <section id="adminJobsSection" class="dashboard-card wide-card"><div class="admin-section-head"><div><p class="eyebrow">İŞ KUYRUĞU</p><h2>İşleme işleri</h2></div><div class="admin-filters"><select id="adminJobStatus" class="admin-filter" aria-label="Tüm durumlar"><option value="all">Tüm durumlar</option><option value="queued">Kuyrukta</option><option value="working">Çalışıyor</option><option value="done">Tamamlandı</option><option value="failed">Hatalı</option></select></div></div><p class="empty-copy">İşlerin kuyruğa girişini, aşamasını, ilerleme yüzdesini ve hata kodunu buradan izle.</p><div id="adminJobs" class="admin-table-wrap"></div></section>
           </section>
 
+          <section id="adminCostsView" class="admin-view" role="tabpanel" data-admin-view="costs" hidden>
+            <div class="admin-view-heading"><div><p class="eyebrow">MALİYET MERKEZİ</p><h2>Servis ve iş maliyetleri</h2></div><p>Uygulamanın gördüğü kullanımı sağlayıcı, model ve iş kimliğine göre izle; kesin tutar için sağlayıcı faturasını esas al.</p></div>
+            <section class="dashboard-card wide-card"><div class="admin-section-head"><div><p class="eyebrow">DÖNEM ÖZETİ</p><h2>Operasyon gideri</h2></div><label class="admin-cost-period">Dönem <select id="adminCostDays" class="admin-filter"><option value="7">7 gün</option><option value="30" selected>30 gün</option><option value="90">90 gün</option><option value="365">1 yıl</option></select></label></div><div id="adminCostMetrics" class="admin-metrics"></div><p id="adminCostDisclaimer" class="empty-copy"></p></section>
+            <section class="dashboard-card wide-card"><div class="admin-section-head"><div><p class="eyebrow">SAĞLAYICILAR</p><h2>Hangi servis ne kadar kullandı?</h2></div></div><div id="adminProviderCosts" class="admin-table-wrap"></div></section>
+            <section class="dashboard-card wide-card"><div class="admin-section-head"><div><p class="eyebrow">İŞ BAŞINA</p><h2>İşleme maliyetleri</h2></div></div><div id="adminJobCosts" class="admin-table-wrap"></div></section>
+            <section class="dashboard-card wide-card"><div class="admin-section-head"><div><p class="eyebrow">SABİT GİDERLER</p><h2>Aylık servis bütçesi</h2></div></div><div id="adminFixedCosts" class="admin-growth-grid"></div></section>
+            <section class="dashboard-card wide-card"><div class="admin-section-head"><div><p class="eyebrow">DIŞ MUTABAKAT</p><h2>Sağlayıcı panelinden doğrulanacak giderler</h2></div></div><div id="adminExternalCosts" class="admin-growth-grid"></div></section>
+          </section>
+
           <section id="adminSystemView" class="admin-view" role="tabpanel" data-admin-view="system" hidden>
             <div class="admin-view-heading"><div><p class="eyebrow">SİSTEM</p><h2>Altyapı sağlığı</h2></div><p>Canlı servisleri, ödeme sağlayıcılarını ve yapılandırma eksiklerini kontrol et.</p></div>
             <section id="adminSystemSection" class="dashboard-card wide-card"><div class="admin-section-head"><div><p class="eyebrow">ALTYAPI</p><h2 data-i18n="admin.systemTitle">Sistem hazır olma durumu</h2></div><p class="admin-section-note">Kritik eksikler, isteğe bağlı özellikler ve planlanan güvenlik kontrolleri ayrı gösterilir.</p></div><div id="adminReadiness" class="admin-readiness"></div><div id="adminPaymentSummary" class="admin-provider-summary"></div></section>
@@ -114,6 +124,6 @@
       </div>
     </section>
   </main>
-  <script src="/page-i18n.js?v=2"></script><script src="/i18n.js?v=15"></script><script src="/admin.js?v=13"></script>
+  <script src="/page-i18n.js?v=4"></script><script src="/i18n.js?v=17"></script><script src="/admin.js?v=14"></script>
 </body>
 </html>

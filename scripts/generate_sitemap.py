@@ -3,8 +3,22 @@ from pathlib import Path
 
 ORIGIN = "https://lecturesift.com"
 LANGUAGES = ("tr", "en", "de", "fr", "es", "it", "pt", "ru", "ar", "zh", "ja", "ko", "hi")
-PATHS = ("/", "/features.html", "/plans.html", "/about.html", "/contact.html", "/privacy.html", "/terms.html", "/distance-sales.html", "/cookies.html", "/refund.html")
-LAST_MODIFIED = "2026-08-28"
+PATHS = (
+    "/",
+    "/features.html",
+    "/document-summary.html",
+    "/lecture-video-summary.html",
+    "/quiz-flashcards.html",
+    "/plans.html",
+    "/about.html",
+    "/contact.html",
+    "/privacy.html",
+    "/terms.html",
+    "/distance-sales.html",
+    "/cookies.html",
+    "/refund.html",
+)
+LAST_MODIFIED = "2026-08-29"
 
 
 def localized_path(language: str, path: str) -> str:

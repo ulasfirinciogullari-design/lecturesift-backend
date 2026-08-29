@@ -120,7 +120,7 @@ def test_health_and_unsupported_upload():
     assert health.json()["version"] == "4.1"
     response = client.post(
         "/jobs",
-        files={"file": ("notes.txt", b"not a video", "text/plain")},
+        files={"file": ("notes.exe", b"not a video", "application/octet-stream")},
         headers=billing_headers(client),
     )
     assert response.status_code == 400

@@ -73,7 +73,8 @@ def install_durable_runtime() -> None:
         data = JOBS.get(job_id)
         if not data:
             return
-        duration = max(
+        document_seconds = max(0.0, float(options.get("document_credit_seconds") or 0))
+        duration = document_seconds or max(
             media_duration_seconds(audio_paths),
             media_duration_seconds(visual_paths) if visual_paths else 0.0,
         )
