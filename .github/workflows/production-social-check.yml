@@ -64,6 +64,10 @@ jobs:
             if body=$(curl --silent --show-error --fail --max-time 25 "$bootstrap"); then
               echo "Instagram repair status: $body"
               status=$(python -c 'import json,sys; print(json.loads(sys.argv[1]).get("status", "unknown"))' "$body")
+              if [ "$status" = "error" ] || [ "$status" = "launch_not_complete" ]; then
+                echo "Instagram repair helper reported $status." >&2
+                exit 1
+              fi
               if [ "$status" != "waiting" ] && [ "$status" != "retrying" ] && [ "$status" != "not_started" ]; then
                 break
               fi
