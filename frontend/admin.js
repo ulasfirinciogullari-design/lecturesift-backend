@@ -273,11 +273,15 @@ function renderAdminContactMessages(messages) {
 
 function adminReadinessChecks(billing, runtime) {
   const cardReady = Boolean(billing?.payments?.iyzico?.configured || billing?.payments?.paytr?.configured);
+  const iyzicoSignatureReady = Boolean(
+    billing?.payments?.iyzico?.configured && billing?.payments?.iyzico?.webhook_signature?.required
+  );
   return [
     {label:"Kalıcı veritabanı", ready:Boolean(billing?.database?.connected && billing?.database?.persistent), severity:"critical", detail:"Hesap, sipariş ve üyelik kayıtları", action:"Render PostgreSQL bağlantısını kontrol et"},
     {label:"E-posta doğrulama", ready:Boolean(billing?.email_delivery_configured), severity:"critical", detail:"Kayıt, kod, bağlantı ve parola sıfırlama", action:"Resend anahtarını ve gönderen alan adını kontrol et"},
     {label:"Satıcı/sağlayıcı kimliği", ready:Boolean(billing?.commerce_identity?.configured), severity:"critical", detail:"Yasal satış ve ödeme açıklamaları", action:"Zorunlu işletme bilgilerini tamamla"},
     {label:"Kartlı ödeme", ready:cardReady, severity:"critical", detail:cardReady ? `Etkin: ${billing?.payments?.iyzico?.configured ? "iyzico" : "PayTR"}` : "Kart sağlayıcısı bağlı değil", action:"Ödeme sağlayıcısı anahtarlarını kontrol et"},
+    {label:"iyzico webhook imzası", ready:iyzicoSignatureReady, severity:"critical", detail:iyzicoSignatureReady ? "X-IYZ-SIGNATURE-V3 zorunlu; geçersiz bildirim reddedilir" : "Canlı v3 imza doğrulaması hazır değil", action:"iyzico anahtarlarını ve canlı webhook ayarını kontrol et"},
     {label:"Banka havalesi", ready:Boolean(billing?.payments?.bank_transfer?.configured), severity:"recommended", detail:"Sipariş numarasıyla manuel ödeme", action:"IBAN ve alıcı bilgisini kontrol et"},
     {label:"Dayanıklı işleme", ready:Boolean(runtime?.durable_processing_ready), severity:"critical", detail:`Kuyruk ${runtime?.queue?.connected ? "bağlı" : "bağlı değil"} · worker ${runtime?.worker?.workers || 0} · özel depo ${runtime?.storage?.connected ? "bağlı" : "bağlı değil"}`, action:"Redis, worker ve özel dosya deposunu etkinleştir"},
     {label:"Veritabanı kurtarma", ready:Boolean(runtime?.recovery?.database_managed_backup_confirmed), severity:"planned", detail:"Yönetilen yedek doğrulaması", action:"Yedek saklama ve geri alma adımlarını belgele"},
@@ -294,7 +298,7 @@ function renderAdminReadiness(billing, runtime) {
   const stateText = item => item.ready ? "Hazır" : item.severity === "optional" ? "Opsiyonel · kapalı" : item.severity === "planned" ? "Planlandı" : item.severity === "recommended" ? "Önerilen ayar" : "Kritik eksik";
   admin$("adminReadiness").innerHTML = checks.map(item => `<article class="readiness-${item.ready ? "ready" : item.severity}"><div><span>${adminEscape(item.label)}</span><small>${adminEscape(item.detail)}</small>${!item.ready ? `<em>${adminEscape(item.action)}</em>` : ""}</div><strong class="${item.ready ? "ready" : item.severity}">${adminEscape(stateText(item))}</strong></article>`).join("");
   const payment = billing?.payments || {};
-  admin$("adminPaymentSummary").innerHTML = `<article><small>Öncelikli kart sağlayıcısı</small><strong>${payment.iyzico?.configured ? "iyzico" : payment.paytr?.configured ? "PayTR" : "Bağlı değil"}</strong></article><article><small>iyzico</small><strong class="${payment.iyzico?.configured ? "ready" : "muted"}">${payment.iyzico?.configured ? "Canlı" : "Kapalı"}</strong></article><article><small>PayTR</small><strong class="${payment.paytr?.configured ? "ready" : "muted"}">${payment.paytr?.configured ? "Canlı" : "Opsiyonel"}</strong></article><article><small>Havale</small><strong class="${payment.bank_transfer?.configured ? "ready" : "muted"}">${payment.bank_transfer?.configured ? "Canlı" : "Kapalı"}</strong></article>`;
+  admin$("adminPaymentSummary").innerHTML = `<article><small>Öncelikli kart sağlayıcısı</small><strong>${payment.iyzico?.configured ? "iyzico" : payment.paytr?.configured ? "PayTR" : "Bağlı değil"}</strong></article><article><small>iyzico</small><strong class="${payment.iyzico?.configured ? "ready" : "muted"}">${payment.iyzico?.configured ? "Canlı" : "Kapalı"}</strong></article><article><small>Webhook güvenliği</small><strong class="${payment.iyzico?.webhook_signature?.required ? "ready" : "muted"}">${payment.iyzico?.webhook_signature?.required ? "V3 zorunlu" : "Kapalı"}</strong></article><article><small>PayTR</small><strong class="${payment.paytr?.configured ? "ready" : "muted"}">${payment.paytr?.configured ? "Canlı" : "Opsiyonel"}</strong></article><article><small>Havale</small><strong class="${payment.bank_transfer?.configured ? "ready" : "muted"}">${payment.bank_transfer?.configured ? "Canlı" : "Kapalı"}</strong></article>`;
   return checks;
 }
 

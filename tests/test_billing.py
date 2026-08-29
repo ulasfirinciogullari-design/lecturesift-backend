@@ -62,6 +62,12 @@ def test_billing_providers_distinguish_ready_state():
     assert providers["paytr"]["status"] == "pending_credentials"
     assert providers["iyzico"]["status"] == "pending_credentials"
     assert providers["iyzico"]["checkout"] == "hosted_redirect"
+    assert providers["iyzico"]["webhook_signature"] == {
+        "required": True,
+        "version": "v3",
+        "header": "X-IYZ-SIGNATURE-V3",
+        "algorithm": "HMAC-SHA256",
+    }
     assert "global" in providers["paddle"]["regions"]
 
 

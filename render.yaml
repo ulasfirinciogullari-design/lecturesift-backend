@@ -35,7 +35,9 @@ services:
       - key: LECTURESIFT_OCR_DPI
         value: "200"
       - key: LECTURESIFT_OCR_MAX_PAGES
-        value: "60"
+        value: "150"
+      - key: LECTURESIFT_OCR_PARALLELISM
+        value: "2"
       - key: LECTURESIFT_OCR_PAGE_TIMEOUT_SECONDS
         value: "45"
       - key: LECTURESIFT_OCR_ESTIMATED_WORDS_PER_PAGE
@@ -225,7 +227,9 @@ services:
       - key: LECTURESIFT_OCR_DPI
         value: "200"
       - key: LECTURESIFT_OCR_MAX_PAGES
-        value: "60"
+        value: "150"
+      - key: LECTURESIFT_OCR_PARALLELISM
+        value: "2"
       - key: LECTURESIFT_OCR_PAGE_TIMEOUT_SECONDS
         value: "45"
       - key: LECTURESIFT_OCR_ESTIMATED_WORDS_PER_PAGE

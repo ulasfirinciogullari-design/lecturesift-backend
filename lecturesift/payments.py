@@ -50,6 +50,16 @@ IYZICO_ASYNC_PAYMENT_STATUSES = {
 IYZICO_HPP_WEBHOOK_EVENTS = {
     "CHECKOUT_FORM_AUTH",
     "BANK_TRANSFER_AUTH",
+    "BKM_AUTH",
+    "BALANCE",
+    "CONTACTLESS_AUTH",
+    "CONTACTLESS_REFUND",
+    "CREDIT_PAYMENT_AUTH",
+    "CREDIT_PAYMENT_PENDING",
+    "CREDIT_PAYMENT_INIT",
+    "PWI_TKN_FUND",
+    "PWI_TKN_AUTH",
+    "PWI_TKN_THREEDS_AUTH",
 }
 IYZICO_BASE_URLS = {
     "https://api.iyzipay.com",
@@ -110,6 +120,12 @@ def iyzico_public_status() -> dict:
         ],
         "checkout": "hosted_redirect",
         "recurring": False,
+        "webhook_signature": {
+            "required": True,
+            "version": "v3",
+            "header": "X-IYZ-SIGNATURE-V3",
+            "algorithm": "HMAC-SHA256",
+        },
     }
 
 

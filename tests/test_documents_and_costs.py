@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import shutil
+import threading
+import time
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
@@ -181,6 +183,59 @@ def test_ocr_page_limit_is_enforced_before_rendering(tmp_path: Path, monkeypatch
 
     with pytest.raises(LectureSiftError) as caught:
         extract_documents([path])
+    assert caught.value.code == "LS-OCR-02"
+
+
+def test_pdf_ocr_uses_bounded_parallel_pages_and_preserves_page_order(tmp_path: Path, monkeypatch):
+    path = tmp_path / "parallel-scan.pdf"
+    writer = PdfWriter()
+    for _ in range(4):
+        writer.add_blank_page(width=612, height=792)
+    with path.open("wb") as stream:
+        writer.write(stream)
+
+    state = {"active": 0, "maximum": 0}
+    lock = threading.Lock()
+
+    def fake_page(_path, page_index, _source_language):
+        with lock:
+            state["active"] += 1
+            state["maximum"] = max(state["maximum"], state["active"])
+        time.sleep(0.03)
+        with lock:
+            state["active"] -= 1
+        return page_index, f"PAGE {page_index + 1}", "eng"
+
+    monkeypatch.setattr(document_service, "OCR_PARALLELISM", 2)
+    monkeypatch.setattr(document_service, "_ocr_pdf_page", fake_page)
+    progress = []
+    result = extract_documents([path], progress_callback=lambda done, total: progress.append((done, total)))
+
+    assert state["maximum"] == 2
+    assert [result["text"].index(f"PAGE {index}") for index in range(1, 5)] == sorted(
+        result["text"].index(f"PAGE {index}") for index in range(1, 5)
+    )
+    assert progress[-1] == (4, 4)
+
+
+def test_ocr_page_budget_applies_across_all_uploaded_documents(tmp_path: Path, monkeypatch):
+    paths = []
+    for index in range(2):
+        path = tmp_path / f"scan-{index}.pdf"
+        writer = PdfWriter()
+        writer.add_blank_page(width=612, height=792)
+        with path.open("wb") as stream:
+            writer.write(stream)
+        paths.append(path)
+
+    monkeypatch.setattr(document_service, "OCR_MAX_PAGES", 1)
+    monkeypatch.setattr(
+        document_service,
+        "_ocr_pdf_page",
+        lambda _path, page_index, _language: (page_index, "Readable scan text", "eng"),
+    )
+    with pytest.raises(LectureSiftError) as caught:
+        extract_documents(paths)
     assert caught.value.code == "LS-OCR-02"
 
 

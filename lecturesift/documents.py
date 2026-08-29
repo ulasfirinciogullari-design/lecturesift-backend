@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import tempfile
 import zipfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Callable
 
@@ -29,6 +30,7 @@ from .config import (
     OCR_ESTIMATED_WORDS_PER_PAGE,
     OCR_MAX_PAGES,
     OCR_MIN_NATIVE_CHARACTERS,
+    OCR_PARALLELISM,
     OCR_PAGE_TIMEOUT_SECONDS,
 )
 from .errors import LectureSiftError
@@ -253,12 +255,23 @@ def _render_pdf_page(path: Path, page_index: int) -> Image.Image:
         ) from exc
 
 
+def _ocr_pdf_page(path: Path, page_index: int, source_language: str) -> tuple[int, str, str]:
+    """Render and OCR one page without sharing mutable PDF/image state."""
+    image = _render_pdf_page(path, page_index)
+    try:
+        text, language = _run_tesseract_image(image, source_language)
+    finally:
+        image.close()
+    return page_index, text, language
+
+
 def _extract_pdf(
     path: Path,
     source_language: str = "auto",
     *,
     enable_ocr: bool = True,
     progress_callback: Callable[[int, int], None] | None = None,
+    ocr_page_budget: int | None = None,
 ) -> tuple[str, dict[str, Any]]:
     with path.open("rb") as stream:
         signature = stream.read(5)
@@ -283,24 +296,42 @@ def _extract_pdf(
     ocr_indexes = [index for index, part in enumerate(parts) if len(part) < OCR_MIN_NATIVE_CHARACTERS]
     native_text_pages = len(parts) - len(ocr_indexes)
     ocr_language = ""
+    available_ocr_pages = OCR_MAX_PAGES if ocr_page_budget is None else max(0, min(OCR_MAX_PAGES, ocr_page_budget))
+    if len(ocr_indexes) > available_ocr_pages:
+        raise LectureSiftError(
+            "LS-OCR-02",
+            f"Tek işte toplam en fazla {OCR_MAX_PAGES} taranmış sayfaya OCR uygulanabilir. Belgeyi bölerek yükle.",
+            f"OCR page limit exceeded: {len(ocr_indexes)} pages with {available_ocr_pages} remaining",
+            413,
+        )
     if enable_ocr and ocr_indexes:
-        if len(ocr_indexes) > OCR_MAX_PAGES:
-            raise LectureSiftError(
-                "LS-OCR-02",
-                f"Tek işte en fazla {OCR_MAX_PAGES} taranmış sayfaya OCR uygulanabilir. Belgeyi bölerek yükle.",
-                f"OCR page limit exceeded: {len(ocr_indexes)}",
-                413,
+        results: dict[int, tuple[str, str]] = {}
+        workers = min(OCR_PARALLELISM, len(ocr_indexes))
+        if workers == 1:
+            completed_results = (
+                _ocr_pdf_page(path, page_index, source_language) for page_index in ocr_indexes
             )
-        for completed_pages, page_index in enumerate(ocr_indexes, 1):
-            image = _render_pdf_page(path, page_index)
-            try:
-                text, ocr_language = _run_tesseract_image(image, source_language)
-            finally:
-                image.close()
+            for completed_pages, (page_index, text, language) in enumerate(completed_results, 1):
+                results[page_index] = (text, language)
+                if progress_callback:
+                    progress_callback(completed_pages, len(ocr_indexes))
+        else:
+            with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="lecturesift-ocr") as executor:
+                futures = {
+                    executor.submit(_ocr_pdf_page, path, page_index, source_language): page_index
+                    for page_index in ocr_indexes
+                }
+                for completed_pages, future in enumerate(as_completed(futures), 1):
+                    page_index, text, language = future.result()
+                    results[page_index] = (text, language)
+                    if progress_callback:
+                        progress_callback(completed_pages, len(ocr_indexes))
+        for page_index in ocr_indexes:
+            text, language = results[page_index]
             if len(text) > len(parts[page_index]):
                 parts[page_index] = text
-            if progress_callback:
-                progress_callback(completed_pages, len(ocr_indexes))
+            if not ocr_language and language:
+                ocr_language = language
     return "\n\n".join(part for part in parts if part), {
         "pages": len(reader.pages),
         "native_text_pages": native_text_pages,
@@ -317,7 +348,15 @@ def _extract_image(
     *,
     enable_ocr: bool = True,
     progress_callback: Callable[[int, int], None] | None = None,
+    ocr_page_budget: int | None = None,
 ) -> tuple[str, dict[str, Any]]:
+    if ocr_page_budget is not None and ocr_page_budget < 1:
+        raise LectureSiftError(
+            "LS-OCR-02",
+            f"Tek işte toplam en fazla {OCR_MAX_PAGES} taranmış sayfaya OCR uygulanabilir. Dosyaları bölerek yükle.",
+            "OCR image exceeds remaining page budget",
+            413,
+        )
     try:
         with Image.open(path) as source:
             _validate_image_dimensions(source)
@@ -420,28 +459,39 @@ def extract_documents(
         raise LectureSiftError("LS-DOC-10", "En az bir belge ekle.", "No document paths", 400)
     sections: list[str] = []
     metadata: list[dict[str, Any]] = []
+    completed_ocr_pages = 0
     for index, path in enumerate(paths, 1):
         _validate_size(path)
         suffix = path.suffix.casefold()
         if suffix not in DOCUMENT_EXTENSIONS:
             raise LectureSiftError("LS-DOC-11", "Bu belge biçimi desteklenmiyor.", f"Unsupported document: {suffix}", 400)
         if suffix == ".pdf":
+            progress_offset = completed_ocr_pages
             text, details = _extract_pdf(
                 path,
                 source_language,
                 enable_ocr=enable_ocr,
-                progress_callback=progress_callback,
+                progress_callback=(
+                    (lambda completed, total, offset=progress_offset: progress_callback(offset + completed, offset + total))
+                    if progress_callback else None
+                ),
+                ocr_page_budget=OCR_MAX_PAGES - completed_ocr_pages,
             )
         elif suffix == ".docx":
             text, details = _extract_docx(path)
         elif suffix == ".pptx":
             text, details = _extract_pptx(path)
         elif suffix in _IMAGE_EXTENSIONS:
+            progress_offset = completed_ocr_pages
             text, details = _extract_image(
                 path,
                 source_language,
                 enable_ocr=enable_ocr,
-                progress_callback=progress_callback,
+                progress_callback=(
+                    (lambda completed, total, offset=progress_offset: progress_callback(offset + completed, offset + total))
+                    if progress_callback else None
+                ),
+                ocr_page_budget=OCR_MAX_PAGES - completed_ocr_pages,
             )
         else:
             text, details = _extract_text(path)
@@ -456,6 +506,7 @@ def extract_documents(
         if text.strip():
             sections.append(f"DOCUMENT {index}: {path.name}\n{text}")
         metadata.append({"name": path.name, "type": suffix.lstrip("."), **details, "characters": len(text)})
+        completed_ocr_pages += int(details.get("ocr_pages") or 0)
     combined = "\n\n".join(sections)
     if len(combined) > MAX_DOCUMENT_CHARACTERS:
         raise LectureSiftError(
