@@ -152,10 +152,10 @@ h1 { max-width: 790px; margin: 0; font-size: clamp(40px, 5.1vw, 73px); line-heig
 .divider { height: 1px; margin: 23px 0 20px; background: var(--line); }
 
 .operation-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 1fr); gap: 11px; margin-bottom: 12px; }
-.format-choices { min-width: 0; margin: 0; padding: 7px 10px 9px; display: flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 12px; background: #0a1931; }
-.format-choices legend { padding: 0 4px; color: var(--muted); font-size: 9px; }
-.format-choices label { flex: 1; cursor: pointer; }.format-choices input { position: absolute; opacity: 0; }
-.format-choices span { min-height: 32px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 8px; color: var(--muted); font-size: 9.5px; font-weight: 800; }
+.format-choices { min-width: 0; margin: 0; padding: 10px; scroll-margin-top: 100px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; gap: 7px; border: 1px solid var(--line); border-radius: 12px; background: #0a1931; }
+.format-legend { grid-column: 1 / -1; display: block; margin: 0 0 2px; color: var(--muted); font-size: 9px; font-weight: 750; line-height: 1.4; }
+.format-choices label { min-width: 0; cursor: pointer; }.format-choices input { position: absolute; opacity: 0; }
+.format-choices label span { min-height: 32px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 8px; color: var(--muted); font-size: 9.5px; font-weight: 800; }
 .format-choices input:checked + span { border-color: rgba(57, 166, 255, .48); background: rgba(57, 166, 255, .12); color: #a7ddff; }
 
 .settings-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 11px; }

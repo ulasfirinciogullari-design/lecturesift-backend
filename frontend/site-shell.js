@@ -88,43 +88,46 @@
     if (!aside) return;
     const corporatePages = ["/about.html", "/contact.html"];
     const legalPages = ["/privacy.html", "/terms.html", "/cookies.html", "/refund.html", "/distance-sales.html"];
-    const entries = corporatePages.includes(currentBasePath)
-      ? [
-          ["Hakkımızda", "/about.html"], ["İletişim", "/contact.html"],
-          ["Özellikler", "/features.html"], ["Planlar", "/plans.html"],
-        ]
-      : legalPages.includes(currentBasePath)
-      ? [
-          ["Gizlilik ve KVKK", "/privacy.html"], ["Kullanım koşulları", "/terms.html"],
-          ["Çerez ve depolama", "/cookies.html"], ["Teslimat, iptal ve iade", "/refund.html"],
-          ["Mesafeli Satış Sözleşmesi", "/distance-sales.html"],
-        ]
-      : null;
-    if (!entries) return;
+    if (![...corporatePages, ...legalPages].includes(currentBasePath)) return;
+    const groups = [
+      ["LectureSift", [["Hakkımızda", "/about.html"], ["İletişim", "/contact.html"]]],
+      ["Ürün", [["Özellikler", "/features.html"], ["Planlar", "/plans.html"]]],
+      ["Yasal belgeler", [
+        ["Gizlilik ve KVKK", "/privacy.html"], ["Kullanım koşulları", "/terms.html"],
+        ["Çerez ve depolama", "/cookies.html"], ["Teslimat, iptal ve iade", "/refund.html"],
+        ["Mesafeli Satış Sözleşmesi", "/distance-sales.html"],
+      ]],
+    ];
     aside.replaceChildren();
-    const heading = document.createElement("strong");
-    heading.textContent = corporatePages.includes(currentBasePath) ? "LectureSift" : exact("Yasal belgeler");
-    aside.append(heading);
-    entries.forEach(([text, path]) => {
-      const anchor = document.createElement("a");
-      anchor.href = pathFor(path);
-      anchor.textContent = exact(text);
-      if (currentBasePath === path) {
-        anchor.className = "active";
-        anchor.setAttribute("aria-current", "page");
-      }
-      aside.append(anchor);
-    });
-    if (legalPages.includes(currentBasePath)) {
-      const divider = document.createElement("span");
-      divider.className = "legal-nav-divider";
-      divider.textContent = exact("Kurumsal");
-      aside.append(divider);
-      [["Hakkımızda", "/about.html"], ["İletişim", "/contact.html"]].forEach(([text, path]) => {
+    groups.forEach(([headingText, entries], groupIndex) => {
+      const heading = document.createElement(groupIndex === 0 ? "strong" : "span");
+      if (groupIndex > 0) heading.className = "legal-nav-divider";
+      heading.textContent = groupIndex === 0 ? headingText : exact(headingText);
+      aside.append(heading);
+      entries.forEach(([text, path]) => {
         const anchor = document.createElement("a");
         anchor.href = pathFor(path);
         anchor.textContent = exact(text);
+        if (currentBasePath === path) {
+          anchor.className = "active";
+          anchor.setAttribute("aria-current", "page");
+        }
         aside.append(anchor);
+      });
+    });
+
+    const footerNav = document.querySelector(".legal-footer nav");
+    if (footerNav) {
+      footerNav.replaceChildren();
+      [
+        ["İletişim", "/contact.html"], ["Gizlilik", "/privacy.html"],
+        ["Koşullar", "/terms.html"], ["İptal ve iade", "/refund.html"],
+        ["Mesafeli satış", "/distance-sales.html"], ["Çerezler", "/cookies.html"],
+      ].forEach(([text, path]) => {
+        const anchor = document.createElement("a");
+        anchor.href = pathFor(path);
+        anchor.textContent = exact(text);
+        footerNav.append(anchor);
       });
     }
   };
@@ -136,13 +139,6 @@
       "Satıcı/hizmet sağlayıcı kimliği, siparişe özgü toplam fiyat, vergi, dönem, ödeme yöntemi ve dijital hizmet başlangıcı; kullanıcı onayından hemen önce sipariş özetinde ve Mesafeli Satış Sözleşmesi'nde gösterilir."
     );
   }
-  if (["/contact.html", "/distance-sales.html"].includes(currentBasePath)) {
-    const script = document.createElement("script");
-    script.src = "/legal-operator.js?v=1";
-    script.defer = true;
-    document.head.append(script);
-  }
-
   const token = localStorage.getItem(TOKEN_KEY) || "";
   setSessionState(Boolean(token));
   if (!token) return;

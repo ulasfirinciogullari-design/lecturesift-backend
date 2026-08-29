@@ -19,6 +19,8 @@
   const showOperatorDetails = ["/distance-sales.html", "/contact.html"]
     .some(path => location.pathname.endsWith(path));
   if (!showOperatorDetails) return;
+  if (card.dataset.legalOperatorLoading === "true") return;
+  card.dataset.legalOperatorLoading = "true";
   const addRow = (list, label, value, href = "") => {
     if (!value) return;
     const row = document.createElement("div");
@@ -40,6 +42,7 @@
     .then(response => response.ok ? response.json() : null)
     .then(operator => {
       if (!operator?.configured) return;
+      card.querySelectorAll("[data-legal-operator]").forEach(existing => existing.remove());
       const section = document.createElement("section");
       section.dataset.legalOperator = "true";
       section.className = "legal-operator";
