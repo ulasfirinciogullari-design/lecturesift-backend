@@ -127,6 +127,21 @@ function showPaymentRedirectResult() {
   }
 }
 
+function openRequestedPlan() {
+  const params = new URLSearchParams(location.search);
+  const planCode = params.get("plan");
+  if (!planCode || !catalog?.plans?.some(plan => plan.code === planCode)) return;
+  const requestedInterval = params.get("interval");
+  const plan = catalog.plans.find(item => item.code === planCode);
+  const interval = plan?.kind === "one_time"
+    ? "one_time"
+    : (requestedInterval === "annual" ? "annual" : "monthly");
+  params.delete("plan");
+  params.delete("interval");
+  history.replaceState({}, "", `${location.pathname}${params.size ? `?${params}` : ""}${location.hash}`);
+  void buy(planCode, interval);
+}
+
 async function api(path, options = {}) {
   const headers = {"Content-Type": "application/json", ...(options.headers || {})};
   const token = localStorage.getItem(TOKEN_KEY);
@@ -167,21 +182,6 @@ function renderCompare() {
     [pt("plans.adExperience", "Reklam deneyimi"), plan => plan.entitlements?.ad_free ? pt("plans.adFree", "Reklamsız kullanım") : pt("plans.rewardedOption", "İsteğe bağlı reklamla ek dakika")],
   ];
   $("compareBody").innerHTML = rows.map(([label, value]) => `<tr><td>${esc(label)}</td>${plans.map(plan => `<td>${esc(value(plan))}</td>`).join("")}</tr>`).join("");
-}
-
-async function renderBankDetails() {
-  try {
-    const transfer = await api("/billing/manual-transfer");
-    if (!transfer.available || !transfer.bank) {
-      $("bankAvailability").textContent = pt("payment.notConfigured", "Havale bilgileri henüz etkin değil.");
-      return;
-    }
-    $("bankAvailability").textContent = pt("payment.available", "Havale ile ödeme kullanılabilir.");
-    $("publicBankIban").textContent = transfer.bank.iban.replace(/(.{4})/g, "$1 ").trim();
-    $("publicBankHolder").textContent = transfer.bank.account_holder;
-    $("publicBankName").textContent = transfer.bank.bank_name || "—";
-    $("publicBankDetails").hidden = false;
-  } catch { $("bankAvailability").textContent = pt("payment.unavailable", "Ödeme bilgileri şu anda alınamıyor."); }
 }
 
 function normalizeCatalog(remote, selected) {
@@ -233,6 +233,18 @@ function cardProviderStatus() {
   return iyzico;
 }
 
+function automaticBankTransferStatus() {
+  const iyzico = iyzicoStatus();
+  return {
+    ...iyzico,
+    configured: Boolean(
+      iyzico.configured
+      && iyzico.capabilities?.includes("bank_transfer")
+      && iyzico.currencies?.includes("TRY")
+    ),
+  };
+}
+
 function pendingCardMessage() {
   return pt("payment.cardPending", "iyzico canlı ödeme anahtarları güvenli sunucu ayarına eklendiğinde kartlı ödeme açılacak.");
 }
@@ -241,8 +253,12 @@ function renderPaymentStatus() {
   const provider = cardProviderStatus();
   if (!$('cardAvailability')) return;
   $('cardAvailability').textContent = provider.configured
-    ? `${provider.code === "iyzico" ? "iyzico" : "PayTR"} · ${pt("payment.providerReady", "Kartlı ödeme kullanıma hazır.")}`
+    ? `${provider.code === "iyzico" ? "iyzico" : "PayTR"} · ${pt("payment.providerReady", "Kart ve güvenli ödeme yöntemleri kullanıma hazır.")}`
     : pendingCardMessage();
+  const bankTransfer = automaticBankTransferStatus();
+  $("bankAvailability").textContent = bankTransfer.configured
+    ? pt("payment.available", "iyzico sayfasında Havale/EFT seçilebilir; eşleşen ödeme otomatik onaylanır.")
+    : pt("payment.notConfigured", "iyzico Havale/EFT seçeneği henüz etkin değil.");
 }
 
 function renderPlans() {
@@ -321,88 +337,35 @@ async function buy(planCode, interval = "monthly") {
   $("checkoutLastName").value = account?.user?.last_name || "";
   $("checkoutTerms").checked = false;
   $("checkoutEarlyPerformance").checked = false;
+  const bankTransfer = automaticBankTransferStatus();
   $("checkoutCardButton").disabled = !commerceIdentity.configured || !provider.configured || !provider.currencies?.includes(currency);
-  $("checkoutBankButton").disabled = !commerceIdentity.configured || currency !== "TRY" || !plan?.manual_price;
+  $("checkoutBankButton").disabled = !commerceIdentity.configured || currency !== "TRY" || !bankTransfer.configured;
   $("checkoutNotice").textContent = !commerceIdentity.configured
     ? pt("payment.commercePending", "Satıcı/sağlayıcı kimliği ve iletişim bilgileri tamamlanmadan ödeme açılamaz.")
     : provider.configured
-    ? pt("payment.providerReady", "Kartlı ödeme kullanıma hazır.")
+    ? pt("payment.providerReady", "Kart ve güvenli ödeme yöntemleri kullanıma hazır.")
     : pendingCardMessage();
   $("checkoutForm").hidden = false;
   $("paytrFrame").hidden = true;
   $("checkoutPanel").hidden = false;
 }
 
-async function createTransfer(planCode, interval) {
+async function startHostedCheckout(preferredMethod = "card") {
   if (!$("checkoutForm").reportValidity()) return;
-  try {
-    const body = await api("/billing/manual-transfer/orders", {
-      method: "POST",
-      body: JSON.stringify({
-        plan_code: planCode,
-        interval,
-        first_name: $("checkoutFirstName").value.trim(),
-        last_name: $("checkoutLastName").value.trim(),
-        terms_accepted:$("checkoutTerms").checked,
-        early_performance_requested:$("checkoutEarlyPerformance").checked,
-        language:PLANS_I18N.language,
-      }),
-    });
-    const order = body.order;
-    $("transferReference").textContent = order.order_number || order.reference;
-    $("transferAmount").textContent = format(order.amount_minor, order.currency || "TRY");
-    $("transferIban").textContent = order.bank.iban.replace(/(.{4})/g, "$1 ").trim();
-    $("transferHolder").textContent = order.bank.account_holder;
-    $("transferInstruction").textContent = order.instruction;
-    $("transferSupport").href = `mailto:${encodeURIComponent(order.support_email)}?subject=${encodeURIComponent(`LectureSift ${order.reference}`)}`;
-    $("transferSupport").textContent = `${pt("payment.sendReceiptTo", "Dekontu e-postayla gönder")}: ${order.support_email}`;
-    $("transferPanel").hidden = false;
-    $("checkoutPanel").hidden = true;
-    $("transferPanel").scrollIntoView({behavior: "smooth"});
-  } catch (error) { showError(error.message, error.code); }
-}
-
-async function load() {
-  const selected = currency || detectedCurrency();
-  currency = selected;
-  populateCurrencies();
-  $("billingCurrency").value = selected;
-  try {
-    const [remote, providerBody] = await Promise.all([
-      api(`/billing/plans?currency=${encodeURIComponent(selected)}`),
-      api("/billing/providers"),
-    ]);
-    providers = providerBody.providers || [];
-    commerceIdentity = providerBody.commerce_identity || {configured:false};
-    catalog = normalizeCatalog(remote, selected);
-    try { account = (await api("/billing/me")).account; } catch { account = null; }
-    renderAccount();
-    renderPlans();
-    renderPaymentStatus();
-    await renderBankDetails();
-    showPaymentRedirectResult();
-  } catch (error) { showError(error.message, error.code); }
-}
-
-$("billingCurrency").addEventListener("change", () => {
-  currency = $("billingCurrency").value;
-  localStorage.setItem("lecturesift-currency", currency);
-  load();
-});
-$("closeError").onclick = () => { $("errorBox").hidden = true; };
-$("checkoutClose").onclick = $("checkoutCancel").onclick = () => {
-  $("checkoutPanel").hidden = true;
-  $("paytrFrame").src = "about:blank";
-};
-$("checkoutBankButton").onclick = () => createTransfer($("checkoutPlanCode").value, $("checkoutInterval").value);
-$("checkoutForm").addEventListener("submit", async event => {
-  event.preventDefault();
-  const button = $("checkoutCardButton");
-  if (button.disabled) return;
-  button.disabled = true;
-  $("checkoutNotice").textContent = pt("payment.opening", "Güvenli ödeme açılıyor…");
+  const cardButton = $("checkoutCardButton");
+  const bankButton = $("checkoutBankButton");
+  if ((preferredMethod === "bank_transfer" ? bankButton : cardButton).disabled) return;
+  cardButton.disabled = true;
+  bankButton.disabled = true;
+  $("checkoutNotice").textContent = preferredMethod === "bank_transfer"
+    ? pt("payment.openingTransfer", "iyzico açılıyor; güvenli sayfada Havale/EFT seçeneğini seç.")
+    : pt("payment.opening", "Güvenli ödeme açılıyor…");
   try {
     const planCode = $("checkoutPlanCode").value;
+    recordPlanAnalytics("add_payment_info", {
+      payment_type: preferredMethod,
+      items: [{item_id: planCode, item_name: planLabel(planCode), quantity: 1}],
+    });
     const body = await api("/billing/checkout", {
       method: "POST",
       body: JSON.stringify({
@@ -430,8 +393,48 @@ $("checkoutForm").addEventListener("submit", async event => {
     $("paytrFrame").hidden = false;
   } catch (error) {
     $("checkoutNotice").textContent = error.message;
-    button.disabled = false;
+    const provider = cardProviderStatus();
+    cardButton.disabled = !commerceIdentity.configured || !provider.configured || !provider.currencies?.includes(currency);
+    bankButton.disabled = !commerceIdentity.configured || currency !== "TRY" || !automaticBankTransferStatus().configured;
   }
+}
+
+async function load() {
+  const selected = currency || detectedCurrency();
+  currency = selected;
+  populateCurrencies();
+  $("billingCurrency").value = selected;
+  try {
+    const [remote, providerBody] = await Promise.all([
+      api(`/billing/plans?currency=${encodeURIComponent(selected)}`),
+      api("/billing/providers"),
+    ]);
+    providers = providerBody.providers || [];
+    commerceIdentity = providerBody.commerce_identity || {configured:false};
+    catalog = normalizeCatalog(remote, selected);
+    try { account = (await api("/billing/me")).account; } catch { account = null; }
+    renderAccount();
+    renderPlans();
+    renderPaymentStatus();
+    showPaymentRedirectResult();
+    openRequestedPlan();
+  } catch (error) { showError(error.message, error.code); }
+}
+
+$("billingCurrency").addEventListener("change", () => {
+  currency = $("billingCurrency").value;
+  localStorage.setItem("lecturesift-currency", currency);
+  load();
+});
+$("closeError").onclick = () => { $("errorBox").hidden = true; };
+$("checkoutClose").onclick = $("checkoutCancel").onclick = () => {
+  $("checkoutPanel").hidden = true;
+  $("paytrFrame").src = "about:blank";
+};
+$("checkoutBankButton").onclick = () => startHostedCheckout("bank_transfer");
+$("checkoutForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  await startHostedCheckout("card");
 });
 currency = detectedCurrency();
 load();
