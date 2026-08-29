@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from . import config
 from .billing_service import BillingAuthenticationError, BillingConfigurationError, BillingError, authenticate_session
+from .costs import cost_overview
 from .jobs import JOBS
 from .mailer import EmailDeliveryError
 from .queue import worker_health
@@ -695,6 +696,16 @@ def admin_processing_jobs(
         "jobs": jobs,
         "worker": worker_health(),
     }
+
+
+@router.get("/billing/admin/costs")
+def admin_costs(
+    days: int = Query(30, ge=1, le=3660),
+    limit: int = Query(100, ge=1, le=500),
+    admin: dict = Depends(_admin),
+) -> dict:
+    del admin
+    return {"ok": True, **cost_overview(days=days, limit=limit)}
 
 
 @router.get("/billing/admin/contact-messages")

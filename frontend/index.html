@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="google-adsense-account" content="ca-pub-7608481350058806">
-  <meta name="description" content="Ders videolarını slayt, transkript, not, özet, quiz ve bilgi kartlarına dönüştür.">
-  <title>LectureSift - AI Ders Çalışma Asistanı</title>
+  <meta name="description" content="Video, ses, PDF, Word ve PowerPoint ders kaynaklarını özet, transkript, quiz, bilgi kartı ve indirilebilir çalışma paketine dönüştür.">
+  <title>LectureSift - Video, PDF ve Ders Özeti Oluşturucu</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
-<link rel="stylesheet" href="/rollout.css?v=7"><link rel="stylesheet" href="/theme.css?v=2"><script src="/theme.js?v=2"></script></head>
+<link rel="stylesheet" href="/rollout.css?v=7"><link rel="stylesheet" href="/theme.css?v=8"><script src="/theme.js?v=2"></script></head>
 <body>
   <div class="ambient ambient-one"></div>
   <div class="ambient ambient-two"></div>
@@ -57,6 +57,7 @@
         <article><span>03</span><h3>Quiz ve bilgi kartları</h3><p>İçeriğe göre üretilen sorularla bilgini ölç, kartlarla aralıklı tekrar yap.</p></article>
         <article><span>04</span><h3>Paylaşılabilir çıktılar</h3><p>Çalışma paketini PDF, Word ve TXT olarak indir; kaynaklarını düzenli tut.</p></article>
       </div>
+      <nav class="feature-deep-links" aria-label="Ayrıntılı özellik rehberleri"><a href="/lecture-video-summary.html">Ders videosu ve ses özeti →</a><a href="/document-summary.html">PDF ve belge özeti →</a><a href="/quiz-flashcards.html">Quiz ve bilgi kartı oluşturma →</a></nav>
       <a class="section-detail-link" href="/features.html">Tüm özellikleri ayrıntılı incele →</a>
     </section>
 
@@ -77,16 +78,16 @@
 
         <div id="uploadPanel" class="source-panel active" role="tabpanel" aria-labelledby="uploadTab">
           <div id="recordingModeTabs" class="recording-mode-tabs">
-            <button id="classicMode" class="active" type="button" data-i18n="classicMode">Video ve ses birlikte</button>
+            <button id="classicMode" class="active" type="button" data-i18n="classicMode">Video, ses veya belge</button>
             <button id="separateMode" type="button" data-i18n="separateMode">Ses ve görüntü ayrı</button>
           </div>
 
           <div id="classicSources" class="source-builder">
-            <input id="classicFiles" class="file-input" type="file" multiple accept="video/mp4,video/webm,video/quicktime,video/x-matroska">
+            <input id="classicFiles" class="file-input" type="file" multiple accept="video/mp4,video/webm,video/quicktime,video/x-matroska,.pdf,.docx,.pptx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/markdown">
             <label id="classicDropZone" class="drop-zone compact" for="classicFiles">
               <span class="upload-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15.5v2.25A2.25 2.25 0 0 0 7.25 20h9.5A2.25 2.25 0 0 0 19 17.75V15.5"/></svg></span>
-              <strong data-i18n="addVideos">Bir veya birden fazla video ekle</strong>
-              <span data-i18n="sortHelp">Dosyalar eklenince sıralarını değiştirebilirsin</span>
+              <strong data-i18n="addVideos">Video, ses veya belge ekle</strong>
+              <span data-i18n="sortHelp">PDF, Word, PowerPoint, TXT ve Markdown belgelerini de özetleyebilirsin</span>
             </label>
             <div id="classicFileList" class="source-file-list"></div>
           </div>
@@ -111,7 +112,7 @@
               </label>
             </div>
           </div>
-          <p class="combined-limit" data-i18n="fileHelp">MP4, MOV, MKV veya WebM - toplam en fazla 1 GB</p>
+          <p class="combined-limit" data-i18n="fileHelp">Video: toplam 1 GB · Belgeler: toplam 50 MB · Video ve belgeyi ayrı işler halinde yükle</p>
         </div>
 
         <div id="linkPanel" class="source-panel" role="tabpanel" aria-labelledby="linkTab" hidden>
@@ -144,7 +145,7 @@
         </div>
 
         <div id="studySettings" class="settings-grid">
-          <label class="control"><span data-i18n="sourceLanguage">Video dili</span><select id="sourceLanguage"></select></label>
+          <label class="control"><span data-i18n="sourceLanguage">Kaynak dili</span><select id="sourceLanguage"></select></label>
           <label class="control"><span data-i18n="outputLanguage">Çıktı dili</span><select id="outputLanguage"></select></label>
           <label class="control"><span data-i18n="summaryStyle">Özet profili</span><select id="summaryStyle"></select></label>
           <label class="control"><span data-i18n="quizCount">Quiz sorusu</span><select id="quizCount"><option>5</option><option selected>10</option><option>20</option><option>30</option></select></label>
@@ -260,8 +261,8 @@
   </div>
 
   <script src="./locale-data.js?v=3"></script>
-  <script src="./page-i18n.js?v=2"></script><script src="/i18n.js?v=15"></script><script src="/site-shell.js?v=1"></script>
-  <script src="./app.js?v=11"></script>
+  <script src="./page-i18n.js?v=4"></script><script src="/i18n.js?v=17"></script><script src="/site-shell.js?v=1"></script>
+  <script src="./app.js?v=12"></script>
   <script src="/rollout.js?v=3"></script>
 </body>
 </html>

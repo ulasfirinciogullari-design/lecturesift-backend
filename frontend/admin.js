@@ -5,10 +5,10 @@ const adminLocale = () => window.LectureSiftI18n?.locale || "tr-TR";
 const adminMinuteShort = () => adminT("unit.minuteShort", "dk");
 const ADMIN_SESSION_TOKEN_KEY = "lecturesift-admin-session-token";
 const ADMIN_VIEW_KEY = "lecturesift-admin-view";
-const ADMIN_VIEWS = ["overview", "users", "finance", "support", "jobs", "system", "growth", "audit"];
+const ADMIN_VIEWS = ["overview", "users", "finance", "support", "jobs", "costs", "system", "growth", "audit"];
 let adminAccessToken = sessionStorage.getItem(ADMIN_SESSION_TOKEN_KEY) || "";
 let adminLoading = false;
-let adminState = {overview:{counts:{}}, users:[], userPagination:{page:1,total:0,total_pages:1}, orders:[], orderPagination:{page:1,total:0,total_pages:1}, rewards:[], refunds:[], credits:[], accountEvents:[], contacts:[], jobs:[], billing:null, runtime:null, ads:null, analytics:null};
+let adminState = {overview:{counts:{}}, users:[], userPagination:{page:1,total:0,total_pages:1}, orders:[], orderPagination:{page:1,total:0,total_pages:1}, rewards:[], refunds:[], credits:[], accountEvents:[], contacts:[], jobs:[], costs:null, billing:null, runtime:null, ads:null, analytics:null};
 let selectedAdminUsers = new Set();
 let adminUserSearchTimer = null;
 let adminOrderSearchTimer = null;
@@ -75,6 +75,10 @@ function adminMoney(amountMinor, currency) {
   } catch (_) {
     return `${(Number(amountMinor || 0) / 100).toLocaleString(adminLocale())} ${currency || "TRY"}`;
   }
+}
+
+function adminUsd(value, maximumFractionDigits = 4) {
+  return new Intl.NumberFormat(adminLocale(), {style:"currency", currency:"USD", minimumFractionDigits:2, maximumFractionDigits}).format(Number(value || 0));
 }
 
 function adminDateObject(value) {
@@ -299,6 +303,32 @@ function renderAdminJobs(jobs) {
   admin$("adminJobs").innerHTML = `<table class="admin-table"><thead><tr><th>İş kimliği</th><th>Durum</th><th>İlerleme / aşama</th><th>Başlangıç</th><th>Hata</th></tr></thead><tbody>${rows || '<tr><td colspan="5">Kayıtlı iş bulunamadı.</td></tr>'}</tbody></table>`;
 }
 
+function renderAdminCosts() {
+  const data = adminState.costs || {};
+  const totals = data.totals || {};
+  const fx = data.currency || {};
+  const metrics = [
+    ["Değişken kullanım", adminUsd(totals.variable_usd, 6), `${Number(data.period_days || 30)} günlük API ve depolama işlemleri`],
+    ["Dönem sabit gideri", adminUsd(totals.period_fixed_usd), `Aylık sabit: ${adminUsd(totals.monthly_fixed_usd)}`],
+    ["Toplam tahmin", adminUsd(totals.combined_usd), `${Number(totals.combined_try || 0).toLocaleString(adminLocale(), {maximumFractionDigits:2})} TL`],
+    ["USD / TRY", Number(fx.usd_try || 0).toLocaleString(adminLocale(), {maximumFractionDigits:4}), fx.source || "Kur bilgisi yok"],
+  ];
+  admin$("adminCostMetrics").innerHTML = metrics.map(([label,value,note]) => `<article><small>${adminEscape(label)}</small><strong>${adminEscape(value)}</strong><span>${adminEscape(note)}</span></article>`).join("");
+  admin$("adminCostDisclaimer").textContent = data.disclaimer || "Sağlayıcı faturaları kesin kaynaktır.";
+  const providers = (data.by_provider || []).map(item => `<tr><td data-label="Sağlayıcı"><strong>${adminEscape(item.provider)}</strong></td><td data-label="Hizmet">${adminEscape(item.service)}</td><td data-label="Kayıt">${Number(item.events || 0).toLocaleString(adminLocale())}</td><td data-label="Maliyet">${adminEscape(adminUsd(item.cost_usd, 6))}</td></tr>`).join("");
+  admin$("adminProviderCosts").innerHTML = `<table class="admin-table admin-record-table"><thead><tr><th>Sağlayıcı</th><th>Hizmet</th><th>Ölçüm kaydı</th><th>Tahmini maliyet</th></tr></thead><tbody>${providers || '<tr><td colspan="4">Bu dönemde ölçülmüş değişken kullanım yok.</td></tr>'}</tbody></table>`;
+  const jobs = (data.jobs || []).map(item => `<tr><td data-label="İş kimliği"><strong>${adminEscape(item.job_id)}</strong></td><td data-label="İlk kullanım">${adminEscape(adminDate(item.started_at))}</td><td data-label="Ölçüm">${Number(item.events || 0).toLocaleString(adminLocale())}</td><td data-label="USD">${adminEscape(adminUsd(item.cost_usd, 6))}</td><td data-label="TRY">${Number(item.cost_try || 0).toLocaleString(adminLocale(), {style:"currency",currency:"TRY",maximumFractionDigits:4})}</td></tr>`).join("");
+  admin$("adminJobCosts").innerHTML = `<table class="admin-table admin-record-table"><thead><tr><th>İş kimliği</th><th>İlk kullanım</th><th>Ölçüm</th><th>USD</th><th>TRY</th></tr></thead><tbody>${jobs || '<tr><td colspan="5">Henüz iş bazlı maliyet oluşmadı.</td></tr>'}</tbody></table>`;
+  admin$("adminFixedCosts").innerHTML = (data.fixed_services || []).map(item => `<article class="${Number(item.monthly_usd || 0) ? "ready" : "missing"}"><header><strong>${adminEscape(item.provider)}</strong><span>${adminEscape(adminUsd(item.monthly_usd))}/ay</span></header><p>${adminEscape(item.label)}</p><code>${adminEscape(item.source)}</code></article>`).join("");
+  admin$("adminExternalCosts").innerHTML = (data.external_invoice_sources || []).map(item => `<article class="missing"><header><strong>${adminEscape(item.provider)}</strong><span>Fatura / mutabakat</span></header><p>${adminEscape(item.label)}</p><small>${adminEscape(item.reason)}</small></article>`).join("");
+}
+
+async function loadAdminCosts() {
+  const days = Number(admin$("adminCostDays")?.value || 30);
+  adminState.costs = await adminRequest(`/billing/admin/costs?days=${encodeURIComponent(days)}&limit=250`);
+  renderAdminCosts();
+}
+
 function buildTimeline() {
   const events = [];
   (adminState.orders.length ? adminState.orders : (adminState.overview.orders || [])).forEach(item => events.push({kind:"order", at:item.created_at, title:`${item.provider === "bank_transfer" ? "Havale" : String(item.provider || "Kart").toUpperCase()} siparişi`, detail:`${item.reference} · ${adminMoney(item.amount_minor, item.currency)} · ${adminStatusLabel(item.status)}`, actor:item.user?.email || ""}));
@@ -476,6 +506,7 @@ async function loadAdmin({silent = false} = {}) {
       adminRequest("/billing/admin/account-events?limit=250").catch(() => ({events:[]})),
       adminPublicRequest("/billing/health"), adminPublicRequest("/rollout/health"),
       adminPublicRequest("/ads/config"), adminPublicRequest("/analytics/config"),
+      adminRequest(`/billing/admin/costs?days=${encodeURIComponent(admin$("adminCostDays")?.value || 30)}&limit=250`).catch(() => null),
     ]);
     adminState = {
       ...adminState,
@@ -490,6 +521,7 @@ async function loadAdmin({silent = false} = {}) {
       runtime:optional[7],
       ads:optional[8],
       analytics:optional[9],
+      costs:optional[10],
     };
     await Promise.all([
       loadAdminUsers(adminState.userPagination.page || 1),
@@ -504,6 +536,7 @@ async function loadAdmin({silent = false} = {}) {
     const checks = renderAdminReadiness(adminState.billing, adminState.runtime);
     renderAdminAlerts(checks);
     renderAdminGrowth();
+    renderAdminCosts();
     admin$("adminLastUpdated").textContent = `Son güncelleme: ${adminDate(new Date().toISOString())} · Türkiye saati`;
     admin$("adminLogin").hidden = true;
     admin$("adminPanel").hidden = false;
@@ -696,6 +729,7 @@ admin$("adminTokenForm").addEventListener("submit", async event => {
 });
 admin$("adminRefresh").addEventListener("click", () => loadAdmin().catch(error => adminNotice(error.message, true)));
 ["adminMessageSearch","adminMessageStatus","adminJobStatus","adminTimelineFilter"].forEach(id => admin$(id)?.addEventListener(id.includes("Search") ? "input" : "change", applyAdminFilters));
+admin$("adminCostDays")?.addEventListener("change", () => loadAdminCosts().catch(error => adminNotice(error.message, true)));
 admin$("adminUserSearch").addEventListener("input", () => { clearTimeout(adminUserSearchTimer); adminUserSearchTimer = setTimeout(() => loadAdminUsers(1).catch(error => adminNotice(error.message, true)), 350); });
 ["adminUserStatus","adminUserPlan","adminUserSort","adminUserPageSize"].forEach(id => admin$(id)?.addEventListener("change", () => loadAdminUsers(1).catch(error => adminNotice(error.message, true))));
 admin$("adminOrderSearch").addEventListener("input", () => { clearTimeout(adminOrderSearchTimer); adminOrderSearchTimer = setTimeout(() => loadAdminOrders(1).catch(error => adminNotice(error.message, true)), 350); });

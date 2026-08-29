@@ -34,6 +34,22 @@ BRAND_VARIANTS = (
     "Conferencia Sift",
     "__ LECTURESIFT__", "__LECTURESIFT__", "LECTURESIFT",
 )
+RUNTIME_COPY = {
+    "Video ve belge kaynakları aynı işte karıştırılamaz. Ayrı ayrı yükle.",
+    "Belge boş görünüyor.",
+    "Belge izin verilen dosya boyutundan büyük.",
+    "Word veya PowerPoint belgesi bozuk ya da güvenli açılamıyor.",
+    "PDF güvenli biçimde okunamadı.",
+    "Şifreli PDF dosyaları desteklenmiyor.",
+    "Belge veya sunum izin verilen sayfa sınırını aşıyor.",
+    "Word belgesi okunamadı.",
+    "PowerPoint sunumu okunamadı.",
+    "Metin dosyası okunamadı.",
+    "En az bir belge ekle.",
+    "Bu belge biçimi desteklenmiyor.",
+    "Belgeden metin çıkarılamadı. Taranmış PDF ise OCR uygulanmış bir sürüm yükle.",
+    "Belgelerin toplam metni tek bir güvenli işlem için fazla. Kaynağı bölerek yeniden dene.",
+}
 
 
 def normalize(value: str) -> str:
@@ -217,7 +233,7 @@ def main() -> int:
         write_catalog(catalog_path, catalog)
         catalog = read_catalog(catalog_path)
     central_sources = read_central_sources(frontend / "i18n.js")
-    required = collect_static_copy(frontend)
+    required = collect_static_copy(frontend) | RUNTIME_COPY
     missing = sorted(required - catalog.keys() - central_sources, key=str.casefold)
     if args.limit:
         missing = missing[: args.limit]

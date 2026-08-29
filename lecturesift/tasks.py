@@ -172,7 +172,8 @@ def process_uploaded_job(
             )
             audio_paths = _download_sources(job_id, "audio", list(audio_keys), job_dir)
             visual_paths = _download_sources(job_id, "visual", list(visual_keys or []), job_dir)
-            duration = max(
+            document_seconds = max(0.0, float(options.get("document_credit_seconds") or 0))
+            duration = document_seconds or max(
                 media_duration_seconds(audio_paths),
                 media_duration_seconds(visual_paths) if visual_paths else 0.0,
             )

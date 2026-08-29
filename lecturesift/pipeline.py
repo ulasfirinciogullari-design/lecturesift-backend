@@ -7,7 +7,9 @@ from pathlib import Path
 
 from .ai import make_study_pack, transcribe, transcribe_timed, translate_transcript
 from .billing_service import record_usage
-from .config import APP_VERSION, PRECISE_TRANSCRIPT_TIMESTAMPS
+from .config import APP_VERSION, DOCUMENT_EXTENSIONS, PRECISE_TRANSCRIPT_TIMESTAMPS
+from .costs import cost_context
+from .documents import extract_documents
 from .duration import media_duration_seconds
 from .errors import normalize_error
 from .exports import build_artifacts, build_binary_artifact
@@ -34,12 +36,22 @@ def _source_duration_seconds(paths: list[Path]) -> float:
     return media_duration_seconds(paths)
 
 
-def _record_billing_usage(job_id: str, options: dict, paths: list[Path]) -> None:
+def _record_billing_usage(
+    job_id: str,
+    options: dict,
+    paths: list[Path],
+    *,
+    duration_seconds: float | None = None,
+) -> None:
     user_id = options.get("billing_user_id")
     if not user_id:
         return
     try:
-        record_usage(str(user_id), job_id, _source_duration_seconds(paths))
+        record_usage(
+            str(user_id),
+            job_id,
+            _source_duration_seconds(paths) if duration_seconds is None else duration_seconds,
+        )
     except Exception:
         # The completed study pack remains available if metering is temporarily unavailable.
         print("BILLING USAGE ERROR: metering is temporarily unavailable", flush=True)
@@ -198,7 +210,7 @@ def _visual_pipeline(
     return merged, diagnostics
 
 
-def process_job(
+def _process_job(
     job_id: str,
     audio_video_paths: Path | list[Path] | tuple[Path, ...],
     options: dict,
@@ -216,6 +228,70 @@ def process_job(
 
     try:
         JOBS.update(job_id, status="working", percent=8, stage="parallel_analysis", started=started)
+
+        document_sources = [path for path in audio_sources if path.suffix.casefold() in DOCUMENT_EXTENSIONS]
+        if document_sources:
+            if len(document_sources) != len(audio_sources) or visual_video_paths is not None:
+                raise ValueError("Document and media sources cannot be mixed in one job.")
+            JOBS.update(job_id, percent=28, stage="document_extraction")
+            document_data = extract_documents(document_sources)
+            JOBS.update(job_id, percent=62, stage="study_pack")
+            study_pack = make_study_pack(
+                document_data["text"],
+                options["output_language"],
+                options["summary_style"],
+                options["quiz_count"],
+                options["flashcard_count"],
+            )
+            JOBS.update(job_id, percent=90, stage="exports")
+            slides_dir.mkdir(parents=True, exist_ok=True)
+            result = {
+                "version": APP_VERSION,
+                "job_id": job_id,
+                "options": _public_options(options),
+                "sources": {
+                    "mode": "documents",
+                    "documents": document_data["documents"],
+                    "source_files": [path.name for path in document_sources],
+                    "words": document_data["words"],
+                    "credit_minutes": document_data["credit_minutes"],
+                },
+                "slides": [],
+                "diagnostics": {
+                    "engine": "document-text-v1",
+                    "characters": document_data["characters"],
+                    "words": document_data["words"],
+                    "source_parts": len(document_sources),
+                },
+                "transcript_original": document_data["text"],
+                "transcript_translated": "",
+                "transcript": document_data["text"],
+                "transcript_segments": [],
+                "transcript_timestamps_mode": "none",
+                "timeline": [],
+                **study_pack,
+            }
+            artifacts, zip_path = build_artifacts(job_dir, result, slides_dir)
+            result["artifacts"] = artifacts
+            elapsed = round(time.time() - started, 1)
+            JOBS.update(
+                job_id,
+                status="done",
+                title=result.get("title") or "LectureSift Belge Paketi",
+                percent=100,
+                stage="done",
+                elapsed_seconds=elapsed,
+                document_words=document_data["words"],
+                billable_minutes=document_data["credit_minutes"],
+                result_path=str(zip_path),
+            )
+            _record_billing_usage(
+                job_id,
+                options,
+                document_sources,
+                duration_seconds=float(document_data["credit_seconds"]),
+            )
+            return
 
         if options.get("job_type") == "audio_export":
             JOBS.update(job_id, percent=35, stage="audio_extract")
@@ -282,7 +358,14 @@ def process_job(
             return
 
         with ThreadPoolExecutor(max_workers=2, thread_name_prefix="lecturesift") as executor:
-            audio_future = executor.submit(_audio_pipeline, job_id, audio_sources, job_dir, options)
+            # Context variables do not cross thread boundaries automatically.
+            # Wrap the audio branch so its OpenAI calls remain attributable to
+            # the same job and account in the cost ledger.
+            def costed_audio_pipeline():
+                with cost_context(job_id, str(options.get("billing_user_id") or "") or None):
+                    return _audio_pipeline(job_id, audio_sources, job_dir, options)
+
+            audio_future = executor.submit(costed_audio_pipeline)
             slides, diagnostics = _visual_pipeline(
                 job_id,
                 visual_sources,
@@ -375,3 +458,14 @@ def process_job(
             technical_error=normalized.technical_message,
             elapsed_seconds=round(time.time() - started, 1),
         )
+
+
+def process_job(
+    job_id: str,
+    audio_video_paths: Path | list[Path] | tuple[Path, ...],
+    options: dict,
+    visual_video_paths: Path | list[Path] | tuple[Path, ...] | None = None,
+) -> None:
+    """Run one job with cost attribution that also propagates to AI helpers."""
+    with cost_context(job_id, str(options.get("billing_user_id") or "") or None):
+        _process_job(job_id, audio_video_paths, options, visual_video_paths)

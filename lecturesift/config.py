@@ -67,6 +67,12 @@ SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
 MAX_VIDEO_BYTES = int(os.getenv("LECTURESIFT_MAX_VIDEO_BYTES", str(1024 * 1024 * 1024)))
 MAX_SOURCE_FILES = int(os.getenv("LECTURESIFT_MAX_SOURCE_FILES", "24"))
+MAX_DOCUMENT_BYTES = int(os.getenv("LECTURESIFT_MAX_DOCUMENT_BYTES", str(50 * 1024 * 1024)))
+MAX_DOCUMENT_PAGES = int(os.getenv("LECTURESIFT_MAX_DOCUMENT_PAGES", "500"))
+MAX_DOCUMENT_CHARACTERS = int(os.getenv("LECTURESIFT_MAX_DOCUMENT_CHARACTERS", "1500000"))
+DOCUMENT_WORDS_PER_CREDIT_MINUTE = max(
+    50, int(os.getenv("LECTURESIFT_DOCUMENT_WORDS_PER_CREDIT_MINUTE", "200"))
+)
 JOB_TTL_SECONDS = int(os.getenv("LECTURESIFT_JOB_TTL_SECONDS", str(6 * 60 * 60)))
 GUEST_TRIAL_MAX_MINUTES = float(os.getenv("LECTURESIFT_GUEST_TRIAL_MINUTES", "5"))
 INSTAGRAM_BONUS_MINUTES = int(os.getenv("LECTURESIFT_INSTAGRAM_BONUS_MINUTES", "30"))
@@ -120,6 +126,15 @@ RECOVERY_DRILL_CONFIRMED = os.getenv(
 ).lower() == "true"
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".webm", ".mpeg", ".mpg", ".m4v"}
+DOCUMENT_EXTENSIONS = {".pdf", ".docx", ".pptx", ".txt", ".md"}
+
+# Cost rates are estimates used for operational visibility, never substitutes
+# for provider invoices. Every value can be overridden without a code deploy.
+COST_USD_TRY_FALLBACK = float(os.getenv("LECTURESIFT_COST_USD_TRY_FALLBACK", "42"))
+COST_RENDER_MONTHLY_USD = float(os.getenv("LECTURESIFT_COST_RENDER_MONTHLY_USD", "0"))
+COST_NETLIFY_MONTHLY_USD = float(os.getenv("LECTURESIFT_COST_NETLIFY_MONTHLY_USD", "20"))
+COST_RESEND_MONTHLY_USD = float(os.getenv("LECTURESIFT_COST_RESEND_MONTHLY_USD", "0"))
+COST_OTHER_MONTHLY_USD = float(os.getenv("LECTURESIFT_COST_OTHER_MONTHLY_USD", "0"))
 
 LANGUAGE_NAMES = {
     "tr": "Turkish",
