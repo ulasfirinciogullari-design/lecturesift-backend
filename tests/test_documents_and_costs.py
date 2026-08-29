@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import threading
 import time
@@ -121,7 +122,12 @@ def test_real_tesseract_reads_a_scanned_pdf(tmp_path: Path):
     image_path = tmp_path / "scan.png"
     image = Image.new("RGB", (1800, 1200), "white")
     draw = ImageDraw.Draw(image)
-    font = ImageFont.truetype("DejaVuSans.ttf", 58)
+    font_name = (
+        str(Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts" / "arial.ttf")
+        if os.name == "nt"
+        else "DejaVuSans.ttf"
+    )
+    font = ImageFont.truetype(font_name, 58)
     draw.text((120, 220), "ENERGY IS CONSERVED IN A CLOSED SYSTEM", fill="black", font=font)
     draw.text((120, 330), "WORK TRANSFERS ENERGY BETWEEN OBJECTS", fill="black", font=font)
     image.save(image_path)
