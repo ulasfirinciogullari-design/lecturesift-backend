@@ -345,6 +345,7 @@ async function buy(planCode, interval = "monthly") {
     : provider.configured
     ? pt("payment.providerReady", "Kart ve güvenli ödeme yöntemleri kullanıma hazır.")
     : pendingCardMessage();
+  $("bankTransferGuide").hidden = true;
   $("checkoutForm").hidden = false;
   $("paytrFrame").hidden = true;
   $("checkoutPanel").hidden = false;
@@ -354,9 +355,11 @@ async function startHostedCheckout(preferredMethod = "card") {
   if (!$("checkoutForm").reportValidity()) return;
   const cardButton = $("checkoutCardButton");
   const bankButton = $("checkoutBankButton");
+  const bankContinueButton = $("bankTransferContinue");
   if ((preferredMethod === "bank_transfer" ? bankButton : cardButton).disabled) return;
   cardButton.disabled = true;
   bankButton.disabled = true;
+  bankContinueButton.disabled = true;
   $("checkoutNotice").textContent = preferredMethod === "bank_transfer"
     ? pt("payment.openingTransfer", "iyzico açılıyor; güvenli sayfada Havale/EFT seçeneğini seç.")
     : pt("payment.opening", "Güvenli ödeme açılıyor…");
@@ -396,7 +399,23 @@ async function startHostedCheckout(preferredMethod = "card") {
     const provider = cardProviderStatus();
     cardButton.disabled = !commerceIdentity.configured || !provider.configured || !provider.currencies?.includes(currency);
     bankButton.disabled = !commerceIdentity.configured || currency !== "TRY" || !automaticBankTransferStatus().configured;
+    bankContinueButton.disabled = bankButton.disabled;
   }
+}
+
+function showBankTransferGuide() {
+  const bankButton = $("checkoutBankButton");
+  if (bankButton.disabled || !$("checkoutForm").reportValidity()) return;
+  $("checkoutNotice").textContent = "";
+  $("checkoutForm").hidden = true;
+  $("bankTransferGuide").hidden = false;
+  $("bankTransferContinue").focus();
+}
+
+function hideBankTransferGuide() {
+  $("bankTransferGuide").hidden = true;
+  $("checkoutForm").hidden = false;
+  $("checkoutBankButton").focus();
 }
 
 async function load() {
@@ -429,9 +448,13 @@ $("billingCurrency").addEventListener("change", () => {
 $("closeError").onclick = () => { $("errorBox").hidden = true; };
 $("checkoutClose").onclick = $("checkoutCancel").onclick = () => {
   $("checkoutPanel").hidden = true;
+  $("bankTransferGuide").hidden = true;
+  $("checkoutForm").hidden = false;
   $("paytrFrame").src = "about:blank";
 };
-$("checkoutBankButton").onclick = () => startHostedCheckout("bank_transfer");
+$("checkoutBankButton").onclick = showBankTransferGuide;
+$("bankTransferBack").onclick = hideBankTransferGuide;
+$("bankTransferContinue").onclick = () => startHostedCheckout("bank_transfer");
 $("checkoutForm").addEventListener("submit", async event => {
   event.preventDefault();
   await startHostedCheckout("card");
