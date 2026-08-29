@@ -38,6 +38,15 @@ def _parse_day(value: str) -> date:
         raise HTTPException(404, detail={"code": "LS-IG-07", "message": "Sosyal medya içeriği bulunamadı."}) from exc
 
 
+def _instagram_snapshot() -> tuple[dict, list[dict]]:
+    client = _client()
+    account = client.get_account()
+    if (account.get("username") or "").lower() != "lecturesift":
+        raise InstagramConfigurationError("Configured account mismatch")
+    recent = client.get_recent_media(limit=50).get("data", [])
+    return account, recent
+
+
 def install_social_routes(app: FastAPI) -> None:
     @app.get("/instagram/launch/image/{index}.jpg")
     def instagram_launch_image(index: int) -> Response:
@@ -95,11 +104,7 @@ def install_social_routes(app: FastAPI) -> None:
     @app.get("/instagram/launch/status")
     def instagram_launch_status() -> dict:
         try:
-            client = _client()
-            account = client.get_account()
-            if (account.get("username") or "").lower() != "lecturesift":
-                raise InstagramConfigurationError("Configured account mismatch")
-            recent = client.get_recent_media(limit=50).get("data", [])
+            _account, recent = _instagram_snapshot()
             completed = completed_indices(recent)
             pending = next_pending_post(recent)
         except InstagramConfigurationError as exc:
@@ -114,4 +119,26 @@ def install_social_routes(app: FastAPI) -> None:
             "total": len(LAUNCH_POSTS),
             "next_index": pending.index if pending else None,
             "complete": pending is None,
+        }
+
+    @app.get("/instagram/daily/status")
+    def instagram_daily_status(day: str | None = None) -> dict:
+        selected_day = _parse_day(day) if day else date.today()
+        marker = f"#LectureSiftGununNotu{selected_day:%Y%m%d}"
+        try:
+            _account, recent = _instagram_snapshot()
+            completed = completed_indices(recent)
+            marker_present = any(marker in (item.get("caption") or "") for item in recent)
+        except InstagramConfigurationError as exc:
+            raise HTTPException(503, detail={"code": "LS-IG-01", "message": "Instagram entegrasyonu yapılandırılmamış."}) from exc
+        except InstagramAPIError as exc:
+            raise HTTPException(502, detail={"code": "LS-IG-04", "message": "Instagram API isteği tamamlanamadı.", "type": exc.error_type}) from exc
+        return {
+            "ok": True,
+            "account": "lecturesift",
+            "date": selected_day.isoformat(),
+            "marker": marker,
+            "marker_present": marker_present,
+            "launch_complete": len(completed) == len(LAUNCH_POSTS),
+            "launch_completed_count": len(completed),
         }
