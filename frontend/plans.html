@@ -43,9 +43,25 @@
           <label class="checkout-consent"><input id="checkoutTerms" type="checkbox" required><span data-i18n="payment.termsConsent">Ön bilgilendirmeyi, kullanım koşullarını, gizlilik metnini ve iptal/iade koşullarını okudum; sipariş verme yükümlülüğünü kabul ediyorum.</span></label>
           <label class="checkout-consent"><input id="checkoutEarlyPerformance" type="checkbox" required><span data-i18n="payment.earlyPerformance">Dijital hizmetin ödeme onayından hemen sonra başlamasını açıkça talep ediyorum; hizmet tamamen ifa edildiğinde uygulanabilir cayma hakkının sona erebileceğini anlıyorum.</span></label>
           <button id="checkoutCardButton" class="primary" type="submit" data-i18n="payment.payByCard">iyzico ile öde — Kart</button>
-          <button id="checkoutBankButton" class="secondary" type="button" data-i18n="payment.payByTransfer">iyzico ile öde — Havale/EFT</button>
+          <button id="checkoutBankButton" class="secondary" type="button" data-i18n="payment.payByTransfer">iyzico Havale/EFT ile devam et</button>
           <button id="checkoutCancel" class="secondary" type="button" data-i18n="common.cancel">İptal</button>
         </form>
+        <section id="bankTransferGuide" class="bank-transfer-guide" hidden aria-labelledby="bankTransferGuideTitle">
+          <span class="bank-transfer-guide-icon" aria-hidden="true">↗</span>
+          <div>
+            <h4 id="bankTransferGuideTitle" data-i18n="payment.transferGuideTitle">Havale/EFT ile devam</h4>
+            <p data-i18n="payment.transferGuideText">iyzico, Havale/EFT seçeneğini ayrı bir bağlantı yerine güvenli ödeme formundaki bir sekmede gösterir.</p>
+            <ol>
+              <li data-i18n="payment.transferGuideStep1">iyzico sayfası açılınca üstteki Havale/EFT sekmesine dokun.</li>
+              <li data-i18n="payment.transferGuideStep2">Banka ve sipariş referansını iyzico ekranından alarak transferi tamamla.</li>
+              <li data-i18n="payment.transferGuideStep3">Ödeme bildirimi geldiğinde paketin otomatik etkinleşir.</li>
+            </ol>
+            <div class="bank-transfer-guide-actions">
+              <button id="bankTransferContinue" class="primary" type="button" data-i18n="payment.continueToTransfer">iyzico’yu aç ve Havale/EFT’yi seç</button>
+              <button id="bankTransferBack" class="secondary" type="button" data-i18n="payment.backToCheckout">Fatura bilgilerine dön</button>
+            </div>
+          </div>
+        </section>
         <p id="checkoutNotice" class="checkout-notice"></p>
         <iframe id="paytrFrame" title="PayTR güvenli ödeme formu" data-i18n-title="payment.frameTitle" hidden></iframe>
       </div>
@@ -59,7 +75,7 @@
   </main>
   <div id="errorBox" class="error-box" hidden role="alert"><button id="closeError" type="button">×</button><span>!</span><div><strong id="errorTitle">İşlem tamamlanamadı</strong><p id="errorMessage"></p><small id="errorCode"></small></div></div>
   <footer class="site-footer"><div class="footer-main"><a class="brand" href="/">LectureSift</a><p>Ders kaynaklarını çalışma paketlerine dönüştür.</p></div><div class="footer-links"><div><strong>Ürün</strong><a href="/features.html">Özellikler</a><a href="/plans.html">Planlar</a></div><div><strong>Hesap</strong><a href="/account.html">Hesabım</a><a href="/login.html">Giriş</a></div><div><strong>Yasal</strong><a href="/privacy.html">Gizlilik</a><a href="/terms.html">Koşullar</a><a href="/distance-sales.html">Mesafeli Satış Sözleşmesi</a><a href="/refund.html">İptal ve iade</a></div></div><div class="footer-bottom"><span>© 2026 LectureSift</span><img class="payment-brand-band footer-payment-band" src="/assets/payments/iyzico-card-brands-white.png" alt="iyzico ile Öde, Mastercard, Visa, American Express ve TROY"></div></footer>
-  <script src="/locale-data.js?v=3"></script><script src="/page-i18n.js?v=6"></script><script src="/i18n.js?v=21"></script><script src="/site-shell.js?v=4"></script><script src="/plans.js?v=12"></script>
+  <script src="/locale-data.js?v=3"></script><script src="/page-i18n.js?v=6"></script><script src="/i18n.js?v=22"></script><script src="/site-shell.js?v=4"></script><script src="/plans.js?v=13"></script>
   <script src="/rollout.js?v=5"></script>
 </body>
 </html>

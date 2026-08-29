@@ -173,7 +173,7 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         content = page.read_text(encoding="utf-8")
         assert "/theme.css?v=11" in content, page.name
         assert "/theme.js?v=2" in content, page.name
-        assert "i18n.js?v=21" in content, page.name
+        assert "i18n.js?v=22" in content, page.name
         assert "page-i18n.js?v=6" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
@@ -377,6 +377,8 @@ def test_profile_admin_automatic_payment_and_full_comparison_interfaces_are_pres
     assert 'href="/admin.html"' not in account
     assert all(value in plans for value in ("compareHead", "compareBody", "bankAvailability", "checkoutBankButton"))
     assert "renderCompare" in plan_script and 'startHostedCheckout("bank_transfer")' in plan_script
+    assert all(value in plans for value in ("bankTransferGuide", "bankTransferContinue", "bankTransferBack"))
+    assert "showBankTransferGuide" in plan_script and "bankTransferGuide" in plan_script
     assert "/billing/checkout" in plan_script
     assert "/billing/manual-transfer" not in plan_script
     assert "publicBankIban" not in plans and "transferPanel" not in plans
