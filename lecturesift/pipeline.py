@@ -214,12 +214,30 @@ def _build_text_outputs(job_id: str, original_transcript: str, options: dict) ->
         and not explicitly_same_language
     )
     if not should_translate:
-        return build_study_pack(), ""
+        study_pack = build_study_pack()
+        try:
+            JOBS.update(job_id, percent=89, stage="study_pack")
+        except KeyError:
+            pass
+        return study_pack, ""
 
     with ThreadPoolExecutor(max_workers=2, thread_name_prefix="lecturesift-text") as executor:
         study_future = executor.submit(build_study_pack)
         translation_future = executor.submit(build_translation)
-        return study_future.result(), translation_future.result()
+        pending = {study_future: "study", translation_future: "translation"}
+        completed: dict[str, object] = {}
+        for future in as_completed(pending):
+            completed[pending[future]] = future.result()
+            try:
+                JOBS.update(
+                    job_id,
+                    percent=80 if len(completed) == 1 else 89,
+                    stage="study_pack",
+                )
+            except KeyError:
+                # Unit-level helpers can run without a persisted job record.
+                pass
+        return dict(completed["study"]), str(completed["translation"])
 
 
 def _aligned_timestamp(second: float) -> str:
