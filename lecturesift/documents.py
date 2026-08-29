@@ -181,7 +181,12 @@ def _run_tesseract_image(image: Image.Image, source_language: str = "auto") -> t
         with tempfile.TemporaryDirectory(prefix="lecturesift-ocr-") as directory:
             image_path = Path(directory) / "page.png"
             prepared.save(image_path, format="PNG", optimize=True)
-            language = _OCR_LANGUAGES.get(source_language) or _auto_ocr_languages(image_path)
+            # PDF extraction can pass a Tesseract language expression that was
+            # detected once for the whole document. This avoids one relatively
+            # expensive OSD process for every scanned page.
+            language = _OCR_LANGUAGES.get(source_language)
+            if not language:
+                language = _auto_ocr_languages(image_path) if source_language == "auto" else source_language
             try:
                 completed = subprocess.run(
                     [
@@ -225,6 +230,42 @@ def _run_tesseract_image(image: Image.Image, source_language: str = "auto") -> t
     finally:
         prepared.close()
     return _normalize_text(completed.stdout), language
+
+
+def _detect_pdf_ocr_language(path: Path, page_index: int) -> str:
+    """Detect a scan's script once before parallel page OCR begins."""
+    image = _render_pdf_page(path, page_index)
+    prepared: Image.Image | None = None
+    try:
+        prepared = _safe_image(image)
+        with tempfile.TemporaryDirectory(prefix="lecturesift-ocr-language-") as directory:
+            image_path = Path(directory) / "sample.png"
+            prepared.save(image_path, format="PNG", optimize=True)
+            return _auto_ocr_languages(image_path)
+    finally:
+        if prepared is not None:
+            prepared.close()
+        image.close()
+
+
+def _detect_pdf_ocr_languages(path: Path, page_indexes: list[int]) -> dict[int, str]:
+    """Map pages to at most three representative script detections.
+
+    Long scanned documents may change language between chapters. Sampling the
+    first, middle, and last OCR page preserves those common transitions while
+    replacing up to hundreds of per-page OSD subprocesses with at most three.
+    """
+    if not page_indexes:
+        return {}
+    positions = sorted({0, len(page_indexes) // 2, len(page_indexes) - 1})
+    samples = {
+        page_indexes[position]: _detect_pdf_ocr_language(path, page_indexes[position])
+        for position in positions
+    }
+    return {
+        page_index: samples[min(samples, key=lambda sampled: abs(sampled - page_index))]
+        for page_index in page_indexes
+    }
 
 
 def _render_pdf_page(path: Path, page_index: int) -> Image.Image:
@@ -306,10 +347,15 @@ def _extract_pdf(
         )
     if enable_ocr and ocr_indexes:
         results: dict[int, tuple[str, str]] = {}
+        ocr_languages = (
+            _detect_pdf_ocr_languages(path, ocr_indexes)
+            if source_language == "auto" and len(ocr_indexes) > 1
+            else {page_index: source_language for page_index in ocr_indexes}
+        )
         workers = min(OCR_PARALLELISM, len(ocr_indexes))
         if workers == 1:
             completed_results = (
-                _ocr_pdf_page(path, page_index, source_language) for page_index in ocr_indexes
+                _ocr_pdf_page(path, page_index, ocr_languages[page_index]) for page_index in ocr_indexes
             )
             for completed_pages, (page_index, text, language) in enumerate(completed_results, 1):
                 results[page_index] = (text, language)
@@ -318,7 +364,7 @@ def _extract_pdf(
         else:
             with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="lecturesift-ocr") as executor:
                 futures = {
-                    executor.submit(_ocr_pdf_page, path, page_index, source_language): page_index
+                    executor.submit(_ocr_pdf_page, path, page_index, ocr_languages[page_index]): page_index
                     for page_index in ocr_indexes
                 }
                 for completed_pages, future in enumerate(as_completed(futures), 1):

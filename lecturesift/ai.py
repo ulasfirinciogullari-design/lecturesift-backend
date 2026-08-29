@@ -356,6 +356,7 @@ def _request_study_pack(
     summary_target: str | None = None,
     extra_requirements: str = "",
     max_tokens: int = 6000,
+    minimum_summary_words: int | None = None,
 ) -> dict:
     language_name = LANGUAGE_NAMES.get(output_language, "English")
     style = SUMMARY_STYLES.get(summary_style, SUMMARY_STYLES["standard"])
@@ -399,20 +400,79 @@ Requirements:
 {source_label}:
 {source}
 """
-    response = _client().chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"},
-        temperature=0.2,
-        max_tokens=max_tokens,
+    if minimum_summary_words is None:
+        minimum_summary_words = {
+            "short": 120,
+            "standard": 320,
+            "detailed": 700,
+            "exam": 350,
+            "five_minute": 180,
+        }.get(summary_style, 0)
+    source_words = len(re.findall(r"[^\W_]+", source, flags=re.UNICODE))
+    effective_summary_minimum = min(
+        minimum_summary_words,
+        max(80, round(source_words * 0.55)),
+    ) if minimum_summary_words else 0
+
+    retry_reason = ""
+    last_error: Exception | None = None
+    for attempt in range(2):
+        retry_instruction = ""
+        if attempt:
+            retry_instruction = (
+                "\nRETRY REQUIREMENT: The previous response was incomplete or truncated. Return a complete, "
+                f"valid JSON object now. {retry_reason}"
+            )
+        response = _client().chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": retry_instruction + prompt}],
+            response_format={"type": "json_object"},
+            temperature=0.2,
+            max_tokens=max_tokens,
+        )
+        record_openai_response("gpt-4o-mini", response, "study_pack")
+        try:
+            value = _safe_json(response.choices[0].message.content or "{}")
+            if not isinstance(value, dict):
+                raise ValueError("Study-pack response is not a JSON object")
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            last_error = exc
+            retry_reason = "The previous JSON could not be parsed. Close every array and object."
+            if attempt == 0:
+                continue
+            break
+
+        base = empty_study_pack()
+        base.update({key: value.get(key, default) for key, default in base.items()})
+        base["quiz"] = _normalize_quiz(base.get("quiz"), quiz_count)
+        base["flashcards"] = _normalize_flashcards(base.get("flashcards"), output_language, flashcard_count)
+        summary_words = len(re.findall(r"[^\W_]+", str(base.get("summary") or ""), flags=re.UNICODE))
+        finish_reason = str(getattr(response.choices[0], "finish_reason", "") or "")
+        incomplete_reasons: list[str] = []
+        if finish_reason == "length":
+            incomplete_reasons.append("The response hit its output limit; be concise but preserve every required section.")
+        if len(source) >= 4_000 and effective_summary_minimum and summary_words < effective_summary_minimum:
+            incomplete_reasons.append(
+                f"The summary contained only {summary_words} words; provide at least {effective_summary_minimum} words."
+            )
+        if len(source) >= 2_000 and quiz_count and len(base["quiz"]) < quiz_count:
+            incomplete_reasons.append(
+                f"The quiz contained only {len(base['quiz'])} items; provide exactly {quiz_count}."
+            )
+        if incomplete_reasons:
+            retry_reason = " ".join(incomplete_reasons)
+            if attempt == 0:
+                continue
+            last_error = ValueError(retry_reason)
+            break
+        return base
+
+    raise LectureSiftError(
+        "LS-AI-08",
+        "Çalışma paketi eksiksiz oluşturulamadı. Lütfen işlemi yeniden dene.",
+        f"Study-pack response remained incomplete after retry: {last_error or 'unknown reason'}",
+        502,
     )
-    record_openai_response("gpt-4o-mini", response, "study_pack")
-    value = _safe_json(response.choices[0].message.content or "{}")
-    base = empty_study_pack()
-    base.update({key: value.get(key, default) for key, default in base.items()})
-    base["quiz"] = _normalize_quiz(base.get("quiz"), quiz_count)
-    base["flashcards"] = _normalize_flashcards(base.get("flashcards"), output_language, flashcard_count)
-    return base
 
 
 def _request_final_study_pack(
@@ -429,7 +489,15 @@ def _request_final_study_pack(
     bounded responses fit comfortably, run at the same time, and are merged into
     the exact public schema returned by the original endpoint.
     """
-    split_output = summary_style == "detailed" or quiz_count > 15 or flashcard_count > 30
+    # The default and exam-oriented packs contain two independent workloads:
+    # explanatory study content and exercises. Running those provider calls at
+    # the same time shortens the most visible final-analysis wait while keeping
+    # the public result schema unchanged.
+    split_output = (
+        (summary_style in {"standard", "detailed", "exam"} and (quiz_count > 0 or flashcard_count > 0))
+        or quiz_count > 15
+        or flashcard_count > 30
+    )
     if not split_output:
         return _request_study_pack(
             source,
@@ -454,7 +522,8 @@ def _request_final_study_pack(
                     f"{requirements}\nPrioritize a complete summary, key points, terms, structured notes, and "
                     "exam focus. Return empty quiz and flashcards arrays."
                 ).strip(),
-                max_tokens=8500,
+                max_tokens={"standard": 10_000, "detailed": 14_000, "exam": 10_000}.get(summary_style, 9_000),
+                minimum_summary_words={"standard": 320, "detailed": 700, "exam": 350}.get(summary_style, 0),
                 **shared,
             )
         return _request_study_pack(
@@ -469,7 +538,8 @@ def _request_final_study_pack(
                 "summary, key points, terms, notes, and exam focus intentionally concise because the full study "
                 "content is produced in a parallel response."
             ).strip(),
-            max_tokens=7500,
+            max_tokens=11_000,
+            minimum_summary_words=0,
             **shared,
         )
 
@@ -537,6 +607,7 @@ def _compact_digests(
                     summary_target="about 700-1200 words",
                     extra_requirements="Keep the entire JSON concise enough for a later final synthesis.",
                     max_tokens=4000,
+                    minimum_summary_words=250,
                 )
         next_level = _parallel_map(groups, compact_group, STUDY_PACK_PARALLELISM)
         if len(next_level) >= len(compacted) and len(next_level) == 1:
@@ -589,6 +660,7 @@ def make_study_pack(
                 summary_target="about 350-700 words",
                 extra_requirements="Keep the entire section JSON under roughly 1800 words.",
                 max_tokens=3500,
+                minimum_summary_words=180,
             )
     digests = _parallel_map(sections, digest_section, STUDY_PACK_PARALLELISM)
 

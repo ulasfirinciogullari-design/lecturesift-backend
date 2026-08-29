@@ -576,7 +576,7 @@
     document.head.append(legalOperatorScript);
   }
   const seoScript = document.createElement("script");
-  seoScript.src = "/seo.js?v=3";
+  seoScript.src = "/seo.js?v=4";
   seoScript.defer = true;
   document.head.append(seoScript);
   const consentStyle = document.createElement("link");

@@ -166,13 +166,48 @@ def _audio_pipeline(
     JOBS.update_task(job_id, "audio", 76, "transcript_ready")
 
     translated = ""
-    if options.get("translate_transcript", True) and original.strip():
+    if (
+        options.get("translate_transcript", True)
+        and original.strip()
+        and not options.get("_defer_transcript_translation")
+    ):
         JOBS.update_task(job_id, "audio", 80, "transcript_translation")
         candidate = translate_transcript(original, options["output_language"])
         if candidate.strip() and not _same_text(original, candidate):
             translated = candidate.strip()
     JOBS.update_task(job_id, "audio", 100, "audio_done")
     return original, translated, transcript_segments, timestamp_mode
+
+
+def _build_text_outputs(job_id: str, original_transcript: str, options: dict) -> tuple[dict, str]:
+    """Build the study pack and optional full transcript translation concurrently."""
+    user_id = str(options.get("billing_user_id") or "") or None
+
+    def build_study_pack() -> dict:
+        with cost_context(job_id, user_id):
+            return make_study_pack(
+                original_transcript,
+                options["output_language"],
+                options["summary_style"],
+                options["quiz_count"],
+                options["flashcard_count"],
+            )
+
+    def build_translation() -> str:
+        with cost_context(job_id, user_id):
+            candidate = translate_transcript(original_transcript, options["output_language"])
+        if candidate.strip() and not _same_text(original_transcript, candidate):
+            return candidate.strip()
+        return ""
+
+    should_translate = bool(options.get("translate_transcript", True) and original_transcript.strip())
+    if not should_translate:
+        return build_study_pack(), ""
+
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="lecturesift-text") as executor:
+        study_future = executor.submit(build_study_pack)
+        translation_future = executor.submit(build_translation)
+        return study_future.result(), translation_future.result()
 
 
 def _aligned_timestamp(second: float) -> str:
@@ -424,7 +459,12 @@ def _process_job(
             # the same job and account in the cost ledger.
             def costed_audio_pipeline():
                 with cost_context(job_id, str(options.get("billing_user_id") or "") or None):
-                    return _audio_pipeline(job_id, audio_sources, job_dir, options)
+                    return _audio_pipeline(
+                        job_id,
+                        audio_sources,
+                        job_dir,
+                        {**options, "_defer_transcript_translation": True},
+                    )
 
             audio_future = executor.submit(costed_audio_pipeline)
             slides, diagnostics = _visual_pipeline(
@@ -439,13 +479,7 @@ def _process_job(
         diagnostics["source_mode"] = source_mode
 
         JOBS.update(job_id, percent=73, stage="study_pack")
-        study_pack = make_study_pack(
-            original_transcript,
-            options["output_language"],
-            options["summary_style"],
-            options["quiz_count"],
-            options["flashcard_count"],
-        )
+        study_pack, translated_transcript = _build_text_outputs(job_id, original_transcript, options)
 
         JOBS.update(job_id, percent=90, stage="exports")
         result = {

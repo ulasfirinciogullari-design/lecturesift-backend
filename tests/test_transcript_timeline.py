@@ -1,4 +1,5 @@
 import threading
+import time
 import uuid
 
 import lecturesift.pipeline as pipeline
@@ -115,3 +116,38 @@ def test_audio_chunks_transcribe_concurrently_but_keep_timeline_order(tmp_path, 
     assert original == "First chunk\n\nSecond chunk"
     assert [item["start"] for item in segments] == [0.0, 60.0]
     assert [item["end"] for item in segments] == [60.0, 150.0]
+
+
+def test_study_pack_and_transcript_translation_run_concurrently(monkeypatch):
+    gate = threading.Barrier(2, timeout=3)
+    completed: list[str] = []
+
+    def fake_study(*_args):
+        gate.wait()
+        time.sleep(0.02)
+        completed.append("study")
+        return {"title": "Parallel pack"}
+
+    def fake_translation(*_args):
+        gate.wait()
+        time.sleep(0.02)
+        completed.append("translation")
+        return "Translated transcript"
+
+    monkeypatch.setattr(pipeline, "make_study_pack", fake_study)
+    monkeypatch.setattr(pipeline, "translate_transcript", fake_translation)
+    pack, translated = pipeline._build_text_outputs(
+        "parallel-job",
+        "Original transcript",
+        {
+            "output_language": "tr",
+            "summary_style": "standard",
+            "quiz_count": 10,
+            "flashcard_count": 20,
+            "translate_transcript": True,
+        },
+    )
+
+    assert pack["title"] == "Parallel pack"
+    assert translated == "Translated transcript"
+    assert sorted(completed) == ["study", "translation"]
