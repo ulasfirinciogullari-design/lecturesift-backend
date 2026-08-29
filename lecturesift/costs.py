@@ -15,6 +15,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Iterator
+from zoneinfo import ZoneInfo
 
 import httpx
 from sqlalchemy import BigInteger, Column, Date, DateTime, Integer, MetaData, String, Table, UniqueConstraint, delete, func, select, update
@@ -74,6 +75,7 @@ _INIT_LOCK = threading.Lock()
 _INITIALIZED = False
 _FX_LOCK = threading.Lock()
 _FX_CACHE: tuple[datetime, float, str] | None = None
+_BUSINESS_TIMEZONE = ZoneInfo("Europe/Istanbul")
 
 OPENAI_SOURCE = "https://developers.openai.com/api/docs/models"
 OPENAI_EFFECTIVE = "2026-08-29"
@@ -516,8 +518,11 @@ def cost_overview(days: int = 30, limit: int = 100) -> dict[str, Any]:
     safe_days = max(1, min(int(days), 3660))
     generated_at = datetime.now(timezone.utc)
     since = generated_at - timedelta(days=safe_days)
-    report_start_date = (generated_at - timedelta(days=safe_days - 1)).date()
-    report_end_date = generated_at.date()
+    # Invoice periods are merchant calendar dates. Near midnight in Türkiye,
+    # UTC can still be on the previous date and would otherwise hide a cost
+    # entered for "today" from a one-day report.
+    report_end_date = generated_at.astimezone(_BUSINESS_TIMEZONE).date()
+    report_start_date = report_end_date - timedelta(days=safe_days - 1)
     with ENGINE.connect() as connection:
         totals = connection.execute(
             select(

@@ -508,6 +508,17 @@ def test_admin_cost_reconciliation_controls_are_wired():
     assert '@router.delete("/billing/admin/costs/actuals/{actual_id}")' in rollout
 
 
+def test_admin_cost_centre_has_theme_specific_readability_rules():
+    admin = (FRONTEND / "admin.html").read_text(encoding="utf-8")
+    theme = (FRONTEND / "theme.css").read_text(encoding="utf-8")
+    assert 'href="/theme.css?v=11"' in admin
+    assert "#adminCostsView" in theme
+    assert 'html[data-theme="light"] #adminCostsView' in theme
+    assert "--cost-warning-text:#754100" in theme
+    assert "--cost-ok-text:#075b42" in theme
+    assert "font-size:12px" in theme
+
+
 def test_checkout_names_contact_inbox_and_mobile_plan_navigation_are_wired():
     plans_html = (FRONTEND / "plans.html").read_text(encoding="utf-8")
     plans_js = (FRONTEND / "plans.js").read_text(encoding="utf-8")

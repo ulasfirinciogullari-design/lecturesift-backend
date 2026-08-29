@@ -6,7 +6,7 @@ import shutil
 import threading
 import time
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -547,6 +547,20 @@ def test_invoice_coverage_merges_overlaps_without_double_counting():
     assert costs._covered_days(rows, "render", start, end) == 9
     assert costs._covered_days(rows, "netlify", start, end) == 10
     assert costs._covered_days(rows, "resend", start, end) == 0
+
+
+def test_cost_report_uses_turkiye_calendar_date_near_utc_midnight(monkeypatch):
+    class FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            value = cls(2026, 8, 29, 21, 30, tzinfo=timezone.utc)
+            return value if tz is None else value.astimezone(tz)
+
+    monkeypatch.setattr(costs, "datetime", FixedDatetime)
+    monkeypatch.setattr(costs, "_fx_rate", lambda: (40.0, "test rate"))
+    overview = costs.cost_overview(days=1, limit=1)
+    assert overview["period"]["invoice_start"] == "2026-08-30"
+    assert overview["period"]["invoice_end"] == "2026-08-30"
 
 
 def test_fixed_cost_confirmation_keys_match_render_configuration():
