@@ -9,12 +9,14 @@ from types import SimpleNamespace
 import pytest
 from docx import Document
 from fastapi.testclient import TestClient
+from PIL import Image, ImageDraw, ImageFont
 from pptx import Presentation
 from pypdf import PdfWriter
 from reportlab.pdfgen import canvas
 
 import lecturesift.app as app_module
 import lecturesift.costs as costs
+import lecturesift.documents as document_service
 from lecturesift import config
 from lecturesift.app import app
 from lecturesift.billing_service import register_user, verify_email
@@ -69,17 +71,117 @@ def test_text_docx_pptx_and_pdf_extraction(tmp_path: Path):
     assert "Work transfers energy" in result["text"]
 
 
-def test_image_only_pdf_returns_actionable_ocr_error(tmp_path: Path):
+def test_image_only_pdf_is_read_with_ocr(tmp_path: Path, monkeypatch):
     path = tmp_path / "scan.pdf"
     writer = PdfWriter()
     writer.add_blank_page(width=612, height=792)
     with path.open("wb") as stream:
         writer.write(stream)
 
+    monkeypatch.setattr(
+        document_service,
+        "_render_pdf_page",
+        lambda *_: Image.new("L", (1400, 1800), "white"),
+    )
+    monkeypatch.setattr(
+        document_service,
+        "_run_tesseract_image",
+        lambda image, source_language="auto": (
+            "Enerji korunur ve iş sistemler arasında enerji aktarır.",
+            "tur+eng",
+        ),
+    )
+
+    result = extract_documents([path], source_language="tr")
+    assert "Enerji korunur" in result["text"]
+    assert result["ocr_used"] is True
+    assert result["ocr_pages"] == 1
+    assert result["documents"][0]["ocr_language"] == "tur+eng"
+
+
+def test_pdf_ocr_renderer_produces_a_page_image(tmp_path: Path):
+    pdf_path = tmp_path / "render-source.pdf"
+    pdf = canvas.Canvas(str(pdf_path))
+    pdf.drawString(72, 760, "OCR render safety test")
+    pdf.save()
+
+    image = document_service._render_pdf_page(pdf_path, 0)
+    try:
+        assert image.width >= 1600
+        assert image.height >= 2000
+    finally:
+        image.close()
+
+
+@pytest.mark.skipif(not shutil.which(config.OCR_COMMAND), reason="Tesseract is not installed")
+def test_real_tesseract_reads_a_scanned_pdf(tmp_path: Path):
+    image_path = tmp_path / "scan.png"
+    image = Image.new("RGB", (1800, 1200), "white")
+    draw = ImageDraw.Draw(image)
+    font = ImageFont.truetype("DejaVuSans.ttf", 58)
+    draw.text((120, 220), "ENERGY IS CONSERVED IN A CLOSED SYSTEM", fill="black", font=font)
+    draw.text((120, 330), "WORK TRANSFERS ENERGY BETWEEN OBJECTS", fill="black", font=font)
+    image.save(image_path)
+
+    pdf_path = tmp_path / "real-scan.pdf"
+    pdf = canvas.Canvas(str(pdf_path), pagesize=(612, 792))
+    pdf.drawImage(str(image_path), 36, 180, width=540, height=360)
+    pdf.save()
+
+    result = extract_documents([pdf_path], source_language="en")
+    normalized = result["text"].upper()
+    assert "ENERGY IS CONSERVED" in normalized
+    assert result["ocr_used"] is True
+    assert result["ocr_pages"] == 1
+
+
+def test_scanned_pdf_preflight_estimates_usage_without_running_ocr(tmp_path: Path, monkeypatch):
+    path = tmp_path / "scan.pdf"
+    writer = PdfWriter()
+    writer.add_blank_page(width=612, height=792)
+    with path.open("wb") as stream:
+        writer.write(stream)
+    monkeypatch.setattr(
+        document_service,
+        "_run_tesseract_image",
+        lambda *_args, **_kwargs: pytest.fail("preflight must not run OCR"),
+    )
+
+    result = extract_documents([path], enable_ocr=False, allow_ocr_pending=True)
+    assert result["ocr_required"] is True
+    assert result["estimated"] is True
+    assert result["ocr_pages"] == 1
+    assert result["words"] == config.OCR_ESTIMATED_WORDS_PER_PAGE
+    assert result["credit_minutes"] >= 1
+
+
+def test_image_document_uses_the_same_ocr_pipeline(tmp_path: Path, monkeypatch):
+    path = tmp_path / "whiteboard.png"
+    Image.new("RGB", (1200, 800), "white").save(path)
+    monkeypatch.setattr(
+        document_service,
+        "_run_tesseract_image",
+        lambda image, source_language="auto": ("Photosynthesis stores chemical energy.", "eng"),
+    )
+
+    result = extract_documents([path], source_language="en")
+    assert "Photosynthesis" in result["text"]
+    assert result["documents"][0]["type"] == "png"
+    assert result["ocr_used"] is True
+
+
+def test_ocr_page_limit_is_enforced_before_rendering(tmp_path: Path, monkeypatch):
+    path = tmp_path / "long-scan.pdf"
+    writer = PdfWriter()
+    writer.add_blank_page(width=612, height=792)
+    writer.add_blank_page(width=612, height=792)
+    with path.open("wb") as stream:
+        writer.write(stream)
+    monkeypatch.setattr(document_service, "OCR_MAX_PAGES", 1)
+
     with pytest.raises(LectureSiftError) as caught:
         extract_documents([path])
-    assert caught.value.code == "LS-DOC-12"
-    assert "OCR" in caught.value.user_message
+    assert caught.value.code == "LS-OCR-02"
 
 
 def test_document_upload_records_document_quota_before_background_processing(tmp_path: Path, monkeypatch):
@@ -111,8 +213,45 @@ def test_document_upload_records_document_quota_before_background_processing(tmp
     shutil.rmtree(Path(job["job_dir"]), ignore_errors=True)
 
 
+def test_scanned_pdf_upload_queues_background_ocr(tmp_path: Path, monkeypatch):
+    captured: dict = {}
+
+    class DeferredThread:
+        def __init__(self, target, args, daemon):
+            captured.update(target=target, args=args, daemon=daemon)
+
+        def start(self):
+            captured["started"] = True
+
+    monkeypatch.setattr(app_module, "WORK_DIR", tmp_path)
+    monkeypatch.setattr(app_module.threading, "Thread", DeferredThread)
+    pdf_path = tmp_path / "scan.pdf"
+    writer = PdfWriter()
+    writer.add_blank_page(width=612, height=792)
+    with pdf_path.open("wb") as stream:
+        writer.write(stream)
+
+    with pdf_path.open("rb") as stream:
+        response = TestClient(app).post(
+            "/jobs",
+            files={"files": (pdf_path.name, stream, "application/pdf")},
+            headers=_account_headers(),
+        )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["ocr_required"] is True
+    assert body["ocr_pages"] == 1
+    assert body["usage_estimated"] is True
+    assert captured["started"] is True
+    assert captured["args"][2]["document_ocr_required"] is True
+    job = JOBS.get(body["job_id"])
+    shutil.rmtree(Path(job["job_dir"]), ignore_errors=True)
+
+
 def test_guest_workspace_accepts_a_text_pdf_without_registered_account(tmp_path: Path, monkeypatch):
     captured: dict = {}
+    install_rollout_routes(app)
 
     class DeferredThread:
         def __init__(self, target, args, daemon):

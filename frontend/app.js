@@ -19,7 +19,7 @@ const EN = {
   audioSourceTitle: "Audio sources", audioSourceHelp: "Add audio-bearing recordings in lecture order.",
   slidesSourceTitle: "Visual / slide sources", slidesSourceHelp: "Add slide recordings in lecture order.", addSlidesVideo: "Add slide video",
   required: "Required", optional: "Optional", syncOffset: "Slide time offset", syncOffsetHelp: "Leave at 0 if both recordings started together.",
-  classicMode: "Video, audio, or document", separateMode: "Separate audio and visuals", addVideos: "Add video, audio, or documents", sortHelp: "PDF, Word, PowerPoint, TXT, and Markdown are supported",
+  classicMode: "Video, audio, or document", separateMode: "Separate audio and visuals", addVideos: "Add video, audio, or documents", sortHelp: "PDF, images, Word, PowerPoint, TXT, and Markdown; automatic OCR for scanned pages",
   addAudioFiles: "Add audio videos", addVisualFiles: "Add slide videos", moveUp: "Move up", moveDown: "Move down", remove: "Remove",
   urlLabel: "Video or education-page URL", urlHelp: "LectureSift tries direct media discovery and provider extraction. Login, DRM, membership, or provider restrictions can still block a download.",
   operationType: "Operation", studyPackOption: "Create a study pack", audioExportOption: "Convert video to MP3", downloadVideoOption: "Download video from URL",
@@ -30,9 +30,9 @@ const EN = {
   readyDetail: "Add a source and choose your settings to see every processing step here.",
   stageReceive: "Receiving video", stageAudio: "Separating audio", stageTranscript: "Transcribing speech", stageVisual: "Scanning visual content",
   stageSlides: "Validating slides", stageStudy: "Structuring the lecture", stageExport: "Preparing files",
-  stageSource: "Receiving the source", stageDocument: "Extracting document text", stageMp3: "Converting audio to MP3", stagePackage: "Packaging the file",
+  stageSource: "Receiving the source", stageDocument: "Extracting text and running OCR", stageMp3: "Converting audio to MP3", stagePackage: "Packaging the file",
   detailMedia: "Audio, transcript, visuals, study content, and exports advance in visible stages.",
-  detailDocument: "Document text, study content, and selected exports are prepared in order.",
+  detailDocument: "Native text and scanned pages are processed with OCR before the study pack is prepared.",
   detailMp3: "The source is uploaded, its audio is converted, and the MP3 download is packaged.",
   detailDownload: "The video is downloaded from its source and prepared as a protected file.",
   uploadingSource: "Uploading the source", queuedForWorker: "Waiting in the processing queue", publishingResult: "Securing the result files",
@@ -64,7 +64,7 @@ const TR = {
   audioSourceTitle: "Ses kaynakları", audioSourceHelp: "Sesli kayıtları ders sırasına göre ekle.",
   slidesSourceTitle: "Görüntü / slayt kaynakları", slidesSourceHelp: "Slayt kayıtlarını ders sırasına göre ekle.", addSlidesVideo: "Slayt videosu ekle",
   required: "Zorunlu", optional: "İsteğe bağlı", syncOffset: "Slayt zaman farkı", syncOffsetHelp: "Aynı anda başladıysa 0 bırak.",
-  classicMode: "Video, ses veya belge", separateMode: "Ses ve görüntü ayrı", addVideos: "Video, ses veya belge ekle", sortHelp: "PDF, Word, PowerPoint, TXT ve Markdown desteklenir",
+  classicMode: "Video, ses veya belge", separateMode: "Ses ve görüntü ayrı", addVideos: "Video, ses veya belge ekle", sortHelp: "PDF, görsel, Word, PowerPoint, TXT ve Markdown; taranmış sayfalarda otomatik OCR",
   addAudioFiles: "Ses videolarını ekle", addVisualFiles: "Slayt videolarını ekle", moveUp: "Yukarı taşı", moveDown: "Aşağı taşı", remove: "Kaldır",
   urlLabel: "Video veya eğitim sayfası bağlantısı", urlHelp: "LectureSift doğrudan medya bulmayı ve sağlayıcı indirmesini dener. Giriş, DRM, üyelik veya sağlayıcı engeli olan içerikler indirilemeyebilir.",
   operationType: "İşlem türü", studyPackOption: "Ders çalışma paketi hazırla", audioExportOption: "Videoyu MP3'e çevir", downloadVideoOption: "URL'den video indir",
@@ -75,9 +75,9 @@ const TR = {
   readyDetail: "Kaynağı ekleyip ayarlarını seçtiğinde işlem adımlarını burada canlı göreceksin.",
   stageReceive: "Video alınıyor", stageAudio: "Ses ayrıştırılıyor", stageTranscript: "Konuşma çözümleniyor", stageVisual: "Görsel içerik taranıyor",
   stageSlides: "Slaytlar doğrulanıyor", stageStudy: "Ders yapılandırılıyor", stageExport: "Çıktılar hazırlanıyor",
-  stageSource: "Kaynak alınıyor", stageDocument: "Belge metni çıkarılıyor", stageMp3: "Ses MP3'e dönüştürülüyor", stagePackage: "Dosya paketleniyor",
+  stageSource: "Kaynak alınıyor", stageDocument: "Belge metni ve OCR işleniyor", stageMp3: "Ses MP3'e dönüştürülüyor", stagePackage: "Dosya paketleniyor",
   detailMedia: "Ses, transkript, görseller, ders içeriği ve çıktılar ayrı adımlarda ilerler.",
-  detailDocument: "Belge metni, ders içeriği ve seçilen çıktılar sırayla hazırlanır.",
+  detailDocument: "Seçilebilir metin ve taranmış sayfalar OCR ile işlenir; ardından çalışma paketi hazırlanır.",
   detailMp3: "Kaynak yüklenir, sesi dönüştürülür ve MP3 indirmesi paketlenir.",
   detailDownload: "Video kaynağından indirilir ve korumalı dosya olarak hazırlanır.",
   uploadingSource: "Kaynak yükleniyor", queuedForWorker: "İşlem sırasında bekliyor", publishingResult: "Sonuç dosyaları güvenceye alınıyor",
@@ -155,8 +155,12 @@ const ERRORS = {
     "LS-DOC-09": "The text file could not be read.",
     "LS-DOC-10": "Add at least one document.",
     "LS-DOC-11": "This document format is not supported.",
-    "LS-DOC-12": "No text could be extracted. If this is a scanned PDF, upload a version with OCR applied.",
+    "LS-DOC-12": "OCR finished but no readable text was found. Try a clearer scan or select the source language.",
     "LS-DOC-13": "The documents contain too much text for one safe job. Split the source and try again.",
+    "LS-OCR-01": "OCR is temporarily unavailable. Try again shortly.",
+    "LS-OCR-02": "The document has too many scanned pages for one OCR job. Split it and try again.",
+    "LS-OCR-03": "OCR timed out on a page. Split the document and try again.",
+    "LS-OCR-04": "The scanned page or image could not be read safely.",
     "LS-VIDEO-02": "The video could not be read. It may be damaged or use an unsupported codec."
   },
   tr: {
@@ -178,8 +182,12 @@ const ERRORS = {
     "LS-DOC-09": "Metin dosyası okunamadı.",
     "LS-DOC-10": "En az bir belge ekle.",
     "LS-DOC-11": "Bu belge biçimi desteklenmiyor.",
-    "LS-DOC-12": "Belgeden metin çıkarılamadı. Taranmış PDF ise OCR uygulanmış bir sürüm yükle.",
+    "LS-DOC-12": "OCR tamamlandı ancak okunabilir metin bulunamadı. Daha net bir tarama veya doğru kaynak diliyle yeniden dene.",
     "LS-DOC-13": "Belgelerin toplam metni tek bir güvenli işlem için fazla. Kaynağı bölerek yeniden dene.",
+    "LS-OCR-01": "OCR hizmeti geçici olarak kullanılamıyor. Biraz sonra yeniden dene.",
+    "LS-OCR-02": "Belgede tek işlem için çok fazla taranmış sayfa var. Belgeyi bölerek yeniden dene.",
+    "LS-OCR-03": "Bir sayfanın OCR işlemi zaman sınırını aştı. Belgeyi bölerek yeniden dene.",
+    "LS-OCR-04": "Taranmış sayfa veya görsel güvenli biçimde okunamadı.",
     "LS-VIDEO-02": "Video okunamadı. Dosya bozuk olabilir veya desteklenmeyen bir codec kullanıyor olabilir."
   }
 };
@@ -525,7 +533,7 @@ function filesFor(role) {
   if (role === "audio") return audioVideos;
   return visualVideos;
 }
-const DOCUMENT_EXTENSIONS = new Set(["pdf", "docx", "pptx", "txt", "md"]);
+const DOCUMENT_EXTENSIONS = new Set(["pdf", "docx", "pptx", "txt", "md", "png", "jpg", "jpeg", "webp", "tif", "tiff"]);
 const MEDIA_EXTENSIONS = new Set(["mp4", "mov", "mkv", "webm", "mpeg", "mpg", "m4v"]);
 const PROGRESS_PROFILES = {
   media: [
@@ -662,7 +670,7 @@ function updateProgress(percent, label, detail = "") {
 function jobPhaseLabel(job, profile) {
   const labels = {
     queued: "queuedForWorker", queued_worker: "queuedForWorker", worker_download: "url_download",
-    worker_publish: "publishingResult", document_extraction: "stageDocument", audio_extract: "stageMp3",
+    worker_publish: "publishingResult", document_extraction: "stageDocument", document_ocr: "stageDocument", audio_extract: "stageMp3",
     transcription: "stageTranscript", transcript_translation: "stageTranscript", parallel_analysis: profile === "document" ? "stageDocument" : "processing",
     study_pack: "study_pack", exports: "exports", done: "done",
   };
@@ -674,7 +682,10 @@ function profileDetail(profile) {
 function updateJobView(job) {
   const profile = configureProgressProfile(job);
   $("processTitle").textContent = job.status === "done" ? t("done") : t("processing");
-  updateProgress(job.percent, jobPhaseLabel(job, profile), profileDetail(profile));
+  const ocrDetail = job.stage === "document_ocr"
+    ? `OCR · ${Number(job.ocr_pages_completed || 0)}/${Number(job.ocr_pages_total || 0)} ${window.LectureSiftI18n?.exact?.("taranmış sayfa") || "taranmış sayfa"}`
+    : profileDetail(profile);
+  updateProgress(job.percent, jobPhaseLabel(job, profile), ocrDetail);
   resetStages();
   if (Number(job.percent || 0) >= 8 || ["working", "processing", "done"].includes(job.status)) setItemState("source", "done");
   else setItemState("source", "active");
@@ -788,7 +799,12 @@ $("analyzeButton").onclick = async () => {
   request.upload.onprogress = event => { if (event.lengthComputable) updateProgress(Math.min(7, event.loaded / event.total * 7), t("uploadingSource"), profileDetail(progressProfileFor())); };
   request.onload = async () => {
     if (request.status < 300) {
-      jobId = JSON.parse(request.responseText).job_id;
+      const created = JSON.parse(request.responseText);
+      jobId = created.job_id;
+      if (created.ocr_required) {
+        const pageCount = Number(created.ocr_pages || 0);
+        updateProgress(8, t("stageDocument"), `${pageCount} ${window.LectureSiftI18n?.exact?.("taranmış sayfa") || "taranmış sayfa"}`);
+      }
       pollJob();
     }
     else {

@@ -36,11 +36,11 @@ BRAND_VARIANTS = (
 )
 RUNTIME_COPY = {
     "Kaynak alınıyor",
-    "Belge metni çıkarılıyor",
+    "Belge metni ve OCR işleniyor",
     "Ses MP3'e dönüştürülüyor",
     "Dosya paketleniyor",
     "Ses, transkript, görseller, ders içeriği ve çıktılar ayrı adımlarda ilerler.",
-    "Belge metni, ders içeriği ve seçilen çıktılar sırayla hazırlanır.",
+    "Seçilebilir metin ve taranmış sayfalar OCR ile işlenir; ardından çalışma paketi hazırlanır.",
     "Kaynak yüklenir, sesi dönüştürülür ve MP3 indirmesi paketlenir.",
     "Video kaynağından indirilir ve korumalı dosya olarak hazırlanır.",
     "Kaynak yükleniyor",
@@ -61,8 +61,13 @@ RUNTIME_COPY = {
     "Metin dosyası okunamadı.",
     "En az bir belge ekle.",
     "Bu belge biçimi desteklenmiyor.",
-    "Belgeden metin çıkarılamadı. Taranmış PDF ise OCR uygulanmış bir sürüm yükle.",
+    "OCR tamamlandı ancak okunabilir metin bulunamadı. Daha net bir tarama veya doğru kaynak diliyle yeniden dene.",
     "Belgelerin toplam metni tek bir güvenli işlem için fazla. Kaynağı bölerek yeniden dene.",
+    "OCR hizmeti geçici olarak kullanılamıyor. Biraz sonra yeniden dene.",
+    "Belgede tek işlem için çok fazla taranmış sayfa var. Belgeyi bölerek yeniden dene.",
+    "Bir sayfanın OCR işlemi zaman sınırını aştı. Belgeyi bölerek yeniden dene.",
+    "Taranmış sayfa veya görsel güvenli biçimde okunamadı.",
+    "taranmış sayfa",
     "Belge analizi hazır",
     "Medya kaynağı hazır",
 }

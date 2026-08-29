@@ -274,7 +274,24 @@ def _process_job(
             if len(document_sources) != len(audio_sources) or visual_video_paths is not None:
                 raise ValueError("Document and media sources cannot be mixed in one job.")
             JOBS.update(job_id, percent=28, stage="document_extraction")
-            document_data = extract_documents(document_sources)
+            expected_ocr_pages = max(1, int(options.get("document_ocr_pages") or 1))
+
+            def update_ocr_progress(completed: int, total: int) -> None:
+                denominator = max(1, total, expected_ocr_pages)
+                percent = 28 + min(30, round(30 * completed / denominator))
+                JOBS.update(
+                    job_id,
+                    percent=percent,
+                    stage="document_ocr" if options.get("document_ocr_required") else "document_extraction",
+                    ocr_pages_completed=completed,
+                    ocr_pages_total=max(total, expected_ocr_pages),
+                )
+
+            document_data = extract_documents(
+                document_sources,
+                source_language=options.get("source_language", "auto"),
+                progress_callback=update_ocr_progress,
+            )
             JOBS.update(job_id, percent=62, stage="study_pack")
             study_pack = make_study_pack(
                 document_data["text"],
@@ -298,10 +315,12 @@ def _process_job(
                 },
                 "slides": [],
                 "diagnostics": {
-                    "engine": "document-text-v1",
+                    "engine": "document-text-ocr-v2",
                     "characters": document_data["characters"],
                     "words": document_data["words"],
                     "source_parts": len(document_sources),
+                    "ocr_used": document_data["ocr_used"],
+                    "ocr_pages": document_data["ocr_pages"],
                 },
                 "transcript_original": document_data["text"],
                 "transcript_translated": "",

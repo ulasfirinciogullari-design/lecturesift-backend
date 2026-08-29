@@ -30,6 +30,16 @@ services:
         value: "1500000"
       - key: LECTURESIFT_DOCUMENT_WORDS_PER_CREDIT_MINUTE
         value: "200"
+      - key: LECTURESIFT_OCR_ENABLED
+        value: "true"
+      - key: LECTURESIFT_OCR_DPI
+        value: "200"
+      - key: LECTURESIFT_OCR_MAX_PAGES
+        value: "60"
+      - key: LECTURESIFT_OCR_PAGE_TIMEOUT_SECONDS
+        value: "45"
+      - key: LECTURESIFT_OCR_ESTIMATED_WORDS_PER_PAGE
+        value: "400"
       - key: LECTURESIFT_COST_RENDER_MONTHLY_USD
         sync: false
       - key: LECTURESIFT_COST_NETLIFY_MONTHLY_USD
@@ -210,6 +220,16 @@ services:
         value: "1500000"
       - key: LECTURESIFT_DOCUMENT_WORDS_PER_CREDIT_MINUTE
         value: "200"
+      - key: LECTURESIFT_OCR_ENABLED
+        value: "true"
+      - key: LECTURESIFT_OCR_DPI
+        value: "200"
+      - key: LECTURESIFT_OCR_MAX_PAGES
+        value: "60"
+      - key: LECTURESIFT_OCR_PAGE_TIMEOUT_SECONDS
+        value: "45"
+      - key: LECTURESIFT_OCR_ESTIMATED_WORDS_PER_PAGE
+        value: "400"
       - key: DATABASE_URL
         fromDatabase:
           name: lecturesift-postgres
