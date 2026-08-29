@@ -5,6 +5,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
     fonts-dejavu-core \
+    tesseract-ocr \
+    tesseract-ocr-osd \
+    tesseract-ocr-ara \
+    tesseract-ocr-chi-sim \
+    tesseract-ocr-deu \
+    tesseract-ocr-eng \
+    tesseract-ocr-fra \
+    tesseract-ocr-hin \
+    tesseract-ocr-ita \
+    tesseract-ocr-jpn \
+    tesseract-ocr-kor \
+    tesseract-ocr-por \
+    tesseract-ocr-rus \
+    tesseract-ocr-spa \
+    tesseract-ocr-tur \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

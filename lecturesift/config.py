@@ -82,6 +82,13 @@ MAX_DOCUMENT_CHARACTERS = int(os.getenv("LECTURESIFT_MAX_DOCUMENT_CHARACTERS", "
 DOCUMENT_WORDS_PER_CREDIT_MINUTE = max(
     50, int(os.getenv("LECTURESIFT_DOCUMENT_WORDS_PER_CREDIT_MINUTE", "200"))
 )
+OCR_ENABLED = os.getenv("LECTURESIFT_OCR_ENABLED", "true").lower() == "true"
+OCR_COMMAND = os.getenv("LECTURESIFT_OCR_COMMAND", "tesseract").strip() or "tesseract"
+OCR_DPI = max(150, min(300, int(os.getenv("LECTURESIFT_OCR_DPI", "200"))))
+OCR_MAX_PAGES = max(1, min(MAX_DOCUMENT_PAGES, int(os.getenv("LECTURESIFT_OCR_MAX_PAGES", "60"))))
+OCR_PAGE_TIMEOUT_SECONDS = max(10, int(os.getenv("LECTURESIFT_OCR_PAGE_TIMEOUT_SECONDS", "45")))
+OCR_MIN_NATIVE_CHARACTERS = max(1, int(os.getenv("LECTURESIFT_OCR_MIN_NATIVE_CHARACTERS", "24")))
+OCR_ESTIMATED_WORDS_PER_PAGE = max(50, int(os.getenv("LECTURESIFT_OCR_ESTIMATED_WORDS_PER_PAGE", "400")))
 JOB_TTL_SECONDS = int(os.getenv("LECTURESIFT_JOB_TTL_SECONDS", str(6 * 60 * 60)))
 GUEST_TRIAL_MAX_MINUTES = float(os.getenv("LECTURESIFT_GUEST_TRIAL_MINUTES", "5"))
 INSTAGRAM_BONUS_MINUTES = int(os.getenv("LECTURESIFT_INSTAGRAM_BONUS_MINUTES", "30"))
@@ -135,7 +142,7 @@ RECOVERY_DRILL_CONFIRMED = os.getenv(
 ).lower() == "true"
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".webm", ".mpeg", ".mpg", ".m4v"}
-DOCUMENT_EXTENSIONS = {".pdf", ".docx", ".pptx", ".txt", ".md"}
+DOCUMENT_EXTENSIONS = {".pdf", ".docx", ".pptx", ".txt", ".md", ".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff"}
 
 # Cost rates are estimates used for operational visibility, never substitutes
 # for provider invoices. Every value can be overridden without a code deploy.

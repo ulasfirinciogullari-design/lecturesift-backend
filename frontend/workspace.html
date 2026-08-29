@@ -62,7 +62,7 @@
     </section>
 
     <section class="workspace-intro" aria-labelledby="workspaceTitle">
-      <div><p class="eyebrow">LectureSift çalışma alanı</p><h1 id="workspaceTitle">Kaynağını ekle, çalışma paketini oluştur.</h1><p>Video, ses, PDF, Word, PowerPoint, TXT veya Markdown dosyanı seç. Hesapsız denemede bir kez en fazla 5 dakikalık kaynak işleyebilirsin.</p></div>
+      <div><p class="eyebrow">LectureSift çalışma alanı</p><h1 id="workspaceTitle">Kaynağını ekle, çalışma paketini oluştur.</h1><p>Video, ses, PDF, taranmış belge veya görsel, Word, PowerPoint, TXT ya da Markdown dosyanı seç. Metinsiz sayfalarda OCR otomatik çalışır.</p></div>
       <div class="workspace-intro-actions"><a href="/account.html">Geçmiş işlemlerim</a><a href="/features.html">Desteklenen özellikler</a></div>
     </section>
 
@@ -88,11 +88,11 @@
           </div>
 
           <div id="classicSources" class="source-builder">
-            <input id="classicFiles" class="file-input" type="file" multiple accept="video/mp4,video/webm,video/quicktime,video/x-matroska,.pdf,.docx,.pptx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/markdown">
+            <input id="classicFiles" class="file-input" type="file" multiple accept="video/mp4,video/webm,video/quicktime,video/x-matroska,.pdf,.docx,.pptx,.txt,.md,.png,.jpg,.jpeg,.webp,.tif,.tiff,application/pdf,image/png,image/jpeg,image/webp,image/tiff,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/markdown">
             <label id="classicDropZone" class="drop-zone compact" for="classicFiles">
               <span class="upload-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15.5v2.25A2.25 2.25 0 0 0 7.25 20h9.5A2.25 2.25 0 0 0 19 17.75V15.5"/></svg></span>
               <strong data-i18n="addVideos">Video, ses veya belge ekle</strong>
-              <span data-i18n="sortHelp">PDF, Word, PowerPoint, TXT ve Markdown belgelerini de özetleyebilirsin</span>
+              <span data-i18n="sortHelp">PDF, görsel, Word, PowerPoint, TXT ve Markdown; taranmış sayfalarda otomatik OCR</span>
             </label>
             <div id="classicFileList" class="source-file-list"></div>
           </div>
@@ -267,7 +267,7 @@
 
   <script src="./locale-data.js?v=3"></script>
   <script src="./page-i18n.js?v=6"></script><script src="/i18n.js?v=20"></script><script src="/site-shell.js?v=4"></script>
-  <script src="./app.js?v=18"></script>
+  <script src="./app.js?v=19"></script>
   <script src="/rollout.js?v=4"></script>
 </body>
 </html>

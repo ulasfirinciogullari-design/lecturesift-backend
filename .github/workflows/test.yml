@@ -42,7 +42,7 @@ jobs:
             node --check "$file"
           done
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core tesseract-ocr tesseract-ocr-eng tesseract-ocr-tur
       - name: Install Python dependencies
         run: pip install -r requirements.txt pytest pyyaml
       - name: Validate Render blueprint YAML

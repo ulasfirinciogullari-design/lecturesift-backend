@@ -160,6 +160,7 @@ def test_processing_center_uses_operation_specific_progress_profiles():
     script = (FRONTEND / "app.js").read_text(encoding="utf-8")
     assert "const PROGRESS_PROFILES" in script
     assert 'document: [["source", "stageSource"], ["document_extraction", "stageDocument"]' in script
+    assert 'document_ocr: "stageDocument"' in script
     assert 'audio_export: [["source", "stageSource"], ["audio_extract", "stageMp3"]' in script
     assert 'download_video: [["source", "stageSource"], ["worker_download", "url_download"]' in script
     assert "function configureProgressProfile" in script
@@ -309,9 +310,13 @@ def test_document_errors_are_localized_for_every_supported_language():
     script = (FRONTEND / "page-i18n.js").read_text(encoding="utf-8")
     payload = script.split("window.LECTURESIFT_PAGE_COPY=", 1)[1].rstrip(";\n")
     catalog = json.loads(payload)
-    for code in ("LS-UPLOAD-05", *(f"LS-DOC-{index:02d}" for index in range(1, 14))):
+    for code in (
+        "LS-UPLOAD-05",
+        *(f"LS-DOC-{index:02d}" for index in range(1, 14)),
+        *(f"LS-OCR-{index:02d}" for index in range(1, 5)),
+    ):
         assert app.count(f'"{code}"') >= 2
-    source = "Belgeden metin çıkarılamadı. Taranmış PDF ise OCR uygulanmış bir sürüm yükle."
+    source = "OCR tamamlandı ancak okunabilir metin bulunamadı. Daha net bir tarama veya doğru kaynak diliyle yeniden dene."
     assert len(catalog[source]) == 13
 
 
@@ -761,9 +766,20 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=18"' in index
+    assert 'src="./app.js?v=19"' in index
     assert 'src="/rollout.js?v=4"' in index
     assert '$("plans").scrollIntoView' not in app
+
+
+def test_workspace_accepts_scans_and_explains_automatic_ocr():
+    page = (FRONTEND / "workspace.html").read_text(encoding="utf-8")
+    script = (FRONTEND / "app.js").read_text(encoding="utf-8")
+    guide = (FRONTEND / "document-summary.html").read_text(encoding="utf-8")
+    for extension in (".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff"):
+        assert extension in page
+        assert f'"{extension.lstrip(".")}"' in script
+    assert "taranmış sayfalarda otomatik OCR" in page
+    assert "OCR otomatik çalışır" in guide
 
 
 def test_transcript_timeline_is_rendered_with_localized_precision_status():

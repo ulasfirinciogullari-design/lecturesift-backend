@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import math
+import os
 import re
+import shutil
+import subprocess
+import tempfile
 import zipfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from docx import Document
+from PIL import Image, ImageOps, UnidentifiedImageError
 from pypdf import PdfReader
 from pptx import Presentation
 
@@ -18,8 +23,43 @@ from .config import (
     MAX_DOCUMENT_BYTES,
     MAX_DOCUMENT_CHARACTERS,
     MAX_DOCUMENT_PAGES,
+    OCR_COMMAND,
+    OCR_DPI,
+    OCR_ENABLED,
+    OCR_ESTIMATED_WORDS_PER_PAGE,
+    OCR_MAX_PAGES,
+    OCR_MIN_NATIVE_CHARACTERS,
+    OCR_PAGE_TIMEOUT_SECONDS,
 )
 from .errors import LectureSiftError
+
+
+_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff"}
+_OCR_LANGUAGES = {
+    "tr": "tur+eng",
+    "en": "eng",
+    "de": "deu+eng",
+    "fr": "fra+eng",
+    "es": "spa+eng",
+    "it": "ita+eng",
+    "pt": "por+eng",
+    "ru": "rus+eng",
+    "ar": "ara+eng",
+    "zh": "chi_sim+eng",
+    "ja": "jpn+eng",
+    "ko": "kor+eng",
+    "hi": "hin+eng",
+}
+_OCR_SCRIPT_LANGUAGES = {
+    "Arabic": "ara+eng",
+    "Cyrillic": "rus+eng",
+    "Devanagari": "hin+eng",
+    "Han": "chi_sim+eng",
+    "Hangul": "kor+eng",
+    "Japanese": "jpn+eng",
+    "Latin": "eng+tur+deu+fra+spa+ita+por",
+}
+_MAX_IMAGE_PIXELS = 40_000_000
 
 
 def _normalize_text(value: str) -> str:
@@ -75,7 +115,151 @@ def _validate_office_archive(path: Path) -> None:
         ) from exc
 
 
-def _extract_pdf(path: Path) -> tuple[str, dict[str, Any]]:
+def _require_ocr() -> None:
+    if not OCR_ENABLED:
+        raise LectureSiftError(
+            "LS-OCR-01",
+            "Bu sunucuda OCR geçici olarak kapalı. Biraz sonra yeniden deneyebilirsin.",
+            "OCR is disabled by configuration",
+            503,
+        )
+    if not shutil.which(OCR_COMMAND):
+        raise LectureSiftError(
+            "LS-OCR-01",
+            "OCR hizmeti şu anda kullanılamıyor. Biraz sonra yeniden deneyebilirsin.",
+            "Tesseract executable is unavailable",
+            503,
+        )
+
+
+def _validate_image_dimensions(image: Image.Image) -> None:
+    if image.width <= 0 or image.height <= 0 or image.width * image.height > _MAX_IMAGE_PIXELS:
+        raise LectureSiftError(
+            "LS-OCR-04",
+            "Görsel güvenli OCR sınırlarını aşıyor. Daha düşük çözünürlüklü bir kopya yükle.",
+            f"Unsafe OCR image dimensions: {image.width}x{image.height}",
+            413,
+        )
+
+
+def _safe_image(image: Image.Image) -> Image.Image:
+    _validate_image_dimensions(image)
+    image.load()
+    grayscale = ImageOps.autocontrast(ImageOps.grayscale(image))
+    if grayscale.width < 1400:
+        ratio = min(2.0, 1400 / max(1, grayscale.width))
+        grayscale = grayscale.resize(
+            (round(grayscale.width * ratio), round(grayscale.height * ratio)),
+            Image.Resampling.LANCZOS,
+        )
+    return grayscale
+
+
+def _auto_ocr_languages(image_path: Path) -> str:
+    try:
+        completed = subprocess.run(
+            [OCR_COMMAND, str(image_path), "stdout", "-l", "osd", "--psm", "0"],
+            capture_output=True,
+            text=True,
+            timeout=min(20, OCR_PAGE_TIMEOUT_SECONDS),
+            check=False,
+        )
+        match = re.search(r"^Script:\s*(.+?)\s*$", completed.stdout, flags=re.MULTILINE)
+        if match:
+            return _OCR_SCRIPT_LANGUAGES.get(match.group(1).strip(), "eng+tur")
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return "eng+tur"
+
+
+def _run_tesseract_image(image: Image.Image, source_language: str = "auto") -> tuple[str, str]:
+    _require_ocr()
+    prepared = _safe_image(image)
+    try:
+        with tempfile.TemporaryDirectory(prefix="lecturesift-ocr-") as directory:
+            image_path = Path(directory) / "page.png"
+            prepared.save(image_path, format="PNG", optimize=True)
+            language = _OCR_LANGUAGES.get(source_language) or _auto_ocr_languages(image_path)
+            try:
+                completed = subprocess.run(
+                    [
+                        OCR_COMMAND,
+                        str(image_path),
+                        "stdout",
+                        "-l",
+                        language,
+                        "--psm",
+                        "3",
+                        "--dpi",
+                        str(OCR_DPI),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=OCR_PAGE_TIMEOUT_SECONDS,
+                    check=False,
+                    env={**os.environ, "OMP_THREAD_LIMIT": "1"},
+                )
+            except subprocess.TimeoutExpired as exc:
+                raise LectureSiftError(
+                    "LS-OCR-03",
+                    "Bu sayfanın OCR işlemi zaman sınırını aştı. Belgeyi bölerek yeniden dene.",
+                    "Tesseract page timeout",
+                    422,
+                ) from exc
+            except OSError as exc:
+                raise LectureSiftError(
+                    "LS-OCR-01",
+                    "OCR hizmeti şu anda kullanılamıyor. Biraz sonra yeniden deneyebilirsin.",
+                    f"Tesseract launch error: {type(exc).__name__}",
+                    503,
+                ) from exc
+            if completed.returncode != 0:
+                raise LectureSiftError(
+                    "LS-OCR-01",
+                    "OCR motoru belge dilini işleyemedi. Kaynak dilini seçip yeniden dene.",
+                    f"Tesseract exited with code {completed.returncode}",
+                    503,
+                )
+    finally:
+        prepared.close()
+    return _normalize_text(completed.stdout), language
+
+
+def _render_pdf_page(path: Path, page_index: int) -> Image.Image:
+    try:
+        import pypdfium2 as pdfium
+
+        document = pdfium.PdfDocument(str(path))
+        try:
+            page = document[page_index]
+            try:
+                bitmap = page.render(scale=OCR_DPI / 72)
+                try:
+                    return bitmap.to_pil().copy()
+                finally:
+                    bitmap.close()
+            finally:
+                page.close()
+        finally:
+            document.close()
+    except LectureSiftError:
+        raise
+    except Exception as exc:
+        raise LectureSiftError(
+            "LS-OCR-04",
+            "PDF sayfası OCR için görüntüye dönüştürülemedi.",
+            f"PDF render failed on page {page_index + 1}: {type(exc).__name__}",
+            422,
+        ) from exc
+
+
+def _extract_pdf(
+    path: Path,
+    source_language: str = "auto",
+    *,
+    enable_ocr: bool = True,
+    progress_callback: Callable[[int, int], None] | None = None,
+) -> tuple[str, dict[str, Any]]:
     with path.open("rb") as stream:
         signature = stream.read(5)
     if signature != b"%PDF-":
@@ -96,7 +280,78 @@ def _extract_pdf(path: Path) -> tuple[str, dict[str, Any]]:
         raise
     except Exception as exc:
         raise LectureSiftError("LS-DOC-04", "PDF güvenli biçimde okunamadı.", str(exc), 400) from exc
-    return "\n\n".join(part for part in parts if part), {"pages": len(reader.pages)}
+    ocr_indexes = [index for index, part in enumerate(parts) if len(part) < OCR_MIN_NATIVE_CHARACTERS]
+    native_text_pages = len(parts) - len(ocr_indexes)
+    ocr_language = ""
+    if enable_ocr and ocr_indexes:
+        if len(ocr_indexes) > OCR_MAX_PAGES:
+            raise LectureSiftError(
+                "LS-OCR-02",
+                f"Tek işte en fazla {OCR_MAX_PAGES} taranmış sayfaya OCR uygulanabilir. Belgeyi bölerek yükle.",
+                f"OCR page limit exceeded: {len(ocr_indexes)}",
+                413,
+            )
+        for completed_pages, page_index in enumerate(ocr_indexes, 1):
+            image = _render_pdf_page(path, page_index)
+            try:
+                text, ocr_language = _run_tesseract_image(image, source_language)
+            finally:
+                image.close()
+            if len(text) > len(parts[page_index]):
+                parts[page_index] = text
+            if progress_callback:
+                progress_callback(completed_pages, len(ocr_indexes))
+    return "\n\n".join(part for part in parts if part), {
+        "pages": len(reader.pages),
+        "native_text_pages": native_text_pages,
+        "ocr_pages": len(ocr_indexes),
+        "ocr_used": bool(enable_ocr and ocr_indexes),
+        "ocr_required": bool(not enable_ocr and ocr_indexes),
+        "ocr_language": ocr_language,
+    }
+
+
+def _extract_image(
+    path: Path,
+    source_language: str = "auto",
+    *,
+    enable_ocr: bool = True,
+    progress_callback: Callable[[int, int], None] | None = None,
+) -> tuple[str, dict[str, Any]]:
+    try:
+        with Image.open(path) as source:
+            _validate_image_dimensions(source)
+            if not enable_ocr:
+                return "", {
+                    "pages": 1,
+                    "native_text_pages": 0,
+                    "ocr_pages": 1,
+                    "ocr_used": False,
+                    "ocr_required": True,
+                    "ocr_language": "",
+                }
+            image = source.copy()
+    except (Image.DecompressionBombError, UnidentifiedImageError, OSError) as exc:
+        raise LectureSiftError(
+            "LS-OCR-04",
+            "Görsel dosyası güvenli biçimde okunamadı.",
+            f"Unreadable image: {type(exc).__name__}",
+            422,
+        ) from exc
+    try:
+        text, language = _run_tesseract_image(image, source_language)
+    finally:
+        image.close()
+    if progress_callback:
+        progress_callback(1, 1)
+    return text, {
+        "pages": 1,
+        "native_text_pages": 0,
+        "ocr_pages": 1,
+        "ocr_used": True,
+        "ocr_required": False,
+        "ocr_language": language,
+    }
 
 
 def _extract_docx(path: Path) -> tuple[str, dict[str, Any]]:
@@ -153,7 +408,14 @@ def _extract_text(path: Path) -> tuple[str, dict[str, Any]]:
     raise LectureSiftError("LS-DOC-09", "Metin dosyasının karakter kodlaması okunamadı.", "Unknown text encoding", 400)
 
 
-def extract_documents(paths: list[Path]) -> dict[str, Any]:
+def extract_documents(
+    paths: list[Path],
+    source_language: str = "auto",
+    *,
+    enable_ocr: bool = True,
+    allow_ocr_pending: bool = False,
+    progress_callback: Callable[[int, int], None] | None = None,
+) -> dict[str, Any]:
     if not paths:
         raise LectureSiftError("LS-DOC-10", "En az bir belge ekle.", "No document paths", 400)
     sections: list[str] = []
@@ -164,21 +426,35 @@ def extract_documents(paths: list[Path]) -> dict[str, Any]:
         if suffix not in DOCUMENT_EXTENSIONS:
             raise LectureSiftError("LS-DOC-11", "Bu belge biçimi desteklenmiyor.", f"Unsupported document: {suffix}", 400)
         if suffix == ".pdf":
-            text, details = _extract_pdf(path)
+            text, details = _extract_pdf(
+                path,
+                source_language,
+                enable_ocr=enable_ocr,
+                progress_callback=progress_callback,
+            )
         elif suffix == ".docx":
             text, details = _extract_docx(path)
         elif suffix == ".pptx":
             text, details = _extract_pptx(path)
+        elif suffix in _IMAGE_EXTENSIONS:
+            text, details = _extract_image(
+                path,
+                source_language,
+                enable_ocr=enable_ocr,
+                progress_callback=progress_callback,
+            )
         else:
             text, details = _extract_text(path)
-        if not text.strip():
+        ocr_pending = bool(details.get("ocr_required"))
+        if not text.strip() and not (allow_ocr_pending and ocr_pending):
             raise LectureSiftError(
                 "LS-DOC-12",
-                "Belgeden metin çıkarılamadı. Taranmış PDF ise önce OCR uygulanmış bir sürüm yükle.",
+                "OCR tamamlandı ancak okunabilir metin bulunamadı. Daha net bir tarama veya doğru kaynak diliyle yeniden dene.",
                 f"No extractable text: {path.name}",
                 422,
             )
-        sections.append(f"DOCUMENT {index}: {path.name}\n{text}")
+        if text.strip():
+            sections.append(f"DOCUMENT {index}: {path.name}\n{text}")
         metadata.append({"name": path.name, "type": suffix.lstrip("."), **details, "characters": len(text)})
     combined = "\n\n".join(sections)
     if len(combined) > MAX_DOCUMENT_CHARACTERS:
@@ -188,13 +464,23 @@ def extract_documents(paths: list[Path]) -> dict[str, Any]:
             f"Document character limit exceeded: {len(combined)}",
             413,
         )
-    words = len(re.findall(r"[^\W_]+", combined, flags=re.UNICODE))
+    extracted_words = len(re.findall(r"[^\W_]+", combined, flags=re.UNICODE))
+    pending_ocr_pages = sum(
+        int(item.get("ocr_pages") or 0) for item in metadata if item.get("ocr_required")
+    )
+    estimated_ocr_words = pending_ocr_pages * OCR_ESTIMATED_WORDS_PER_PAGE
+    words = extracted_words + estimated_ocr_words
     credit_minutes = max(1, math.ceil(words / DOCUMENT_WORDS_PER_CREDIT_MINUTE))
     return {
         "text": combined,
         "documents": metadata,
         "characters": len(combined),
         "words": words,
+        "extracted_words": extracted_words,
+        "estimated": bool(pending_ocr_pages),
+        "ocr_required": bool(pending_ocr_pages),
+        "ocr_pages": sum(int(item.get("ocr_pages") or 0) for item in metadata),
+        "ocr_used": any(bool(item.get("ocr_used")) for item in metadata),
         "credit_minutes": credit_minutes,
         "credit_seconds": credit_minutes * 60,
     }

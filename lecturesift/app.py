@@ -56,6 +56,9 @@ from .config import (
     MAX_DOCUMENT_BYTES,
     MAX_SOURCE_FILES,
     MAX_VIDEO_BYTES,
+    OCR_COMMAND,
+    OCR_ENABLED,
+    OCR_MAX_PAGES,
     OPENAI_API_KEY,
     VIDEO_EXTENSIONS,
     WORK_DIR,
@@ -547,6 +550,12 @@ def health() -> dict:
         "dual_source_upload": True,
         "multi_source_upload": True,
         "document_sources": sorted(DOCUMENT_EXTENSIONS),
+        "ocr": {
+            "enabled": OCR_ENABLED,
+            "engine": "tesseract-local",
+            "available": bool(OCR_ENABLED and shutil.which(OCR_COMMAND)),
+            "max_pages_per_job": OCR_MAX_PAGES,
+        },
         "output_formats": ["pdf", "docx", "txt"],
         "audio_export": True,
         "url_video_download": True,
@@ -1253,7 +1262,16 @@ async def create_job(
             )
             visual_paths = []
             visual_sizes = []
-        document_data = extract_documents(audio_paths) if document_mode else None
+        document_data = (
+            extract_documents(
+                audio_paths,
+                source_language=options["source_language"],
+                enable_ocr=False,
+                allow_ocr_pending=True,
+            )
+            if document_mode
+            else None
+        )
     except LectureSiftError as exc:
         shutil.rmtree(job_dir, ignore_errors=True)
         _raise_public(exc)
@@ -1266,6 +1284,9 @@ async def create_job(
     if document_data:
         options["document_credit_seconds"] = float(document_data["credit_seconds"])
         options["document_words"] = int(document_data["words"])
+        options["document_ocr_required"] = bool(document_data["ocr_required"])
+        options["document_ocr_pages"] = int(document_data["ocr_pages"])
+        options["document_estimated"] = bool(document_data["estimated"])
     source_type = (
         ("document_multi" if len(audio_paths) > 1 else "document")
         if document_mode
@@ -1297,6 +1318,9 @@ async def create_job(
         "source_layout": "documents" if document_mode else layout,
         "document_words": int(document_data["words"]) if document_data else None,
         "billable_minutes": int(document_data["credit_minutes"]) if document_data else None,
+        "ocr_required": bool(document_data["ocr_required"]) if document_data else False,
+        "ocr_pages": int(document_data["ocr_pages"]) if document_data else 0,
+        "usage_estimated": bool(document_data["estimated"]) if document_data else False,
     }
 
 
