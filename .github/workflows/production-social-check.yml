@@ -29,7 +29,7 @@ jobs:
             sleep 15
           done
 
-      - name: Verify Instagram connection and ninth relaunched marker
+      - name: Verify Instagram connection and completed launch grid
         shell: bash
         run: |
           set -euo pipefail
@@ -45,11 +45,39 @@ jobs:
               echo "Launch status: $body"
               count=$(python -c 'import json,sys; print(json.loads(sys.argv[1]).get("completed_count", 0))' "$body")
               if [ "$count" -ge 9 ]; then
+                break
+              fi
+            fi
+            if [ "$attempt" -eq 32 ]; then
+              echo "Completed Instagram launch grid was not observed in time." >&2
+              exit 1
+            fi
+            sleep 15
+          done
+
+      - name: Verify today's bilingual Reel after publishing window
+        shell: bash
+        run: |
+          set -euo pipefail
+          hour=$(date -u +%H)
+          if [ "$hour" -lt 17 ]; then
+            echo "Daily Instagram publishing window has not opened yet; skipping daily marker check."
+            exit 0
+          fi
+
+          today=$(date -u +%F)
+          daily_status="https://lecturesift-backend.onrender.com/instagram/daily/status?day=$today"
+          for attempt in $(seq 1 32); do
+            if body=$(curl --silent --show-error --fail --max-time 25 "$daily_status"); then
+              echo "Daily status: $body"
+              present=$(python -c 'import json,sys; print("true" if json.loads(sys.argv[1]).get("marker_present") else "false")' "$body")
+              complete=$(python -c 'import json,sys; print("true" if json.loads(sys.argv[1]).get("launch_complete") else "false")' "$body")
+              if [ "$present" = "true" ] && [ "$complete" = "true" ]; then
                 exit 0
               fi
             fi
             if [ "$attempt" -eq 32 ]; then
-              echo "Ninth relaunched Instagram marker was not observed in time." >&2
+              echo "Today's bilingual Instagram Reel marker was not observed in time." >&2
               exit 1
             fi
             sleep 15
