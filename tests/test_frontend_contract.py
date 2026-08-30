@@ -983,6 +983,7 @@ def test_google_ads_conversions_are_consent_gated_and_csp_allows_measurement():
     assert 'for = "/:lang/verify.html"' in headers
     assert 'for = "/:lang/reset-password.html"' in headers
     assert 'for = "/account.html"' in headers and 'for = "/admin.html"' in headers
+    assert 'for = "/support.html"' in headers and 'for = "/:lang/support.html"' in headers
     assert all(
         key in blueprint
         for key in (

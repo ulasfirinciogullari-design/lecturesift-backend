@@ -66,3 +66,13 @@
   for = "/:lang/admin.html"
   [headers.values]
     Cache-Control = "no-store"
+
+[[headers]]
+  for = "/support.html"
+  [headers.values]
+    Cache-Control = "no-store"
+
+[[headers]]
+  for = "/:lang/support.html"
+  [headers.values]
+    Cache-Control = "no-store"
