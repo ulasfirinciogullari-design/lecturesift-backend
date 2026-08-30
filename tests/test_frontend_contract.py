@@ -49,6 +49,16 @@ def test_homepage_promotes_campaigns_without_duplicating_plan_checkout():
     assert 'href="/plans.html"' in homepage
 
 
+def test_account_history_opens_results_in_the_workspace():
+    account = (FRONTEND / "account.html").read_text(encoding="utf-8")
+    auth = (FRONTEND / "auth.js").read_text(encoding="utf-8")
+
+    assert 'href="/workspace.html" data-i18n="account.newLesson"' in account
+    assert 'I18N.localizedPath(I18N.language, "/workspace.html")' in auth
+    assert '?job=${encodeURIComponent(job.job_id)}' in auth
+    assert 'href="/?job=${encodeURIComponent(job.job_id)}"' not in auth
+
+
 def test_owner_only_netlify_toolbar_is_hidden_on_every_site_layout():
     for stylesheet in ("styles.css", "auth.css", "legal.css"):
         content = (FRONTEND / stylesheet).read_text(encoding="utf-8")

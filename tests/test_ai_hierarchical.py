@@ -1,4 +1,5 @@
 import json
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -74,12 +75,24 @@ def test_long_study_pack_processes_every_section_before_final_synthesis(monkeypa
 
 def test_detailed_study_pack_splits_content_and_exercises_then_merges(monkeypatch):
     calls = []
+    gate = threading.Barrier(3, timeout=3)
 
     def fake(source, output_language, summary_style, quiz_count, flashcard_count, **kwargs):
         calls.append((summary_style, quiz_count, flashcard_count, kwargs))
-        pack = _pack("content" if quiz_count == 0 else "exercises")
-        if quiz_count == 0:
+        gate.wait()
+        requirements = kwargs.get("extra_requirements", "")
+        part = (
+            "notes"
+            if "comprehensive, ordered structured notes" in requirements
+            else "content"
+            if quiz_count == 0
+            else "exercises"
+        )
+        pack = _pack(part)
+        if part == "content":
             pack["summary"] = "Complete detailed explanation."
+            pack["notes"] = []
+        elif part == "notes":
             pack["notes"] = [{"heading": "Deep note", "content": "All concepts", "bullets": []}]
         else:
             pack["quiz"] = [{"question": f"Q{index}"} for index in range(quiz_count)]
@@ -92,13 +105,30 @@ def test_detailed_study_pack_splits_content_and_exercises_then_merges(monkeypatc
     monkeypatch.setattr(ai, "_request_study_pack", fake)
     result = ai.make_study_pack("Detailed source " * 100, "en", "detailed", 20, 40)
 
-    assert len(calls) == 2
-    assert {(quiz, cards) for _, quiz, cards, _ in calls} == {(0, 0), (20, 40)}
+    assert len(calls) == 3
+    assert [(quiz, cards) for _, quiz, cards, _ in calls].count((0, 0)) == 2
+    assert (20, 40) in [(quiz, cards) for _, quiz, cards, _ in calls]
     assert result["summary"] == "Complete detailed explanation."
     assert result["notes"][0]["heading"] == "Deep note"
     assert len(result["quiz"]) == 20
     assert len(result["flashcards"]) == 40
-    assert max(call[3]["max_tokens"] for call in calls) >= 14_000
+    assert max(call[3]["max_tokens"] for call in calls) == 11_000
+
+
+def test_detailed_study_pack_without_exercises_only_requests_content_and_notes(monkeypatch):
+    calls = []
+
+    def fake(source, output_language, summary_style, quiz_count, flashcard_count, **kwargs):
+        calls.append((quiz_count, flashcard_count, kwargs.get("extra_requirements", "")))
+        return _pack("part")
+
+    monkeypatch.setattr(ai, "_request_study_pack", fake)
+    result = ai.make_study_pack("Detailed source " * 100, "en", "detailed", 0, 0)
+
+    assert len(calls) == 2
+    assert all((quiz, cards) == (0, 0) for quiz, cards, _requirements in calls)
+    assert result["quiz"] == []
+    assert result["flashcards"] == []
 
 
 def test_zero_requested_flashcards_stays_empty():
