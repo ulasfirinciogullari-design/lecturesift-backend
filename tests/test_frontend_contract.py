@@ -569,6 +569,9 @@ def test_checkout_names_contact_inbox_and_mobile_plan_navigation_are_wired():
     assert "/billing/admin/contact-messages" in admin_js
     assert "adminContactDialog" in admin_html and "admin-contact-reply" in admin_js
     assert "/billing/admin/contact-messages/${encodeURIComponent(messageId)}/reply" in admin_js
+    assert 'href="/rollout.css?v=10"' in admin_html and 'src="/admin.js?v=17"' in admin_html
+    assert admin_js.count('class="admin-table admin-record-table"') >= 10
+    assert all(label in admin_js for label in ('data-label="İş"', 'data-label="Bakiye"', 'data-label="Açıklama"'))
     assert "supportReplyForm" in support_html and "supportThread" in support_html
     assert "/contact/conversations/" in support_js and "conversationToken" in support_js
     assert ".topbar .top-actions .top-link" in rollout_css
@@ -582,6 +585,8 @@ def test_checkout_names_contact_inbox_and_mobile_plan_navigation_are_wired():
             ".admin-workspace",
             ".admin-view[hidden]",
             ".admin-section-nav button[aria-selected=\"true\"]",
+            ".admin-layout :is(#adminPanel,.admin-workspace,.admin-view-stack,.admin-view,.dashboard-card,.admin-table-wrap,.admin-section-head,.admin-filters,.admin-data-toolbar)",
+            "max-width:calc(100vw - 16px)",
             "@media(max-width:620px)",
         )
     )

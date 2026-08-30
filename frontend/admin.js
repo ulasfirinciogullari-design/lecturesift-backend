@@ -161,8 +161,8 @@ function renderAdminOrders(orders) {
 }
 
 function renderAdminRewards(rewards) {
-  const rows = rewards.map(reward => `<tr><td><strong>@${adminEscape(reward.handle)}</strong><br><small>${adminEscape(reward.email || "")}</small></td><td>+${Number(reward.minutes || 0).toLocaleString(adminLocale())} ${adminEscape(adminMinuteShort())}</td><td>${adminEscape(adminStatusLabel(reward.status))}</td><td><span class="admin-actions"><button class="admin-action approve" data-reward-decision="${adminEscape(reward.id)}" data-approve="1">Onayla</button><button class="admin-action reject" data-reward-decision="${adminEscape(reward.id)}" data-approve="0">Reddet</button></span></td></tr>`).join("");
-  admin$("adminRewards").innerHTML = `<table class="admin-table"><thead><tr><th>Kullanıcı adı</th><th>Dakika</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>${rows || '<tr><td colspan="4">Bekleyen bonus talebi yok.</td></tr>'}</tbody></table>`;
+  const rows = rewards.map(reward => `<tr><td data-label="Kullanıcı"><strong>@${adminEscape(reward.handle)}</strong><br><small>${adminEscape(reward.email || "")}</small></td><td data-label="Dakika">+${Number(reward.minutes || 0).toLocaleString(adminLocale())} ${adminEscape(adminMinuteShort())}</td><td data-label="Durum">${adminEscape(adminStatusLabel(reward.status))}</td><td data-label="İşlem"><span class="admin-actions"><button class="admin-action approve" data-reward-decision="${adminEscape(reward.id)}" data-approve="1">Onayla</button><button class="admin-action reject" data-reward-decision="${adminEscape(reward.id)}" data-approve="0">Reddet</button></span></td></tr>`).join("");
+  admin$("adminRewards").innerHTML = `<table class="admin-table admin-record-table"><thead><tr><th>Kullanıcı adı</th><th>Dakika</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>${rows || '<tr><td colspan="4">Bekleyen bonus talebi yok.</td></tr>'}</tbody></table>`;
   document.querySelectorAll("[data-reward-decision]").forEach(button => button.addEventListener("click", () => decideReward(button)));
 }
 
@@ -172,9 +172,9 @@ function renderAdminRefunds(refunds) {
     let actions = "—";
     if (item.status === "requested") actions = `${note}<span class="admin-actions"><button class="admin-action approve" data-refund-decision="${adminEscape(item.id)}" data-action="approve">Onayla</button><button class="admin-action reject" data-refund-decision="${adminEscape(item.id)}" data-action="reject">Reddet</button></span>`;
     if (item.status === "approved_pending_refund") actions = `${note}<button class="admin-action approve" data-refund-decision="${adminEscape(item.id)}" data-action="complete">İade gönderildi</button>`;
-    return `<tr><td><strong>${adminEscape(item.order_reference)}</strong><br><small title="${adminEscape(adminDate(item.created_at))}">${adminEscape(adminRelativeDate(item.created_at))}</small></td><td>${adminEscape(item.user?.name || "—")}<br><small>${adminEscape(item.user?.email || "")}</small></td><td>${adminEscape(item.reason)}</td><td>${adminEscape(adminStatusLabel(item.status))}</td><td>${actions}</td></tr>`;
+    return `<tr><td data-label="Sipariş"><strong>${adminEscape(item.order_reference)}</strong><br><small title="${adminEscape(adminDate(item.created_at))}">${adminEscape(adminRelativeDate(item.created_at))}</small></td><td data-label="Müşteri">${adminEscape(item.user?.name || "—")}<br><small>${adminEscape(item.user?.email || "")}</small></td><td data-label="Neden">${adminEscape(item.reason)}</td><td data-label="Durum">${adminEscape(adminStatusLabel(item.status))}</td><td data-label="İşlem">${actions}</td></tr>`;
   }).join("");
-  admin$("adminRefunds").innerHTML = `<table class="admin-table"><thead><tr><th>Sipariş no</th><th>Müşteri</th><th>İade nedeni</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>${rows || '<tr><td colspan="5">İade talebi bulunamadı.</td></tr>'}</tbody></table>`;
+  admin$("adminRefunds").innerHTML = `<table class="admin-table admin-record-table"><thead><tr><th>Sipariş no</th><th>Müşteri</th><th>İade nedeni</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>${rows || '<tr><td colspan="5">İade talebi bulunamadı.</td></tr>'}</tbody></table>`;
   document.querySelectorAll("[data-refund-decision]").forEach(button => button.addEventListener("click", () => decideRefund(button)));
 }
 
@@ -256,13 +256,13 @@ async function loadAdminUserActivity(userId) {
 }
 
 function renderAdminCreditEvents(events) {
-  const rows = events.map(item => `<tr><td title="${adminEscape(adminDate(item.created_at))}">${adminEscape(adminRelativeDate(item.created_at))}</td><td>${adminEscape(item.email)}</td><td><strong>${item.minutes_delta > 0 ? "+" : ""}${Number(item.minutes_delta).toLocaleString()}</strong></td><td>${Number(item.balance_before).toLocaleString()} → ${Number(item.balance_after).toLocaleString()}</td><td>${adminEscape(item.reason)}</td></tr>`).join("");
-  admin$("adminCreditEvents").innerHTML = `<table class="admin-table"><thead><tr><th>Tarih</th><th>Müşteri</th><th>Dakika</th><th>Bakiye değişimi</th><th>Neden</th></tr></thead><tbody>${rows || '<tr><td colspan="5">Henüz yönetici dakika işlemi yok.</td></tr>'}</tbody></table>`;
+  const rows = events.map(item => `<tr><td data-label="Tarih" title="${adminEscape(adminDate(item.created_at))}">${adminEscape(adminRelativeDate(item.created_at))}</td><td data-label="Müşteri">${adminEscape(item.email)}</td><td data-label="Dakika"><strong>${item.minutes_delta > 0 ? "+" : ""}${Number(item.minutes_delta).toLocaleString()}</strong></td><td data-label="Bakiye">${Number(item.balance_before).toLocaleString()} → ${Number(item.balance_after).toLocaleString()}</td><td data-label="Neden">${adminEscape(item.reason)}</td></tr>`).join("");
+  admin$("adminCreditEvents").innerHTML = `<table class="admin-table admin-record-table"><thead><tr><th>Tarih</th><th>Müşteri</th><th>Dakika</th><th>Bakiye değişimi</th><th>Neden</th></tr></thead><tbody>${rows || '<tr><td colspan="5">Henüz yönetici dakika işlemi yok.</td></tr>'}</tbody></table>`;
 }
 
 function renderAdminAccountEvents(events) {
-  const rows = events.map(item => `<tr><td title="${adminEscape(adminDate(item.created_at))}">${adminEscape(adminRelativeDate(item.created_at))}</td><td>${adminEscape(item.subject_email)}</td><td>${adminEscape(item.action)}</td><td>${adminEscape(item.summary)}</td><td>${adminEscape(item.actor)}</td></tr>`).join("");
-  admin$("adminAccountEvents").innerHTML = `<table class="admin-table"><thead><tr><th>Tarih</th><th>Kullanıcı</th><th>İşlem</th><th>Açıklama</th><th>Yapan</th></tr></thead><tbody>${rows || '<tr><td colspan="5">Henüz yönetici hesap işlemi yok.</td></tr>'}</tbody></table>`;
+  const rows = events.map(item => `<tr><td data-label="Tarih" title="${adminEscape(adminDate(item.created_at))}">${adminEscape(adminRelativeDate(item.created_at))}</td><td data-label="Kullanıcı">${adminEscape(item.subject_email)}</td><td data-label="İşlem">${adminEscape(item.action)}</td><td data-label="Açıklama">${adminEscape(item.summary)}</td><td data-label="Yapan">${adminEscape(item.actor)}</td></tr>`).join("");
+  admin$("adminAccountEvents").innerHTML = `<table class="admin-table admin-record-table"><thead><tr><th>Tarih</th><th>Kullanıcı</th><th>İşlem</th><th>Açıklama</th><th>Yapan</th></tr></thead><tbody>${rows || '<tr><td colspan="5">Henüz yönetici hesap işlemi yok.</td></tr>'}</tbody></table>`;
 }
 
 function renderAdminContactMessages(messages) {
@@ -355,8 +355,8 @@ function renderAdminReadiness(billing, runtime) {
 }
 
 function renderAdminJobs(jobs) {
-  const rows = jobs.map(job => `<tr><td><strong>${adminEscape(job.job_id)}</strong><br><small>${adminEscape(job.owner_id ? `Hesap: ${job.owner_id.slice(0, 8)}…` : "Misafir/hesapsız")}</small></td><td><span class="status-pill ${job.status === "done" ? "paid" : ""}">${adminEscape(adminStatusLabel(job.status))}</span></td><td><div class="admin-progress"><span style="width:${Math.max(0, Math.min(100, Number(job.percent || 0)))}%"></span></div><small>%${Number(job.percent || 0)} · ${adminEscape(job.stage || "—")}</small></td><td title="${adminEscape(adminDate(job.created))}">${adminEscape(adminRelativeDate(job.created))}</td><td>${adminEscape(job.error_code || job.public_error || job.error || "—")}</td></tr>`).join("");
-  admin$("adminJobs").innerHTML = `<table class="admin-table"><thead><tr><th>İş kimliği</th><th>Durum</th><th>İlerleme / aşama</th><th>Başlangıç</th><th>Hata</th></tr></thead><tbody>${rows || '<tr><td colspan="5">Kayıtlı iş bulunamadı.</td></tr>'}</tbody></table>`;
+  const rows = jobs.map(job => `<tr><td data-label="İş"><strong>${adminEscape(job.job_id)}</strong><br><small>${adminEscape(job.owner_id ? `Hesap: ${job.owner_id.slice(0, 8)}…` : "Misafir/hesapsız")}</small></td><td data-label="Durum"><span class="status-pill ${job.status === "done" ? "paid" : ""}">${adminEscape(adminStatusLabel(job.status))}</span></td><td data-label="İlerleme"><div class="admin-progress"><span style="width:${Math.max(0, Math.min(100, Number(job.percent || 0)))}%"></span></div><small>%${Number(job.percent || 0)} · ${adminEscape(job.stage || "—")}</small></td><td data-label="Başlangıç" title="${adminEscape(adminDate(job.created))}">${adminEscape(adminRelativeDate(job.created))}</td><td data-label="Hata">${adminEscape(job.error_code || job.public_error || job.error || "—")}</td></tr>`).join("");
+  admin$("adminJobs").innerHTML = `<table class="admin-table admin-record-table"><thead><tr><th>İş kimliği</th><th>Durum</th><th>İlerleme / aşama</th><th>Başlangıç</th><th>Hata</th></tr></thead><tbody>${rows || '<tr><td colspan="5">Kayıtlı iş bulunamadı.</td></tr>'}</tbody></table>`;
 }
 
 function renderAdminCosts() {
