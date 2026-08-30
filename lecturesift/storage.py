@@ -5,6 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 
 import boto3
+from botocore.config import Config
+from botocore.exceptions import (
+    ClientError,
+    ConnectTimeoutError,
+    EndpointConnectionError,
+    NoCredentialsError,
+    PartialCredentialsError,
+    ReadTimeoutError,
+)
 
 from .costs import record_r2_operation
 from .config import (
@@ -32,7 +41,43 @@ class ObjectStorage:
                 region_name=S3_REGION or "auto",
                 aws_access_key_id=S3_ACCESS_KEY_ID,
                 aws_secret_access_key=S3_SECRET_ACCESS_KEY,
+                config=Config(
+                    retries={"mode": "standard", "total_max_attempts": 5},
+                    connect_timeout=5,
+                    read_timeout=60,
+                    tcp_keepalive=True,
+                ),
             )
+
+    @staticmethod
+    def error_code(exc: Exception) -> str:
+        """Return a safe diagnostic code without leaking credentials or URLs."""
+        if isinstance(exc, (NoCredentialsError, PartialCredentialsError)):
+            return "credentials_missing"
+        if isinstance(exc, (ConnectTimeoutError, ReadTimeoutError)):
+            return "storage_timeout"
+        if isinstance(exc, EndpointConnectionError):
+            return "endpoint_unreachable"
+        if isinstance(exc, ClientError):
+            response = exc.response or {}
+            error = response.get("Error") or {}
+            code = str(error.get("Code") or "").casefold()
+            status = int((response.get("ResponseMetadata") or {}).get("HTTPStatusCode") or 0)
+            if code in {
+                "invalidaccesskeyid",
+                "invalidtoken",
+                "signaturedoesnotmatch",
+                "tokenrefreshrequired",
+                "expiredtoken",
+            }:
+                return "credentials_invalid"
+            if code in {"accessdenied", "forbidden", "unauthorized"} or status in {401, 403}:
+                return "access_denied"
+            if code in {"nosuchbucket", "notfound"} or status == 404:
+                return "bucket_not_found"
+            if code in {"requesttimeout", "requesttimeoutexception", "slowdown"} or status in {408, 429}:
+                return "storage_timeout"
+        return "storage_error"
 
     def source_key(self, job_id: str, role: str, index: int, path: Path) -> str:
         suffix = path.suffix.lower() or ".bin"
@@ -63,17 +108,25 @@ class ObjectStorage:
         )
         return destination
 
-    def health(self) -> dict[str, bool]:
+    def health(self) -> dict[str, bool | str]:
         if not self.remote or self._client is None:
-            return {"configured": False, "connected": False}
+            return {
+                "configured": False,
+                "connected": False,
+                "diagnostic": "not_configured",
+            }
         try:
             # A bucket-scoped R2 Object Read & Write token can list objects but
             # may not be allowed to perform bucket-management operations. Test
             # the least-privileged operation the application actually needs.
             self._client.list_objects_v2(Bucket=self.bucket, MaxKeys=1)
             return {"configured": True, "connected": True}
-        except Exception:
-            return {"configured": True, "connected": False}
+        except Exception as exc:
+            return {
+                "configured": True,
+                "connected": False,
+                "diagnostic": self.error_code(exc),
+            }
 
     @staticmethod
     def _is_source_media(path: Path, job_dir: Path, relative: str) -> bool:
