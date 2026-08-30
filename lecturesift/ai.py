@@ -475,6 +475,28 @@ Requirements:
             retry_reason = " ".join(incomplete_reasons)
             if attempt == 0:
                 continue
+            # A valid, source-grounded pack is still useful when the provider
+            # stops naturally a little below our preferred length or item
+            # target.  Do not discard every generated artifact after the
+            # bounded retry solely because of a soft quality target.  Output
+            # truncation and genuinely empty responses continue to fail
+            # closed below.
+            usable_word_floor = (
+                min(120, max(40, round(effective_summary_minimum * 0.35)))
+                if effective_summary_minimum
+                else 0
+            )
+            has_structured_content = any(
+                base.get(field)
+                for field in ("key_points", "important_terms", "notes", "exam_focus", "quiz", "flashcards")
+            )
+            if (
+                finish_reason != "length"
+                and str(base.get("summary") or "").strip()
+                and summary_words >= usable_word_floor
+                and has_structured_content
+            ):
+                return base
             last_error = ValueError(retry_reason)
             break
         return base
