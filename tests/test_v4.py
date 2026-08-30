@@ -1,3 +1,5 @@
+import asyncio
+import io
 import json
 import shutil
 import subprocess
@@ -8,9 +10,10 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+from fastapi import HTTPException, UploadFile
 from fastapi.testclient import TestClient
 
-from lecturesift.app import _options, app
+from lecturesift.app import _options, _save_upload, app
 from lecturesift.errors import normalize_error
 from lecturesift.exports import build_artifacts
 import lecturesift.exports as exports_module
@@ -41,6 +44,20 @@ def synthetic_slide() -> np.ndarray:
         cv2.circle(frame, (125, 275 + index * 105), 10, (50, 95, 190), -1)
         cv2.putText(frame, value, (165, 290 + index * 105), cv2.FONT_HERSHEY_SIMPLEX, 1.25, (40, 45, 60), 3)
     return frame
+
+
+def test_streamed_upload_accepts_exact_byte_limit_and_rejects_one_extra(tmp_path):
+    exact = UploadFile(filename="exact.pdf", file=io.BytesIO(b"12345678"))
+    assert asyncio.run(_save_upload(exact, tmp_path / "exact.pdf", max_bytes=8)) == 8
+    assert (tmp_path / "exact.pdf").read_bytes() == b"12345678"
+
+    too_large = UploadFile(filename="too-large.pdf", file=io.BytesIO(b"123456789"))
+    try:
+        asyncio.run(_save_upload(too_large, tmp_path / "too-large.pdf", max_bytes=8))
+        raise AssertionError("oversized upload was not rejected")
+    except HTTPException as exc:
+        assert exc.detail["code"] == "LS-UPLOAD-02"
+        assert exc.status_code == 413
 
 
 def synthetic_scene() -> np.ndarray:

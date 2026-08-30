@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import boto3
+from boto3.s3.transfer import TransferConfig
 from botocore.config import Config
 from botocore.exceptions import (
     ClientError,
@@ -25,6 +26,7 @@ from .config import (
     S3_ENDPOINT_URL,
     S3_REGION,
     S3_SECRET_ACCESS_KEY,
+    STORAGE_FILE_TRANSFER_CONCURRENCY,
     STORAGE_TRANSFER_PARALLELISM,
 )
 
@@ -36,6 +38,12 @@ class ObjectStorage:
             self.bucket and S3_ENDPOINT_URL and S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY
         )
         self._client = None
+        self._transfer_config = TransferConfig(
+            multipart_threshold=16 * 1024 * 1024,
+            multipart_chunksize=8 * 1024 * 1024,
+            max_concurrency=STORAGE_FILE_TRANSFER_CONCURRENCY,
+            use_threads=True,
+        )
         if self.remote:
             self._client = boto3.client(
                 "s3",
@@ -88,7 +96,7 @@ class ObjectStorage:
     def upload_file(self, path: Path, key: str) -> str:
         if not self.remote or self._client is None:
             raise RuntimeError("Kalıcı dosya deposu yapılandırılmamış.")
-        self._client.upload_file(str(path), self.bucket, key)
+        self._client.upload_file(str(path), self.bucket, key, Config=self._transfer_config)
         parts = key.split("/")
         record_r2_operation(
             "write",
@@ -101,7 +109,7 @@ class ObjectStorage:
         if not self.remote or self._client is None:
             raise RuntimeError("Kalıcı dosya deposu yapılandırılmamış.")
         destination.parent.mkdir(parents=True, exist_ok=True)
-        self._client.download_file(self.bucket, key, str(destination))
+        self._client.download_file(self.bucket, key, str(destination), Config=self._transfer_config)
         parts = key.split("/")
         record_r2_operation(
             "read",

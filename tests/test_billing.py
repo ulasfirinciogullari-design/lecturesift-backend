@@ -53,14 +53,29 @@ def test_billing_catalog_has_hybrid_plans_and_translation_keys():
         "max_minutes_per_job": 30,
         "max_document_pages": 50,
         "max_ocr_pages": 20,
+        "max_document_characters": 1_500_000,
     }
     assert plans["plus"]["entitlements"]["limits"] == {
         "max_files_per_job": 16,
         "max_media_upload_mb": 1024,
-        "max_document_upload_mb": 50,
+        "max_document_upload_mb": 100,
         "max_minutes_per_job": 300,
         "max_document_pages": 350,
         "max_ocr_pages": 100,
+        "max_document_characters": 1_500_000,
+    }
+    assert {
+        code: plans[code]["entitlements"]["limits"]["max_document_upload_mb"]
+        for code in ("test", "free", "credit", "lite", "plus", "pro", "max", "business")
+    } == {
+        "test": 10,
+        "free": 25,
+        "credit": 50,
+        "lite": 75,
+        "plus": 100,
+        "pro": 100,
+        "max": 100,
+        "business": 100,
     }
     assert plans["max"]["entitlements"]["limits"]["max_minutes_per_job"] == 900
 

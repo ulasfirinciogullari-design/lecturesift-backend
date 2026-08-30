@@ -4,12 +4,16 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
+from .config import MAX_DOCUMENT_BYTES, MAX_DOCUMENT_CHARACTERS
+
 
 SUPPORTED_CURRENCIES = (
     "TRY", "USD", "EUR", "GBP", "CAD", "AUD", "NZD", "JPY", "KRW",
     "CNY", "INR", "BRL", "MXN", "CHF", "SEK", "NOK", "DKK", "PLN",
     "AED", "SAR", "SGD", "HKD",
 )
+
+_MEBIBYTE = 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -49,8 +53,17 @@ class Plan:
         selected_currency = currency if currency in SUPPORTED_CURRENCIES else "TRY"
         regional = REGIONAL_PRICES.get(self.code, {})
         display_amount = regional.get(selected_currency)
+        # A plan must never advertise a document size that the active runtime
+        # rejects. Keep this final safety boundary here as environment-specific
+        # deployments can lower the global cap without changing the catalog.
+        effective_document_upload_mb = min(
+            self.max_document_upload_mb,
+            max(0, MAX_DOCUMENT_BYTES // _MEBIBYTE),
+        )
+        public_plan = asdict(self)
+        public_plan["max_document_upload_mb"] = effective_document_upload_mb
         return {
-            **asdict(self),
+            **public_plan,
             "export_enabled": self.export_enabled,
             "name_key": f"billing.plan.{self.code}.name",
             "description_key": f"billing.plan.{self.code}.description",
@@ -75,10 +88,11 @@ class Plan:
                 "limits": {
                     "max_files_per_job": self.max_files_per_job,
                     "max_media_upload_mb": self.max_media_upload_mb,
-                    "max_document_upload_mb": self.max_document_upload_mb,
+                    "max_document_upload_mb": effective_document_upload_mb,
                     "max_minutes_per_job": self.max_minutes_per_job,
                     "max_document_pages": self.max_document_pages,
                     "max_ocr_pages": self.max_ocr_pages,
+                    "max_document_characters": MAX_DOCUMENT_CHARACTERS,
                 },
                 "team_seats": self.team_seats,
                 "priority": self.priority,
@@ -95,11 +109,11 @@ PLANS = (
     Plan("free", "free", 60, ("pdf",), "standard", 1, 10, 20, ("short", "standard"), 7, 3, 100, 25, 30, 50, 20),
     Plan("test", "one_time", 1, ("pdf",), "standard", 1, 1, 1, ("short",), 1, 1, 25, 10, 1, 10, 5),
     Plan("credit", "one_time", 180, ("pdf", "docx", "txt"), "standard", 1, 20, 40, ALL_SUMMARY_PROFILES, 30, 8, 500, 50, 180, 150, 50, 19900),
-    Plan("lite", "subscription", 600, ("pdf", "docx", "txt"), "standard", 1, 20, 40, ALL_SUMMARY_PROFILES, 90, 12, 750, 50, 180, 250, 75, 27900),
-    Plan("plus", "subscription", 1800, ("pdf", "docx", "txt"), "standard", 1, 30, 60, ALL_SUMMARY_PROFILES, 180, 16, 1024, 50, 300, 350, 100, 44900, featured=True),
-    Plan("pro", "subscription", 5000, ("pdf", "docx", "txt"), "priority", 1, 30, 60, ALL_SUMMARY_PROFILES, 365, 24, 1024, 50, 600, 500, 150, 99900),
-    Plan("max", "subscription", 12000, ("pdf", "docx", "txt"), "priority", 1, 30, 60, ALL_SUMMARY_PROFILES, 730, 24, 1024, 50, 900, 500, 150, 199900),
-    Plan("business", "quote", None, ("pdf", "docx", "txt"), "priority", 10, None, None, ALL_SUMMARY_PROFILES, 730, 24, 1024, 50, 1440, 500, 150),
+    Plan("lite", "subscription", 600, ("pdf", "docx", "txt"), "standard", 1, 20, 40, ALL_SUMMARY_PROFILES, 90, 12, 750, 75, 180, 250, 75, 27900),
+    Plan("plus", "subscription", 1800, ("pdf", "docx", "txt"), "standard", 1, 30, 60, ALL_SUMMARY_PROFILES, 180, 16, 1024, 100, 300, 350, 100, 44900, featured=True),
+    Plan("pro", "subscription", 5000, ("pdf", "docx", "txt"), "priority", 1, 30, 60, ALL_SUMMARY_PROFILES, 365, 24, 1024, 100, 600, 500, 150, 99900),
+    Plan("max", "subscription", 12000, ("pdf", "docx", "txt"), "priority", 1, 30, 60, ALL_SUMMARY_PROFILES, 730, 24, 1024, 100, 900, 500, 150, 199900),
+    Plan("business", "quote", None, ("pdf", "docx", "txt"), "priority", 10, None, None, ALL_SUMMARY_PROFILES, 730, 24, 1024, 100, 1440, 500, 150),
 )
 
 PLAN_BY_CODE = {plan.code: plan for plan in PLANS}

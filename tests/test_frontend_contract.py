@@ -178,6 +178,27 @@ def test_processing_center_uses_operation_specific_progress_profiles():
     assert "uploadingSource" in script
 
 
+def test_workspace_uses_active_plan_upload_limits_without_stale_hard_caps():
+    page = (FRONTEND / "workspace.html").read_text(encoding="utf-8")
+    app = (FRONTEND / "app.js").read_text(encoding="utf-8")
+    plans = (FRONTEND / "plans.js").read_text(encoding="utf-8")
+    translations = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+
+    assert 'id="sourceLimitHelp"' in page
+    assert "function updateSourceLimitHelp" in app
+    assert "function uploadLimitMessage" in app
+    assert "sourceLimits.max_document_upload_mb" in app
+    assert "documentUpload ? 50 * 1024 ** 2" not in app
+    assert "Belgelerin toplam boyutu 50 MB" not in app
+    assert "Documents: 50 MB total" not in app
+    assert "max_document_upload_mb:75" in app
+    assert "max_document_upload_mb:100" in app
+    assert "max_document_upload_mb:75" in plans
+    assert "max_document_upload_mb:100" in plans
+    assert '"upload.activePlanLimits"' in translations
+    assert '"plans.documentUploadLimit":["Bir işte toplam belge boyutu"' in translations
+
+
 def test_workspace_outputs_are_individually_optional_and_mobile_ready():
     page = (FRONTEND / "workspace.html").read_text(encoding="utf-8")
     script = (FRONTEND / "app.js").read_text(encoding="utf-8")
@@ -206,7 +227,7 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         content = page.read_text(encoding="utf-8")
         assert "/theme.css?v=12" in content, page.name
         assert "/theme.js?v=2" in content, page.name
-        assert "i18n.js?v=24" in content, page.name
+        assert "i18n.js?v=25" in content, page.name
         assert "page-i18n.js?v=6" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
@@ -900,7 +921,7 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=24"' in index
+    assert 'src="./app.js?v=25"' in index
     assert 'src="/rollout.js?v=5"' in index
     assert '$("plans").scrollIntoView' not in app
 

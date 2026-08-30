@@ -74,7 +74,7 @@ def normalize_error(exc: Exception) -> LectureSiftError:
     if "larger than" in low or "size limit" in low:
         return LectureSiftError(
             "LS-UPLOAD-02",
-            "Video izin verilen dosya boyutunu aşıyor.",
+            "Seçilen kaynaklar izin verilen toplam yükleme boyutunu aşıyor.",
             raw,
             413,
         )

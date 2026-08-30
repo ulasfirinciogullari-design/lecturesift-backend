@@ -186,6 +186,23 @@ def test_free_plan_source_limits_are_enforced_server_side():
         require_duration_entitlement(user_id, 60, document_mode=True, document_pages=51)
     with pytest.raises(BillingError, match="en fazla 20 taranmış sayfaya OCR"):
         require_duration_entitlement(user_id, 60, document_mode=True, ocr_pages=21)
+    require_duration_entitlement(
+        user_id,
+        60,
+        document_mode=True,
+        source_size_bytes=25 * 1024 * 1024,
+    )
+    with pytest.raises(BillingError, match="yükleme sınırı 25 MB"):
+        require_duration_entitlement(
+            user_id,
+            60,
+            document_mode=True,
+            source_size_bytes=25 * 1024 * 1024 + 1,
+        )
+
+
+def test_global_document_capacity_is_one_hundred_mebibytes():
+    assert config.MAX_DOCUMENT_BYTES == 100 * 1024 * 1024
 
 
 def test_annual_subscription_allowance_renews_each_calendar_month():
