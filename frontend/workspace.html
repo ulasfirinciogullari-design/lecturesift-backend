@@ -7,7 +7,7 @@
   <meta name="description" content="LectureSift çalışma alanında video, ses, PDF, Word ve PowerPoint kaynaklarından özet, transkript, quiz ve bilgi kartı oluştur.">
   <title>Çalışma Alanı | LectureSift</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=12">
+  <link rel="stylesheet" href="./styles.css?v=13">
 <link rel="stylesheet" href="/rollout.css?v=8"><link rel="stylesheet" href="/theme.css?v=11"><script src="/theme.js?v=2"></script></head>
 <body class="workspace-page" data-page="workspace">
   <div class="ambient ambient-one"></div>
@@ -142,20 +142,51 @@
             <option value="download_video" data-i18n="downloadVideoOption">URL'den video indir</option>
           </select></label>
           <div id="formatChoices" class="format-choices" role="group" aria-labelledby="formatChoicesLabel">
-            <span id="formatChoicesLabel" class="format-legend" data-i18n="outputFormats">Çıktı biçimleri</span>
+            <span id="formatChoicesLabel" class="format-legend" data-i18n="outputFormats">İndirilecek dosyalar (isteğe bağlı)</span>
             <label><input id="formatPdf" type="checkbox" value="pdf" checked><span>PDF</span></label>
             <label><input id="formatDocx" type="checkbox" value="docx"><span>Word</span></label>
             <label><input id="formatTxt" type="checkbox" value="txt"><span>TXT</span></label>
+            <small class="format-help" data-i18n="formatOptional">Hiçbirini seçmezsen sonuç yalnızca hesabında ve sitede gösterilir.</small>
           </div>
         </div>
 
-        <div id="studySettings" class="settings-grid">
-          <label class="control"><span data-i18n="sourceLanguage">Kaynak dili</span><select id="sourceLanguage"></select></label>
-          <label class="control"><span data-i18n="outputLanguage">Çıktı dili</span><select id="outputLanguage"></select></label>
-          <label class="control"><span data-i18n="summaryStyle">Özet profili</span><select id="summaryStyle"></select></label>
-          <label class="control"><span data-i18n="quizCount">Quiz sorusu</span><select id="quizCount"><option>5</option><option selected>10</option><option>20</option><option>30</option></select></label>
-          <label class="control"><span data-i18n="cardCount">Bilgi kartı</span><select id="cardCount"><option>10</option><option selected>20</option><option>40</option><option>60</option></select></label>
-          <label id="translateControl" class="toggle-control"><span><b data-i18n="translateTitle">Transkripti çevir</b><small id="translateHelp" data-i18n="translateHelp">Orijinali de korunur</small></span><input id="translateTranscript" type="checkbox" checked><i aria-hidden="true"></i></label>
+        <div id="studySettings">
+          <div class="settings-grid core-settings">
+            <label class="control"><span data-i18n="sourceLanguage">Kaynak dili</span><select id="sourceLanguage"></select></label>
+            <label class="control"><span data-i18n="outputLanguage">Çıktı dili</span><select id="outputLanguage"></select></label>
+            <label class="control"><span data-i18n="summaryStyle">Özet profili</span><select id="summaryStyle"></select></label>
+          </div>
+
+          <div class="choice-heading">
+            <div><strong data-i18n="contentSelection">Paket içeriğini seç</strong><small data-i18n="contentSelectionHelp">Yalnızca açtığın bölümler hazırlanır; quiz ve bilgi kartı zorunlu değildir.</small></div>
+            <div class="pack-presets" role="group" aria-label="Hazır paket seçimleri" data-i18n-aria-label="presetLabel">
+              <button type="button" data-pack-preset="fast" data-i18n="presetFast">Hızlı</button>
+              <button type="button" data-pack-preset="balanced" class="active" data-i18n="presetBalanced">Dengeli</button>
+              <button type="button" data-pack-preset="exam" data-i18n="presetExam">Sınav</button>
+              <button type="button" data-pack-preset="transcript" data-i18n="presetTranscript">Sadece transkript</button>
+            </div>
+          </div>
+
+          <div class="content-choice-grid">
+            <div class="content-choice">
+              <label><input id="includeSummary" type="checkbox" checked><i aria-hidden="true"></i><span><b data-i18n="includeSummary">Özet ve akıllı notlar</b><small data-i18n="includeSummaryHelp">Ana fikirler, terimler ve sınav odağı</small></span></label>
+            </div>
+            <div class="content-choice">
+              <label><input id="includeTranscript" type="checkbox" checked><i aria-hidden="true"></i><span><b data-i18n="includeTranscript">Transkript</b><small data-i18n="includeTranscriptHelp">Kaynak metin ve isteğe bağlı çeviri</small></span></label>
+            </div>
+            <div class="content-choice">
+              <label><input id="includeSlides" type="checkbox" checked><i aria-hidden="true"></i><span><b data-i18n="includeSlides">Slayt görselleri</b><small data-i18n="includeSlidesHelp">Video içindeki gerçek sunum kareleri</small></span></label>
+            </div>
+            <div class="content-choice with-count">
+              <label><input id="includeQuiz" type="checkbox" checked><i aria-hidden="true"></i><span><b data-i18n="quizCount">Quiz sorusu</b><small data-i18n="optionalOutput">İsteğe bağlı</small></span></label>
+              <select id="quizCount" aria-label="Quiz sorusu" data-i18n-aria-label="quizCount"><option>5</option><option selected>10</option><option>20</option><option>30</option></select>
+            </div>
+            <div class="content-choice with-count">
+              <label><input id="includeCards" type="checkbox" checked><i aria-hidden="true"></i><span><b data-i18n="cardCount">Bilgi kartı</b><small data-i18n="optionalOutput">İsteğe bağlı</small></span></label>
+              <select id="cardCount" aria-label="Bilgi kartı" data-i18n-aria-label="cardCount"><option>10</option><option selected>20</option><option>40</option><option>60</option></select>
+            </div>
+            <label id="translateControl" class="toggle-control"><span><b data-i18n="translateTitle">Transkripti çevir</b><small id="translateHelp" data-i18n="translateHelp">Orijinali de korunur</small></span><input id="translateTranscript" type="checkbox" checked><i aria-hidden="true"></i></label>
+          </div>
         </div>
 
         <button id="analyzeButton" class="primary-button" type="button">
@@ -267,7 +298,7 @@
 
   <script src="./locale-data.js?v=3"></script>
   <script src="./page-i18n.js?v=6"></script><script src="/i18n.js?v=23"></script><script src="/site-shell.js?v=4"></script>
-  <script src="./app.js?v=22"></script>
+  <script src="./app.js?v=23"></script>
   <script src="/rollout.js?v=5"></script>
 </body>
 </html>

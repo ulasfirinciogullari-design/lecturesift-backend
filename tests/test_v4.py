@@ -17,6 +17,7 @@ from lecturesift.jobs import JOBS
 from lecturesift.billing_service import register_user, verify_email
 from lecturesift.media import convert_videos_to_mp3, extract_audio_chunks, validate_remote_url
 from lecturesift.pipeline import process_job
+from lecturesift import pipeline
 from lecturesift.slides import presentation_score, read_frame_at, scan_candidate_timestamps
 
 
@@ -193,6 +194,70 @@ def test_same_explicit_language_disables_duplicate_translation():
     options = _options("tr", "tr", "standard", 10, 20, True, output_formats="pdf,docx,txt")
     assert options["translate_transcript"] is False
     assert options["output_formats"] == ["pdf", "docx", "txt"]
+
+
+def test_study_options_allow_optional_outputs_and_no_download_files():
+    options = _options(
+        "tr",
+        "en",
+        "standard",
+        0,
+        0,
+        True,
+        output_formats="",
+        include_summary=False,
+        include_transcript=True,
+        include_slides=False,
+    )
+    assert options["quiz_count"] == 0
+    assert options["flashcard_count"] == 0
+    assert options["include_summary"] is False
+    assert options["include_transcript"] is True
+    assert options["include_slides"] is False
+    assert options["output_formats"] == []
+
+
+def test_transcript_only_selection_skips_study_generation(monkeypatch):
+    monkeypatch.setattr(
+        pipeline,
+        "make_study_pack",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("AI study generation should be skipped")),
+    )
+    result = pipeline._make_selected_study_pack(
+        "Source transcript",
+        {
+            "output_language": "tr",
+            "summary_style": "standard",
+            "quiz_count": 0,
+            "flashcard_count": 0,
+            "include_summary": False,
+        },
+    )
+    assert result["summary"] == ""
+    assert result["quiz"] == []
+    assert result["flashcards"] == []
+
+
+def test_no_export_format_creates_no_artifact_files(tmp_path: Path):
+    result = {
+        "title": "Web sonucu",
+        "summary": "Yalnızca sitede gösterilecek özet.",
+        "transcript_original": "Yalnızca sitede gösterilecek transkript.",
+        "quiz": [],
+        "flashcards": [],
+        "slides": [],
+        "options": {
+            "output_formats": [],
+            "include_summary": True,
+            "include_transcript": True,
+            "include_slides": False,
+        },
+    }
+    artifacts, zip_path = build_artifacts(tmp_path, result, tmp_path / "slides")
+    assert artifacts == []
+    assert zip_path.exists()
+    with zipfile.ZipFile(zip_path) as archive:
+        assert archive.namelist() == []
 
 
 def test_no_audio_scene_video_completes_without_false_slides(tmp_path: Path):

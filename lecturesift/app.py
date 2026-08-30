@@ -396,20 +396,24 @@ def _options(
     slides_offset_seconds: float = 0,
     output_formats: str = "pdf",
     job_type: str = "study_pack",
+    include_summary: bool = True,
+    include_transcript: bool = True,
+    include_slides: bool = True,
 ) -> dict:
     source = source_language or "auto"
     output = output_language or "tr"
     translation_enabled = bool(translate_transcript) and not (source != "auto" and source == output)
     formats = [value for value in dict.fromkeys(output_formats.lower().replace(" ", "").split(",")) if value in {"pdf", "docx", "txt"}]
-    if not formats:
-        formats = ["pdf"]
     selected_job_type = job_type if job_type in {"study_pack", "audio_export", "download_video"} else "study_pack"
     return {
         "source_language": source,
         "output_language": output,
         "summary_style": summary_style or "standard",
-        "quiz_count": max(3, min(int(quiz_count), 30)),
-        "flashcard_count": max(5, min(int(flashcard_count), 60)),
+        "quiz_count": max(0, min(int(quiz_count), 30)),
+        "flashcard_count": max(0, min(int(flashcard_count), 60)),
+        "include_summary": bool(include_summary),
+        "include_transcript": bool(include_transcript),
+        "include_slides": bool(include_slides),
         "translate_transcript": translation_enabled,
         "slides_offset_seconds": max(-3600.0, min(float(slides_offset_seconds or 0), 3600.0)),
         "output_formats": formats,
@@ -1232,6 +1236,9 @@ async def create_job(
     slides_offset_seconds: float = Form(0),
     output_formats: str = Form("pdf"),
     job_type: str = Form("study_pack"),
+    include_summary: bool = Form(True),
+    include_transcript: bool = Form(True),
+    include_slides: bool = Form(True),
     billing_user: dict = Depends(_billing_user),
 ) -> dict:
     options = _options(
@@ -1244,7 +1251,25 @@ async def create_job(
         slides_offset_seconds,
         output_formats,
         job_type,
+        include_summary,
+        include_transcript,
+        include_slides,
     )
+    if options["job_type"] == "study_pack" and not any(
+        (
+            options["include_summary"],
+            options["include_transcript"],
+            options["quiz_count"] > 0,
+            options["flashcard_count"] > 0,
+        )
+    ):
+        raise HTTPException(
+            400,
+            detail={
+                "code": "LS-OUTPUT-01",
+                "message": "En az bir çalışma çıktısı seç: özet ve notlar, transkript, quiz veya bilgi kartı.",
+            },
+        )
     try:
         entitlement = validate_job_features(
             billing_user["id"],
@@ -1373,6 +1398,9 @@ def create_url_job(
     slides_offset_seconds: float = Form(0),
     output_formats: str = Form("pdf"),
     job_type: str = Form("study_pack"),
+    include_summary: bool = Form(True),
+    include_transcript: bool = Form(True),
+    include_slides: bool = Form(True),
     billing_user: dict = Depends(_billing_user),
 ) -> dict:
     options = _options(
@@ -1385,7 +1413,25 @@ def create_url_job(
         slides_offset_seconds,
         output_formats,
         job_type,
+        include_summary,
+        include_transcript,
+        include_slides,
     )
+    if options["job_type"] == "study_pack" and not any(
+        (
+            options["include_summary"],
+            options["include_transcript"],
+            options["quiz_count"] > 0,
+            options["flashcard_count"] > 0,
+        )
+    ):
+        raise HTTPException(
+            400,
+            detail={
+                "code": "LS-OUTPUT-01",
+                "message": "En az bir çalışma çıktısı seç: özet ve notlar, transkript, quiz veya bilgi kartı.",
+            },
+        )
     try:
         entitlement = validate_job_features(
             billing_user["id"],

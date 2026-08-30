@@ -168,6 +168,28 @@ def test_processing_center_uses_operation_specific_progress_profiles():
     assert "uploadingSource" in script
 
 
+def test_workspace_outputs_are_individually_optional_and_mobile_ready():
+    page = (FRONTEND / "workspace.html").read_text(encoding="utf-8")
+    script = (FRONTEND / "app.js").read_text(encoding="utf-8")
+    style = (FRONTEND / "styles.css").read_text(encoding="utf-8")
+    theme = (FRONTEND / "theme.css").read_text(encoding="utf-8")
+
+    for control_id in ("includeSummary", "includeTranscript", "includeSlides", "includeQuiz", "includeCards"):
+        assert f'id="{control_id}"' in page
+    for preset in ("fast", "balanced", "exam", "transcript"):
+        assert f'data-pack-preset="{preset}"' in page
+    assert 'data.append("quiz_count", $("includeQuiz").checked ? $("quizCount").value : "0")' in script
+    assert 'data.append("flashcard_count", $("includeCards").checked ? $("cardCount").value : "0")' in script
+    assert 'data.append("include_summary"' in script
+    assert 'data.append("include_transcript"' in script
+    assert 'data.append("include_slides"' in script
+    assert "formats.push(\"pdf\")" not in script
+    assert script.count('[data-i18n-aria-label]') == 1
+    assert ".content-choice-grid" in style
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in style
+    assert ".content-choice" in theme
+
+
 def test_every_page_supports_persistent_light_and_dark_themes():
     for page in FRONTEND.glob("*.html"):
         content = page.read_text(encoding="utf-8")
@@ -855,7 +877,7 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=22"' in index
+    assert 'src="./app.js?v=23"' in index
     assert 'src="/rollout.js?v=5"' in index
     assert '$("plans").scrollIntoView' not in app
 

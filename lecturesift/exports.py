@@ -222,19 +222,28 @@ def _timestamped_transcript(result: dict) -> str:
 def build_artifacts(job_dir: Path, result: dict, slides_dir: Path) -> tuple[list[dict], Path]:
     package_dir = job_dir / "package"
     package_dir.mkdir(parents=True, exist_ok=True)
-    formats = set(result.get("options", {}).get("output_formats") or ["pdf"])
+    options = result.get("options", {})
+    configured_formats = options.get("output_formats")
+    formats = set(["pdf"] if configured_formats is None else configured_formats)
     title = result.get("title") or "LectureSift Ders Paketi"
     original = _timestamped_transcript(result)
     translated = result.get("transcript_translated", "")
-    documents = [
-        ("Ozet", "Özet", f"{title} - Özet", [("Özet", [result.get("summary", "")])], result.get("summary", "")),
-        ("Ders_Notlari", "Ders Notları", f"{title} - Ders Notları", [("Ders Notları", [_notes_text(result)])], _notes_text(result)),
-        ("Transkript_Orijinal", "Orijinal Transkript", f"{title} - Orijinal Transkript", [("Transkript", [original])], original),
-        ("Quiz", "Quiz", f"{title} - Quiz", [("Sorular ve Yanıtlar", [_quiz_text(result.get("quiz", []))])], _quiz_text(result.get("quiz", []))),
-        ("Flashcards", "Bilgi Kartları", f"{title} - Bilgi Kartları", [("Bilgi Kartları", [_flashcards_text(result.get("flashcards", []))])], _flashcards_text(result.get("flashcards", []))),
-    ]
-    if translated:
-        documents.insert(3, ("Transkript_Ceviri", "Çevrilmiş Transkript", f"{title} - Çevrilmiş Transkript", [("Transkript", [translated])], translated))
+    documents = []
+    if options.get("include_summary", True):
+        documents.extend(
+            [
+                ("Ozet", "Özet", f"{title} - Özet", [("Özet", [result.get("summary", "")])], result.get("summary", "")),
+                ("Ders_Notlari", "Ders Notları", f"{title} - Ders Notları", [("Ders Notları", [_notes_text(result)])], _notes_text(result)),
+            ]
+        )
+    if options.get("include_transcript", True):
+        documents.append(("Transkript_Orijinal", "Orijinal Transkript", f"{title} - Orijinal Transkript", [("Transkript", [original])], original))
+        if translated:
+            documents.append(("Transkript_Ceviri", "Çevrilmiş Transkript", f"{title} - Çevrilmiş Transkript", [("Transkript", [translated])], translated))
+    if result.get("quiz"):
+        documents.append(("Quiz", "Quiz", f"{title} - Quiz", [("Sorular ve Yanıtlar", [_quiz_text(result["quiz"])])], _quiz_text(result["quiz"])))
+    if result.get("flashcards"):
+        documents.append(("Flashcards", "Bilgi Kartları", f"{title} - Bilgi Kartları", [("Bilgi Kartları", [_flashcards_text(result["flashcards"])])], _flashcards_text(result["flashcards"])))
 
     artifacts: list[dict] = []
     for stem, label, document_title, sections, plain_text in documents:
@@ -251,7 +260,7 @@ def build_artifacts(job_dir: Path, result: dict, slides_dir: Path) -> tuple[list
             path.write_text(plain_text, encoding="utf-8")
             artifacts.append(_artifact(path, f"{label} (TXT)"))
 
-    slides = result.get("slides", [])
+    slides = result.get("slides", []) if options.get("include_slides", True) else []
     if slides:
         if "pdf" in formats:
             path = package_dir / "Slaytlar.pdf"

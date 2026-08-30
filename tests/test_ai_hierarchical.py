@@ -105,6 +105,25 @@ def test_zero_requested_flashcards_stays_empty():
     assert ai._normalize_flashcards([{"front": "Term", "back": "Definition"}], "en", 0) == []
 
 
+def test_long_study_pack_does_not_generate_unrequested_exercises(monkeypatch):
+    calls = []
+
+    def fake(source, output_language, summary_style, quiz_count, flashcard_count, **kwargs):
+        calls.append((quiz_count, flashcard_count, kwargs.get("source_label", "TRANSCRIPT")))
+        return _pack(kwargs.get("source_label", "TRANSCRIPT"))
+
+    monkeypatch.setattr(ai, "_request_study_pack", fake)
+    transcript = ("Optional exercise source material. " * 5_000) + " END_MARKER"
+    assert len(transcript) > ai.LONG_TRANSCRIPT_THRESHOLD
+
+    result = ai.make_study_pack(transcript, "en", "standard", 0, 0)
+
+    assert calls
+    assert all(quiz == 0 and cards == 0 for quiz, cards, _label in calls)
+    assert result["quiz"] == []
+    assert result["flashcards"] == []
+
+
 def test_incomplete_detailed_summary_is_retried_once(monkeypatch):
     responses = [
         _pack("too-short"),
