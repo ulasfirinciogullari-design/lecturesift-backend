@@ -119,18 +119,18 @@ const PLAN_COPY = {
     free: ["Ücretsiz", "LectureSift'i denemek ve kısa dersleri işlemek için.", "60 dk / ay"],
     credit: ["Dakika Paketi", "Abonelik olmadan ek işlem hakkı.", "180 dakika"],
     lite: ["Lite", "Düzenli bireysel ders çalışması için.", "600 dk / ay"],
-    plus: ["Plus", "Yoğun ders dönemi ve çoklu kaynaklar için.", "2.400 dk / ay"],
-    pro: ["Pro", "Uzun kayıtlar ve öncelikli işleme için.", "6.000 dk / ay"],
-    max: ["Max", "En yüksek bireysel kullanım kapasitesi.", "15.000 dk / ay"],
+    plus: ["Plus", "Yoğun ders dönemi ve çoklu kaynaklar için.", "1.800 dk / ay"],
+    pro: ["Pro", "Uzun kayıtlar ve öncelikli işleme için.", "5.000 dk / ay"],
+    max: ["Max", "En yüksek bireysel kullanım kapasitesi.", "12.000 dk / ay"],
     business: ["Business", "Ekipler, kurumlar ve özel kapasite için.", "10 kullanıcı"]
   },
   en: {
     free: ["Free", "Try LectureSift and process short lectures.", "60 min / month"],
     credit: ["Minute Pack", "Extra processing without a subscription.", "180 minutes"],
     lite: ["Lite", "For regular individual study.", "600 min / month"],
-    plus: ["Plus", "For intensive study and multiple sources.", "2,400 min / month"],
-    pro: ["Pro", "For long recordings and priority processing.", "6,000 min / month"],
-    max: ["Max", "The highest individual processing capacity.", "15,000 min / month"],
+    plus: ["Plus", "For intensive study and multiple sources.", "1,800 min / month"],
+    pro: ["Pro", "For long recordings and priority processing.", "5,000 min / month"],
+    max: ["Max", "The highest individual processing capacity.", "12,000 min / month"],
     business: ["Business", "For teams, institutions, and custom capacity.", "10 seats"]
   }
 };
@@ -271,23 +271,32 @@ const PLAN_FALLBACK = {
   free: ["free", 60, 10, 20, ["pdf"], ["short", "standard"], "standard", false],
   credit: ["one_time", 180, 20, 40, ["pdf", "docx", "txt"], ["short", "standard", "detailed", "exam", "five_minute"], "standard", false],
   lite: ["subscription", 600, 20, 40, ["pdf", "docx", "txt"], ["short", "standard", "detailed", "exam", "five_minute"], "standard", false],
-  plus: ["subscription", 2400, 30, 60, ["pdf", "docx", "txt"], ["short", "standard", "detailed", "exam", "five_minute"], "standard", true],
-  pro: ["subscription", 6000, 30, 60, ["pdf", "docx", "txt"], ["short", "standard", "detailed", "exam", "five_minute"], "priority", false],
-  max: ["subscription", 15000, 30, 60, ["pdf", "docx", "txt"], ["short", "standard", "detailed", "exam", "five_minute"], "priority", false],
+  plus: ["subscription", 1800, 30, 60, ["pdf", "docx", "txt"], ["short", "standard", "detailed", "exam", "five_minute"], "standard", true],
+  pro: ["subscription", 5000, 30, 60, ["pdf", "docx", "txt"], ["short", "standard", "detailed", "exam", "five_minute"], "priority", false],
+  max: ["subscription", 12000, 30, 60, ["pdf", "docx", "txt"], ["short", "standard", "detailed", "exam", "five_minute"], "priority", false],
   business: ["quote", null, null, null, ["pdf", "docx", "txt"], ["short", "standard", "detailed", "exam", "five_minute"], "priority", false],
 };
 const FALLBACK_PRICES = {
-  TRY: [0,19900,34900,69900,129900,249900,null], USD: [0,500,900,1800,3300,6300,null],
-  EUR: [0,500,900,1700,3100,5900,null], GBP: [0,400,800,1500,2700,5200,null],
-  CAD: [0,700,1200,2500,4500,8500,null], AUD: [0,800,1400,2800,5200,9900,null],
-  NZD: [0,900,1600,3100,5700,10900,null], JPY: [0,800,1400,2800,5000,9500,null],
-  KRW: [0,7000,13000,25000,47000,89000,null], CNY: [0,3600,6500,12900,23900,45900,null],
-  INR: [0,39900,74900,149900,279900,529900,null], BRL: [0,2500,4500,8900,16900,31900,null],
-  MXN: [0,9900,17900,34900,64900,124900,null], CHF: [0,500,800,1600,3000,5700,null],
-  SEK: [0,5500,9900,19900,36900,69900,null], NOK: [0,5900,10900,21900,39900,76900,null],
-  DKK: [0,3500,6500,12900,22900,44900,null], PLN: [0,2000,3600,7200,13200,25200,null],
-  AED: [0,1900,3300,6600,12100,23100,null], SAR: [0,1900,3400,6800,12400,23600,null],
-  SGD: [0,700,1200,2400,4500,8500,null], HKD: [0,3900,7000,14000,26000,49000,null],
+  TRY: [0,19900,27900,44900,99900,199900,null], USD: [0,499,699,999,2499,4999,null],
+  EUR: [0,499,649,949,2399,4799,null], GBP: [0,399,599,849,2099,4199,null],
+  CAD: [0,699,949,1349,3399,6799,null], AUD: [0,799,1099,1549,3799,7599,null],
+  NZD: [0,899,1199,1699,4199,8399,null], JPY: [0,750,1050,1500,3750,7500,null],
+  KRW: [0,6900,9500,13900,34900,69900,null], CNY: [0,3500,4900,6900,17500,34900,null],
+  INR: [0,39900,54900,79900,199900,399900,null], BRL: [0,2499,3499,4999,12499,24999,null],
+  MXN: [0,9900,13900,19900,49900,99900,null], CHF: [0,449,599,849,2199,4399,null],
+  SEK: [0,5299,7299,10499,25999,51999,null], NOK: [0,5499,7699,10999,27499,54999,null],
+  DKK: [0,3499,4499,6699,16999,33999,null], PLN: [0,1999,2699,3999,9999,19999,null],
+  AED: [0,1899,2599,3699,9199,18399,null], SAR: [0,1899,2599,3799,9399,18799,null],
+  SGD: [0,699,949,1349,3399,6799,null], HKD: [0,3899,5499,7799,19499,38999,null],
+};
+const PLAN_SOURCE_LIMITS = {
+  free: {max_files_per_job:3, max_media_upload_mb:100, max_document_upload_mb:25, max_minutes_per_job:30, max_document_pages:50, max_ocr_pages:20},
+  credit: {max_files_per_job:8, max_media_upload_mb:500, max_document_upload_mb:50, max_minutes_per_job:180, max_document_pages:150, max_ocr_pages:50},
+  lite: {max_files_per_job:12, max_media_upload_mb:750, max_document_upload_mb:50, max_minutes_per_job:180, max_document_pages:250, max_ocr_pages:75},
+  plus: {max_files_per_job:16, max_media_upload_mb:1024, max_document_upload_mb:50, max_minutes_per_job:300, max_document_pages:350, max_ocr_pages:100},
+  pro: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:50, max_minutes_per_job:600, max_document_pages:500, max_ocr_pages:150},
+  max: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:50, max_minutes_per_job:900, max_document_pages:500, max_ocr_pages:150},
+  business: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:50, max_minutes_per_job:1440, max_document_pages:500, max_ocr_pages:150},
 };
 
 function fallbackCatalog(currency) {
@@ -295,7 +304,7 @@ function fallbackCatalog(currency) {
   return {selected_currency:selected, supported_currencies:Object.keys(FALLBACK_PRICES), plans:PLAN_ORDER.map((code, index) => {
     const [kind, minutes, quiz, cards, formats, summaries, priority, featured] = PLAN_FALLBACK[code];
     const amount = FALLBACK_PRICES[selected][index];
-    return {code, kind, minutes, priority, featured, display_price:amount == null ? null : {currency:selected, amount_minor:amount}, entitlements:{minutes, quiz_questions:quiz, flashcards:cards, export_formats:formats, summary_profiles:summaries, priority, download_enabled:code !== "free"}};
+    return {code, kind, minutes, priority, featured, display_price:amount == null ? null : {currency:selected, amount_minor:amount}, entitlements:{minutes, quiz_questions:quiz, flashcards:cards, export_formats:formats, summary_profiles:summaries, priority, limits:PLAN_SOURCE_LIMITS[code], download_enabled:code !== "free"}};
   })};
 }
 
@@ -304,7 +313,7 @@ function planCopy(code) {
   if (currentLanguage === "tr") return fallback;
   if (currentLanguage === "en") return PLAN_COPY.en[code] || fallback;
   const central = window.LectureSiftI18n;
-  const amount = {free:60, credit:180, lite:600, plus:2400, pro:6000, max:15000, business:10}[code];
+  const amount = {free:60, credit:180, lite:600, plus:1800, pro:5000, max:12000, business:10}[code];
   const units = code === "business"
     ? central?.t("plans.userUnit", "kullanıcı")
     : code === "credit"
@@ -522,7 +531,16 @@ function filesFor(role) {
   return visualVideos;
 }
 const DOCUMENT_EXTENSIONS = new Set(["pdf", "docx", "pptx", "txt", "md", "png", "jpg", "jpeg", "webp", "tif", "tiff"]);
-const MEDIA_EXTENSIONS = new Set(["mp4", "mov", "mkv", "webm", "mpeg", "mpg", "m4v"]);
+const VIDEO_EXTENSIONS = new Set(["mp4", "mov", "mkv", "webm", "mpeg", "mpg", "m4v"]);
+const AUDIO_EXTENSIONS = new Set(["mp3", "wav", "m4a", "aac", "flac", "ogg", "oga", "opus", "wma", "aiff", "aif", "mka"]);
+const MEDIA_EXTENSIONS = new Set([...VIDEO_EXTENSIONS, ...AUDIO_EXTENSIONS]);
+const DEFAULT_SOURCE_LIMITS = {max_files_per_job:3, max_media_upload_mb:100, max_document_upload_mb:25};
+function activeSourceLimits() {
+  return billingAccount?.job_entitlements?.limits || billingAccount?.plan?.entitlements?.limits || DEFAULT_SOURCE_LIMITS;
+}
+function selectedSourceFiles(role) {
+  return role === "classic" ? classicVideos : [...audioVideos, ...visualVideos];
+}
 const PROGRESS_PROFILES = {
   media: [
     ["source", "stageSource"], ["audio", "stageAudio"], ["transcription", "stageTranscript"],
@@ -554,10 +572,26 @@ function addFiles(role, incoming) {
   const current = filesFor(role), known = new Set(current.map(file => `${file.name}:${file.size}:${file.lastModified}`));
   for (const file of incoming) {
     const extension = fileExtension(file);
-    const allowed = role === "classic" ? (DOCUMENT_EXTENSIONS.has(extension) || MEDIA_EXTENSIONS.has(extension)) : MEDIA_EXTENSIONS.has(extension);
+    const allowed = role === "classic"
+      ? (DOCUMENT_EXTENSIONS.has(extension) || MEDIA_EXTENSIONS.has(extension))
+      : role === "visual" ? VIDEO_EXTENSIONS.has(extension) : MEDIA_EXTENSIONS.has(extension);
     if (!allowed) { showError("Bu dosya biçimi desteklenmiyor.", "LS-UPLOAD-01"); continue; }
     if (role === "classic" && current.length && current.some(isDocumentFile) !== isDocumentFile(file)) {
       showError("Video ve belgeyi aynı işte karıştırma; ayrı ayrı yükle.", "LS-UPLOAD-05");
+      continue;
+    }
+    const limits = activeSourceLimits();
+    const selected = selectedSourceFiles(role);
+    if (selected.length >= Number(limits.max_files_per_job || DEFAULT_SOURCE_LIMITS.max_files_per_job)) {
+      showError(window.LectureSiftI18n?.t("upload.planFileLimit", "Planının tek işte kaynak sayısı sınırına ulaştın."), "LS-UPLOAD-04");
+      continue;
+    }
+    const uploadLimitMb = isDocumentFile(file)
+      ? Number(limits.max_document_upload_mb || DEFAULT_SOURCE_LIMITS.max_document_upload_mb)
+      : Number(limits.max_media_upload_mb || DEFAULT_SOURCE_LIMITS.max_media_upload_mb);
+    const projectedBytes = selected.reduce((sum, item) => sum + Number(item.size || 0), 0) + Number(file.size || 0);
+    if (projectedBytes > uploadLimitMb * 1024 * 1024) {
+      showError(window.LectureSiftI18n?.t("upload.planSizeLimit", "Bu seçim planının tek iş yükleme sınırını aşıyor."), "LS-UPLOAD-02");
       continue;
     }
     const key = `${file.name}:${file.size}:${file.lastModified}`;

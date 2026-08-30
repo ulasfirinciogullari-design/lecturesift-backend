@@ -192,6 +192,12 @@ PLAN_BY_CODE.setdefault(
         20,
         ("short", "standard"),
         1,
+        max_files_per_job=1,
+        max_media_upload_mb=25,
+        max_document_upload_mb=10,
+        max_minutes_per_job=max(1, int(round(config.GUEST_TRIAL_MAX_MINUTES))),
+        max_document_pages=10,
+        max_ocr_pages=5,
     ),
 )
 

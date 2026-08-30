@@ -87,7 +87,7 @@ def test_iyzico_checkout_and_callback_verify_signatures_amount_and_order(monkeyp
                 "signature": _response_signature([reference, token]),
             })
         reference = payload["conversationId"]
-        values = ["SUCCESS", "payment-123", "TRY", reference, reference, "699", "699", token]
+        values = ["SUCCESS", "payment-123", "TRY", reference, reference, "449", "449", token]
         return FakeResponse({
             "status": "success",
             "paymentStatus": "SUCCESS",
@@ -95,8 +95,8 @@ def test_iyzico_checkout_and_callback_verify_signatures_amount_and_order(monkeyp
             "currency": "TRY",
             "basketId": reference,
             "conversationId": reference,
-            "paidPrice": "699.00",
-            "price": "699.0",
+            "paidPrice": "449.00",
+            "price": "449.0",
             "token": token,
             "signature": _response_signature(values),
         })
@@ -134,7 +134,7 @@ def test_iyzico_checkout_and_callback_verify_signatures_amount_and_order(monkeyp
     assert initialize["payload"]["buyer"]["identityNumber"] == "11111111111"
     assert initialize["payload"]["basketItems"][0]["itemType"] == "VIRTUAL"
     assert "shippingAddress" not in initialize["payload"]
-    assert initialize["payload"]["price"] == "699.00"
+    assert initialize["payload"]["price"] == "449.00"
     assert initialize["payload"]["callbackUrl"].endswith(f"?order={reference}")
     assert "live-secret-key" not in initialize["raw"]
     assert "live-api-key" not in initialize["raw"]
@@ -314,7 +314,7 @@ def test_iyzico_bank_transfer_waits_for_signed_webhook_before_activation(monkeyp
                 "signature": _response_signature([reference, token]),
             })
         payment_status = "SUCCESS" if state["matched"] else "INIT_BANK_TRANSFER"
-        values = [payment_status, "bank-payment-123", "TRY", reference, reference, "699", "699", token]
+        values = [payment_status, "bank-payment-123", "TRY", reference, reference, "449", "449", token]
         return FakeResponse({
             "status": "success",
             "paymentStatus": payment_status,
@@ -322,8 +322,8 @@ def test_iyzico_bank_transfer_waits_for_signed_webhook_before_activation(monkeyp
             "currency": "TRY",
             "basketId": reference,
             "conversationId": reference,
-            "paidPrice": "699.00",
-            "price": "699.00",
+            "paidPrice": "449.00",
+            "price": "449.00",
             "token": token,
             "signature": _response_signature(values),
         })

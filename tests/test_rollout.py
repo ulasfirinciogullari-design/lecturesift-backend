@@ -238,7 +238,7 @@ def test_manual_order_admin_rejection_and_instagram_approval(monkeypatch):
     )
     assert order.status_code == 200
     reference = order.json()["order"]["reference"]
-    assert order.json()["order"]["amount_minor"] == 699000
+    assert order.json()["order"]["amount_minor"] == 449000
 
     pending = client.get("/admin/manual-orders?status=pending", headers=auth("admin-secret"))
     assert pending.status_code == 200

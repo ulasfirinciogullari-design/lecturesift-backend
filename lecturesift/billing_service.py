@@ -7,6 +7,7 @@ never written to the database, logs, or repository.
 from __future__ import annotations
 
 import base64
+import calendar
 import hashlib
 import hmac
 import json
@@ -764,7 +765,7 @@ def account_status(user_id: str) -> dict:
         subscription = _active_subscription(connection, user_id, now)
         plan_code = subscription.plan_code if subscription else "free"
         plan = PLAN_BY_CODE[plan_code]
-        period_start = subscription.starts_at if subscription else month_start
+        period_start = _subscription_usage_period_start(subscription, now) if subscription else month_start
         used = connection.execute(
             select(func.coalesce(func.sum(USAGE_EVENTS.c.minutes), 0)).where(
                 USAGE_EVENTS.c.user_id == user_id,
@@ -806,6 +807,7 @@ def account_status(user_id: str) -> dict:
     remaining = None if base_remaining is None else base_remaining + credit_minutes
     paid_credit_access = credit_minutes > 0 and paid_credit_purchases > 0
     download_enabled = bool(plan.download_enabled or paid_credit_access)
+    effective_job_plan = PLAN_BY_CODE["credit"] if plan.code == "free" and paid_credit_access else plan
     return {
         "user": _public_user(user, profile, preference),
         "plan": plan.public(),
@@ -825,6 +827,7 @@ def account_status(user_id: str) -> dict:
         "remaining_minutes": remaining,
         "can_create_job": remaining is None or remaining > 0,
         "download_enabled": download_enabled,
+        "job_entitlements": effective_job_plan.public()["entitlements"],
         "download_access_source": (
             "plan" if plan.download_enabled else "credit" if paid_credit_access else None
         ),
@@ -979,6 +982,34 @@ def require_job_entitlement(user_id: str) -> dict:
     return status
 
 
+def _shift_month(value: datetime, months: int) -> datetime:
+    """Move a timestamp by whole calendar months without changing its timezone."""
+    absolute = value.year * 12 + value.month - 1 + months
+    year, month_index = divmod(absolute, 12)
+    month = month_index + 1
+    day = min(value.day, calendar.monthrange(year, month)[1])
+    return value.replace(year=year, month=month, day=day)
+
+
+def _subscription_usage_period_start(subscription, now: datetime) -> datetime:
+    """Return the current allowance period for monthly and annual subscriptions."""
+    starts_at = subscription.starts_at
+    if subscription.interval != "annual" or now <= starts_at:
+        return starts_at
+    elapsed_months = max(0, (now.year - starts_at.year) * 12 + now.month - starts_at.month)
+    candidate = _shift_month(starts_at, elapsed_months)
+    if candidate > now:
+        candidate = _shift_month(starts_at, elapsed_months - 1)
+    return max(starts_at, candidate)
+
+
+def _effective_job_plan(status: dict):
+    plan = PLAN_BY_CODE[status["plan"]["code"]]
+    if plan.code == "free" and status.get("download_access_source") == "credit":
+        return PLAN_BY_CODE["credit"]
+    return plan
+
+
 def require_download_entitlement(user_id: str) -> dict:
     status = account_status(user_id)
     if not status["download_enabled"]:
@@ -989,15 +1020,48 @@ def require_download_entitlement(user_id: str) -> dict:
     return status
 
 
-def require_duration_entitlement(user_id: str, duration_seconds: float) -> dict:
-    """Reject media that cannot fit in the user's currently available minutes."""
+def require_duration_entitlement(
+    user_id: str,
+    duration_seconds: float,
+    *,
+    source_file_count: int = 1,
+    source_size_bytes: int = 0,
+    document_mode: bool = False,
+    document_pages: int = 0,
+    ocr_pages: int = 0,
+) -> dict:
+    """Reject sources that exceed the account's remaining or per-job limits."""
     status = require_job_entitlement(user_id)
+    plan = _effective_job_plan(status)
     required_minutes = max(1, int(math.ceil(max(0.0, duration_seconds) / 60)))
     remaining = status["remaining_minutes"]
     if remaining is not None and required_minutes > int(remaining):
         raise BillingError(
             f"Bu kaynak yaklaşık {required_minutes} dakika; hesabında {int(remaining)} dakika kaldı. "
             "Daha kısa bir kaynak yükle veya dakika hakkını artır."
+        )
+    if required_minutes > plan.max_minutes_per_job:
+        raise BillingError(
+            f"Bu iş yaklaşık {required_minutes} dakika; {plan.code} planında tek iş sınırı "
+            f"{plan.max_minutes_per_job} dakikadır. Kaynağı böl veya planını yükselt."
+        )
+    if source_file_count > plan.max_files_per_job:
+        raise BillingError(
+            f"{plan.code} planında bir işe en fazla {plan.max_files_per_job} kaynak eklenebilir."
+        )
+    upload_limit_mb = plan.max_document_upload_mb if document_mode else plan.max_media_upload_mb
+    if source_size_bytes > upload_limit_mb * 1024 * 1024:
+        raise BillingError(
+            f"{plan.code} planında bu iş için toplam {'belge' if document_mode else 'medya'} "
+            f"yükleme sınırı {upload_limit_mb} MB'dir."
+        )
+    if document_mode and document_pages > plan.max_document_pages:
+        raise BillingError(
+            f"{plan.code} planında bir işte en fazla {plan.max_document_pages} belge sayfası işlenebilir."
+        )
+    if document_mode and ocr_pages > plan.max_ocr_pages:
+        raise BillingError(
+            f"{plan.code} planında bir işte en fazla {plan.max_ocr_pages} taranmış sayfaya OCR uygulanabilir."
         )
     return status
 
@@ -1014,7 +1078,7 @@ def validate_job_features(
     status = require_job_entitlement(user_id)
     if job_type in {"audio_export", "download_video"} and not status["download_enabled"]:
         raise BillingError("MP3 ve video indirme araçları dakika paketi veya ücretli plan gerektirir.")
-    plan = PLAN_BY_CODE[status["plan"]["code"]]
+    plan = _effective_job_plan(status)
     if plan.quiz_questions is not None and quiz_count > plan.quiz_questions:
         raise BillingError(f"Planın en fazla {plan.quiz_questions} quiz sorusuna izin veriyor.")
     if plan.flashcards is not None and flashcard_count > plan.flashcards:
@@ -1024,7 +1088,7 @@ def validate_job_features(
         raise BillingError("Seçtiğin çıktı biçimlerinden biri mevcut planına dahil değil.")
     if summary_style not in plan.summary_profiles:
         raise BillingError("Seçtiğin özet profili mevcut planına dahil değil.")
-    return status
+    return {**status, "job_plan": plan.public()}
 
 
 def record_usage(user_id: str, job_id: str, duration_seconds: float) -> None:
@@ -1042,7 +1106,7 @@ def record_usage(user_id: str, job_id: str, duration_seconds: float) -> None:
             plan_code = subscription.plan_code if subscription else "free"
             plan = PLAN_BY_CODE[plan_code]
             period_start = (
-                subscription.starts_at
+                _subscription_usage_period_start(subscription, now)
                 if subscription
                 else datetime(now.year, now.month, 1, tzinfo=timezone.utc)
             )

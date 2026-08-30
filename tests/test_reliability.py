@@ -53,14 +53,36 @@ def test_subscription_overflow_spends_extra_minutes(monkeypatch):
     with ENGINE.begin() as connection:
         connection.execute(update(USERS).where(USERS.c.id == user_id).values(credit_minutes=20))
 
-    record_usage(user_id, f"usage-{uuid.uuid4()}", 2395 * 60)
+    record_usage(user_id, f"usage-{uuid.uuid4()}", 1795 * 60)
     record_usage(user_id, f"usage-{uuid.uuid4()}", 10 * 60)
     status = account_status(user_id)
-    assert status["used_minutes"] == 2405
+    assert status["used_minutes"] == 1805
     assert status["credit_minutes"] == 15
     assert status["remaining_minutes"] == 15
     with pytest.raises(BillingError, match="hesabında 15 dakika"):
         require_duration_entitlement(user_id, 16 * 60)
+
+
+def test_paid_minute_package_uses_its_own_job_limits(monkeypatch):
+    user_id, _ = _account()
+    monkeypatch.setattr(config, "BILLING_BANK_IBAN", "TR000000000000000000000000")
+    monkeypatch.setattr(config, "BILLING_BANK_ACCOUNT_HOLDER", "Test Holder")
+    monkeypatch.setattr(config, "BILLING_SUPPORT_EMAIL", "support@example.com")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_NAME", "LectureSift Test")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_ADDRESS", "Test Address 1")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_COUNTRY", "TR")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_PHONE", "+905551112233")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_EMAIL", "support@example.com")
+    order = create_manual_order(user_id, "credit", "one_time")
+    approve_manual_order(order["reference"])
+
+    status = account_status(user_id)
+    assert status["plan"]["code"] == "free"
+    assert status["job_entitlements"]["limits"]["max_files_per_job"] == 8
+    assert status["job_entitlements"]["limits"]["max_minutes_per_job"] == 180
+    require_duration_entitlement(user_id, 120 * 60, source_file_count=8)
+    with pytest.raises(BillingError, match="en fazla 8 kaynak"):
+        require_duration_entitlement(user_id, 60, source_file_count=9)
 
 
 def test_rollout_health_checks_connections_and_worker(monkeypatch):

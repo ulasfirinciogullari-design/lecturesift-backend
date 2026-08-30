@@ -47,6 +47,7 @@ from .billing_service import (
 )
 from .config import (
     APP_VERSION,
+    AUDIO_EXTENSIONS,
     DOCUMENT_EXTENSIONS,
     FRONTEND_BASE_URL,
     INSTAGRAM_ACCESS_TOKEN,
@@ -55,6 +56,7 @@ from .config import (
     INSTAGRAM_APP_SECRET,
     INSTAGRAM_GRAPH_API_VERSION,
     MAX_DOCUMENT_BYTES,
+    MEDIA_EXTENSIONS,
     MAX_SOURCE_FILES,
     MAX_VIDEO_BYTES,
     OCR_COMMAND,
@@ -466,12 +468,12 @@ def _rate_limit(
 
 def _upload_extension(file: UploadFile, allowed_extensions: set[str] | None = None) -> str:
     extension = Path(file.filename or "video.mp4").suffix.lower()
-    allowed = allowed_extensions or VIDEO_EXTENSIONS
+    allowed = allowed_extensions or MEDIA_EXTENSIONS
     if extension not in allowed:
         _raise_public(
             LectureSiftError(
                 "LS-UPLOAD-01",
-                "Bu dosya biçimi desteklenmiyor. Video için MP4, MOV, MKV veya WebM; belge için PDF, Word, PowerPoint, TXT veya Markdown kullan.",
+                "Bu dosya biçimi desteklenmiyor. Yaygın video, ses, PDF, Word, PowerPoint, metin veya görsel biçimlerinden birini kullan.",
             )
         )
     return extension
@@ -506,11 +508,13 @@ def _validate_upload_list(
     files: list[UploadFile],
     label: str,
     allowed_extensions: set[str] | None = None,
+    max_files: int = MAX_SOURCE_FILES,
 ) -> list[str]:
     if not files:
         _raise_public(LectureSiftError("LS-UPLOAD-03", f"{label} için en az bir kaynak ekle."))
-    if len(files) > MAX_SOURCE_FILES:
-        _raise_public(LectureSiftError("LS-UPLOAD-04", f"{label} için en fazla {MAX_SOURCE_FILES} kaynak eklenebilir."))
+    safe_max_files = max(1, min(MAX_SOURCE_FILES, int(max_files)))
+    if len(files) > safe_max_files:
+        _raise_public(LectureSiftError("LS-UPLOAD-04", f"{label} için en fazla {safe_max_files} kaynak eklenebilir."))
     return [_upload_extension(file, allowed_extensions) for file in files]
 
 
@@ -554,6 +558,8 @@ def health() -> dict:
         "async_jobs": True,
         "dual_source_upload": True,
         "multi_source_upload": True,
+        "audio_sources": sorted(AUDIO_EXTENSIONS),
+        "video_sources": sorted(VIDEO_EXTENSIONS),
         "document_sources": sorted(DOCUMENT_EXTENSIONS),
         "ocr": {
             "enabled": OCR_ENABLED,
@@ -1250,19 +1256,24 @@ async def create_job(
         )
     except BillingError as exc:
         raise HTTPException(402, detail={"code": "LS-BILL-10", "message": str(exc)}) from exc
+    plan_limits = entitlement["job_plan"]["entitlements"]["limits"]
+    max_plan_files = int(plan_limits["max_files_per_job"])
     layout = "separate" if source_layout == "separate" or slides_file or visual_files else "classic"
     document_mode = False
     if layout == "separate":
         audio_uploads = list(audio_files or ([] if file is None else [file]))
         visual_uploads = list(visual_files or ([] if slides_file is None else [slides_file]))
-        audio_extensions = _validate_upload_list(audio_uploads, "Ses kaynağı", VIDEO_EXTENSIONS)
-        visual_extensions = _validate_upload_list(visual_uploads, "Görüntü/slayt kaynağı", VIDEO_EXTENSIONS)
+        if len(audio_uploads) + len(visual_uploads) > max_plan_files:
+            _raise_public(LectureSiftError("LS-UPLOAD-04", f"Planında bir işe en fazla {max_plan_files} kaynak eklenebilir."))
+        audio_extensions = _validate_upload_list(audio_uploads, "Ses kaynağı", MEDIA_EXTENSIONS, max_plan_files)
+        visual_extensions = _validate_upload_list(visual_uploads, "Görüntü/slayt kaynağı", VIDEO_EXTENSIONS, max_plan_files)
     else:
         classic_uploads = list(files or ([] if file is None else [file]))
         classic_extensions = _validate_upload_list(
             classic_uploads,
             "Ders kaynağı",
-            VIDEO_EXTENSIONS | DOCUMENT_EXTENSIONS,
+            MEDIA_EXTENSIONS | DOCUMENT_EXTENSIONS,
+            max_plan_files,
         )
         document_mode = all(extension in DOCUMENT_EXTENSIONS for extension in classic_extensions)
         if any(extension in DOCUMENT_EXTENSIONS for extension in classic_extensions) and not document_mode:
@@ -1278,13 +1289,15 @@ async def create_job(
     job_id = str(uuid.uuid4())
     job_dir = _job_path(job_id)
     total = 0
+    plan_media_bytes = min(MAX_VIDEO_BYTES, int(plan_limits["max_media_upload_mb"]) * 1024 * 1024)
+    plan_document_bytes = min(MAX_DOCUMENT_BYTES, int(plan_limits["max_document_upload_mb"]) * 1024 * 1024)
     try:
         if layout == "separate":
             audio_paths, total, audio_sizes = await _save_upload_list(
-                audio_uploads, audio_extensions, job_dir, "audio", total
+                audio_uploads, audio_extensions, job_dir, "audio", total, plan_media_bytes
             )
             visual_paths, total, visual_sizes = await _save_upload_list(
-                visual_uploads, visual_extensions, job_dir, "visual", total
+                visual_uploads, visual_extensions, job_dir, "visual", total, plan_media_bytes
             )
         else:
             audio_paths, total, audio_sizes = await _save_upload_list(
@@ -1293,7 +1306,7 @@ async def create_job(
                 job_dir,
                 "document" if document_mode else "part",
                 total,
-                MAX_DOCUMENT_BYTES if document_mode else MAX_VIDEO_BYTES,
+                plan_document_bytes if document_mode else plan_media_bytes,
             )
             visual_paths = []
             visual_sizes = []
