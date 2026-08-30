@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from botocore.exceptions import ClientError, EndpointConnectionError
 
 from lecturesift.billing_service import register_user, verify_email
 from lecturesift.storage import ObjectStorage
@@ -113,6 +114,47 @@ def test_object_storage_health_uses_bucket_scoped_object_permission():
 
     assert storage.health() == {"configured": True, "connected": True}
     assert storage._client.calls == [{"Bucket": "private-bucket", "MaxKeys": 1}]
+
+
+def test_object_storage_health_reports_safe_invalid_credentials_diagnostic():
+    class FakeClient:
+        def list_objects_v2(self, **kwargs):
+            raise ClientError(
+                {
+                    "Error": {"Code": "InvalidAccessKeyId", "Message": "secret detail"},
+                    "ResponseMetadata": {"HTTPStatusCode": 403},
+                },
+                "ListObjectsV2",
+            )
+
+    storage = ObjectStorage.__new__(ObjectStorage)
+    storage.bucket = "private-bucket"
+    storage.remote = True
+    storage._client = FakeClient()
+
+    assert storage.health() == {
+        "configured": True,
+        "connected": False,
+        "diagnostic": "credentials_invalid",
+    }
+
+
+def test_object_storage_health_reports_safe_endpoint_diagnostic():
+    class FakeClient:
+        def list_objects_v2(self, **kwargs):
+            raise EndpointConnectionError(endpoint_url="https://private.example.invalid")
+
+    storage = ObjectStorage.__new__(ObjectStorage)
+    storage.bucket = "private-bucket"
+    storage.remote = True
+    storage._client = FakeClient()
+
+    result = storage.health()
+
+    assert result["configured"] is True
+    assert result["connected"] is False
+    assert result["diagnostic"] == "endpoint_unreachable"
+    assert "private.example.invalid" not in str(result)
 
 
 def test_completed_job_materializes_missing_nested_download(tmp_path: Path, monkeypatch):

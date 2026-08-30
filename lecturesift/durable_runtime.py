@@ -25,7 +25,7 @@ def _queue_ready() -> bool:
     return bool(CELERY_BROKER_URL and STORAGE.remote and os.getenv("LECTURESIFT_WORKER") != "1")
 
 
-def _durability_unavailable(job_id: str) -> None:
+def _durability_unavailable(job_id: str, diagnostic: str = "durable_runtime_unavailable") -> None:
     JOBS.update(
         job_id,
         status="error",
@@ -35,6 +35,7 @@ def _durability_unavailable(job_id: str) -> None:
         worker_state="unavailable",
         error_code="LS-SYSTEM-01",
         error="Güvenli işleme altyapısı geçici olarak kullanılamıyor. Lütfen biraz sonra yeniden dene.",
+        infrastructure_diagnostic=diagnostic,
     )
 
 
@@ -209,8 +210,9 @@ def install_durable_runtime() -> None:
                 return
             except Exception as exc:
                 if REQUIRE_DURABLE_PROCESSING:
-                    _durability_unavailable(job_id)
-                    JOBS.update(job_id, technical_error=str(exc))
+                    diagnostic = STORAGE.error_code(exc)
+                    _durability_unavailable(job_id, diagnostic)
+                    JOBS.update(job_id, technical_error=diagnostic)
                     return
                 # The current in-process path remains available if the queue or
                 # object store has a transient configuration problem.
