@@ -73,6 +73,33 @@ def _enforce_minutes(user_id: str, job_id: str, duration: float) -> None:
         require_duration_entitlement(user_id, duration)
 
 
+def _measure_source_durations(
+    audio_paths: list[Path],
+    visual_paths: list[Path],
+) -> tuple[float, float]:
+    """Measure independent audio/visual source sets without serial probe waits."""
+    if not visual_paths:
+        return media_duration_seconds(audio_paths), 0.0
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="lecturesift-source-duration") as executor:
+        audio_future = executor.submit(media_duration_seconds, audio_paths)
+        visual_future = executor.submit(media_duration_seconds, visual_paths)
+        return audio_future.result(), visual_future.result()
+
+
+def _pipeline_options_with_durations(
+    options: dict,
+    audio_duration: float,
+    visual_duration: float = 0.0,
+) -> dict:
+    """Attach private measurements without mutating the persisted/public options."""
+    return {
+        **options,
+        "_measured_audio_duration_seconds": max(0.0, float(audio_duration)),
+        "_measured_visual_duration_seconds": max(0.0, float(visual_duration)),
+        "_measured_duration_seconds": max(0.0, float(audio_duration), float(visual_duration)),
+    }
+
+
 def _preflight_worker_documents(job_id: str, paths: list[Path], options: dict) -> float:
     """Inspect document quotas on the worker before expensive OCR or AI work."""
     document_data = extract_documents(
@@ -387,10 +414,19 @@ def process_uploaded_job(
             document_seconds = max(0.0, float(options.get("document_credit_seconds") or 0))
             if bool(options.get("document_mode")) and not document_seconds:
                 document_seconds = _preflight_worker_documents(job_id, audio_paths, options)
-            duration = document_seconds or max(
-                media_duration_seconds(audio_paths),
-                media_duration_seconds(visual_paths) if visual_paths else 0.0,
-            )
+            audio_duration = 0.0
+            visual_duration = 0.0
+            if document_seconds:
+                duration = document_seconds
+                pipeline_options = dict(options)
+            else:
+                audio_duration, visual_duration = _measure_source_durations(audio_paths, visual_paths)
+                duration = max(audio_duration, visual_duration)
+                pipeline_options = _pipeline_options_with_durations(
+                    options,
+                    audio_duration,
+                    visual_duration,
+                )
             media_minutes = max(0.1, duration / 60.0)
             try:
                 user_id = str(options.get("billing_user_id", ""))
@@ -440,7 +476,7 @@ def process_uploaded_job(
                 ),
                 eta_started_at=time.time(),
             )
-            process_job(job_id, audio_paths, options, visual_paths or None)
+            process_job(job_id, audio_paths, pipeline_options, visual_paths or None)
             finished = JOBS.get(job_id) or {}
             if finished.get("status") != "done":
                 transient = _processing_error(finished)
@@ -520,7 +556,12 @@ def process_url_job(self, job_id: str, url: str, options: dict) -> dict:
             shutil.rmtree(job_dir, ignore_errors=True)
             job_dir.mkdir(parents=True, exist_ok=True)
             JOBS.update(job_id, job_dir=str(job_dir), status="working", stage="url_download", worker_state="downloading")
-            video_path = download_remote_video(url, job_dir)
+            video_path = download_remote_video(
+                url,
+                job_dir,
+                job_type=str(options.get("job_type") or "study_pack"),
+                include_slides=bool(options.get("include_slides", True)),
+            )
             duration = media_duration_seconds([video_path])
             try:
                 _enforce_minutes(str(options.get("billing_user_id", "")), job_id, duration)
@@ -538,7 +579,8 @@ def process_url_job(self, job_id: str, url: str, options: dict) -> dict:
                 media_minutes=round(media_minutes, 2),
                 file_size_bytes=source_size,
             )
-            process_job(job_id, video_path, options)
+            pipeline_options = _pipeline_options_with_durations(options, duration, duration)
+            process_job(job_id, video_path, pipeline_options)
             finished = JOBS.get(job_id) or {}
             if finished.get("status") != "done":
                 transient = _processing_error(finished)

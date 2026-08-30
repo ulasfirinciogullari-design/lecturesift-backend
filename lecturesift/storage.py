@@ -182,6 +182,47 @@ class ObjectStorage:
             "remote_file_count": len(uploaded),
         }
 
+    def _download_objects(self, downloads: list[tuple[str, Path]]) -> int:
+        """Download an already validated object plan with bounded fan-out."""
+        if not downloads:
+            return 0
+
+        def download(item: tuple[str, Path]) -> Path:
+            key, path = item
+            return self.download_file(key, path)
+
+        workers = min(STORAGE_TRANSFER_PARALLELISM, len(downloads))
+        if workers <= 1:
+            for item in downloads:
+                download(item)
+        else:
+            with ThreadPoolExecutor(
+                max_workers=workers,
+                thread_name_prefix="lecturesift-restore",
+            ) as executor:
+                list(executor.map(download, downloads))
+        return len(downloads)
+
+    def materialize_files(self, job_id: str, destination: Path, keys: list[str]) -> int:
+        """Download only named objects that belong to one private job prefix."""
+        if not self.remote or self._client is None:
+            return 0
+        prefix = f"jobs/{job_id}/"
+        downloads: list[tuple[str, Path]] = []
+        for key in dict.fromkeys(str(value) for value in keys if str(value)):
+            if not key.startswith(prefix):
+                continue
+            relative = key[len(prefix):]
+            relative_path = Path(relative.replace("\\", "/"))
+            if (
+                not relative
+                or relative_path.is_absolute()
+                or ".." in relative_path.parts
+            ):
+                continue
+            downloads.append((key, destination / relative_path))
+        return self._download_objects(downloads)
+
     def materialize_job(self, job_id: str, destination: Path) -> int:
         if not self.remote or self._client is None:
             return 0
@@ -198,21 +239,7 @@ class ObjectStorage:
                     continue
                 downloads.append((key, destination / relative))
 
-        def download(item: tuple[str, Path]) -> Path:
-            key, path = item
-            return self.download_file(key, path)
-
-        workers = min(STORAGE_TRANSFER_PARALLELISM, len(downloads))
-        if workers <= 1:
-            for item in downloads:
-                download(item)
-        else:
-            with ThreadPoolExecutor(
-                max_workers=workers,
-                thread_name_prefix=f"lecturesift-restore-{job_id[:8]}",
-            ) as executor:
-                list(executor.map(download, downloads))
-        return len(downloads)
+        return self._download_objects(downloads)
 
     def delete_job(self, job_id: str) -> int:
         """Delete every stored object for one job without exposing object keys."""

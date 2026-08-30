@@ -188,7 +188,9 @@ def _public_job(data: dict) -> dict:
     ):
         result.pop(key, None)
     result["options"] = {
-        key: value for key, value in result.get("options", {}).items() if key != "billing_user_id"
+        key: value
+        for key, value in result.get("options", {}).items()
+        if key != "billing_user_id" and not str(key).startswith("_")
     }
     return result
 
@@ -222,7 +224,12 @@ def start_url_job(job_id: str, url: str, job_dir: Path, options: dict) -> str:
     def worker() -> None:
         started = time.time()
         try:
-            video_path = download_remote_video(url, job_dir)
+            video_path = download_remote_video(
+                url,
+                job_dir,
+                job_type=str(options.get("job_type") or "study_pack"),
+                include_slides=bool(options.get("include_slides", True)),
+            )
             JOBS.update(job_id, percent=8, stage="parallel_analysis")
             process_job(job_id, video_path, options)
         except Exception as exc:
@@ -399,12 +406,19 @@ def _options(
     include_summary: bool = True,
     include_transcript: bool = True,
     include_slides: bool = True,
+    transcript_timestamps: bool = False,
+    speaker_detection: bool = False,
 ) -> dict:
     source = source_language or "auto"
     output = output_language or "tr"
     translation_enabled = bool(translate_transcript) and not (source != "auto" and source == output)
     formats = [value for value in dict.fromkeys(output_formats.lower().replace(" ", "").split(",")) if value in {"pdf", "docx", "txt"}]
     selected_job_type = job_type if job_type in {"study_pack", "audio_export", "download_video"} else "study_pack"
+    transcript_selected = selected_job_type == "study_pack" and bool(include_transcript)
+    speakers_enabled = bool(speaker_detection) and transcript_selected
+    # Speaker diarization always returns provider segment times, so requesting
+    # speakers necessarily enables the precise timestamp path as well.
+    timestamps_enabled = bool(transcript_timestamps or speakers_enabled) and transcript_selected
     return {
         "source_language": source,
         "output_language": output,
@@ -414,6 +428,8 @@ def _options(
         "include_summary": bool(include_summary),
         "include_transcript": bool(include_transcript),
         "include_slides": bool(include_slides),
+        "transcript_timestamps": timestamps_enabled,
+        "speaker_detection": speakers_enabled,
         "translate_transcript": translation_enabled,
         "slides_offset_seconds": max(-3600.0, min(float(slides_offset_seconds or 0), 3600.0)),
         "output_formats": formats,
@@ -574,6 +590,8 @@ def health() -> dict:
             "configured_parallel_pages": OCR_PARALLELISM,
         },
         "output_formats": ["pdf", "docx", "txt"],
+        "transcript_timestamps": True,
+        "speaker_detection": True,
         "audio_export": True,
         "url_video_download": True,
         "instagram_configured": all((INSTAGRAM_ACCESS_TOKEN, INSTAGRAM_ACCOUNT_ID, INSTAGRAM_APP_SECRET)),
@@ -1140,8 +1158,12 @@ def get_result(job_id: str, user: dict = Depends(_billing_user)) -> dict:
     data = _owned_job(job_id, user)
     if data.get("status") != "done":
         raise HTTPException(409, detail={"code": "LS-JOB-02", "message": "Ders analizi henüz tamamlanmadı."})
-    path = Path(data["job_dir"]) / "result.json"
-    if not path.exists():
+    path = JOBS.ensure_local_file(
+        data,
+        str(data.get("remote_result_key") or ""),
+        local_relative="result.json",
+    )
+    if path is None:
         raise HTTPException(404, detail={"code": "LS-JOB-03", "message": "Sonuç dosyası bulunamadı."})
     result = json.loads(path.read_text(encoding="utf-8"))
     result["download_enabled"] = _job_download_allowed(data, user)
@@ -1159,8 +1181,12 @@ def ask_lesson_question(
     if data.get("status") != "done":
         raise HTTPException(409, detail={"code": "LS-JOB-02", "message": "Ders analizi henüz tamamlanmadı."})
     _rate_limit(request, "lesson-question", user["id"], limit=30, window_seconds=60 * 60)
-    result_path = Path(data["job_dir"]) / "result.json"
-    if not result_path.exists():
+    result_path = JOBS.ensure_local_file(
+        data,
+        str(data.get("remote_result_key") or ""),
+        local_relative="result.json",
+    )
+    if result_path is None:
         raise HTTPException(404, detail={"code": "LS-JOB-03", "message": "Sonuç dosyası bulunamadı."})
     try:
         result = json.loads(result_path.read_text(encoding="utf-8"))
@@ -1177,8 +1203,8 @@ def get_slide(job_id: str, filename: str, user: dict = Depends(_billing_user)) -
     data = _owned_job(job_id, user)
     if Path(filename).name != filename:
         raise HTTPException(400, detail={"code": "LS-FILE-01", "message": "Geçersiz dosya adı."})
-    path = Path(data["job_dir"]) / "slides" / filename
-    if not path.exists():
+    path = JOBS.ensure_local_file(data, local_relative=f"slides/{filename}")
+    if path is None:
         raise HTTPException(404, detail={"code": "LS-FILE-02", "message": "Slayt görseli bulunamadı."})
     return FileResponse(str(path), media_type="image/jpeg")
 
@@ -1191,8 +1217,8 @@ def get_artifact(job_id: str, filename: str, user: dict = Depends(_billing_user)
     _require_job_download(data, user)
     if Path(filename).name != filename:
         raise HTTPException(400, detail={"code": "LS-FILE-01", "message": "Geçersiz dosya adı."})
-    path = Path(data["job_dir"]) / "package" / filename
-    if not path.exists() or not path.is_file():
+    path = JOBS.ensure_local_file(data, local_relative=f"package/{filename}")
+    if path is None:
         raise HTTPException(404, detail={"code": "LS-FILE-02", "message": "Çıktı dosyası bulunamadı."})
     return FileResponse(str(path), filename=filename)
 
@@ -1203,8 +1229,13 @@ def download(job_id: str, user: dict = Depends(_billing_user)) -> FileResponse:
     if data.get("status") != "done":
         raise HTTPException(409, detail={"code": "LS-JOB-02", "message": "Ders analizi henüz tamamlanmadı."})
     _require_job_download(data, user)
-    result_path = Path(str(data.get("result_path") or ""))
-    if not result_path.is_file():
+    remote_download_key = str(data.get("remote_download_key") or "")
+    result_path = (
+        JOBS.ensure_local_file(data, remote_download_key)
+        if remote_download_key
+        else Path(str(data.get("result_path") or ""))
+    )
+    if result_path is None or not result_path.is_file():
         raise HTTPException(
             409,
             detail={
@@ -1239,6 +1270,8 @@ async def create_job(
     include_summary: bool = Form(True),
     include_transcript: bool = Form(True),
     include_slides: bool = Form(True),
+    transcript_timestamps: bool = Form(False),
+    speaker_detection: bool = Form(False),
     billing_user: dict = Depends(_billing_user),
 ) -> dict:
     options = _options(
@@ -1254,6 +1287,8 @@ async def create_job(
         include_summary,
         include_transcript,
         include_slides,
+        transcript_timestamps,
+        speaker_detection,
     )
     if options["job_type"] == "study_pack" and not any(
         (
@@ -1309,6 +1344,11 @@ async def create_job(
                     status_code=400,
                 )
             )
+        if document_mode:
+            # Documents already have stable page/text positions and never enter
+            # the audio transcription path.
+            options["transcript_timestamps"] = False
+            options["speaker_detection"] = False
 
     JOBS.cleanup_expired()
     job_id = str(uuid.uuid4())
@@ -1401,6 +1441,8 @@ def create_url_job(
     include_summary: bool = Form(True),
     include_transcript: bool = Form(True),
     include_slides: bool = Form(True),
+    transcript_timestamps: bool = Form(False),
+    speaker_detection: bool = Form(False),
     billing_user: dict = Depends(_billing_user),
 ) -> dict:
     options = _options(
@@ -1416,6 +1458,8 @@ def create_url_job(
         include_summary,
         include_transcript,
         include_slides,
+        transcript_timestamps,
+        speaker_detection,
     )
     if options["job_type"] == "study_pack" and not any(
         (

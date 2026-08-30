@@ -225,9 +225,10 @@ def test_workspace_outputs_are_individually_optional_and_mobile_ready():
 def test_every_page_supports_persistent_light_and_dark_themes():
     for page in FRONTEND.glob("*.html"):
         content = page.read_text(encoding="utf-8")
-        assert "/theme.css?v=12" in content, page.name
+        expected_theme_version = "13" if page.name == "workspace.html" else "12"
+        assert f"/theme.css?v={expected_theme_version}" in content, page.name
         assert "/theme.js?v=2" in content, page.name
-        assert "i18n.js?v=25" in content, page.name
+        assert "i18n.js?v=26" in content, page.name
         assert "page-i18n.js?v=6" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
@@ -404,6 +405,66 @@ def test_every_declared_interface_key_has_thirteen_translations():
     assert not uncovered, uncovered
     assert all(len(rows[key]) == 13 for key in central)
     assert all(all(str(value).strip() for value in rows[key]) for key in central)
+
+
+def test_every_dynamic_workspace_copy_resolves_to_thirteen_languages_without_turkish_fallback():
+    workspace_script = (FRONTEND / "app.js").read_text(encoding="utf-8")
+    central_script = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    page_script = (FRONTEND / "page-i18n.js").read_text(encoding="utf-8")
+
+    tr_block = re.search(
+        r"const TR = \{(.*?)\n\};\n\nconst LEGACY",
+        workspace_script,
+        re.DOTALL,
+    )
+    assert tr_block
+    tr_copy = {
+        key: json.loads(f'"{value}"')
+        for key, value in re.findall(
+            r'(?<![\w.])([A-Za-z]\w*):\s*"((?:\\.|[^"\\])*)"',
+            tr_block.group(1),
+        )
+    }
+    assert len(tr_copy) >= 140
+
+    central_rows = {
+        key: json.loads(f"[{payload}]")
+        for key, payload in re.findall(
+            r'^\s*"([^"]+)":\[(.*?)\],?$',
+            central_script,
+            re.MULTILINE,
+        )
+    }
+    page_payload = page_script.split("window.LECTURESIFT_PAGE_COPY=", 1)[1].rstrip(";\n")
+    page_rows = json.loads(page_payload)
+    rows_by_turkish_source = {values[0]: values for values in page_rows.values()}
+    rows_by_turkish_source.update({values[0]: values for values in central_rows.values()})
+
+    missing = {
+        key: source
+        for key, source in tr_copy.items()
+        if source not in rows_by_turkish_source
+    }
+    assert not missing, missing
+    for key, source in tr_copy.items():
+        translations = rows_by_turkish_source[source]
+        assert len(translations) == 13, key
+        assert all(str(value).strip() for value in translations), key
+
+    centralized_workspace_keys = (
+        "subtitle", "dropTitle", "fileHelp", "classicMode", "addVideos", "sortHelp",
+        "outputFormats", "formatOptional", "sourceLanguage", "contentSelection",
+        "contentSelectionHelp", "presetLabel", "presetBalanced", "presetTranscript",
+        "includeSummary", "includeSummaryHelp", "includeSlides", "includeSlidesHelp",
+        "uploadAccepted", "promiseTitle", "promiseText", "outputSelectionRequired",
+        "plansSubtitle",
+    )
+    assert len(centralized_workspace_keys) == 23
+    for key in centralized_workspace_keys:
+        assert key in central_rows, key
+        assert central_rows[key][0] == tr_copy[key], key
+        assert len(central_rows[key]) == 13, key
+        assert len(set(central_rows[key])) >= 10, key
 
 
 def test_dynamic_plan_descriptions_are_localized_and_account_uses_plan_label():
@@ -921,7 +982,7 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=25"' in index
+    assert 'src="./app.js?v=26"' in index
     assert 'src="/rollout.js?v=5"' in index
     assert '$("plans").scrollIntoView' not in app
 
@@ -938,12 +999,87 @@ def test_workspace_accepts_scans_and_explains_automatic_ocr():
 
 
 def test_transcript_timeline_is_rendered_with_localized_precision_status():
+    page = (FRONTEND / "workspace.html").read_text(encoding="utf-8")
     app = (FRONTEND / "app.js").read_text(encoding="utf-8")
+    style = (FRONTEND / "styles.css").read_text(encoding="utf-8")
+    theme = (FRONTEND / "theme.css").read_text(encoding="utf-8")
     catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+
+    for control_id in ("transcriptTimestamps", "speakerDetection"):
+        assert f'id="{control_id}"' in page
+    assert 'id="transcriptEnhancements"' in page
+    assert re.search(r'<input\b(?=[^>]*\bid="speakerDetection")(?=[^>]*\btype="checkbox")(?=[^>]*\bdisabled\b)[^>]*>', page)
+    assert 'aria-describedby="speakerDetectionHelp speakerDetectionRequirement"' in page
+    assert 'id="transcriptTimeline"' in page
+    assert 'id="transcriptWaveform" class="transcript-waveform" role="list"' in page
+    assert 'id="speakerLegend"' in page
+    assert 'id="transcriptTranslationNotice"' in page
+    assert 'aria-pressed="false" data-i18n="translated"' in page
+    assert 'aria-pressed="true" data-i18n="original"' in page
+
+    assert "function syncTranscriptEnhancements" in app
+    assert '$("speakerDetection").disabled = !timestampsEnabled' in app
+    assert 'if (!timestampsEnabled) $("speakerDetection").checked = false' in app
+    assert 'data.append("transcript_timestamps", timestampsEnabled ? "true" : "false")' in app
+    assert 'data.append("speaker_detection", timestampsEnabled && $("speakerDetection").checked ? "true" : "false")' in app
+    assert 'timestamps:false, speakers:false' in app
+    assert '["summary", "transcript", "slides", "quiz", "cards", "timestamps", "speakers"' in app
     assert "data.transcript_timestamps_mode" in app
     assert "latestResult.transcript_segments" in app
+    assert '["provider_segments", "speaker_segments"].includes' in app
+    assert "latestResult?.transcript_speaker_metadata?.speakers" in app
+    assert 'speakerMetadata.get(String(segment.speaker_id || ""))?.label' in app
+    assert 'speakerKey: String(segment.speaker_id || segment.speaker || segment.speaker_label || "")' in app
+    assert 'if (!speaker) return ""' in app
+    assert 'legend.closest(".speaker-legend-shell").hidden = !palette.entries.length' in app
+    assert "function renderTranscriptTimeline" in app
+    assert "function activateTranscriptSegment" in app
+    assert 'class="transcript-wave-track"' in app
+    assert 'aria-controls="transcript-segment-${segment.index}"' in app
+    assert 'id="transcript-segment-${segment.index}"' in app
+    assert 'class="transcript-segment" data-transcript-segment=' in app
+    assert 'paragraph.className = "transcript-plain"' in app
+    assert '$("transcriptTranslationNotice").hidden = !translated || !segments.length' in app
+
+    for selector in (
+        ".transcript-enhancements", ".transcript-option-grid", ".transcript-timeline",
+        ".transcript-waveform", ".speaker-legend", ".transcript-segment",
+    ):
+        assert selector in style
+    assert ".transcript-box { max-height: none" in style
+    assert ".transcript-tools .chip { min-height: 44px" in style
+    assert ".transcript-wave-track" in style
+    assert "min-width: 24px" in style
+    assert "overflow-x: auto" in style
+    assert ".transcript-timeline" in theme
+    assert ".transcript-segment" in theme
+    assert ".transcript-segment time{color:#075a9e" in theme
+
     assert '"transcript.preciseTimestamps"' in catalog
     assert '"transcript.estimatedTimestamps"' in catalog
+    translation_keys = (
+        "includeTranscriptHelp", "transcriptDisabledHelp", "transcript.enhancementsTitle",
+        "transcript.enhancementsHelp", "transcript.timestampsHelp", "transcript.speakersTitle",
+        "transcript.speakersHelp", "transcript.speakersRequiresTimestamps", "transcript.toolsLabel",
+        "transcript.timelineTitle", "transcript.timelineHelp", "transcript.timelineLabel",
+        "transcript.speakerLegend", "transcript.speakerPrefix", "transcript.translationPlainNotice",
+        "transcript.noTimestamps", "transcript.segmentAction", "transcript.segmentSpeakerAction",
+    )
+    for key in translation_keys:
+        payload = re.search(rf'^\s*"{re.escape(key)}":\[(.*?)\],?$', catalog, re.MULTILINE)
+        assert payload, key
+        translations = json.loads(f"[{payload.group(1)}]")
+        assert len(translations) == 13, key
+        assert all(str(value).strip() for value in translations), key
+        assert len(set(translations)) >= 10, key
+
+    action_rows = {}
+    for key in ("transcript.segmentAction", "transcript.segmentSpeakerAction"):
+        payload = re.search(rf'^\s*"{re.escape(key)}":\[(.*?)\],?$', catalog, re.MULTILINE)
+        assert payload, key
+        action_rows[key] = json.loads(f"[{payload.group(1)}]")
+    assert all("{time}" in value for value in action_rows["transcript.segmentAction"])
+    assert all("{time}" in value and "{speaker}" in value for value in action_rows["transcript.segmentSpeakerAction"])
 
 
 def test_contact_form_has_a_branded_noindex_success_page():

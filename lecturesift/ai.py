@@ -63,18 +63,29 @@ def _client() -> OpenAI:
     return _CLIENT
 
 
-def transcribe(audio_path: Path, language: str) -> str:
+def _transcription_cost_duration(audio_path: Path, duration_seconds: float | None) -> float:
+    try:
+        measured = float(duration_seconds)
+    except (TypeError, ValueError):
+        measured = -1.0
+    return measured if measured > 0 else media_duration_seconds([audio_path])
+
+
+def transcribe(audio_path: Path, language: str, duration_seconds: float | None = None) -> str:
     with open(audio_path, "rb") as stream:
         arguments = {"model": "gpt-4o-mini-transcribe", "file": stream}
         if language and language != "auto":
             arguments["language"] = language
         response = _client().audio.transcriptions.create(**arguments)
     if not record_openai_response("gpt-4o-mini-transcribe", response, "transcription"):
-        record_transcription_fallback("gpt-4o-mini-transcribe", media_duration_seconds([audio_path]))
+        record_transcription_fallback(
+            "gpt-4o-mini-transcribe",
+            _transcription_cost_duration(audio_path, duration_seconds),
+        )
     return getattr(response, "text", str(response)).strip()
 
 
-def transcribe_timed(audio_path: Path, language: str) -> dict:
+def transcribe_timed(audio_path: Path, language: str, duration_seconds: float | None = None) -> dict:
     """Transcribe with provider-reported speaker and segment timestamps.
 
     This uses the diarization model only when the separately costed precise
@@ -91,7 +102,13 @@ def transcribe_timed(audio_path: Path, language: str) -> dict:
             arguments["language"] = language
         response = _client().audio.transcriptions.create(**arguments)
     if not record_openai_response("gpt-4o-transcribe-diarize", response, "transcription_diarization"):
-        record_transcription_fallback("gpt-4o-transcribe-diarize", media_duration_seconds([audio_path]))
+        record_transcription_fallback(
+            "gpt-4o-transcribe-diarize",
+            _transcription_cost_duration(
+                audio_path,
+                getattr(response, "duration", 0) or duration_seconds,
+            ),
+        )
     segments = []
     for item in getattr(response, "segments", None) or []:
         text = str(getattr(item, "text", "") or "").strip()
@@ -515,6 +532,7 @@ def _request_final_study_pack(
     summary_style: str,
     quiz_count: int,
     flashcard_count: int,
+    include_summary: bool = True,
     **kwargs,
 ) -> dict:
     """Keep large detailed packs reliable by separating prose from exercises.
@@ -523,6 +541,33 @@ def _request_final_study_pack(
     Smaller bounded responses fit comfortably, run at the same time, and are
     merged into the exact public schema returned by the original endpoint.
     """
+    # When the user requested only exercises, do not also generate the full
+    # overview that the pipeline will immediately discard.  The model still
+    # returns the stable study-pack schema, but all non-exercise fields are
+    # explicitly kept minimal.  This turns the common quiz/card-only path from
+    # two provider calls into one without weakening source grounding.
+    if not include_summary:
+        shared = dict(kwargs)
+        requirements = str(shared.pop("extra_requirements", "") or "").strip()
+        shared.pop("minimum_summary_words", None)
+        requested_max_tokens = int(shared.pop("max_tokens", 0) or 0)
+        return _request_study_pack(
+            source,
+            output_language,
+            "short",
+            quiz_count,
+            flashcard_count,
+            summary_target="one short sentence",
+            extra_requirements=(
+                f"{requirements}\nGenerate only the requested quiz questions and flashcards. Keep title, "
+                "summary, key points, important terms, notes, and exam focus intentionally minimal because "
+                "the user did not request a summary. Preserve coverage across the complete source."
+            ).strip(),
+            max_tokens=max(requested_max_tokens, 11_000),
+            minimum_summary_words=0,
+            **shared,
+        )
+
     # Detailed packs contain three independent workloads: the explanatory
     # overview, structured notes, and optional exercises. Keeping one very
     # large response for both prose and notes made the final stage wait on a
@@ -705,6 +750,7 @@ def make_study_pack(
     summary_style: str,
     quiz_count: int,
     flashcard_count: int,
+    include_summary: bool = True,
 ) -> dict:
     if not transcript.strip():
         return empty_study_pack()
@@ -715,11 +761,24 @@ def make_study_pack(
             summary_style,
             quiz_count,
             flashcard_count,
+            include_summary,
         )
 
     sections = _chunk_text(transcript, STUDY_SECTION_CHARACTERS)
-    section_quiz = 0 if quiz_count <= 0 else max(2, (quiz_count + len(sections) - 1) // len(sections) + 1)
-    section_cards = 0 if flashcard_count <= 0 else max(4, (flashcard_count + len(sections) - 1) // len(sections) + 2)
+    # Section-level exercises were generated only to be regenerated during the
+    # final synthesis.  For exercise-only requests, section calls now produce
+    # compact grounded digests and the requested exercises are created once at
+    # the final whole-lecture step.
+    section_quiz = (
+        0
+        if not include_summary or quiz_count <= 0
+        else max(2, (quiz_count + len(sections) - 1) // len(sections) + 1)
+    )
+    section_cards = (
+        0
+        if not include_summary or flashcard_count <= 0
+        else max(4, (flashcard_count + len(sections) - 1) // len(sections) + 2)
+    )
     def digest_section(index: int, section: str) -> dict:
         return _request_study_pack(
                 section,
@@ -743,8 +802,8 @@ def make_study_pack(
         digests,
         output_language,
         summary_style,
-        quiz_count,
-        flashcard_count,
+        quiz_count if include_summary else 0,
+        flashcard_count if include_summary else 0,
     )
     return _request_final_study_pack(
         _digest_source(compacted),
@@ -752,6 +811,7 @@ def make_study_pack(
         summary_style,
         quiz_count,
         flashcard_count,
+        include_summary,
         source_label="ORDERED SECTION DIGESTS",
         source_context=(
             "The source contains faithful digests of every consecutive section of one lecture. Synthesize one "

@@ -222,7 +222,15 @@ def _timestamped_transcript(result: dict) -> str:
     return "\n\n".join(rows)
 
 
-def build_artifacts(job_dir: Path, result: dict, slides_dir: Path) -> tuple[list[dict], Path]:
+def build_artifacts(
+    job_dir: Path,
+    result: dict,
+    slides_dir: Path,
+    *,
+    notes_stem: str = "Ders_Notlari",
+    notes_label: str = "Ders Notları",
+    archive_stem: str = "LectureSift_Study_Pack_V4",
+) -> tuple[list[dict], Path]:
     package_dir = job_dir / "package"
     package_dir.mkdir(parents=True, exist_ok=True)
     options = result.get("options", {})
@@ -233,10 +241,11 @@ def build_artifacts(job_dir: Path, result: dict, slides_dir: Path) -> tuple[list
     translated = result.get("transcript_translated", "")
     documents = []
     if options.get("include_summary", True):
+        notes_text = _notes_text(result)
         documents.extend(
             [
                 ("Ozet", "Özet", f"{title} - Özet", [("Özet", [result.get("summary", "")])], result.get("summary", "")),
-                ("Ders_Notlari", "Ders Notları", f"{title} - Ders Notları", [("Ders Notları", [_notes_text(result)])], _notes_text(result)),
+                (notes_stem, notes_label, f"{title} - Ders Notları", [("Ders Notları", [notes_text])], notes_text),
             ]
         )
     if options.get("include_transcript", True):
@@ -289,7 +298,7 @@ def build_artifacts(job_dir: Path, result: dict, slides_dir: Path) -> tuple[list
             artifacts = list(executor.map(export, export_jobs))
 
     _save_result(job_dir, result, artifacts)
-    zip_base = job_dir / "LectureSift_Study_Pack_V4"
+    zip_base = job_dir / archive_stem
     shutil.make_archive(str(zip_base), "zip", root_dir=package_dir)
     return artifacts, zip_base.with_suffix(".zip")
 

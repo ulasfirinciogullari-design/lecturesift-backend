@@ -159,31 +159,63 @@ class JobStore:
         job_id = str(data.get("job_id", ""))
         if not job_id:
             return data
-        local_dir = WORK_DIR / job_id
-        remote_download_key = str(data.get("remote_download_key", ""))
         remote_prefix = f"jobs/{job_id}/"
-        relative_download = (
-            remote_download_key[len(remote_prefix):]
-            if remote_download_key.startswith(remote_prefix)
-            else Path(remote_download_key).name
-        )
-        relative_path = Path(relative_download) if relative_download else None
-        if relative_path and (relative_path.is_absolute() or ".." in relative_path.parts):
-            relative_path = None
-        local_zip = local_dir / relative_path if relative_path else None
-        needs_materialization = not (local_dir / "result.json").exists() or bool(
-            local_zip and not local_zip.exists()
-        )
-        if needs_materialization:
-            try:
-                local_dir.mkdir(parents=True, exist_ok=True)
-                STORAGE.materialize_job(job_id, local_dir)
-            except Exception:
-                return data
-        data["job_dir"] = str(local_dir)
-        if local_zip and local_zip.exists():
-            data["result_path"] = str(local_zip)
+        remote_result_key = str(data.get("remote_result_key") or f"{remote_prefix}result.json")
+        self.ensure_local_file(data, remote_result_key, local_relative="result.json")
         return data
+
+    def ensure_local_file(
+        self,
+        data: dict[str, Any],
+        remote_key: str = "",
+        *,
+        local_relative: str = "",
+    ) -> Path | None:
+        """Materialize one validated job output and return its local path."""
+        job_id = str(data.get("job_id") or "")
+        if not job_id:
+            return None
+        remote_prefix = f"jobs/{job_id}/"
+        selected_key = str(remote_key or "")
+        if selected_key:
+            if not selected_key.startswith(remote_prefix):
+                return None
+            relative = selected_key[len(remote_prefix):].replace("\\", "/")
+        else:
+            relative = str(local_relative or "").replace("\\", "/")
+            selected_key = f"{remote_prefix}{relative}" if relative else ""
+        relative_path = Path(relative)
+        if (
+            not relative
+            or relative_path.is_absolute()
+            or ".." in relative_path.parts
+        ):
+            return None
+
+        durable = bool(data.get("remote_prefix") and STORAGE.remote)
+        if durable:
+            local_dir = WORK_DIR / job_id
+        else:
+            raw_job_dir = str(data.get("job_dir") or "").strip()
+            if not raw_job_dir:
+                return None
+            local_dir = Path(raw_job_dir)
+        local_path = local_dir / relative_path
+        if local_path.is_file():
+            if durable:
+                data["job_dir"] = str(local_dir)
+            return local_path
+        if not durable or not selected_key:
+            return None
+        try:
+            local_dir.mkdir(parents=True, exist_ok=True)
+            STORAGE.materialize_files(job_id, local_dir, [selected_key])
+        except Exception:
+            return None
+        if not local_path.is_file():
+            return None
+        data["job_dir"] = str(local_dir)
+        return local_path
 
     def create(self, job_id: str, job_dir: Path, options: dict, **extra: Any) -> dict:
         now = time.time()
@@ -223,11 +255,17 @@ class JobStore:
             self._flush_locked()
 
     def update_task(self, job_id: str, task: str, percent: float, stage: str) -> None:
+        normalized = {
+            "percent": max(0, min(100, round(percent))),
+            "stage": stage,
+        }
         with self._lock, self._distributed_write_lock():
             self._refresh_locked()
             data = self._jobs[job_id]
             tasks = data.setdefault("tasks", {})
-            tasks[task] = {"percent": max(0, min(100, round(percent))), "stage": stage}
+            if tasks.get(task) == normalized:
+                return
+            tasks[task] = normalized
             weighted = 8.0
             for name, weight in self.TASK_WEIGHTS.items():
                 weighted += weight * float(tasks.get(name, {}).get("percent", 0)) / 100.0

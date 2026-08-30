@@ -28,6 +28,8 @@ def file_duration_seconds(path: Path) -> float:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=20,
             check=False,
         )
@@ -47,7 +49,8 @@ def file_duration_seconds(path: Path) -> float:
         capture.release()
 
 
-def media_duration_seconds(paths: Iterable[Path]) -> float:
+def media_duration_values(paths: Iterable[Path]) -> list[float]:
+    """Probe independent media files concurrently while preserving input order."""
     normalized = [Path(path) for path in paths]
     workers = min(DURATION_PROBE_PARALLELISM, len(normalized))
     if workers <= 1:
@@ -58,4 +61,8 @@ def media_duration_seconds(paths: Iterable[Path]) -> float:
             thread_name_prefix="lecturesift-duration",
         ) as executor:
             durations = list(executor.map(file_duration_seconds, normalized))
-    return sum(max(0.0, value) for value in durations)
+    return [max(0.0, value) for value in durations]
+
+
+def media_duration_seconds(paths: Iterable[Path]) -> float:
+    return sum(media_duration_values(paths))

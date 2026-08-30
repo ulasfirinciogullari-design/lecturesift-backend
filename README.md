@@ -72,7 +72,7 @@ Account, bank-transfer, credit-pack, and admin approval data is stored in the co
 
 Set the independent `ADMIN_ADMIN` secret in Render to open `/admin.html`. Normal user sessions, legal contact addresses, billing credentials, and Instagram credentials never grant admin access. The secret must never be committed and is retained only for the current browser-tab session.
 
-Transcript timelines always include clearly labeled audio-chunk start times. Set `LECTURESIFT_PRECISE_TRANSCRIPT_TIMESTAMPS=true` on both the web service and worker only after approving the higher transcription cost; this switches transcription to `gpt-4o-transcribe-diarize` and stores provider-reported segment start/end times and speaker labels. The safe default is `false`.
+Every job can independently request precise transcript timestamps and automatic speaker separation. The fast default uses clearly labelled audio-chunk start estimates; precise modes use `gpt-4o-transcribe-diarize` and preserve provider-reported segment boundaries. Speaker identities are scoped to one provider request, so equal labels in separate long-audio chunks are never silently assumed to be the same person. `LECTURESIFT_PRECISE_TRANSCRIPT_TIMESTAMPS=true` remains only as a legacy default for already queued jobs; new web requests carry explicit per-job choices.
 
 Configure the PayTR notification URL as:
 

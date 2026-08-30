@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import shutil
 from pathlib import Path
 
 
@@ -51,33 +49,17 @@ def install_pipeline_enhancements() -> None:
 
     def enhanced(job_dir: Path, result: dict, slides_dir: Path):
         _normalize_flashcards(result)
-        artifacts, _old_zip = original(job_dir, result, slides_dir)
-        package_dir = job_dir / "package"
-
-        for artifact in artifacts:
-            filename = str(artifact.get("file", ""))
-            if filename.startswith("Ders_Notlari."):
-                source = package_dir / filename
-                target_name = filename.replace("Ders_Notlari.", "Akilli_Notlar.", 1)
-                target = package_dir / target_name
-                if source.exists():
-                    source.replace(target)
-                artifact["file"] = target_name
-                artifact["label"] = str(artifact.get("label", "")).replace("Ders Notları", "Akıllı Notlar")
-
-        result_path = job_dir / "result.json"
-        result_path.write_text(
-            json.dumps({**result, "artifacts": artifacts}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
+        # Ask the exporter for the rollout names up front.  The previous
+        # wrapper renamed the notes only after export, rebuilt the complete ZIP,
+        # rewrote result.json, and then deleted the first archive.
+        return original(
+            job_dir,
+            result,
+            slides_dir,
+            notes_stem="Akilli_Notlar",
+            notes_label="Akıllı Notlar",
+            archive_stem="LectureSift_Study_Pack",
         )
-        zip_base = job_dir / "LectureSift_Study_Pack"
-        zip_path = zip_base.with_suffix(".zip")
-        if zip_path.exists():
-            zip_path.unlink()
-        shutil.make_archive(str(zip_base), "zip", root_dir=package_dir)
-        for old in job_dir.glob("LectureSift_Study_Pack_V*.zip"):
-            old.unlink(missing_ok=True)
-        return artifacts, zip_path
 
     pipeline.build_artifacts = enhanced
     _INSTALLED = True

@@ -7,8 +7,8 @@
   <meta name="description" content="LectureSift çalışma alanında video, ses, PDF, Word ve PowerPoint kaynaklarından özet, transkript, quiz ve bilgi kartı oluştur.">
   <title>Çalışma Alanı | LectureSift</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=13">
-<link rel="stylesheet" href="/rollout.css?v=9"><link rel="stylesheet" href="/theme.css?v=12"><script src="/theme.js?v=2"></script></head>
+  <link rel="stylesheet" href="./styles.css?v=14">
+<link rel="stylesheet" href="/rollout.css?v=9"><link rel="stylesheet" href="/theme.css?v=13"><script src="/theme.js?v=2"></script></head>
 <body class="workspace-page" data-page="workspace">
   <div class="ambient ambient-one"></div>
   <div class="ambient ambient-two"></div>
@@ -186,6 +186,17 @@
               <select id="cardCount" aria-label="Bilgi kartı" data-i18n-aria-label="cardCount"><option>10</option><option selected>20</option><option>40</option><option>60</option></select>
             </div>
             <label id="translateControl" class="toggle-control"><span><b data-i18n="translateTitle">Transkripti çevir</b><small id="translateHelp" data-i18n="translateHelp">Orijinali de korunur</small></span><input id="translateTranscript" type="checkbox" checked><i aria-hidden="true"></i></label>
+            <div id="transcriptEnhancements" class="transcript-enhancements" role="group" aria-labelledby="transcriptEnhancementsTitle" aria-describedby="transcriptEnhancementsHelp">
+              <div class="transcript-enhancements-head">
+                <strong id="transcriptEnhancementsTitle" data-i18n="transcript.enhancementsTitle">Transkript zaman ve konuşmacı seçenekleri</strong>
+                <small id="transcriptEnhancementsHelp" data-i18n="transcript.enhancementsHelp">Yalnızca gerektiğinde aç; hızlı analiz varsayılan olarak korunur.</small>
+              </div>
+              <div class="transcript-option-grid">
+                <label id="transcriptTimestampsControl" class="toggle-control transcript-option"><span><b id="transcriptTimestampsTitle" data-i18n="transcript.preciseTimestamps">Hassas zaman damgaları</b><small id="transcriptTimestampsHelp" data-i18n="transcript.timestampsHelp">Konuşma segmentlerini hassas zamanlarla ve segment dalgasıyla gösterir; işlem süresini artırabilir.</small></span><input id="transcriptTimestamps" type="checkbox" aria-labelledby="transcriptTimestampsTitle" aria-describedby="transcriptTimestampsHelp"><i aria-hidden="true"></i></label>
+                <label id="speakerDetectionControl" class="toggle-control transcript-option is-disabled"><span><b id="speakerDetectionTitle" data-i18n="transcript.speakersTitle">Konuşmacıları otomatik ayır</b><small id="speakerDetectionHelp" data-i18n="transcript.speakersHelp">Konuşmacı etiketleri üretir; hassas zaman damgalarını gerektirir.</small></span><input id="speakerDetection" type="checkbox" aria-labelledby="speakerDetectionTitle" aria-describedby="speakerDetectionHelp speakerDetectionRequirement" disabled><i aria-hidden="true"></i></label>
+              </div>
+              <p id="speakerDetectionRequirement" class="transcript-option-note" data-i18n="transcript.speakersRequiresTimestamps">Konuşmacı ayrımı için önce hassas zaman damgalarını aç.</p>
+            </div>
           </div>
         </div>
 
@@ -273,7 +284,16 @@
       <div class="result-body">
         <article id="pane-summary" role="tabpanel" aria-labelledby="resultTab-summary" class="result-pane active"><div id="summaryContent" class="prose"></div><div id="keyPoints" class="key-grid"></div></article>
         <article id="pane-notes" role="tabpanel" aria-labelledby="resultTab-notes" class="result-pane" hidden><div id="notesContent" class="notes-grid"></div></article>
-        <article id="pane-transcript" role="tabpanel" aria-labelledby="resultTab-transcript" class="result-pane" hidden><div class="transcript-tools"><button id="showTranslated" type="button" class="chip active" data-i18n="translated">Çevrilmiş</button><button id="showOriginal" type="button" class="chip" data-i18n="original">Orijinal</button></div><div id="transcriptContent" class="transcript-box"></div></article>
+        <article id="pane-transcript" role="tabpanel" aria-labelledby="resultTab-transcript" class="result-pane" hidden>
+          <div class="transcript-tools" role="group" aria-label="Transkript görünümü" data-i18n-aria-label="transcript.toolsLabel"><button id="showTranslated" type="button" class="chip" aria-pressed="false" data-i18n="translated">Çevrilmiş</button><button id="showOriginal" type="button" class="chip active" aria-pressed="true" data-i18n="original">Orijinal</button></div>
+          <p id="transcriptTranslationNotice" class="transcript-view-note" role="note" data-i18n="transcript.translationPlainNotice" hidden>Çeviri düz metindir; zaman ve konuşmacı eşleşmeleri orijinal görünümde gösterilir.</p>
+          <section id="transcriptTimeline" class="transcript-timeline" aria-labelledby="transcriptTimelineTitle" hidden>
+            <div class="transcript-timeline-head"><div><strong id="transcriptTimelineTitle" data-i18n="transcript.timelineTitle">Konuşma zaman dalgası</strong><small data-i18n="transcript.timelineHelp">Çubuklar konuşma segmentlerini gösterir; ses genliği değildir.</small></div><span id="transcriptPrecisionBadge"></span></div>
+            <div id="transcriptWaveform" class="transcript-waveform" role="list" aria-label="Tıklanabilir konuşma zaman çizelgesi" data-i18n-aria-label="transcript.timelineLabel"></div>
+            <div class="speaker-legend-shell"><strong id="speakerLegendTitle" data-i18n="transcript.speakerLegend">Konuşmacılar</strong><div id="speakerLegend" class="speaker-legend" role="list" aria-labelledby="speakerLegendTitle"></div></div>
+          </section>
+          <div id="transcriptContent" class="transcript-box"></div>
+        </article>
         <article id="pane-slides" role="tabpanel" aria-labelledby="resultTab-slides" class="result-pane" hidden><div id="slidesContent" class="slides-grid"></div></article>
         <article id="pane-quiz" role="tabpanel" aria-labelledby="resultTab-quiz" class="result-pane" hidden><div id="quizStatus" class="quiz-status" aria-live="polite"></div><div id="quizContent"></div></article>
         <article id="pane-exam" role="tabpanel" aria-labelledby="resultTab-exam" class="result-pane" hidden><div class="exam-prep"><div class="exam-readiness"><span data-i18n="exam.readiness">Hazırlık durumu</span><strong id="examReadiness">—</strong><p id="examRecommendation"></p></div><div><h3 data-i18n="exam.focusTitle">Sınavda öne çıkabilecek konular</h3><div id="examFocusList" class="notes-grid"></div></div><button id="startExamButton" type="button" data-i18n="exam.start">Karışık deneme başlat</button></div></article>
@@ -297,8 +317,8 @@
   </div>
 
   <script src="./locale-data.js?v=3"></script>
-  <script src="./page-i18n.js?v=6"></script><script src="/i18n.js?v=25"></script><script src="/site-shell.js?v=4"></script>
-  <script src="./app.js?v=25"></script>
+  <script src="./page-i18n.js?v=6"></script><script src="/i18n.js?v=26"></script><script src="/site-shell.js?v=4"></script>
+  <script src="./app.js?v=26"></script>
   <script src="/rollout.js?v=5"></script>
 </body>
 </html>
