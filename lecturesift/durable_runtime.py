@@ -84,6 +84,7 @@ def _preflight_documents(job_id: str, paths: list[Path], options: dict) -> float
         document_credit_seconds=float(document_data["credit_seconds"]),
         document_words=int(document_data["words"]),
         document_ocr_required=bool(document_data["ocr_required"]),
+        document_pages=int(document_data["pages"]),
         document_ocr_pages=int(document_data["ocr_pages"]),
         document_estimated=bool(document_data["estimated"]),
     )
@@ -93,6 +94,7 @@ def _preflight_documents(job_id: str, paths: list[Path], options: dict) -> float
         document_words=int(document_data["words"]),
         billable_minutes=int(document_data["credit_minutes"]),
         document_ocr_required=bool(document_data["ocr_required"]),
+        document_pages=int(document_data["pages"]),
         document_ocr_pages=int(document_data["ocr_pages"]),
         usage_estimated=bool(document_data["estimated"]),
         stage="document_preflight",
@@ -140,8 +142,15 @@ def install_durable_runtime() -> None:
                 guest_user = is_guest_user(user_id)
                 if guest_user:
                     reserve_guest_job(user_id, job_id, media_minutes)
-                else:
-                    require_duration_entitlement(user_id, duration)
+                require_duration_entitlement(
+                    user_id,
+                    duration,
+                    source_file_count=len(audio_paths) + len(visual_paths),
+                    source_size_bytes=size_bytes,
+                    document_mode=document_mode,
+                    document_pages=int(options.get("document_pages") or 0),
+                    ocr_pages=int(options.get("document_ocr_pages") or 0),
+                )
         except BillingError as exc:
             JOBS.update(
                 job_id,

@@ -24,39 +24,49 @@ const COPY = {
   business: ["Business", "Ekipler ve kurumlar için"],
 };
 const ALL_SUMMARIES = ["short", "standard", "detailed", "exam", "five_minute"];
+const PLAN_LIMITS = {
+  free: {max_files_per_job:3, max_media_upload_mb:100, max_document_upload_mb:25, max_minutes_per_job:30, max_document_pages:50, max_ocr_pages:20},
+  test: {max_files_per_job:1, max_media_upload_mb:25, max_document_upload_mb:10, max_minutes_per_job:1, max_document_pages:10, max_ocr_pages:5},
+  credit: {max_files_per_job:8, max_media_upload_mb:500, max_document_upload_mb:50, max_minutes_per_job:180, max_document_pages:150, max_ocr_pages:50},
+  lite: {max_files_per_job:12, max_media_upload_mb:750, max_document_upload_mb:50, max_minutes_per_job:180, max_document_pages:250, max_ocr_pages:75},
+  plus: {max_files_per_job:16, max_media_upload_mb:1024, max_document_upload_mb:50, max_minutes_per_job:300, max_document_pages:350, max_ocr_pages:100},
+  pro: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:50, max_minutes_per_job:600, max_document_pages:500, max_ocr_pages:150},
+  max: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:50, max_minutes_per_job:900, max_document_pages:500, max_ocr_pages:150},
+  business: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:50, max_minutes_per_job:1440, max_document_pages:500, max_ocr_pages:150},
+};
 const FALLBACK_META = {
-  free: {kind: "free", minutes: 60, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 60, quiz_questions: 10, flashcards: 20, export_formats: ["pdf"], summary_profiles: ["short", "standard"], team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: false}},
-  test: {kind: "one_time", minutes: 1, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 1, quiz_questions: 1, flashcards: 1, export_formats: ["pdf"], summary_profiles: ["short"], team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: true}},
-  credit: {kind: "one_time", minutes: 180, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 180, quiz_questions: 20, flashcards: 40, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: true}},
-  lite: {kind: "subscription", minutes: 600, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 600, quiz_questions: 20, flashcards: 40, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
-  plus: {kind: "subscription", minutes: 2400, priority: "standard", team_seats: 1, featured: true, entitlements: {minutes: 2400, quiz_questions: 30, flashcards: 60, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
-  pro: {kind: "subscription", minutes: 6000, priority: "priority", team_seats: 1, featured: false, entitlements: {minutes: 6000, quiz_questions: 30, flashcards: 60, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
-  max: {kind: "subscription", minutes: 15000, priority: "priority", team_seats: 1, featured: false, entitlements: {minutes: 15000, quiz_questions: 30, flashcards: 60, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
-  business: {kind: "quote", minutes: null, priority: "priority", team_seats: 10, featured: false, entitlements: {minutes: null, quiz_questions: null, flashcards: null, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, team_seats: 10, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
+  free: {kind: "free", minutes: 60, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 60, quiz_questions: 10, flashcards: 20, export_formats: ["pdf"], summary_profiles: ["short", "standard"], limits: PLAN_LIMITS.free, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: false}},
+  test: {kind: "one_time", minutes: 1, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 1, quiz_questions: 1, flashcards: 1, export_formats: ["pdf"], summary_profiles: ["short"], limits: PLAN_LIMITS.test, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: true}},
+  credit: {kind: "one_time", minutes: 180, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 180, quiz_questions: 20, flashcards: 40, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, limits: PLAN_LIMITS.credit, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: true}},
+  lite: {kind: "subscription", minutes: 600, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 600, quiz_questions: 20, flashcards: 40, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, limits: PLAN_LIMITS.lite, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
+  plus: {kind: "subscription", minutes: 1800, priority: "standard", team_seats: 1, featured: true, entitlements: {minutes: 1800, quiz_questions: 30, flashcards: 60, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, limits: PLAN_LIMITS.plus, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
+  pro: {kind: "subscription", minutes: 5000, priority: "priority", team_seats: 1, featured: false, entitlements: {minutes: 5000, quiz_questions: 30, flashcards: 60, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, limits: PLAN_LIMITS.pro, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
+  max: {kind: "subscription", minutes: 12000, priority: "priority", team_seats: 1, featured: false, entitlements: {minutes: 12000, quiz_questions: 30, flashcards: 60, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, limits: PLAN_LIMITS.max, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
+  business: {kind: "quote", minutes: null, priority: "priority", team_seats: 10, featured: false, entitlements: {minutes: null, quiz_questions: null, flashcards: null, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, limits: PLAN_LIMITS.business, team_seats: 10, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
 };
 const FALLBACK_PRICES = {
-  TRY: [0, 100, 19900, 34900, 69900, 129900, 249900, null],
-  USD: [0, null, 500, 900, 1800, 3300, 6300, null],
-  EUR: [0, null, 500, 900, 1700, 3100, 5900, null],
-  GBP: [0, null, 400, 800, 1500, 2700, 5200, null],
-  CAD: [0, null, 700, 1200, 2500, 4500, 8500, null],
-  AUD: [0, null, 800, 1400, 2800, 5200, 9900, null],
-  NZD: [0, null, 900, 1600, 3100, 5700, 10900, null],
-  JPY: [0, null, 800, 1400, 2800, 5000, 9500, null],
-  KRW: [0, null, 7000, 13000, 25000, 47000, 89000, null],
-  CNY: [0, null, 3600, 6500, 12900, 23900, 45900, null],
-  INR: [0, null, 39900, 74900, 149900, 279900, 529900, null],
-  BRL: [0, null, 2500, 4500, 8900, 16900, 31900, null],
-  MXN: [0, null, 9900, 17900, 34900, 64900, 124900, null],
-  CHF: [0, null, 500, 800, 1600, 3000, 5700, null],
-  SEK: [0, null, 5500, 9900, 19900, 36900, 69900, null],
-  NOK: [0, null, 5900, 10900, 21900, 39900, 76900, null],
-  DKK: [0, null, 3500, 6500, 12900, 22900, 44900, null],
-  PLN: [0, null, 2000, 3600, 7200, 13200, 25200, null],
-  AED: [0, null, 1900, 3300, 6600, 12100, 23100, null],
-  SAR: [0, null, 1900, 3400, 6800, 12400, 23600, null],
-  SGD: [0, null, 700, 1200, 2400, 4500, 8500, null],
-  HKD: [0, null, 3900, 7000, 14000, 26000, 49000, null],
+  TRY: [0, 100, 19900, 27900, 44900, 99900, 199900, null],
+  USD: [0, null, 499, 699, 999, 2499, 4999, null],
+  EUR: [0, null, 499, 649, 949, 2399, 4799, null],
+  GBP: [0, null, 399, 599, 849, 2099, 4199, null],
+  CAD: [0, null, 699, 949, 1349, 3399, 6799, null],
+  AUD: [0, null, 799, 1099, 1549, 3799, 7599, null],
+  NZD: [0, null, 899, 1199, 1699, 4199, 8399, null],
+  JPY: [0, null, 750, 1050, 1500, 3750, 7500, null],
+  KRW: [0, null, 6900, 9500, 13900, 34900, 69900, null],
+  CNY: [0, null, 3500, 4900, 6900, 17500, 34900, null],
+  INR: [0, null, 39900, 54900, 79900, 199900, 399900, null],
+  BRL: [0, null, 2499, 3499, 4999, 12499, 24999, null],
+  MXN: [0, null, 9900, 13900, 19900, 49900, 99900, null],
+  CHF: [0, null, 449, 599, 849, 2199, 4399, null],
+  SEK: [0, null, 5299, 7299, 10499, 25999, 51999, null],
+  NOK: [0, null, 5499, 7699, 10999, 27499, 54999, null],
+  DKK: [0, null, 3499, 4499, 6699, 16999, 33999, null],
+  PLN: [0, null, 1999, 2699, 3999, 9999, 19999, null],
+  AED: [0, null, 1899, 2599, 3699, 9199, 18399, null],
+  SAR: [0, null, 1899, 2599, 3799, 9399, 18799, null],
+  SGD: [0, null, 699, 949, 1349, 3399, 6799, null],
+  HKD: [0, null, 3899, 5499, 7799, 19499, 38999, null],
 };
 
 let catalog = null;
@@ -171,6 +181,12 @@ function renderCompare() {
   const rows = [
     [pt("plans.billingType", "Ödeme türü"), plan => plan.kind === "subscription" ? pt("plans.subscription", "Aylık abonelik") : plan.kind === "one_time" ? pt("plans.oneTime", "Tek ödeme") : plan.kind === "free" ? pt("plan.free", "Ücretsiz") : pt("plans.quote", "Teklif")],
     [pt("plans.minutes", "İşleme dakikası"), plan => plan.entitlements?.minutes == null ? "∞" : Number(plan.entitlements.minutes).toLocaleString(PLANS_I18N.locale)],
+    [pt("plans.singleJobLimit", "Tek iş süre sınırı"), plan => `${Number(plan.entitlements?.limits?.max_minutes_per_job || 0).toLocaleString(PLANS_I18N.locale)} ${pt("unit.minuteShort", "dk")}`],
+    [pt("plans.filesPerJob", "Bir işte kaynak sayısı"), plan => Number(plan.entitlements?.limits?.max_files_per_job || 0).toLocaleString(PLANS_I18N.locale)],
+    [pt("plans.mediaUploadLimit", "Medya yükleme sınırı"), plan => `${Number(plan.entitlements?.limits?.max_media_upload_mb || 0).toLocaleString(PLANS_I18N.locale)} MB`],
+    [pt("plans.documentUploadLimit", "Belge yükleme sınırı"), plan => `${Number(plan.entitlements?.limits?.max_document_upload_mb || 0).toLocaleString(PLANS_I18N.locale)} MB`],
+    [pt("plans.documentPageLimit", "Belge sayfası / iş"), plan => Number(plan.entitlements?.limits?.max_document_pages || 0).toLocaleString(PLANS_I18N.locale)],
+    [pt("plans.ocrPageLimit", "OCR sayfası / iş"), plan => Number(plan.entitlements?.limits?.max_ocr_pages || 0).toLocaleString(PLANS_I18N.locale)],
     [pt("plans.quiz", "Quiz sorusu / işlem"), plan => plan.entitlements?.quiz_questions ?? "∞"],
     [pt("plans.cards", "Bilgi kartı / işlem"), plan => plan.entitlements?.flashcards ?? "∞"],
     [pt("plans.summaries", "Özet profilleri"), plan => summaries(plan.entitlements?.summary_profiles || [])],
@@ -270,6 +286,7 @@ function renderPlans() {
     const plan = map.get(code);
     if (!plan) return "";
     const entitlements = plan.entitlements || {};
+    const limits = entitlements.limits || {};
     const price = plan.display_price || plan.manual_price;
     const current = account?.plan?.code === code;
     const priceText = price
@@ -289,6 +306,10 @@ function renderPlans() {
       <div class="plan-price">${esc(priceText)} <small>${suffix}</small></div>
       <ul class="plan-features">
         <li>${esc(minutesText)}</li>
+        <li>${Number(limits.max_minutes_per_job || 0).toLocaleString(PLANS_I18N.locale)} ${esc(pt("plans.minutesPerJob", "dk / tek iş"))}</li>
+        <li>${Number(limits.max_files_per_job || 0).toLocaleString(PLANS_I18N.locale)} ${esc(pt("plans.filesPerJobShort", "kaynak / iş"))}</li>
+        <li>${Number(limits.max_media_upload_mb || 0).toLocaleString(PLANS_I18N.locale)} MB ${esc(pt("plans.mediaShort", "medya"))} · ${Number(limits.max_document_upload_mb || 0).toLocaleString(PLANS_I18N.locale)} MB ${esc(pt("plans.documentShort", "belge"))}</li>
+        <li>${Number(limits.max_document_pages || 0).toLocaleString(PLANS_I18N.locale)} ${esc(pt("plans.pagesShort", "sayfa"))} · ${Number(limits.max_ocr_pages || 0).toLocaleString(PLANS_I18N.locale)} OCR</li>
         <li>${entitlements.quiz_questions ?? "∞"} ${esc(pt("plans.quizShort", "quiz sorusu"))}</li>
         <li>${entitlements.flashcards ?? "∞"} ${esc(pt("plans.cardsShort", "bilgi kartı"))}</li>
         <li>${esc(summaries(entitlements.summary_profiles))} ${esc(pt("plans.summaryShort", "özet"))}</li>

@@ -180,6 +180,33 @@ def test_image_document_uses_the_same_ocr_pipeline(tmp_path: Path, monkeypatch):
     assert result["ocr_used"] is True
 
 
+@pytest.mark.parametrize("suffix", [".jpg", ".jpeg", ".webp", ".tif", ".tiff"])
+def test_every_supported_image_variant_uses_ocr(tmp_path: Path, monkeypatch, suffix: str):
+    path = tmp_path / f"whiteboard{suffix}"
+    Image.new("RGB", (640, 360), "white").save(path)
+    monkeypatch.setattr(
+        document_service,
+        "_run_tesseract_image",
+        lambda image, source_language="auto": ("Every supported scan reaches OCR.", "eng"),
+    )
+
+    result = extract_documents([path], source_language="en")
+
+    assert result["documents"][0]["type"] == suffix.lstrip(".")
+    assert result["ocr_used"] is True
+    assert "supported scan" in result["text"]
+
+
+def test_markdown_document_is_extracted(tmp_path: Path):
+    path = tmp_path / "lesson.md"
+    path.write_text("# Energy\n\nEnergy is conserved in a closed system.", encoding="utf-8")
+
+    result = extract_documents([path], source_language="en")
+
+    assert result["documents"][0]["type"] == "md"
+    assert "Energy is conserved" in result["text"]
+
+
 def test_ocr_page_limit_is_enforced_before_rendering(tmp_path: Path, monkeypatch):
     path = tmp_path / "long-scan.pdf"
     writer = PdfWriter()

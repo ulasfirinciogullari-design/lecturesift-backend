@@ -13,6 +13,7 @@ from .config import (
     MEDIA_PREP_PARALLELISM,
     PRECISE_TRANSCRIPT_TIMESTAMPS,
     TRANSCRIPTION_PARALLELISM,
+    VIDEO_EXTENSIONS,
 )
 from .costs import cost_context
 from .documents import extract_documents
@@ -358,7 +359,11 @@ def _process_job(
     job_dir = Path(data["job_dir"])
     slides_dir = job_dir / "slides"
     audio_sources = _path_list(audio_video_paths)
-    visual_sources = _path_list(visual_video_paths) if visual_video_paths is not None else list(audio_sources)
+    visual_sources = (
+        _path_list(visual_video_paths)
+        if visual_video_paths is not None
+        else [path for path in audio_sources if path.suffix.casefold() in VIDEO_EXTENSIONS]
+    )
     source_mode = "separate" if visual_video_paths is not None else "classic"
     started = time.time()
 
@@ -514,28 +519,46 @@ def _process_job(
             _record_billing_usage(job_id, options, audio_sources)
             return
 
-        with ThreadPoolExecutor(max_workers=2, thread_name_prefix="lecturesift") as executor:
-            # Context variables do not cross thread boundaries automatically.
-            # Wrap the audio branch so its OpenAI calls remain attributable to
-            # the same job and account in the cost ledger.
-            def costed_audio_pipeline():
-                with cost_context(job_id, str(options.get("billing_user_id") or "") or None):
-                    return _audio_pipeline(
-                        job_id,
-                        audio_sources,
-                        job_dir,
-                        {**options, "_defer_transcript_translation": True},
-                    )
+        if visual_sources:
+            with ThreadPoolExecutor(max_workers=2, thread_name_prefix="lecturesift") as executor:
+                # Context variables do not cross thread boundaries automatically.
+                # Wrap the audio branch so its OpenAI calls remain attributable to
+                # the same job and account in the cost ledger.
+                def costed_audio_pipeline():
+                    with cost_context(job_id, str(options.get("billing_user_id") or "") or None):
+                        return _audio_pipeline(
+                            job_id,
+                            audio_sources,
+                            job_dir,
+                            {**options, "_defer_transcript_translation": True},
+                        )
 
-            audio_future = executor.submit(costed_audio_pipeline)
-            slides, diagnostics = _visual_pipeline(
+                audio_future = executor.submit(costed_audio_pipeline)
+                slides, diagnostics = _visual_pipeline(
+                    job_id,
+                    visual_sources,
+                    job_dir,
+                    slides_dir,
+                    float(options.get("slides_offset_seconds", 0) or 0),
+                )
+                original_transcript, translated_transcript, transcript_segments, timestamp_mode = audio_future.result()
+        else:
+            slides = []
+            diagnostics = {
+                "engine": "audio-only",
+                "source_parts": len(audio_sources),
+                "duration_seconds": round(_source_duration_seconds(audio_sources), 1),
+                "final_unique_slides": 0,
+                "slides_offset_seconds": 0.0,
+                "parts": [],
+                "rejections": {},
+            }
+            original_transcript, translated_transcript, transcript_segments, timestamp_mode = _audio_pipeline(
                 job_id,
-                visual_sources,
+                audio_sources,
                 job_dir,
-                slides_dir,
-                float(options.get("slides_offset_seconds", 0) or 0),
+                {**options, "_defer_transcript_translation": True},
             )
-            original_transcript, translated_transcript, transcript_segments, timestamp_mode = audio_future.result()
 
         diagnostics["source_mode"] = source_mode
 
@@ -550,7 +573,7 @@ def _process_job(
             "sources": {
                 "mode": source_mode,
                 "audio": audio_sources[0].name,
-                "visual": visual_sources[0].name,
+                "visual": visual_sources[0].name if visual_sources else None,
                 "audio_files": [path.name for path in audio_sources],
                 "visual_files": [path.name for path in visual_sources],
                 "slides_offset_seconds": float(options.get("slides_offset_seconds", 0) or 0),

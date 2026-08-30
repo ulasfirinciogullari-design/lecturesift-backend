@@ -88,7 +88,7 @@
           </div>
 
           <div id="classicSources" class="source-builder">
-            <input id="classicFiles" class="file-input" type="file" multiple accept="video/mp4,video/webm,video/quicktime,video/x-matroska,.pdf,.docx,.pptx,.txt,.md,.png,.jpg,.jpeg,.webp,.tif,.tiff,application/pdf,image/png,image/jpeg,image/webp,image/tiff,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/markdown">
+            <input id="classicFiles" class="file-input" type="file" multiple accept=".mp4,.mov,.mkv,.webm,.mpeg,.mpg,.m4v,.mp3,.wav,.m4a,.aac,.flac,.ogg,.oga,.opus,.wma,.aiff,.aif,.mka,.pdf,.docx,.pptx,.txt,.md,.png,.jpg,.jpeg,.webp,.tif,.tiff,video/*,audio/*,application/pdf,image/png,image/jpeg,image/webp,image/tiff,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/markdown">
             <label id="classicDropZone" class="drop-zone compact" for="classicFiles">
               <span class="upload-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15.5v2.25A2.25 2.25 0 0 0 7.25 20h9.5A2.25 2.25 0 0 0 19 17.75V15.5"/></svg></span>
               <strong data-i18n="addVideos">Video, ses veya belge ekle</strong>
@@ -101,14 +101,14 @@
             <div class="upload-source-card">
               <div class="upload-source-head"><strong data-i18n="audioSourceTitle">Ses kaynakları</strong><span data-i18n="required">Zorunlu</span></div>
               <p data-i18n="audioSourceHelp">Sesli videoları veya kayıtları ders sırasına göre ekle.</p>
-              <input id="audioFiles" class="file-input" type="file" multiple accept="video/mp4,video/webm,video/quicktime,video/x-matroska">
+              <input id="audioFiles" class="file-input" type="file" multiple accept=".mp4,.mov,.mkv,.webm,.mpeg,.mpg,.m4v,.mp3,.wav,.m4a,.aac,.flac,.ogg,.oga,.opus,.wma,.aiff,.aif,.mka,video/*,audio/*">
               <label id="audioDropZone" class="mini-drop-zone" for="audioFiles" data-i18n="addAudioFiles">Ses videolarını ekle</label>
               <div id="audioFileList" class="source-file-list compact-list"></div>
             </div>
             <div class="upload-source-card optional">
               <div class="upload-source-head"><strong data-i18n="slidesSourceTitle">Görüntü / slayt kaynakları</strong><span data-i18n="required">Zorunlu</span></div>
               <p data-i18n="slidesSourceHelp">Slayt videolarını ders sırasına göre ekle.</p>
-              <input id="visualFiles" class="file-input" type="file" multiple accept="video/mp4,video/webm,video/quicktime,video/x-matroska">
+              <input id="visualFiles" class="file-input" type="file" multiple accept=".mp4,.mov,.mkv,.webm,.mpeg,.mpg,.m4v,video/*">
               <label id="visualDropZone" class="mini-drop-zone secondary" for="visualFiles" data-i18n="addVisualFiles">Slayt videolarını ekle</label>
               <div id="visualFileList" class="source-file-list compact-list"></div>
               <label id="syncControl" class="sync-control">
@@ -267,7 +267,7 @@
 
   <script src="./locale-data.js?v=3"></script>
   <script src="./page-i18n.js?v=6"></script><script src="/i18n.js?v=23"></script><script src="/site-shell.js?v=4"></script>
-  <script src="./app.js?v=21"></script>
+  <script src="./app.js?v=22"></script>
   <script src="/rollout.js?v=5"></script>
 </body>
 </html>

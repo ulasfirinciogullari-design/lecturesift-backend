@@ -9,12 +9,12 @@ import boto3
 from .costs import record_r2_operation
 from .config import (
     DOCUMENT_EXTENSIONS,
+    MEDIA_EXTENSIONS,
     S3_ACCESS_KEY_ID,
     S3_BUCKET,
     S3_ENDPOINT_URL,
     S3_REGION,
     S3_SECRET_ACCESS_KEY,
-    VIDEO_EXTENSIONS,
 )
 
 
@@ -79,7 +79,7 @@ class ObjectStorage:
     def _is_source_media(path: Path, job_dir: Path, relative: str) -> bool:
         if relative.startswith(("sources/", "slide_segments/")):
             return True
-        if path.parent != job_dir or path.suffix.casefold() not in (VIDEO_EXTENSIONS | DOCUMENT_EXTENSIONS):
+        if path.parent != job_dir or path.suffix.casefold() not in (MEDIA_EXTENSIONS | DOCUMENT_EXTENSIONS):
             return False
         return path.name.startswith(("part_", "audio_", "visual_", "document_", "remote."))
 

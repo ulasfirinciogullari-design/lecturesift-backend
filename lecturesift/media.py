@@ -10,7 +10,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 import yt_dlp
 
-from .config import MAX_VIDEO_BYTES, VIDEO_EXTENSIONS
+from .config import MAX_VIDEO_BYTES, MEDIA_EXTENSIONS
 from .errors import LectureSiftError
 
 
@@ -81,7 +81,7 @@ def _download_direct_media(media_url: str, job_dir: Path) -> Path:
     media_url = validate_remote_url(media_url)
     parsed = urlparse(media_url)
     extension = Path(parsed.path).suffix.lower()
-    if extension not in VIDEO_EXTENSIONS:
+    if extension not in MEDIA_EXTENSIONS:
         extension = ".mp4"
     destination = job_dir / f"remote{extension}"
     request = Request(media_url, headers={"User-Agent": "Mozilla/5.0 LectureSift/4.0"})
@@ -104,15 +104,15 @@ def _find_media_in_page(page_url: str) -> str | None:
     with _URL_OPENER.open(request, timeout=30) as response:
         content_type = (response.headers.get("content-type") or "").lower()
         final_url = response.geturl()
-        if any(value in content_type for value in ("video/mp4", "video/webm", "application/octet-stream")):
+        if content_type.startswith(("audio/", "video/")) or "application/octet-stream" in content_type:
             return final_url
         raw = response.read(6 * 1024 * 1024)
 
     page_text = html.unescape(raw.decode("utf-8", errors="ignore"))
     patterns = [
-        r'''(?:href|src|content)\s*=\s*["']([^"']+\.(?:mp4|m4v|mov|webm|mkv|mpeg|mpg)(?:\?[^"']*)?)["']''',
+        r'''(?:href|src|content)\s*=\s*["']([^"']+\.(?:mp4|m4v|mov|webm|mkv|mpeg|mpg|mp3|wav|m4a|aac|flac|ogg|oga|opus|wma|aiff|aif|mka)(?:\?[^"']*)?)["']''',
         r'''["']([^"']+\.m3u8(?:\?[^"']*)?)["']''',
-        r'''https?://[^\s"'<>\\]+?\.(?:mp4|m4v|mov|webm|mkv|mpeg|mpg)(?:\?[^\s"'<>\\]*)?''',
+        r'''https?://[^\s"'<>\\]+?\.(?:mp4|m4v|mov|webm|mkv|mpeg|mpg|mp3|wav|m4a|aac|flac|ogg|oga|opus|wma|aiff|aif|mka)(?:\?[^\s"'<>\\]*)?''',
     ]
     found: list[str] = []
     for pattern in patterns:
@@ -126,7 +126,7 @@ def _find_media_in_page(page_url: str) -> str | None:
 
 def download_remote_video(url: str, job_dir: Path) -> Path:
     parsed = urlparse(url)
-    if Path(parsed.path).suffix.lower() in VIDEO_EXTENSIONS:
+    if Path(parsed.path).suffix.lower() in MEDIA_EXTENSIONS:
         return _download_direct_media(url, job_dir)
 
     try:

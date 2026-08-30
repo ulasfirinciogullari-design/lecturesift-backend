@@ -651,6 +651,7 @@ def extract_documents(
         "extracted_words": extracted_words,
         "estimated": bool(pending_ocr_pages),
         "ocr_required": bool(pending_ocr_pages),
+        "pages": sum(int(item.get("pages") or item.get("slides") or 1) for item in metadata),
         "ocr_pages": sum(int(item.get("ocr_pages") or 0) for item in metadata),
         "ocr_used": any(bool(item.get("ocr_used")) for item in metadata),
         "credit_minutes": credit_minutes,

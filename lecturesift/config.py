@@ -155,6 +155,11 @@ RECOVERY_DRILL_CONFIRMED = os.getenv(
 ).lower() == "true"
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".webm", ".mpeg", ".mpg", ".m4v"}
+AUDIO_EXTENSIONS = {
+    ".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".oga", ".opus",
+    ".wma", ".aiff", ".aif", ".mka",
+}
+MEDIA_EXTENSIONS = VIDEO_EXTENSIONS | AUDIO_EXTENSIONS
 DOCUMENT_EXTENSIONS = {".pdf", ".docx", ".pptx", ".txt", ".md", ".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff"}
 
 # Cost inputs are deliberately separated from invoice confirmation. A numeric

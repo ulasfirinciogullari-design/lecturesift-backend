@@ -24,6 +24,12 @@ class Plan:
     flashcards: int | None
     summary_profiles: tuple[str, ...]
     history_days: int
+    max_files_per_job: int = 3
+    max_media_upload_mb: int = 100
+    max_document_upload_mb: int = 25
+    max_minutes_per_job: int = 30
+    max_document_pages: int = 50
+    max_ocr_pages: int = 20
     try_amount_minor: int | None = None
     featured: bool = False
 
@@ -66,6 +72,14 @@ class Plan:
                 "export_formats": list(self.export_formats),
                 "summary_profiles": list(self.summary_profiles),
                 "history_days": self.history_days,
+                "limits": {
+                    "max_files_per_job": self.max_files_per_job,
+                    "max_media_upload_mb": self.max_media_upload_mb,
+                    "max_document_upload_mb": self.max_document_upload_mb,
+                    "max_minutes_per_job": self.max_minutes_per_job,
+                    "max_document_pages": self.max_document_pages,
+                    "max_ocr_pages": self.max_ocr_pages,
+                },
                 "team_seats": self.team_seats,
                 "priority": self.priority,
                 "ad_free": self.ad_free,
@@ -78,14 +92,14 @@ class Plan:
 ALL_SUMMARY_PROFILES = ("short", "standard", "detailed", "exam", "five_minute")
 
 PLANS = (
-    Plan("free", "free", 60, ("pdf",), "standard", 1, 10, 20, ("short", "standard"), 7),
-    Plan("test", "one_time", 1, ("pdf",), "standard", 1, 1, 1, ("short",), 1),
-    Plan("credit", "one_time", 180, ("pdf", "docx", "txt"), "standard", 1, 20, 40, ALL_SUMMARY_PROFILES, 30, 19900),
-    Plan("lite", "subscription", 600, ("pdf", "docx", "txt"), "standard", 1, 20, 40, ALL_SUMMARY_PROFILES, 90, 34900),
-    Plan("plus", "subscription", 2400, ("pdf", "docx", "txt"), "standard", 1, 30, 60, ALL_SUMMARY_PROFILES, 180, 69900, featured=True),
-    Plan("pro", "subscription", 6000, ("pdf", "docx", "txt"), "priority", 1, 30, 60, ALL_SUMMARY_PROFILES, 365, 129900),
-    Plan("max", "subscription", 15000, ("pdf", "docx", "txt"), "priority", 1, 30, 60, ALL_SUMMARY_PROFILES, 730, 249900),
-    Plan("business", "quote", None, ("pdf", "docx", "txt"), "priority", 10, None, None, ALL_SUMMARY_PROFILES, 730),
+    Plan("free", "free", 60, ("pdf",), "standard", 1, 10, 20, ("short", "standard"), 7, 3, 100, 25, 30, 50, 20),
+    Plan("test", "one_time", 1, ("pdf",), "standard", 1, 1, 1, ("short",), 1, 1, 25, 10, 1, 10, 5),
+    Plan("credit", "one_time", 180, ("pdf", "docx", "txt"), "standard", 1, 20, 40, ALL_SUMMARY_PROFILES, 30, 8, 500, 50, 180, 150, 50, 19900),
+    Plan("lite", "subscription", 600, ("pdf", "docx", "txt"), "standard", 1, 20, 40, ALL_SUMMARY_PROFILES, 90, 12, 750, 50, 180, 250, 75, 27900),
+    Plan("plus", "subscription", 1800, ("pdf", "docx", "txt"), "standard", 1, 30, 60, ALL_SUMMARY_PROFILES, 180, 16, 1024, 50, 300, 350, 100, 44900, featured=True),
+    Plan("pro", "subscription", 5000, ("pdf", "docx", "txt"), "priority", 1, 30, 60, ALL_SUMMARY_PROFILES, 365, 24, 1024, 50, 600, 500, 150, 99900),
+    Plan("max", "subscription", 12000, ("pdf", "docx", "txt"), "priority", 1, 30, 60, ALL_SUMMARY_PROFILES, 730, 24, 1024, 50, 900, 500, 150, 199900),
+    Plan("business", "quote", None, ("pdf", "docx", "txt"), "priority", 10, None, None, ALL_SUMMARY_PROFILES, 730, 24, 1024, 50, 1440, 500, 150),
 )
 
 PLAN_BY_CODE = {plan.code: plan for plan in PLANS}
@@ -95,29 +109,29 @@ PLAN_BY_CODE = {plan.code: plan for plan in PLANS}
 # final amount charged.
 _PRICE_PLAN_CODES = ("free", "test", "credit", "lite", "plus", "pro", "max")
 _REGIONAL_PRICE_POINTS = {
-    "TRY": (0, 100, 19900, 34900, 69900, 129900, 249900),
-    "USD": (0, None, 500, 900, 1800, 3300, 6300),
-    "EUR": (0, None, 500, 900, 1700, 3100, 5900),
-    "GBP": (0, None, 400, 800, 1500, 2700, 5200),
-    "CAD": (0, None, 700, 1200, 2500, 4500, 8500),
-    "AUD": (0, None, 800, 1400, 2800, 5200, 9900),
-    "NZD": (0, None, 900, 1600, 3100, 5700, 10900),
+    "TRY": (0, 100, 19900, 27900, 44900, 99900, 199900),
+    "USD": (0, None, 499, 699, 999, 2499, 4999),
+    "EUR": (0, None, 499, 649, 949, 2399, 4799),
+    "GBP": (0, None, 399, 599, 849, 2099, 4199),
+    "CAD": (0, None, 699, 949, 1349, 3399, 6799),
+    "AUD": (0, None, 799, 1099, 1549, 3799, 7599),
+    "NZD": (0, None, 899, 1199, 1699, 4199, 8399),
     # JPY and KRW have zero-decimal minor units; the other values use cents.
-    "JPY": (0, None, 800, 1400, 2800, 5000, 9500),
-    "KRW": (0, None, 7000, 13000, 25000, 47000, 89000),
-    "CNY": (0, None, 3600, 6500, 12900, 23900, 45900),
-    "INR": (0, None, 39900, 74900, 149900, 279900, 529900),
-    "BRL": (0, None, 2500, 4500, 8900, 16900, 31900),
-    "MXN": (0, None, 9900, 17900, 34900, 64900, 124900),
-    "CHF": (0, None, 500, 800, 1600, 3000, 5700),
-    "SEK": (0, None, 5500, 9900, 19900, 36900, 69900),
-    "NOK": (0, None, 5900, 10900, 21900, 39900, 76900),
-    "DKK": (0, None, 3500, 6500, 12900, 22900, 44900),
-    "PLN": (0, None, 2000, 3600, 7200, 13200, 25200),
-    "AED": (0, None, 1900, 3300, 6600, 12100, 23100),
-    "SAR": (0, None, 1900, 3400, 6800, 12400, 23600),
-    "SGD": (0, None, 700, 1200, 2400, 4500, 8500),
-    "HKD": (0, None, 3900, 7000, 14000, 26000, 49000),
+    "JPY": (0, None, 750, 1050, 1500, 3750, 7500),
+    "KRW": (0, None, 6900, 9500, 13900, 34900, 69900),
+    "CNY": (0, None, 3500, 4900, 6900, 17500, 34900),
+    "INR": (0, None, 39900, 54900, 79900, 199900, 399900),
+    "BRL": (0, None, 2499, 3499, 4999, 12499, 24999),
+    "MXN": (0, None, 9900, 13900, 19900, 49900, 99900),
+    "CHF": (0, None, 449, 599, 849, 2199, 4399),
+    "SEK": (0, None, 5299, 7299, 10499, 25999, 51999),
+    "NOK": (0, None, 5499, 7699, 10999, 27499, 54999),
+    "DKK": (0, None, 3499, 4499, 6699, 16999, 33999),
+    "PLN": (0, None, 1999, 2699, 3999, 9999, 19999),
+    "AED": (0, None, 1899, 2599, 3699, 9199, 18399),
+    "SAR": (0, None, 1899, 2599, 3799, 9399, 18799),
+    "SGD": (0, None, 699, 949, 1349, 3399, 6799),
+    "HKD": (0, None, 3899, 5499, 7799, 19499, 38999),
 }
 REGIONAL_PRICES = {
     plan_code: {

@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 
 from .billing_service import BillingError, require_duration_entitlement
-from .config import VIDEO_EXTENSIONS, WORK_DIR
+from .config import MEDIA_EXTENSIONS, WORK_DIR
 from .duration import media_duration_seconds
 from .errors import normalize_error
 from .jobs import JOBS
@@ -97,7 +97,7 @@ def _cleanup_sources(job_dir: Path) -> None:
     for path in job_dir.iterdir() if job_dir.is_dir() else []:
         if (
             path.is_file()
-            and path.suffix.casefold() in VIDEO_EXTENSIONS
+            and path.suffix.casefold() in MEDIA_EXTENSIONS
             and path.name.startswith(("part_", "audio_", "visual_", "remote."))
         ):
             path.unlink(missing_ok=True)
@@ -179,7 +179,15 @@ def process_uploaded_job(
             )
             media_minutes = max(0.1, duration / 60.0)
             try:
-                _enforce_minutes(str(options.get("billing_user_id", "")), job_id, duration)
+                require_duration_entitlement(
+                    str(options.get("billing_user_id", "")),
+                    duration,
+                    source_file_count=len(audio_paths) + len(visual_paths),
+                    source_size_bytes=sum(path.stat().st_size for path in audio_paths + visual_paths if path.exists()),
+                    document_mode=bool(options.get("document_mode")),
+                    document_pages=int(options.get("document_pages") or 0),
+                    ocr_pages=int(options.get("document_ocr_pages") or 0),
+                )
             except BillingError as exc:
                 return _quota_error(job_id, exc)
 
