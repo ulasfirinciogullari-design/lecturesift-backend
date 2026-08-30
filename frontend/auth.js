@@ -275,11 +275,12 @@ async function initAccount() {
   };
 
   const renderJobHistory = jobs => {
+    const workspacePath = I18N.localizedPath ? I18N.localizedPath(I18N.language, "/workspace.html") : "/workspace.html";
     $("jobHistory").innerHTML = jobs.length ? jobs.map(job => {
       const created = new Intl.DateTimeFormat(I18N.locale, {dateStyle:"medium", timeStyle:"short"}).format(new Date(Number(job.created || 0) * 1000));
       const label = job.title || (job.options?.job_type === "audio_export" ? t("history.audioExport", "MP3 dönüşümü") : job.options?.job_type === "download_video" ? t("history.videoDownload", "Video indirme") : t("history.studyPack", "Ders çalışma paketi"));
       const status = job.status === "done" ? t("history.ready", "Hazır") : job.status === "error" ? t("history.failed", "Tamamlanamadı") : t("history.processing", "İşleniyor");
-      const action = job.status === "error" ? "" : `<a class="secondary-action link-action" href="/?job=${encodeURIComponent(job.job_id)}">${t("history.open", "Aç")}</a>`;
+      const action = job.status === "error" ? "" : `<a class="secondary-action link-action" href="${adminSafe(workspacePath)}?job=${encodeURIComponent(job.job_id)}">${t("history.open", "Aç")}</a>`;
       return `<div class="order-row history-row"><span><strong>${adminSafe(label)}</strong><br><small>${adminSafe(created)} · ${adminSafe(status)}</small></span>${action}</div>`;
     }).join("") : `<p class="empty-copy">${t("account.noHistory", "Henüz işlenmiş bir dersin yok.")}</p>`;
   };

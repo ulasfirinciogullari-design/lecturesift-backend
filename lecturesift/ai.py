@@ -519,16 +519,19 @@ def _request_final_study_pack(
 ) -> dict:
     """Keep large detailed packs reliable by separating prose from exercises.
 
-    One oversized JSON response could be truncated before its closing brace. Two
-    bounded responses fit comfortably, run at the same time, and are merged into
-    the exact public schema returned by the original endpoint.
+    One oversized JSON response could be truncated before its closing brace.
+    Smaller bounded responses fit comfortably, run at the same time, and are
+    merged into the exact public schema returned by the original endpoint.
     """
-    # The default and exam-oriented packs contain two independent workloads:
-    # explanatory study content and exercises. Running those provider calls at
-    # the same time shortens the most visible final-analysis wait while keeping
-    # the public result schema unchanged.
+    # Detailed packs contain three independent workloads: the explanatory
+    # overview, structured notes, and optional exercises. Keeping one very
+    # large response for both prose and notes made the final stage wait on a
+    # long token stream (and made a bounded retry equally expensive). Generate
+    # those parts concurrently and merge them into the unchanged public schema.
+    # Standard and exam-oriented packs retain the smaller two-part split.
     split_output = (
-        (summary_style in {"standard", "detailed", "exam"} and (quiz_count > 0 or flashcard_count > 0))
+        summary_style == "detailed"
+        or (summary_style in {"standard", "exam"} and (quiz_count > 0 or flashcard_count > 0))
         or quiz_count > 15
         or flashcard_count > 30
     )
@@ -542,10 +545,23 @@ def _request_final_study_pack(
             **kwargs,
         )
 
+    parts = ["content"]
+    if summary_style == "detailed":
+        parts.append("notes")
+    if quiz_count > 0 or flashcard_count > 0:
+        parts.append("exercises")
+
     def request_part(_index: int, part: str) -> dict:
         shared = dict(kwargs)
         requirements = str(shared.pop("extra_requirements", "") or "").strip()
         if part == "content":
+            detailed_requirements = (
+                "Return an intentionally empty notes array; a parallel response produces the complete structured "
+                "notes. Prioritize the full explanatory summary, key points, important terms, and exam focus."
+                if summary_style == "detailed"
+                else "Prioritize a complete summary, key points, terms, structured notes, and exam focus. "
+                "Return empty quiz and flashcards arrays."
+            )
             return _request_study_pack(
                 source,
                 output_language,
@@ -553,11 +569,28 @@ def _request_final_study_pack(
                 0,
                 0,
                 extra_requirements=(
-                    f"{requirements}\nPrioritize a complete summary, key points, terms, structured notes, and "
-                    "exam focus. Return empty quiz and flashcards arrays."
+                    f"{requirements}\n{detailed_requirements} Return empty quiz and flashcards arrays."
                 ).strip(),
-                max_tokens={"standard": 10_000, "detailed": 14_000, "exam": 10_000}.get(summary_style, 9_000),
+                max_tokens={"standard": 10_000, "detailed": 8_500, "exam": 10_000}.get(summary_style, 9_000),
                 minimum_summary_words={"standard": 320, "detailed": 700, "exam": 350}.get(summary_style, 0),
+                **shared,
+            )
+        if part == "notes":
+            return _request_study_pack(
+                source,
+                output_language,
+                "standard",
+                0,
+                0,
+                summary_target="about 100-180 words",
+                extra_requirements=(
+                    f"{requirements}\nProduce comprehensive, ordered structured notes that cover every source "
+                    "topic, definition, distinction, mechanism, worked example, and lecturer emphasis. Keep the "
+                    "summary and all non-notes fields concise because the full overview is produced in parallel. "
+                    "Return empty quiz and flashcards arrays."
+                ).strip(),
+                max_tokens=8_500,
+                minimum_summary_words=0,
                 **shared,
             )
         return _request_study_pack(
@@ -577,13 +610,19 @@ def _request_final_study_pack(
             **shared,
         )
 
-    content, exercises = _parallel_map(
-        ["content", "exercises"],
+    generated = _parallel_map(
+        parts,
         request_part,
-        min(2, STUDY_PACK_PARALLELISM),
+        min(len(parts), STUDY_PACK_PARALLELISM),
     )
+    responses = dict(zip(parts, generated))
+    content = responses["content"]
     merged = empty_study_pack()
     merged.update(content)
+    notes = responses.get("notes")
+    if notes and notes.get("notes"):
+        merged["notes"] = notes["notes"]
+    exercises = responses.get("exercises") or empty_study_pack()
     if not str(merged.get("title") or "").strip():
         merged["title"] = exercises.get("title") or "LectureSift"
     merged["quiz"] = _normalize_quiz(exercises.get("quiz"), quiz_count)
