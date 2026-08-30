@@ -184,6 +184,7 @@ def test_workspace_outputs_are_individually_optional_and_mobile_ready():
     assert 'data.append("include_transcript"' in script
     assert 'data.append("include_slides"' in script
     assert "formats.push(\"pdf\")" not in script
+    assert 'selectedFormats().join(",") || "none"' in script
     assert script.count('[data-i18n-aria-label]') == 1
     assert ".content-choice-grid" in style
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in style
@@ -877,7 +878,7 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=23"' in index
+    assert 'src="./app.js?v=24"' in index
     assert 'src="/rollout.js?v=5"' in index
     assert '$("plans").scrollIntoView' not in app
 

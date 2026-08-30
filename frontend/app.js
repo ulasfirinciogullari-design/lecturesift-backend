@@ -840,7 +840,7 @@ function formData() {
   data.append("translate_transcript", $("includeTranscript").checked && $("translateTranscript").checked ? "true" : "false");
   data.append("slides_offset_seconds", sourceLayout === "separate" ? ($("slidesOffset").value || "0") : "0");
   data.append("source_layout", sourceLayout); data.append("job_type", jobType.value);
-  data.append("output_formats", selectedFormats().join(","));
+  data.append("output_formats", selectedFormats().join(",") || "none");
   return data;
 }
 
