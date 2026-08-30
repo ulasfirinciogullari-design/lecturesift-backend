@@ -6,7 +6,9 @@ system. No banking, admin, or email credentials are stored in source control.
 
 from __future__ import annotations
 
+import base64
 import hashlib
+import hmac
 import html
 import ipaddress
 import math
@@ -201,6 +203,26 @@ PLAN_BY_CODE.setdefault(
     ),
 )
 
+CONTACT_REPLIES = Table(
+    "lecturesift_contact_replies",
+    METADATA,
+    Column("id", String(36), primary_key=True),
+    Column(
+        "contact_message_id",
+        String(36),
+        ForeignKey("lecturesift_contact_messages.id"),
+        nullable=False,
+        index=True,
+    ),
+    Column("direction", String(12), nullable=False),
+    Column("body", String(4000), nullable=False),
+    Column("sender", String(320), nullable=False),
+    Column("delivery_status", String(20), nullable=False),
+    Column("provider_message_id", String(180), nullable=True),
+    Column("created_at", DateTime(timezone=True), nullable=False, index=True),
+    Column("sent_at", DateTime(timezone=True), nullable=True),
+)
+
 
 def init_rollout_database() -> None:
     init_billing_database()
@@ -215,6 +237,7 @@ def init_rollout_database() -> None:
         ACCOUNT_ACTIVITY,
         REFUND_REQUESTS,
         CONTACT_MESSAGES,
+        CONTACT_REPLIES,
     ):
         table.create(bind=ENGINE, checkfirst=True)
 
@@ -1881,11 +1904,183 @@ def list_admin_credit_events(limit: int = 100) -> list[dict[str, Any]]:
 
 def _public_contact_message(row: Any) -> dict[str, Any]:
     values = dict(row._mapping) if hasattr(row, "_mapping") else dict(row)
-    for key in ("created_at", "updated_at"):
-        if isinstance(values.get(key), datetime):
-            values[key] = values[key].isoformat()
+    for key, value in list(values.items()):
+        if isinstance(value, datetime):
+            values[key] = value.isoformat()
     values["email_notified"] = bool(values.get("email_notified"))
+    values["reply_count"] = int(values.get("reply_count") or 0)
     return values
+
+
+def _public_contact_reply(row: Any) -> dict[str, Any]:
+    values = dict(row._mapping) if hasattr(row, "_mapping") else dict(row)
+    for key, value in list(values.items()):
+        if isinstance(value, datetime):
+            values[key] = value.isoformat()
+    # Provider identifiers are operational metadata, not public conversation data.
+    values.pop("provider_message_id", None)
+    values["sender"] = "LectureSift Destek" if values.get("direction") == "admin" else "Kullanıcı"
+    return values
+
+
+def _support_reply_token(message_id: str) -> str:
+    secret = config.BILLING_SESSION_SECRET or config.ADMIN_ADMIN
+    if not secret:
+        raise BillingConfigurationError("Güvenli destek yanıt bağlantısı henüz yapılandırılmamış.")
+    digest = hmac.new(secret.encode("utf-8"), f"support:{message_id}".encode("utf-8"), hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+
+def _verify_support_reply_token(message_id: str, token: str) -> None:
+    expected = _support_reply_token(message_id)
+    if not token or not secrets.compare_digest(expected, token.strip()):
+        raise BillingAuthenticationError("Destek konuşması bağlantısı geçersiz.")
+
+
+def get_contact_conversation(
+    message_id: str,
+    *,
+    public_token: str | None = None,
+) -> dict[str, Any]:
+    init_rollout_database()
+    if public_token is not None:
+        _verify_support_reply_token(message_id, public_token)
+    with ENGINE.connect() as connection:
+        message = connection.execute(
+            select(CONTACT_MESSAGES).where(CONTACT_MESSAGES.c.id == message_id)
+        ).one_or_none()
+        if message is None:
+            raise BillingError("İletişim mesajı bulunamadı.")
+        replies = connection.execute(
+            select(CONTACT_REPLIES)
+            .where(CONTACT_REPLIES.c.contact_message_id == message_id)
+            .order_by(CONTACT_REPLIES.c.created_at.asc())
+        ).all()
+    return {
+        "message": _public_contact_message(message),
+        "replies": [_public_contact_reply(row) for row in replies],
+    }
+
+
+def reply_to_contact_message(message_id: str, body: str, actor: str) -> dict[str, Any]:
+    normalized_body = body.strip()
+    if len(normalized_body) < 2 or len(normalized_body) > 4000:
+        raise BillingError("Yanıt 2 ile 4000 karakter arasında olmalı.")
+    conversation = get_contact_conversation(message_id)
+    message = conversation["message"]
+    reply_id = str(uuid.uuid4())
+    now = utcnow()
+    with ENGINE.begin() as connection:
+        connection.execute(
+            CONTACT_REPLIES.insert().values(
+                id=reply_id,
+                contact_message_id=message_id,
+                direction="admin",
+                body=normalized_body,
+                sender=actor[:320] or "admin",
+                delivery_status="pending",
+                provider_message_id=None,
+                created_at=now,
+                sent_at=None,
+            )
+        )
+
+    token = _support_reply_token(message_id)
+    conversation_url = (
+        f"{config.FRONTEND_BASE_URL}/support.html#conversation={message_id}&token={token}"
+    )
+    subject = f"LectureSift destek yanıtı · {message['topic']} · #{message_id[:8]}"
+    safe_body = html.escape(normalized_body).replace(chr(10), "<br>")
+    try:
+        provider_id = send_transactional_email(
+            message["email"],
+            subject,
+            (
+                f"<h1>Merhaba {html.escape(message['name'])},</h1>"
+                f"<p>{safe_body}</p>"
+                f'<p><a href="{html.escape(conversation_url)}">Konuşmayı görüntüle ve yanıtla</a></p>'
+                "<p>Bu bağlantı yalnızca bu destek konuşmasına erişim sağlar; kimseyle paylaşma.</p>"
+            ),
+            (
+                f"Merhaba {message['name']},\n\n{normalized_body}\n\n"
+                f"Konuşmayı görüntüle ve yanıtla: {conversation_url}"
+            ),
+            reply_to=config.CONTACT_EMAIL,
+        )
+    except EmailDeliveryError:
+        with ENGINE.begin() as connection:
+            connection.execute(
+                update(CONTACT_REPLIES)
+                .where(CONTACT_REPLIES.c.id == reply_id)
+                .values(delivery_status="failed")
+            )
+        raise
+
+    sent_at = utcnow()
+    with ENGINE.begin() as connection:
+        connection.execute(
+            update(CONTACT_REPLIES)
+            .where(CONTACT_REPLIES.c.id == reply_id)
+            .values(
+                delivery_status="sent",
+                provider_message_id=(provider_id or None),
+                sent_at=sent_at,
+            )
+        )
+        connection.execute(
+            update(CONTACT_MESSAGES)
+            .where(CONTACT_MESSAGES.c.id == message_id)
+            .values(status="read", updated_at=sent_at)
+        )
+    return get_contact_conversation(message_id)
+
+
+def add_public_contact_reply(message_id: str, token: str, body: str) -> dict[str, Any]:
+    normalized_body = body.strip()
+    if len(normalized_body) < 2 or len(normalized_body) > 4000:
+        raise BillingError("Yanıt 2 ile 4000 karakter arasında olmalı.")
+    conversation = get_contact_conversation(message_id, public_token=token)
+    message = conversation["message"]
+    reply_id = str(uuid.uuid4())
+    now = utcnow()
+    with ENGINE.begin() as connection:
+        connection.execute(
+            CONTACT_REPLIES.insert().values(
+                id=reply_id,
+                contact_message_id=message_id,
+                direction="user",
+                body=normalized_body,
+                sender=message["email"],
+                delivery_status="received",
+                provider_message_id=None,
+                created_at=now,
+                sent_at=now,
+            )
+        )
+        connection.execute(
+            update(CONTACT_MESSAGES)
+            .where(CONTACT_MESSAGES.c.id == message_id)
+            .values(status="new", updated_at=now)
+        )
+
+    if email_delivery_configured() and config.CONTACT_EMAIL:
+        try:
+            send_transactional_email(
+                config.CONTACT_EMAIL,
+                f"LectureSift destek yanıtı: {message['topic']} · #{message_id[:8]}",
+                (
+                    f"<h1>Kullanıcı destek konuşmasına yanıt verdi</h1>"
+                    f"<p><strong>Gönderen:</strong> {html.escape(message['name'])} "
+                    f"&lt;{html.escape(message['email'])}&gt;</p>"
+                    f"<p>{html.escape(normalized_body).replace(chr(10), '<br>')}</p>"
+                ),
+                f"Gönderen: {message['name']} <{message['email']}>\n\n{normalized_body}",
+                reply_to=message["email"],
+            )
+        except EmailDeliveryError:
+            # The reply is already durably available in the admin inbox.
+            pass
+    return get_contact_conversation(message_id, public_token=token)
 
 
 def create_contact_message(
@@ -1946,6 +2141,7 @@ def create_contact_message(
                     f"Gönderen: {normalized_name} <{normalized_email}>\n"
                     f"Konu: {normalized_topic}{reference_line}\n\n{normalized_message}"
                 ),
+                reply_to=normalized_email,
             )
             notified = True
         except EmailDeliveryError:
@@ -1972,7 +2168,25 @@ def list_contact_messages(status: str = "", limit: int = 100) -> list[dict[str, 
     if normalized_status and normalized_status not in {"new", "read", "resolved"}:
         raise BillingError("Geçersiz iletişim mesajı durumu.")
     with ENGINE.connect() as connection:
-        query = select(CONTACT_MESSAGES).order_by(CONTACT_MESSAGES.c.created_at.desc()).limit(safe_limit)
+        reply_stats = (
+            select(
+                CONTACT_REPLIES.c.contact_message_id.label("message_id"),
+                func.count(CONTACT_REPLIES.c.id).label("reply_count"),
+                func.max(CONTACT_REPLIES.c.created_at).label("last_reply_at"),
+            )
+            .group_by(CONTACT_REPLIES.c.contact_message_id)
+            .subquery()
+        )
+        query = (
+            select(
+                CONTACT_MESSAGES,
+                func.coalesce(reply_stats.c.reply_count, 0).label("reply_count"),
+                reply_stats.c.last_reply_at,
+            )
+            .outerjoin(reply_stats, reply_stats.c.message_id == CONTACT_MESSAGES.c.id)
+            .order_by(CONTACT_MESSAGES.c.updated_at.desc())
+            .limit(safe_limit)
+        )
         if normalized_status:
             query = query.where(CONTACT_MESSAGES.c.status == normalized_status)
         rows = connection.execute(query).all()

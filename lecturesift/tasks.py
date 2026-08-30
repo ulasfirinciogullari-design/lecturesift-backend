@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import shutil
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from .billing_service import BillingError, require_duration_entitlement
-from .config import MEDIA_EXTENSIONS, WORK_DIR
+from .config import MEDIA_EXTENSIONS, SOURCE_DOWNLOAD_PARALLELISM, WORK_DIR
 from .duration import media_duration_seconds
 from .errors import normalize_error
 from .jobs import JOBS
@@ -21,14 +22,45 @@ install_pipeline_enhancements()
 from .pipeline import process_job  # noqa: E402  (patched before binding)
 
 
-def _download_sources(job_id: str, role: str, keys: list[str], job_dir: Path) -> list[Path]:
-    paths: list[Path] = []
-    for index, key in enumerate(keys, 1):
+def _download_source_specs(
+    job_id: str,
+    specs: list[tuple[str, int, str]],
+    job_dir: Path,
+) -> list[Path]:
+    def download(spec: tuple[str, int, str]) -> Path:
+        role, index, key = spec
         suffix = Path(key).suffix or ".bin"
         destination = job_dir / "sources" / f"{role}_{index:03d}{suffix}"
         STORAGE.download_file(key, destination)
-        paths.append(destination)
-    return paths
+        return destination
+
+    workers = min(SOURCE_DOWNLOAD_PARALLELISM, len(specs))
+    if workers <= 1:
+        return [download(spec) for spec in specs]
+    with ThreadPoolExecutor(
+        max_workers=workers,
+        thread_name_prefix=f"lecturesift-source-{job_id[:8]}",
+    ) as executor:
+        # executor.map preserves input order while transfers finish concurrently.
+        return list(executor.map(download, specs))
+
+
+def _download_sources(job_id: str, role: str, keys: list[str], job_dir: Path) -> list[Path]:
+    specs = [(role, index, key) for index, key in enumerate(keys, 1)]
+    return _download_source_specs(job_id, specs, job_dir)
+
+
+def _download_job_sources(
+    job_id: str,
+    audio_keys: list[str],
+    visual_keys: list[str],
+    job_dir: Path,
+) -> tuple[list[Path], list[Path]]:
+    audio_specs = [("audio", index, key) for index, key in enumerate(audio_keys, 1)]
+    visual_specs = [("visual", index, key) for index, key in enumerate(visual_keys, 1)]
+    downloaded = _download_source_specs(job_id, audio_specs + visual_specs, job_dir)
+    split_at = len(audio_specs)
+    return downloaded[:split_at], downloaded[split_at:]
 
 
 def _enforce_minutes(user_id: str, job_id: str, duration: float) -> None:
@@ -170,8 +202,12 @@ def process_uploaded_job(
                 stage="worker_download",
                 worker_state="downloading",
             )
-            audio_paths = _download_sources(job_id, "audio", list(audio_keys), job_dir)
-            visual_paths = _download_sources(job_id, "visual", list(visual_keys or []), job_dir)
+            audio_paths, visual_paths = _download_job_sources(
+                job_id,
+                list(audio_keys),
+                list(visual_keys or []),
+                job_dir,
+            )
             document_seconds = max(0.0, float(options.get("document_credit_seconds") or 0))
             duration = document_seconds or max(
                 media_duration_seconds(audio_paths),

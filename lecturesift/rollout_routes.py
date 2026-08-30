@@ -19,6 +19,7 @@ from .mailer import EmailDeliveryError
 from .queue import worker_health
 from .security import RATE_LIMITER, RateLimitExceeded
 from .rollout_service import (
+    add_public_contact_reply,
     admin_close_user_account,
     admin_user_identity,
     admin_revoke_user_sessions,
@@ -34,6 +35,7 @@ from .rollout_service import (
     decide_instagram_reward,
     decide_refund_request,
     export_account_data,
+    get_contact_conversation,
     guest_trial_status,
     instagram_reward_for_user,
     is_guest_user,
@@ -48,6 +50,7 @@ from .rollout_service import (
     list_contact_messages,
     refund_requests_for_user,
     request_email_change,
+    reply_to_contact_message,
     issue_rewarded_ad_session,
     redeem_rewarded_ad_session,
     rewarded_ads_for_user,
@@ -125,6 +128,19 @@ class ContactStatusRequest(BaseModel):
     status: str
 
 
+class ContactReplyRequest(BaseModel):
+    message: str
+
+
+class PublicContactReplyRequest(BaseModel):
+    token: str
+    message: str
+
+
+class PublicContactAccessRequest(BaseModel):
+    token: str
+
+
 class AdminUserUpdateRequest(BaseModel):
     email: str
     first_name: str
@@ -194,6 +210,13 @@ def _admin(authorization: str | None = Header(None)) -> dict:
 def _billing_failure(exc: Exception, code: str = "LS-BILL-22") -> None:
     status = 503 if isinstance(exc, (BillingConfigurationError, EmailDeliveryError)) else 400
     raise HTTPException(status, detail={"code": code, "message": str(exc)}) from exc
+
+
+def _public_support_conversation(conversation: dict) -> dict:
+    safe = {**conversation, "message": dict(conversation.get("message") or {})}
+    for key in ("email", "email_notified"):
+        safe["message"].pop(key, None)
+    return safe
 
 
 @router.get("/rollout/health")
@@ -330,6 +353,49 @@ def submit_contact_message(payload: ContactMessageRequest, request: Request) -> 
         "ok": True,
         "message": "Mesajın alındı. Destek ekibi en kısa sürede e-posta adresinden dönecek.",
         "reference": result["id"],
+    }
+
+
+@router.post("/contact/conversations/{message_id}/view")
+def public_contact_conversation(message_id: str, payload: PublicContactAccessRequest) -> dict:
+    try:
+        conversation = get_contact_conversation(message_id, public_token=payload.token)
+    except BillingAuthenticationError as exc:
+        raise HTTPException(401, detail={"code": "LS-CONTACT-05", "message": str(exc)}) from exc
+    except (BillingError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-CONTACT-06")
+    return {"ok": True, **_public_support_conversation(conversation)}
+
+
+@router.post("/contact/conversations/{message_id}/replies")
+def public_contact_reply(
+    message_id: str,
+    payload: PublicContactReplyRequest,
+    request: Request,
+) -> dict:
+    client_key = request.client.host if request.client else "unknown"
+    try:
+        RATE_LIMITER.check(
+            "contact-conversation-reply",
+            f"{client_key}:{message_id}",
+            limit=12,
+            window_seconds=60 * 60,
+        )
+        conversation = add_public_contact_reply(message_id, payload.token, payload.message)
+    except RateLimitExceeded as exc:
+        raise HTTPException(
+            429,
+            detail={"code": "LS-CONTACT-07", "message": str(exc)},
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
+    except BillingAuthenticationError as exc:
+        raise HTTPException(401, detail={"code": "LS-CONTACT-05", "message": str(exc)}) from exc
+    except (BillingError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-CONTACT-06")
+    return {
+        "ok": True,
+        "notice": "Yanıtın destek ekibine ulaştı.",
+        **_public_support_conversation(conversation),
     }
 
 
@@ -758,6 +824,36 @@ def admin_contact_messages(
     except BillingError as exc:
         _billing_failure(exc, "LS-CONTACT-03")
     return {"ok": True, "messages": messages}
+
+
+@router.get("/billing/admin/contact-messages/{message_id}")
+def admin_contact_conversation(
+    message_id: str,
+    admin: dict = Depends(_admin),
+) -> dict:
+    del admin
+    try:
+        conversation = get_contact_conversation(message_id)
+    except BillingError as exc:
+        _billing_failure(exc, "LS-CONTACT-06")
+    return {"ok": True, **conversation}
+
+
+@router.post("/billing/admin/contact-messages/{message_id}/reply")
+def admin_contact_reply(
+    message_id: str,
+    payload: ContactReplyRequest,
+    admin: dict = Depends(_admin),
+) -> dict:
+    try:
+        conversation = reply_to_contact_message(message_id, payload.message, admin["actor"])
+    except (BillingError, BillingConfigurationError, EmailDeliveryError) as exc:
+        _billing_failure(exc, "LS-CONTACT-08")
+    return {
+        "ok": True,
+        "notice": "Yanıt kullanıcıya e-posta olarak gönderildi ve konuşmaya kaydedildi.",
+        **conversation,
+    }
 
 
 @router.post("/billing/admin/contact-messages/{message_id}/status")

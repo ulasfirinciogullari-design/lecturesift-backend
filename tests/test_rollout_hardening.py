@@ -1,5 +1,6 @@
 import uuid
 import json
+import threading
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -8,6 +9,9 @@ from botocore.exceptions import ClientError, EndpointConnectionError
 from lecturesift.billing_service import register_user, verify_email
 from lecturesift.storage import ObjectStorage
 import lecturesift.jobs as jobs_module
+import lecturesift.duration as duration_module
+import lecturesift.storage as storage_module
+import lecturesift.tasks as tasks_module
 from lecturesift.jobs import JobStore
 from main import app
 
@@ -77,6 +81,73 @@ def test_output_publication_excludes_original_source_media(tmp_path: Path):
     assert ObjectStorage._is_source_media(remote, job_dir, remote.name) is True
     assert ObjectStorage._is_source_media(nested, job_dir, "sources/audio_001.mp4") is True
     assert ObjectStorage._is_source_media(output, job_dir, output.name) is False
+
+
+def test_worker_downloads_multiple_private_sources_concurrently_in_original_order(tmp_path, monkeypatch):
+    gate = threading.Barrier(2, timeout=3)
+    monkeypatch.setattr(tasks_module, "SOURCE_DOWNLOAD_PARALLELISM", 2)
+
+    def download(key: str, destination: Path) -> Path:
+        gate.wait()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(key, encoding="utf-8")
+        return destination
+
+    monkeypatch.setattr(tasks_module.STORAGE, "download_file", download)
+    paths = tasks_module._download_sources(
+        "parallel-job",
+        "audio",
+        ["jobs/source-first.mp4", "jobs/source-second.mp4"],
+        tmp_path,
+    )
+    assert [path.name for path in paths] == ["audio_001.mp4", "audio_002.mp4"]
+    assert [path.read_text(encoding="utf-8") for path in paths] == [
+        "jobs/source-first.mp4",
+        "jobs/source-second.mp4",
+    ]
+
+
+def test_duration_probes_run_concurrently_and_keep_exact_sum(tmp_path, monkeypatch):
+    gate = threading.Barrier(2, timeout=3)
+    monkeypatch.setattr(duration_module, "DURATION_PROBE_PARALLELISM", 2)
+
+    def probe(path: Path) -> float:
+        gate.wait()
+        return 11.5 if path.name == "first.mp4" else 8.5
+
+    monkeypatch.setattr(duration_module, "file_duration_seconds", probe)
+    assert duration_module.media_duration_seconds(
+        [tmp_path / "first.mp4", tmp_path / "second.mp4"]
+    ) == 20.0
+
+
+def test_generated_outputs_publish_to_object_storage_concurrently(tmp_path, monkeypatch):
+    job_dir = tmp_path / "publish"
+    (job_dir / "package").mkdir(parents=True)
+    (job_dir / "result.json").write_text("{}", encoding="utf-8")
+    (job_dir / "package" / "notes.txt").write_text("notes", encoding="utf-8")
+    gate = threading.Barrier(2, timeout=3)
+    uploaded = []
+    storage = ObjectStorage.__new__(ObjectStorage)
+    storage.bucket = "private-bucket"
+    storage.remote = True
+    storage._client = object()
+    monkeypatch.setattr(storage_module, "STORAGE_TRANSFER_PARALLELISM", 2)
+
+    def upload(path: Path, key: str) -> str:
+        del path
+        gate.wait()
+        uploaded.append(key)
+        return key
+
+    storage.upload_file = upload
+    result = storage.publish_job("parallel-publish", job_dir)
+    assert set(uploaded) == {
+        "jobs/parallel-publish/package/notes.txt",
+        "jobs/parallel-publish/result.json",
+    }
+    assert result["remote_result_key"] == "jobs/parallel-publish/result.json"
+    assert result["remote_file_count"] == 2
 
 
 def test_object_storage_deletes_private_source_keys_in_batches():

@@ -266,9 +266,61 @@ function renderAdminAccountEvents(events) {
 }
 
 function renderAdminContactMessages(messages) {
-  const rows = messages.map(item => `<tr><td><strong>${adminEscape(item.name)}</strong><br><a href="mailto:${encodeURIComponent(item.email)}">${adminEscape(item.email)}</a><br><small title="${adminEscape(adminDate(item.created_at))}">${adminEscape(adminRelativeDate(item.created_at))}</small></td><td><strong>${adminEscape(item.topic)}</strong>${item.order_reference ? `<br><small>Sipariş no: ${adminEscape(item.order_reference)}</small>` : ""}</td><td class="admin-message-cell">${adminEscape(item.message)}</td><td><span class="status-pill ${item.status === "resolved" ? "paid" : ""}">${adminEscape(adminStatusLabel(item.status))}</span><br><small>${item.email_notified ? "E-posta bildirildi" : "Panelde saklandı"}</small></td><td><span class="admin-actions"><button class="admin-action" data-contact-status="${adminEscape(item.id)}" data-status="read">Okundu</button><button class="admin-action approve" data-contact-status="${adminEscape(item.id)}" data-status="resolved">Çözümlendi</button></span></td></tr>`).join("");
-  admin$("adminContactMessages").innerHTML = `<table class="admin-table"><thead><tr><th>Gönderen</th><th>Konu</th><th>Mesaj</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>${rows || '<tr><td colspan="5">Henüz iletişim mesajı yok.</td></tr>'}</tbody></table>`;
+  const rows = messages.map(item => `<tr><td data-label="Gönderen"><strong>${adminEscape(item.name)}</strong><br><a href="mailto:${encodeURIComponent(item.email)}">${adminEscape(item.email)}</a><br><small title="${adminEscape(adminDate(item.created_at))}">${adminEscape(adminRelativeDate(item.updated_at || item.created_at))}</small></td><td data-label="Konu"><strong>${adminEscape(item.topic)}</strong>${item.order_reference ? `<br><small>Sipariş no: ${adminEscape(item.order_reference)}</small>` : ""}</td><td data-label="Mesaj" class="admin-message-cell">${adminEscape(item.message)}</td><td data-label="Durum"><span class="status-pill ${item.status === "resolved" ? "paid" : ""}">${adminEscape(adminStatusLabel(item.status))}</span><br><small>${Number(item.reply_count || 0)} yanıt · ${item.email_notified ? "bildirim açık" : "panel kaydı"}</small></td><td data-label="İşlem"><span class="admin-actions"><button class="admin-action approve" data-contact-open="${adminEscape(item.id)}">Konuşmayı aç</button><button class="admin-action" data-contact-status="${adminEscape(item.id)}" data-status="resolved">Çöz</button></span></td></tr>`).join("");
+  admin$("adminContactMessages").innerHTML = `<table class="admin-table admin-record-table"><thead><tr><th>Gönderen</th><th>Konu</th><th>Mesaj</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>${rows || '<tr><td colspan="5">Henüz iletişim mesajı yok.</td></tr>'}</tbody></table>`;
   document.querySelectorAll("[data-contact-status]").forEach(button => button.addEventListener("click", () => updateContactMessage(button)));
+  document.querySelectorAll("[data-contact-open]").forEach(button => button.addEventListener("click", () => openContactConversation(button.dataset.contactOpen)));
+}
+
+function renderContactConversation(conversation) {
+  const message = conversation.message || {};
+  const replies = conversation.replies || [];
+  admin$("adminContactDialogTitle").textContent = `${message.topic || "Destek"} · ${message.name || "Kullanıcı"}`;
+  const bubbles = [
+    {direction:"user", sender:message.name, body:message.message, created_at:message.created_at, delivery_status:"received"},
+    ...replies,
+  ].map(item => `<article class="support-bubble ${item.direction === "admin" ? "outgoing" : "incoming"}"><header><strong>${adminEscape(item.direction === "admin" ? "LectureSift Destek" : message.name || "Kullanıcı")}</strong><time>${adminEscape(adminDate(item.created_at))}</time></header><p>${adminEscape(item.body).replace(/\n/g, "<br>")}</p>${item.direction === "admin" ? `<small class="delivery-${adminEscape(item.delivery_status)}">${item.delivery_status === "sent" ? "E-posta gönderildi" : item.delivery_status === "failed" ? "Gönderilemedi · yeniden yanıtla" : "Gönderiliyor"}</small>` : ""}</article>`).join("");
+  admin$("adminContactDialogBody").innerHTML = `<section class="admin-contact-summary"><a href="mailto:${encodeURIComponent(message.email || "")}">${adminEscape(message.email || "")}</a>${message.order_reference ? `<span>Sipariş: ${adminEscape(message.order_reference)}</span>` : ""}<span class="status-pill ${message.status === "resolved" ? "paid" : ""}">${adminEscape(adminStatusLabel(message.status))}</span></section><section class="support-thread" aria-live="polite">${bubbles}</section><form class="admin-contact-reply" data-contact-reply-form="${adminEscape(message.id)}"><label class="field"><span>Yanıtın</span><textarea name="message" minlength="2" maxlength="4000" placeholder="Kullanıcıya gönderilecek yanıtı yaz…" required></textarea></label><div class="admin-actions"><button class="admin-action approve" type="submit">E-postayla gönder</button><button class="admin-action" type="button" data-contact-dialog-status="${adminEscape(message.id)}" data-status="${message.status === "resolved" ? "read" : "resolved"}">${message.status === "resolved" ? "Konuşmayı yeniden aç" : "Çözümlendi olarak işaretle"}</button></div><p class="empty-copy">Yanıt gönderilince kullanıcıya güvenli konuşma bağlantısı da iletilir. Gönderim sonucu burada kalıcı olarak görünür.</p></form>`;
+  admin$("adminContactDialogBody").querySelector("[data-contact-reply-form]")?.addEventListener("submit", submitContactReply);
+  admin$("adminContactDialogBody").querySelector("[data-contact-dialog-status]")?.addEventListener("click", async event => {
+    await updateContactMessage(event.currentTarget, {refresh:false});
+    await openContactConversation(message.id);
+  });
+  const thread = admin$("adminContactDialogBody").querySelector(".support-thread");
+  if (thread) thread.scrollTop = thread.scrollHeight;
+}
+
+async function openContactConversation(messageId) {
+  try {
+    const body = await adminRequest(`/billing/admin/contact-messages/${encodeURIComponent(messageId)}`);
+    renderContactConversation(body);
+    const dialog = admin$("adminContactDialog");
+    if (!dialog.open) dialog.showModal();
+  } catch (error) { adminNotice(error.message, true); }
+}
+
+async function submitContactReply(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const submit = form.querySelector('button[type="submit"]');
+  const messageId = form.dataset.contactReplyForm;
+  const bodyText = String(new FormData(form).get("message") || "").trim();
+  submit.disabled = true;
+  submit.textContent = "Gönderiliyor…";
+  try {
+    const body = await adminRequest(`/billing/admin/contact-messages/${encodeURIComponent(messageId)}/reply`, {method:"POST", body:JSON.stringify({message:bodyText})});
+    adminNotice(body.notice);
+    renderContactConversation(body);
+    const item = adminState.contacts.find(value => value.id === messageId);
+    if (item) Object.assign(item, body.message, {reply_count:(body.replies || []).length, last_reply_at:(body.replies || []).at(-1)?.created_at});
+    applyAdminFilters();
+  } catch (error) {
+    adminNotice(error.message, true);
+    await openContactConversation(messageId);
+  } finally {
+    submit.disabled = false;
+    submit.textContent = "E-postayla gönder";
+  }
 }
 
 function adminReadinessChecks(billing, runtime) {
@@ -791,9 +843,10 @@ async function applyAdminBulkAction() {
   finally { button.disabled = false; }
 }
 
-async function updateContactMessage(button) {
+async function updateContactMessage(button, {refresh = true} = {}) {
   button.disabled = true;
-  try { await adminRequest(`/billing/admin/contact-messages/${encodeURIComponent(button.dataset.contactStatus)}/status`, {method:"POST", body:JSON.stringify({status:button.dataset.status})}); await loadAdmin(); }
+  const messageId = button.dataset.contactStatus || button.dataset.contactDialogStatus;
+  try { await adminRequest(`/billing/admin/contact-messages/${encodeURIComponent(messageId)}/status`, {method:"POST", body:JSON.stringify({status:button.dataset.status})}); if (refresh) await loadAdmin(); }
   catch (error) { adminNotice(error.message, true); button.disabled = false; }
 }
 

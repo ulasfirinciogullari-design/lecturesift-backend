@@ -3,6 +3,7 @@ import re
 import uuid
 import zipfile
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from fastapi.testclient import TestClient
@@ -217,6 +218,107 @@ def test_contact_messages_are_stored_and_visible_to_admin(monkeypatch):
     )
     assert resolved.status_code == 200
     assert resolved.json()["message"]["status"] == "resolved"
+
+
+def test_admin_and_user_can_continue_a_secure_support_conversation(monkeypatch):
+    monkeypatch.setattr(config, "ADMIN_ADMIN", "admin-secret")
+    monkeypatch.setattr(config, "BILLING_SESSION_SECRET", "support-session-secret")
+    monkeypatch.setattr(config, "CONTACT_EMAIL", "support@lecturesift.com")
+    monkeypatch.setattr(rollout_service, "email_delivery_configured", lambda: False)
+    user_email = f"conversation-{uuid.uuid4()}@example.com"
+    created = client.post(
+        "/contact/messages",
+        json={
+            "name": "Destek Kullanıcısı",
+            "email": user_email,
+            "topic": "Teknik destek",
+            "message": "Panel üzerinden iki yönlü konuşma testidir.",
+        },
+    )
+    message_id = created.json()["reference"]
+
+    sent = {}
+    monkeypatch.setattr(
+        rollout_service,
+        "send_transactional_email",
+        lambda to, subject, html, text, **kwargs: sent.update(
+            to=to, subject=subject, html=html, text=text, kwargs=kwargs
+        ) or "resend-message-id",
+    )
+    replied = client.post(
+        f"/billing/admin/contact-messages/{message_id}/reply",
+        headers=auth("admin-secret"),
+        json={"message": "Merhaba, sorununu inceliyoruz. Bu bağlantıdan yanıt verebilirsin."},
+    )
+    assert replied.status_code == 200, replied.text
+    assert replied.json()["replies"][0]["delivery_status"] == "sent"
+    assert sent["to"] == user_email
+    assert sent["kwargs"]["reply_to"] == "support@lecturesift.com"
+    conversation_url = re.search(r"https://[^\s]+support\.html#conversation=[^\s]+", sent["text"]).group(0)
+    query = parse_qs(urlparse(conversation_url).fragment)
+    token = query["token"][0]
+
+    denied = client.post(
+        f"/contact/conversations/{message_id}/view", json={"token": "wrong-token"}
+    )
+    assert denied.status_code == 401
+    public = client.post(
+        f"/contact/conversations/{message_id}/view", json={"token": token}
+    )
+    assert public.status_code == 200
+    assert public.json()["replies"][0]["sender"] == "LectureSift Destek"
+
+    monkeypatch.setattr(rollout_service, "email_delivery_configured", lambda: False)
+    user_reply = client.post(
+        f"/contact/conversations/{message_id}/replies",
+        json={"token": token, "message": "Teşekkürler, ek bilgiyi buradan gönderiyorum."},
+    )
+    assert user_reply.status_code == 200, user_reply.text
+    assert len(user_reply.json()["replies"]) == 2
+    assert user_reply.json()["message"]["status"] == "new"
+
+    admin_conversation = client.get(
+        f"/billing/admin/contact-messages/{message_id}", headers=auth("admin-secret")
+    )
+    assert admin_conversation.status_code == 200
+    assert [item["direction"] for item in admin_conversation.json()["replies"]] == ["admin", "user"]
+    listing = client.get("/billing/admin/contact-messages", headers=auth("admin-secret")).json()
+    listed = next(item for item in listing["messages"] if item["id"] == message_id)
+    assert listed["reply_count"] == 2
+    assert listed["last_reply_at"]
+
+
+def test_failed_admin_support_email_is_stored_and_reported(monkeypatch):
+    monkeypatch.setattr(config, "ADMIN_ADMIN", "admin-secret")
+    monkeypatch.setattr(config, "BILLING_SESSION_SECRET", "support-session-secret")
+    monkeypatch.setattr(rollout_service, "email_delivery_configured", lambda: False)
+    created = client.post(
+        "/contact/messages",
+        json={
+            "name": "Teslimat Testi",
+            "email": f"delivery-{uuid.uuid4()}@example.com",
+            "topic": "Teknik destek",
+            "message": "E-posta teslimat hatası kalıcı kayda alınmalıdır.",
+        },
+    )
+    message_id = created.json()["reference"]
+    monkeypatch.setattr(
+        rollout_service,
+        "send_transactional_email",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            rollout_service.EmailDeliveryError("Gönderilemedi.")
+        ),
+    )
+    response = client.post(
+        f"/billing/admin/contact-messages/{message_id}/reply",
+        headers=auth("admin-secret"),
+        json={"message": "Bu yanıt sağlayıcı tarafından reddedilecek."},
+    )
+    assert response.status_code == 503
+    conversation = client.get(
+        f"/billing/admin/contact-messages/{message_id}", headers=auth("admin-secret")
+    ).json()
+    assert conversation["replies"][0]["delivery_status"] == "failed"
 
 
 def test_manual_order_admin_rejection_and_instagram_approval(monkeypatch):

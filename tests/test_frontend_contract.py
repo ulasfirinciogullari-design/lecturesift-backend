@@ -137,7 +137,7 @@ def test_public_navigation_is_consistent_localized_and_session_aware():
     for page in public_pages:
         content = (FRONTEND / page).read_text(encoding="utf-8")
         assert "/site-shell.js?v=4" in content, page
-        assert "/rollout.css?v=8" in content, page
+        assert "/rollout.css?v=9" in content, page
 
     shell = (FRONTEND / "site-shell.js").read_text(encoding="utf-8")
     assert 'const TOKEN_KEY = "lecturesift-billing-token"' in shell
@@ -204,9 +204,9 @@ def test_workspace_outputs_are_individually_optional_and_mobile_ready():
 def test_every_page_supports_persistent_light_and_dark_themes():
     for page in FRONTEND.glob("*.html"):
         content = page.read_text(encoding="utf-8")
-        assert "/theme.css?v=11" in content, page.name
+        assert "/theme.css?v=12" in content, page.name
         assert "/theme.js?v=2" in content, page.name
-        assert "i18n.js?v=23" in content, page.name
+        assert "i18n.js?v=24" in content, page.name
         assert "page-i18n.js?v=6" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
@@ -544,7 +544,7 @@ def test_admin_cost_reconciliation_controls_are_wired():
 def test_admin_cost_centre_has_theme_specific_readability_rules():
     admin = (FRONTEND / "admin.html").read_text(encoding="utf-8")
     theme = (FRONTEND / "theme.css").read_text(encoding="utf-8")
-    assert 'href="/theme.css?v=11"' in admin
+    assert 'href="/theme.css?v=12"' in admin
     assert "#adminCostsView" in theme
     assert 'html[data-theme="light"] #adminCostsView' in theme
     assert "--cost-warning-text:#754100" in theme
@@ -558,12 +558,19 @@ def test_checkout_names_contact_inbox_and_mobile_plan_navigation_are_wired():
     contact_html = (FRONTEND / "contact.html").read_text(encoding="utf-8")
     contact_js = (FRONTEND / "contact.js").read_text(encoding="utf-8")
     admin_js = (FRONTEND / "admin.js").read_text(encoding="utf-8")
+    admin_html = (FRONTEND / "admin.html").read_text(encoding="utf-8")
+    support_html = (FRONTEND / "support.html").read_text(encoding="utf-8")
+    support_js = (FRONTEND / "support.js").read_text(encoding="utf-8")
     rollout_css = (FRONTEND / "rollout.css").read_text(encoding="utf-8")
     assert "checkoutFirstName" in plans_html and "checkoutLastName" in plans_html
     assert 'first_name: $("checkoutFirstName")' in plans_js
     assert 'last_name: $("checkoutLastName")' in plans_js
     assert "contactForm" in contact_html and "/contact/messages" in contact_js
     assert "/billing/admin/contact-messages" in admin_js
+    assert "adminContactDialog" in admin_html and "admin-contact-reply" in admin_js
+    assert "/billing/admin/contact-messages/${encodeURIComponent(messageId)}/reply" in admin_js
+    assert "supportReplyForm" in support_html and "supportThread" in support_html
+    assert "/contact/conversations/" in support_js and "conversationToken" in support_js
     assert ".topbar .top-actions .top-link" in rollout_css
     assert all(
         value in rollout_css
