@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from lecturesift.app import _options, app
 from lecturesift.errors import normalize_error
 from lecturesift.exports import build_artifacts
+import lecturesift.exports as exports_module
 from lecturesift.jobs import JOBS
 from lecturesift.billing_service import register_user, verify_email
 from lecturesift.media import convert_videos_to_mp3, extract_audio_chunks, validate_remote_url
@@ -188,6 +189,37 @@ def test_selected_word_and_txt_exports(tmp_path: Path):
     assert "Transkript_Ceviri.docx" not in names
     with zipfile.ZipFile(zip_path) as archive:
         assert all(name.endswith((".docx", ".txt")) for name in archive.namelist())
+
+
+def test_selected_output_documents_are_built_concurrently_in_stable_order(tmp_path, monkeypatch):
+    gate = threading.Barrier(2, timeout=3)
+    monkeypatch.setattr(exports_module, "ARTIFACT_EXPORT_PARALLELISM", 2)
+
+    def write_pdf(path: Path, title: str, sections: list) -> None:
+        del title, sections
+        if path.name in {"Ozet.pdf", "Ders_Notlari.pdf"}:
+            gate.wait()
+        path.write_bytes(b"pdf")
+
+    monkeypatch.setattr(exports_module, "_write_pdf", write_pdf)
+    result = {
+        "title": "Parallel exports",
+        "summary": "Summary",
+        "notes": [{"heading": "Note", "content": "Body", "bullets": []}],
+        "quiz": [],
+        "flashcards": [],
+        "transcript_original": "Transcript",
+        "transcript_segments": [],
+        "transcript_translated": "",
+        "slides": [],
+        "options": {"output_formats": ["pdf"], "include_summary": True, "include_transcript": True},
+    }
+    artifacts, _ = exports_module.build_artifacts(tmp_path, result, tmp_path / "slides")
+    assert [item["file"] for item in artifacts] == [
+        "Ozet.pdf",
+        "Ders_Notlari.pdf",
+        "Transkript_Orijinal.pdf",
+    ]
 
 
 def test_same_explicit_language_disables_duplicate_translation():

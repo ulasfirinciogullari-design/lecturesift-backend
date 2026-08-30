@@ -46,6 +46,14 @@ html[data-theme="light"] :is(.flow-grid p,.faq-list p,.credit-callout p,.legal-c
 html[data-theme="light"] :is(.eyebrow,.capability-card p,.capability-card li,.feature-deep-links strong,.feature-deep-links span,.footer-main>p,.consent-banner p,.consent-banner a,.consent-banner button,.consent-manage){font-size:12px!important;line-height:1.55}
 html[data-theme="light"] :is(.consent-banner button,.consent-manage){min-height:40px;padding:8px 12px}
 html[data-theme="light"] :is(.consent-card p,.consent-card b,.consent-card small,.consent-card a,.consent-card button){font-size:12px!important;line-height:1.55;color:#294563!important}
+html[data-theme="light"] .support-thread{background:#edf3fa!important}
+html[data-theme="light"] .support-bubble{background:#fff!important;color:#172943!important;border-color:rgba(26,56,94,.22)!important;box-shadow:0 8px 24px rgba(32,62,98,.09)!important}
+html[data-theme="light"] .support-bubble.outgoing{background:#e2f5ed!important;color:#12372b!important;border-color:rgba(8,116,78,.24)!important}
+html[data-theme="light"] .support-bubble :is(p,strong){color:inherit!important}
+html[data-theme="light"] .support-bubble :is(time,small){color:#506783!important}
+html[data-theme="light"] .support-bubble .delivery-sent{color:#087451!important}
+html[data-theme="light"] .support-bubble .delivery-failed{color:#b72543!important}
+html[data-theme="light"] .admin-contact-reply .admin-action:not(.approve){background:#e5eef8!important;color:#183b62!important;border-color:rgba(26,56,94,.28)!important}
 /* Keep every customer-facing control readable in light mode. Several compact
    components intentionally use tiny dark-theme labels; on a white surface
    those labels need both stronger ink and a 12px floor. */

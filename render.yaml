@@ -28,6 +28,14 @@ services:
         value: "3"
       - key: LECTURESIFT_STUDY_PACK_PARALLELISM
         value: "3"
+      - key: LECTURESIFT_SOURCE_DOWNLOAD_PARALLELISM
+        value: "4"
+      - key: LECTURESIFT_STORAGE_TRANSFER_PARALLELISM
+        value: "4"
+      - key: LECTURESIFT_DURATION_PROBE_PARALLELISM
+        value: "4"
+      - key: LECTURESIFT_ARTIFACT_EXPORT_PARALLELISM
+        value: "3"
       - key: LECTURESIFT_MAX_DOCUMENT_BYTES
         value: "52428800"
       - key: LECTURESIFT_MAX_DOCUMENT_PAGES
@@ -239,6 +247,14 @@ services:
       - key: LECTURESIFT_TRANSLATION_PARALLELISM
         value: "3"
       - key: LECTURESIFT_STUDY_PACK_PARALLELISM
+        value: "3"
+      - key: LECTURESIFT_SOURCE_DOWNLOAD_PARALLELISM
+        value: "4"
+      - key: LECTURESIFT_STORAGE_TRANSFER_PARALLELISM
+        value: "4"
+      - key: LECTURESIFT_DURATION_PROBE_PARALLELISM
+        value: "4"
+      - key: LECTURESIFT_ARTIFACT_EXPORT_PARALLELISM
         value: "3"
       - key: LECTURESIFT_MAX_DOCUMENT_BYTES
         value: "52428800"

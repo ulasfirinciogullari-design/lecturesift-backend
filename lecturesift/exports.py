@@ -1,5 +1,6 @@
 import json
 import shutil
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -15,6 +16,8 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Image as ReportImage
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
+
+from .config import ARTIFACT_EXPORT_PARALLELISM
 
 
 FONT_PATH = Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
@@ -245,35 +248,45 @@ def build_artifacts(job_dir: Path, result: dict, slides_dir: Path) -> tuple[list
     if result.get("flashcards"):
         documents.append(("Flashcards", "Bilgi Kartları", f"{title} - Bilgi Kartları", [("Bilgi Kartları", [_flashcards_text(result["flashcards"])])], _flashcards_text(result["flashcards"])))
 
-    artifacts: list[dict] = []
+    export_jobs: list[tuple[Path, str, object, tuple]] = []
     for stem, label, document_title, sections, plain_text in documents:
         if "pdf" in formats:
             path = package_dir / f"{stem}.pdf"
-            _write_pdf(path, document_title, sections)
-            artifacts.append(_artifact(path, f"{label} (PDF)"))
+            export_jobs.append((path, f"{label} (PDF)", _write_pdf, (path, document_title, sections)))
         if "docx" in formats:
             path = package_dir / f"{stem}.docx"
-            _write_docx(path, document_title, sections)
-            artifacts.append(_artifact(path, f"{label} (Word)"))
+            export_jobs.append((path, f"{label} (Word)", _write_docx, (path, document_title, sections)))
         if "txt" in formats:
             path = package_dir / f"{stem}.txt"
-            path.write_text(plain_text, encoding="utf-8")
-            artifacts.append(_artifact(path, f"{label} (TXT)"))
+            export_jobs.append((path, f"{label} (TXT)", Path.write_text, (path, plain_text, "utf-8")))
 
     slides = result.get("slides", []) if options.get("include_slides", True) else []
     if slides:
         if "pdf" in formats:
             path = package_dir / "Slaytlar.pdf"
-            _write_slides_pdf(path, title, slides, slides_dir)
-            artifacts.append(_artifact(path, "Slaytlar (PDF)"))
+            export_jobs.append((path, "Slaytlar (PDF)", _write_slides_pdf, (path, title, slides, slides_dir)))
         if "docx" in formats:
             path = package_dir / "Slaytlar.docx"
-            _write_slides_docx(path, title, slides, slides_dir)
-            artifacts.append(_artifact(path, "Slaytlar (Word)"))
+            export_jobs.append((path, "Slaytlar (Word)", _write_slides_docx, (path, title, slides, slides_dir)))
         if "txt" in formats:
             path = package_dir / "Slaytlar.txt"
-            path.write_text("\n".join(f"{item.get('timestamp', '')} — {item.get('file', '')}" for item in slides), encoding="utf-8")
-            artifacts.append(_artifact(path, "Slayt Listesi (TXT)"))
+            plain_text = "\n".join(f"{item.get('timestamp', '')} — {item.get('file', '')}" for item in slides)
+            export_jobs.append((path, "Slayt Listesi (TXT)", Path.write_text, (path, plain_text, "utf-8")))
+
+    def export(item: tuple[Path, str, object, tuple]) -> dict:
+        path, label, writer, arguments = item
+        writer(*arguments)
+        return _artifact(path, label)
+
+    workers = min(ARTIFACT_EXPORT_PARALLELISM, len(export_jobs))
+    if workers <= 1:
+        artifacts = [export(item) for item in export_jobs]
+    else:
+        with ThreadPoolExecutor(
+            max_workers=workers,
+            thread_name_prefix="lecturesift-export",
+        ) as executor:
+            artifacts = list(executor.map(export, export_jobs))
 
     _save_result(job_dir, result, artifacts)
     zip_base = job_dir / "LectureSift_Study_Pack_V4"

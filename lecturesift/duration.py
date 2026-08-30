@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Iterable
 
 import cv2
+
+from .config import DURATION_PROBE_PARALLELISM
 
 
 def file_duration_seconds(path: Path) -> float:
@@ -45,4 +48,14 @@ def file_duration_seconds(path: Path) -> float:
 
 
 def media_duration_seconds(paths: Iterable[Path]) -> float:
-    return sum(max(0.0, file_duration_seconds(Path(path))) for path in paths)
+    normalized = [Path(path) for path in paths]
+    workers = min(DURATION_PROBE_PARALLELISM, len(normalized))
+    if workers <= 1:
+        durations = [file_duration_seconds(path) for path in normalized]
+    else:
+        with ThreadPoolExecutor(
+            max_workers=workers,
+            thread_name_prefix="lecturesift-duration",
+        ) as executor:
+            durations = list(executor.map(file_duration_seconds, normalized))
+    return sum(max(0.0, value) for value in durations)

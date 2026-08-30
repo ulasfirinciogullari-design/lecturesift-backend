@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import boto3
@@ -24,6 +25,7 @@ from .config import (
     S3_ENDPOINT_URL,
     S3_REGION,
     S3_SECRET_ACCESS_KEY,
+    STORAGE_TRANSFER_PARALLELISM,
 )
 
 
@@ -139,16 +141,30 @@ class ObjectStorage:
     def publish_job(self, job_id: str, job_dir: Path) -> dict:
         if not self.remote:
             return {}
-        uploaded: list[str] = []
-        for path in job_dir.rglob("*"):
+        paths = []
+        for path in sorted(job_dir.rglob("*")):
             if not path.is_file():
                 continue
             relative = path.relative_to(job_dir).as_posix()
             if self._is_source_media(path, job_dir, relative):
                 continue
+            paths.append(path)
+
+        def publish(path: Path) -> str:
+            relative = path.relative_to(job_dir).as_posix()
             key = f"jobs/{job_id}/{relative}"
             self.upload_file(path, key)
-            uploaded.append(key)
+            return key
+
+        workers = min(STORAGE_TRANSFER_PARALLELISM, len(paths))
+        if workers <= 1:
+            uploaded = [publish(path) for path in paths]
+        else:
+            with ThreadPoolExecutor(
+                max_workers=workers,
+                thread_name_prefix=f"lecturesift-publish-{job_id[:8]}",
+            ) as executor:
+                uploaded = list(executor.map(publish, paths))
         result_key = f"jobs/{job_id}/result.json"
         zip_keys = [key for key in uploaded if key.casefold().endswith(".zip")]
         return {
@@ -163,7 +179,7 @@ class ObjectStorage:
             return 0
         prefix = f"jobs/{job_id}/"
         paginator = self._client.get_paginator("list_objects_v2")
-        count = 0
+        downloads: list[tuple[str, Path]] = []
         for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
             for item in page.get("Contents", []):
                 key = str(item.get("Key", ""))
@@ -172,9 +188,23 @@ class ObjectStorage:
                 relative = key[len(prefix):]
                 if not relative:
                     continue
-                self.download_file(key, destination / relative)
-                count += 1
-        return count
+                downloads.append((key, destination / relative))
+
+        def download(item: tuple[str, Path]) -> Path:
+            key, path = item
+            return self.download_file(key, path)
+
+        workers = min(STORAGE_TRANSFER_PARALLELISM, len(downloads))
+        if workers <= 1:
+            for item in downloads:
+                download(item)
+        else:
+            with ThreadPoolExecutor(
+                max_workers=workers,
+                thread_name_prefix=f"lecturesift-restore-{job_id[:8]}",
+            ) as executor:
+                list(executor.map(download, downloads))
+        return len(downloads)
 
     def delete_job(self, job_id: str) -> int:
         """Delete every stored object for one job without exposing object keys."""
