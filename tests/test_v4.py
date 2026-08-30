@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import io
 import json
 import shutil
@@ -266,6 +267,60 @@ def test_study_options_allow_optional_outputs_and_no_download_files():
     assert options["output_formats"] == []
 
 
+def test_transcript_timestamps_and_speakers_are_normalized_per_job():
+    provider_timestamps = _options(
+        "en",
+        "en",
+        "standard",
+        0,
+        0,
+        False,
+        transcript_timestamps=True,
+        speaker_detection=False,
+    )
+    assert provider_timestamps["transcript_timestamps"] is True
+    assert provider_timestamps["speaker_detection"] is False
+
+    speakers = _options(
+        "en",
+        "en",
+        "standard",
+        0,
+        0,
+        False,
+        transcript_timestamps=False,
+        speaker_detection=True,
+    )
+    assert speakers["transcript_timestamps"] is True
+    assert speakers["speaker_detection"] is True
+
+    no_transcript = _options(
+        "en",
+        "en",
+        "standard",
+        0,
+        0,
+        False,
+        include_transcript=False,
+        transcript_timestamps=True,
+        speaker_detection=True,
+    )
+    assert no_transcript["transcript_timestamps"] is False
+    assert no_transcript["speaker_detection"] is False
+
+
+def test_both_job_creation_endpoints_expose_transcript_controls():
+    for path in ("/jobs", "/jobs/url"):
+        route = next(
+            item
+            for item in app.routes
+            if getattr(item, "path", None) == path and "POST" in getattr(item, "methods", set())
+        )
+        parameters = inspect.signature(route.endpoint).parameters
+        assert "transcript_timestamps" in parameters
+        assert "speaker_detection" in parameters
+
+
 def test_transcript_only_selection_skips_study_generation(monkeypatch):
     monkeypatch.setattr(
         pipeline,
@@ -377,7 +432,7 @@ def test_dual_source_uses_audio_video_for_audio_and_slide_video_for_visuals(tmp_
     transcribed_chunks: list[str] = []
     monkeypatch.setattr(
         "lecturesift.pipeline.transcribe",
-        lambda path, _language: transcribed_chunks.append(path.name) or "Bu ses ana videodan geldi.",
+        lambda path, _language, _duration=None: transcribed_chunks.append(path.name) or "Bu ses ana videodan geldi.",
     )
     monkeypatch.setattr("lecturesift.pipeline.translate_transcript", lambda text, _language: f"Çeviri: {text}")
     monkeypatch.setattr(
@@ -508,6 +563,23 @@ def test_audio_is_prepared_in_bounded_chunks(tmp_path: Path):
     chunks = extract_audio_chunks(video, tmp_path)
     assert [path.name for path in chunks] == ["audio_000.mp3"]
     assert chunks[0].stat().st_size > 0
+
+
+def test_audio_chunk_duration_is_forwarded_to_ffmpeg(tmp_path: Path, monkeypatch):
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"source")
+    captured: dict[str, list[str]] = {}
+
+    def fake_run(command):
+        captured["command"] = command
+        Path(command[-1].replace("%03d", "000")).write_bytes(b"mp3")
+
+    monkeypatch.setattr("lecturesift.media.run_command", fake_run)
+    chunks = extract_audio_chunks(source, tmp_path, segment_seconds=900)
+    command = captured["command"]
+    segment_index = command.index("-segment_time")
+    assert command[segment_index + 1] == "900"
+    assert [path.name for path in chunks] == ["audio_000.mp3"]
 
 
 def test_multi_upload_preserves_user_order(tmp_path: Path, monkeypatch):

@@ -696,10 +696,10 @@ $("classicMode").onclick = () => setSourceLayout("classic");
 $("separateMode").onclick = () => setSourceLayout("separate");
 
 const PACK_PRESETS = {
-  fast: {summary:true, transcript:true, slides:false, quiz:false, cards:false, style:"short", quizCount:"5", cardCount:"10", formats:["pdf"]},
-  balanced: {summary:true, transcript:true, slides:true, quiz:true, cards:true, style:"standard", quizCount:"10", cardCount:"20", formats:["pdf"]},
-  exam: {summary:true, transcript:true, slides:true, quiz:true, cards:true, style:"exam", quizCount:"20", cardCount:"40", formats:["pdf"]},
-  transcript: {summary:false, transcript:true, slides:false, quiz:false, cards:false, style:"standard", quizCount:"5", cardCount:"10", formats:[]},
+  fast: {summary:true, transcript:true, slides:false, quiz:false, cards:false, timestamps:false, speakers:false, style:"short", quizCount:"5", cardCount:"10", formats:["pdf"]},
+  balanced: {summary:true, transcript:true, slides:true, quiz:true, cards:true, timestamps:false, speakers:false, style:"standard", quizCount:"10", cardCount:"20", formats:["pdf"]},
+  exam: {summary:true, transcript:true, slides:true, quiz:true, cards:true, timestamps:false, speakers:false, style:"exam", quizCount:"20", cardCount:"40", formats:["pdf"]},
+  transcript: {summary:false, transcript:true, slides:false, quiz:false, cards:false, timestamps:false, speakers:false, style:"standard", quizCount:"5", cardCount:"10", formats:[]},
 };
 
 function selectedFormats() {
@@ -714,6 +714,19 @@ function syncTranslationChoice() {
   $("translateControl").classList.toggle("is-disabled", same || transcriptDisabled);
   $("translateHelp").textContent = transcriptDisabled ? t("transcriptDisabledHelp") : same ? t("sameLanguageHelp") : t("translateHelp");
 }
+
+function syncTranscriptEnhancements() {
+  const transcriptEnabled = $("includeTranscript").checked;
+  const timestampsEnabled = transcriptEnabled && $("transcriptTimestamps").checked;
+  $("transcriptTimestamps").disabled = !transcriptEnabled;
+  $("transcriptTimestampsControl").classList.toggle("is-disabled", !transcriptEnabled);
+  $("transcriptEnhancements").classList.toggle("is-disabled", !transcriptEnabled);
+  if (!transcriptEnabled) $("transcriptTimestamps").checked = false;
+  $("speakerDetection").disabled = !timestampsEnabled;
+  $("speakerDetectionControl").classList.toggle("is-disabled", !timestampsEnabled);
+  if (!timestampsEnabled) $("speakerDetection").checked = false;
+  $("speakerDetectionRequirement").hidden = !transcriptEnabled || timestampsEnabled;
+}
 sourceLanguage.addEventListener("change", syncTranslationChoice);
 outputLanguage.addEventListener("change", syncTranslationChoice);
 
@@ -721,10 +734,11 @@ function activePresetName() {
   const state = {
     summary:$("includeSummary").checked, transcript:$("includeTranscript").checked, slides:$("includeSlides").checked,
     quiz:$("includeQuiz").checked, cards:$("includeCards").checked, style:summaryStyle.value,
+    timestamps:$("transcriptTimestamps").checked, speakers:$("speakerDetection").checked,
     quizCount:$("quizCount").value, cardCount:$("cardCount").value, formats:selectedFormats(),
   };
   return Object.entries(PACK_PRESETS).find(([, preset]) =>
-    ["summary", "transcript", "slides", "quiz", "cards", "style", "quizCount", "cardCount"].every(key => state[key] === preset[key])
+    ["summary", "transcript", "slides", "quiz", "cards", "timestamps", "speakers", "style", "quizCount", "cardCount"].every(key => state[key] === preset[key])
     && state.formats.join(",") === preset.formats.join(",")
   )?.[0] || "";
 }
@@ -736,6 +750,7 @@ function syncContentChoices() {
   $("quizCount").closest(".content-choice").classList.toggle("is-disabled", !$("includeQuiz").checked);
   $("cardCount").closest(".content-choice").classList.toggle("is-disabled", !$("includeCards").checked);
   syncTranslationChoice();
+  syncTranscriptEnhancements();
   const activePreset = activePresetName();
   document.querySelectorAll("[data-pack-preset]").forEach(button => {
     const active = button.dataset.packPreset === activePreset;
@@ -749,6 +764,7 @@ function applyPackPreset(name) {
   if (!preset) return;
   $("includeSummary").checked = preset.summary; $("includeTranscript").checked = preset.transcript;
   $("includeSlides").checked = preset.slides; $("includeQuiz").checked = preset.quiz; $("includeCards").checked = preset.cards;
+  $("transcriptTimestamps").checked = preset.timestamps; $("speakerDetection").checked = preset.speakers;
   summaryStyle.value = preset.style; $("quizCount").value = preset.quizCount; $("cardCount").value = preset.cardCount;
   [$("formatPdf"), $("formatDocx"), $("formatTxt")].forEach(input => { input.checked = preset.formats.includes(input.value); });
   $("translateTranscript").checked = preset.transcript && !(sourceLanguage.value !== "auto" && sourceLanguage.value === outputLanguage.value);
@@ -756,7 +772,7 @@ function applyPackPreset(name) {
 }
 
 document.querySelectorAll("[data-pack-preset]").forEach(button => button.addEventListener("click", () => applyPackPreset(button.dataset.packPreset)));
-[$("includeSummary"), $("includeTranscript"), $("includeSlides"), $("includeQuiz"), $("includeCards"), $("quizCount"), $("cardCount"), summaryStyle, $("formatPdf"), $("formatDocx"), $("formatTxt")]
+[$("includeSummary"), $("includeTranscript"), $("includeSlides"), $("includeQuiz"), $("includeCards"), $("quizCount"), $("cardCount"), summaryStyle, $("formatPdf"), $("formatDocx"), $("formatTxt"), $("transcriptTimestamps"), $("speakerDetection")]
   .forEach(control => control.addEventListener("change", syncContentChoices));
 
 function updateOperationUI() {
@@ -861,6 +877,9 @@ function formData() {
   data.append("include_transcript", $("includeTranscript").checked ? "true" : "false");
   data.append("include_slides", $("includeSlides").checked ? "true" : "false");
   data.append("translate_transcript", $("includeTranscript").checked && $("translateTranscript").checked ? "true" : "false");
+  const timestampsEnabled = $("includeTranscript").checked && $("transcriptTimestamps").checked;
+  data.append("transcript_timestamps", timestampsEnabled ? "true" : "false");
+  data.append("speaker_detection", timestampsEnabled && $("speakerDetection").checked ? "true" : "false");
   data.append("slides_offset_seconds", sourceLayout === "separate" ? ($("slidesOffset").value || "0") : "0");
   data.append("source_layout", sourceLayout); data.append("job_type", jobType.value);
   data.append("output_formats", selectedFormats().join(",") || "none");
@@ -1038,14 +1057,20 @@ function renderResult(data) {
     cards: Number(options.flashcard_count ?? data.flashcards?.length ?? 0) > 0,
     files: Boolean(data.artifacts?.length),
   };
-  const timestampLabel = data.transcript_timestamps_mode === "provider_segments"
+  const preciseTranscriptMode = ["provider_segments", "speaker_segments"].includes(data.transcript_timestamps_mode);
+  const timestampLabel = preciseTranscriptMode
     ? window.LectureSiftI18n?.t("transcript.preciseTimestamps", "Hassas zaman damgaları")
-    : window.LectureSiftI18n?.t("transcript.estimatedTimestamps", "Bölüm başlangıç zamanları");
+    : data.transcript_timestamps_mode === "chunk_estimate"
+      ? window.LectureSiftI18n?.t("transcript.estimatedTimestamps", "Bölüm başlangıç zamanları")
+      : window.LectureSiftI18n?.t("transcript.noTimestamps", "Zaman damgası kapalı");
   const resultDetails = [];
   if (selected.slides) resultDetails.push(`${data.slides?.length || 0} ${t("tabSlides")}`);
   if (selected.quiz) resultDetails.push(`${data.quiz?.length || 0} Quiz`);
   if (selected.cards) resultDetails.push(`${data.flashcards?.length || 0} ${t("tabCards")}`);
   if (selected.transcript) resultDetails.push(timestampLabel);
+  if (selected.transcript && (data.transcript_segments || []).some(segment => segment.speaker_label || segment.speaker_id || segment.speaker)) {
+    resultDetails.push(window.LectureSiftI18n?.t("transcript.speakerLegend", "Konuşmacılar") || "Konuşmacılar");
+  }
   $("resultMeta").textContent = utilityResult ? `${data.artifacts?.length || 0} ${t("tabFiles")}` : resultDetails.join(" · ");
   const canDownload = data.download_enabled !== false;
   const unlockText = window.LectureSiftI18n?.t("plans.unlockDownload", "Dosyaları indirmek için paket seç") || "Dosyaları indirmek için paket seç";
@@ -1059,7 +1084,7 @@ function renderResult(data) {
   const notes = (data.notes || []).map(item => `<div class="note-item"><h3>${escapeHtml(item.heading)}</h3><p>${escapeHtml(item.content)}</p><ul>${(item.bullets || []).map(value => `<li>${escapeHtml(value)}</li>`).join("")}</ul></div>`).join("");
   const exam = data.exam_focus?.length ? `<div class="note-item"><h3>${escapeHtml(t("summaryExam"))}</h3><ul>${data.exam_focus.map(value => `<li>${escapeHtml(value)}</li>`).join("")}</ul></div>` : "";
   $("notesContent").innerHTML = terms + notes + exam || `<div class="empty-state">${escapeHtml(t("noContent"))}</div>`;
-  renderTranscript(true);
+  renderTranscript(!(data.transcript_segments || []).length);
   $("slidesContent").innerHTML = data.slides?.length ? data.slides.map(slide => `<figure class="slide-card"><img loading="lazy" data-protected-src="/jobs/${jobId}/slide/${encodeURIComponent(slide.file)}" alt="Slide ${escapeHtml(slide.timestamp)}"><figcaption>${escapeHtml(slide.timestamp || `${slide.second}s`)}</figcaption></figure>`).join("") : `<div class="empty-state">${escapeHtml(t("noSlides"))}</div>`;
   document.querySelectorAll("img[data-protected-src]").forEach(async image => {
     try {
@@ -1083,16 +1108,173 @@ function renderResult(data) {
   $("results").hidden = false; $("results").scrollIntoView({behavior: "smooth", block: "start"});
 }
 
+function transcriptUiText(key, fallback) {
+  return window.LectureSiftI18n?.t(key, fallback) || fallback;
+}
+
+function transcriptTemplate(key, fallback, values) {
+  return Object.entries(values).reduce(
+    (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
+    transcriptUiText(key, fallback),
+  );
+}
+
+function transcriptTimestamp(seconds) {
+  const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor(total % 3600 / 60);
+  const remainder = total % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+}
+
+function transcriptSpeakerLabel(value) {
+  const speaker = String(value || "").trim();
+  if (!speaker) return "";
+  if (/^[A-Z0-9_-]{1,12}$/i.test(speaker)) {
+    return `${transcriptUiText("transcript.speakerPrefix", "Konuşmacı")} ${speaker}`;
+  }
+  return speaker;
+}
+
+function normalizedTranscriptSegments(rawSegments) {
+  const speakerMetadata = new Map(
+    (latestResult?.transcript_speaker_metadata?.speakers || [])
+      .filter(speaker => speaker?.speaker_id)
+      .map(speaker => [String(speaker.speaker_id), speaker]),
+  );
+  const segments = (rawSegments || []).map((segment, sourceIndex) => ({
+    sourceIndex,
+    start: Math.max(0, Number(segment.start) || 0),
+    end: Number(segment.end),
+    timestamp: String(segment.timestamp || ""),
+    speakerKey: String(segment.speaker_id || segment.speaker || segment.speaker_label || "").trim(),
+    speaker: transcriptSpeakerLabel(
+      speakerMetadata.get(String(segment.speaker_id || ""))?.label
+      || segment.speaker_label
+      || segment.speaker
+      || segment.speaker_id,
+    ),
+    speakerUncertain: Boolean(segment.speaker_uncertain),
+    text: String(segment.text || "").trim(),
+    precision: String(segment.precision || ""),
+  })).filter(segment => segment.text).sort((left, right) => left.start - right.start || left.sourceIndex - right.sourceIndex);
+  return segments.map((segment, index) => {
+    const nextStart = segments[index + 1]?.start;
+    const end = Number.isFinite(segment.end) && segment.end > segment.start
+      ? segment.end
+      : Number.isFinite(nextStart) && nextStart > segment.start ? nextStart : segment.start + 1;
+    return {...segment, index, end, timestamp:segment.timestamp || transcriptTimestamp(segment.start)};
+  });
+}
+
+function transcriptSpeakerPalette(segments) {
+  const hues = [205, 269, 155, 28, 337, 184, 52, 304];
+  const entries = [];
+  const hueByKey = new Map();
+  segments.forEach(segment => {
+    if (!segment.speakerKey || hueByKey.has(segment.speakerKey)) return;
+    const hue = hues[entries.length % hues.length];
+    hueByKey.set(segment.speakerKey, hue);
+    entries.push({key:segment.speakerKey, label:segment.speaker, hue});
+  });
+  return {entries, hueFor:segment => hueByKey.get(segment.speakerKey) ?? 212};
+}
+
+function activateTranscriptSegment(index, {focusRow = false} = {}) {
+  document.querySelectorAll("[data-transcript-segment]").forEach(control => {
+    const active = Number(control.dataset.transcriptSegment) === index;
+    control.classList.toggle("active", active);
+    if (active) control.setAttribute("aria-current", "true");
+    else control.removeAttribute("aria-current");
+  });
+  if (!focusRow) return;
+  const row = document.querySelector(`.transcript-segment[data-transcript-segment="${index}"]`);
+  if (!row) return;
+  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  row.scrollIntoView({behavior:reducedMotion ? "auto" : "smooth", block:"nearest"});
+  row.focus({preventScroll:true});
+}
+
+function renderTranscriptTimeline(segments) {
+  const timeline = $("transcriptTimeline"), waveform = $("transcriptWaveform"), legend = $("speakerLegend");
+  if (!segments.length) {
+    timeline.hidden = true;
+    waveform.replaceChildren();
+    legend.replaceChildren();
+    return;
+  }
+  const palette = transcriptSpeakerPalette(segments);
+  const duration = Math.max(1, ...segments.map(segment => segment.end));
+  const timelineMinimumWidth = Math.max(1, segments.length * 30);
+  const slots = segments.map(segment => {
+    const left = Math.min(99.6, Math.max(0, segment.start / duration * 100));
+    const width = Math.max(.4, Math.min(100 - left, (segment.end - segment.start) / duration * 100));
+    const height = 34 + Math.min(54, (segment.text.length % 9) * 6);
+    const label = segment.speaker
+      ? transcriptTemplate("transcript.segmentSpeakerAction", "{time} zamanındaki {speaker} bölümünü seç", {time:segment.timestamp, speaker:segment.speaker})
+      : transcriptTemplate("transcript.segmentAction", "{time} zamanındaki bölümü seç", {time:segment.timestamp});
+    return `<span class="transcript-wave-slot" role="listitem" style="--segment-left:${left}%;--segment-width:${width}%;--speaker-hue:${palette.hueFor(segment)}"><button type="button" class="transcript-wave-segment" data-transcript-segment="${segment.index}" style="--wave-height:${height}%" aria-label="${escapeHtml(label)}" aria-controls="transcript-segment-${segment.index}" title="${escapeHtml(label)}"></button></span>`;
+  }).join("");
+  waveform.innerHTML = `<div class="transcript-wave-track" style="--timeline-min-width:${timelineMinimumWidth}px">${slots}</div>`;
+  legend.innerHTML = palette.entries.map(speaker => `<span role="listitem" style="--speaker-hue:${speaker.hue}"><i aria-hidden="true"></i>${escapeHtml(speaker.label)}</span>`).join("");
+  legend.closest(".speaker-legend-shell").hidden = !palette.entries.length;
+  const mode = latestResult?.transcript_timestamps_mode;
+  $("transcriptPrecisionBadge").textContent = ["provider_segments", "speaker_segments"].includes(mode)
+    ? transcriptUiText("transcript.preciseTimestamps", "Hassas zaman damgaları")
+    : mode === "chunk_estimate"
+      ? transcriptUiText("transcript.estimatedTimestamps", "Bölüm başlangıç zamanları")
+      : transcriptUiText("transcript.noTimestamps", "Zaman damgası kapalı");
+  timeline.hidden = false;
+  waveform.querySelectorAll(".transcript-wave-segment").forEach(button => {
+    button.addEventListener("click", () => activateTranscriptSegment(Number(button.dataset.transcriptSegment), {focusRow:true}));
+  });
+}
+
+function renderOriginalTranscript(segments) {
+  const content = $("transcriptContent");
+  if (!segments.length) {
+    content.textContent = latestResult.transcript_original || t("noContent");
+    renderTranscriptTimeline([]);
+    return;
+  }
+  const palette = transcriptSpeakerPalette(segments);
+  content.innerHTML = `<ol class="transcript-segment-list">${segments.map(segment => {
+    const label = segment.speaker
+      ? transcriptTemplate("transcript.segmentSpeakerAction", "{time} zamanındaki {speaker} bölümünü seç", {time:segment.timestamp, speaker:segment.speaker})
+      : transcriptTemplate("transcript.segmentAction", "{time} zamanındaki bölümü seç", {time:segment.timestamp});
+    const speaker = segment.speaker ? `<span class="transcript-speaker"><i aria-hidden="true"></i>${escapeHtml(segment.speaker)}</span>` : "";
+    const accessibleLabel = `${label}. ${segment.text}`;
+    return `<li><button id="transcript-segment-${segment.index}" type="button" class="transcript-segment" data-transcript-segment="${segment.index}" style="--speaker-hue:${palette.hueFor(segment)}" aria-label="${escapeHtml(accessibleLabel)}"><span class="transcript-segment-meta"><time datetime="PT${Math.round(segment.start)}S">${escapeHtml(segment.timestamp)}</time>${speaker}</span><span class="transcript-segment-text" dir="auto">${escapeHtml(segment.text)}</span></button></li>`;
+  }).join("")}</ol>`;
+  renderTranscriptTimeline(segments);
+  content.querySelectorAll(".transcript-segment").forEach(button => {
+    button.addEventListener("click", () => activateTranscriptSegment(Number(button.dataset.transcriptSegment)));
+  });
+}
+
 function renderTranscript(translated) {
   if (!latestResult) return;
   const hasTranslation = Boolean(latestResult.transcript_translated?.trim());
+  const segments = normalizedTranscriptSegments(latestResult.transcript_segments);
   document.querySelector(".transcript-tools").hidden = !hasTranslation;
   translated = hasTranslation && translated;
-  $("showTranslated").classList.toggle("active", translated); $("showOriginal").classList.toggle("active", !translated);
-  const segments = latestResult.transcript_segments || [];
-  const timestamped = segments.map(segment => `[${segment.timestamp || "00:00:00"}]${segment.speaker ? ` ${segment.speaker}` : ""}  ${segment.text || ""}`).join("\n\n");
-  const value = translated ? (latestResult.transcript_translated || latestResult.transcript_original) : (timestamped || latestResult.transcript_original);
-  $("transcriptContent").textContent = value || t("noContent");
+  $("showTranslated").classList.toggle("active", translated);
+  $("showOriginal").classList.toggle("active", !translated);
+  $("showTranslated").setAttribute("aria-pressed", String(translated));
+  $("showOriginal").setAttribute("aria-pressed", String(!translated));
+  $("transcriptTranslationNotice").hidden = !translated || !segments.length;
+  if (translated) {
+    $("transcriptTimeline").hidden = true;
+    $("transcriptContent").replaceChildren();
+    const paragraph = document.createElement("p");
+    paragraph.className = "transcript-plain";
+    paragraph.dir = "auto";
+    paragraph.textContent = latestResult.transcript_translated || latestResult.transcript_original || t("noContent");
+    $("transcriptContent").append(paragraph);
+    return;
+  }
+  renderOriginalTranscript(segments);
+  if (segments.length) activateTranscriptSegment(0);
 }
 
 $("lessonQuestionForm").addEventListener("submit", async event => {

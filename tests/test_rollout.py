@@ -11,6 +11,7 @@ from sqlalchemy import delete
 
 import lecturesift.jobs as jobs_module
 import lecturesift.rollout_service as rollout_service
+import lecturesift.exports as exports_module
 from lecturesift import config, pipeline
 from lecturesift.billing_service import ENGINE, USER_PROFILES, register_user, verify_email
 from lecturesift.pipeline_enhancements import install_pipeline_enhancements
@@ -739,8 +740,16 @@ def test_job_store_persists_and_reloads(tmp_path, monkeypatch):
     assert second.recoverable()[0]["job_id"] == "job-one"
 
 
-def test_smart_notes_question_cards_and_versionless_zip(tmp_path: Path):
+def test_smart_notes_question_cards_and_versionless_zip(tmp_path: Path, monkeypatch):
     install_pipeline_enhancements()
+    archive_calls = []
+    make_archive = exports_module.shutil.make_archive
+
+    def tracked_archive(*args, **kwargs):
+        archive_calls.append((args, kwargs))
+        return make_archive(*args, **kwargs)
+
+    monkeypatch.setattr(exports_module.shutil, "make_archive", tracked_archive)
     result = {
         "title": "Test Ders",
         "summary": "Kapsamlı bir özet.",
@@ -760,6 +769,7 @@ def test_smart_notes_question_cards_and_versionless_zip(tmp_path: Path):
     assert "Akilli_Notlar.pdf" in names
     assert "Ders_Notlari.pdf" not in names
     assert zip_path.name == "LectureSift_Study_Pack.zip"
+    assert len(archive_calls) == 1
     parsed = json.loads((tmp_path / "result.json").read_text(encoding="utf-8"))
     assert parsed["flashcards"][0]["front"].endswith("?")
     with zipfile.ZipFile(zip_path) as archive:

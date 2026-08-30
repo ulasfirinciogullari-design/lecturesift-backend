@@ -17,7 +17,7 @@ services:
       - key: LECTURESIFT_PRECISE_TRANSCRIPT_TIMESTAMPS
         value: "false"
       - key: LECTURESIFT_TRANSCRIPTION_PARALLELISM
-        value: "3"
+        value: "4"
       - key: LECTURESIFT_MEDIA_PREP_PARALLELISM
         value: "2"
       - key: LECTURESIFT_SLIDE_ANALYSIS_PARALLELISM
@@ -239,7 +239,7 @@ services:
       - key: LECTURESIFT_PRECISE_TRANSCRIPT_TIMESTAMPS
         value: "false"
       - key: LECTURESIFT_TRANSCRIPTION_PARALLELISM
-        value: "3"
+        value: "4"
       - key: LECTURESIFT_MEDIA_PREP_PARALLELISM
         value: "2"
       - key: LECTURESIFT_SLIDE_ANALYSIS_PARALLELISM

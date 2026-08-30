@@ -17,7 +17,7 @@ from .config import (
 )
 from .costs import cost_context
 from .documents import extract_documents
-from .duration import media_duration_seconds
+from .duration import media_duration_seconds, media_duration_values
 from .errors import normalize_error
 from .exports import build_artifacts, build_binary_artifact
 from .jobs import JOBS
@@ -37,7 +37,26 @@ def _same_text(left: str, right: str) -> bool:
 
 
 def _public_options(options: dict) -> dict:
-    return {key: value for key, value in options.items() if key != "billing_user_id"}
+    # Worker-only measurements avoid repeated media probes later in the
+    # pipeline.  They are implementation details and must never become part of
+    # a downloadable result or public API response.
+    return {
+        key: value
+        for key, value in options.items()
+        if key != "billing_user_id" and not str(key).startswith("_")
+    }
+
+
+def _measured_duration(options: dict, role: str | None = "audio") -> float | None:
+    """Return a trusted worker-side duration measurement when one is present."""
+    key = f"_measured_{role}_duration_seconds" if role else "_measured_duration_seconds"
+    try:
+        value = float(options.get(key))
+    except (TypeError, ValueError):
+        return None
+    # A real media source cannot have a useful zero-second duration. Treat a
+    # failed/zero worker probe as absent so the pipeline can retry locally.
+    return value if value > 0 else None
 
 
 def _needs_study_generation(options: dict) -> bool:
@@ -70,6 +89,7 @@ def _make_selected_study_pack(source: str, options: dict) -> dict:
             options["summary_style"],
             options["quiz_count"],
             options["flashcard_count"],
+            bool(options.get("include_summary", True)),
         ),
         options,
     )
@@ -90,10 +110,23 @@ def _record_billing_usage(
     if not user_id:
         return
     try:
+        # Quota enforcement bills the longest synchronized source. Reuse that
+        # same overall worker measurement so a longer visual/slides track is
+        # not accidentally charged as only the shorter audio track.
+        measured = _measured_duration(options, None)
+        if measured is None:
+            # Keep already queued jobs and direct pipeline callers compatible.
+            measured = _measured_duration(options, "audio")
         record_usage(
             str(user_id),
             job_id,
-            _source_duration_seconds(paths) if duration_seconds is None else duration_seconds,
+            (
+                duration_seconds
+                if duration_seconds is not None
+                else measured
+                if measured is not None
+                else _source_duration_seconds(paths)
+            ),
         )
     except Exception:
         # The completed study pack remains available if metering is temporarily unavailable.
@@ -135,16 +168,89 @@ def _transcript_timestamp(second: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
+TRANSCRIPT_MODE_FAST = "chunk_estimate"
+TRANSCRIPT_MODE_PROVIDER = "provider_segments"
+TRANSCRIPT_MODE_SPEAKER = "speaker_segments"
+FAST_TRANSCRIPTION_CHUNK_SECONDS = 900
+PROVIDER_TRANSCRIPTION_CHUNK_SECONDS = 3600
+
+
+def _selected_transcript_mode(options: dict) -> str:
+    """Resolve the per-job mode while keeping already queued legacy jobs valid."""
+    if "transcript_timestamps" not in options and "speaker_detection" not in options:
+        return TRANSCRIPT_MODE_SPEAKER if PRECISE_TRANSCRIPT_TIMESTAMPS else TRANSCRIPT_MODE_FAST
+    if options.get("speaker_detection"):
+        return TRANSCRIPT_MODE_SPEAKER
+    if options.get("transcript_timestamps"):
+        return TRANSCRIPT_MODE_PROVIDER
+    return TRANSCRIPT_MODE_FAST
+
+
+def _speaker_token(value: str) -> str:
+    token = "_".join(part for part in "".join(
+        character.casefold() if character.isalnum() else " " for character in value
+    ).split() if part)
+    return token[:48] or "unknown"
+
+
+def _transcript_speaker_metadata(segments: list[dict], mode: str) -> dict:
+    enabled = mode == TRANSCRIPT_MODE_SPEAKER
+    speakers: dict[str, dict] = {}
+    uncertain_segment_count = 0
+    if enabled:
+        for segment in segments:
+            if segment.get("speaker_uncertain"):
+                uncertain_segment_count += 1
+            speaker_id = str(segment.get("speaker_id") or "")
+            if not speaker_id or speaker_id in speakers:
+                continue
+            speakers[speaker_id] = {
+                "speaker_id": speaker_id,
+                "label": segment.get("speaker"),
+                "provider_label": segment.get("speaker_label"),
+                "scope": segment.get("speaker_scope"),
+                "chunk_index": segment.get("chunk_index"),
+            }
+    return {
+        "enabled": enabled,
+        "identity_scope": "audio_chunk" if enabled else "none",
+        "cross_chunk_identity_assumed": False,
+        "uncertain_segment_count": uncertain_segment_count,
+        "all_segments_labeled": enabled and bool(segments) and uncertain_segment_count == 0,
+        "identity_note": (
+            "Provider speaker labels are scoped to one transcription chunk; matching labels in different "
+            "chunks are not treated as the same person."
+            if enabled
+            else "Speaker labels were not requested and provider labels were discarded."
+        ),
+        "speakers": list(speakers.values()),
+    }
+
+
 def _audio_pipeline(
     job_id: str,
     video_paths: list[Path],
     job_dir: Path,
     options: dict,
 ) -> tuple[str, str, list[dict], str]:
+    timestamp_mode = _selected_transcript_mode(options)
+    uses_provider_segments = timestamp_mode in {TRANSCRIPT_MODE_PROVIDER, TRANSCRIPT_MODE_SPEAKER}
+    keeps_speaker_labels = timestamp_mode == TRANSCRIPT_MODE_SPEAKER
+    segment_seconds = (
+        PROVIDER_TRANSCRIPTION_CHUNK_SECONDS
+        if uses_provider_segments
+        else FAST_TRANSCRIPTION_CHUNK_SECONDS
+    )
+
     def prepare_audio(index: int, video_path: Path) -> tuple[int, list[Path]]:
         if not has_audio_stream(video_path):
             return index, []
-        return index, extract_audio_chunks(video_path, job_dir, prefix=f"audio_{index + 1:03d}")
+        return index, extract_audio_chunks(
+            video_path,
+            job_dir,
+            prefix=f"audio_{index + 1:03d}",
+            segment_seconds=segment_seconds,
+        )
 
     prepared: list[list[Path] | None] = [None] * len(video_paths)
     workers = min(MEDIA_PREP_PARALLELISM, len(video_paths))
@@ -181,13 +287,19 @@ def _audio_pipeline(
         JOBS.update_task(job_id, "audio", 100, "no_audio")
         return "", "", [], "none"
 
-    chunk_durations = [_source_duration_seconds([path]) for path in audio_chunks]
+    # The worker already measured the common one-source/one-chunk path for
+    # quota enforcement. Reuse it. Multi-chunk jobs still need exact per-chunk
+    # offsets, so those independent probes run concurrently.
+    measured_audio_duration = _measured_duration(options, "audio")
+    if len(video_paths) == 1 and len(audio_chunks) == 1 and measured_audio_duration is not None:
+        chunk_durations = [measured_audio_duration]
+    else:
+        chunk_durations = media_duration_values(audio_chunks)
     chunk_offsets: list[float] = []
     timeline_cursor = 0.0
     for duration in chunk_durations:
         chunk_offsets.append(timeline_cursor)
         timeline_cursor += duration
-    timestamp_mode = "provider_segments" if PRECISE_TRANSCRIPT_TIMESTAMPS else "chunk_estimate"
     user_id = str(options.get("billing_user_id") or "") or None
 
     def transcribe_chunk(index: int, audio_path: Path) -> tuple[int, str, list[dict]]:
@@ -197,23 +309,61 @@ def _audio_pipeline(
         with cost_context(job_id, user_id):
             timed = None
             text = ""
-            if PRECISE_TRANSCRIPT_TIMESTAMPS:
-                timed = transcribe_timed(audio_path, options["source_language"])
+            if uses_provider_segments:
+                timed = transcribe_timed(audio_path, options["source_language"], chunk_duration)
                 text = timed["text"]
             else:
-                text = transcribe(audio_path, options["source_language"])
-        if PRECISE_TRANSCRIPT_TIMESTAMPS:
+                text = transcribe(audio_path, options["source_language"], chunk_duration)
+        if uses_provider_segments:
+            scope_id = f"chunk_{index + 1:04d}"
             for segment in (timed or {}).get("segments", []):
                 start = offset + float(segment["start"])
                 end = offset + float(segment["end"])
-                segments.append(
-                    {
-                        **segment,
-                        "start": round(start, 2),
-                        "end": round(max(start, end), 2),
-                        "timestamp": _transcript_timestamp(start),
-                    }
-                )
+                normalized_segment = {
+                    "start": round(start, 2),
+                    "end": round(max(start, end), 2),
+                    "timestamp": _transcript_timestamp(start),
+                    "speaker": None,
+                    "text": str(segment.get("text") or "").strip(),
+                    "precision": "provider_segment",
+                    "chunk_index": index,
+                    "chunk_id": scope_id,
+                }
+                if keeps_speaker_labels:
+                    provider_label = str(segment.get("speaker") or "").strip()
+                    if provider_label:
+                        speaker_id = f"{scope_id}:{_speaker_token(provider_label)}"
+                        normalized_segment.update(
+                            {
+                                # Keep today's plain-text/UI consumers honest too:
+                                # repeated A/B labels from separate provider calls
+                                # visibly carry their request-local scope.
+                                "speaker": (
+                                    provider_label
+                                    if len(audio_chunks) == 1
+                                    else f"{provider_label} [{scope_id}]"
+                                ),
+                                "speaker_id": speaker_id,
+                                "speaker_label": provider_label,
+                                "speaker_scope": scope_id,
+                                "speaker_uncertain": False,
+                            }
+                        )
+                    else:
+                        # Do not fail an otherwise valid long job because the
+                        # provider omitted one label, and never invent an
+                        # identity which could be mistaken for a real speaker.
+                        normalized_segment.update(
+                            {
+                                "speaker": None,
+                                "speaker_id": None,
+                                "speaker_label": None,
+                                "speaker_scope": scope_id,
+                                "speaker_uncertain": True,
+                                "speaker_uncertainty_reason": "provider_label_missing",
+                            }
+                        )
+                segments.append(normalized_segment)
         else:
             if text.strip():
                 segments.append(
@@ -224,6 +374,8 @@ def _audio_pipeline(
                         "speaker": None,
                         "text": text.strip(),
                         "precision": "chunk_estimate",
+                        "chunk_index": index,
+                        "chunk_id": f"chunk_{index + 1:04d}",
                     }
                 )
         return index, text.strip(), segments
@@ -517,6 +669,7 @@ def _process_job(
                 "transcript": document_data["text"] if options.get("include_transcript", True) else "",
                 "transcript_segments": [],
                 "transcript_timestamps_mode": "none",
+                "transcript_speaker_metadata": _transcript_speaker_metadata([], "none"),
                 "timeline": [],
                 **study_pack,
             }
@@ -633,10 +786,16 @@ def _process_job(
                 original_transcript, translated_transcript, transcript_segments, timestamp_mode = audio_future.result()
         else:
             slides = []
+            measured_audio_duration = _measured_duration(options, "audio")
             diagnostics = {
                 "engine": "slides-disabled" if visual_sources else "audio-only",
                 "source_parts": len(audio_sources),
-                "duration_seconds": round(_source_duration_seconds(audio_sources), 1),
+                "duration_seconds": round(
+                    measured_audio_duration
+                    if measured_audio_duration is not None
+                    else _source_duration_seconds(audio_sources),
+                    1,
+                ),
                 "final_unique_slides": 0,
                 "slides_offset_seconds": 0.0,
                 "parts": [],
@@ -674,13 +833,21 @@ def _process_job(
             "transcript": (translated_transcript or original_transcript) if options.get("include_transcript", True) else "",
             "transcript_segments": transcript_segments if options.get("include_transcript", True) else [],
             "transcript_timestamps_mode": timestamp_mode,
+            "transcript_speaker_metadata": _transcript_speaker_metadata(
+                transcript_segments if options.get("include_transcript", True) else [],
+                timestamp_mode,
+            ),
             "timeline": sorted(
                 ([
                     {
                         "type": "transcript",
                         "second": item["start"],
+                        "end": item["end"],
+                        "duration": round(max(0.0, float(item["end"]) - float(item["start"])), 2),
                         "timestamp": item["timestamp"],
                         "speaker": item.get("speaker"),
+                        "speaker_id": item.get("speaker_id"),
+                        "speaker_scope": item.get("speaker_scope"),
                         "text": item["text"],
                     }
                     for item in transcript_segments

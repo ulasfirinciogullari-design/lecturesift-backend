@@ -441,15 +441,17 @@ def test_object_storage_health_reports_safe_endpoint_diagnostic():
     assert "private.example.invalid" not in str(result)
 
 
-def test_completed_job_materializes_missing_nested_download(tmp_path: Path, monkeypatch):
+def test_completed_job_poll_does_not_fetch_missing_archive(tmp_path: Path, monkeypatch):
     job_id = "remote-job"
     local_dir = tmp_path / job_id
     local_dir.mkdir()
     (local_dir / "result.json").write_text(json.dumps({"ok": True}), encoding="utf-8")
     calls = []
 
-    def materialize(selected_job_id: str, destination: Path) -> int:
-        calls.append((selected_job_id, destination))
+    remote_key = f"jobs/{job_id}/package/LectureSift_Study_Pack.zip"
+
+    def materialize(selected_job_id: str, destination: Path, keys: list[str]) -> int:
+        calls.append((selected_job_id, destination, keys))
         archive = destination / "package" / "LectureSift_Study_Pack.zip"
         archive.parent.mkdir(parents=True, exist_ok=True)
         archive.write_bytes(b"PK-test")
@@ -457,17 +459,198 @@ def test_completed_job_materializes_missing_nested_download(tmp_path: Path, monk
 
     monkeypatch.setattr(jobs_module, "WORK_DIR", tmp_path)
     monkeypatch.setattr(jobs_module.STORAGE, "remote", True)
-    monkeypatch.setattr(jobs_module.STORAGE, "materialize_job", materialize)
+    monkeypatch.setattr(jobs_module.STORAGE, "materialize_files", materialize)
+    monkeypatch.setattr(
+        jobs_module.STORAGE,
+        "materialize_job",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("full job tree must not be materialized")),
+    )
     store = JobStore.__new__(JobStore)
     data = {
         "job_id": job_id,
         "status": "done",
         "remote_prefix": f"jobs/{job_id}/",
-        "remote_download_key": f"jobs/{job_id}/package/LectureSift_Study_Pack.zip",
+        "remote_result_key": f"jobs/{job_id}/result.json",
+        "remote_download_key": remote_key,
         "result_path": "/worker-only/LectureSift_Study_Pack.zip",
     }
 
     materialized = store._materialize_completed(data)
 
-    assert calls == [(job_id, local_dir)]
-    assert Path(materialized["result_path"]).read_bytes() == b"PK-test"
+    assert calls == []
+    assert materialized["job_dir"] == str(local_dir)
+    assert materialized["result_path"] == "/worker-only/LectureSift_Study_Pack.zip"
+
+    archive_path = store.ensure_local_file(materialized, remote_key)
+
+    assert calls == [(job_id, local_dir, [remote_key])]
+    assert archive_path is not None
+    assert archive_path.read_bytes() == b"PK-test"
+
+
+def test_completed_job_fetches_result_then_archive_only_on_demand(tmp_path: Path, monkeypatch):
+    job_id = "targeted-remote-job"
+    local_dir = tmp_path / job_id
+    result_key = f"jobs/{job_id}/result.json"
+    archive_key = f"jobs/{job_id}/LectureSift_Study_Pack.zip"
+    calls = []
+
+    def materialize(selected_job_id: str, destination: Path, keys: list[str]) -> int:
+        calls.append((selected_job_id, list(keys)))
+        for key in keys:
+            relative = key.removeprefix(f"jobs/{selected_job_id}/")
+            target = destination / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if key == result_key:
+                target.write_text("{}", encoding="utf-8")
+            else:
+                target.write_bytes(b"PK")
+        return len(keys)
+
+    monkeypatch.setattr(jobs_module, "WORK_DIR", tmp_path)
+    monkeypatch.setattr(jobs_module.STORAGE, "remote", True)
+    monkeypatch.setattr(jobs_module.STORAGE, "materialize_files", materialize)
+    monkeypatch.setattr(
+        jobs_module.STORAGE,
+        "materialize_job",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("full job tree must not be materialized")),
+    )
+    store = JobStore.__new__(JobStore)
+    data = {
+        "job_id": job_id,
+        "status": "done",
+        "remote_prefix": f"jobs/{job_id}/",
+        "remote_result_key": result_key,
+        "remote_download_key": archive_key,
+        "result_path": "/worker-only/LectureSift_Study_Pack.zip",
+    }
+
+    materialized = store._materialize_completed(data)
+
+    assert calls == [(job_id, [result_key])]
+    assert (local_dir / "result.json").is_file()
+    assert not (local_dir / "LectureSift_Study_Pack.zip").exists()
+    assert materialized["result_path"] == "/worker-only/LectureSift_Study_Pack.zip"
+
+    archive_path = store.ensure_local_file(materialized, archive_key)
+
+    assert calls == [(job_id, [result_key]), (job_id, [archive_key])]
+    assert archive_path is not None
+    assert archive_path.read_bytes() == b"PK"
+
+
+def test_remote_result_slide_artifact_and_download_endpoints_fetch_one_object_each(
+    tmp_path: Path,
+    monkeypatch,
+):
+    token = new_token()
+    user_id = client.get("/billing/me", headers=auth(token)).json()["account"]["user"]["id"]
+    job_id = f"remote-endpoints-{uuid.uuid4()}"
+    prefix = f"jobs/{job_id}/"
+    result_key = f"{prefix}result.json"
+    archive_key = f"{prefix}package/LectureSift_Study_Pack.zip"
+    data = {
+        "job_id": job_id,
+        "status": "done",
+        "job_dir": "/worker-only/job",
+        "result_path": "/worker-only/LectureSift_Study_Pack.zip",
+        "remote_prefix": prefix,
+        "remote_result_key": result_key,
+        "remote_download_key": archive_key,
+        "options": {"billing_user_id": user_id, "download_entitled": True},
+    }
+    calls: list[tuple[str, str]] = []
+
+    def ensure_local_file(
+        selected: dict,
+        remote_key: str = "",
+        *,
+        local_relative: str = "",
+    ) -> Path:
+        assert selected["job_id"] == job_id
+        calls.append((remote_key, local_relative))
+        relative = remote_key.removeprefix(prefix) if remote_key else local_relative
+        target = tmp_path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if relative == "result.json":
+            target.write_text(json.dumps({"title": "Remote result"}), encoding="utf-8")
+        elif relative.endswith(".zip"):
+            target.write_bytes(b"PK-remote")
+        elif relative.endswith(".jpg"):
+            target.write_bytes(b"JPEG-remote")
+        else:
+            target.write_bytes(b"PDF-remote")
+        return target
+
+    monkeypatch.setattr(jobs_module.JOBS, "get", lambda selected_job_id: data.copy() if selected_job_id == job_id else None)
+    monkeypatch.setattr(jobs_module.JOBS, "ensure_local_file", ensure_local_file)
+
+    result = client.get(f"/jobs/{job_id}/result", headers=auth(token))
+    slide = client.get(f"/jobs/{job_id}/slide/slide_001.jpg", headers=auth(token))
+    artifact = client.get(f"/jobs/{job_id}/artifact/notes.pdf", headers=auth(token))
+    archive = client.get(f"/jobs/{job_id}/download", headers=auth(token))
+
+    assert result.status_code == 200
+    assert result.json()["title"] == "Remote result"
+    assert slide.status_code == 200 and slide.content == b"JPEG-remote"
+    assert artifact.status_code == 200 and artifact.content == b"PDF-remote"
+    assert archive.status_code == 200 and archive.content == b"PK-remote"
+    assert calls == [
+        (result_key, "result.json"),
+        ("", "slides/slide_001.jpg"),
+        ("", "package/notes.pdf"),
+        (archive_key, ""),
+    ]
+
+
+def test_object_storage_materializes_only_valid_requested_job_keys(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(storage_module, "STORAGE_TRANSFER_PARALLELISM", 1)
+    storage = ObjectStorage.__new__(ObjectStorage)
+    storage.bucket = "private-bucket"
+    storage.remote = True
+    storage._client = object()
+    downloaded = []
+
+    def download(key: str, destination: Path) -> Path:
+        downloaded.append((key, destination.relative_to(tmp_path).as_posix()))
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(b"data")
+        return destination
+
+    storage.download_file = download
+    count = storage.materialize_files(
+        "selected-job",
+        tmp_path,
+        [
+            "jobs/selected-job/result.json",
+            "jobs/selected-job/package/LectureSift_Study_Pack.zip",
+            "jobs/selected-job/result.json",
+            "jobs/other-job/private.txt",
+            "jobs/selected-job/../escape.txt",
+        ],
+    )
+
+    assert count == 2
+    assert downloaded == [
+        ("jobs/selected-job/result.json", "result.json"),
+        ("jobs/selected-job/package/LectureSift_Study_Pack.zip", "package/LectureSift_Study_Pack.zip"),
+    ]
+
+
+def test_repeated_rounded_task_progress_skips_state_flush(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(jobs_module, "WORK_DIR", tmp_path)
+    monkeypatch.setattr(jobs_module, "REDIS_URL", "")
+    store = JobStore()
+    job_dir = tmp_path / "progress-job"
+    job_dir.mkdir()
+    store.create("progress-job", job_dir, {})
+    flushes = []
+    monkeypatch.setattr(store, "_flush_locked", lambda: flushes.append(True))
+
+    store.update_task("progress-job", "audio", 12.1, "transcription")
+    store.update_task("progress-job", "audio", 12.4, "transcription")
+    assert len(flushes) == 1
+
+    store.update_task("progress-job", "audio", 12.6, "transcription")
+    store.update_task("progress-job", "audio", 12.6, "transcript_ready")
+    assert len(flushes) == 3

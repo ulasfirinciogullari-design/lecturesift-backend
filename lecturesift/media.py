@@ -20,6 +20,8 @@ def run_command(command: list[str]) -> subprocess.CompletedProcess:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     if process.returncode != 0:
         raise RuntimeError(process.stderr[-12000:])
@@ -124,7 +126,29 @@ def _find_media_in_page(page_url: str) -> str | None:
     return found[0] if found else None
 
 
-def download_remote_video(url: str, job_dir: Path) -> Path:
+def _remote_download_format(job_type: str, include_slides: bool) -> str:
+    """Select only the streams needed by the requested job.
+
+    Download jobs retain the provider's best available video. Transcript and
+    audio-export jobs avoid downloading a video stream entirely. Slide-aware
+    analysis keeps enough visual detail for OCR while avoiding unnecessarily
+    large 1440p/4K transfers.
+    """
+    normalized_job_type = str(job_type or "study_pack").strip().lower()
+    if normalized_job_type == "download_video":
+        return "bv*+ba/b"
+    if normalized_job_type in {"audio_export", "transcript", "transcription"} or not include_slides:
+        return "bestaudio/best"
+    return "bestvideo[height<=720]+bestaudio/best[height<=720]/best"
+
+
+def download_remote_video(
+    url: str,
+    job_dir: Path,
+    *,
+    job_type: str = "study_pack",
+    include_slides: bool = True,
+) -> Path:
     parsed = urlparse(url)
     if Path(parsed.path).suffix.lower() in MEDIA_EXTENSIONS:
         return _download_direct_media(url, job_dir)
@@ -150,7 +174,7 @@ def download_remote_video(url: str, job_dir: Path) -> Path:
     output_template = str(job_dir / "remote.%(ext)s")
     options = {
         "outtmpl": output_template,
-        "format": "bv*+ba/b",
+        "format": _remote_download_format(job_type, include_slides),
         "merge_output_format": "mp4",
         "noplaylist": True,
         "quiet": True,
@@ -198,6 +222,8 @@ def has_audio_stream(video_path: Path) -> bool:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         return bool(process.stdout.strip())
     except FileNotFoundError:
@@ -211,8 +237,14 @@ def has_audio_stream(video_path: Path) -> bool:
         return fallback.returncode == 0
 
 
-def extract_audio_chunks(video_path: Path, job_dir: Path, prefix: str = "audio") -> list[Path]:
+def extract_audio_chunks(
+    video_path: Path,
+    job_dir: Path,
+    prefix: str = "audio",
+    segment_seconds: int = 1200,
+) -> list[Path]:
     safe_prefix = re.sub(r"[^a-zA-Z0-9_-]", "_", prefix)
+    bounded_segment_seconds = max(60, int(segment_seconds))
     audio_pattern = job_dir / f"{safe_prefix}_%03d.mp3"
     run_command(
         [
@@ -230,7 +262,7 @@ def extract_audio_chunks(video_path: Path, job_dir: Path, prefix: str = "audio")
             "-f",
             "segment",
             "-segment_time",
-            "1200",
+            str(bounded_segment_seconds),
             "-reset_timestamps",
             "1",
             str(audio_pattern),

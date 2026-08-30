@@ -1,7 +1,9 @@
 fastapi==0.116.1
 uvicorn[standard]==0.35.0
 python-multipart==0.0.20
-openai>=1.99.0
+# 3.6 exposes typed diarized transcription responses and the top-level
+# chunking_strategy parameter used by the selectable speaker/timeline mode.
+openai>=3.6.0,<4
 opencv-python-headless==4.12.0.88
 numpy>=2.0,<3
 yt-dlp
