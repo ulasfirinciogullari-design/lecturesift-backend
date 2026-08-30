@@ -15,7 +15,7 @@ const EN = {
   title: "Turn every lecture source into one organized study pack.",
   subtitle: "Add video, audio, PDF, Word, PowerPoint, TXT, or Markdown and turn it into one organized study pack.",
   sourceTitle: "Add the lecture source", secure: "Secure processing", uploadTab: "Upload file", linkTab: "Use a link",
-  dropTitle: "Drop a source here", dropText: "or choose from your device", fileHelp: "Video: 1 GB total · Documents: 50 MB total · Process media and documents separately",
+  dropTitle: "Drop a source here", dropText: "or choose from your device", fileHelp: "Your per-job upload limits are loading from your active plan.",
   audioSourceTitle: "Audio sources", audioSourceHelp: "Add audio-bearing recordings in lecture order.",
   slidesSourceTitle: "Visual / slide sources", slidesSourceHelp: "Add slide recordings in lecture order.", addSlidesVideo: "Add slide video",
   required: "Required", optional: "Optional", syncOffset: "Slide time offset", syncOffsetHelp: "Leave at 0 if both recordings started together.",
@@ -66,7 +66,7 @@ const TR = {
   title: "Tüm ders kaynaklarını tek düzenli çalışma paketine dönüştür.",
   subtitle: "Video, ses, PDF, Word, PowerPoint, TXT veya Markdown ekle; tek düzenli çalışma paketine dönüştür.",
   sourceTitle: "Ders kaynağını ekle", secure: "Güvenli işlem", uploadTab: "Dosya yükle", linkTab: "Bağlantı kullan",
-  dropTitle: "Kaynağı buraya bırak", dropText: "veya cihazından seç", fileHelp: "Video: toplam 1 GB · Belgeler: toplam 50 MB · Video ve belgeyi ayrı işle",
+  dropTitle: "Kaynağı buraya bırak", dropText: "veya cihazından seç", fileHelp: "Tek iş yükleme sınırların aktif planından yükleniyor.",
   audioSourceTitle: "Ses kaynakları", audioSourceHelp: "Sesli kayıtları ders sırasına göre ekle.",
   slidesSourceTitle: "Görüntü / slayt kaynakları", slidesSourceHelp: "Slayt kayıtlarını ders sırasına göre ekle.", addSlidesVideo: "Slayt videosu ekle",
   required: "Zorunlu", optional: "İsteğe bağlı", syncOffset: "Slayt zaman farkı", syncOffsetHelp: "Aynı anda başladıysa 0 bırak.",
@@ -153,7 +153,7 @@ const ERRORS = {
     "LS-AI-02": "The AI service is busy. Try again in a few minutes.",
     "LS-URL-02": "The video provider blocked server-side downloading. Upload the file or use a direct MP4/WebM link.",
     "LS-URL-03": "No downloadable video was found on this page. Use a direct video link or upload the file.",
-    "LS-UPLOAD-02": "The video is larger than the allowed file size.",
+    "LS-UPLOAD-02": "The selected sources exceed the upload size allowed by your plan.",
     "LS-UPLOAD-04": "The file-processing request could not be completed. Try again, or upload a smaller copy of the document.",
     "LS-UPLOAD-05": "Video and document sources cannot be mixed in one job. Upload them separately.",
     "LS-DOC-01": "The document is empty.",
@@ -180,7 +180,7 @@ const ERRORS = {
     "LS-AI-02": "Yapay zekâ hizmeti yoğun. Birkaç dakika sonra tekrar dene.",
     "LS-URL-02": "Video sağlayıcısı sunucu üzerinden indirmeyi engelledi. Dosyayı yükle veya doğrudan MP4/WebM bağlantısı kullan.",
     "LS-URL-03": "Bu sayfada indirilebilir video bulunamadı. Doğrudan video bağlantısı kullan veya dosyayı yükle.",
-    "LS-UPLOAD-02": "Video izin verilen dosya boyutundan büyük.",
+    "LS-UPLOAD-02": "Seçilen kaynaklar planının izin verdiği yükleme boyutunu aşıyor.",
     "LS-UPLOAD-04": "Dosya işleme isteği tamamlanamadı. Yeniden dene veya belgenin daha küçük bir kopyasını yükle.",
     "LS-UPLOAD-05": "Video ve belge kaynakları aynı işte karıştırılamaz. Ayrı ayrı yükle.",
     "LS-DOC-01": "Belge boş görünüyor.",
@@ -257,6 +257,7 @@ function applyLanguage() {
   syncContentChoices(); updateOperationUI();
   if (billingCatalog) renderPlans();
   renderBillingAccount();
+  updateSourceLimitHelp();
 }
 
 uiLanguage.replaceChildren();
@@ -309,11 +310,11 @@ const FALLBACK_PRICES = {
 const PLAN_SOURCE_LIMITS = {
   free: {max_files_per_job:3, max_media_upload_mb:100, max_document_upload_mb:25, max_minutes_per_job:30, max_document_pages:50, max_ocr_pages:20},
   credit: {max_files_per_job:8, max_media_upload_mb:500, max_document_upload_mb:50, max_minutes_per_job:180, max_document_pages:150, max_ocr_pages:50},
-  lite: {max_files_per_job:12, max_media_upload_mb:750, max_document_upload_mb:50, max_minutes_per_job:180, max_document_pages:250, max_ocr_pages:75},
-  plus: {max_files_per_job:16, max_media_upload_mb:1024, max_document_upload_mb:50, max_minutes_per_job:300, max_document_pages:350, max_ocr_pages:100},
-  pro: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:50, max_minutes_per_job:600, max_document_pages:500, max_ocr_pages:150},
-  max: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:50, max_minutes_per_job:900, max_document_pages:500, max_ocr_pages:150},
-  business: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:50, max_minutes_per_job:1440, max_document_pages:500, max_ocr_pages:150},
+  lite: {max_files_per_job:12, max_media_upload_mb:750, max_document_upload_mb:75, max_minutes_per_job:180, max_document_pages:250, max_ocr_pages:75},
+  plus: {max_files_per_job:16, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:300, max_document_pages:350, max_ocr_pages:100},
+  pro: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:600, max_document_pages:500, max_ocr_pages:150},
+  max: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:900, max_document_pages:500, max_ocr_pages:150},
+  business: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:1440, max_document_pages:500, max_ocr_pages:150},
 };
 
 function fallbackCatalog(currency) {
@@ -396,6 +397,7 @@ function renderBillingAccount() {
     $("accountButton").textContent = loggedIn ? (billingAccount.user.first_name || billingAccount.user.email) : t("login");
     $("accountButton").href = loggedIn ? "/account.html" : "/login.html";
   }
+  updateSourceLimitHelp();
   if (!loggedIn) return;
   if ($("accountEmail")) $("accountEmail").textContent = billingAccount.user.email;
   if ($("accountPlan")) $("accountPlan").textContent = `${t("currentPlan")}: ${planCopy(billingAccount.plan.code)[0]}`;
@@ -555,6 +557,25 @@ const DEFAULT_SOURCE_LIMITS = {max_files_per_job:3, max_media_upload_mb:100, max
 function activeSourceLimits() {
   return billingAccount?.job_entitlements?.limits || billingAccount?.plan?.entitlements?.limits || DEFAULT_SOURCE_LIMITS;
 }
+function updateSourceLimitHelp() {
+  const node = $("sourceLimitHelp");
+  if (!node) return;
+  const limits = activeSourceLimits();
+  const central = window.LectureSiftI18n;
+  const locale = central?.locale || (currentLanguage === "tr" ? "tr-TR" : navigator.language);
+  const number = value => Number(value || 0).toLocaleString(locale);
+  const prefix = central?.t("upload.activePlanLimits", "Aktif plan · tek işte") || "Aktif plan · tek işte";
+  const media = central?.t("plans.mediaShort", "medya") || "medya";
+  const documentLabel = central?.t("plans.documentShort", "belge") || "belge";
+  const sources = central?.t("plans.filesPerJobShort", "kaynak / iş") || "kaynak / iş";
+  node.textContent = `${prefix}: ${number(limits.max_media_upload_mb)} MB ${media} · ${number(limits.max_document_upload_mb)} MB ${documentLabel} · ${number(limits.max_files_per_job)} ${sources}`;
+}
+function uploadLimitMessage(documentMode, limitMb) {
+  const central = window.LectureSiftI18n;
+  const base = central?.t("upload.planSizeLimit", "Bu seçim planının tek iş yükleme sınırını aşıyor.") || "Bu seçim planının tek iş yükleme sınırını aşıyor.";
+  const kind = central?.t(documentMode ? "plans.documentShort" : "plans.mediaShort", documentMode ? "belge" : "medya") || (documentMode ? "belge" : "medya");
+  return `${base} ${Number(limitMb).toLocaleString(central?.locale || navigator.language)} MB ${kind}.`;
+}
 function selectedSourceFiles(role) {
   return role === "classic" ? classicVideos : [...audioVideos, ...visualVideos];
 }
@@ -608,7 +629,7 @@ function addFiles(role, incoming) {
       : Number(limits.max_media_upload_mb || DEFAULT_SOURCE_LIMITS.max_media_upload_mb);
     const projectedBytes = selected.reduce((sum, item) => sum + Number(item.size || 0), 0) + Number(file.size || 0);
     if (projectedBytes > uploadLimitMb * 1024 * 1024) {
-      showError(window.LectureSiftI18n?.t("upload.planSizeLimit", "Bu seçim planının tek iş yükleme sınırını aşıyor."), "LS-UPLOAD-02");
+      showError(uploadLimitMessage(isDocumentFile(file), uploadLimitMb), "LS-UPLOAD-02");
       continue;
     }
     const key = `${file.name}:${file.size}:${file.lastModified}`;
@@ -812,7 +833,9 @@ function updateJobView(job) {
 function showError(message, code = "LS-SYSTEM-01") {
   const known = ERRORS.tr[code];
   const centralKey = ({"LS-AI-03":"error.ai03","LS-AI-04":"error.ai04","LS-AI-05":"error.ai05","LS-AI-06":"error.ai06","LS-AI-07":"error.ai07","LS-AI-08":"error.ai08"})[code];
-  const translated = centralKey
+  const translated = code === "LS-UPLOAD-02" && message
+    ? message
+    : centralKey
     ? window.LectureSiftI18n?.t(centralKey, message)
     : known
     ? (currentLanguage === "tr" ? known : currentLanguage === "en" ? ERRORS.en[code] : window.LectureSiftI18n?.exact(known))
@@ -873,8 +896,10 @@ $("analyzeButton").onclick = async () => {
     showError("Ses ve görüntü ayrı modunda her iki listeye de en az bir video ekle.", "LS-UPLOAD-03"); return;
   }
   const documentUpload = sourceLayout === "classic" && uploadFiles.length && uploadFiles.every(isDocumentFile);
-  if (sourceMode === "upload" && uploadFiles.reduce((total, file) => total + file.size, 0) > (documentUpload ? 50 * 1024 ** 2 : 1024 ** 3)) {
-    showError(documentUpload ? "Belgelerin toplam boyutu 50 MB sınırını aşıyor." : "Dosyaların toplam boyutu 1 GB sınırını aşıyor.", "LS-UPLOAD-02"); return;
+  const sourceLimits = activeSourceLimits();
+  const uploadLimitMb = Number(documentUpload ? sourceLimits.max_document_upload_mb : sourceLimits.max_media_upload_mb);
+  if (sourceMode === "upload" && uploadFiles.reduce((total, file) => total + file.size, 0) > uploadLimitMb * 1024 ** 2) {
+    showError(uploadLimitMessage(documentUpload, uploadLimitMb), "LS-UPLOAD-02"); return;
   }
   if (documentUpload && jobType.value !== "study_pack") { showError("Belge kaynakları çalışma paketi işleminde kullanılabilir.", "LS-UPLOAD-05"); return; }
   if (sourceMode === "link" && !videoUrl.value.trim()) { showError(TR.urlLabel, "LS-URL-01"); return; }

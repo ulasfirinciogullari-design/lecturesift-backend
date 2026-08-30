@@ -630,7 +630,9 @@ def reserve_guest_job(user_id: str, job_id: str, media_minutes: float) -> None:
         )
     with ENGINE.begin() as connection:
         trial = connection.execute(
-            select(GUEST_TRIALS).where(GUEST_TRIALS.c.user_id == user_id)
+            select(GUEST_TRIALS)
+            .where(GUEST_TRIALS.c.user_id == user_id)
+            .with_for_update()
         ).first()
         if not trial:
             return

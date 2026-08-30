@@ -32,12 +32,14 @@ services:
         value: "4"
       - key: LECTURESIFT_STORAGE_TRANSFER_PARALLELISM
         value: "4"
+      - key: LECTURESIFT_STORAGE_FILE_TRANSFER_CONCURRENCY
+        value: "2"
       - key: LECTURESIFT_DURATION_PROBE_PARALLELISM
         value: "4"
       - key: LECTURESIFT_ARTIFACT_EXPORT_PARALLELISM
         value: "3"
       - key: LECTURESIFT_MAX_DOCUMENT_BYTES
-        value: "52428800"
+        value: "104857600"
       - key: LECTURESIFT_MAX_DOCUMENT_PAGES
         value: "500"
       - key: LECTURESIFT_MAX_DOCUMENT_CHARACTERS
@@ -252,12 +254,14 @@ services:
         value: "4"
       - key: LECTURESIFT_STORAGE_TRANSFER_PARALLELISM
         value: "4"
+      - key: LECTURESIFT_STORAGE_FILE_TRANSFER_CONCURRENCY
+        value: "2"
       - key: LECTURESIFT_DURATION_PROBE_PARALLELISM
         value: "4"
       - key: LECTURESIFT_ARTIFACT_EXPORT_PARALLELISM
         value: "3"
       - key: LECTURESIFT_MAX_DOCUMENT_BYTES
-        value: "52428800"
+        value: "104857600"
       - key: LECTURESIFT_MAX_DOCUMENT_PAGES
         value: "500"
       - key: LECTURESIFT_MAX_DOCUMENT_CHARACTERS

@@ -10,12 +10,13 @@ from pathlib import Path
 from .billing_service import BillingError, require_duration_entitlement
 from .config import MEDIA_EXTENSIONS, SOURCE_DOWNLOAD_PARALLELISM, WORK_DIR
 from .duration import media_duration_seconds
+from .documents import extract_documents
 from .errors import normalize_error
 from .jobs import JOBS
 from .media import download_remote_video
 from .pipeline_enhancements import install_pipeline_enhancements
 from .queue import celery_app
-from .rollout_service import is_guest_user, record_runtime, reserve_guest_job
+from .rollout_service import estimate_eta_seconds, is_guest_user, record_runtime, reserve_guest_job
 from .storage import STORAGE
 
 install_pipeline_enhancements()
@@ -72,7 +73,136 @@ def _enforce_minutes(user_id: str, job_id: str, duration: float) -> None:
         require_duration_entitlement(user_id, duration)
 
 
-def _quota_error(job_id: str, exc: BillingError) -> dict:
+def _preflight_worker_documents(job_id: str, paths: list[Path], options: dict) -> float:
+    """Inspect document quotas on the worker before expensive OCR or AI work."""
+    document_data = extract_documents(
+        paths,
+        source_language=str(options.get("source_language") or "auto"),
+        enable_ocr=False,
+        allow_ocr_pending=True,
+    )
+    options.update(
+        document_credit_seconds=float(document_data["credit_seconds"]),
+        document_words=int(document_data["words"]),
+        document_ocr_required=bool(document_data["ocr_required"]),
+        document_pages=int(document_data["pages"]),
+        document_ocr_pages=int(document_data["ocr_pages"]),
+        document_estimated=bool(document_data["estimated"]),
+    )
+    JOBS.update(
+        job_id,
+        options=options,
+        document_words=int(document_data["words"]),
+        billable_minutes=int(document_data["credit_minutes"]),
+        document_ocr_required=bool(document_data["ocr_required"]),
+        document_pages=int(document_data["pages"]),
+        document_ocr_pages=int(document_data["ocr_pages"]),
+        usage_estimated=bool(document_data["estimated"]),
+        stage="document_preflight",
+        worker_state="preflighting",
+    )
+    return float(document_data["credit_seconds"])
+
+
+def _enforce_uploaded_job_quota(
+    user_id: str,
+    job_id: str,
+    duration: float,
+    *,
+    source_file_count: int,
+    source_size_bytes: int,
+    document_mode: bool,
+    document_pages: int,
+    ocr_pages: int,
+) -> None:
+    """Apply the worker-side estimate without consuming a guest document trial early.
+
+    Document OCR can materially change billable minutes.  The pipeline performs the
+    final document entitlement check after extraction; reserving the anonymous trial
+    here would otherwise commit it using an estimate rather than the real result.
+    """
+    guest_user = bool(user_id and is_guest_user(user_id))
+    if guest_user and not document_mode:
+        reserve_guest_job(user_id, job_id, max(0.1, duration / 60.0))
+    require_duration_entitlement(
+        user_id,
+        duration,
+        source_file_count=source_file_count,
+        source_size_bytes=source_size_bytes,
+        document_mode=document_mode,
+        document_pages=document_pages,
+        ocr_pages=ocr_pages,
+    )
+
+
+def _source_keys(
+    data: dict | None = None,
+    audio_keys: list[str] | None = None,
+    visual_keys: list[str] | None = None,
+) -> list[str]:
+    stored = (data or {}).get("source_keys") or {}
+    return list(
+        dict.fromkeys(
+            str(key)
+            for key in [
+                *list(audio_keys or []),
+                *list(visual_keys or []),
+                *list(stored.get("audio") or []),
+                *list(stored.get("visual") or []),
+            ]
+            if str(key)
+        )
+    )
+
+
+def _cleanup_terminal_sources(
+    job_dir: Path | None,
+    *,
+    data: dict | None = None,
+    audio_keys: list[str] | None = None,
+    visual_keys: list[str] | None = None,
+) -> None:
+    """Best-effort source cleanup that never masks the terminal job error."""
+    if job_dir is not None:
+        try:
+            _cleanup_sources(job_dir)
+        except OSError:
+            pass
+    keys = _source_keys(data, audio_keys, visual_keys)
+    if keys:
+        try:
+            STORAGE.delete_keys(keys)
+        except Exception:
+            pass
+
+
+def _stored_job_dir(data: dict | None) -> Path | None:
+    """Return only a job directory nested below WORK_DIR.
+
+    An empty persisted path becomes ``Path('.')``; treating it as a cleanup
+    target would be dangerously broad, so persisted paths are constrained here.
+    """
+    raw = str((data or {}).get("job_dir") or "").strip()
+    if not raw:
+        return None
+    try:
+        candidate = Path(raw).resolve()
+        root = WORK_DIR.resolve()
+        candidate.relative_to(root)
+    except (OSError, ValueError):
+        return None
+    return candidate if candidate != root else None
+
+
+def _quota_error(
+    job_id: str,
+    exc: BillingError,
+    *,
+    job_dir: Path | None = None,
+    data: dict | None = None,
+    audio_keys: list[str] | None = None,
+    visual_keys: list[str] | None = None,
+) -> dict:
     JOBS.update(
         job_id,
         status="error",
@@ -82,10 +212,25 @@ def _quota_error(job_id: str, exc: BillingError) -> dict:
         error_code="LS-BILL-10",
         error=str(exc),
     )
+    _cleanup_terminal_sources(
+        job_dir,
+        data=data,
+        audio_keys=audio_keys,
+        visual_keys=visual_keys,
+    )
     return {"job_id": job_id, "status": "error", "error_code": "LS-BILL-10"}
 
 
-def _retry_or_fail(task, job_id: str, exc: Exception) -> dict:
+def _retry_or_fail(
+    task,
+    job_id: str,
+    exc: Exception,
+    *,
+    job_dir: Path | None = None,
+    data: dict | None = None,
+    audio_keys: list[str] | None = None,
+    visual_keys: list[str] | None = None,
+) -> dict:
     normalized = normalize_error(exc)
     if normalized.code not in {"LS-AI-02", "LS-SYSTEM-01"}:
         JOBS.update(
@@ -97,6 +242,12 @@ def _retry_or_fail(task, job_id: str, exc: Exception) -> dict:
             error_code=normalized.code,
             error=normalized.user_message,
             technical_error=normalized.technical_message,
+        )
+        _cleanup_terminal_sources(
+            job_dir,
+            data=data,
+            audio_keys=audio_keys,
+            visual_keys=visual_keys,
         )
         return {"job_id": job_id, "status": "error", "error_code": normalized.code}
 
@@ -110,6 +261,12 @@ def _retry_or_fail(task, job_id: str, exc: Exception) -> dict:
         technical_error=str(exc),
     )
     if retries >= task.max_retries:
+        _cleanup_terminal_sources(
+            job_dir,
+            data=data,
+            audio_keys=audio_keys,
+            visual_keys=visual_keys,
+        )
         raise exc
     raise task.retry(exc=exc, countdown=min(300, 15 * (2 ** retries)))
 
@@ -181,15 +338,34 @@ def process_uploaded_job(
 
         data = JOBS.get(job_id)
         if not data:
+            _cleanup_terminal_sources(
+                None,
+                audio_keys=list(audio_keys),
+                visual_keys=list(visual_keys or []),
+            )
             return {"job_id": job_id, "status": "missing"}
         if data.get("status") == "done" and data.get("remote_prefix"):
+            _cleanup_terminal_sources(
+                None,
+                data=data,
+                audio_keys=list(audio_keys),
+                visual_keys=list(visual_keys or []),
+            )
             return {"job_id": job_id, "status": "done"}
         try:
             resumed = _resume_publish(job_id, data)
             if resumed:
                 return resumed
         except Exception as exc:
-            return _retry_or_fail(self, job_id, exc)
+            return _retry_or_fail(
+                self,
+                job_id,
+                exc,
+                job_dir=_stored_job_dir(data),
+                data=data,
+                audio_keys=list(audio_keys),
+                visual_keys=list(visual_keys or []),
+            )
 
         job_dir = WORK_DIR / job_id
         try:
@@ -209,31 +385,60 @@ def process_uploaded_job(
                 job_dir,
             )
             document_seconds = max(0.0, float(options.get("document_credit_seconds") or 0))
+            if bool(options.get("document_mode")) and not document_seconds:
+                document_seconds = _preflight_worker_documents(job_id, audio_paths, options)
             duration = document_seconds or max(
                 media_duration_seconds(audio_paths),
                 media_duration_seconds(visual_paths) if visual_paths else 0.0,
             )
             media_minutes = max(0.1, duration / 60.0)
             try:
-                require_duration_entitlement(
-                    str(options.get("billing_user_id", "")),
-                    duration,
+                user_id = str(options.get("billing_user_id", ""))
+                source_size = sum(
+                    path.stat().st_size
+                    for path in audio_paths + visual_paths
+                    if path.exists()
+                )
+                entitlement_duration = (
+                    0.0
+                    if bool(options.get("document_mode"))
+                    and bool(options.get("document_estimated"))
+                    else duration
+                )
+                _enforce_uploaded_job_quota(
+                    user_id,
+                    job_id,
+                    entitlement_duration,
                     source_file_count=len(audio_paths) + len(visual_paths),
-                    source_size_bytes=sum(path.stat().st_size for path in audio_paths + visual_paths if path.exists()),
+                    source_size_bytes=source_size,
                     document_mode=bool(options.get("document_mode")),
                     document_pages=int(options.get("document_pages") or 0),
                     ocr_pages=int(options.get("document_ocr_pages") or 0),
                 )
             except BillingError as exc:
-                return _quota_error(job_id, exc)
+                return _quota_error(
+                    job_id,
+                    exc,
+                    job_dir=job_dir,
+                    data=data,
+                    audio_keys=list(audio_keys),
+                    visual_keys=list(visual_keys or []),
+                )
 
             started = time.time()
-            source_size = sum(path.stat().st_size for path in audio_paths + visual_paths if path.exists())
             JOBS.update(
                 job_id,
                 worker_state="processing",
                 media_minutes=round(media_minutes, 2),
                 file_size_bytes=source_size,
+                eta_seconds=estimate_eta_seconds(
+                    media_minutes,
+                    source_size,
+                    job_type=str(options.get("job_type") or "study_pack"),
+                    summary_style=str(options.get("summary_style") or "standard"),
+                    source_kind="document" if options.get("document_mode") else "media",
+                ),
+                eta_started_at=time.time(),
             )
             process_job(job_id, audio_paths, options, visual_paths or None)
             finished = JOBS.get(job_id) or {}
@@ -241,6 +446,12 @@ def process_uploaded_job(
                 transient = _processing_error(finished)
                 if transient:
                     raise transient
+                _cleanup_terminal_sources(
+                    job_dir,
+                    data=finished or data,
+                    audio_keys=list(audio_keys),
+                    visual_keys=list(visual_keys or []),
+                )
                 return {"job_id": job_id, "status": finished.get("status", "error")}
 
             # The pipeline creates local output first. Do not expose a terminal
@@ -267,7 +478,15 @@ def process_uploaded_job(
             )
             return {"job_id": job_id, "status": "done", **remote}
         except Exception as exc:
-            return _retry_or_fail(self, job_id, exc)
+            return _retry_or_fail(
+                self,
+                job_id,
+                exc,
+                job_dir=job_dir,
+                data=JOBS.get(job_id) or data,
+                audio_keys=list(audio_keys),
+                visual_keys=list(visual_keys or []),
+            )
 
 
 @celery_app.task(bind=True, max_retries=6, name="lecturesift.process_url_job")
@@ -288,7 +507,13 @@ def process_url_job(self, job_id: str, url: str, options: dict) -> dict:
             if resumed:
                 return resumed
         except Exception as exc:
-            return _retry_or_fail(self, job_id, exc)
+            return _retry_or_fail(
+                self,
+                job_id,
+                exc,
+                job_dir=_stored_job_dir(data),
+                data=data,
+            )
 
         job_dir = WORK_DIR / job_id
         try:
@@ -300,7 +525,7 @@ def process_url_job(self, job_id: str, url: str, options: dict) -> dict:
             try:
                 _enforce_minutes(str(options.get("billing_user_id", "")), job_id, duration)
             except BillingError as exc:
-                return _quota_error(job_id, exc)
+                return _quota_error(job_id, exc, job_dir=job_dir, data=data)
 
             media_minutes = max(0.1, duration / 60.0)
             source_size = video_path.stat().st_size if video_path.exists() else 0
@@ -319,6 +544,7 @@ def process_url_job(self, job_id: str, url: str, options: dict) -> dict:
                 transient = _processing_error(finished)
                 if transient:
                     raise transient
+                _cleanup_terminal_sources(job_dir, data=finished or data)
                 return {"job_id": job_id, "status": finished.get("status", "error")}
 
             remote = STORAGE.publish_job(job_id, job_dir)
@@ -328,4 +554,10 @@ def process_url_job(self, job_id: str, url: str, options: dict) -> dict:
             JOBS.update(job_id, worker_state="done", **remote)
             return {"job_id": job_id, "status": "done", **remote}
         except Exception as exc:
-            return _retry_or_fail(self, job_id, exc)
+            return _retry_or_fail(
+                self,
+                job_id,
+                exc,
+                job_dir=job_dir,
+                data=JOBS.get(job_id) or data,
+            )

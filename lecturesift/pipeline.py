@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from .ai import empty_study_pack, make_study_pack, transcribe, transcribe_timed, translate_transcript
-from .billing_service import record_usage
+from .billing_service import BillingError, record_usage, require_duration_entitlement
 from .config import (
     APP_VERSION,
     DOCUMENT_EXTENSIONS,
@@ -22,6 +22,7 @@ from .errors import normalize_error
 from .exports import build_artifacts, build_binary_artifact
 from .jobs import JOBS
 from .media import convert_videos_to_mp3, extract_audio_chunks, has_audio_stream
+from .rollout_service import is_guest_user, reserve_guest_job
 from .slides import extract_slides
 
 
@@ -97,6 +98,34 @@ def _record_billing_usage(
     except Exception:
         # The completed study pack remains available if metering is temporarily unavailable.
         print("BILLING USAGE ERROR: metering is temporarily unavailable", flush=True)
+
+
+def _enforce_actual_document_entitlement(
+    job_id: str,
+    options: dict,
+    document_sources: list[Path],
+    document_data: dict,
+) -> None:
+    """Recheck document limits from the final OCR result before invoking AI."""
+    user_id = str(options.get("billing_user_id") or "")
+    if not user_id:
+        return
+    duration_seconds = max(0.0, float(document_data.get("credit_seconds") or 0))
+    if is_guest_user(user_id):
+        # Anonymous trials are consumed only after the document is readable and
+        # its real OCR-derived duration is known.
+        reserve_guest_job(user_id, job_id, max(0.1, duration_seconds / 60.0))
+    require_duration_entitlement(
+        user_id,
+        duration_seconds,
+        source_file_count=len(document_sources),
+        source_size_bytes=sum(
+            path.stat().st_size for path in document_sources if path.exists()
+        ),
+        document_mode=True,
+        document_pages=int(document_data.get("pages") or 0),
+        ocr_pages=int(document_data.get("ocr_pages") or 0),
+    )
 
 
 def _transcript_timestamp(second: float) -> str:
@@ -423,6 +452,42 @@ def _process_job(
                 source_language=options.get("source_language", "auto"),
                 progress_callback=update_ocr_progress,
             )
+            options.update(
+                document_credit_seconds=float(document_data["credit_seconds"]),
+                document_words=int(document_data["words"]),
+                document_ocr_required=bool(document_data["ocr_required"]),
+                document_pages=int(document_data["pages"]),
+                document_ocr_pages=int(document_data["ocr_pages"]),
+                document_estimated=False,
+            )
+            JOBS.update(
+                job_id,
+                options=options,
+                document_words=int(document_data["words"]),
+                billable_minutes=int(document_data["credit_minutes"]),
+                document_ocr_required=bool(document_data["ocr_required"]),
+                document_pages=int(document_data["pages"]),
+                document_ocr_pages=int(document_data["ocr_pages"]),
+                usage_estimated=False,
+            )
+            try:
+                _enforce_actual_document_entitlement(
+                    job_id,
+                    options,
+                    document_sources,
+                    document_data,
+                )
+            except BillingError as exc:
+                JOBS.update(
+                    job_id,
+                    status="error",
+                    percent=0,
+                    stage="error",
+                    worker_state="rejected",
+                    error_code="LS-BILL-10",
+                    error=str(exc),
+                )
+                return
             JOBS.update(job_id, percent=62, stage="study_pack")
             study_pack = _make_selected_study_pack(document_data["text"], options)
             JOBS.update(job_id, percent=90, stage="exports")

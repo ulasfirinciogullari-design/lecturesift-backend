@@ -25,14 +25,14 @@ const COPY = {
 };
 const ALL_SUMMARIES = ["short", "standard", "detailed", "exam", "five_minute"];
 const PLAN_LIMITS = {
-  free: {max_files_per_job:3, max_media_upload_mb:100, max_document_upload_mb:25, max_minutes_per_job:30, max_document_pages:50, max_ocr_pages:20},
-  test: {max_files_per_job:1, max_media_upload_mb:25, max_document_upload_mb:10, max_minutes_per_job:1, max_document_pages:10, max_ocr_pages:5},
-  credit: {max_files_per_job:8, max_media_upload_mb:500, max_document_upload_mb:50, max_minutes_per_job:180, max_document_pages:150, max_ocr_pages:50},
-  lite: {max_files_per_job:12, max_media_upload_mb:750, max_document_upload_mb:50, max_minutes_per_job:180, max_document_pages:250, max_ocr_pages:75},
-  plus: {max_files_per_job:16, max_media_upload_mb:1024, max_document_upload_mb:50, max_minutes_per_job:300, max_document_pages:350, max_ocr_pages:100},
-  pro: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:50, max_minutes_per_job:600, max_document_pages:500, max_ocr_pages:150},
-  max: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:50, max_minutes_per_job:900, max_document_pages:500, max_ocr_pages:150},
-  business: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:50, max_minutes_per_job:1440, max_document_pages:500, max_ocr_pages:150},
+  free: {max_files_per_job:3, max_media_upload_mb:100, max_document_upload_mb:25, max_minutes_per_job:30, max_document_pages:50, max_ocr_pages:20, max_document_characters:1500000},
+  test: {max_files_per_job:1, max_media_upload_mb:25, max_document_upload_mb:10, max_minutes_per_job:1, max_document_pages:10, max_ocr_pages:5, max_document_characters:1500000},
+  credit: {max_files_per_job:8, max_media_upload_mb:500, max_document_upload_mb:50, max_minutes_per_job:180, max_document_pages:150, max_ocr_pages:50, max_document_characters:1500000},
+  lite: {max_files_per_job:12, max_media_upload_mb:750, max_document_upload_mb:75, max_minutes_per_job:180, max_document_pages:250, max_ocr_pages:75, max_document_characters:1500000},
+  plus: {max_files_per_job:16, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:300, max_document_pages:350, max_ocr_pages:100, max_document_characters:1500000},
+  pro: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:600, max_document_pages:500, max_ocr_pages:150, max_document_characters:1500000},
+  max: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:900, max_document_pages:500, max_ocr_pages:150, max_document_characters:1500000},
+  business: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:1440, max_document_pages:500, max_ocr_pages:150, max_document_characters:1500000},
 };
 const FALLBACK_META = {
   free: {kind: "free", minutes: 60, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 60, quiz_questions: 10, flashcards: 20, export_formats: ["pdf"], summary_profiles: ["short", "standard"], limits: PLAN_LIMITS.free, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: false}},
@@ -183,10 +183,11 @@ function renderCompare() {
     [pt("plans.minutes", "İşleme dakikası"), plan => plan.entitlements?.minutes == null ? "∞" : Number(plan.entitlements.minutes).toLocaleString(PLANS_I18N.locale)],
     [pt("plans.singleJobLimit", "Tek iş süre sınırı"), plan => `${Number(plan.entitlements?.limits?.max_minutes_per_job || 0).toLocaleString(PLANS_I18N.locale)} ${pt("unit.minuteShort", "dk")}`],
     [pt("plans.filesPerJob", "Bir işte kaynak sayısı"), plan => Number(plan.entitlements?.limits?.max_files_per_job || 0).toLocaleString(PLANS_I18N.locale)],
-    [pt("plans.mediaUploadLimit", "Medya yükleme sınırı"), plan => `${Number(plan.entitlements?.limits?.max_media_upload_mb || 0).toLocaleString(PLANS_I18N.locale)} MB`],
-    [pt("plans.documentUploadLimit", "Belge yükleme sınırı"), plan => `${Number(plan.entitlements?.limits?.max_document_upload_mb || 0).toLocaleString(PLANS_I18N.locale)} MB`],
+    [pt("plans.mediaUploadLimit", "Bir işte toplam medya boyutu"), plan => `${Number(plan.entitlements?.limits?.max_media_upload_mb || 0).toLocaleString(PLANS_I18N.locale)} MB`],
+    [pt("plans.documentUploadLimit", "Bir işte toplam belge boyutu"), plan => `${Number(plan.entitlements?.limits?.max_document_upload_mb || 0).toLocaleString(PLANS_I18N.locale)} MB`],
     [pt("plans.documentPageLimit", "Belge sayfası / iş"), plan => Number(plan.entitlements?.limits?.max_document_pages || 0).toLocaleString(PLANS_I18N.locale)],
     [pt("plans.ocrPageLimit", "OCR sayfası / iş"), plan => Number(plan.entitlements?.limits?.max_ocr_pages || 0).toLocaleString(PLANS_I18N.locale)],
+    [pt("plans.documentCharacterLimit", "Çıkarılan metin karakteri / iş"), plan => Number(plan.entitlements?.limits?.max_document_characters || 0).toLocaleString(PLANS_I18N.locale)],
     [pt("plans.quiz", "Quiz sorusu / işlem"), plan => plan.entitlements?.quiz_questions ?? "∞"],
     [pt("plans.cards", "Bilgi kartı / işlem"), plan => plan.entitlements?.flashcards ?? "∞"],
     [pt("plans.summaries", "Özet profilleri"), plan => summaries(plan.entitlements?.summary_profiles || [])],

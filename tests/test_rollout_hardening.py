@@ -10,6 +10,8 @@ from lecturesift.billing_service import register_user, verify_email
 from lecturesift.storage import ObjectStorage
 import lecturesift.jobs as jobs_module
 import lecturesift.duration as duration_module
+import lecturesift.durable_runtime as durable_runtime_module
+import lecturesift.app as app_module
 import lecturesift.storage as storage_module
 import lecturesift.tasks as tasks_module
 from lecturesift.jobs import JobStore
@@ -105,6 +107,217 @@ def test_worker_downloads_multiple_private_sources_concurrently_in_original_orde
         "jobs/source-first.mp4",
         "jobs/source-second.mp4",
     ]
+
+
+def test_web_uploads_multiple_sources_to_r2_concurrently_and_preserves_order(tmp_path, monkeypatch):
+    first = tmp_path / "first.pdf"
+    second = tmp_path / "second.pdf"
+    first.write_bytes(b"first")
+    second.write_bytes(b"second")
+    gate = threading.Barrier(2, timeout=3)
+    uploaded = []
+
+    monkeypatch.setattr(durable_runtime_module, "STORAGE_TRANSFER_PARALLELISM", 2)
+    monkeypatch.setattr(
+        durable_runtime_module.STORAGE,
+        "source_key",
+        lambda job_id, role, index, path: f"jobs/{job_id}/{role}_{index:03d}{path.suffix}",
+    )
+
+    def upload(_path: Path, key: str) -> str:
+        gate.wait()
+        uploaded.append(key)
+        return key
+
+    monkeypatch.setattr(durable_runtime_module.STORAGE, "upload_file", upload)
+    audio, visual = durable_runtime_module._upload_job_sources(
+        "parallel-source-upload",
+        [first, second],
+        [],
+    )
+
+    assert visual == []
+    assert audio == [
+        "jobs/parallel-source-upload/audio_001.pdf",
+        "jobs/parallel-source-upload/audio_002.pdf",
+    ]
+    assert set(uploaded) == set(audio)
+
+
+def test_partial_source_upload_is_removed_when_r2_transfer_fails(tmp_path, monkeypatch):
+    first = tmp_path / "first.pdf"
+    second = tmp_path / "second.pdf"
+    first.write_bytes(b"first")
+    second.write_bytes(b"second")
+    deleted = []
+
+    monkeypatch.setattr(durable_runtime_module, "STORAGE_TRANSFER_PARALLELISM", 1)
+    monkeypatch.setattr(
+        durable_runtime_module.STORAGE,
+        "source_key",
+        lambda job_id, role, index, path: f"jobs/{job_id}/{role}_{index:03d}{path.suffix}",
+    )
+
+    def upload(_path: Path, key: str) -> str:
+        if key.endswith("002.pdf"):
+            raise RuntimeError("temporary R2 failure")
+        return key
+
+    monkeypatch.setattr(durable_runtime_module.STORAGE, "upload_file", upload)
+    monkeypatch.setattr(
+        durable_runtime_module.STORAGE,
+        "delete_keys",
+        lambda keys: deleted.extend(keys) or len(keys),
+    )
+
+    try:
+        durable_runtime_module._upload_job_sources("partial-source-upload", [first, second], [])
+        raise AssertionError("upload failure was not raised")
+    except RuntimeError as exc:
+        assert str(exc) == "temporary R2 failure"
+    assert deleted == [
+        "jobs/partial-source-upload/audio_001.pdf",
+        "jobs/partial-source-upload/audio_002.pdf",
+    ]
+
+
+def test_ambiguous_parallel_upload_failure_removes_every_planned_r2_key(tmp_path, monkeypatch):
+    first = tmp_path / "first.pdf"
+    second = tmp_path / "second.pdf"
+    first.write_bytes(b"first")
+    second.write_bytes(b"second")
+    gate = threading.Barrier(2, timeout=3)
+    committed = []
+    deleted = []
+
+    monkeypatch.setattr(durable_runtime_module, "STORAGE_TRANSFER_PARALLELISM", 2)
+    monkeypatch.setattr(
+        durable_runtime_module.STORAGE,
+        "source_key",
+        lambda job_id, role, index, path: f"jobs/{job_id}/{role}_{index:03d}{path.suffix}",
+    )
+
+    def upload(_path: Path, key: str) -> str:
+        gate.wait()
+        committed.append(key)
+        if key.endswith("002.pdf"):
+            # Model a timeout after R2 accepted the bytes but before the client
+            # received a success response.
+            raise TimeoutError("upload response was lost")
+        return key
+
+    monkeypatch.setattr(durable_runtime_module.STORAGE, "upload_file", upload)
+    monkeypatch.setattr(
+        durable_runtime_module.STORAGE,
+        "delete_keys",
+        lambda keys: deleted.extend(keys) or len(keys),
+    )
+
+    try:
+        durable_runtime_module._upload_job_sources("ambiguous-upload", [first, second], [])
+        raise AssertionError("ambiguous upload failure was not raised")
+    except TimeoutError as exc:
+        assert str(exc) == "upload response was lost"
+
+    expected = [
+        "jobs/ambiguous-upload/audio_001.pdf",
+        "jobs/ambiguous-upload/audio_002.pdf",
+    ]
+    assert set(committed) == set(expected)
+    assert deleted == expected
+
+
+def test_queue_ready_document_defers_probe_and_guest_reservation_to_worker(tmp_path, monkeypatch):
+    job_dir = tmp_path / "deferred-document"
+    job_dir.mkdir()
+    source = job_dir / "lecture.pdf"
+    source.write_bytes(b"%PDF-1.7\n")
+    job_id = f"deferred-document-{uuid.uuid4()}"
+    user_id = f"deferred-guest-{uuid.uuid4()}"
+    options = {
+        "billing_user_id": user_id,
+        "document_mode": True,
+        "source_language": "tr",
+        "job_type": "study_pack",
+        "summary_style": "detailed",
+    }
+    jobs_module.JOBS.create(job_id, job_dir, options, source_type="document")
+    entitlement_checks = []
+    reservations = []
+    queued = []
+
+    class QueuedTask:
+        id = "celery-deferred-document"
+
+    class ProcessUploadedJob:
+        @staticmethod
+        def delay(queued_job_id, audio_keys, queued_options, visual_keys):
+            queued.append((queued_job_id, audio_keys, dict(queued_options), visual_keys))
+            return QueuedTask()
+
+    def no_document_ffprobe(_paths):
+        raise AssertionError("queue-ready documents must not be sent to ffprobe on the web")
+
+    def check_entitlement(captured_user_id, duration, **kwargs):
+        entitlement_checks.append((captured_user_id, duration, kwargs))
+        return {}
+
+    monkeypatch.setattr(durable_runtime_module, "_queue_ready", lambda: True)
+    monkeypatch.setattr(durable_runtime_module, "media_duration_seconds", no_document_ffprobe)
+    monkeypatch.setattr(durable_runtime_module, "is_guest_user", lambda _user_id: True)
+    monkeypatch.setattr(
+        durable_runtime_module,
+        "reserve_guest_job",
+        lambda *args: reservations.append(args),
+    )
+    monkeypatch.setattr(durable_runtime_module, "require_duration_entitlement", check_entitlement)
+    monkeypatch.setattr(
+        durable_runtime_module,
+        "_upload_job_sources",
+        lambda _job_id, _audio, _visual: (["jobs/deferred/audio_001.pdf"], []),
+    )
+    monkeypatch.setattr(tasks_module, "process_uploaded_job", ProcessUploadedJob())
+
+    try:
+        app_module.process_job(job_id, [source], options)
+        data = jobs_module.JOBS.get(job_id) or {}
+        assert reservations == []
+        assert len(entitlement_checks) == 1
+        assert entitlement_checks[0][0] == user_id
+        assert entitlement_checks[0][1] == 0.0
+        assert entitlement_checks[0][2]["document_mode"] is True
+        assert entitlement_checks[0][2]["source_size_bytes"] == len(b"%PDF-1.7\n")
+        assert queued and queued[0][0] == job_id
+        assert "document_credit_seconds" not in queued[0][2]
+        assert data["document_preflight_deferred_to_worker"] is True
+        assert data["guest_reservation_deferred_to_worker"] is True
+        assert data["guest_reservation_deferred_to_pipeline"] is True
+        assert data["usage_estimated"] is True
+        assert data["media_minutes"] is None
+        assert data["eta_seconds"] is None
+        assert source.exists() is False
+    finally:
+        jobs_module.JOBS.delete_for_user(user_id)
+
+
+def test_worker_document_preflight_sets_quota_metadata(tmp_path):
+    source = tmp_path / "lecture.txt"
+    source.write_text("energy work force power " * 80, encoding="utf-8")
+    job_id = f"worker-preflight-{uuid.uuid4()}"
+    user_id = f"worker-preflight-user-{uuid.uuid4()}"
+    options = {"source_language": "en", "document_mode": True, "billing_user_id": user_id}
+    JOBS = tasks_module.JOBS
+    JOBS.create(job_id, tmp_path, options)
+    try:
+        seconds = tasks_module._preflight_worker_documents(job_id, [source], options)
+        inspected = JOBS.get(job_id)
+        assert seconds >= 120
+        assert options["document_credit_seconds"] == seconds
+        assert inspected["billable_minutes"] >= 2
+        assert inspected["document_words"] >= 300
+        assert inspected["worker_state"] == "preflighting"
+    finally:
+        JOBS.delete_for_user(user_id)
 
 
 def test_duration_probes_run_concurrently_and_keep_exact_sum(tmp_path, monkeypatch):
