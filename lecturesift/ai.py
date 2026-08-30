@@ -626,23 +626,25 @@ def _compact_digests(
         if len(_digest_source(compacted)) <= MAX_SYNTHESIS_CHARACTERS:
             return compacted
         groups = _digest_groups(compacted)
+
         def compact_group(index: int, group: list[dict]) -> dict:
             return _request_study_pack(
-                    _digest_source(group),
-                    output_language,
-                    summary_style,
-                    max(2, min(quiz_count, 8)),
-                    max(4, min(flashcard_count, 12)),
-                    source_label=f"ORDERED DIGEST GROUP {index + 1} OF {len(groups)}",
-                    source_context=(
-                        "The source contains faithful digests of consecutive lecture sections. "
-                        "Merge them without omitting unique facts and without adding outside knowledge."
-                    ),
-                    summary_target="about 700-1200 words",
-                    extra_requirements="Keep the entire JSON concise enough for a later final synthesis.",
-                    max_tokens=4000,
-                    minimum_summary_words=250,
-                )
+                _digest_source(group),
+                output_language,
+                summary_style,
+                0 if quiz_count <= 0 else max(2, min(quiz_count, 8)),
+                0 if flashcard_count <= 0 else max(4, min(flashcard_count, 12)),
+                source_label=f"ORDERED DIGEST GROUP {index + 1} OF {len(groups)}",
+                source_context=(
+                    "The source contains faithful digests of consecutive lecture sections. "
+                    "Merge them without omitting unique facts and without adding outside knowledge."
+                ),
+                summary_target="about 700-1200 words",
+                extra_requirements="Keep the entire JSON concise enough for a later final synthesis.",
+                max_tokens=4000,
+                minimum_summary_words=250,
+            )
+
         next_level = _parallel_map(groups, compact_group, STUDY_PACK_PARALLELISM)
         if len(next_level) >= len(compacted) and len(next_level) == 1:
             compacted = next_level
@@ -677,8 +679,8 @@ def make_study_pack(
         )
 
     sections = _chunk_text(transcript, STUDY_SECTION_CHARACTERS)
-    section_quiz = max(2, (quiz_count + len(sections) - 1) // len(sections) + 1)
-    section_cards = max(4, (flashcard_count + len(sections) - 1) // len(sections) + 2)
+    section_quiz = 0 if quiz_count <= 0 else max(2, (quiz_count + len(sections) - 1) // len(sections) + 1)
+    section_cards = 0 if flashcard_count <= 0 else max(4, (flashcard_count + len(sections) - 1) // len(sections) + 2)
     def digest_section(index: int, section: str) -> dict:
         return _request_study_pack(
                 section,

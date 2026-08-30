@@ -5,7 +5,7 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from .ai import make_study_pack, transcribe, transcribe_timed, translate_transcript
+from .ai import empty_study_pack, make_study_pack, transcribe, transcribe_timed, translate_transcript
 from .billing_service import record_usage
 from .config import (
     APP_VERSION,
@@ -37,6 +37,41 @@ def _same_text(left: str, right: str) -> bool:
 
 def _public_options(options: dict) -> dict:
     return {key: value for key, value in options.items() if key != "billing_user_id"}
+
+
+def _needs_study_generation(options: dict) -> bool:
+    return bool(
+        options.get("include_summary", True)
+        or int(options.get("quiz_count") or 0) > 0
+        or int(options.get("flashcard_count") or 0) > 0
+    )
+
+
+def _apply_study_selection(study_pack: dict, options: dict) -> dict:
+    selected = {**empty_study_pack(), **study_pack}
+    if not options.get("include_summary", True):
+        for field in ("summary", "key_points", "important_terms", "notes", "exam_focus"):
+            selected[field] = "" if field == "summary" else []
+    if int(options.get("quiz_count") or 0) <= 0:
+        selected["quiz"] = []
+    if int(options.get("flashcard_count") or 0) <= 0:
+        selected["flashcards"] = []
+    return selected
+
+
+def _make_selected_study_pack(source: str, options: dict) -> dict:
+    if not _needs_study_generation(options):
+        return empty_study_pack()
+    return _apply_study_selection(
+        make_study_pack(
+            source,
+            options["output_language"],
+            options["summary_style"],
+            options["quiz_count"],
+            options["flashcard_count"],
+        ),
+        options,
+    )
 
 
 def _source_duration_seconds(paths: list[Path]) -> float:
@@ -217,13 +252,7 @@ def _build_text_outputs(job_id: str, original_transcript: str, options: dict) ->
 
     def build_study_pack() -> dict:
         with cost_context(job_id, user_id):
-            return make_study_pack(
-                original_transcript,
-                options["output_language"],
-                options["summary_style"],
-                options["quiz_count"],
-                options["flashcard_count"],
-            )
+            return _make_selected_study_pack(original_transcript, options)
 
     def build_translation() -> str:
         with cost_context(job_id, user_id):
@@ -241,7 +270,8 @@ def _build_text_outputs(job_id: str, original_transcript: str, options: dict) ->
         and source_language == output_language
     )
     should_translate = bool(
-        options.get("translate_transcript", True)
+        options.get("include_transcript", True)
+        and options.get("translate_transcript", True)
         and original_transcript.strip()
         and not explicitly_same_language
     )
@@ -394,13 +424,7 @@ def _process_job(
                 progress_callback=update_ocr_progress,
             )
             JOBS.update(job_id, percent=62, stage="study_pack")
-            study_pack = make_study_pack(
-                document_data["text"],
-                options["output_language"],
-                options["summary_style"],
-                options["quiz_count"],
-                options["flashcard_count"],
-            )
+            study_pack = _make_selected_study_pack(document_data["text"], options)
             JOBS.update(job_id, percent=90, stage="exports")
             slides_dir.mkdir(parents=True, exist_ok=True)
             result = {
@@ -423,9 +447,9 @@ def _process_job(
                     "ocr_used": document_data["ocr_used"],
                     "ocr_pages": document_data["ocr_pages"],
                 },
-                "transcript_original": document_data["text"],
+                "transcript_original": document_data["text"] if options.get("include_transcript", True) else "",
                 "transcript_translated": "",
-                "transcript": document_data["text"],
+                "transcript": document_data["text"] if options.get("include_transcript", True) else "",
                 "transcript_segments": [],
                 "transcript_timestamps_mode": "none",
                 "timeline": [],
@@ -519,7 +543,7 @@ def _process_job(
             _record_billing_usage(job_id, options, audio_sources)
             return
 
-        if visual_sources:
+        if visual_sources and options.get("include_slides", True):
             with ThreadPoolExecutor(max_workers=2, thread_name_prefix="lecturesift") as executor:
                 # Context variables do not cross thread boundaries automatically.
                 # Wrap the audio branch so its OpenAI calls remain attributable to
@@ -545,7 +569,7 @@ def _process_job(
         else:
             slides = []
             diagnostics = {
-                "engine": "audio-only",
+                "engine": "slides-disabled" if visual_sources else "audio-only",
                 "source_parts": len(audio_sources),
                 "duration_seconds": round(_source_duration_seconds(audio_sources), 1),
                 "final_unique_slides": 0,
@@ -580,13 +604,13 @@ def _process_job(
             },
             "slides": slides,
             "diagnostics": diagnostics,
-            "transcript_original": original_transcript,
-            "transcript_translated": translated_transcript,
-            "transcript": translated_transcript or original_transcript,
-            "transcript_segments": transcript_segments,
+            "transcript_original": original_transcript if options.get("include_transcript", True) else "",
+            "transcript_translated": translated_transcript if options.get("include_transcript", True) else "",
+            "transcript": (translated_transcript or original_transcript) if options.get("include_transcript", True) else "",
+            "transcript_segments": transcript_segments if options.get("include_transcript", True) else [],
             "transcript_timestamps_mode": timestamp_mode,
             "timeline": sorted(
-                [
+                ([
                     {
                         "type": "transcript",
                         "second": item["start"],
@@ -595,7 +619,7 @@ def _process_job(
                         "text": item["text"],
                     }
                     for item in transcript_segments
-                ]
+                ] if options.get("include_transcript", True) else [])
                 + [
                     {
                         "type": "slide",

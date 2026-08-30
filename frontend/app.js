@@ -23,8 +23,14 @@ const EN = {
   addAudioFiles: "Add audio videos", addVisualFiles: "Add slide videos", moveUp: "Move up", moveDown: "Move down", remove: "Remove",
   urlLabel: "Video or education-page URL", urlHelp: "LectureSift tries direct media discovery and provider extraction. Login, DRM, membership, or provider restrictions can still block a download.",
   operationType: "Operation", studyPackOption: "Create a study pack", audioExportOption: "Convert video to MP3", downloadVideoOption: "Download video from URL",
-  outputFormats: "Output formats", sameLanguageHelp: "Source and output languages match; one transcript will be created.",
+  outputFormats: "Downloadable files (optional)", formatOptional: "Leave all unchecked to keep the result only in your account and on the website.",
+  sameLanguageHelp: "Source and output languages match; one transcript will be created.", transcriptDisabledHelp: "Select transcript to enable translation.",
   settingsTitle: "Configure the study pack", sourceLanguage: "Source language", outputLanguage: "Output language", summaryStyle: "Summary profile",
+  contentSelection: "Choose package contents", contentSelectionHelp: "Only enabled sections are prepared; quizzes and flashcards are optional.",
+  presetLabel: "Ready-made package choices", presetFast: "Fast", presetBalanced: "Balanced", presetExam: "Exam", presetTranscript: "Transcript only",
+  includeSummary: "Summary and smart notes", includeSummaryHelp: "Key ideas, terms, and exam focus",
+  includeTranscript: "Transcript", includeTranscriptHelp: "Source text and optional translation",
+  includeSlides: "Slide images", includeSlidesHelp: "Genuine presentation frames in a video", optionalOutput: "Optional",
   quizCount: "Quiz questions", cardCount: "Flashcards", translateTitle: "Translate transcript", translateHelp: "The original is preserved", analyze: "Analyze lecture",
   processEyebrow: "Live processing center", readyTitle: "Ready to analyze", readyStage: "Waiting for a video",
   readyDetail: "Add a source and choose your settings to see every processing step here.",
@@ -36,7 +42,7 @@ const EN = {
   detailMp3: "The source is uploaded, its audio is converted, and the MP3 download is packaged.",
   detailDownload: "The video is downloaded from its source and prepared as a protected file.",
   uploadingSource: "Uploading the source", uploadAccepted: "Upload complete; preparing the processing job", queuedForWorker: "Waiting in the processing queue", publishingResult: "Securing the result files",
-  promiseTitle: "One organized result from every source", promiseText: "Choose PDF, Word, or TXT. PDF-only is the default ZIP package.",
+  promiseTitle: "Your source, your preferred result", promiseText: "Select only the summary, transcript, slides, quiz, flashcards, and files you need.",
   resultEyebrow: "Study pack ready", downloadAll: "Download complete pack", tabSummary: "Summary", tabNotes: "Smart notes", tabTranscript: "Transcript",
   tabSlides: "Slides", tabCards: "Flashcards", tabFiles: "Files", translated: "Translated", original: "Original", errorTitle: "Analysis could not finish",
   summaryShort: "Quick", summaryStandard: "Standard", summaryDetailed: "Detailed", summaryExam: "Exam-focused", summaryFive: "Learn in 5 minutes",
@@ -44,7 +50,7 @@ const EN = {
   correct: "Correct", incorrect: "Incorrect", score: "Score", reveal: "Reveal answer", previous: "Previous", next: "Next", know: "I know this", repeat: "Repeat",
   download: "Download", processing: "Lecture analysis in progress", done: "Your study pack is ready", parallel_analysis: "Audio and visuals are being analyzed together",
   url_download: "Downloading the video", study_pack: "Creating smart notes and questions", exports: "Preparing selected output files",
-  errorFallback: "The request could not be completed. Check the video or link and try again.",
+  errorFallback: "The request could not be completed. Check the video or link and try again.", outputSelectionRequired: "Select at least one study output: summary and notes, transcript, quiz, or flashcards.",
   plansNav: "Plans", login: "Sign in", register: "Create account", logout: "Sign out",
   plansEyebrow: "Transparent usage plans", plansTitle: "Process what you need and upgrade anytime.",
   plansSubtitle: "Cards and bank transfers are completed on iyzico's secure page; matched payments activate automatically.",
@@ -68,8 +74,14 @@ const TR = {
   addAudioFiles: "Ses videolarını ekle", addVisualFiles: "Slayt videolarını ekle", moveUp: "Yukarı taşı", moveDown: "Aşağı taşı", remove: "Kaldır",
   urlLabel: "Video veya eğitim sayfası bağlantısı", urlHelp: "LectureSift doğrudan medya bulmayı ve sağlayıcı indirmesini dener. Giriş, DRM, üyelik veya sağlayıcı engeli olan içerikler indirilemeyebilir.",
   operationType: "İşlem türü", studyPackOption: "Ders çalışma paketi hazırla", audioExportOption: "Videoyu MP3'e çevir", downloadVideoOption: "URL'den video indir",
-  outputFormats: "Çıktı biçimleri", sameLanguageHelp: "Kaynak ve çıktı dili aynı; tek transkript oluşturulacak.",
+  outputFormats: "İndirilecek dosyalar (isteğe bağlı)", formatOptional: "Hiçbirini seçmezsen sonuç yalnızca hesabında ve sitede gösterilir.",
+  sameLanguageHelp: "Kaynak ve çıktı dili aynı; tek transkript oluşturulacak.", transcriptDisabledHelp: "Çeviriyi açmak için transkripti seç.",
   settingsTitle: "Çalışma paketini ayarla", sourceLanguage: "Kaynak dili", outputLanguage: "Çıktı dili", summaryStyle: "Özet profili",
+  contentSelection: "Paket içeriğini seç", contentSelectionHelp: "Yalnızca açtığın bölümler hazırlanır; quiz ve bilgi kartı zorunlu değildir.",
+  presetLabel: "Hazır paket seçimleri", presetFast: "Hızlı", presetBalanced: "Dengeli", presetExam: "Sınav", presetTranscript: "Sadece transkript",
+  includeSummary: "Özet ve akıllı notlar", includeSummaryHelp: "Ana fikirler, terimler ve sınav odağı",
+  includeTranscript: "Transkript", includeTranscriptHelp: "Kaynak metin ve isteğe bağlı çeviri",
+  includeSlides: "Slayt görselleri", includeSlidesHelp: "Video içindeki gerçek sunum kareleri", optionalOutput: "İsteğe bağlı",
   quizCount: "Quiz sorusu", cardCount: "Bilgi kartı", translateTitle: "Transkripti çevir", translateHelp: "Orijinali de korunur", analyze: "Dersi analiz et",
   processEyebrow: "Canlı işlem merkezi", readyTitle: "Analize hazır", readyStage: "Video bekleniyor",
   readyDetail: "Kaynağı ekleyip ayarlarını seçtiğinde işlem adımlarını burada canlı göreceksin.",
@@ -81,7 +93,7 @@ const TR = {
   detailMp3: "Kaynak yüklenir, sesi dönüştürülür ve MP3 indirmesi paketlenir.",
   detailDownload: "Video kaynağından indirilir ve korumalı dosya olarak hazırlanır.",
   uploadingSource: "Kaynak yükleniyor", uploadAccepted: "Yükleme tamamlandı; işlem işi hazırlanıyor", queuedForWorker: "İşlem sırasında bekliyor", publishingResult: "Sonuç dosyaları güvenceye alınıyor",
-  promiseTitle: "Tüm kaynaklardan tek düzenli sonuç", promiseText: "PDF, Word veya TXT seçebilirsin. Varsayılan ZIP yalnızca PDF içerir.",
+  promiseTitle: "Kaynağın, istediğin sonuç", promiseText: "Yalnızca ihtiyacın olan özet, transkript, slayt, quiz, bilgi kartı ve dosyaları seç.",
   resultEyebrow: "Ders paketi hazır", downloadAll: "Tüm paketi indir", tabSummary: "Özet", tabNotes: "Akıllı notlar", tabTranscript: "Transkript",
   tabSlides: "Slaytlar", tabCards: "Bilgi kartları", tabFiles: "Dosyalar", translated: "Çevrilmiş", original: "Orijinal", errorTitle: "İşlem tamamlanamadı",
   summaryShort: "Hızlı", summaryStandard: "Standart", summaryDetailed: "Derinlemesine", summaryExam: "Sınav odaklı", summaryFive: "5 dakikada öğren",
@@ -89,7 +101,7 @@ const TR = {
   correct: "Doğru", incorrect: "Yanlış", score: "Skor", reveal: "Cevabı göster", previous: "Önceki", next: "Sonraki", know: "Biliyorum", repeat: "Tekrar et",
   download: "İndir", processing: "Ders analizi sürüyor", done: "Çalışma paketin hazır", parallel_analysis: "Ses ve görüntü birlikte analiz ediliyor",
   url_download: "Video bağlantıdan alınıyor", study_pack: "Akıllı notlar ve sorular hazırlanıyor", exports: "Seçilen çıktı dosyaları hazırlanıyor",
-  errorFallback: "İşlem tamamlanamadı. Videoyu veya bağlantıyı kontrol edip yeniden deneyebilirsin.",
+  errorFallback: "İşlem tamamlanamadı. Videoyu veya bağlantıyı kontrol edip yeniden deneyebilirsin.", outputSelectionRequired: "En az bir çalışma çıktısı seç: özet ve notlar, transkript, quiz veya bilgi kartı.",
   plansNav: "Planlar", login: "Giriş", register: "Hesap oluştur", logout: "Çıkış",
   plansEyebrow: "Şeffaf kullanım planları", plansTitle: "İhtiyacın kadar işle, istediğin zaman yükselt.",
   plansSubtitle: "Kart ve Havale/EFT, iyzico’nun güvenli sayfasında tamamlanır; eşleşen ödeme otomatik etkinleştirilir.",
@@ -218,11 +230,16 @@ function formatTime(seconds) { const value = Math.max(0, Math.round(seconds || 0
 
 function applyLanguage() {
   const strings = stringsFor(currentLanguage);
+  const selectedSummaryStyle = summaryStyle.value || "standard";
   document.documentElement.lang = currentLanguage;
   document.documentElement.dir = currentLanguage === "ar" ? "rtl" : "ltr";
   document.querySelectorAll("[data-i18n]").forEach(node => {
     const key = node.dataset.i18n;
     node.textContent = strings[key] || EN[key] || node.textContent;
+  });
+  document.querySelectorAll("[data-i18n-aria-label]").forEach(node => {
+    const key = node.dataset.i18nAriaLabel;
+    node.setAttribute("aria-label", strings[key] || EN[key] || node.getAttribute("aria-label") || "");
   });
   const central = window.LectureSiftI18n;
   summaryStyle.innerHTML = [
@@ -232,12 +249,12 @@ function applyLanguage() {
     ["exam", central?.t("summary.exam", t("summaryExam")) || t("summaryExam")],
     ["five_minute", central?.t("summary.fiveMinute", t("summaryFive")) || t("summaryFive")]
   ].map(([value, label]) => `<option value="${value}">${escapeHtml(label)}</option>`).join("");
-  summaryStyle.value = "standard";
+  summaryStyle.value = [...summaryStyle.options].some(option => option.value === selectedSummaryStyle) ? selectedSummaryStyle : "standard";
   const autoOption = [...sourceLanguage.options].find(option => option.value === "auto");
   if (autoOption) autoOption.textContent = t("auto");
   localStorage.setItem("lecturesift-ui", currentLanguage);
   ["classic", "audio", "visual"].forEach(renderFileList);
-  syncTranslationChoice(); updateOperationUI();
+  syncContentChoices(); updateOperationUI();
   if (billingCatalog) renderPlans();
   renderBillingAccount();
 }
@@ -657,14 +674,69 @@ function setSourceLayout(layout) {
 $("classicMode").onclick = () => setSourceLayout("classic");
 $("separateMode").onclick = () => setSourceLayout("separate");
 
+const PACK_PRESETS = {
+  fast: {summary:true, transcript:true, slides:false, quiz:false, cards:false, style:"short", quizCount:"5", cardCount:"10", formats:["pdf"]},
+  balanced: {summary:true, transcript:true, slides:true, quiz:true, cards:true, style:"standard", quizCount:"10", cardCount:"20", formats:["pdf"]},
+  exam: {summary:true, transcript:true, slides:true, quiz:true, cards:true, style:"exam", quizCount:"20", cardCount:"40", formats:["pdf"]},
+  transcript: {summary:false, transcript:true, slides:false, quiz:false, cards:false, style:"standard", quizCount:"5", cardCount:"10", formats:[]},
+};
+
+function selectedFormats() {
+  return [$("formatPdf"), $("formatDocx"), $("formatTxt")].filter(input => input.checked).map(input => input.value);
+}
+
 function syncTranslationChoice() {
   const same = sourceLanguage.value !== "auto" && sourceLanguage.value === outputLanguage.value;
-  $("translateTranscript").disabled = same;
-  if (same) $("translateTranscript").checked = false;
-  $("translateHelp").textContent = same ? t("sameLanguageHelp") : t("translateHelp");
+  const transcriptDisabled = !$("includeTranscript").checked;
+  $("translateTranscript").disabled = same || transcriptDisabled;
+  if (same || transcriptDisabled) $("translateTranscript").checked = false;
+  $("translateControl").classList.toggle("is-disabled", same || transcriptDisabled);
+  $("translateHelp").textContent = transcriptDisabled ? t("transcriptDisabledHelp") : same ? t("sameLanguageHelp") : t("translateHelp");
 }
 sourceLanguage.addEventListener("change", syncTranslationChoice);
 outputLanguage.addEventListener("change", syncTranslationChoice);
+
+function activePresetName() {
+  const state = {
+    summary:$("includeSummary").checked, transcript:$("includeTranscript").checked, slides:$("includeSlides").checked,
+    quiz:$("includeQuiz").checked, cards:$("includeCards").checked, style:summaryStyle.value,
+    quizCount:$("quizCount").value, cardCount:$("cardCount").value, formats:selectedFormats(),
+  };
+  return Object.entries(PACK_PRESETS).find(([, preset]) =>
+    ["summary", "transcript", "slides", "quiz", "cards", "style", "quizCount", "cardCount"].every(key => state[key] === preset[key])
+    && state.formats.join(",") === preset.formats.join(",")
+  )?.[0] || "";
+}
+
+function syncContentChoices() {
+  $("quizCount").disabled = !$("includeQuiz").checked;
+  $("cardCount").disabled = !$("includeCards").checked;
+  summaryStyle.disabled = !$("includeSummary").checked;
+  $("quizCount").closest(".content-choice").classList.toggle("is-disabled", !$("includeQuiz").checked);
+  $("cardCount").closest(".content-choice").classList.toggle("is-disabled", !$("includeCards").checked);
+  syncTranslationChoice();
+  const activePreset = activePresetName();
+  document.querySelectorAll("[data-pack-preset]").forEach(button => {
+    const active = button.dataset.packPreset === activePreset;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+}
+
+function applyPackPreset(name) {
+  const preset = PACK_PRESETS[name];
+  if (!preset) return;
+  $("includeSummary").checked = preset.summary; $("includeTranscript").checked = preset.transcript;
+  $("includeSlides").checked = preset.slides; $("includeQuiz").checked = preset.quiz; $("includeCards").checked = preset.cards;
+  summaryStyle.value = preset.style; $("quizCount").value = preset.quizCount; $("cardCount").value = preset.cardCount;
+  [$("formatPdf"), $("formatDocx"), $("formatTxt")].forEach(input => { input.checked = preset.formats.includes(input.value); });
+  $("translateTranscript").checked = preset.transcript && !(sourceLanguage.value !== "auto" && sourceLanguage.value === outputLanguage.value);
+  syncContentChoices();
+}
+
+document.querySelectorAll("[data-pack-preset]").forEach(button => button.addEventListener("click", () => applyPackPreset(button.dataset.packPreset)));
+[$("includeSummary"), $("includeTranscript"), $("includeSlides"), $("includeQuiz"), $("includeCards"), $("quizCount"), $("cardCount"), summaryStyle, $("formatPdf"), $("formatDocx"), $("formatTxt")]
+  .forEach(control => control.addEventListener("change", syncContentChoices));
 
 function updateOperationUI() {
   const type = jobType.value, study = type === "study_pack";
@@ -759,18 +831,25 @@ async function responseError(response) {
 function formData() {
   const data = new FormData();
   data.append("source_language", sourceLanguage.value); data.append("output_language", outputLanguage.value);
-  data.append("summary_style", summaryStyle.value); data.append("quiz_count", $("quizCount").value); data.append("flashcard_count", $("cardCount").value);
-  data.append("translate_transcript", $("translateTranscript").checked ? "true" : "false");
+  data.append("summary_style", summaryStyle.value);
+  data.append("quiz_count", $("includeQuiz").checked ? $("quizCount").value : "0");
+  data.append("flashcard_count", $("includeCards").checked ? $("cardCount").value : "0");
+  data.append("include_summary", $("includeSummary").checked ? "true" : "false");
+  data.append("include_transcript", $("includeTranscript").checked ? "true" : "false");
+  data.append("include_slides", $("includeSlides").checked ? "true" : "false");
+  data.append("translate_transcript", $("includeTranscript").checked && $("translateTranscript").checked ? "true" : "false");
   data.append("slides_offset_seconds", sourceLayout === "separate" ? ($("slidesOffset").value || "0") : "0");
   data.append("source_layout", sourceLayout); data.append("job_type", jobType.value);
-  const formats = [$("formatPdf"), $("formatDocx"), $("formatTxt")].filter(input => input.checked).map(input => input.value);
-  if (jobType.value === "study_pack" && !formats.length) { $("formatPdf").checked = true; formats.push("pdf"); }
-  data.append("output_formats", formats.join(",") || "pdf");
+  data.append("output_formats", selectedFormats().join(","));
   return data;
 }
 
 $("analyzeButton").onclick = async () => {
   $("errorBox").hidden = true;
+  if (jobType.value === "study_pack" && ![$("includeSummary"), $("includeTranscript"), $("includeQuiz"), $("includeCards")].some(input => input.checked)) {
+    showError(t("outputSelectionRequired"), "LS-OUTPUT-01");
+    return;
+  }
   if (!billingToken || !billingAccount) {
     try {
       const access = await window.LectureSiftGuestTrial?.ensureAccess?.();
@@ -925,12 +1004,27 @@ function setupResultTabs() {
 function renderResult(data) {
   $("resultHeading").textContent = data.title || "LectureSift";
   const utilityResult = data.job_type && data.job_type !== "study_pack";
+  const options = data.options || {};
+  const selected = {
+    summary: options.include_summary !== false,
+    transcript: options.include_transcript !== false,
+    slides: options.include_slides !== false,
+    quiz: Number(options.quiz_count ?? data.quiz?.length ?? 0) > 0,
+    cards: Number(options.flashcard_count ?? data.flashcards?.length ?? 0) > 0,
+    files: Boolean(data.artifacts?.length),
+  };
   const timestampLabel = data.transcript_timestamps_mode === "provider_segments"
     ? window.LectureSiftI18n?.t("transcript.preciseTimestamps", "Hassas zaman damgaları")
     : window.LectureSiftI18n?.t("transcript.estimatedTimestamps", "Bölüm başlangıç zamanları");
-  $("resultMeta").textContent = utilityResult ? `${data.artifacts?.length || 0} ${t("tabFiles")}` : `${data.slides?.length || 0} ${t("tabSlides")} · ${data.quiz?.length || 0} Quiz · ${data.flashcards?.length || 0} ${t("tabCards")} · ${timestampLabel}`;
+  const resultDetails = [];
+  if (selected.slides) resultDetails.push(`${data.slides?.length || 0} ${t("tabSlides")}`);
+  if (selected.quiz) resultDetails.push(`${data.quiz?.length || 0} Quiz`);
+  if (selected.cards) resultDetails.push(`${data.flashcards?.length || 0} ${t("tabCards")}`);
+  if (selected.transcript) resultDetails.push(timestampLabel);
+  $("resultMeta").textContent = utilityResult ? `${data.artifacts?.length || 0} ${t("tabFiles")}` : resultDetails.join(" · ");
   const canDownload = data.download_enabled !== false;
   const unlockText = window.LectureSiftI18n?.t("plans.unlockDownload", "Dosyaları indirmek için paket seç") || "Dosyaları indirmek için paket seç";
+  $("downloadAll").hidden = !selected.files;
   $("downloadAll").href = canDownload ? "#" : (window.LectureSiftI18n?.localizedPath?.(currentLanguage, "/plans.html") || "/plans.html");
   $("downloadAll").textContent = canDownload ? t("downloadAll") : unlockText;
   $("downloadAll").onclick = canDownload ? (event => { event.preventDefault(); downloadProtected(`/jobs/${jobId}/download`, "LectureSift_Paketi.zip"); }) : null;
@@ -952,8 +1046,15 @@ function renderResult(data) {
   });
   renderQuiz(data.quiz || []); renderExamPrep(data); renderCards(); renderFiles(data.artifacts || [], canDownload);
   $("lessonQuestionForm").reset(); $("lessonAnswer").hidden = true; $("lessonAnswer").replaceChildren();
-  document.querySelectorAll(".result-tab").forEach(button => { button.hidden = utilityResult && button.dataset.pane !== "files"; });
-  activateResultPane(utilityResult ? "files" : "summary");
+  const visiblePanes = utilityResult
+    ? {files:true}
+    : {
+        summary:selected.summary, notes:selected.summary, transcript:selected.transcript, slides:selected.slides,
+        quiz:selected.quiz, exam:selected.summary || selected.quiz, cards:selected.cards,
+        ask:selected.summary || selected.transcript, files:selected.files,
+      };
+  document.querySelectorAll(".result-tab").forEach(button => { button.hidden = !visiblePanes[button.dataset.pane]; });
+  activateResultPane(utilityResult ? "files" : Object.keys(visiblePanes).find(name => visiblePanes[name]));
   $("results").hidden = false; $("results").scrollIntoView({behavior: "smooth", block: "start"});
 }
 
