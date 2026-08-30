@@ -137,6 +137,39 @@ def test_incomplete_detailed_summary_is_retried_once(monkeypatch):
     assert any("RETRY REQUIREMENT" in message["content"] for message in calls[1]["messages"])
 
 
+def test_study_pack_keeps_usable_retry_below_preferred_word_target(monkeypatch):
+    calls = []
+    retry_pack = {
+        **_pack("usable-short-retry"),
+        "summary": " ".join(["grounded"] * 192),
+        "notes": [{"heading": "Topic", "content": "Source-backed explanation", "bullets": []}],
+    }
+
+    class Completions:
+        @staticmethod
+        def create(**kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(
+                choices=[SimpleNamespace(
+                    finish_reason="stop",
+                    message=SimpleNamespace(content=json.dumps(retry_pack)),
+                )]
+            )
+
+    monkeypatch.setattr(
+        ai,
+        "_CLIENT",
+        SimpleNamespace(chat=SimpleNamespace(completions=Completions())),
+    )
+    monkeypatch.setattr(ai, "record_openai_response", lambda *_args, **_kwargs: True)
+
+    result = ai._request_study_pack("source " * 1000, "en", "standard", 0, 0)
+
+    assert len(calls) == 2
+    assert result["title"] == "usable-short-retry"
+    assert len(result["summary"].split()) == 192
+
+
 def test_study_pack_treats_source_commands_as_untrusted_material(monkeypatch):
     captured = {}
 
