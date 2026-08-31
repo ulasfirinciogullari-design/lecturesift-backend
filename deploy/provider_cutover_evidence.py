@@ -17,6 +17,11 @@ from urllib.parse import parse_qsl, unquote, urlsplit
 
 EVIDENCE_ROOT = Path("/var/lib/lecturesift/provider-cutover")
 RECOVERY_EVIDENCE_ROOT = Path("/var/lib/lecturesift/recovery-drills")
+# Production evidence is always owned by root:root.  Tests may monkeypatch
+# these process-local constants to the unprivileged CI runner's effective IDs;
+# they are deliberately not configurable through environment variables or CLI.
+EVIDENCE_OWNER_UID = 0
+EVIDENCE_OWNER_GID = 0
 IN_PROGRESS_NAME = "provider-cutover.in-progress"
 POSTGRES_PROOF_NAME = "postgres-cutover.ok"
 REDIS_PROOF_NAME = "redis-cutover.ok"
@@ -131,7 +136,9 @@ def _ensure_evidence_root(root: Path) -> Path:
         raise EvidenceError("provider-cutover evidence root escaped its fixed path")
     details = root.stat()
     if os.name == "posix" and (
-        details.st_uid != 0 or stat.S_IMODE(details.st_mode) & 0o077
+        details.st_uid != EVIDENCE_OWNER_UID
+        or details.st_gid != EVIDENCE_OWNER_GID
+        or stat.S_IMODE(details.st_mode) & 0o077
     ):
         raise EvidenceError("provider-cutover evidence root must be root-owned mode 0700")
     return resolved
@@ -155,7 +162,7 @@ def _atomic_write(path: Path, fields: dict[str, str]) -> None:
         else:
             os.chmod(temporary, 0o600)
         if hasattr(os, "fchown"):
-            os.fchown(descriptor, 0, 0)
+            os.fchown(descriptor, EVIDENCE_OWNER_UID, EVIDENCE_OWNER_GID)
         payload = "".join(f"{key}={fields[key]}\n" for key in sorted(fields)).encode()
         with os.fdopen(descriptor, "wb", closefd=True) as stream:
             descriptor = -1
@@ -198,7 +205,9 @@ def _load(path: Path) -> dict[str, str]:
         raise EvidenceError(f"missing or unsafe evidence: {path.name}")
     details = path.stat()
     if os.name == "posix" and (
-        details.st_uid != 0 or stat.S_IMODE(details.st_mode) != 0o600
+        details.st_uid != EVIDENCE_OWNER_UID
+        or details.st_gid != EVIDENCE_OWNER_GID
+        or stat.S_IMODE(details.st_mode) != 0o600
     ):
         raise EvidenceError(f"evidence must be root-owned mode 0600: {path.name}")
     fields: dict[str, str] = {}
@@ -216,7 +225,9 @@ def _load_recovery_evidence(path: Path) -> dict[str, str]:
         raise EvidenceError(f"missing or unsafe recovery evidence: {path.name}")
     details = path.stat()
     if os.name == "posix" and (
-        details.st_uid != 0 or stat.S_IMODE(details.st_mode) & 0o022
+        details.st_uid != EVIDENCE_OWNER_UID
+        or details.st_gid != EVIDENCE_OWNER_GID
+        or stat.S_IMODE(details.st_mode) & 0o022
     ):
         raise EvidenceError(f"recovery evidence must be root-owned and immutable to others: {path.name}")
     fields: dict[str, str] = {}
@@ -525,6 +536,8 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
+        if (EVIDENCE_OWNER_UID, EVIDENCE_OWNER_GID) != (0, 0):
+            raise EvidenceError("production evidence ownership must remain root:root")
         if not hasattr(os, "geteuid") or os.geteuid() != 0:
             raise EvidenceError("provider cutover evidence must be managed as root")
         if args.command == "source-fingerprint":

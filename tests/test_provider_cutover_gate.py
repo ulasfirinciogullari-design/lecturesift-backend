@@ -23,6 +23,14 @@ REVISION = "2" * 40
 SOURCE = "3" * 64
 
 
+@pytest.fixture(autouse=True)
+def _use_ci_process_as_evidence_owner(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Exercise ownership checks without requiring the Linux CI user to be root."""
+    if os.name == "posix":
+        monkeypatch.setattr(evidence, "EVIDENCE_OWNER_UID", os.geteuid())
+        monkeypatch.setattr(evidence, "EVIDENCE_OWNER_GID", os.getegid())
+
+
 def _read(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
