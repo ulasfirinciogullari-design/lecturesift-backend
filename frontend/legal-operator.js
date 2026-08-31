@@ -1,5 +1,5 @@
 (function () {
-  const API = "https://lecturesift-backend.onrender.com";
+  const API = "https://api.lecturesift.com";
   const card = document.querySelector(".legal-card");
   if (!card || document.querySelector("[data-legal-operator]")) return;
   const i18n = window.LectureSiftI18n;

@@ -433,6 +433,7 @@ Requirements:
 
     retry_reason = ""
     last_error: Exception | None = None
+    best_usable_candidate: tuple[tuple[int, ...], dict] | None = None
     for attempt in range(2):
         retry_instruction = ""
         if attempt:
@@ -469,6 +470,8 @@ Requirements:
             retry_reason = "The previous JSON could not be parsed. Close every array and object."
             if attempt == 0:
                 continue
+            if best_usable_candidate is not None:
+                return best_usable_candidate[1]
             break
 
         base = empty_study_pack()
@@ -490,8 +493,6 @@ Requirements:
             )
         if incomplete_reasons:
             retry_reason = " ".join(incomplete_reasons)
-            if attempt == 0:
-                continue
             # A valid, source-grounded pack is still useful when the provider
             # stops naturally a little below our preferred length or item
             # target.  Do not discard every generated artifact after the
@@ -499,7 +500,7 @@ Requirements:
             # truncation and genuinely empty responses continue to fail
             # closed below.
             usable_word_floor = (
-                min(120, max(40, round(effective_summary_minimum * 0.35)))
+                min(100, max(40, round(effective_summary_minimum * 0.30)))
                 if effective_summary_minimum
                 else 0
             )
@@ -507,13 +508,44 @@ Requirements:
                 base.get(field)
                 for field in ("key_points", "important_terms", "notes", "exam_focus", "quiz", "flashcards")
             )
-            if (
+            is_usable = (
                 finish_reason != "length"
                 and str(base.get("summary") or "").strip()
                 and summary_words >= usable_word_floor
                 and has_structured_content
-            ):
-                return base
+            )
+            if is_usable:
+                quiz_items = len(base.get("quiz") or [])
+                flashcard_items = len(base.get("flashcards") or [])
+                quiz_deficit = max(0, quiz_count - quiz_items)
+                flashcard_deficit = max(0, flashcard_count - flashcard_items)
+                summary_deficit = max(0, effective_summary_minimum - summary_words)
+                # Prefer the candidate that fulfils what the user explicitly
+                # requested.  A slightly longer summary must not displace a
+                # retry that contains the complete quiz or flashcard set.
+                # Summary length and general structure break ties only after
+                # requested exercise deficits have been compared.
+                quality = (
+                    int(quiz_deficit == 0),
+                    -quiz_deficit,
+                    int(flashcard_deficit == 0),
+                    -flashcard_deficit,
+                    int(summary_deficit == 0),
+                    -summary_deficit,
+                    sum(
+                        bool(base.get(field))
+                        for field in ("key_points", "important_terms", "notes", "exam_focus")
+                    ),
+                    summary_words,
+                    quiz_items,
+                    flashcard_items,
+                )
+                if best_usable_candidate is None or quality > best_usable_candidate[0]:
+                    best_usable_candidate = (quality, base)
+            if attempt == 0:
+                continue
+            if best_usable_candidate is not None:
+                return best_usable_candidate[1]
             last_error = ValueError(retry_reason)
             break
         return base

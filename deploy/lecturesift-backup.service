@@ -1,0 +1,23 @@
+[Unit]
+Description=Back up LectureSift PostgreSQL and Redis
+Requires=docker.service
+After=docker.service lecturesift.service network-online.target
+OnFailure=lecturesift-backup-alert@%n.service
+OnFailureJobMode=replace-irreversibly
+
+[Service]
+Type=oneshot
+Environment=LECTURESIFT_ENV_FILE=/etc/lecturesift/runtime.env
+Environment=LECTURESIFT_API_ENV_FILE=/etc/lecturesift/api.env
+Environment=LECTURESIFT_WORKER_ENV_FILE=/etc/lecturesift/worker.env
+Environment=LECTURESIFT_INSTAGRAM_ENV_FILE=/etc/lecturesift/instagram.env
+Environment=LECTURESIFT_DB_ENV_FILE=/etc/lecturesift/postgres.env
+Environment=LECTURESIFT_RESTIC_ENV_FILE=/etc/lecturesift/restic.env
+ExecStartPre=/usr/bin/python3 /opt/lecturesift/deploy/generate_role_envs.py --check
+ExecStart=/bin/bash /opt/lecturesift/deploy/backup.sh
+ExecStopPost=/bin/bash /opt/lecturesift/deploy/recover_backup_runtime.sh
+TimeoutStartSec=3600
+TimeoutStopSec=240
+UMask=0077
+Nice=10
+IOSchedulingClass=idle

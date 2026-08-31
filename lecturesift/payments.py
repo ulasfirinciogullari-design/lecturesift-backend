@@ -19,14 +19,17 @@ import httpx
 
 from . import config
 from .billing_service import (
+    adopt_payment_order_token_digest_from_verified_notification,
     BillingConfigurationError,
     BillingError,
+    bind_payment_order_token_digest,
     complete_payment_order,
     commerce_identity,
     create_payment_order,
     mark_payment_order_pending,
     mark_payment_order_token_failed,
     payment_order,
+    payment_order_token_digest,
     record_payment_consent,
 )
 
@@ -65,6 +68,17 @@ IYZICO_BASE_URLS = {
     "https://api.iyzipay.com",
     "https://sandbox-api.iyzipay.com",
 }
+IYZICO_PUBLIC_FAILURE_MESSAGES = {
+    # iyzico documents 10208 as INVALID_MERCHANT_OR_SP: the live merchant's
+    # category/MCC assignment was rejected.  It is not a signal that the
+    # buyer entered a bad card number, so give the buyer an actionable and
+    # non-blaming message while retaining the provider code on the order for
+    # merchant support.
+    "10208": (
+        "iyzico, mağazanın kategori kodunu doğrulayamadı. Bu sipariş için plan etkinleşmedi; "
+        "sipariş numarasıyla LectureSift desteğine başvurabilirsin."
+    ),
+}
 
 
 class PaymentProviderError(BillingError):
@@ -97,7 +111,11 @@ def _iyzico_base_url() -> str:
 
 
 def iyzico_configured() -> bool:
-    return bool(config.IYZICO_API_KEY and config.IYZICO_SECRET_KEY)
+    return bool(
+        config.IYZICO_API_KEY
+        and config.IYZICO_SECRET_KEY
+        and len(config.PAYMENT_TOKEN_BINDING_SECRET) >= 32
+    )
 
 
 def iyzico_public_status() -> dict:
@@ -202,6 +220,52 @@ def _iyzico_response_signature(values: list[object]) -> str:
     ).hexdigest()
 
 
+def _iyzico_token_digest_with_key(order_reference: str, token: str, key: str) -> str:
+    """Create a non-replayable, order-scoped digest of a checkout token."""
+    message = f"lecturesift:iyzico:checkout-token:v1:{order_reference}:{token}"
+    return hmac.new(
+        key.encode("utf-8"),
+        message.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _iyzico_token_binding_keys() -> tuple[str, ...]:
+    active = config.PAYMENT_TOKEN_BINDING_SECRET
+    legacy = config.PAYMENT_TOKEN_BINDING_LEGACY_SECRET
+    if len(active) < 32:
+        raise BillingConfigurationError(
+            "Ödeme oturumu bağlama anahtarı en az 32 karakter olmalı."
+        )
+    if legacy and len(legacy) < 32:
+        raise BillingConfigurationError(
+            "Eski ödeme oturumu bağlama anahtarı en az 32 karakter olmalı."
+        )
+    return (active,) if not legacy or hmac.compare_digest(active, legacy) else (active, legacy)
+
+
+def _iyzico_token_digest(order_reference: str, token: str) -> str:
+    return _iyzico_token_digest_with_key(
+        order_reference,
+        token,
+        _iyzico_token_binding_keys()[0],
+    )
+
+
+def _require_iyzico_token_match(order_reference: str, token: str) -> None:
+    """Fail before contacting iyzico unless this token initialized the order."""
+    stored_digest = payment_order_token_digest(order_reference, "iyzico")
+    # Check every configured key without short-circuiting. During a deliberate
+    # rotation the previous key remains accepted only for the maximum pending
+    # transfer window, while all new bindings use the active key.
+    matched = 0
+    for key in _iyzico_token_binding_keys():
+        candidate_digest = _iyzico_token_digest_with_key(order_reference, token, key)
+        matched |= int(hmac.compare_digest(stored_digest, candidate_digest))
+    if matched == 0:
+        raise PaymentProviderError("Ödeme oturumu siparişle eşleşmiyor.")
+
+
 def _verify_iyzico_response_signature(body: dict, values: list[object]) -> None:
     signature = str(body.get("signature") or "")
     expected = _iyzico_response_signature(values)
@@ -275,6 +339,21 @@ def _iyzico_post(path: str, payload: dict) -> dict:
     if not isinstance(body, dict):
         raise PaymentProviderError("iyzico geçersiz bir yanıt döndürdü.")
     return body
+
+
+def _iyzico_failure(body: dict) -> tuple[str, str]:
+    """Return bounded, public-safe provider failure details for an order."""
+    code = str(
+        body.get("errorCode")
+        or body.get("errorGroup")
+        or "iyzico_failure"
+    ).strip()[:32]
+    provider_message = str(
+        body.get("errorMessage")
+        or "Ödeme banka veya iyzico tarafından onaylanmadı."
+    ).strip()
+    public_message = IYZICO_PUBLIC_FAILURE_MESSAGES.get(code, provider_message)
+    return code or "iyzico_failure", public_message[:240]
 
 
 def create_iyzico_checkout(
@@ -375,7 +454,7 @@ def create_iyzico_checkout(
         body = _iyzico_post(IYZICO_INITIALIZE_PATH, payload)
         if body.get("status") != "success":
             raise PaymentProviderError("iyzico ödeme formunu başlatamadı. Bilgilerini kontrol edip tekrar dene.")
-        token = str(body.get("token") or "")
+        token = str(body.get("token") or "").strip()
         conversation_id = str(body.get("conversationId") or "")
         checkout_url = str(body.get("paymentPageUrl") or "")
         _verify_iyzico_response_signature(body, [conversation_id, token])
@@ -383,11 +462,17 @@ def create_iyzico_checkout(
         if (
             conversation_id != reference
             or not token
+            or len(token) > 200
             or parsed.scheme != "https"
             or not (parsed.hostname == "iyzipay.com" or (parsed.hostname or "").endswith(".iyzipay.com"))
         ):
             raise PaymentProviderError("iyzico ödeme oturumu doğrulanamadı.")
-    except PaymentProviderError:
+        bind_payment_order_token_digest(
+            reference,
+            "iyzico",
+            _iyzico_token_digest(reference, token),
+        )
+    except BillingError:
         mark_payment_order_token_failed(reference)
         raise
     return {
@@ -399,7 +484,12 @@ def create_iyzico_checkout(
     }
 
 
-def process_iyzico_callback(*, order_reference: str, token: str) -> dict:
+def process_iyzico_callback(
+    *,
+    order_reference: str,
+    token: str,
+    _verified_webhook: bool = False,
+) -> dict:
     if not iyzico_configured():
         raise BillingConfigurationError("iyzico canlı ödeme anahtarları henüz etkinleştirilmemiş.")
     order = payment_order(order_reference)
@@ -408,6 +498,11 @@ def process_iyzico_callback(*, order_reference: str, token: str) -> dict:
     selected_token = token.strip()
     if not selected_token or len(selected_token) > 200:
         raise PaymentProviderError("Geçersiz iyzico ödeme belirteci.")
+    # The browser callback is not itself signed. A signed webhook can also be
+    # replayed with a valid signature, so both paths must prove that the token
+    # is the exact one returned by our initialize call before any retrieve or
+    # local state transition occurs.
+    _require_iyzico_token_match(order_reference, selected_token)
     body = _iyzico_post(
         IYZICO_RETRIEVE_PATH,
         {"locale": "tr", "conversationId": order_reference, "token": selected_token},
@@ -419,17 +514,12 @@ def process_iyzico_callback(*, order_reference: str, token: str) -> dict:
         # ``created`` state.  The request itself is signed and sent server-side;
         # when iyzico echoes a conversation id it must still match our order.
         conversation_id = str(body.get("conversationId") or "")
-        if conversation_id and conversation_id != order_reference:
+        if (
+            (conversation_id and conversation_id != order_reference)
+            or (not conversation_id and not _verified_webhook)
+        ):
             raise PaymentProviderError("iyzico ödeme sonucu siparişle eşleşmiyor.")
-        failure_code = str(
-            body.get("errorCode")
-            or body.get("errorGroup")
-            or "iyzico_failure"
-        )
-        failure_message = str(
-            body.get("errorMessage")
-            or "Ödeme banka veya iyzico tarafından onaylanmadı."
-        )
+        failure_code, failure_message = _iyzico_failure(body)
         return complete_payment_order(
             order_reference,
             succeeded=False,
@@ -467,12 +557,13 @@ def process_iyzico_callback(*, order_reference: str, token: str) -> dict:
     if payment_status in IYZICO_ASYNC_PAYMENT_STATUSES:
         return mark_payment_order_pending(order_reference)
     succeeded = payment_status == "SUCCESS"
+    failure_code, failure_message = ("", "") if succeeded else _iyzico_failure(body)
     return complete_payment_order(
         order_reference,
         succeeded=succeeded,
         provider_amount_minor=int(paid_price * 100),
-        failure_code="" if succeeded else str(body.get("errorCode") or "payment_failed"),
-        failure_message="" if succeeded else str(body.get("errorMessage") or "Ödeme tamamlanmadı."),
+        failure_code=failure_code,
+        failure_message=failure_message,
     )
 
 
@@ -483,9 +574,20 @@ def process_iyzico_webhook(*, payload: dict, signature: str) -> dict:
     if not isinstance(payload, dict):
         raise PaymentProviderError("Geçersiz iyzico webhook bildirimi.")
     _verify_iyzico_hpp_webhook_signature(payload, signature)
+    order_reference = str(payload.get("paymentConversationId") or "")
+    selected_token = str(payload.get("token") or "").strip()
+    # Compatibility bridge for checkouts initialized before token-binding was
+    # deployed. Only the signed provider notification may create this legacy
+    # binding; an unsigned browser callback remains strictly fail-closed.
+    adopt_payment_order_token_digest_from_verified_notification(
+        order_reference,
+        "iyzico",
+        _iyzico_token_digest(order_reference, selected_token),
+    )
     return process_iyzico_callback(
-        order_reference=str(payload.get("paymentConversationId") or ""),
-        token=str(payload.get("token") or ""),
+        order_reference=order_reference,
+        token=selected_token,
+        _verified_webhook=True,
     )
 
 

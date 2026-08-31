@@ -22,6 +22,7 @@ from .errors import normalize_error
 from .exports import build_artifacts, build_binary_artifact
 from .jobs import JOBS
 from .media import convert_videos_to_mp3, extract_audio_chunks, has_audio_stream
+from .provider_state import AI_PROVIDER_CIRCUIT
 from .rollout_service import is_guest_user, reserve_guest_job
 from .slides import extract_slides
 
@@ -881,6 +882,7 @@ def _process_job(
         _record_billing_usage(job_id, options, audio_sources)
     except Exception as exc:
         normalized = normalize_error(exc)
+        AI_PROVIDER_CIRCUIT.trip_error(normalized)
         print(f"PROCESS ERROR [{normalized.code}]: {normalized.technical_message}", flush=True)
         traceback.print_exc()
         JOBS.update(

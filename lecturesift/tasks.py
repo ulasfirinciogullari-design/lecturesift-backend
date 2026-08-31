@@ -17,10 +17,12 @@ from .media import download_remote_video
 from .pipeline_enhancements import install_pipeline_enhancements
 from .queue import celery_app
 from .rollout_service import estimate_eta_seconds, is_guest_user, record_runtime, reserve_guest_job
+from .resource_limits import enforce_job_workspace
 from .storage import STORAGE
 
 install_pipeline_enhancements()
 from .pipeline import process_job  # noqa: E402  (patched before binding)
+from .provider_state import AI_PROVIDER_CIRCUIT
 
 
 def _download_source_specs(
@@ -259,6 +261,7 @@ def _retry_or_fail(
     visual_keys: list[str] | None = None,
 ) -> dict:
     normalized = normalize_error(exc)
+    AI_PROVIDER_CIRCUIT.trip_error(normalized)
     if normalized.code not in {"LS-AI-02", "LS-SYSTEM-01"}:
         JOBS.update(
             job_id,
@@ -276,6 +279,10 @@ def _retry_or_fail(
             audio_keys=audio_keys,
             visual_keys=visual_keys,
         )
+        if normalized.code.startswith("LS-STORAGE-") and job_dir is not None:
+            # A capacity failure must release every derived artifact, not only
+            # source media, or the next queued job inherits the exhausted disk.
+            shutil.rmtree(job_dir, ignore_errors=True)
         return {"job_id": job_id, "status": "error", "error_code": normalized.code}
 
     retries = int(getattr(task.request, "retries", 0))
@@ -335,6 +342,7 @@ def _resume_publish(job_id: str, data: dict) -> dict | None:
     job_dir = Path(str(data.get("job_dir") or ""))
     if data.get("worker_state") != "retrying" or not result_path.is_file() or not job_dir.is_dir():
         return None
+    enforce_job_workspace(job_dir, work_root=WORK_DIR)
     JOBS.update(
         job_id,
         status="working",
@@ -398,6 +406,7 @@ def process_uploaded_job(
         try:
             shutil.rmtree(job_dir, ignore_errors=True)
             job_dir.mkdir(parents=True, exist_ok=True)
+            enforce_job_workspace(job_dir, reserve_full_budget=True, work_root=WORK_DIR)
             JOBS.update(
                 job_id,
                 job_dir=str(job_dir),
@@ -411,6 +420,7 @@ def process_uploaded_job(
                 list(visual_keys or []),
                 job_dir,
             )
+            enforce_job_workspace(job_dir, reserve_full_budget=True, work_root=WORK_DIR)
             document_seconds = max(0.0, float(options.get("document_credit_seconds") or 0))
             if bool(options.get("document_mode")) and not document_seconds:
                 document_seconds = _preflight_worker_documents(job_id, audio_paths, options)
@@ -477,6 +487,7 @@ def process_uploaded_job(
                 eta_started_at=time.time(),
             )
             process_job(job_id, audio_paths, pipeline_options, visual_paths or None)
+            enforce_job_workspace(job_dir, work_root=WORK_DIR)
             finished = JOBS.get(job_id) or {}
             if finished.get("status") != "done":
                 transient = _processing_error(finished)
@@ -555,6 +566,7 @@ def process_url_job(self, job_id: str, url: str, options: dict) -> dict:
         try:
             shutil.rmtree(job_dir, ignore_errors=True)
             job_dir.mkdir(parents=True, exist_ok=True)
+            enforce_job_workspace(job_dir, reserve_full_budget=True, work_root=WORK_DIR)
             JOBS.update(job_id, job_dir=str(job_dir), status="working", stage="url_download", worker_state="downloading")
             video_path = download_remote_video(
                 url,
@@ -562,6 +574,7 @@ def process_url_job(self, job_id: str, url: str, options: dict) -> dict:
                 job_type=str(options.get("job_type") or "study_pack"),
                 include_slides=bool(options.get("include_slides", True)),
             )
+            enforce_job_workspace(job_dir, reserve_full_budget=True, work_root=WORK_DIR)
             duration = media_duration_seconds([video_path])
             try:
                 _enforce_minutes(str(options.get("billing_user_id", "")), job_id, duration)
@@ -581,6 +594,7 @@ def process_url_job(self, job_id: str, url: str, options: dict) -> dict:
             )
             pipeline_options = _pipeline_options_with_durations(options, duration, duration)
             process_job(job_id, video_path, pipeline_options)
+            enforce_job_workspace(job_dir, work_root=WORK_DIR)
             finished = JOBS.get(job_id) or {}
             if finished.get("status") != "done":
                 transient = _processing_error(finished)

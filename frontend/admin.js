@@ -1,4 +1,4 @@
-const ADMIN_API = "https://lecturesift-backend.onrender.com";
+const ADMIN_API = "https://api.lecturesift.com";
 const admin$ = id => document.getElementById(id);
 const adminT = (key, fallback) => window.LectureSiftI18n?.t(key) || fallback || key;
 const adminLocale = () => window.LectureSiftI18n?.locale || "tr-TR";

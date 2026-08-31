@@ -1,0 +1,27 @@
+[Unit]
+Description=Verify LectureSift R2 backup bucket retention lock
+Documentation=file:/opt/lecturesift/deploy/R2_RETENTION_PROBE.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+EnvironmentFile=/etc/lecturesift/restic.env
+ExecStart=/usr/bin/python3 /opt/lecturesift/deploy/r2_retention_probe.py --confirm CREATE-ONE-IMMUTABLE-R2-PROBE
+StateDirectory=lecturesift/recovery-drills
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/lecturesift/recovery-drills
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+SystemCallArchitectures=native

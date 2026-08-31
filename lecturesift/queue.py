@@ -2,7 +2,7 @@
 
 from celery import Celery
 
-from .config import CELERY_BROKER_URL, REDIS_URL
+from .config import CELERY_BROKER_URL, CELERY_VISIBILITY_TIMEOUT_SECONDS, REDIS_URL
 
 
 broker = CELERY_BROKER_URL or REDIS_URL or "memory://"
@@ -20,7 +20,9 @@ celery_app.conf.update(
     task_track_started=True,
     worker_prefetch_multiplier=1,
     broker_connection_retry_on_startup=True,
-    broker_transport_options={"visibility_timeout": 12 * 60 * 60},
+    broker_transport_options={"visibility_timeout": CELERY_VISIBILITY_TIMEOUT_SECONDS},
+    result_backend_transport_options={"visibility_timeout": CELERY_VISIBILITY_TIMEOUT_SECONDS},
+    visibility_timeout=CELERY_VISIBILITY_TIMEOUT_SECONDS,
     result_expires=24 * 60 * 60,
     task_serializer="json",
     accept_content=["json"],

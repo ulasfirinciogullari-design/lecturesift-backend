@@ -1,5 +1,5 @@
 (() => {
-  const API_BASE = "https://lecturesift-backend.onrender.com";
+  const API_BASE = "https://api.lecturesift.com";
   const TOKEN_KEY = "lecturesift-billing-token";
   const GUEST_TOKEN_KEY = "lecturesift-guest-token";
   const DEVICE_KEY = "lecturesift-guest-device";

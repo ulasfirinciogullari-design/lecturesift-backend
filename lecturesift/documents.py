@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Callable
 
@@ -17,6 +18,7 @@ from docx import Document
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pypdf import PdfReader
 from pptx import Presentation
+from pptx.enum.shapes import MSO_SHAPE_TYPE
 
 from .config import (
     DOCUMENT_EXTENSIONS,
@@ -63,6 +65,8 @@ _OCR_SCRIPT_LANGUAGES = {
 }
 _MAX_IMAGE_PIXELS = 40_000_000
 _ONE_GIB = 1024 * 1024 * 1024
+_PPTX_MIN_PANEL_COVERAGE = 0.05
+_PPTX_MIN_SCANNED_SLIDE_COVERAGE = 0.30
 
 
 def _container_memory_limit_bytes() -> int | None:
@@ -529,7 +533,134 @@ def _extract_docx(path: Path) -> tuple[str, dict[str, Any]]:
     return _normalize_text("\n\n".join(parts)), {"paragraphs": len(document.paragraphs), "tables": len(document.tables)}
 
 
-def _extract_pptx(path: Path) -> tuple[str, dict[str, Any]]:
+def _pptx_shape_text(shape: Any) -> list[str]:
+    """Return user-authored text from a PowerPoint shape, including tables."""
+    parts: list[str] = []
+    text = getattr(shape, "text", "")
+    if text and text.strip():
+        parts.append(text.strip())
+    if bool(getattr(shape, "has_table", False)):
+        for row in shape.table.rows:
+            cells = [cell.text.strip() for cell in row.cells]
+            if any(cells):
+                parts.append(" | ".join(cells))
+    if getattr(shape, "shape_type", None) == MSO_SHAPE_TYPE.GROUP:
+        for child in shape.shapes:
+            parts.extend(_pptx_shape_text(child))
+    return parts
+
+
+def _pptx_picture_shapes(shape: Any) -> list[Any]:
+    # Inserted picture placeholders are ``PLACEHOLDER`` shapes in
+    # python-pptx rather than ``PICTURE`` shapes. Capability detection keeps
+    # those images visible to OCR without guessing from placeholder types.
+    try:
+        image = shape.image
+        blob = image.blob
+    except (AttributeError, KeyError, TypeError, ValueError):
+        blob = None
+    if isinstance(blob, (bytes, bytearray)) and blob:
+        return [shape]
+    if getattr(shape, "shape_type", None) == MSO_SHAPE_TYPE.GROUP:
+        pictures: list[Any] = []
+        for child in shape.shapes:
+            pictures.extend(_pptx_picture_shapes(child))
+        return pictures
+    return []
+
+
+def _pptx_picture_blob(shape: Any) -> bytes:
+    try:
+        blob = shape.image.blob
+    except (AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise LectureSiftError(
+            "LS-OCR-04",
+            "Sunumdaki taranmış slayt görseli güvenli biçimde okunamadı.",
+            f"Unreadable PowerPoint image relationship: {type(exc).__name__}",
+            422,
+        ) from exc
+    if not isinstance(blob, (bytes, bytearray)) or not blob:
+        raise LectureSiftError(
+            "LS-OCR-04",
+            "Sunumdaki taranmış slayt görseli güvenli biçimde okunamadı.",
+            "Empty PowerPoint image payload",
+            422,
+        )
+    return bytes(blob)
+
+
+def _load_pptx_picture_image(blob: bytes) -> Image.Image:
+    try:
+        with Image.open(BytesIO(blob)) as source:
+            _validate_image_dimensions(source)
+            return source.copy()
+    except (Image.DecompressionBombError, UnidentifiedImageError, OSError) as exc:
+        raise LectureSiftError(
+            "LS-OCR-04",
+            "Sunumdaki taranmış slayt görseli güvenli biçimde okunamadı.",
+            f"Unreadable PowerPoint image: {type(exc).__name__}",
+            422,
+        ) from exc
+
+
+def _detect_pptx_ocr_language(blob: bytes) -> str:
+    image = _load_pptx_picture_image(blob)
+    prepared: Image.Image | None = None
+    try:
+        prepared = _safe_image(image)
+        with tempfile.TemporaryDirectory(prefix="lecturesift-pptx-ocr-language-") as directory:
+            image_path = Path(directory) / "sample.pgm"
+            prepared.save(image_path, format="PPM")
+            return _auto_ocr_languages(image_path)
+    finally:
+        if prepared is not None:
+            prepared.close()
+        image.close()
+
+
+def _detect_pptx_ocr_languages(blobs: list[bytes]) -> dict[int, str]:
+    """Map embedded images to at most three representative script samples."""
+    if not blobs:
+        return {}
+    positions = sorted({0, len(blobs) // 2, len(blobs) - 1})
+    workers = min(effective_ocr_parallelism(), len(positions))
+    if workers <= 1:
+        samples = {position: _detect_pptx_ocr_language(blobs[position]) for position in positions}
+    else:
+        with ThreadPoolExecutor(
+            max_workers=workers,
+            thread_name_prefix="lecturesift-pptx-ocr-language",
+        ) as executor:
+            futures = {
+                executor.submit(_detect_pptx_ocr_language, blobs[position]): position
+                for position in positions
+            }
+            samples = {futures[future]: future.result() for future in as_completed(futures)}
+    return {
+        position: samples[
+            min(samples, key=lambda sampled: (abs(sampled - position), sampled))
+        ]
+        for position in range(len(blobs))
+    }
+
+
+def _ocr_pptx_picture(candidate_index: int, blob: bytes, source_language: str) -> tuple[int, str, str]:
+    image = _load_pptx_picture_image(blob)
+    try:
+        text, language = _run_tesseract_image(image, source_language)
+    finally:
+        image.close()
+    return candidate_index, text, language
+
+
+def _extract_pptx(
+    path: Path,
+    source_language: str = "auto",
+    *,
+    enable_ocr: bool = True,
+    progress_callback: Callable[[int, int], None] | None = None,
+    ocr_page_budget: int | None = None,
+) -> tuple[str, dict[str, Any]]:
     _validate_office_archive(path)
     try:
         presentation = Presentation(str(path))
@@ -540,20 +671,143 @@ def _extract_pptx(path: Path) -> tuple[str, dict[str, Any]]:
                 f"Presentation slide limit exceeded: {len(presentation.slides)}",
                 413,
             )
-        sections: list[str] = []
+        slide_lines: dict[int, list[str]] = {}
+        ocr_candidates: list[tuple[int, bytes]] = []
+        slide_area = max(1, int(presentation.slide_width) * int(presentation.slide_height))
         for index, slide in enumerate(presentation.slides, 1):
-            lines = []
+            visual_lines: list[str] = []
+            notes_lines: list[str] = []
+            pictures: list[Any] = []
             for shape in slide.shapes:
-                text = getattr(shape, "text", "")
-                if text and text.strip():
-                    lines.append(text.strip())
-            if lines:
-                sections.append(f"SLIDE {index}\n" + "\n".join(lines))
+                visual_lines.extend(_pptx_shape_text(shape))
+                pictures.extend(_pptx_picture_shapes(shape))
+            if bool(getattr(slide, "has_notes_slide", False)):
+                notes_frame = slide.notes_slide.notes_text_frame
+                notes_text = notes_frame.text if notes_frame is not None else ""
+                if notes_text and notes_text.strip():
+                    notes_lines.append(f"SPEAKER NOTES\n{notes_text.strip()}")
+            slide_lines[index] = [*visual_lines, *notes_lines]
+            # Notes are invisible during the presentation and must not make a
+            # scanned/photo slide look like it already has native slide text.
+            if pictures and len(" ".join(visual_lines).strip()) < OCR_MIN_NATIVE_CHARACTERS:
+                picture_coverage = [
+                    (
+                        picture,
+                        (
+                            max(0, int(getattr(picture, "width", 0)))
+                            * max(0, int(getattr(picture, "height", 0)))
+                        )
+                        / slide_area,
+                    )
+                    for picture in pictures
+                ]
+                substantial = [
+                    picture
+                    for picture, coverage in picture_coverage
+                    if coverage >= _PPTX_MIN_PANEL_COVERAGE
+                ]
+                # A short title plus a logo/photo is still a native slide and
+                # must not consume the user's OCR allowance. Treat the slide
+                # as scanned only when its meaningful image panels together
+                # occupy a material part of the canvas. Multiple screenshot
+                # panels are summed so two-column scans remain supported.
+                if sum(
+                    coverage
+                    for _picture, coverage in picture_coverage
+                    if coverage >= _PPTX_MIN_PANEL_COVERAGE
+                ) < _PPTX_MIN_SCANNED_SLIDE_COVERAGE:
+                    substantial = []
+                # OCR every meaningful panel on low-text slides. This covers
+                # two-column screenshots and picture placeholders while
+                # ignoring small logos and decorative icons.
+                ocr_candidates.extend(
+                    (index, _pptx_picture_blob(picture)) for picture in substantial
+                )
+
+        available_ocr_pages = (
+            OCR_MAX_PAGES
+            if ocr_page_budget is None
+            else max(0, min(OCR_MAX_PAGES, ocr_page_budget))
+        )
+        if len(ocr_candidates) > available_ocr_pages:
+            raise LectureSiftError(
+                "LS-OCR-02",
+                f"Tek işte toplam en fazla {OCR_MAX_PAGES} taranmış sayfaya OCR uygulanabilir. Sunumu bölerek yükle.",
+                f"PowerPoint OCR image limit exceeded: {len(ocr_candidates)}",
+                413,
+            )
+
+        ocr_used = False
+        ocr_languages: list[str] = []
+        if enable_ocr:
+            blobs = [blob for _, blob in ocr_candidates]
+            candidate_languages = (
+                _detect_pptx_ocr_languages(blobs)
+                if source_language == "auto" and len(blobs) > 1
+                else {candidate_index: source_language for candidate_index in range(len(blobs))}
+            )
+            results: dict[int, tuple[str, str]] = {}
+            workers = min(effective_ocr_parallelism(), len(ocr_candidates)) if ocr_candidates else 0
+            if workers == 1:
+                completed_results = (
+                    _ocr_pptx_picture(
+                        candidate_index,
+                        blob,
+                        candidate_languages[candidate_index],
+                    )
+                    for candidate_index, (_, blob) in enumerate(ocr_candidates)
+                )
+                for completed, (candidate_index, text, language) in enumerate(completed_results, 1):
+                    results[candidate_index] = (text, language)
+                    if progress_callback:
+                        progress_callback(completed, len(ocr_candidates))
+            elif workers > 1:
+                with ThreadPoolExecutor(
+                    max_workers=workers,
+                    thread_name_prefix="lecturesift-pptx-ocr",
+                ) as executor:
+                    futures = {
+                        executor.submit(
+                            _ocr_pptx_picture,
+                            candidate_index,
+                            blob,
+                            candidate_languages[candidate_index],
+                        ): candidate_index
+                        for candidate_index, (_, blob) in enumerate(ocr_candidates)
+                    }
+                    for completed, future in enumerate(as_completed(futures), 1):
+                        candidate_index, text, language = future.result()
+                        results[candidate_index] = (text, language)
+                        if progress_callback:
+                            progress_callback(completed, len(ocr_candidates))
+            for candidate_index, (index, _) in enumerate(ocr_candidates):
+                text, language = results[candidate_index]
+                if text.strip():
+                    slide_lines[index].append(f"SLIDE OCR\n{text.strip()}")
+                if language and language not in ocr_languages:
+                    ocr_languages.append(language)
+            ocr_used = bool(ocr_candidates)
+
+        sections = [
+            f"SLIDE {index}\n" + "\n".join(lines)
+            for index, lines in slide_lines.items()
+            if lines
+        ]
     except LectureSiftError:
         raise
     except Exception as exc:
         raise LectureSiftError("LS-DOC-08", "PowerPoint sunumu okunamadı.", str(exc), 400) from exc
-    return _normalize_text("\n\n".join(sections)), {"slides": len(presentation.slides)}
+    ocr_slide_indexes = {index for index, _ in ocr_candidates}
+    return _normalize_text("\n\n".join(sections)), {
+        "slides": len(presentation.slides),
+        "native_text_pages": len(presentation.slides) - len(ocr_slide_indexes),
+        "ocr_pages": len(ocr_slide_indexes),
+        "ocr_images": len(ocr_candidates),
+        "ocr_units": len(ocr_candidates),
+        "ocr_used": ocr_used,
+        "ocr_required": bool(ocr_candidates) and not enable_ocr,
+        "ocr_language": "+".join(ocr_languages),
+    }
 
 
 def _extract_text(path: Path) -> tuple[str, dict[str, Any]]:
@@ -580,14 +834,14 @@ def extract_documents(
         raise LectureSiftError("LS-DOC-10", "En az bir belge ekle.", "No document paths", 400)
     sections: list[str] = []
     metadata: list[dict[str, Any]] = []
-    completed_ocr_pages = 0
+    completed_ocr_units = 0
     for index, path in enumerate(paths, 1):
         _validate_size(path)
         suffix = path.suffix.casefold()
         if suffix not in DOCUMENT_EXTENSIONS:
             raise LectureSiftError("LS-DOC-11", "Bu belge biçimi desteklenmiyor.", f"Unsupported document: {suffix}", 400)
         if suffix == ".pdf":
-            progress_offset = completed_ocr_pages
+            progress_offset = completed_ocr_units
             text, details = _extract_pdf(
                 path,
                 source_language,
@@ -596,14 +850,24 @@ def extract_documents(
                     (lambda completed, total, offset=progress_offset: progress_callback(offset + completed, offset + total))
                     if progress_callback else None
                 ),
-                ocr_page_budget=OCR_MAX_PAGES - completed_ocr_pages,
+                ocr_page_budget=OCR_MAX_PAGES - completed_ocr_units,
             )
         elif suffix == ".docx":
             text, details = _extract_docx(path)
         elif suffix == ".pptx":
-            text, details = _extract_pptx(path)
+            progress_offset = completed_ocr_units
+            text, details = _extract_pptx(
+                path,
+                source_language,
+                enable_ocr=enable_ocr,
+                progress_callback=(
+                    (lambda completed, total, offset=progress_offset: progress_callback(offset + completed, offset + total))
+                    if progress_callback else None
+                ),
+                ocr_page_budget=OCR_MAX_PAGES - completed_ocr_units,
+            )
         elif suffix in _IMAGE_EXTENSIONS:
-            progress_offset = completed_ocr_pages
+            progress_offset = completed_ocr_units
             text, details = _extract_image(
                 path,
                 source_language,
@@ -612,7 +876,7 @@ def extract_documents(
                     (lambda completed, total, offset=progress_offset: progress_callback(offset + completed, offset + total))
                     if progress_callback else None
                 ),
-                ocr_page_budget=OCR_MAX_PAGES - completed_ocr_pages,
+                ocr_page_budget=OCR_MAX_PAGES - completed_ocr_units,
             )
         else:
             text, details = _extract_text(path)
@@ -627,7 +891,7 @@ def extract_documents(
         if text.strip():
             sections.append(f"DOCUMENT {index}: {path.name}\n{text}")
         metadata.append({"name": path.name, "type": suffix.lstrip("."), **details, "characters": len(text)})
-        completed_ocr_pages += int(details.get("ocr_pages") or 0)
+        completed_ocr_units += int(details.get("ocr_units") or details.get("ocr_pages") or 0)
     combined = "\n\n".join(sections)
     if len(combined) > MAX_DOCUMENT_CHARACTERS:
         raise LectureSiftError(

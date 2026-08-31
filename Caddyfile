@@ -1,0 +1,45 @@
+{
+    email support@lecturesift.com
+}
+
+api.lecturesift.com {
+    encode zstd gzip
+
+    request_body {
+        # Keep a little room for multipart framing around a 1 GiB source file.
+        max_size 1100MB
+    }
+
+    reverse_proxy api:8000 {
+        header_up Host {host}
+        header_up X-Forwarded-Proto {scheme}
+        # This host is DNS-only: Caddy is the sole public ingress and replaces
+        # client-supplied forwarding headers with the socket peer address.
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Real-IP {remote_host}
+        # Compose admits Caddy only after the API's JSON readiness probe has
+        # proved PostgreSQL, Redis, a worker and R2. Keep active probing on the
+        # same aggregate endpoint instead of the database-only billing probe.
+        health_uri /rollout/health?readiness=true
+        health_interval 30s
+        health_timeout 5s
+        transport http {
+            dial_timeout 10s
+            response_header_timeout 15m
+        }
+    }
+
+    header {
+        -Server
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        Permissions-Policy "camera=(), geolocation=(), microphone=()"
+    }
+
+    log {
+        output stdout
+        format json
+    }
+}

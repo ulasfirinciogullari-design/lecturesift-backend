@@ -1,11 +1,101 @@
 import os
+import json
+import re
 import tempfile
+import time
+from collections.abc import Mapping
 from pathlib import Path
 
 
 APP_VERSION = "4.1"
+
+
+_FULL_BUILD_REVISION = re.compile(r"^[0-9a-fA-F]{40}$")
+
+
+def _build_revision(environment: Mapping[str, str] | None = None) -> str:
+    """Return one immutable source revision without accepting short/dirty ids.
+
+    OVH images bake ``LECTURESIFT_BUILD_REVISION`` at build time. Render
+    supplies ``RENDER_GIT_COMMIT`` at runtime, so it is the fallback only when
+    the explicit image value is absent. An explicitly supplied but malformed
+    value fails closed instead of being hidden by a provider fallback.
+    """
+    source = os.environ if environment is None else environment
+    explicit = str(source.get("LECTURESIFT_BUILD_REVISION") or "").strip()
+    # ``unknown`` is the intentionally unverified Dockerfile default and is
+    # treated as absent so Render's provider-supplied full commit can win.
+    candidate = (
+        explicit
+        if explicit and explicit.casefold() != "unknown"
+        else str(source.get("RENDER_GIT_COMMIT") or "").strip()
+    )
+    return candidate.lower() if _FULL_BUILD_REVISION.fullmatch(candidate) else "unknown"
+
+
+BUILD_REVISION = _build_revision()
+_EXPECTED_BUILD_REVISION_RAW = os.getenv("LECTURESIFT_EXPECTED_BUILD_REVISION", "").strip()
+EXPECTED_BUILD_REVISION_CONFIGURED = bool(_EXPECTED_BUILD_REVISION_RAW)
+EXPECTED_BUILD_REVISION = (
+    _EXPECTED_BUILD_REVISION_RAW.lower()
+    if _FULL_BUILD_REVISION.fullmatch(_EXPECTED_BUILD_REVISION_RAW)
+    else "unknown"
+)
 WORK_DIR = Path(os.getenv("LECTURESIFT_WORK_DIR", str(Path(tempfile.gettempdir()) / "lecturesift")))
 WORK_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _maintenance_mode(value: str) -> str:
+    """Normalize the write fence and fail closed on a bad deployment value."""
+    normalized = str(value or "").strip().lower()
+    return normalized if normalized in {"off", "drain", "freeze"} else "freeze"
+
+
+MAINTENANCE_MODE = _maintenance_mode(os.getenv("LECTURESIFT_MAINTENANCE_MODE", "off"))
+MAINTENANCE_STATE_FILE = WORK_DIR / ".runtime-maintenance.json"
+_BOOT_ID_FILE = Path("/proc/sys/kernel/random/boot_id")
+_BOOT_ID_PATTERN = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+)
+
+
+def current_maintenance_mode() -> str:
+    """Return the static fence or a short-lived, same-boot runtime fence.
+
+    The backup service uses the runtime file to drain new work without
+    restarting the API (payment callbacks stay reachable). The file is written
+    atomically and expires automatically. A host reboot changes boot_id, so a
+    SIGKILL/power-loss residue cannot leave a new boot permanently drained.
+    Malformed active evidence fails closed as ``freeze``.
+    """
+    if MAINTENANCE_MODE != "off":
+        return MAINTENANCE_MODE
+    try:
+        raw = MAINTENANCE_STATE_FILE.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return "off"
+    except OSError:
+        return "freeze"
+    try:
+        payload = json.loads(raw)
+        mode = str(payload.get("mode") or "").strip().lower()
+        expires_at = int(payload.get("expires_at"))
+        marker_boot_id = str(payload.get("boot_id") or "").strip().lower()
+        current_boot_id = _BOOT_ID_FILE.read_text(encoding="ascii").strip().lower()
+        now = int(time.time())
+        if payload.get("version") != 1 or mode not in {"drain", "freeze"}:
+            return "freeze"
+        if not _BOOT_ID_PATTERN.fullmatch(marker_boot_id):
+            return "freeze"
+        if marker_boot_id != current_boot_id or expires_at <= now:
+            return "off"
+        # A runtime fence is deliberately short-lived. Treat an implausibly
+        # distant timestamp as corrupt rather than honoring it indefinitely.
+        if expires_at > now + 4 * 60 * 60:
+            return "freeze"
+        return mode
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return "freeze"
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 PRECISE_TRANSCRIPT_TIMESTAMPS = os.getenv(
@@ -58,7 +148,9 @@ PUBLIC_BASE_URL = (
 ).rstrip("/")
 FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "https://lecturesift.com").rstrip("/")
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{WORK_DIR / 'billing.db'}")
+REQUIRE_POSTGRES = os.getenv("LECTURESIFT_REQUIRE_POSTGRES", "false").lower() == "true"
 BILLING_SESSION_SECRET = os.getenv("BILLING_SESSION_SECRET", "")
+BILLING_LEGACY_SESSION_SECRET_HEX = os.getenv("BILLING_LEGACY_SESSION_SECRET_HEX", "").strip()
 ADMIN_ADMIN = os.getenv("ADMIN_ADMIN", "")
 BILLING_PROTECTED_EMAILS = {
     email.strip().casefold()
@@ -75,6 +167,10 @@ PAYTR_TEST_MODE = os.getenv("PAYTR_TEST_MODE", "true").lower() == "true"
 PAYTR_DEBUG = os.getenv("PAYTR_DEBUG", "false").lower() == "true"
 IYZICO_API_KEY = os.getenv("IYZICO_API_KEY", "").strip()
 IYZICO_SECRET_KEY = os.getenv("IYZICO_SECRET_KEY", "")
+PAYMENT_TOKEN_BINDING_SECRET = os.getenv("PAYMENT_TOKEN_BINDING_SECRET", "")
+PAYMENT_TOKEN_BINDING_LEGACY_SECRET = os.getenv(
+    "PAYMENT_TOKEN_BINDING_LEGACY_SECRET", ""
+)
 IYZICO_BASE_URL = os.getenv("IYZICO_BASE_URL", "https://api.iyzipay.com").rstrip("/")
 IYZICO_BANK_TRANSFER_ENABLED = os.getenv(
     "IYZICO_BANK_TRANSFER_ENABLED", "false"
@@ -153,6 +249,16 @@ GOOGLE_ADS_PURCHASE_LABEL = os.getenv("LECTURESIFT_GOOGLE_ADS_PURCHASE_LABEL", "
 
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "")
 REDIS_URL = os.getenv("REDIS_URL", CELERY_BROKER_URL)
+_requested_visibility_timeout = int(
+    os.getenv("LECTURESIFT_CELERY_VISIBILITY_TIMEOUT_SECONDS", str(JOB_TTL_SECONDS))
+)
+# An unacknowledged task becomes eligible for delivery again after this
+# timeout.  Keeping it above the application's own job lifetime could strand a
+# crashed job in the broker for days, so cap it at the supported job TTL.
+CELERY_VISIBILITY_TIMEOUT_SECONDS = min(
+    max(60 * 60, _requested_visibility_timeout),
+    max(60 * 60, JOB_TTL_SECONDS),
+)
 REQUIRE_DURABLE_PROCESSING = os.getenv("LECTURESIFT_REQUIRE_DURABLE_PROCESSING", "false").lower() == "true"
 S3_ENDPOINT_URL = os.getenv("S3_ENDPOINT_URL", "")
 S3_REGION = os.getenv("S3_REGION", "auto")

@@ -1,0 +1,34 @@
+[Unit]
+Description=LectureSift production stack
+Requires=docker.service
+BindsTo=docker.service
+PartOf=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/lecturesift
+Environment=LECTURESIFT_ENV_FILE=/etc/lecturesift/runtime.env
+Environment=LECTURESIFT_API_ENV_FILE=/etc/lecturesift/api.env
+Environment=LECTURESIFT_WORKER_ENV_FILE=/etc/lecturesift/worker.env
+Environment=LECTURESIFT_INSTAGRAM_ENV_FILE=/etc/lecturesift/instagram.env
+Environment=LECTURESIFT_DB_ENV_FILE=/etc/lecturesift/postgres.env
+Environment=LECTURESIFT_RELEASE_ENV_FILE=/run/lecturesift/release.env
+ExecStartPre=/bin/bash /opt/lecturesift/deploy/preflight.sh
+ExecStartPre=/bin/bash /opt/lecturesift/deploy/release.sh build
+ExecStart=/usr/bin/docker compose up -d --wait --wait-timeout 300 postgres redis
+ExecStart=/bin/bash /opt/lecturesift/deploy/provision_database_role.sh
+ExecStart=/usr/bin/docker compose up -d --remove-orphans --wait --wait-timeout 600
+ExecReload=/bin/bash /opt/lecturesift/deploy/preflight.sh
+ExecReload=/bin/bash /opt/lecturesift/deploy/release.sh build
+ExecReload=/usr/bin/docker compose up -d --wait --wait-timeout 300 postgres redis
+ExecReload=/bin/bash /opt/lecturesift/deploy/provision_database_role.sh
+ExecReload=/usr/bin/docker compose up -d --remove-orphans --wait --wait-timeout 600
+ExecStop=/usr/bin/docker compose down
+TimeoutStartSec=1200
+TimeoutStopSec=900
+
+[Install]
+WantedBy=multi-user.target

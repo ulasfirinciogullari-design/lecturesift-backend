@@ -15,6 +15,7 @@ from docx import Document
 from fastapi.testclient import TestClient
 from PIL import Image, ImageDraw, ImageFont
 from pptx import Presentation
+from pptx.util import Inches
 from pypdf import PdfWriter
 from reportlab.pdfgen import canvas
 
@@ -60,6 +61,10 @@ def test_text_docx_pptx_and_pdf_extraction(tmp_path: Path):
     slide = presentation.slides.add_slide(presentation.slide_layouts[1])
     slide.shapes.title.text = "Conservation law"
     slide.placeholders[1].text = "Energy changes form but is conserved."
+    slide_table = slide.shapes.add_table(1, 2, Inches(1), Inches(3), Inches(5), Inches(1)).table
+    slide_table.cell(0, 0).text = "Equation"
+    slide_table.cell(0, 1).text = "E = K + U"
+    slide.notes_slide.notes_text_frame.text = "Mention isolated systems and friction."
     presentation.save(pptx_path)
 
     pdf_path = tmp_path / "handout.pdf"
@@ -73,7 +78,189 @@ def test_text_docx_pptx_and_pdf_extraction(tmp_path: Path):
     assert [item["type"] for item in result["documents"]] == ["txt", "docx", "pptx", "pdf"]
     assert "Potential and kinetic energy" in result["text"]
     assert "Conservation law" in result["text"]
+    assert "Equation | E = K + U" in result["text"]
+    assert "Mention isolated systems and friction" in result["text"]
     assert "Work transfers energy" in result["text"]
+
+
+def test_image_only_pptx_is_read_with_ocr_and_preflight_can_defer(tmp_path: Path, monkeypatch):
+    image_path = tmp_path / "slide-scan.png"
+    Image.new("RGB", (1600, 900), "white").save(image_path)
+
+    pptx_path = tmp_path / "scanned-slides.pptx"
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    slide.shapes.add_picture(str(image_path), 0, 0, width=presentation.slide_width)
+    presentation.save(pptx_path)
+
+    monkeypatch.setattr(
+        document_service,
+        "_run_tesseract_image",
+        lambda image, source_language="auto": (
+            "Fotosentez ışık enerjisini kimyasal enerjiye dönüştürür.",
+            "tur+eng",
+        ),
+    )
+
+    preflight = extract_documents(
+        [pptx_path],
+        source_language="tr",
+        enable_ocr=False,
+        allow_ocr_pending=True,
+    )
+    assert preflight["documents"][0]["ocr_required"] is True
+    assert preflight["documents"][0]["ocr_pages"] == 1
+
+    result = extract_documents([pptx_path], source_language="tr")
+    assert "Fotosentez" in result["text"]
+    assert result["ocr_used"] is True
+    assert result["ocr_pages"] == 1
+    assert result["documents"][0]["ocr_language"] == "tur+eng"
+
+
+def test_picture_placeholder_pptx_reaches_ocr(tmp_path: Path, monkeypatch):
+    image_path = tmp_path / "placeholder-scan.png"
+    Image.new("RGB", (1600, 900), "white").save(image_path)
+
+    pptx_path = tmp_path / "picture-placeholder.pptx"
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[8])
+    inserted = slide.placeholders[1].insert_picture(str(image_path))
+    assert inserted.shape_type != document_service.MSO_SHAPE_TYPE.PICTURE
+    presentation.save(pptx_path)
+
+    monkeypatch.setattr(
+        document_service,
+        "_run_tesseract_image",
+        lambda image, source_language="auto": ("Placeholder OCR content", "eng"),
+    )
+
+    result = extract_documents([pptx_path], source_language="en")
+
+    assert "Placeholder OCR content" in result["text"]
+    assert result["documents"][0]["ocr_pages"] == 1
+    assert result["documents"][0]["ocr_images"] == 1
+    assert result["documents"][0]["native_text_pages"] == 0
+
+
+def test_pptx_ocrs_all_substantial_images_and_notes_do_not_suppress_it(tmp_path: Path, monkeypatch):
+    left_path = tmp_path / "left.png"
+    right_path = tmp_path / "right.png"
+    Image.new("RGB", (900, 900), "red").save(left_path)
+    Image.new("RGB", (900, 900), "blue").save(right_path)
+
+    pptx_path = tmp_path / "two-scans-with-notes.pptx"
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    slide.shapes.add_picture(str(left_path), Inches(0.5), Inches(1), width=Inches(5.5))
+    slide.shapes.add_picture(str(right_path), Inches(7.2), Inches(1), width=Inches(5.5))
+    slide.notes_slide.notes_text_frame.text = (
+        "This deliberately long speaker note exceeds the native-text threshold "
+        "but is not visible slide content and therefore must not suppress OCR."
+    )
+    presentation.save(pptx_path)
+
+    state = {"active": 0, "maximum": 0}
+    lock = threading.Lock()
+    gate = threading.Barrier(2, timeout=3)
+
+    def fake_ocr(image, source_language="auto"):
+        with lock:
+            state["active"] += 1
+            state["maximum"] = max(state["maximum"], state["active"])
+        gate.wait()
+        pixel = image.convert("RGB").getpixel((0, 0))
+        text = "LEFT OCR PANEL" if pixel[0] > pixel[2] else "RIGHT OCR PANEL"
+        with lock:
+            state["active"] -= 1
+        return text, "eng"
+
+    monkeypatch.setattr(document_service, "OCR_PARALLELISM", 2)
+    monkeypatch.setattr(document_service, "_container_memory_limit_bytes", lambda: 2 * 1024**3)
+    monkeypatch.setattr(document_service, "_run_tesseract_image", fake_ocr)
+    progress = []
+
+    result = extract_documents(
+        [pptx_path],
+        source_language="en",
+        progress_callback=lambda completed, total: progress.append((completed, total)),
+    )
+
+    assert state["maximum"] == 2
+    assert "LEFT OCR PANEL" in result["text"]
+    assert "RIGHT OCR PANEL" in result["text"]
+    assert "deliberately long speaker note" in result["text"]
+    assert result["documents"][0]["ocr_pages"] == 1
+    assert result["documents"][0]["ocr_images"] == 2
+    assert result["documents"][0]["native_text_pages"] == 0
+    assert progress[-1] == (2, 2)
+
+
+def test_short_title_and_medium_logo_do_not_consume_pptx_ocr_quota(tmp_path: Path, monkeypatch):
+    logo_path = tmp_path / "brand-panel.png"
+    Image.new("RGB", (800, 400), "navy").save(logo_path)
+
+    pptx_path = tmp_path / "native-title-with-logo.pptx"
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    title_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.4), Inches(5), Inches(0.6))
+    title_box.text_frame.text = "Intro"
+    slide.shapes.add_picture(str(logo_path), Inches(0.5), Inches(1.4), width=Inches(4))
+    presentation.save(pptx_path)
+
+    monkeypatch.setattr(
+        document_service,
+        "_run_tesseract_image",
+        lambda *_args, **_kwargs: pytest.fail("a logo panel must not trigger OCR"),
+    )
+
+    result = extract_documents([pptx_path], source_language="en")
+
+    assert "Intro" in result["text"]
+    assert result["documents"][0]["ocr_pages"] == 0
+    assert result["documents"][0]["ocr_images"] == 0
+    assert result["documents"][0]["native_text_pages"] == 1
+
+
+def test_pptx_auto_ocr_uses_bounded_representative_language_samples(monkeypatch):
+    blobs = [bytes([index]) for index in range(9)]
+    state = {"active": 0, "maximum": 0}
+    detections: list[int] = []
+    lock = threading.Lock()
+    gate = threading.Barrier(2, timeout=3)
+
+    def fake_detect(blob):
+        index = blob[0]
+        with lock:
+            detections.append(index)
+            state["active"] += 1
+            state["maximum"] = max(state["maximum"], state["active"])
+        if index in {0, 4}:
+            gate.wait()
+        time.sleep(0.02)
+        with lock:
+            state["active"] -= 1
+        return f"lang-{index}"
+
+    monkeypatch.setattr(document_service, "OCR_PARALLELISM", 2)
+    monkeypatch.setattr(document_service, "_container_memory_limit_bytes", lambda: 2 * 1024**3)
+    monkeypatch.setattr(document_service, "_detect_pptx_ocr_language", fake_detect)
+
+    languages = document_service._detect_pptx_ocr_languages(blobs)
+
+    assert state["maximum"] == 2
+    assert set(detections) == {0, 4, 8}
+    assert languages == {
+        0: "lang-0",
+        1: "lang-0",
+        2: "lang-0",
+        3: "lang-4",
+        4: "lang-4",
+        5: "lang-4",
+        6: "lang-4",
+        7: "lang-8",
+        8: "lang-8",
+    }
 
 
 def test_image_only_pdf_is_read_with_ocr(tmp_path: Path, monkeypatch):

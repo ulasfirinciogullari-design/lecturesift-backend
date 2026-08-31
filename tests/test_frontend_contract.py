@@ -514,6 +514,8 @@ def test_profile_admin_automatic_payment_and_full_comparison_interfaces_are_pres
     assert all(value in plans for value in ("transferPanel", "transferReference", "transferAmount", "transferIban", "transferHolder", "transferBank"))
     assert "renderCompare" in plan_script and "createTransfer" in plan_script
     assert "/billing/checkout" in plan_script
+    assert "order_number || reference" in plan_script
+    assert "orderLabel" in plan_script
     assert "/billing/manual-transfer/orders" in plan_script
     assert "manual_bank_transfer" in plan_script
     assert all(value in plans for value in ("bankTransferGuide", "bankTransferContinue", "bankTransferBack"))
@@ -1156,3 +1158,32 @@ def test_google_ads_conversions_are_consent_gated_and_csp_allows_measurement():
     )
     backend = (FRONTEND.parent / "lecturesift" / "app.py").read_text(encoding="utf-8")
     assert 'allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"]' in backend
+
+
+def test_frontend_uses_stable_api_hostname_during_vps_cutover():
+    old_origin = "https://lecturesift-backend.onrender.com"
+    api_assets = (
+        "admin.js",
+        "analytics.js",
+        "app.js",
+        "auth.js",
+        "contact.js",
+        "display-ads.js",
+        "legal-operator.js",
+        "plans.js",
+        "rollout.js",
+        "site-shell.js",
+        "support.js",
+    )
+    for name in api_assets:
+        source = (FRONTEND / name).read_text(encoding="utf-8")
+        assert "https://api.lecturesift.com" in source, name
+
+    for asset in FRONTEND.rglob("*"):
+        if asset.is_file() and asset.suffix in {".html", ".js", ".css"}:
+            assert old_origin not in asset.read_text(encoding="utf-8"), asset.relative_to(FRONTEND)
+
+    headers = (FRONTEND.parent / "netlify.toml").read_text(encoding="utf-8")
+    assert "https://api.lecturesift.com" in headers
+    # Keep the old origin in CSP only during the rollback observation window.
+    assert old_origin in headers

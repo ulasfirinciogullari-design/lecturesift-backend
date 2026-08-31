@@ -5,15 +5,23 @@ import json
 import uuid
 
 from fastapi.testclient import TestClient
+from sqlalchemy import delete, select
 
 from lecturesift import config, payments
-from lecturesift.billing_service import register_user, verify_email
+from lecturesift.billing_service import (
+    ENGINE,
+    PAYMENT_PROVIDER_SESSIONS,
+    register_user,
+    verify_email,
+)
 from main import app
 
 
 def _configure(monkeypatch) -> None:
     monkeypatch.setattr(config, "IYZICO_API_KEY", "live-api-key")
     monkeypatch.setattr(config, "IYZICO_SECRET_KEY", "live-secret-key")
+    monkeypatch.setattr(config, "PAYMENT_TOKEN_BINDING_SECRET", "payment-binding-secret-at-least-32-chars")
+    monkeypatch.setattr(config, "PAYMENT_TOKEN_BINDING_LEGACY_SECRET", "")
     monkeypatch.setattr(config, "IYZICO_BASE_URL", "https://api.iyzipay.com")
     monkeypatch.setattr(config, "PUBLIC_BASE_URL", "https://lecturesift-backend.onrender.com")
     monkeypatch.setattr(config, "LEGAL_OPERATOR_NAME", "LectureSift Test")
@@ -123,10 +131,20 @@ def test_iyzico_checkout_and_callback_verify_signatures_amount_and_order(monkeyp
     assert checkout.status_code == 200, checkout.text
     body = checkout.json()
     reference = body["order"]["reference"]
+    assert body["order"]["order_number"] == reference
     assert body["provider"] == "iyzico"
     assert body["display_mode"] == "redirect"
     assert body["mode"] == "live"
     assert body["checkout_url"] == f"https://api.iyzipay.com/checkoutform/{token}"
+    with ENGINE.connect() as connection:
+        provider_session = connection.execute(
+            select(PAYMENT_PROVIDER_SESSIONS).where(
+                PAYMENT_PROVIDER_SESSIONS.c.order_reference == reference
+            )
+        ).one()
+    assert provider_session.provider == "iyzico"
+    assert len(provider_session.token_digest) == 64
+    assert provider_session.token_digest != token
 
     initialize = captured[0]
     assert initialize["url"] == f"https://api.iyzipay.com{payments.IYZICO_INITIALIZE_PATH}"
@@ -151,6 +169,17 @@ def test_iyzico_checkout_and_callback_verify_signatures_amount_and_order(monkeyp
         f"apiKey:{config.IYZICO_API_KEY}&randomKey:{random_key}&signature:{request_signature}"
     )
 
+    previous_binding_secret = config.PAYMENT_TOKEN_BINDING_SECRET
+    monkeypatch.setattr(
+        config,
+        "PAYMENT_TOKEN_BINDING_SECRET",
+        "rotated-payment-binding-secret-at-least-32-chars",
+    )
+    monkeypatch.setattr(
+        config,
+        "PAYMENT_TOKEN_BINDING_LEGACY_SECRET",
+        previous_binding_secret,
+    )
     callback = client.post(
         f"/billing/iyzico/callback?order={reference}",
         data={"token": token},
@@ -286,6 +315,367 @@ def test_iyzico_decline_is_recorded_instead_of_staying_created(monkeypatch):
     assert account["credit_minutes"] == 0
 
 
+def test_iyzico_merchant_category_failure_is_actionable_and_keeps_code(monkeypatch):
+    _configure(monkeypatch)
+    state = {"reference": ""}
+    token = "merchant-category-checkout-token"
+
+    class FakeResponse:
+        def __init__(self, body):
+            self._body = body
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._body
+
+    def fake_post(url, *, content, headers, timeout):
+        payload = json.loads(content)
+        reference = payload["conversationId"]
+        if url.endswith(payments.IYZICO_INITIALIZE_PATH):
+            state["reference"] = reference
+            return FakeResponse({
+                "status": "success",
+                "conversationId": reference,
+                "token": token,
+                "paymentPageUrl": f"https://api.iyzipay.com/checkoutform/{token}",
+                "signature": _response_signature([reference, token]),
+            })
+        return FakeResponse({
+            "status": "failure",
+            "conversationId": reference,
+            "errorCode": "10208",
+            "errorGroup": "INVALID_MERCHANT_OR_SP",
+            "errorMessage": "Üye işyeri kategori kodu hatalı",
+        })
+
+    monkeypatch.setattr(payments.httpx, "post", fake_post)
+    _, session = _account()
+    client = TestClient(app)
+    checkout = client.post(
+        "/billing/checkout",
+        headers={"Authorization": f"Bearer {session}", "X-Forwarded-For": "203.0.113.47"},
+        json={
+            "plan_code": "test", "interval": "one_time", "currency": "TRY",
+            "billing_address": "Örnek Mahallesi No 6", "billing_city": "Hatay",
+            "billing_zip_code": "31800", "phone": "+905551112233", "language": "tr",
+            "terms_accepted": True, "early_performance_requested": True,
+        },
+    )
+    assert checkout.status_code == 200, checkout.text
+    callback = client.post(
+        f"/billing/iyzico/callback?order={state['reference']}",
+        data={"token": token},
+        follow_redirects=False,
+    )
+    assert callback.status_code == 303
+    account = client.get(
+        "/billing/me", headers={"Authorization": f"Bearer {session}"}
+    ).json()["account"]
+    order = account["payment_orders"][0]
+    assert order["status"] == "failed"
+    assert order["failure_code"] == "10208"
+    assert "mağazanın kategori kodunu" in order["failure_message"]
+    assert "plan etkinleşmedi" in order["failure_message"]
+    assert "Karttan çekim yapılmadı" not in order["failure_message"]
+
+
+def test_iyzico_uncorrelated_failure_cannot_terminally_fail_order(monkeypatch):
+    _configure(monkeypatch)
+    state = {"reference": ""}
+    token = "uncorrelated-failure-token"
+
+    class FakeResponse:
+        def __init__(self, body):
+            self._body = body
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._body
+
+    def fake_post(url, *, content, headers, timeout):
+        payload = json.loads(content)
+        reference = payload["conversationId"]
+        if url.endswith(payments.IYZICO_INITIALIZE_PATH):
+            state["reference"] = reference
+            return FakeResponse({
+                "status": "success",
+                "conversationId": reference,
+                "token": token,
+                "paymentPageUrl": f"https://api.iyzipay.com/checkoutform/{token}",
+                "signature": _response_signature([reference, token]),
+            })
+        return FakeResponse({
+            "status": "failure",
+            "errorCode": "10208",
+            "errorMessage": "Uncorrelated provider failure",
+        })
+
+    monkeypatch.setattr(payments.httpx, "post", fake_post)
+    _, session = _account()
+    client = TestClient(app)
+    checkout = client.post(
+        "/billing/checkout",
+        headers={"Authorization": f"Bearer {session}", "X-Forwarded-For": "203.0.113.48"},
+        json={
+            "plan_code": "test", "interval": "one_time", "currency": "TRY",
+            "billing_address": "Örnek Mahallesi No 7", "billing_city": "Hatay",
+            "billing_zip_code": "31800", "phone": "+905551112233", "language": "tr",
+            "terms_accepted": True, "early_performance_requested": True,
+        },
+    )
+    assert checkout.status_code == 200, checkout.text
+    callback = client.post(
+        f"/billing/iyzico/callback?order={state['reference']}",
+        data={"token": token},
+        follow_redirects=False,
+    )
+    assert callback.status_code == 303
+    assert "payment=verification_failed" in callback.headers["location"]
+    account = client.get(
+        "/billing/me", headers={"Authorization": f"Bearer {session}"}
+    ).json()["account"]
+    order = account["payment_orders"][0]
+    assert order["status"] == "created"
+    assert order["failure_code"] is None
+
+
+def test_iyzico_browser_callback_rejects_wrong_or_legacy_unbound_token_before_retrieve(monkeypatch):
+    _configure(monkeypatch)
+    state = {"reference": "", "requests": 0}
+    token = "bound-checkout-token"
+
+    class FakeResponse:
+        def __init__(self, body):
+            self._body = body
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._body
+
+    def fake_post(url, *, content, headers, timeout):
+        state["requests"] += 1
+        payload = json.loads(content)
+        reference = payload["conversationId"]
+        if not url.endswith(payments.IYZICO_INITIALIZE_PATH):
+            raise AssertionError("wrong checkout token must fail before retrieve")
+        state["reference"] = reference
+        return FakeResponse({
+            "status": "success",
+            "conversationId": reference,
+            "token": token,
+            "paymentPageUrl": f"https://api.iyzipay.com/checkoutform/{token}",
+            "signature": _response_signature([reference, token]),
+        })
+
+    monkeypatch.setattr(payments.httpx, "post", fake_post)
+    _, session = _account()
+    client = TestClient(app)
+    checkout = client.post(
+        "/billing/checkout",
+        headers={"Authorization": f"Bearer {session}", "X-Forwarded-For": "203.0.113.49"},
+        json={
+            "plan_code": "test", "interval": "one_time", "currency": "TRY",
+            "billing_address": "Örnek Mahallesi No 8", "billing_city": "Hatay",
+            "billing_zip_code": "31800", "phone": "+905551112233", "language": "tr",
+            "terms_accepted": True, "early_performance_requested": True,
+        },
+    )
+    assert checkout.status_code == 200, checkout.text
+    callback = client.post(
+        f"/billing/iyzico/callback?order={state['reference']}",
+        data={"token": "different-checkout-token"},
+        follow_redirects=False,
+    )
+    assert callback.status_code == 303
+    assert "payment=verification_failed" in callback.headers["location"]
+    assert state["requests"] == 1
+
+    # A correct raw token still cannot self-adopt through the unsigned browser
+    # callback when the order predates the binding table.
+    with ENGINE.begin() as connection:
+        connection.execute(
+            delete(PAYMENT_PROVIDER_SESSIONS).where(
+                PAYMENT_PROVIDER_SESSIONS.c.order_reference == state["reference"]
+            )
+        )
+    legacy_callback = client.post(
+        f"/billing/iyzico/callback?order={state['reference']}",
+        data={"token": token},
+        follow_redirects=False,
+    )
+    assert legacy_callback.status_code == 303
+    assert "payment=verification_failed" in legacy_callback.headers["location"]
+    assert state["requests"] == 1
+    account = client.get(
+        "/billing/me", headers={"Authorization": f"Bearer {session}"}
+    ).json()["account"]
+    assert account["payment_orders"][0]["status"] == "created"
+    assert account["payment_orders"][0]["failure_code"] is None
+
+
+def test_iyzico_signed_webhook_rejects_wrong_bound_token_before_retrieve(monkeypatch):
+    _configure(monkeypatch)
+    state = {"reference": "", "requests": 0}
+    token = "signed-bound-checkout-token"
+
+    class FakeResponse:
+        def __init__(self, body):
+            self._body = body
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._body
+
+    def fake_post(url, *, content, headers, timeout):
+        state["requests"] += 1
+        payload = json.loads(content)
+        reference = payload["conversationId"]
+        if not url.endswith(payments.IYZICO_INITIALIZE_PATH):
+            raise AssertionError("wrong signed webhook token must fail before retrieve")
+        state["reference"] = reference
+        return FakeResponse({
+            "status": "success",
+            "conversationId": reference,
+            "token": token,
+            "paymentPageUrl": f"https://api.iyzipay.com/checkoutform/{token}",
+            "signature": _response_signature([reference, token]),
+        })
+
+    monkeypatch.setattr(payments.httpx, "post", fake_post)
+    _, session = _account()
+    client = TestClient(app)
+    checkout = client.post(
+        "/billing/checkout",
+        headers={"Authorization": f"Bearer {session}", "X-Forwarded-For": "203.0.113.50"},
+        json={
+            "plan_code": "test", "interval": "one_time", "currency": "TRY",
+            "billing_address": "Örnek Mahallesi No 9", "billing_city": "Hatay",
+            "billing_zip_code": "31800", "phone": "+905551112233", "language": "tr",
+            "terms_accepted": True, "early_performance_requested": True,
+        },
+    )
+    assert checkout.status_code == 200, checkout.text
+    webhook = {
+        "paymentConversationId": state["reference"],
+        "merchantId": 3404590,
+        "status": "FAILURE",
+        "token": "different-signed-token",
+        "iyziReferenceCode": "wrong-token-reference",
+        "iyziEventType": "CHECKOUT_FORM_AUTH",
+        "iyziEventTime": 1762239641852,
+        "iyziPaymentId": 27553417,
+    }
+    rejected = client.post(
+        "/billing/iyzico/webhook",
+        headers={"X-IYZ-SIGNATURE-V3": _webhook_signature(webhook)},
+        json=webhook,
+    )
+    assert rejected.status_code == 400
+    assert state["requests"] == 1
+    account = client.get(
+        "/billing/me", headers={"Authorization": f"Bearer {session}"}
+    ).json()["account"]
+    assert account["payment_orders"][0]["status"] == "created"
+    assert account["payment_orders"][0]["failure_code"] is None
+
+
+def test_iyzico_signed_webhook_adopts_legacy_token_and_terminalizes_correlated_10208(monkeypatch):
+    _configure(monkeypatch)
+    state = {"reference": ""}
+    token = "signed-category-checkout-token"
+
+    class FakeResponse:
+        def __init__(self, body):
+            self._body = body
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._body
+
+    def fake_post(url, *, content, headers, timeout):
+        payload = json.loads(content)
+        reference = payload["conversationId"]
+        if url.endswith(payments.IYZICO_INITIALIZE_PATH):
+            state["reference"] = reference
+            return FakeResponse({
+                "status": "success",
+                "conversationId": reference,
+                "token": token,
+                "paymentPageUrl": f"https://api.iyzipay.com/checkoutform/{token}",
+                "signature": _response_signature([reference, token]),
+            })
+        # Some authenticated failure retrieves do not echo conversationId.
+        # The signed webhook plus the initialize-token binding still provides
+        # the required correlation to terminalize this exact order safely.
+        return FakeResponse({
+            "status": "failure",
+            "errorCode": "10208",
+            "errorGroup": "INVALID_MERCHANT_OR_SP",
+            "errorMessage": "Üye işyeri kategori kodu hatalı",
+        })
+
+    monkeypatch.setattr(payments.httpx, "post", fake_post)
+    _, session = _account()
+    client = TestClient(app)
+    checkout = client.post(
+        "/billing/checkout",
+        headers={"Authorization": f"Bearer {session}", "X-Forwarded-For": "203.0.113.51"},
+        json={
+            "plan_code": "test", "interval": "one_time", "currency": "TRY",
+            "billing_address": "Örnek Mahallesi No 10", "billing_city": "Hatay",
+            "billing_zip_code": "31800", "phone": "+905551112233", "language": "tr",
+            "terms_accepted": True, "early_performance_requested": True,
+        },
+    )
+    assert checkout.status_code == 200, checkout.text
+    with ENGINE.begin() as connection:
+        connection.execute(
+            delete(PAYMENT_PROVIDER_SESSIONS).where(
+                PAYMENT_PROVIDER_SESSIONS.c.order_reference == state["reference"]
+            )
+        )
+    webhook = {
+        "paymentConversationId": state["reference"],
+        "merchantId": 3404590,
+        "status": "FAILURE",
+        "token": token,
+        "iyziReferenceCode": "category-failure-reference",
+        "iyziEventType": "CHECKOUT_FORM_AUTH",
+        "iyziEventTime": 1762239641852,
+        "iyziPaymentId": 27553418,
+    }
+    accepted = client.post(
+        "/billing/iyzico/webhook",
+        headers={"X-IYZ-SIGNATURE-V3": _webhook_signature(webhook)},
+        json=webhook,
+    )
+    assert accepted.status_code == 200 and accepted.text == "OK"
+    account = client.get(
+        "/billing/me", headers={"Authorization": f"Bearer {session}"}
+    ).json()["account"]
+    order = account["payment_orders"][0]
+    assert order["status"] == "failed"
+    assert order["failure_code"] == "10208"
+    assert "plan etkinleşmedi" in order["failure_message"]
+    with ENGINE.connect() as connection:
+        adopted = connection.execute(
+            select(PAYMENT_PROVIDER_SESSIONS).where(
+                PAYMENT_PROVIDER_SESSIONS.c.order_reference == state["reference"]
+            )
+        ).one()
+    assert adopted.token_digest == payments._iyzico_token_digest(state["reference"], token)
+
+
 def test_iyzico_bank_transfer_waits_for_signed_webhook_before_activation(monkeypatch):
     _configure(monkeypatch)
     state = {"reference": "", "matched": False}
@@ -358,6 +748,12 @@ def test_iyzico_bank_transfer_waits_for_signed_webhook_before_activation(monkeyp
     ).json()["account"]
     assert account["payment_orders"][0]["status"] == "pending"
     assert account["plan"]["code"] == "free"
+    with ENGINE.begin() as connection:
+        connection.execute(
+            delete(PAYMENT_PROVIDER_SESSIONS).where(
+                PAYMENT_PROVIDER_SESSIONS.c.order_reference == reference
+            )
+        )
 
     webhook = {
         "paymentConversationId": reference,

@@ -335,7 +335,7 @@ def publish_next_launch_post(*, only_if_none_completed: bool = False, force: boo
     if not force and not INSTAGRAM_DAILY_AUTOMATION_ENABLED:
         return {"status": "disabled"}
 
-    base_url = PUBLIC_BASE_URL or "https://lecturesift-backend.onrender.com"
+    base_url = PUBLIC_BASE_URL or "https://api.lecturesift.com"
     client = _client()
     _assert_target_account(client)
     recent = client.get_recent_media(limit=50).get("data", [])
@@ -370,7 +370,7 @@ def publish_daily_post(day: date | None = None) -> dict:
     if is_already_published(client, selected_day):
         return {"status": "already_published", "kind": "daily", "date": selected_day.isoformat()}
     tip = daily_tip(selected_day)
-    base_url = PUBLIC_BASE_URL or "https://lecturesift-backend.onrender.com"
+    base_url = PUBLIC_BASE_URL or "https://api.lecturesift.com"
     media_type = INSTAGRAM_DAILY_MEDIA_TYPE.upper()
     if media_type == "REELS":
         media_url = f"{base_url}/instagram/daily/reel/{selected_day.isoformat()}.mp4"

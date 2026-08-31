@@ -219,6 +219,129 @@ def test_study_pack_keeps_usable_retry_below_preferred_word_target(monkeypatch):
     assert len(result["summary"].split()) == 192
 
 
+def test_standard_pack_keeps_structured_hundred_word_retry(monkeypatch):
+    calls = []
+    retry_pack = {
+        **_pack("usable-hundred-word-retry"),
+        "summary": " ".join(["grounded"] * 100),
+        "notes": [{"heading": "Topic", "content": "Source-backed explanation", "bullets": []}],
+    }
+
+    class Completions:
+        @staticmethod
+        def create(**kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(
+                choices=[SimpleNamespace(
+                    finish_reason="stop",
+                    message=SimpleNamespace(content=json.dumps(retry_pack)),
+                )]
+            )
+
+    monkeypatch.setattr(
+        ai,
+        "_CLIENT",
+        SimpleNamespace(chat=SimpleNamespace(completions=Completions())),
+    )
+    monkeypatch.setattr(ai, "record_openai_response", lambda *_args, **_kwargs: True)
+
+    result = ai._request_study_pack("source " * 1000, "en", "standard", 0, 0)
+
+    assert len(calls) == 2
+    assert result["title"] == "usable-hundred-word-retry"
+    assert len(result["summary"].split()) == 100
+
+
+def test_study_pack_keeps_better_first_candidate_when_retry_is_worse(monkeypatch):
+    calls = []
+    candidates = [
+        {
+            **_pack("better-first"),
+            "summary": " ".join(["grounded"] * 250),
+            "notes": [{"heading": "Topic", "content": "Broad coverage", "bullets": []}],
+        },
+        {
+            **_pack("worse-retry"),
+            "summary": " ".join(["grounded"] * 70),
+            "notes": [{"heading": "Topic", "content": "Short", "bullets": []}],
+        },
+    ]
+
+    class Completions:
+        @staticmethod
+        def create(**kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(
+                choices=[SimpleNamespace(
+                    finish_reason="stop",
+                    message=SimpleNamespace(content=json.dumps(candidates[len(calls) - 1])),
+                )]
+            )
+
+    monkeypatch.setattr(
+        ai,
+        "_CLIENT",
+        SimpleNamespace(chat=SimpleNamespace(completions=Completions())),
+    )
+    monkeypatch.setattr(ai, "record_openai_response", lambda *_args, **_kwargs: True)
+
+    result = ai._request_study_pack("source " * 1000, "en", "standard", 0, 0)
+
+    assert len(calls) == 2
+    assert result["title"] == "better-first"
+    assert len(result["summary"].split()) == 250
+
+
+def test_study_pack_prefers_complete_requested_quiz_over_longer_summary(monkeypatch):
+    calls = []
+    complete_quiz = [
+        {
+            "question": f"Question {index}",
+            "options": ["A", "B", "C", "D"],
+            "answer_index": 0,
+            "explanation": "Grounded explanation",
+        }
+        for index in range(4)
+    ]
+    candidates = [
+        {
+            **_pack("long-without-quiz"),
+            "summary": " ".join(["grounded"] * 250),
+            "notes": [{"heading": "Topic", "content": "Broad coverage", "bullets": []}],
+        },
+        {
+            **_pack("shorter-complete-quiz"),
+            "summary": " ".join(["grounded"] * 200),
+            "notes": [{"heading": "Topic", "content": "Focused coverage", "bullets": []}],
+            "quiz": complete_quiz,
+        },
+    ]
+
+    class Completions:
+        @staticmethod
+        def create(**kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(
+                choices=[SimpleNamespace(
+                    finish_reason="stop",
+                    message=SimpleNamespace(content=json.dumps(candidates[len(calls) - 1])),
+                )]
+            )
+
+    monkeypatch.setattr(
+        ai,
+        "_CLIENT",
+        SimpleNamespace(chat=SimpleNamespace(completions=Completions())),
+    )
+    monkeypatch.setattr(ai, "record_openai_response", lambda *_args, **_kwargs: True)
+
+    result = ai._request_study_pack("source " * 1000, "en", "standard", 4, 0)
+
+    assert len(calls) == 2
+    assert result["title"] == "shorter-complete-quiz"
+    assert len(result["quiz"]) == 4
+
+
 def test_study_pack_treats_source_commands_as_untrusted_material(monkeypatch):
     captured = {}
 

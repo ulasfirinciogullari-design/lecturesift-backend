@@ -94,6 +94,8 @@ services:
           property: connectionString
       - key: BILLING_SESSION_SECRET
         generateValue: true
+      - key: PAYMENT_TOKEN_BINDING_SECRET
+        generateValue: true
       - key: ADMIN_ADMIN
         sync: false
       - key: BILLING_PROTECTED_EMAILS
@@ -163,7 +165,7 @@ services:
       - key: INSTAGRAM_DAILY_MEDIA_TYPE
         value: REELS
       - key: PUBLIC_BASE_URL
-        value: https://lecturesift-backend.onrender.com
+        value: https://api.lecturesift.com
       - key: LECTURESIFT_GUEST_TRIAL_MINUTES
         value: "5"
       - key: LECTURESIFT_REQUIRE_DURABLE_PROCESSING
@@ -327,4 +329,4 @@ services:
       - key: INSTAGRAM_DAILY_MEDIA_TYPE
         value: REELS
       - key: PUBLIC_BASE_URL
-        value: https://lecturesift-backend.onrender.com
+        value: https://api.lecturesift.com

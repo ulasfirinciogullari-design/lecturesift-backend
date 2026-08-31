@@ -22,17 +22,28 @@ def normalize_error(exc: Exception) -> LectureSiftError:
     raw = str(exc)
     low = raw.lower()
 
-    if "invalid_api_key" in low or "incorrect api key" in low or "401 unauthorized" in low:
+    if "invalid_api_key" in low or "incorrect api key" in low:
         return LectureSiftError(
-            "LS-AI-01",
+            "LS-AI-03",
             "Yapay zekâ bağlantısı sunucu tarafında doğrulanamadı. Yönetici yapılandırmayı kontrol etmeli.",
             raw,
             503,
         )
-    if "insufficient_quota" in low or "exceeded your current quota" in low:
+    if any(
+        marker in low
+        for marker in (
+            "insufficient_quota",
+            "exceeded your current quota",
+            "credit_balance_exhausted",
+            "organization_usage_limit_exceeded",
+            "organization_spend_limit_exceeded",
+            "project_spend_limit_exceeded",
+        )
+    ):
         return LectureSiftError(
             "LS-AI-01",
-            "Yapay zekâ kullanım kotası dolmuş. Hesap kotası yenilendiğinde işlem tekrar denenebilir.",
+            "LectureSift'in yapay zekâ sağlayıcı kredisi veya harcama limiti dolmuş. "
+            "Bu senin plan dakikan değil; yönetici API bakiyesini yeniledikten sonra yeniden dene.",
             raw,
             503,
         )

@@ -1,4 +1,4 @@
-const API = "https://lecturesift-backend.onrender.com";
+const API = "https://api.lecturesift.com";
 const LOCALE_DATA = window.LECTURESIFT_LOCALE_DATA || {
   countries: [], currencies: ["TRY", "USD", "EUR", "GBP"], currencyForCountry: {},
 };
@@ -149,8 +149,9 @@ const PLAN_COPY = {
 
 const ERRORS = {
   en: {
-    "LS-AI-01": "The AI usage quota is exhausted. Try again after the account quota has been renewed.",
+    "LS-AI-01": "LectureSift's AI provider credit or spend limit is exhausted. This is not your plan allowance; try again after the administrator renews the API balance.",
     "LS-AI-02": "The AI service is busy. Try again in a few minutes.",
+    "LS-AI-03": "LectureSift could not authenticate with its AI provider. The administrator must check the server configuration.",
     "LS-URL-02": "The video provider blocked server-side downloading. Upload the file or use a direct MP4/WebM link.",
     "LS-URL-03": "No downloadable video was found on this page. Use a direct video link or upload the file.",
     "LS-UPLOAD-02": "The selected sources exceed the upload size allowed by your plan.",
@@ -176,8 +177,9 @@ const ERRORS = {
     "LS-VIDEO-02": "The video could not be read. It may be damaged or use an unsupported codec."
   },
   tr: {
-    "LS-AI-01": "Yapay zekâ kullanım kotası doldu. Hesap kotası yenilendikten sonra tekrar dene.",
+    "LS-AI-01": "LectureSift'in yapay zekâ sağlayıcı kredisi veya harcama limiti doldu. Bu senin plan dakikan değil; yönetici API bakiyesini yeniledikten sonra yeniden dene.",
     "LS-AI-02": "Yapay zekâ hizmeti yoğun. Birkaç dakika sonra tekrar dene.",
+    "LS-AI-03": "LectureSift yapay zekâ sağlayıcısında kimlik doğrulayamadı. Yönetici sunucu yapılandırmasını kontrol etmeli.",
     "LS-URL-02": "Video sağlayıcısı sunucu üzerinden indirmeyi engelledi. Dosyayı yükle veya doğrudan MP4/WebM bağlantısı kullan.",
     "LS-URL-03": "Bu sayfada indirilebilir video bulunamadı. Doğrudan video bağlantısı kullan veya dosyayı yükle.",
     "LS-UPLOAD-02": "Seçilen kaynaklar planının izin verdiği yükleme boyutunu aşıyor.",

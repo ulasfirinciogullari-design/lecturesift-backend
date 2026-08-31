@@ -1,4 +1,4 @@
-const CONTACT_API = "https://lecturesift-backend.onrender.com";
+const CONTACT_API = "https://api.lecturesift.com";
 const contactForm = document.getElementById("contactForm");
 const contactStatus = document.getElementById("contactStatus");
 

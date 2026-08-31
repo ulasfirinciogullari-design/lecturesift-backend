@@ -1,4 +1,4 @@
-const API = "https://lecturesift-backend.onrender.com";
+const API = "https://api.lecturesift.com";
 const TOKEN_KEY = "lecturesift-billing-token";
 const LOCALE_DATA = window.LECTURESIFT_LOCALE_DATA || {countries: [], currencies: [], currencyForCountry: {}};
 const I18N = window.LectureSiftI18n || {language:"tr", locale:"tr-TR", languages:{tr:"Türkçe"}, t:(key, fallback)=>fallback || key};

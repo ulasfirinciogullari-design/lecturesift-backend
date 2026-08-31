@@ -1,0 +1,362 @@
+name: lecturesift
+
+x-app: &app
+  build:
+    context: .
+    args:
+      # `deploy/release.sh build` is the only production builder. Direct
+      # builds become `unknown` and cannot pass the API release health gate.
+      LECTURESIFT_BUILD_REVISION: ${LECTURESIFT_BUILD_REVISION:-unknown}
+  image: lecturesift-backend:local
+  # Crash-loop recovery is bounded, but Docker daemon/host restarts never
+  # bypass the systemd preflight gate. lecturesift.service owns boot lifecycle.
+  restart: "on-failure:5"
+  init: true
+  stop_grace_period: 2m
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: 20m
+      max-file: "5"
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: "on-failure:5"
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - edge
+    security_opt:
+      - no-new-privileges:true
+    cpus: "0.50"
+    cpu_shares: 256
+    mem_limit: 192m
+    mem_reservation: 64m
+    memswap_limit: 192m
+    pids_limit: 128
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  api:
+    <<: *app
+    env_file:
+      - ${LECTURESIFT_API_ENV_FILE:-/etc/lecturesift/api.env}
+      - ${LECTURESIFT_RELEASE_ENV_FILE:-/run/lecturesift/release.env}
+    command:
+      - uvicorn
+      - main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --proxy-headers
+      - --forwarded-allow-ips=*
+    environment:
+      PORT: "8000"
+      LECTURESIFT_REQUIRE_POSTGRES: "true"
+      LECTURESIFT_REQUIRE_DURABLE_PROCESSING: "true"
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - api_work:/var/lib/lecturesift
+    networks:
+      - edge
+      - backend
+    cpus: "1.00"
+    cpu_shares: 768
+    mem_limit: 768m
+    mem_reservation: 256m
+    memswap_limit: 768m
+    pids_limit: 384
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m,mode=1777
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import json, os, re, urllib.request;
+          base='http://127.0.0.1:8000';
+          health=json.load(urllib.request.urlopen(base + '/health', timeout=10));
+          json.load(urllib.request.urlopen(base + '/billing/health', timeout=10));
+          rollout=json.load(urllib.request.urlopen(base + '/rollout/health', timeout=10));
+          expected=os.environ.get('LECTURESIFT_EXPECTED_BUILD_REVISION', '');
+          revision=health.get('revision', '');
+          release_ok=bool(re.fullmatch(r'[0-9a-f]{40}', expected)) and revision == expected;
+          raise SystemExit(0 if release_ok and rollout.get('ready') is True and rollout.get('durable_processing_ready') is True and (rollout.get('storage') or {}).get('connected') is True else 1)
+      interval: 30s
+      timeout: 15s
+      start_period: 60s
+      retries: 5
+
+  worker:
+    <<: *app
+    env_file:
+      - ${LECTURESIFT_WORKER_ENV_FILE:-/etc/lecturesift/worker.env}
+    command:
+      - celery
+      - -A
+      - lecturesift.queue.celery_app
+      - worker
+      - --loglevel=INFO
+      - --concurrency=1
+      - --max-tasks-per-child=10
+      - --max-memory-per-child=2500000
+    environment:
+      LECTURESIFT_WORKER: "1"
+      LECTURESIFT_REQUIRE_POSTGRES: "true"
+      LECTURESIFT_REQUIRE_DURABLE_PROCESSING: "true"
+      HTTP_PROXY: http://egress-proxy:3128
+      HTTPS_PROXY: http://egress-proxy:3128
+      http_proxy: http://egress-proxy:3128
+      https_proxy: http://egress-proxy:3128
+      NO_PROXY: postgres,redis,localhost,127.0.0.1
+      no_proxy: postgres,redis,localhost,127.0.0.1
+    stop_grace_period: 10m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      egress-proxy:
+        condition: service_healthy
+    volumes:
+      - worker_work:/var/lib/lecturesift
+    networks:
+      - backend
+    cpus: "3.25"
+    cpu_shares: 2048
+    mem_limit: 3584m
+    mem_reservation: 2g
+    memswap_limit: 3584m
+    pids_limit: 768
+    tmpfs:
+      # OCR rasterization, FFmpeg scratch files and a future LibreOffice user
+      # profile remain executable-independent and memory-capped. Durable job
+      # sources/results stay in the disk-backed work volume and R2.
+      - /tmp:rw,noexec,nosuid,nodev,size=768m,mode=1777
+    healthcheck:
+      test: ["CMD", "python", "-c", "from lecturesift.queue import celery_app; import sys; sys.exit(0 if celery_app.control.ping(timeout=5) else 1)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 5
+
+  egress-proxy:
+    build:
+      context: ./deploy/egress-proxy
+      args:
+        LECTURESIFT_BUILD_REVISION: ${LECTURESIFT_BUILD_REVISION:-unknown}
+    image: lecturesift-egress-proxy:local
+    restart: "on-failure:5"
+    read_only: true
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - backend
+      - egress
+    cpus: "0.50"
+    cpu_shares: 256
+    mem_limit: 256m
+    mem_reservation: 64m
+    memswap_limit: 256m
+    pids_limit: 128
+    tmpfs:
+      - /run/squid:rw,noexec,nosuid,nodev,size=8m,uid=13,gid=13,mode=0755
+      - /tmp:rw,noexec,nosuid,nodev,size=128m,uid=13,gid=13,mode=1777
+    healthcheck:
+      test: ["CMD", "squidclient", "-h", "127.0.0.1", "-p", "3128", "mgr:info"]
+      interval: 20s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  instagram:
+    <<: *app
+    env_file:
+      - ${LECTURESIFT_INSTAGRAM_ENV_FILE:-/etc/lecturesift/instagram.env}
+    command: python -m lecturesift.daily_social
+    restart: "no"
+    profiles: ["jobs"]
+    healthcheck:
+      disable: true
+    networks:
+      - egress
+    cpus: "0.75"
+    cpu_shares: 256
+    mem_limit: 512m
+    mem_reservation: 128m
+    memswap_limit: 512m
+    pids_limit: 256
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=256m,mode=1777
+
+  migration:
+    <<: *app
+    # DDL runs only in this one-shot owner container. Neither long-lived
+    # runtime service receives POSTGRES_PASSWORD or schema CREATE privilege.
+    env_file:
+      - ${LECTURESIFT_DB_ENV_FILE:-/etc/lecturesift/postgres.env}
+    command:
+      - python
+      - -c
+      - >-
+        import os;
+        from urllib.parse import quote;
+        os.environ['DATABASE_URL'] =
+        'postgresql+psycopg://' + quote(os.environ['POSTGRES_USER'], safe='') + ':' +
+        quote(os.environ['POSTGRES_PASSWORD'], safe='') + '@postgres:5432/' +
+        quote(os.environ.get('LECTURESIFT_PROVISION_DATABASE',
+        os.environ['POSTGRES_DB']), safe='');
+        from lecturesift.rollout_service import init_rollout_database;
+        init_rollout_database()
+    restart: "no"
+    profiles: ["maintenance"]
+    healthcheck:
+      disable: true
+    networks:
+      - backend
+    cpus: "1.00"
+    cpu_shares: 512
+    mem_limit: 512m
+    mem_reservation: 128m
+    memswap_limit: 512m
+    pids_limit: 256
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m,mode=1777
+
+  postgres:
+    # Render production currently runs PostgreSQL 18. Matching the source major
+    # keeps pg_dump/pg_restore and on-disk compatibility within supported paths.
+    # Render uses libc collation provider en_US.UTF8 at glibc 2.36. The
+    # Bookworm image matches that runtime; Alpine/musl produced a different
+    # collation version and is not safe for a byte-faithful migration.
+    image: postgres:18-bookworm
+    restart: "on-failure:5"
+    env_file:
+      - ${LECTURESIFT_DB_ENV_FILE:-/etc/lecturesift/postgres.env}
+    environment:
+      POSTGRES_INITDB_ARGS: "--locale=en_US.UTF-8 --encoding=UTF8"
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=128MB
+      - -c
+      - max_connections=50
+      - -c
+      - temp_file_limit=256MB
+    shm_size: 256mb
+    stop_grace_period: 2m
+    volumes:
+      # PostgreSQL 18 stores clusters under /var/lib/postgresql/18/docker.
+      # Mount the version-neutral parent so container recreation cannot put the
+      # real database on an anonymous layer.
+      - postgres_data:/var/lib/postgresql
+      - ./deploy/postgres-app-role.sh:/docker-entrypoint-initdb.d/10-lecturesift-app-role.sh:ro
+      - ./deploy/postgres-app-role.sh:/usr/local/sbin/lecturesift-provision-app-role:ro
+    networks:
+      - backend
+    cpus: "1.00"
+    cpu_shares: 512
+    mem_limit: 1g
+    mem_reservation: 384m
+    memswap_limit: 1g
+    pids_limit: 256
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m,uid=999,gid=999,mode=1777
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  redis:
+    image: redis:7.4-alpine
+    restart: "on-failure:5"
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    volumes:
+      - ./deploy/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - redis_data:/data
+    networks:
+      - backend
+    stop_grace_period: 2m
+    cpus: "0.50"
+    cpu_shares: 256
+    mem_limit: 768m
+    mem_reservation: 256m
+    memswap_limit: 768m
+    pids_limit: 128
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --raw ping | grep -q '^PONG$'"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+networks:
+  edge:
+  backend:
+    internal: true
+  # Only the filtering proxy and scheduled social job receive a direct route.
+  # The worker remains on `backend` and must use egress-proxy for HTTP(S).
+  egress:
+
+volumes:
+  caddy_data:
+  caddy_config:
+  api_work:
+    name: lecturesift-api-work
+  worker_work:
+    name: lecturesift-worker-work
+  postgres_data:
+    # Separate name leaves the rejected empty Alpine rehearsal volume intact
+    # until the Bookworm locale match and restore rehearsal are verified.
+    name: lecturesift-postgres-data-bookworm
+  redis_data:
+    name: lecturesift-redis-data

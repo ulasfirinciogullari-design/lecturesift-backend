@@ -131,13 +131,31 @@ def test_private_url_is_rejected():
 def test_quota_error_is_human_readable():
     error = normalize_error(RuntimeError("429 insufficient_quota: exceeded your current quota"))
     assert error.code == "LS-AI-01"
-    assert "kota" in error.user_message.lower()
+    assert "sağlayıcı kredisi" in error.user_message.lower()
+    assert "plan dakikan" in error.user_message.lower()
+
+
+def test_provider_billing_error_codes_are_not_misclassified_as_burst_rate_limits():
+    for code in (
+        "credit_balance_exhausted",
+        "organization_usage_limit_exceeded",
+        "organization_spend_limit_exceeded",
+        "project_spend_limit_exceeded",
+    ):
+        error = normalize_error(RuntimeError(f"429 {code}"))
+        assert error.code == "LS-AI-01"
+        assert error.status_code == 503
 
 
 def test_invalid_api_key_is_not_classified_as_a_retryable_system_error():
     error = normalize_error(RuntimeError("401 Unauthorized: invalid_api_key"))
-    assert error.code == "LS-AI-01"
+    assert error.code == "LS-AI-03"
     assert error.status_code == 503
+
+
+def test_unrelated_generic_401_does_not_trip_openai_auth_classification():
+    error = normalize_error(RuntimeError("401 Unauthorized while downloading a remote source"))
+    assert error.code != "LS-AI-03"
 
 
 def test_health_and_unsupported_upload():

@@ -9,6 +9,7 @@ import unicodedata
 from datetime import date
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from . import config
@@ -220,7 +221,7 @@ def _public_support_conversation(conversation: dict) -> dict:
 
 
 @router.get("/rollout/health")
-def rollout_health() -> dict:
+def rollout_health(readiness: bool = False) -> dict:
     queue = JOBS.redis_health()
     storage = STORAGE.health()
     worker = worker_health() if queue["connected"] else {
@@ -228,8 +229,26 @@ def rollout_health() -> dict:
         "reachable": False,
         "workers": 0,
     }
-    return {
+    durable_processing_ready = bool(
+        config.CELERY_BROKER_URL
+        and queue["connected"]
+        and storage["connected"]
+        and worker["reachable"]
+    )
+    release_identity_ready = bool(
+        not config.EXPECTED_BUILD_REVISION_CONFIGURED
+        or (
+            config.EXPECTED_BUILD_REVISION != "unknown"
+            and config.BUILD_REVISION == config.EXPECTED_BUILD_REVISION
+        )
+    )
+    deployment_ready = bool(durable_processing_ready and release_identity_ready)
+    payload = {
         "ok": True,
+        # ``ready`` is the deployment/readiness contract. ``ok`` only means
+        # this diagnostic endpoint executed; it must never be used to admit
+        # Caddy while Redis, R2 or the worker is unavailable.
+        "ready": deployment_ready,
         "guest_trial_minutes": config.GUEST_TRIAL_MAX_MINUTES,
         "instagram_bonus_minutes": config.INSTAGRAM_BONUS_MINUTES,
         "analytics_configured": bool(
@@ -256,12 +275,12 @@ def rollout_health() -> dict:
         "queue": queue,
         "storage": storage,
         "worker": worker,
-        "durable_processing_ready": bool(
-            config.CELERY_BROKER_URL
-            and queue["connected"]
-            and storage["connected"]
-            and worker["reachable"]
-        ),
+        "durable_processing_ready": durable_processing_ready,
+        "release": {
+            "revision": config.BUILD_REVISION,
+            "expected_revision_configured": config.EXPECTED_BUILD_REVISION_CONFIGURED,
+            "ready": release_identity_ready,
+        },
         "recovery": {
             "database_managed_backup_confirmed": config.DATABASE_RECOVERY_CONFIRMED,
             "object_retention_confirmed": config.OBJECT_RETENTION_CONFIRMED,
@@ -273,6 +292,11 @@ def rollout_health() -> dict:
             ),
         },
     }
+    if readiness and not deployment_ready:
+        # Caddy's active checker needs an HTTP readiness signal; the ordinary
+        # diagnostic response remains 200 so the admin UI can display details.
+        return JSONResponse(status_code=503, content=payload)
+    return payload
 
 
 @router.get("/ads/config")

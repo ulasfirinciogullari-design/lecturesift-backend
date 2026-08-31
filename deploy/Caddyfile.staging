@@ -1,0 +1,33 @@
+{
+    email support@lecturesift.com
+}
+
+api.lecturesift.com {
+    request_body {
+        # Match production so staging never accepts a request that would be
+        # rejected after cutover (1 GiB source plus multipart framing).
+        max_size 1100MB
+    }
+
+    handle {
+        # Keep the public API live on Render while the OVH replacement is
+        # exercised privately on 127.0.0.1. Production traffic is switched to
+        # the local API only after every migration gate passes.
+        reverse_proxy https://lecturesift-backend.onrender.com {
+            header_up Host lecturesift-backend.onrender.com
+        }
+    }
+
+    header {
+        -Server
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy no-referrer
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    }
+
+    log {
+        output stdout
+        format json
+    }
+}

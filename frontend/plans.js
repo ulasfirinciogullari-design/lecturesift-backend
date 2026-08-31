@@ -1,4 +1,4 @@
-const API = "https://lecturesift-backend.onrender.com";
+const API = "https://api.lecturesift.com";
 const TOKEN_KEY = "lecturesift-billing-token";
 const ORDER = ["free", "test", "credit", "lite", "plus", "pro", "max", "business"];
 const LOCALE_DATA = window.LECTURESIFT_LOCALE_DATA || {
@@ -127,14 +127,18 @@ function showPaymentRedirectResult() {
   const result = params.get("payment");
   const reference = params.get("order");
   if (!result || !reference) return;
+  const orderNumber = (account?.payment_orders || []).find(
+    item => item.reference === reference,
+  )?.order_number || reference;
+  const orderLabel = `${pt("payment.orderNumber", "Sipariş no")}: ${orderNumber}`;
   if (result === "failed") {
     const order = (account?.payment_orders || []).find(item => item.reference === reference);
     showError(
-      order?.failure_message || pt("payment.declined", "Ödeme banka veya iyzico tarafından onaylanmadı."),
+      `${order?.failure_message || pt("payment.declined", "Ödeme banka veya iyzico tarafından onaylanmadı.")} ${orderLabel}`,
       order?.failure_code || "LS-PAY-DECLINED",
     );
   } else if (result === "verification_failed") {
-    showError(pt("order.failed", "Ödeme sonucu doğrulanamadı."), "LS-PAY-VERIFY");
+    showError(`${pt("order.failed", "Ödeme sonucu doğrulanamadı.")} ${orderLabel}`, "LS-PAY-VERIFY");
   }
 }
 
