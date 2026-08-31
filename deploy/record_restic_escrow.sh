@@ -58,8 +58,13 @@ export RESTIC_REPOSITORY RESTIC_PASSWORD
 export AWS_ACCESS_KEY_ID="$RESTIC_AWS_ACCESS_KEY_ID"
 export AWS_SECRET_ACCESS_KEY="$RESTIC_AWS_SECRET_ACCESS_KEY"
 
-repository_id_sha256="$(restic cat config 2>/dev/null | python3 -c \
-  'import hashlib,json,sys; value=str(json.load(sys.stdin).get("id") or ""); raise SystemExit(1) if not value else None; print(hashlib.sha256(value.encode("ascii")).hexdigest())')" || \
+repository_id_sha256="$(restic cat config 2>/dev/null | python3 -c '
+import hashlib, json, sys
+value = str(json.load(sys.stdin).get("id") or "")
+if not value:
+    raise SystemExit(1)
+print(hashlib.sha256(value.encode("ascii")).hexdigest())
+')" || \
   fail "the configured repository could not be opened"
 current_key_hint="$(restic key list --json 2>/dev/null | python3 -c '
 import json, re, sys

@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+import json
+import re
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -401,6 +406,28 @@ def test_recovery_escrow_evidence_is_non_secret_and_repository_bound():
     assert "ciphertext_sha256=" in script
     assert "recovery_test=decrypt-and-repository-opened" in script
     assert "RESTIC_PASSWORD" not in script.split("marker_tmp=", 1)[1]
+
+
+def test_recovery_escrow_repository_id_hash_accepts_a_valid_repository():
+    script = _read("deploy/record_restic_escrow.sh")
+    embedded_python = re.search(
+        r"repository_id_sha256=.*?python3 -c '\n(?P<code>.*?)\n'\)\" \|\|",
+        script,
+        flags=re.DOTALL,
+    )
+    assert embedded_python is not None
+
+    repository_id = "ab" * 32
+    result = subprocess.run(
+        [sys.executable, "-c", embedded_python.group("code")],
+        input=json.dumps({"id": repository_id}),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == hashlib.sha256(repository_id.encode("ascii")).hexdigest()
 
 
 def test_staging_ingress_and_secret_ignores_match_production_contract():
