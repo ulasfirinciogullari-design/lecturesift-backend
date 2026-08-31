@@ -30,7 +30,7 @@ host_cpus="$(getconf _NPROCESSORS_ONLN 2>/dev/null || true)"
 [[ "$host_cpus" =~ ^[0-9]+$ ]] || fail "online CPU count could not be determined"
 (( host_cpus >= MIN_HOST_CPUS )) || fail "at least 4 online CPUs are required"
 
-host_memory_bytes="$(awk '/^MemTotal:/ {printf "%.0f\\n", $2 * 1024; exit}' /proc/meminfo)"
+host_memory_bytes="$(awk '/^MemTotal:/ {printf "%.0f\n", $2 * 1024; exit}' /proc/meminfo)"
 [[ "$host_memory_bytes" =~ ^[0-9]+$ ]] || fail "host memory could not be determined"
 (( host_memory_bytes >= MIN_HOST_MEMORY_BYTES )) || \
   fail "at least 7 GiB of visible memory is required for the 8-GB VPS profile"

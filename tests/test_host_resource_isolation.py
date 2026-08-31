@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import re
+import shutil
+import subprocess
 from pathlib import Path
 
 from fastapi.responses import JSONResponse
@@ -96,6 +99,8 @@ def test_resource_guard_reserves_host_capacity_and_bounds_work_volumes():
 
     assert "MIN_HOST_CPUS=4" in guard
     assert "MIN_HOST_MEMORY_BYTES=7516192768" in guard
+    assert r'printf "%.0f\n", $2 * 1024' in guard
+    assert r'printf "%.0f\\n", $2 * 1024' not in guard
     assert "DEFAULT_HOST_DISK_RESERVE_BYTES=10737418240" in guard
     assert "DEFAULT_MAX_JOB_WORK_BYTES=8589934592" in guard
     assert "disk_reserve + job_budget + max_video_bytes" in guard
@@ -108,6 +113,31 @@ def test_resource_guard_reserves_host_capacity_and_bounds_work_volumes():
     assert "LECTURESIFT_HOST_DISK_RESERVE_BYTES=10737418240" in env_example
     assert "LECTURESIFT_MAX_JOB_WORK_BYTES=8589934592" in env_example
     assert 'bash "$ROOT_DIR/deploy/resource_guard.sh"' in preflight
+
+
+def test_resource_guard_memory_probe_emits_only_decimal_bytes():
+    guard = _read("deploy/resource_guard.sh")
+    match = re.search(
+        r'host_memory_bytes="\$\(awk \'([^\']+)\' /proc/meminfo\)"',
+        guard,
+    )
+    assert match is not None
+    program = match.group(1)
+    assert r"\\n" not in program
+
+    awk = shutil.which("awk")
+    if awk is None:
+        return
+    completed = subprocess.run(
+        [awk, program],
+        input="MemTotal:        8060928 kB\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0
+    assert completed.stderr == ""
+    assert completed.stdout == f"{8060928 * 1024}\n"
 
 
 def test_api_health_requires_rollout_and_r2_before_caddy_can_start():
