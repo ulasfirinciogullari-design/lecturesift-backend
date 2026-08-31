@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import importlib.util
 import os
 import stat
@@ -119,9 +120,49 @@ def test_atomic_state_machine_requires_matching_postgres_redis_r2_and_revision(
     )
 
     repository_hash = "a" * 64
+    snapshot_id = "b" * 64
+    backup_set_hash = "c" * 64
+    assert evidence.validate_seed_ready(
+        root,
+        cutover_id=CUTOVER_ID,
+        revision=REVISION,
+        source=SOURCE,
+    )["redis_proof_sha256"] == evidence.sha256_file(root / evidence.REDIS_PROOF_NAME)
+    evidence.write_seed(
+        root,
+        cutover_id=CUTOVER_ID,
+        revision=REVISION,
+        source=SOURCE,
+        run_id="first-cutover-seed-20260831T190700Z-123",
+        snapshot_id=snapshot_id,
+        repository_id_sha256=repository_hash,
+        backup_set_sha256=backup_set_hash,
+        database_dump_sha256="d" * 64,
+        redis_dump_sha256="e" * 64,
+        configuration_checksums_sha256="f" * 64,
+    )
+    assert evidence.validate_seed(
+        root,
+        cutover_id=CUTOVER_ID,
+        revision=REVISION,
+        source=SOURCE,
+        repository_id_sha256=repository_hash,
+    )["snapshot_id"] == snapshot_id
+
     recovery = recovery_root / "restic-restore-20260831T180000Z-123.ok"
     retention = recovery_root / "r2-retention-lock.ok"
-    _write_external(recovery, {"repository_id_sha256": repository_hash, "status": "success"})
+    recovery_fields = {
+        "backup_set_sha256": backup_set_hash,
+        "drill_scope": "current-latest",
+        "live_services_touched": "false",
+        "postgres_restore": "verified",
+        "repository_id_sha256": repository_hash,
+        "redis_restore": "verified",
+        "restored_payload_removed": "true",
+        "snapshot_id": snapshot_id,
+        "status": "success",
+    }
+    _write_external(recovery, {**recovery_fields, "snapshot_id": "0" * 64})
     _write_external(
         retention,
         {
@@ -129,6 +170,22 @@ def test_atomic_state_machine_requires_matching_postgres_redis_r2_and_revision(
             "status": "immutable-retention-verified",
         },
     )
+    with pytest.raises(evidence.EvidenceError, match="exactly match"):
+        evidence.finalize(
+            root,
+            cutover_id=CUTOVER_ID,
+            revision=REVISION,
+            source=SOURCE,
+            recovery_marker=Path(recovery.name),
+            recovery_sha256=evidence.sha256_file(recovery),
+            retention_marker=Path(retention.name),
+            retention_sha256=evidence.sha256_file(retention),
+            repository_id_sha256=repository_hash,
+        )
+    assert (root / evidence.IN_PROGRESS_NAME).is_file()
+    assert not (root / evidence.FINAL_PROOF_NAME).exists()
+
+    _write_external(recovery, recovery_fields)
     evidence.finalize(
         root,
         cutover_id=CUTOVER_ID,
@@ -192,12 +249,104 @@ def test_finalizer_rechecks_volatile_state_and_never_switches_traffic():
     assert "lecturesift-api-rehearsal lecturesift-worker-rehearsal" in finalizer
     assert "r2-retention-lock.ok" in finalizer
     assert "drill_scope=current-latest" in finalizer
+    assert "first-cutover-seed.ok" in finalizer
+    assert "validate-seed" in finalizer
+    assert 'snapshot_id=$SEED_SNAPSHOT_ID' in finalizer
+    assert 'backup_set_sha256=$SEED_BACKUP_SET_SHA256' in finalizer
     assert "release.sh" in finalizer and 'bash "$RELEASE_TOOL" prepare' in finalizer
     assert "provider_cutover_evidence.py" in finalizer and " finalize" in finalizer
     assert "Redis/R2 rollback was not asserted or performed" in finalizer
     assert "up -d caddy" not in finalizer
     assert "stop caddy" not in finalizer
     assert "api.lecturesift.com" not in finalizer
+
+
+def test_seed_snapshot_start_time_remains_valid_after_a_long_r2_upload():
+    run_started_epoch = 2_000_000_000
+    snapshot_id = "a" * 64
+    snapshot_started = dt.datetime.fromtimestamp(
+        run_started_epoch + 2, tz=dt.timezone.utc
+    )
+    upload_completed = dt.datetime.fromtimestamp(
+        run_started_epoch + 6 * 60 * 60, tz=dt.timezone.utc
+    )
+    document = [
+        {
+            "hostname": "lecturesift-production",
+            "id": snapshot_id,
+            "tags": ["lecturesift", "production", "first-cutover-seed"],
+            "time": snapshot_started.isoformat().replace("+00:00", "Z"),
+        }
+    ]
+
+    assert evidence.validate_seed_snapshot_document(
+        document,
+        expected_snapshot_id=snapshot_id,
+        run_started_epoch=run_started_epoch,
+        now=upload_completed,
+    )["id"] == snapshot_id
+
+    document[0]["time"] = dt.datetime.fromtimestamp(
+        run_started_epoch - 6, tz=dt.timezone.utc
+    ).isoformat()
+    with pytest.raises(evidence.EvidenceError, match="did not begin during"):
+        evidence.validate_seed_snapshot_document(
+            document,
+            expected_snapshot_id=snapshot_id,
+            run_started_epoch=run_started_epoch,
+            now=upload_completed,
+        )
+
+
+def test_first_cutover_seed_is_exact_format_fenced_and_never_changes_runtime():
+    seed = _read("deploy/seed_first_cutover_backup.sh")
+
+    for confirmation in (
+        "LECTURESIFT_FIRST_CUTOVER_SEED_CONFIRM",
+        "LECTURESIFT_SOURCE_FROZEN",
+        "LECTURESIFT_SOURCE_WORKER_STOPPED",
+        "LECTURESIFT_PROVIDER_RECONCILED",
+    ):
+        assert confirmation in seed
+    assert "validate-seed-ready" in seed and "write-seed" in seed
+    assert "validate-seed-snapshot" in seed and "RUN_STARTED_EPOCH" in seed
+    assert "age <= 900" not in seed
+    assert seed.index("validate-seed-ready") < seed.index("restic backup")
+    assert seed.index("restic backup") < seed.index("write-seed")
+    assert "provider-cutover.in-progress" not in seed  # helper owns the state machine
+    assert "lecturesift-production-backups/restic" in seed
+    assert "eu[.]r2[.]cloudflarestorage[.]com" in seed
+    assert 'RESTIC_HOST="lecturesift-production"' in seed
+    assert "--tag lecturesift --tag production --tag first-cutover-seed" in seed
+
+    # PostgreSQL dump and metadata are bound to one exported MVCC snapshot.
+    assert "pg_export_snapshot()" in seed
+    assert '--snapshot "$SNAPSHOT_ID"' in seed
+    assert "format=lecturesift-backup-v2" in seed
+    assert "application_identity=lecturesift-production" in seed
+    assert "postgres.dump redis-dump.rdb BACKUP_METADATA >SHA256SUMS" in seed
+    assert "configuration-snapshot-v1" in seed
+    assert '"$CONFIGURATION_SNAPSHOT_TOOL" create' in seed
+    assert '"$CONFIGURATION_SNAPSHOT_TOOL" verify' in seed
+    assert '.release.lock' in seed and seed.count("assert_release_checkout_unchanged") >= 4
+
+    # Redis is forced durable and the copied RDB is validated before upload.
+    assert "WAITAOF 1 0 5000" in seed
+    assert "BGSAVE" in seed and "redis-check-rdb" in seed
+    assert "rdb_changes_since_last_save" in seed
+    assert seed.count("assert_seed_state_unchanged") == 3  # definition + before/after upload
+    assert seed.count("assert_source_frozen_and_idle") >= 4  # definition + capture gates
+
+    # The seed is a data-only cutover bridge. It cannot make runtime or traffic
+    # transitions and does not perform retention deletion/compaction.
+    assert "up -d" not in seed
+    assert "compose stop" not in seed and "compose start" not in seed
+    assert "up -d caddy" not in seed and "stop caddy" not in seed
+    assert "api.lecturesift.com" not in seed
+    assert "restic forget" not in seed and "restic prune" not in seed
+    assert seed.index('rm -rf --one-file-system -- "$payload_real"') < seed.index(
+        "write-seed"
+    )
 
 
 def test_normal_preflight_requires_exact_final_gate_and_nonproduction_is_explicit():

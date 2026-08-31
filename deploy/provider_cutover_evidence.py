@@ -25,12 +25,14 @@ EVIDENCE_OWNER_GID = 0
 IN_PROGRESS_NAME = "provider-cutover.in-progress"
 POSTGRES_PROOF_NAME = "postgres-cutover.ok"
 REDIS_PROOF_NAME = "redis-cutover.ok"
+SEED_PROOF_NAME = "first-cutover-seed.ok"
 FINAL_PROOF_NAME = "provider-cutover.ok"
 VERSION = "1"
 _CUTOVER_ID = re.compile(r"^[0-9a-f]{32}$")
 _REVISION = re.compile(r"^[0-9a-f]{40}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.-]{0,126}$")
+_SNAPSHOT_ID = re.compile(r"^[0-9a-f]{64}$")
 _SAFE_VALUE = re.compile(r"^[A-Za-z0-9_.:@/+,-]{1,512}$")
 
 
@@ -272,7 +274,12 @@ def begin_postgres(root: Path, *, cutover_id: str, revision: str, source: str) -
         progress,
         {**common, "phase": "postgres-in-progress", "started_at_utc": _now()},
     )
-    for name in (FINAL_PROOF_NAME, POSTGRES_PROOF_NAME, REDIS_PROOF_NAME):
+    for name in (
+        FINAL_PROOF_NAME,
+        POSTGRES_PROOF_NAME,
+        REDIS_PROOF_NAME,
+        SEED_PROOF_NAME,
+    ):
         _unlink(root / name)
 
 
@@ -339,7 +346,7 @@ def begin_redis(root: Path, *, cutover_id: str, revision: str, source: str) -> N
         root / IN_PROGRESS_NAME,
         {**common, "phase": "redis-in-progress", "updated_at_utc": _now()},
     )
-    for name in (FINAL_PROOF_NAME, REDIS_PROOF_NAME):
+    for name in (FINAL_PROOF_NAME, REDIS_PROOF_NAME, SEED_PROOF_NAME):
         _unlink(root / name)
 
 
@@ -385,6 +392,230 @@ def write_redis(
     )
 
 
+def validate_seed_ready(
+    root: Path, *, cutover_id: str, revision: str, source: str
+) -> dict[str, str]:
+    common = _common_fields(cutover_id=cutover_id, revision=revision, source_fingerprint=source)
+    root = _ensure_evidence_root(root)
+    _require_progress(root, common=common, phase="redis-verified")
+    postgres_path = root / POSTGRES_PROOF_NAME
+    redis_path = root / REDIS_PROOF_NAME
+    postgres = _load(postgres_path)
+    redis = _load(redis_path)
+    if (
+        not _matches_common(postgres, common)
+        or not _matches_common(redis, common)
+        or postgres.get("status") != "postgres-cutover-verified"
+        or postgres.get("source_frozen") != "verified"
+        or postgres.get("source_worker_queue_zero") != "verified"
+        or postgres.get("pending_payments_before") != "0"
+        or postgres.get("pending_payments_after") != "0"
+        or postgres.get("api_worker_started") != "false"
+        or redis.get("status") != "redis-cutover-verified"
+        or redis.get("source_frozen") != "verified"
+        or redis.get("source_worker_queue_zero") != "verified"
+        or redis.get("target_broker_zero") != "verified"
+    ):
+        raise EvidenceError("PostgreSQL/Redis proofs are not ready for the first cutover seed")
+    return {
+        **common,
+        "postgres_proof_sha256": sha256_file(postgres_path),
+        "redis_proof_sha256": sha256_file(redis_path),
+    }
+
+
+def write_seed(
+    root: Path,
+    *,
+    cutover_id: str,
+    revision: str,
+    source: str,
+    run_id: str,
+    snapshot_id: str,
+    repository_id_sha256: str,
+    backup_set_sha256: str,
+    database_dump_sha256: str,
+    redis_dump_sha256: str,
+    configuration_checksums_sha256: str,
+) -> None:
+    if not _RUN_ID.fullmatch(run_id):
+        raise EvidenceError("invalid first-cutover seed run ID")
+    if not _SNAPSHOT_ID.fullmatch(snapshot_id):
+        raise EvidenceError("first-cutover seed snapshot ID must be one full lowercase Restic ID")
+    for value in (
+        repository_id_sha256,
+        backup_set_sha256,
+        database_dump_sha256,
+        redis_dump_sha256,
+        configuration_checksums_sha256,
+    ):
+        if not _SHA256.fullmatch(value):
+            raise EvidenceError("first-cutover seed contains an invalid SHA-256 value")
+    common = _common_fields(cutover_id=cutover_id, revision=revision, source_fingerprint=source)
+    root = _ensure_evidence_root(root)
+    step_hashes = validate_seed_ready(
+        root,
+        cutover_id=cutover_id,
+        revision=revision,
+        source=source,
+    )
+    seed_path = root / SEED_PROOF_NAME
+    _atomic_write(
+        seed_path,
+        {
+            **common,
+            "api_worker_started": "false",
+            "backup_set_sha256": backup_set_sha256,
+            "caddy_changed": "false",
+            "configuration_checksums_sha256": configuration_checksums_sha256,
+            "database_dump_sha256": database_dump_sha256,
+            "dns_changed": "false",
+            "postgres_proof_sha256": step_hashes["postgres_proof_sha256"],
+            "redis_dump_sha256": redis_dump_sha256,
+            "redis_proof_sha256": step_hashes["redis_proof_sha256"],
+            "repository_id_sha256": repository_id_sha256,
+            "run_id": run_id,
+            "seeded_at_utc": _now(),
+            "snapshot_id": snapshot_id,
+            "status": "first-cutover-seed-verified",
+        },
+    )
+    # The global stop fence already blocks production.  Publish the seed proof
+    # first and only then advance its phase, so a crash is either retryable
+    # from redis-verified or fail-closed at seed-verified.
+    _atomic_write(
+        root / IN_PROGRESS_NAME,
+        {**common, "phase": "seed-verified", "updated_at_utc": _now()},
+    )
+
+
+def validate_seed(
+    root: Path,
+    *,
+    cutover_id: str,
+    revision: str,
+    source: str,
+    repository_id_sha256: str,
+) -> dict[str, str]:
+    common = _common_fields(cutover_id=cutover_id, revision=revision, source_fingerprint=source)
+    if not _SHA256.fullmatch(repository_id_sha256):
+        raise EvidenceError("first-cutover seed repository identity is invalid")
+    root = _ensure_evidence_root(root)
+    _require_progress(root, common=common, phase="seed-verified")
+    postgres_path = root / POSTGRES_PROOF_NAME
+    redis_path = root / REDIS_PROOF_NAME
+    seed = _load(root / SEED_PROOF_NAME)
+    if (
+        not _matches_common(seed, common)
+        or seed.get("status") != "first-cutover-seed-verified"
+        or seed.get("repository_id_sha256") != repository_id_sha256
+        or not _RUN_ID.fullmatch(seed.get("run_id", ""))
+        or not _SNAPSHOT_ID.fullmatch(seed.get("snapshot_id", ""))
+        or any(
+            not _SHA256.fullmatch(seed.get(field, ""))
+            for field in (
+                "backup_set_sha256",
+                "configuration_checksums_sha256",
+                "database_dump_sha256",
+                "postgres_proof_sha256",
+                "redis_dump_sha256",
+                "redis_proof_sha256",
+            )
+        )
+        or seed.get("postgres_proof_sha256") != sha256_file(postgres_path)
+        or seed.get("redis_proof_sha256") != sha256_file(redis_path)
+        or seed.get("api_worker_started") != "false"
+        or seed.get("caddy_changed") != "false"
+        or seed.get("dns_changed") != "false"
+    ):
+        raise EvidenceError("first-cutover seed proof does not match this provider cutover")
+    return seed
+
+
+def validate_seed_snapshot_document(
+    document: object,
+    *,
+    expected_snapshot_id: str,
+    run_started_epoch: int,
+    now: dt.datetime | None = None,
+) -> dict[str, object]:
+    """Validate the Restic snapshot returned by this seed invocation.
+
+    Restic records a snapshot's start time, not its upload completion time.
+    Therefore the lower bound is the start of this script invocation while the
+    upper bound only rejects a clock-skewed future timestamp. There is
+    deliberately no maximum upload-duration bound.
+    """
+
+    if not _SNAPSHOT_ID.fullmatch(expected_snapshot_id):
+        raise EvidenceError("expected first-cutover snapshot ID is invalid")
+    if (
+        isinstance(run_started_epoch, bool)
+        or not isinstance(run_started_epoch, int)
+        or run_started_epoch <= 0
+    ):
+        raise EvidenceError("first-cutover run start time is invalid")
+    if not isinstance(document, list) or len(document) != 1:
+        raise EvidenceError("Restic must return exactly one first-cutover snapshot")
+    snapshot = document[0]
+    if not isinstance(snapshot, dict):
+        raise EvidenceError("Restic returned malformed first-cutover snapshot metadata")
+    tags_value = snapshot.get("tags")
+    if not isinstance(tags_value, list) or any(
+        not isinstance(tag, str) for tag in tags_value
+    ):
+        raise EvidenceError("Restic returned malformed first-cutover snapshot tags")
+    snapshot_id = str(snapshot.get("id") or "")
+    if (
+        snapshot_id != expected_snapshot_id
+        or snapshot.get("hostname") != "lecturesift-production"
+        or not {"lecturesift", "production", "first-cutover-seed"}.issubset(
+            set(tags_value)
+        )
+    ):
+        raise EvidenceError("Restic snapshot identity, host or tags do not match the seed")
+    created_text = str(snapshot.get("time") or "")
+    try:
+        created = dt.datetime.fromisoformat(created_text.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise EvidenceError("Restic snapshot start time is invalid") from exc
+    if created.tzinfo is None:
+        raise EvidenceError("Restic snapshot start time must include a timezone")
+    current = now or dt.datetime.now(dt.timezone.utc)
+    if current.tzinfo is None:
+        raise EvidenceError("snapshot validation time must include a timezone")
+    created_epoch = created.astimezone(dt.timezone.utc).timestamp()
+    current_epoch = current.astimezone(dt.timezone.utc).timestamp()
+    if created_epoch < run_started_epoch - 5 or created_epoch > current_epoch + 300:
+        raise EvidenceError("Restic snapshot did not begin during this seed invocation")
+    return snapshot
+
+
+def validate_seed_snapshot_file(
+    path: Path, *, expected_snapshot_id: str, run_started_epoch: int
+) -> dict[str, object]:
+    if not path.is_absolute() or not path.is_file() or path.is_symlink():
+        raise EvidenceError("first-cutover snapshot metadata file is missing or unsafe")
+    if path.resolve(strict=True) != path:
+        raise EvidenceError("first-cutover snapshot metadata path is not canonical")
+    details = path.stat()
+    if os.name == "posix" and (
+        details.st_uid != EVIDENCE_OWNER_UID
+        or details.st_gid != EVIDENCE_OWNER_GID
+        or stat.S_IMODE(details.st_mode) & 0o077
+    ):
+        raise EvidenceError("first-cutover snapshot metadata must be root-private")
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise EvidenceError("first-cutover snapshot metadata is unreadable") from exc
+    return validate_seed_snapshot_document(
+        document,
+        expected_snapshot_id=expected_snapshot_id,
+        run_started_epoch=run_started_epoch,
+    )
+
+
 def finalize(
     root: Path,
     *,
@@ -404,11 +635,41 @@ def finalize(
     if recovery_marker.name != recovery_marker.as_posix() or retention_marker.name != retention_marker.as_posix():
         raise EvidenceError("final evidence records marker basenames only")
     root = _ensure_evidence_root(root)
-    _require_progress(root, common=common, phase="redis-verified")
+    _require_progress(root, common=common, phase="seed-verified")
     postgres_path = root / POSTGRES_PROOF_NAME
     redis_path = root / REDIS_PROOF_NAME
+    seed_path = root / SEED_PROOF_NAME
     postgres = _load(postgres_path)
     redis = _load(redis_path)
+    seed = validate_seed(
+        root,
+        cutover_id=cutover_id,
+        revision=revision,
+        source=source,
+        repository_id_sha256=repository_id_sha256,
+    )
+    recovery_path = RECOVERY_EVIDENCE_ROOT / recovery_marker.name
+    retention_path = RECOVERY_EVIDENCE_ROOT / retention_marker.name
+    recovery = _load_recovery_evidence(recovery_path)
+    retention = _load_recovery_evidence(retention_path)
+    if (
+        sha256_file(recovery_path) != recovery_sha256
+        or sha256_file(retention_path) != retention_sha256
+        or recovery.get("status") != "success"
+        or recovery.get("drill_scope") != "current-latest"
+        or recovery.get("postgres_restore") != "verified"
+        or recovery.get("redis_restore") != "verified"
+        or recovery.get("restored_payload_removed") != "true"
+        or recovery.get("live_services_touched") != "false"
+        or recovery.get("repository_id_sha256") != repository_id_sha256
+        or recovery.get("snapshot_id") != seed.get("snapshot_id")
+        or recovery.get("backup_set_sha256") != seed.get("backup_set_sha256")
+        or retention.get("status") != "immutable-retention-verified"
+        or retention.get("repository_id_sha256") != repository_id_sha256
+    ):
+        raise EvidenceError(
+            "recovery/retention evidence does not exactly match the first-cutover seed"
+        )
     if (
         not _matches_common(postgres, common)
         or not _matches_common(redis, common)
@@ -431,6 +692,9 @@ def finalize(
             "r2_retention_marker": retention_marker.name,
             "r2_retention_marker_sha256": retention_sha256,
             "redis_proof_sha256": sha256_file(redis_path),
+            "seed_backup_set_sha256": seed["backup_set_sha256"],
+            "seed_proof_sha256": sha256_file(seed_path),
+            "seed_snapshot_id": seed["snapshot_id"],
             "source_freeze_revalidated": "true",
             "source_worker_queue_zero": "verified",
             "status": "provider-cutover-verified",
@@ -460,13 +724,17 @@ def validate_final(root: Path, *, expected_revision: str) -> dict[str, str]:
         raise EvidenceError("provider cutover final proof is not valid for this exact release")
     postgres = root / POSTGRES_PROOF_NAME
     redis = root / REDIS_PROOF_NAME
+    seed = root / SEED_PROOF_NAME
     postgres_fields = _load(postgres)
     redis_fields = _load(redis)
+    seed_fields = _load(seed)
     if final.get("postgres_proof_sha256") != sha256_file(postgres):
         raise EvidenceError("PostgreSQL cutover proof changed after finalization")
     if final.get("redis_proof_sha256") != sha256_file(redis):
         raise EvidenceError("Redis cutover proof changed after finalization")
-    for step in (postgres_fields, redis_fields):
+    if final.get("seed_proof_sha256") != sha256_file(seed):
+        raise EvidenceError("first-cutover seed proof changed after finalization")
+    for step in (postgres_fields, redis_fields, seed_fields):
         for key in ("cutover_id", "release_revision", "source_fingerprint_sha256"):
             if step.get(key) != final.get(key):
                 raise EvidenceError("step proof does not match provider final proof")
@@ -491,6 +759,12 @@ def validate_final(root: Path, *, expected_revision: str) -> dict[str, str]:
         not _SHA256.fullmatch(repository_hash)
         or recovery_fields.get("repository_id_sha256") != repository_hash
         or retention_fields.get("repository_id_sha256") != repository_hash
+        or seed_fields.get("repository_id_sha256") != repository_hash
+        or seed_fields.get("status") != "first-cutover-seed-verified"
+        or recovery_fields.get("snapshot_id") != seed_fields.get("snapshot_id")
+        or recovery_fields.get("backup_set_sha256") != seed_fields.get("backup_set_sha256")
+        or final.get("seed_snapshot_id") != seed_fields.get("snapshot_id")
+        or final.get("seed_backup_set_sha256") != seed_fields.get("backup_set_sha256")
         or recovery_fields.get("status") != "success"
         or retention_fields.get("status") != "immutable-retention-verified"
     ):
@@ -521,6 +795,24 @@ def _parser() -> argparse.ArgumentParser:
     redis.add_argument("--run-id", required=True)
     redis.add_argument("--state-sha256", required=True)
     redis.add_argument("--rollback-sha256", required=True)
+    seed_ready = commands.add_parser("validate-seed-ready")
+    common(seed_ready)
+    seed = commands.add_parser("write-seed")
+    common(seed)
+    seed.add_argument("--run-id", required=True)
+    seed.add_argument("--snapshot-id", required=True)
+    seed.add_argument("--repository-id-sha256", required=True)
+    seed.add_argument("--backup-set-sha256", required=True)
+    seed.add_argument("--database-dump-sha256", required=True)
+    seed.add_argument("--redis-dump-sha256", required=True)
+    seed.add_argument("--configuration-checksums-sha256", required=True)
+    validate_seed_parser = commands.add_parser("validate-seed")
+    common(validate_seed_parser)
+    validate_seed_parser.add_argument("--repository-id-sha256", required=True)
+    snapshot = commands.add_parser("validate-seed-snapshot")
+    snapshot.add_argument("--snapshot-json", required=True)
+    snapshot.add_argument("--expected-snapshot-id", required=True)
+    snapshot.add_argument("--run-started-epoch", required=True, type=int)
     final = commands.add_parser("finalize")
     common(final)
     final.add_argument("--recovery-marker", required=True)
@@ -548,7 +840,13 @@ def main(argv: list[str] | None = None) -> int:
             "revision": getattr(args, "revision", ""),
             "source": getattr(args, "source_fingerprint", ""),
         }
-        if args.command == "begin-postgres":
+        if args.command == "validate-seed-snapshot":
+            validate_seed_snapshot_file(
+                Path(args.snapshot_json),
+                expected_snapshot_id=args.expected_snapshot_id,
+                run_started_epoch=args.run_started_epoch,
+            )
+        elif args.command == "begin-postgres":
             begin_postgres(EVIDENCE_ROOT, **kwargs)
         elif args.command == "write-postgres":
             write_postgres(
@@ -568,6 +866,26 @@ def main(argv: list[str] | None = None) -> int:
                 run_id=args.run_id,
                 state_sha256=args.state_sha256,
                 rollback_sha256=args.rollback_sha256,
+            )
+        elif args.command == "validate-seed-ready":
+            validate_seed_ready(EVIDENCE_ROOT, **kwargs)
+        elif args.command == "write-seed":
+            write_seed(
+                EVIDENCE_ROOT,
+                **kwargs,
+                run_id=args.run_id,
+                snapshot_id=args.snapshot_id,
+                repository_id_sha256=args.repository_id_sha256,
+                backup_set_sha256=args.backup_set_sha256,
+                database_dump_sha256=args.database_dump_sha256,
+                redis_dump_sha256=args.redis_dump_sha256,
+                configuration_checksums_sha256=args.configuration_checksums_sha256,
+            )
+        elif args.command == "validate-seed":
+            validate_seed(
+                EVIDENCE_ROOT,
+                **kwargs,
+                repository_id_sha256=args.repository_id_sha256,
             )
         elif args.command == "finalize":
             finalize(

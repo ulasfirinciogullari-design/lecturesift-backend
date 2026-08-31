@@ -23,6 +23,7 @@ RESTIC_ENV_FILE="${LECTURESIFT_RESTIC_ENV_FILE:-/etc/lecturesift/restic.env}"
 CUTOVER_EVIDENCE_TOOL="$ROOT_DIR/deploy/provider_cutover_evidence.py"
 RELEASE_TOOL="$ROOT_DIR/deploy/release.sh"
 RELEASE_MARKER="/run/lecturesift/release.env"
+SEED_PROOF="/var/lib/lecturesift/provider-cutover/first-cutover-seed.ok"
 RECOVERY_ROOT="/var/lib/lecturesift/recovery-drills"
 RETENTION_MARKER="$RECOVERY_ROOT/r2-retention-lock.ok"
 EXPECTED_REPOSITORY_PATTERN='s3:https://[0-9a-f]{32}[.]eu[.]r2[.]cloudflarestorage[.]com/lecturesift-production-backups/restic'
@@ -262,6 +263,11 @@ validate_recovery_marker() {
   grep -Fqx 'restored_payload_removed=true' "$marker" || return 1
   grep -Fqx 'live_services_touched=false' "$marker" || return 1
   grep -Fqx "repository_id_sha256=$REPOSITORY_ID_SHA256" "$marker" || return 1
+  grep -Fqx "snapshot_id=$SEED_SNAPSHOT_ID" "$marker" || return 1
+  grep -Fqx "backup_set_sha256=$SEED_BACKUP_SET_SHA256" "$marker" || return 1
+  [[ "$(grep -Fxc "repository_id_sha256=$REPOSITORY_ID_SHA256" "$marker")" == "1" ]] || return 1
+  [[ "$(grep -Fxc "snapshot_id=$SEED_SNAPSHOT_ID" "$marker")" == "1" ]] || return 1
+  [[ "$(grep -Fxc "backup_set_sha256=$SEED_BACKUP_SET_SHA256" "$marker")" == "1" ]] || return 1
   [[ "$(grep -c '^completed_at_utc=' "$marker")" == "1" ]] || return 1
   completed="$(sed -n 's/^completed_at_utc=//p' "$marker")"
   completed_epoch="$(date -u -d "$completed" +%s 2>/dev/null)" || return 1
@@ -307,6 +313,25 @@ print(hashlib.sha256(value.encode("ascii")).hexdigest())
 unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
 [[ "$REPOSITORY_ID_SHA256" =~ ^[0-9a-f]{64}$ ]] || fail "the repository identity hash is invalid"
 
+# Bind the recovery drill to the one seed snapshot made by this exact frozen
+# PostgreSQL/Redis cutover.  A merely recent snapshot from the same repository
+# is not sufficient evidence for the production-start gate.
+check_private_file "$SEED_PROOF" "First-cutover seed proof"
+python3 "$CUTOVER_EVIDENCE_TOOL" validate-seed \
+  --cutover-id "$CUTOVER_ID" \
+  --revision "$EXPECTED_BUILD_REVISION" \
+  --source-fingerprint "$SOURCE_FINGERPRINT" \
+  --repository-id-sha256 "$REPOSITORY_ID_SHA256" ||
+  fail "the exact repository-bound first-cutover seed proof is invalid"
+[[ "$(grep -c '^snapshot_id=' "$SEED_PROOF")" == "1" &&
+   "$(grep -c '^backup_set_sha256=' "$SEED_PROOF")" == "1" ]] ||
+  fail "the first-cutover seed identity is ambiguous"
+SEED_SNAPSHOT_ID="$(sed -n 's/^snapshot_id=//p' "$SEED_PROOF")"
+SEED_BACKUP_SET_SHA256="$(sed -n 's/^backup_set_sha256=//p' "$SEED_PROOF")"
+[[ "$SEED_SNAPSHOT_ID" =~ ^[0-9a-f]{64}$ &&
+   "$SEED_BACKUP_SET_SHA256" =~ ^[0-9a-f]{64}$ ]] ||
+  fail "the first-cutover seed identity is malformed"
+
 [[ -d "$RECOVERY_ROOT" && ! -L "$RECOVERY_ROOT" &&
    "$(realpath -e -- "$RECOVERY_ROOT")" == "$RECOVERY_ROOT" ]] ||
   fail "the recovery evidence root is missing or unsafe"
@@ -317,7 +342,8 @@ while IFS= read -r candidate; do
   fi
 done < <(find "$RECOVERY_ROOT" -maxdepth 1 -type f -name 'restic-restore-*.ok' -printf '%T@ %p\n' |
   sort -n | cut -d' ' -f2-)
-[[ -n "$recovery_marker" ]] || fail "no recent current-latest Restic restore proof matches this repository"
+[[ -n "$recovery_marker" ]] ||
+  fail "no recent current-latest Restic restore proof matches the exact first-cutover seed"
 validate_retention_marker || fail "no recent repository-bound R2 retention-lock proof is valid"
 
 "${compose[@]}" up -d --wait --wait-timeout 300 postgres redis

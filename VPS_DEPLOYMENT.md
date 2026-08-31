@@ -121,7 +121,16 @@ on the VPS. Netlify and private Cloudflare R2 remain external.
    Temporary OCR/office files are on bounded in-container tmpfs mounts; durable
    sources and results belong in R2, not `/tmp`. A failed resource gate leaves
    the existing stack unchanged.
-7. Initialize and test the off-site restic repository. `backup.sh` installs an
+7. Initialize and test the off-site restic repository. During the first
+   provider cutover, API/worker are intentionally still stopped, so do not use
+   `backup.sh` to manufacture the restore proof required by the production
+   gate. After the PostgreSQL and Redis cutover proofs exist, use the dedicated
+   `deploy/seed_first_cutover_backup.sh` bridge and the exact sequence in
+   `deploy/FIRST_CUTOVER_SEED.md`. It writes the same
+   `lecturesift-backup-v2` and `configuration-snapshot-v1` formats as normal
+   backups, but never starts/stops API/worker or changes Caddy/DNS. Restore the
+   still-current seed through `restic_restore_rehearsal.sh` before running the
+   provider finalizer. Once production has safely started, `backup.sh` installs an
    atomic, same-boot, two-hour `drain` marker that the already-running API reads
    per request. It never recreates API/Caddy, so authenticated payment callbacks
    remain reachable while new jobs are blocked. It waits up to 20 minutes for
@@ -338,16 +347,34 @@ into VPS Redis.
    `/var/lib/lecturesift/migration-fail-stop/redis-state-unproven`. Production
    preflight will refuse to start until an operator verifies/repairs the target
    Redis value and then deliberately removes that root-only marker.
-5. Run the root-only R2 retention probe once. It must produce
-   `/var/lib/lecturesift/recovery-drills/r2-retention-lock.ok`, and a recent
-   `current-latest` Restic restore-drill marker must exist for the same
-   repository. Then, while Render remains frozen and both sides still have
-   zero pending payments/queues, run `deploy/finalize_provider_cutover.sh`
-   with the same ID/revision and
+5. Initialize the exact dedicated EU R2 Restic repository, complete the
+   off-host Restic-password escrow proof, and run the root-only R2 retention
+   probe once. It must produce
+   `/var/lib/lecturesift/recovery-drills/r2-retention-lock.ok`. While Render
+   remains frozen and API/worker remain stopped, run
+   `deploy/seed_first_cutover_backup.sh` with the same cutover ID/revision and
+   all four explicit seed confirmations. The seed tool first requires the
+   matching PostgreSQL and Redis proofs; it then creates one exact-format,
+   encrypted Restic snapshot from the already-running target PostgreSQL/Redis,
+   deletes its root-private plaintext staging directory (ordinary filesystem
+   deletion, not guaranteed storage-media sanitization), and records the snapshot,
+   backup-set, repository and step-proof hashes in the root-only
+   `first-cutover-seed.ok`. It never runs Compose lifecycle commands, changes
+   traffic, or performs Restic forget/prune. Follow
+   `deploy/FIRST_CUTOVER_SEED.md` exactly.
+
+   With no other snapshot writer running, immediately run
+   `deploy/restic_restore_rehearsal.sh` without an explicit snapshot override.
+   Its resulting `current-latest` proof must identify the exact seed snapshot,
+   backup set and repository; a recent but different snapshot is rejected.
+   Then, while Render remains frozen and both sides still have zero pending
+   payments/queues, run `deploy/finalize_provider_cutover.sh` with the same
+   ID/revision and
    `LECTURESIFT_PROVIDER_CUTOVER_FINALIZE_CONFIRM=YES`. The finalizer rechecks
    the direct Render freeze response, absence of its worker, both queues,
-   pending provider orders, clean Git revision, and repository-bound recovery
-   and retention evidence. Only exact-matching PostgreSQL and Redis proofs can
+   pending provider orders, clean Git revision, seed proof, and
+   repository-bound recovery and retention evidence. Only exact-matching
+   PostgreSQL, Redis and first-cutover seed proofs can
    create `/var/lib/lecturesift/provider-cutover/provider-cutover.ok`; its
    atomic creation does not start API/worker and does not touch Caddy or DNS.
    It is not evidence that a Redis or R2 rollback was performed.
