@@ -72,6 +72,16 @@ def _manifest_text(objects: list[str], *, legacy: bool = False) -> str:
     return "\n".join(lines) + "\n"
 
 
+def test_manifest_generator_quiets_psql_before_configuring_record_output():
+    lines = MANIFEST.read_text(encoding="utf-8").splitlines()
+
+    quiet = lines.index(r"\set QUIET on")
+    tuples_only = lines.index(r"\pset tuples_only on")
+    unaligned = lines.index(r"\pset format unaligned")
+
+    assert quiet < tuples_only < unaligned
+
+
 def test_schema_transition_fixture_rejects_unreviewed_catalog_deltas(tmp_path: Path):
     contract = _contract_lines()
     baseline = [
@@ -197,6 +207,26 @@ def test_manifest_completion_rejects_truncation_old_versions_and_missing_checks(
     missing_check.write_text("\n".join(missing_anomaly) + "\n", encoding="utf-8")
     with pytest.raises(verifier.ContractError, match="exact anomaly checks"):
         verifier.verify_current(missing_check, CONTRACT)
+
+
+@pytest.mark.parametrize(
+    "chatter",
+    ("Tuples only is on.", "Output format is unaligned."),
+)
+def test_manifest_rejects_psql_informational_chatter(tmp_path: Path, chatter: str):
+    objects = [
+        "SCHEMA_OBJECT|C|public.billing_users|1|id|character varying(36)|t|||",
+        "SCHEMA_OBJECT|K|billing_users|billing_users_pkey|t|PRIMARY KEY (id)",
+        *_contract_lines(),
+    ]
+    contaminated = tmp_path / "psql-chatter.txt"
+    contaminated.write_text(
+        chatter + "\n" + _manifest_text(objects),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(verifier.ContractError, match="unknown manifest record family"):
+        verifier.verify_current(contaminated, CONTRACT)
 
 
 def test_manifest_rejects_malformed_record_shapes_and_noncanonical_values(
@@ -446,7 +476,12 @@ def test_manifest_legacy_strict_current_and_schema_contract_on_postgres_18(tmp_p
         command.extend(["--file", "/tmp/rehearsal_manifest.sql"])
         result = docker_exec(*command)
         assert result.returncode == 0, result.stderr
-        return result.stdout.replace("\r\n", "\n")
+        output = result.stdout.replace("\r\n", "\n")
+        assert {
+            "Tuples only is on.",
+            "Output format is unaligned.",
+        }.isdisjoint(output.splitlines())
+        return output
 
     database_url = (
         f"postgresql+psycopg://postgres:{password}@127.0.0.1:{port}/{database}"

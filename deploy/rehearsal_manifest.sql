@@ -1,4 +1,5 @@
 \set ON_ERROR_STOP on
+\set QUIET on
 \pset tuples_only on
 \pset format unaligned
 
