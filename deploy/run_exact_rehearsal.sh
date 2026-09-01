@@ -4,6 +4,8 @@ set +x
 umask 077
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 export GIT_ATTR_NOSYSTEM=1
+export GIT_CONFIG_NOSYSTEM=1
+export GIT_CONFIG_GLOBAL=/dev/null
 IFS=$' \t\n'
 
 revision="${LECTURESIFT_EXPECTED_REHEARSAL_REVISION:-}"
@@ -880,8 +882,9 @@ write_admission() {
   [[ ! -e "$local_tree" && ! -L "$local_tree" ]] || return 1
   install -d -o root -g root -m 0700 "$local_tree"
   verify_no_git_export_attributes "$root" "$revision" || return 1
-  git -c core.attributesFile=/dev/null -C "$root" archive --format=tar "$revision" | \
-    tar -xf - -C "$local_tree"
+  git -c core.attributesFile=/dev/null -c core.autocrlf=false -c core.eol=lf \
+    -c tar.umask=0002 -C "$root" archive --format=tar "$revision" | \
+    tar -xf - -C "$local_tree" || return 1
   local_tree_sha="$(python3 - "$local_tree" <<'PY'
 import hashlib
 import json

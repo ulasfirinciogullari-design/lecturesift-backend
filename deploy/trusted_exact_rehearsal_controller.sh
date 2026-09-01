@@ -4,6 +4,8 @@ set +x
 umask 077
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 export GIT_ATTR_NOSYSTEM=1
+export GIT_CONFIG_NOSYSTEM=1
+export GIT_CONFIG_GLOBAL=/dev/null
 IFS=$' \t\n'
 unset CDPATH ENV BASH_ENV
 unset -f id git python3 sha256sum realpath stat find findmnt flock awk install \
@@ -299,7 +301,8 @@ verify_no_git_export_attributes "$root" "$revision" || \
 ( ulimit -v $((3 * 1024 * 1024)); ulimit -t 300; \
   ulimit -f $((MAX_REVIEW_TREE_BYTES / 1024)); \
   timeout --signal=KILL 360 git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
-    -c core.attributesFile=/dev/null -C "$root" archive --format=tar "$revision" \
+    -c core.attributesFile=/dev/null -c core.autocrlf=false -c core.eol=lf \
+    -c tar.umask=0002 -C "$root" archive --format=tar "$revision" \
     >"$state/reviewed-tree.tar" ) || fail review-tree-export
 source_tree_sha256="$(timeout --signal=KILL 360 python3 - "$state/reviewed-tree.tar" <<'PY'
 import hashlib

@@ -4,6 +4,8 @@ set +x
 umask 077
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 export GIT_ATTR_NOSYSTEM=1
+export GIT_CONFIG_NOSYSTEM=1
+export GIT_CONFIG_GLOBAL=/dev/null
 IFS=$' \t\n'
 unset CDPATH ENV BASH_ENV
 unset -f id git python3 sha256sum realpath stat find findmnt flock awk install \
@@ -106,6 +108,18 @@ if pending or field_index % 3:
      "$post_info_attributes" == "$info_attributes" && \
      "$post_info_attributes" == "$post_common_dir/info/attributes" && \
      ! -e "$post_info_attributes" && ! -L "$post_info_attributes" ]]
+}
+
+normalize_release_tree_modes() {
+  local tree="$1" unexpected
+  [[ -d "$tree" && ! -L "$tree" ]] || return 1
+  find "$tree" -xdev -type d -exec chmod 0755 -- {} + || return 1
+  find "$tree" -xdev -type f -perm /111 -exec chmod 0755 -- {} + || return 1
+  find "$tree" -xdev -type f ! -perm /111 -exec chmod 0644 -- {} + || return 1
+  unexpected="$(find "$tree" -xdev \
+    \( -type d ! -perm 0755 -o -type f ! \( -perm 0644 -o -perm 0755 \) -o \
+       \( ! -type d -a ! -type f \) \) -print -quit)" || return 1
+  [[ -z "$unexpected" ]]
 }
 
 [[ "$(id -u)" == "0" ]] || fail root-required
@@ -335,6 +349,7 @@ verify_no_git_export_attributes "$state/repository.git" "$revision" || \
   fail export-attributes-forbidden
 ( ulimit -v $((3 * 1024 * 1024)); ulimit -t 300; ulimit -f $((MAX_EXPANDED_BYTES / 1024)); \
   timeout --signal=KILL 360 git -c core.attributesFile=/dev/null \
+    -c core.autocrlf=false -c core.eol=lf -c tar.umask=0002 \
     -C "$state/repository.git" archive --format=tar "$revision" >"$state/git-tree.tar" ) || \
   fail git-tree-export
 
@@ -446,7 +461,7 @@ PY
 install -d -o root -g root -m 0700 -- "$state/reviewed"
 tar -xf "$state/git-tree.tar" -C "$state/reviewed" --no-same-owner --no-same-permissions
 chown -R root:root -- "$state/reviewed"
-chmod -R go-w -- "$state/reviewed"
+normalize_release_tree_modes "$state/reviewed" || fail reviewed-tree-mode-normalization
 candidate="$state/reviewed/deploy/stage_release_candidate.sh"
 [[ -f "$candidate" && ! -L "$candidate" && \
    "$(realpath -e -- "$candidate")" == "$state/reviewed/deploy/stage_release_candidate.sh" ]] || \

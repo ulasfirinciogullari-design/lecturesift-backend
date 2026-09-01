@@ -3,6 +3,8 @@ set -euo pipefail
 set +x
 umask 077
 export GIT_ATTR_NOSYSTEM=1
+export GIT_CONFIG_NOSYSTEM=1
+export GIT_CONFIG_GLOBAL=/dev/null
 
 # Build and admit exactly one clean Git commit. The marker contains no secret;
 # it is root-only so an unprivileged local process cannot make an older image
@@ -167,9 +169,13 @@ if [[ "$MODE" == "build" ]]; then
     # mutable checkout. The clean-tree checks remain mandatory, while a
     # transient worktree edit cannot be smuggled into a correctly labelled
     # image and restored before the post-build check.
-    git -c core.attributesFile=/dev/null -C "$ROOT_DIR" \
+    git -c core.attributesFile=/dev/null -c core.autocrlf=false -c core.eol=lf \
+      -c tar.umask=0002 -C "$ROOT_DIR" \
       archive --format=tar "$expected_revision" \
       | tar -xf - -C "$release_context"
+    find "$release_context" -xdev -type d -exec chmod 0755 -- {} +
+    find "$release_context" -xdev -type f -perm /111 -exec chmod 0755 -- {} +
+    find "$release_context" -xdev -type f ! -perm /111 -exec chmod 0644 -- {} +
     docker build --pull \
       --build-arg "LECTURESIFT_BUILD_REVISION=$expected_revision" \
       --build-arg "LECTURESIFT_SUPPLY_CHAIN_LOCK_SHA256=$supply_chain_digest" \

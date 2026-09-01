@@ -300,6 +300,8 @@ def _git_tree_digest(root: Path, revision: str) -> str:
         if key.startswith("GIT_"):
             git_environment.pop(key)
     git_environment["GIT_ATTR_NOSYSTEM"] = "1"
+    git_environment["GIT_CONFIG_NOSYSTEM"] = "1"
+    git_environment["GIT_CONFIG_GLOBAL"] = os.devnull
     head = subprocess.run(
         _bounded_git_command(
             GIT_ATTRIBUTE_ADDRESS_SPACE_BYTES,
@@ -330,7 +332,11 @@ def _git_tree_digest(root: Path, revision: str) -> str:
     process = subprocess.Popen(
         _bounded_git_command(
             GIT_ARCHIVE_ADDRESS_SPACE_BYTES,
-            "-c", "core.attributesFile=/dev/null", "-C", str(root),
+            "-c", "core.attributesFile=/dev/null",
+            "-c", "core.autocrlf=false",
+            "-c", "core.eol=lf",
+            "-c", "tar.umask=0002",
+            "-C", str(root),
             "archive", "--format=tar", revision,
         ),
         stdout=subprocess.PIPE,

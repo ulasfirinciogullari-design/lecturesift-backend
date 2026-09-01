@@ -4,6 +4,8 @@ set +x
 umask 077
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 export GIT_ATTR_NOSYSTEM=1
+export GIT_CONFIG_NOSYSTEM=1
+export GIT_CONFIG_GLOBAL=/dev/null
 IFS=$' \t\n'
 unset CDPATH ENV BASH_ENV
 unset -f id git python3 sha256sum realpath stat find awk install mktemp rm \
@@ -99,6 +101,18 @@ if pending or field_index % 3:
      "$post_info_attributes" == "$info_attributes" && \
      "$post_info_attributes" == "$post_common_dir/info/attributes" && \
      ! -e "$post_info_attributes" && ! -L "$post_info_attributes" ]]
+}
+
+normalize_release_tree_modes() {
+  local tree="$1" unexpected
+  [[ -d "$tree" && ! -L "$tree" ]] || return 1
+  find "$tree" -xdev -type d -exec chmod 0755 -- {} + || return 1
+  find "$tree" -xdev -type f -perm /111 -exec chmod 0755 -- {} + || return 1
+  find "$tree" -xdev -type f ! -perm /111 -exec chmod 0644 -- {} + || return 1
+  unexpected="$(find "$tree" -xdev \
+    \( -type d ! -perm 0755 -o -type f ! \( -perm 0644 -o -perm 0755 \) -o \
+       \( ! -type d -a ! -type f \) \) -print -quit)" || return 1
+  [[ -z "$unexpected" ]]
 }
 
 [[ "$(id -u)" == "0" ]] || fail root-required
@@ -385,7 +399,7 @@ incoming_release_identity="$(stat -c '%d:%i' -- "$incoming_release")"
 tar --extract --file "$archive" --directory "$incoming_release" \
   --strip-components=1 --no-same-owner --no-same-permissions
 chown -R root:root "$incoming_release"
-chmod -R go-w "$incoming_release"
+normalize_release_tree_modes "$incoming_release" || fail archive-mode-normalization
 [[ -z "$(find "$incoming_release" -xdev -type l -print -quit)" ]] || fail archive-symlink
 [[ -z "$(find "$incoming_release" -xdev \( ! -user root -o -perm /022 \) -print -quit)" ]] || \
   fail archive-metadata
@@ -411,8 +425,10 @@ chmod -R go-w "$incoming_worktree"
 install -d -o root -g root -m 0700 "$comparison_tree"
 created_comparison_tree=true
 comparison_tree_identity="$(stat -c '%d:%i' -- "$comparison_tree")"
-git -c core.attributesFile=/dev/null -C "$incoming_worktree" \
+git -c core.attributesFile=/dev/null -c core.autocrlf=false -c core.eol=lf \
+  -c tar.umask=0002 -C "$incoming_worktree" \
   archive --format=tar "$revision" | tar -xf - -C "$comparison_tree"
+normalize_release_tree_modes "$comparison_tree" || fail comparison-tree-mode-normalization
 tree_sha256="$(python3 - "$incoming_release" "$comparison_tree" <<'PY'
 import hashlib
 import json
