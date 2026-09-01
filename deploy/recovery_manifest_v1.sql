@@ -135,14 +135,14 @@ WHERE status = 'paid' AND provider_amount_minor IS DISTINCT FROM amount_minor
 UNION ALL
 SELECT 'ANOMALY|paid_card_plan_without_subscription|' || count(*)
 FROM billing_payment_orders o
-WHERE o.status = 'paid' AND o.plan_code <> 'credit'
+WHERE o.status = 'paid' AND o.interval IS DISTINCT FROM 'one_time'
   AND NOT EXISTS (
     SELECT 1 FROM billing_subscriptions s WHERE s.source_reference = o.reference
   )
 UNION ALL
 SELECT 'ANOMALY|paid_manual_plan_without_subscription|' || count(*)
 FROM billing_manual_orders o
-WHERE o.status = 'paid' AND o.plan_code <> 'credit'
+WHERE o.status = 'paid' AND o.interval IS DISTINCT FROM 'one_time'
   AND NOT EXISTS (
     SELECT 1 FROM billing_subscriptions s WHERE s.source_reference = o.reference
   )

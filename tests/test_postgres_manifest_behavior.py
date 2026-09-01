@@ -96,6 +96,24 @@ def test_manifest_generator_quiets_psql_before_configuring_record_output():
     assert quiet < tuples_only < unaligned
 
 
+@pytest.mark.parametrize(
+    "manifest_path",
+    (MANIFEST, ROOT / "deploy" / "recovery_manifest_v1.sql"),
+)
+def test_paid_purchase_subscription_anomaly_uses_interval_semantics(
+    manifest_path: Path,
+):
+    payload = manifest_path.read_text(encoding="utf-8")
+
+    # Every one-time product grants credits and deliberately creates no
+    # subscription.  The integrity contract must therefore follow purchase
+    # interval semantics rather than special-casing the historical credit SKU.
+    assert payload.count(
+        "WHERE o.status = 'paid' AND o.interval IS DISTINCT FROM 'one_time'"
+    ) == 2
+    assert "WHERE o.status = 'paid' AND o.plan_code <> 'credit'" not in payload
+
+
 def test_postgres_locale_spelling_matches_the_render_source_manifest():
     paths = (
         ROOT / "compose.yaml",
@@ -770,6 +788,61 @@ def test_manifest_legacy_strict_current_and_schema_contract_on_postgres_18(tmp_p
         assert copied.returncode == 0, copied.stderr
 
         migrate()
+        purchase_user = f"purchase-{uuid.uuid4().hex[:20]}"
+        sql(
+            "INSERT INTO billing_users "
+            "(id, email, password_salt, password_hash, credit_minutes, created_at) "
+            f"VALUES ('{purchase_user}', '{purchase_user}@invalid.example', "
+            "repeat('0', 64), repeat('1', 64), 0, now()); "
+            "INSERT INTO billing_payment_orders "
+            "(reference, user_id, provider, plan_code, interval, amount_minor, "
+            "currency, status, provider_amount_minor, created_at, updated_at) VALUES "
+            f"('manifest-pay-test', '{purchase_user}', 'iyzico_card_confirmed', "
+            "'test', 'one_time', 100, 'TRY', 'paid', 100, now(), now()), "
+            f"('manifest-pay-credit', '{purchase_user}', 'iyzico_card_confirmed', "
+            "'credit', 'one_time', 19900, 'TRY', 'paid', 19900, now(), now()); "
+            "INSERT INTO billing_manual_orders "
+            "(reference, user_id, plan_code, interval, amount_minor, currency, "
+            "status, created_at, updated_at) VALUES "
+            f"('manifest-manual-test', '{purchase_user}', 'test', 'one_time', "
+            "100, 'TRY', 'paid', now(), now()), "
+            f"('manifest-manual-credit', '{purchase_user}', 'credit', 'one_time', "
+            "19900, 'TRY', 'paid', now(), now())"
+        )
+        one_time = manifest()
+        _assert_clean_manifest(one_time)
+        assert "ANOMALY|paid_card_plan_without_subscription|0" in one_time
+        assert "ANOMALY|paid_manual_plan_without_subscription|0" in one_time
+
+        sql(
+            "INSERT INTO billing_payment_orders "
+            "(reference, user_id, provider, plan_code, interval, amount_minor, "
+            "currency, status, provider_amount_minor, created_at, updated_at) "
+            f"VALUES ('manifest-pay-monthly', '{purchase_user}', "
+            "'iyzico_card_confirmed', 'plus', 'monthly', 44900, 'TRY', 'paid', "
+            "44900, now(), now()); "
+            "INSERT INTO billing_manual_orders "
+            "(reference, user_id, plan_code, interval, amount_minor, currency, "
+            "status, created_at, updated_at) "
+            f"VALUES ('manifest-manual-annual', '{purchase_user}', 'pro', "
+            "'annual', 999000, 'TRY', 'paid', now(), now())"
+        )
+        missing_subscriptions = manifest()
+        assert "ANOMALY|paid_card_plan_without_subscription|1" in missing_subscriptions
+        assert "ANOMALY|paid_manual_plan_without_subscription|1" in missing_subscriptions
+        missing_subscriptions_path = tmp_path / "missing-subscriptions.txt"
+        missing_subscriptions_path.write_text(
+            missing_subscriptions, encoding="utf-8"
+        )
+        rejected = verify_cli("current", missing_subscriptions_path)
+        assert rejected.returncode != 0
+        assert "contains a schema/integrity failure" in rejected.stderr
+
+        sql(
+            f"DELETE FROM billing_payment_orders WHERE user_id = '{purchase_user}'; "
+            f"DELETE FROM billing_manual_orders WHERE user_id = '{purchase_user}'; "
+            f"DELETE FROM billing_users WHERE id = '{purchase_user}'"
+        )
         current = manifest()
         _assert_clean_manifest(current)
         current_path = tmp_path / "current.txt"
