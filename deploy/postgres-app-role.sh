@@ -133,8 +133,8 @@ SELECT format('REVOKE ALL ON SCHEMA lecturesift_worker FROM %I', :'worker_user')
 SELECT format('GRANT USAGE ON SCHEMA lecturesift_worker TO %I', :'worker_user')
 \gexec
 
-# The API can read and mutate application rows, but it cannot create, replace
-# or drop schema objects. Only the owner-run migration container performs DDL.
+-- The API can read and mutate application rows, but it cannot create, replace
+-- or drop schema objects. Only the owner-run migration container performs DDL.
 SELECT format('REVOKE ALL ON ALL TABLES IN SCHEMA public FROM %I', :'api_user')
 \gexec
 SELECT format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM %I', :'api_user')
@@ -163,8 +163,8 @@ SELECT format(
 )
 \gexec
 
-# The worker receives no privilege on owner tables, sequences or functions.
-# Its only database surface is rebuilt below as masked, owner-backed views.
+-- The worker receives no privilege on owner tables, sequences or functions.
+-- Its only database surface is rebuilt below as masked, owner-backed views.
 SELECT format('REVOKE ALL ON ALL TABLES IN SCHEMA public FROM %I', :'worker_user')
 \gexec
 SELECT format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM %I', :'worker_user')
@@ -308,9 +308,9 @@ SELECT format(
 )
 \gexec
 
-# Prove the views are not merely granted but actually support the exact
-# entitlement/metering writes. Every probe row is rolled back in the same
-# transaction; a crash also rolls the open transaction back server-side.
+-- Prove the views are not merely granted but actually support the exact
+-- entitlement/metering writes. Every probe row is rolled back in the same
+-- transaction; a crash also rolls the open transaction back server-side.
 BEGIN;
 SELECT 'role-probe-' || substr(md5(random()::text || clock_timestamp()::text), 1, 24) AS probe_user,
        'usage-probe-' || md5(random()::text || clock_timestamp()::text) AS usage_job,

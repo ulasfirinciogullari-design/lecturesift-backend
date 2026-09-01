@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -90,6 +91,38 @@ def test_ci_runs_the_mandatory_shell_syntax_gate():
         encoding="utf-8"
     )
     assert 'bash "$root/deploy/check_shell_syntax.sh" || fail shell-syntax-gate' in wrapper
+
+
+def test_deployment_sql_heredocs_use_sql_comment_syntax():
+    opener = re.compile(r"<<-?\s*(['\"]?)(SQL|PSQL)\1(?:\s|$)")
+    blocks = 0
+
+    for path in sorted((ROOT / "deploy").glob("*.sh")):
+        delimiter: str | None = None
+        opening_line = 0
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if delimiter is None:
+                match = opener.search(line)
+                if match is not None:
+                    delimiter = match.group(2)
+                    opening_line = number
+                    blocks += 1
+                continue
+
+            if line.strip() == delimiter:
+                delimiter = None
+                continue
+
+            assert not line.lstrip().startswith("#"), (
+                f"{path.relative_to(ROOT)}:{number}: shell comment inside "
+                "a SQL heredoc is invalid SQL; use --"
+            )
+
+        assert delimiter is None, (
+            f"{path.relative_to(ROOT)}:{opening_line}: unclosed {delimiter} heredoc"
+        )
+
+    assert blocks >= 1
 
 
 def test_secret_bearing_scripts_disable_inherited_xtrace_before_secret_access(
