@@ -11,6 +11,8 @@ import re
 import stat
 import subprocess
 import tarfile
+import threading
+import time
 
 
 ADMISSION_ROOT = Path("/var/lib/lecturesift/rehearsal-admissions")
@@ -23,6 +25,13 @@ IMAGE_ID = re.compile(r"sha256:[0-9a-f]{64}")
 RUN_ID = re.compile(r"[0-9]{8}T[0-9]{6}Z")
 ADMISSION_VERSION = "5"
 REHEARSAL_RESULT_FORMAT = "lecturesift-exact-rehearsal-result-v3"
+GIT_COMMAND_TIMEOUT_SECONDS = 60
+GIT_ARCHIVE_TIMEOUT_SECONDS = 360
+GIT_ATTRIBUTE_ADDRESS_SPACE_BYTES = 768 * 1024 * 1024
+GIT_ARCHIVE_ADDRESS_SPACE_BYTES = 3 * 1024 * 1024 * 1024
+PRLIMIT_PATH = "/usr/bin/prlimit"
+GIT_PATH = "/usr/bin/git"
+PROCESS_REAP_TIMEOUT_SECONDS = 5
 ARTIFACT_DIGEST_FIELDS = (
     "application_e2e_sha256",
     "environment_proof_sha256",
@@ -38,6 +47,70 @@ ARTIFACT_DIGEST_FIELDS = (
 
 class AdmissionError(RuntimeError):
     pass
+
+
+def _bounded_git_command(address_space_bytes: int, *arguments: str) -> list[str]:
+    if address_space_bytes <= 0:
+        raise AdmissionError("invalid Git address-space bound")
+    return [
+        PRLIMIT_PATH,
+        f"--as={address_space_bytes}",
+        "--",
+        GIT_PATH,
+        *arguments,
+    ]
+
+
+def _kill_processes(processes: tuple[subprocess.Popen[bytes], ...]) -> None:
+    for process in processes:
+        if process.poll() is not None:
+            continue
+        try:
+            process.kill()
+        except OSError:
+            pass
+
+
+def _reap_processes(processes: tuple[subprocess.Popen[bytes], ...]) -> None:
+    for process in processes:
+        try:
+            process.wait(timeout=PROCESS_REAP_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            _kill_processes((process,))
+            try:
+                process.wait(timeout=PROCESS_REAP_TIMEOUT_SECONDS)
+            except subprocess.TimeoutExpired:
+                pass
+
+
+def _start_process_watchdog(
+    processes: tuple[subprocess.Popen[bytes], ...], timeout_seconds: int
+) -> tuple[threading.Timer, threading.Event, float]:
+    expired = threading.Event()
+
+    def expire() -> None:
+        expired.set()
+        _kill_processes(processes)
+
+    deadline = time.monotonic() + timeout_seconds
+    timer = threading.Timer(timeout_seconds, expire)
+    timer.daemon = True
+    timer.start()
+    return timer, expired, deadline
+
+
+def _stop_process_watchdog(timer: threading.Timer) -> None:
+    timer.cancel()
+    timer.join(timeout=PROCESS_REAP_TIMEOUT_SECONDS)
+
+
+def _wait_before_deadline(
+    process: subprocess.Popen[bytes], deadline: float
+) -> int:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise subprocess.TimeoutExpired(process.args, 0)
+    return process.wait(timeout=remaining)
 
 
 def _private_file(path: Path, parent: Path) -> None:
@@ -90,60 +163,176 @@ def _fields(path: Path, allowed: set[str]) -> dict[str, str]:
     return values
 
 
-def _git_tree_digest(root: Path, revision: str) -> str:
-    git_environment = os.environ.copy()
-    git_environment["GIT_ATTR_NOSYSTEM"] = "1"
-    head = subprocess.run(
-        ["git", "-C", str(root), "rev-parse", "--verify", "HEAD^{commit}"],
+def _git_info_attributes_path(
+    root: Path, git_environment: dict[str, str]
+) -> Path:
+    common_raw = subprocess.run(
+        _bounded_git_command(
+            GIT_ATTRIBUTE_ADDRESS_SPACE_BYTES,
+            "-C", str(root), "rev-parse", "--path-format=absolute", "--git-common-dir",
+        ),
         check=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         text=True,
         env=git_environment,
+        timeout=GIT_COMMAND_TIMEOUT_SECONDS,
     ).stdout.strip()
-    dirty = subprocess.run(
-        ["git", "-C", str(root), "status", "--porcelain=v1", "--untracked-files=all"],
+    info_raw = subprocess.run(
+        _bounded_git_command(
+            GIT_ATTRIBUTE_ADDRESS_SPACE_BYTES,
+            "-C", str(root), "rev-parse", "--path-format=absolute",
+            "--git-path", "info/attributes",
+        ),
         check=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         text=True,
         env=git_environment,
-    ).stdout
-    if head != revision or dirty:
-        raise AdmissionError("active checkout is not the admitted clean revision")
-    attributes_process = subprocess.Popen(
-        ["git", "-C", str(root), "ls-tree", "-rz", "--name-only", revision],
+        timeout=GIT_COMMAND_TIMEOUT_SECONDS,
+    ).stdout.strip()
+    if not common_raw or not info_raw:
+        raise AdmissionError("cannot resolve Git attribute metadata")
+    common_dir = Path(common_raw).resolve(strict=True)
+    info_attributes = Path(info_raw)
+    try:
+        normalized_info = info_attributes.parent.resolve(strict=True) / info_attributes.name
+    except OSError as exc:
+        raise AdmissionError("cannot resolve Git attribute metadata") from exc
+    if normalized_info != common_dir / "info" / "attributes":
+        raise AdmissionError("Git attribute metadata escaped the repository")
+    if info_attributes.exists() or info_attributes.is_symlink():
+        raise AdmissionError("Git info export attributes are forbidden")
+    return normalized_info
+
+
+def _assert_no_effective_git_export_attributes(
+    root: Path, revision: str, git_environment: dict[str, str]
+) -> None:
+    info_attributes_before = _git_info_attributes_path(root, git_environment)
+    tree_process = subprocess.Popen(
+        _bounded_git_command(
+            GIT_ATTRIBUTE_ADDRESS_SPACE_BYTES,
+            "-C", str(root), "ls-tree", "-rzt", "--name-only", revision,
+        ),
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         env=git_environment,
     )
-    if attributes_process.stdout is None:
-        attributes_process.kill()
-        raise AdmissionError("cannot inspect Git attribute paths")
-    pending = b""
+    attributes_process: subprocess.Popen[bytes] | None = None
+    processes: tuple[subprocess.Popen[bytes], ...] = (tree_process,)
+    watchdog: threading.Timer | None = None
+    watchdog_expired: threading.Event | None = None
+    deadline = 0.0
     try:
+        if tree_process.stdout is None:
+            raise AdmissionError("cannot enumerate Git attribute paths")
+        attributes_process = subprocess.Popen(
+            _bounded_git_command(
+                GIT_ATTRIBUTE_ADDRESS_SPACE_BYTES,
+                "-c", "core.attributesFile=/dev/null", "-C", str(root),
+                "check-attr", f"--source={revision}", "-z", "--stdin", "--all",
+            ),
+            stdin=tree_process.stdout,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            env=git_environment,
+        )
+        processes = (attributes_process, tree_process)
+        watchdog, watchdog_expired, deadline = _start_process_watchdog(
+            processes, GIT_COMMAND_TIMEOUT_SECONDS
+        )
+        tree_process.stdout.close()
+        if attributes_process.stdout is None:
+            raise AdmissionError("cannot inspect effective Git attributes")
+        pending = b""
+        fields: list[bytes] = []
+        records = 0
         while chunk := attributes_process.stdout.read(65536):
             pending += chunk
+            if len(pending) > 1_114_112:
+                raise AdmissionError("Git attribute record exceeds the admission bound")
             while b"\0" in pending:
-                raw_path, pending = pending.split(b"\0", 1)
-                if len(raw_path) > 1024 * 1024:
-                    raise AdmissionError("Git tree path exceeds the admission bound")
-                if raw_path == b".gitattributes" or raw_path.endswith(b"/.gitattributes"):
-                    raise AdmissionError("Git export attributes are forbidden in admitted trees")
-        if pending or attributes_process.wait(timeout=30) != 0:
-            raise AdmissionError("Git attribute path inspection failed")
-    except BaseException:
-        attributes_process.kill()
-        attributes_process.wait()
-        raise
-    info_attributes = root / ".git/info/attributes"
-    if info_attributes.exists() or info_attributes.is_symlink():
-        raise AdmissionError("Git export attributes are forbidden in admitted trees")
+                field, pending = pending.split(b"\0", 1)
+                fields.append(field)
+                if len(fields) != 3:
+                    continue
+                raw_path, attribute, _value = fields
+                if (
+                    not raw_path
+                    or not attribute
+                    or len(raw_path) > 1024 * 1024
+                    or len(attribute) > 1024 * 1024
+                    or len(_value) > 1024 * 1024
+                ):
+                    raise AdmissionError("Git attribute record is malformed")
+                records += 1
+                if records > 200_000:
+                    raise AdmissionError("Git attribute inventory exceeds the admission bound")
+                if attribute in {b"export-ignore", b"export-subst"}:
+                    raise AdmissionError("effective Git export attributes are forbidden")
+                fields.clear()
+        if watchdog_expired.is_set():
+            raise AdmissionError("Git attribute inspection timed out")
+        if pending or fields:
+            raise AdmissionError("Git attribute output is truncated")
+        if (
+            _wait_before_deadline(attributes_process, deadline) != 0
+            or _wait_before_deadline(tree_process, deadline) != 0
+        ):
+            raise AdmissionError("Git attribute inspection failed")
+        if watchdog_expired.is_set():
+            raise AdmissionError("Git attribute inspection timed out")
+        if _git_info_attributes_path(root, git_environment) != info_attributes_before:
+            raise AdmissionError("Git attribute metadata changed during inspection")
+    except subprocess.TimeoutExpired as exc:
+        raise AdmissionError("Git attribute inspection timed out") from exc
+    finally:
+        if watchdog is not None:
+            _stop_process_watchdog(watchdog)
+        _kill_processes(processes)
+        _reap_processes(processes)
+
+
+def _git_tree_digest(root: Path, revision: str) -> str:
+    git_environment = os.environ.copy()
+    for key in tuple(git_environment):
+        if key.startswith("GIT_"):
+            git_environment.pop(key)
+    git_environment["GIT_ATTR_NOSYSTEM"] = "1"
+    head = subprocess.run(
+        _bounded_git_command(
+            GIT_ATTRIBUTE_ADDRESS_SPACE_BYTES,
+            "-C", str(root), "rev-parse", "--verify", "HEAD^{commit}",
+        ),
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        env=git_environment,
+        timeout=GIT_COMMAND_TIMEOUT_SECONDS,
+    ).stdout.strip()
+    dirty = subprocess.run(
+        _bounded_git_command(
+            GIT_ATTRIBUTE_ADDRESS_SPACE_BYTES,
+            "-C", str(root), "status", "--porcelain=v1", "--untracked-files=all",
+        ),
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        env=git_environment,
+        timeout=GIT_COMMAND_TIMEOUT_SECONDS,
+    ).stdout
+    if head != revision or dirty:
+        raise AdmissionError("active checkout is not the admitted clean revision")
+    _assert_no_effective_git_export_attributes(root, revision, git_environment)
     process = subprocess.Popen(
-        [
-            "git", "-c", "core.attributesFile=/dev/null", "-C", str(root),
+        _bounded_git_command(
+            GIT_ARCHIVE_ADDRESS_SPACE_BYTES,
+            "-c", "core.attributesFile=/dev/null", "-C", str(root),
             "archive", "--format=tar", revision,
-        ],
+        ),
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         env=git_environment,
@@ -151,6 +340,9 @@ def _git_tree_digest(root: Path, revision: str) -> str:
     if process.stdout is None:
         process.kill()
         raise AdmissionError("cannot stream the admitted Git tree")
+    watchdog, watchdog_expired, deadline = _start_process_watchdog(
+        (process,), GIT_ARCHIVE_TIMEOUT_SECONDS
+    )
     inventory: list[tuple[str, str, int, str]] = []
     seen: set[str] = set()
     entries = 0
@@ -185,12 +377,22 @@ def _git_tree_digest(root: Path, revision: str) -> str:
                     )
                 else:
                     raise AdmissionError("Git archive contains an unsupported entry")
-        if process.wait(timeout=30) != 0:
+        if watchdog_expired.is_set():
+            raise AdmissionError("Git archive generation timed out")
+        if _wait_before_deadline(process, deadline) != 0:
             raise AdmissionError("Git archive generation failed")
-    except BaseException:
-        process.kill()
-        process.wait()
+        if watchdog_expired.is_set():
+            raise AdmissionError("Git archive generation timed out")
+    except subprocess.TimeoutExpired as exc:
+        raise AdmissionError("Git archive generation timed out") from exc
+    except BaseException as exc:
+        if watchdog_expired.is_set():
+            raise AdmissionError("Git archive generation timed out") from exc
         raise
+    finally:
+        _stop_process_watchdog(watchdog)
+        _kill_processes((process,))
+        _reap_processes((process,))
     if entries == 0:
         raise AdmissionError("Git archive is empty")
     inventory.sort()

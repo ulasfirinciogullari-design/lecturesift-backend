@@ -42,6 +42,68 @@ fail() {
   exit 1
 }
 
+verify_no_git_export_attributes() {
+  local repository="$1" expected_revision="$2" common_dir info_attributes \
+    post_common_dir post_info_attributes
+  common_dir="$(timeout --signal=KILL 30 git -C "$repository" rev-parse \
+    --path-format=absolute --git-common-dir)" || return 1
+  common_dir="$(timeout --signal=KILL 30 realpath -e -- "$common_dir")" || return 1
+  info_attributes="$(timeout --signal=KILL 30 git -C "$repository" rev-parse --path-format=absolute \
+    --git-path info/attributes)" || return 1
+  info_attributes="$(timeout --signal=KILL 30 realpath -m -- "$info_attributes")" || return 1
+  [[ "$info_attributes" == "$common_dir/info/attributes" && \
+     ! -e "$info_attributes" && ! -L "$info_attributes" ]] || return 1
+  (
+    ulimit -v $((768 * 1024))
+    set -o pipefail
+    timeout --signal=KILL 60 git -C "$repository" ls-tree -rzt --name-only \
+      "$expected_revision" | \
+      timeout --signal=KILL 60 git -c core.attributesFile=/dev/null \
+        -C "$repository" check-attr --source="$expected_revision" -z --stdin --all | \
+      timeout --signal=KILL 60 python3 -c '
+import sys
+
+forbidden = {b"export-ignore", b"export-subst"}
+pending = b""
+field_index = 0
+attribute = b""
+record_count = 0
+while True:
+    chunk = sys.stdin.buffer.read(65536)
+    if not chunk:
+        break
+    pending += chunk
+    if len(pending) > 1114112:
+        raise SystemExit(4)
+    while b"\0" in pending:
+        field, pending = pending.split(b"\0", 1)
+        if len(field) > 1048576 or (field_index % 3 != 2 and not field):
+            raise SystemExit(4)
+        position = field_index % 3
+        if position == 1:
+            attribute = field
+        elif position == 2:
+            record_count += 1
+            if record_count > 200000 or attribute in forbidden:
+                raise SystemExit(3)
+        field_index += 1
+if pending or field_index % 3:
+    raise SystemExit(5)
+'
+  ) || return 1
+  post_common_dir="$(timeout --signal=KILL 30 git -C "$repository" rev-parse \
+    --path-format=absolute --git-common-dir)" || return 1
+  post_common_dir="$(timeout --signal=KILL 30 realpath -e -- "$post_common_dir")" || return 1
+  post_info_attributes="$(timeout --signal=KILL 30 git -C "$repository" rev-parse \
+    --path-format=absolute --git-path info/attributes)" || return 1
+  post_info_attributes="$(timeout --signal=KILL 30 realpath -m -- \
+    "$post_info_attributes")" || return 1
+  [[ "$post_common_dir" == "$common_dir" && \
+     "$post_info_attributes" == "$info_attributes" && \
+     "$post_info_attributes" == "$post_common_dir/info/attributes" && \
+     ! -e "$post_info_attributes" && ! -L "$post_info_attributes" ]]
+}
+
 [[ "$(id -u)" == "0" ]] || fail root-required
 [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || fail bad-revision
 [[ -d "$root" && ! -L "$root" && "$(realpath -e -- "$root")" == "$root" ]] || \
@@ -817,24 +879,7 @@ write_admission() {
   local_tree="$trusted_handoff_state/rehearsed-local-source-tree"
   [[ ! -e "$local_tree" && ! -L "$local_tree" ]] || return 1
   install -d -o root -g root -m 0700 "$local_tree"
-  git -C "$root" ls-tree -rz --name-only "$revision" | python3 -c '
-import sys
-pending = b""
-while True:
-    chunk = sys.stdin.buffer.read(65536)
-    if not chunk:
-        break
-    pending += chunk
-    while b"\0" in pending:
-        path, pending = pending.split(b"\0", 1)
-        if path == b".gitattributes" or path.endswith(b"/.gitattributes"):
-            raise SystemExit(3)
-        if len(path) > 1048576:
-            raise SystemExit(4)
-if pending:
-    raise SystemExit(5)
-' || return 1
-  [[ ! -e "$root/.git/info/attributes" && ! -L "$root/.git/info/attributes" ]] || return 1
+  verify_no_git_export_attributes "$root" "$revision" || return 1
   git -c core.attributesFile=/dev/null -C "$root" archive --format=tar "$revision" | \
     tar -xf - -C "$local_tree"
   local_tree_sha="$(python3 - "$local_tree" <<'PY'

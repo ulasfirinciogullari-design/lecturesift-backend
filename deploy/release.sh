@@ -167,7 +167,8 @@ if [[ "$MODE" == "build" ]]; then
     # mutable checkout. The clean-tree checks remain mandatory, while a
     # transient worktree edit cannot be smuggled into a correctly labelled
     # image and restored before the post-build check.
-    git -C "$ROOT_DIR" archive --format=tar "$expected_revision" \
+    git -c core.attributesFile=/dev/null -C "$ROOT_DIR" \
+      archive --format=tar "$expected_revision" \
       | tar -xf - -C "$release_context"
     docker build --pull \
       --build-arg "LECTURESIFT_BUILD_REVISION=$expected_revision" \

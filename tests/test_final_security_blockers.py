@@ -410,11 +410,25 @@ def test_git_export_attributes_cannot_hide_root_executed_candidate_files() -> No
         script = _read(relative)
         assert "GIT_ATTR_NOSYSTEM=1" in script
         if relative != "deploy/release.sh":
-            assert "export-attributes-forbidden" in script or ".gitattributes" in script
+            assert "verify_no_git_export_attributes" in script
+            assert "ls-tree -rzt --name-only" in script
+            assert "check-attr" in script
+            assert '--source="$expected_revision" -z --stdin --all' in script
+            assert 'forbidden = {b"export-ignore", b"export-subst"}' in script
+            assert "--git-common-dir" in script
+            assert "--git-path info/attributes" in script
             assert "core.attributesFile=/dev/null" in script
+            assert 'path == b".gitattributes"' not in script
+        else:
+            assert "git -c core.attributesFile=/dev/null" in script
     validator = _read("deploy/validate_rehearsal_admission.py")
-    assert "Git export attributes are forbidden in admitted trees" in validator
+    assert "_assert_no_effective_git_export_attributes" in validator
+    assert "effective Git export attributes are forbidden" in validator
     assert 'git_environment["GIT_ATTR_NOSYSTEM"] = "1"' in validator
+    assert '"ls-tree", "-rzt", "--name-only"' in validator
+    assert '"check-attr", f"--source={revision}", "-z", "--stdin", "--all"' in validator
+    assert '"--git-common-dir"' in validator
+    assert '"--git-path", "info/attributes"' in validator
     assert 'mode="r|"' in validator
     assert "stream.read(1024 * 1024)" in validator
     assert "stream.read()).hexdigest()" not in validator

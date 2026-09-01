@@ -117,7 +117,8 @@ def test_release_helper_binds_clean_head_marker_label_and_image_environment():
     assert "org.opencontainers.image.revision" in release
     assert "LECTURESIFT_BUILD_REVISION=$expected" in release
     assert "source HEAD or cleanliness changed during release build" in release
-    assert "git -C \"$ROOT_DIR\" archive --format=tar \"$expected_revision\"" in release
+    assert "git -c core.attributesFile=/dev/null -C \"$ROOT_DIR\"" in release
+    assert "archive --format=tar \"$expected_revision\"" in release
     assert 'docker build --pull' in release
     assert 'docker image tag "$candidate_app" "$APP_IMAGE"' in release
     assert "candidate proxy image identity is invalid" in release

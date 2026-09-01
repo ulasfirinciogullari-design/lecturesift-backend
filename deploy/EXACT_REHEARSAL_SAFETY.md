@@ -58,9 +58,12 @@ skip the runtime gate only when a usable Bash is unavailable.
    bundle import it enforces transport size/hash and host disk/process resource
    bounds. Before any candidate shell it compares every archive path, entry
    type, executable bit and streamed file digest with the bundle revision and
-   the version-2 private allowlist. Tracked or repository-local Git export
-   attributes are forbidden so `export-ignore`/`export-subst` cannot hide or
-   transform root-executed files outside the reviewed digest.
+   the version-2 private allowlist. Benign tracked attributes such as line-ending
+   rules are allowed, but Git's effective attributes are evaluated at the exact
+   revision for every tracked file and directory. Any effective `export-ignore`
+   or `export-subst`, or any repository-local `info/attributes` source, is
+   rejected so root-executed files cannot be hidden or transformed outside the
+   reviewed digest.
 2. The now-reviewed `stage_release_candidate.sh` repeats transport/tree checks.
    Before either candidate Docker build, the stager invokes the fixed controller
    in `authorize-build` mode. Missing or mismatched allowlist, source-tree,
