@@ -103,11 +103,15 @@ class Plan:
         }
 
 
-ALL_SUMMARY_PROFILES = ("short", "standard", "detailed", "exam", "five_minute")
+DETAILED_SUMMARY_PROFILE = ("detailed",)
+# Backwards-compatible export for code that imports the former catalog
+# constant.  Public plans intentionally advertise only the single profile the
+# product now generates.
+ALL_SUMMARY_PROFILES = DETAILED_SUMMARY_PROFILE
 
 PLANS = (
-    Plan("free", "free", 60, ("pdf",), "standard", 1, 10, 20, ("short", "standard"), 7, 3, 100, 25, 30, 50, 20),
-    Plan("test", "one_time", 1, ("pdf",), "standard", 1, 1, 1, ("short",), 1, 1, 25, 10, 1, 10, 5),
+    Plan("free", "free", 60, ("pdf",), "standard", 1, 10, 20, DETAILED_SUMMARY_PROFILE, 7, 3, 100, 25, 30, 50, 20),
+    Plan("test", "one_time", 1, ("pdf",), "standard", 1, 1, 1, DETAILED_SUMMARY_PROFILE, 1, 1, 25, 10, 1, 10, 5),
     Plan("credit", "one_time", 180, ("pdf", "docx", "txt"), "standard", 1, 20, 40, ALL_SUMMARY_PROFILES, 30, 8, 500, 50, 180, 150, 50, 19900),
     Plan("lite", "subscription", 600, ("pdf", "docx", "txt"), "standard", 1, 20, 40, ALL_SUMMARY_PROFILES, 90, 12, 750, 75, 180, 250, 75, 27900),
     Plan("plus", "subscription", 1800, ("pdf", "docx", "txt"), "standard", 1, 30, 60, ALL_SUMMARY_PROFILES, 180, 16, 1024, 100, 300, 350, 100, 44900, featured=True),

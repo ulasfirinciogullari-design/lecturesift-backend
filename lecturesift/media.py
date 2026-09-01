@@ -225,6 +225,9 @@ def has_audio_stream(video_path: Path) -> bool:
             encoding="utf-8",
             errors="replace",
         )
+        if process.returncode != 0:
+            diagnostic = (process.stderr or "").strip()[-2000:]
+            raise RuntimeError(f"ffprobe could not inspect the media stream: {diagnostic}")
         return bool(process.stdout.strip())
     except FileNotFoundError:
         # Minimal FFmpeg distributions may omit ffprobe. Mapping the first
@@ -232,9 +235,18 @@ def has_audio_stream(video_path: Path) -> bool:
         fallback = subprocess.run(
             ["ffmpeg", "-v", "error", "-i", str(video_path), "-map", "0:a:0", "-f", "null", "-"],
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
-        return fallback.returncode == 0
+        if fallback.returncode == 0:
+            return True
+        diagnostic = (fallback.stderr or "").strip()
+        lowered = diagnostic.casefold()
+        if "matches no streams" in lowered or "does not contain any stream" in lowered:
+            return False
+        raise RuntimeError(f"ffmpeg could not inspect the media stream: {diagnostic[-2000:]}")
 
 
 def extract_audio_chunks(

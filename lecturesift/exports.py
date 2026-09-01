@@ -210,6 +210,35 @@ def _save_result(job_dir: Path, result: dict, artifacts: list[dict]) -> None:
     (job_dir / "result.json").write_text(json.dumps(complete_result, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _package_audio_artifact(job_dir: Path, package_dir: Path, source: Path | None) -> dict | None:
+    """Copy one worker-generated audio file into the private download package.
+
+    The caller always supplies a server-generated path.  Still constrain it to
+    this job and reject links so a future caller cannot turn the exporter into
+    an arbitrary-file read.  A fixed archive name also prevents source
+    filenames from becoming ZIP member paths.
+    """
+    if source is None:
+        return None
+    source = Path(source)
+    if source.is_symlink() or not source.is_file():
+        raise ValueError("Study-pack audio must be a regular file.")
+    try:
+        resolved_job = job_dir.resolve(strict=True)
+        resolved_source = source.resolve(strict=True)
+        resolved_source.relative_to(resolved_job)
+    except (OSError, ValueError) as exc:
+        raise ValueError("Study-pack audio escaped its job directory.") from exc
+
+    destination = package_dir / "LectureSift_Ders_Sesi.mp3"
+    if resolved_source != destination.resolve(strict=False):
+        destination.unlink(missing_ok=True)
+        shutil.copyfile(resolved_source, destination)
+    if destination.is_symlink() or not destination.is_file() or destination.stat().st_size <= 0:
+        raise ValueError("Study-pack audio is empty or invalid.")
+    return _artifact(destination, "Ders Sesi (MP3)")
+
+
 def _timestamped_transcript(result: dict) -> str:
     segments = result.get("transcript_segments") or []
     if not segments:
@@ -227,6 +256,7 @@ def build_artifacts(
     result: dict,
     slides_dir: Path,
     *,
+    audio_source: Path | None = None,
     notes_stem: str = "Ders_Notlari",
     notes_label: str = "Ders Notları",
     archive_stem: str = "LectureSift_Study_Pack_V4",
@@ -296,6 +326,10 @@ def build_artifacts(
             thread_name_prefix="lecturesift-export",
         ) as executor:
             artifacts = list(executor.map(export, export_jobs))
+
+    audio_artifact = _package_audio_artifact(job_dir, package_dir, audio_source)
+    if audio_artifact is not None:
+        artifacts.append(audio_artifact)
 
     _save_result(job_dir, result, artifacts)
     zip_base = job_dir / archive_stem

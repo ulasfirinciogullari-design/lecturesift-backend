@@ -501,7 +501,10 @@ def _options(
     return {
         "source_language": source,
         "output_language": output,
-        "summary_style": summary_style or "standard",
+        # LectureSift now ships one consistent, comprehensive study-pack
+        # profile.  Keep accepting the legacy form field so older clients do
+        # not break, but never let a stale UI downgrade the generated output.
+        "summary_style": "detailed",
         "quiz_count": max(0, min(int(quiz_count), 30)),
         "flashcard_count": max(0, min(int(flashcard_count), 60)),
         "include_summary": bool(include_summary),

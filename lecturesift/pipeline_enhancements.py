@@ -47,7 +47,13 @@ def install_pipeline_enhancements() -> None:
 
     original = pipeline.build_artifacts
 
-    def enhanced(job_dir: Path, result: dict, slides_dir: Path):
+    def enhanced(
+        job_dir: Path,
+        result: dict,
+        slides_dir: Path,
+        *,
+        audio_source: Path | None = None,
+    ):
         _normalize_flashcards(result)
         # Ask the exporter for the rollout names up front.  The previous
         # wrapper renamed the notes only after export, rebuilt the complete ZIP,
@@ -56,6 +62,7 @@ def install_pipeline_enhancements() -> None:
             job_dir,
             result,
             slides_dir,
+            audio_source=audio_source,
             notes_stem="Akilli_Notlar",
             notes_label="Akıllı Notlar",
             archive_stem="LectureSift_Study_Pack",

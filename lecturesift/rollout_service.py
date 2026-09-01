@@ -192,7 +192,7 @@ PLAN_BY_CODE.setdefault(
         1,
         10,
         20,
-        ("short", "standard"),
+        ("detailed",),
         1,
         max_files_per_job=1,
         max_media_upload_mb=25,

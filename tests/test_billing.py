@@ -37,6 +37,10 @@ def test_billing_catalog_has_hybrid_plans_and_translation_keys():
     assert plans["plus"]["entitlements"]["quiz_questions"] == 30
     assert plans["plus"]["entitlements"]["flashcards"] == 60
     assert plans["plus"]["entitlements"]["export_formats"] == ["pdf", "docx", "txt"]
+    assert all(
+        plan["entitlements"]["summary_profiles"] == ["detailed"]
+        for plan in plans.values()
+    )
     assert plans["free"]["entitlements"]["ad_free"] is False
     assert plans["free"]["entitlements"]["rewarded_minutes_eligible"] is True
     assert plans["free"]["entitlements"]["download_enabled"] is False
@@ -92,6 +96,18 @@ def test_billing_catalog_has_hybrid_plans_and_translation_keys():
     assert jpy["selected_currency"] == "JPY"
     assert jpy_plans["plus"]["display_price"] == {"currency": "JPY", "amount_minor": 1500}
     assert {"CAD", "AUD", "INR", "BRL", "AED", "SGD"} <= set(jpy["supported_currencies"])
+
+
+def test_legacy_summary_selection_cannot_downgrade_the_detailed_profile():
+    options = app_module._options(
+        "auto",
+        "tr",
+        "short",
+        0,
+        0,
+        False,
+    )
+    assert options["summary_style"] == "detailed"
 
 
 def test_billing_providers_distinguish_ready_state():

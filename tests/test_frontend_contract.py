@@ -36,6 +36,68 @@ def test_plan_page_preserves_learning_entitlements_and_zero_decimal_prices():
     assert "accountAdMode" in (FRONTEND / "account.html").read_text(encoding="utf-8")
 
 
+def test_all_frontend_plan_fallbacks_use_only_the_detailed_summary_profile():
+    plans = (FRONTEND / "plans.js").read_text(encoding="utf-8")
+    workspace = (FRONTEND / "app.js").read_text(encoding="utf-8")
+
+    assert 'const ALL_SUMMARIES = ["detailed"];' in plans
+    plans_fallback = plans.split("const FALLBACK_META = {", 1)[1].split(
+        "const FALLBACK_PRICES = {", 1
+    )[0]
+    assert plans_fallback.count("summary_profiles: ALL_SUMMARIES") == 8
+    assert "summary_profiles: ALL_SUMMARIES" in plans.split(
+        "function normalizeCatalog", 1
+    )[1]
+
+    workspace_fallback = workspace.split("const PLAN_FALLBACK = {", 1)[1].split(
+        "const FALLBACK_PRICES = {", 1
+    )[0]
+    assert workspace_fallback.count('["detailed"]') == 7
+    assert '["short"' not in workspace_fallback
+    assert '"exam"' not in workspace_fallback
+    assert '"five_minute"' not in workspace_fallback
+    assert 'summary_profiles:["detailed"]' in workspace
+
+
+def test_public_product_copy_promises_one_detailed_summary_in_every_language():
+    features = (FRONTEND / "features.html").read_text(encoding="utf-8")
+    workspace = (FRONTEND / "workspace.html").read_text(encoding="utf-8")
+    documents = (FRONTEND / "document-summary.html").read_text(encoding="utf-8")
+    seo = (FRONTEND / "seo.js").read_text(encoding="utf-8")
+    plans = (FRONTEND / "plans.js").read_text(encoding="utf-8")
+    workspace_script = (FRONTEND / "app.js").read_text(encoding="utf-8")
+    catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+
+    legacy_claims = (
+        "Çalışma sürene göre kısa, standart, ayrıntılı, sınav odaklı veya beş dakikalık özet seç.",
+        "Hızlı, ayrıntılı, sınav odaklı veya beş dakikalık öğrenme profilleri.",
+        "Kısa, standart, ayrıntılı, sınav odaklı veya beş dakikalık öğrenme profili seç.",
+        '"Kısa, standart, ayrıntılı ve sınav odaklı özetler"',
+    )
+    public_copy = "\n".join((features, workspace, documents, seo))
+    assert not any(claim in public_copy for claim in legacy_claims)
+    assert features.count('data-i18n="copy.detailedSummaryTitle"') == 1
+    assert workspace.count('data-i18n="copy.detailedSummaryText"') == 1
+    assert documents.count('data-i18n="copy.detailedDocumentSummaryText"') == 1
+    assert '"Her kaynak için ayrıntılı ve kapsamlı özet"' in seo
+    assert 'pt("plans.alwaysDetailed", "Her zaman ayrıntılı ve kapsamlı")' in plans
+    assert 'local("plans.alwaysDetailed", "Her zaman ayrıntılı ve kapsamlı")' in workspace_script
+
+    for key in (
+        "plans.summaries",
+        "plans.alwaysDetailed",
+        "copy.detailedSummaryTitle",
+        "copy.detailedSummaryText",
+        "copy.detailedDocumentSummaryText",
+    ):
+        payload = re.search(rf'^\s*"{re.escape(key)}":\[(.*?)\],?$', catalog, re.MULTILINE)
+        assert payload, key
+        translations = json.loads(f"[{payload.group(1)}]")
+        assert len(translations) == 13, key
+        assert all(str(value).strip() for value in translations), key
+        assert len(set(translations)) >= 10, key
+
+
 def test_homepage_promotes_campaigns_without_duplicating_plan_checkout():
     homepage = (FRONTEND / "index.html").read_text(encoding="utf-8")
     workspace = (FRONTEND / "workspace.html").read_text(encoding="utf-8")
@@ -209,6 +271,16 @@ def test_workspace_outputs_are_individually_optional_and_mobile_ready():
         assert f'id="{control_id}"' in page
     for preset in ("fast", "balanced", "exam", "transcript"):
         assert f'data-pack-preset="{preset}"' in page
+    assert 'id="jobType"' not in page
+    assert 'data-i18n="operationType"' not in page
+    assert 'id="summaryStyle"' not in page
+    assert 'data-i18n="summaryStyle"' not in page
+    assert 'const DEFAULT_JOB_TYPE = "study_pack";' in script
+    assert 'const DEFAULT_SUMMARY_STYLE = "detailed";' in script
+    assert 'data.append("job_type", DEFAULT_JOB_TYPE)' in script
+    assert 'data.append("summary_style", DEFAULT_SUMMARY_STYLE)' in script
+    assert "jobType.value" not in script
+    assert "summaryStyle.value" not in script
     assert 'data.append("quiz_count", $("includeQuiz").checked ? $("quizCount").value : "0")' in script
     assert 'data.append("flashcard_count", $("includeCards").checked ? $("cardCount").value : "0")' in script
     assert 'data.append("include_summary"' in script
@@ -219,6 +291,9 @@ def test_workspace_outputs_are_individually_optional_and_mobile_ready():
     assert script.count('[data-i18n-aria-label]') == 1
     assert ".content-choice-grid" in style
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in style
+    assert ".operation-grid.single { grid-template-columns: minmax(0, 1fr); }" in style
+    assert ".settings-grid.two-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }" in style
+    assert ".settings-grid, .settings-grid.two-columns, .content-choice-grid { grid-template-columns: 1fr; }" in style
     assert ".content-choice" in theme
 
 
@@ -984,7 +1059,7 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=26"' in index
+    assert 'src="./app.js?v=27"' in index
     assert 'src="/rollout.js?v=5"' in index
     assert '$("plans").scrollIntoView' not in app
 
