@@ -233,6 +233,11 @@ def test_worker_database_role_is_masked_and_narrowly_writable():
     assert "CREATE OR REPLACE VIEW lecturesift_worker.billing_users" in role_sql
     assert "''::varchar(64) AS password_hash" in role_sql
     assert "CREATE OR REPLACE VIEW lecturesift_worker.billing_auth_tokens" not in role_sql
+    assert "REVOKE ALL ON TABLE public.billing_email_verifications FROM PUBLIC" in role_sql
+    assert "billing_email_verifications FROM %I', :'api_user'" in role_sql
+    assert "billing_email_verifications FROM %I', :'worker_user'" in role_sql
+    assert "table_name = 'billing_email_verifications'" in role_sql
+    assert "information_schema.column_privileges" in role_sql
     assert "CREATE OR REPLACE VIEW lecturesift_worker.lecturesift_admin" not in role_sql
     assert "CREATE OR REPLACE VIEW lecturesift_worker.lecturesift_contact" not in role_sql
     assert "WHERE plan_code = 'credit' AND status = 'paid'" in role_sql

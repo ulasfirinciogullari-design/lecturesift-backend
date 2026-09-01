@@ -1,0 +1,28 @@
+# LectureSift preserved-schema contract v1 (PostgreSQL 18)
+#
+# billing_email_verifications is a compatibility-only table whose retained
+# audit rows must survive migration unchanged.  It is not a permitted
+# migration-added target: every accepted source and target manifest must match
+# this exact PostgreSQL 18 catalog shape.
+
+SCHEMA_OBJECT|C|public.billing_email_verifications|1|user_id|character varying(36)|t|||
+SCHEMA_OBJECT|C|public.billing_email_verifications|2|code_hash|character varying(64)|t|||
+SCHEMA_OBJECT|C|public.billing_email_verifications|3|expires_at|timestamp with time zone|t|||
+SCHEMA_OBJECT|C|public.billing_email_verifications|4|last_sent_at|timestamp with time zone|f|||
+SCHEMA_OBJECT|C|public.billing_email_verifications|5|window_started_at|timestamp with time zone|t|||
+SCHEMA_OBJECT|C|public.billing_email_verifications|6|send_count|integer|t|||
+SCHEMA_OBJECT|C|public.billing_email_verifications|7|attempt_count|integer|t|||
+SCHEMA_OBJECT|C|public.billing_email_verifications|8|verified_at|timestamp with time zone|f|||
+SCHEMA_OBJECT|C|public.billing_email_verifications|9|created_at|timestamp with time zone|t|||
+SCHEMA_OBJECT|C|public.billing_email_verifications|10|updated_at|timestamp with time zone|t|||
+SCHEMA_OBJECT|I|billing_email_verifications|billing_email_verifications_pkey|CREATE UNIQUE INDEX billing_email_verifications_pkey ON public.billing_email_verifications USING btree (user_id)
+SCHEMA_OBJECT|K|billing_email_verifications|billing_email_verifications_attempt_count_not_null|t|NOT NULL attempt_count
+SCHEMA_OBJECT|K|billing_email_verifications|billing_email_verifications_code_hash_not_null|t|NOT NULL code_hash
+SCHEMA_OBJECT|K|billing_email_verifications|billing_email_verifications_created_at_not_null|t|NOT NULL created_at
+SCHEMA_OBJECT|K|billing_email_verifications|billing_email_verifications_expires_at_not_null|t|NOT NULL expires_at
+SCHEMA_OBJECT|K|billing_email_verifications|billing_email_verifications_pkey|t|PRIMARY KEY (user_id)
+SCHEMA_OBJECT|K|billing_email_verifications|billing_email_verifications_send_count_not_null|t|NOT NULL send_count
+SCHEMA_OBJECT|K|billing_email_verifications|billing_email_verifications_updated_at_not_null|t|NOT NULL updated_at
+SCHEMA_OBJECT|K|billing_email_verifications|billing_email_verifications_user_id_fkey|t|FOREIGN KEY (user_id) REFERENCES billing_users(id)
+SCHEMA_OBJECT|K|billing_email_verifications|billing_email_verifications_user_id_not_null|t|NOT NULL user_id
+SCHEMA_OBJECT|K|billing_email_verifications|billing_email_verifications_window_started_at_not_null|t|NOT NULL window_started_at

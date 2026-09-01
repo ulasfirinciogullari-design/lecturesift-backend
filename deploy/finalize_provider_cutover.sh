@@ -28,6 +28,7 @@ SOURCE_POSTGRES_TRANSPORT="$ROOT_DIR/deploy/source_postgres_transport.py"
 TARGET_REDIS_MANIFEST_TOOL="$ROOT_DIR/deploy/target_redis_manifest.sh"
 TARGET_DATA_MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest.sql"
 SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt"
+PRESERVED_SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt"
 SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition.py"
 POSTGRES_SECURITY_MANIFEST="$ROOT_DIR/deploy/postgres_security_manifest.sql"
 POSTGRES_SECURITY_VALIDATOR="$ROOT_DIR/deploy/validate_postgres_security_manifest.py"
@@ -80,7 +81,7 @@ for path in "$CUTOVER_EVIDENCE_TOOL" "$RENDER_WORKER_STOP_TOOL" \
   "$TARGET_REDIS_MANIFEST_TOOL" "$SOURCE_REDIS_GUARD" \
   "$SOURCE_POSTGRES_TRANSPORT" \
   "$TARGET_DATA_MANIFEST" \
-  "$SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" \
+  "$SCHEMA_CONTRACT" "$PRESERVED_SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" \
   "$POSTGRES_SECURITY_MANIFEST" "$POSTGRES_SECURITY_VALIDATOR" \
   "$POSTGRES_ROLE_LOGIN_PROBE" \
   "$RELEASE_TOOL" "$ROOT_DIR/compose.yaml"; do
@@ -232,7 +233,8 @@ capture_target_data_manifest() {
     return 1
   fi
   python3 "$SCHEMA_VERIFIER" current \
-    --manifest "$raw" --contract "$SCHEMA_CONTRACT" >/dev/null || return 1
+    --manifest "$raw" --contract "$SCHEMA_CONTRACT" \
+    --preserved-contract "$PRESERVED_SCHEMA_CONTRACT" >/dev/null || return 1
   tr -d '\r' <"$raw" |
     grep -E '^(DATABASE|SCHEMA|SCHEMA_OBJECT|TABLE|ANOMALY|STATUS|SCHEMA_COMPAT|UNVALIDATED_FK|MANIFEST_COMPLETE)\|' |
     LC_ALL=C sort >"$safe"

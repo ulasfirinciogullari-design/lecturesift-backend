@@ -28,6 +28,7 @@ ALLOWED_RUNTIME_ENV_FILE="/etc/lecturesift/runtime.env"
 RUNTIME_ENV_FILE="${LECTURESIFT_ENV_FILE:-$ALLOWED_RUNTIME_ENV_FILE}"
 MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest.sql"
 SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt"
+PRESERVED_SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt"
 SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition.py"
 POSTGRES_SECURITY_MANIFEST="$ROOT_DIR/deploy/postgres_security_manifest.sql"
 POSTGRES_SECURITY_VALIDATOR="$ROOT_DIR/deploy/validate_postgres_security_manifest.py"
@@ -72,7 +73,7 @@ check_private_file() {
 check_private_file "$SOURCE_ENV_FILE" "Render source environment"
 check_private_file "$DB_ENV_FILE" "Target database environment"
 check_private_file "$RUNTIME_ENV_FILE" "Runtime environment"
-for path in "$MANIFEST" "$SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" \
+for path in "$MANIFEST" "$SCHEMA_CONTRACT" "$PRESERVED_SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" \
   "$POSTGRES_SECURITY_MANIFEST" "$POSTGRES_SECURITY_VALIDATOR" \
   "$POSTGRES_ROLE_LOGIN_PROBE" \
   "$PROVISION_ROLE" "$CUTOVER_EVIDENCE_TOOL" "$RENDER_WORKER_STOP_TOOL" \
@@ -210,7 +211,8 @@ canonical_manifest() {
     fail "an invalid manifest compatibility mode was requested"
   if [[ "$mode" == "strict" ]]; then
     python3 "$SCHEMA_VERIFIER" current \
-      --manifest "$source" --contract "$SCHEMA_CONTRACT" >/dev/null ||
+      --manifest "$source" --contract "$SCHEMA_CONTRACT" \
+      --preserved-contract "$PRESERVED_SCHEMA_CONTRACT" >/dev/null ||
       fail "a strict database manifest violates the exact current schema contract"
   fi
   tr -d '\r' <"$source" |
@@ -684,6 +686,7 @@ python3 "$SCHEMA_VERIFIER" transition \
   --before "$RUN_DIR/target-restored-raw.txt" \
   --after "$RUN_DIR/target-migrated.txt" \
   --contract "$SCHEMA_CONTRACT" \
+  --preserved-contract "$PRESERVED_SCHEMA_CONTRACT" \
   >"$RUN_DIR/schema-transition.txt" ||
   fail "the current schema migration escaped its exact reviewed schema contract"
 

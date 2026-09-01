@@ -171,6 +171,23 @@ SELECT format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM %I', :'worker_u
 \gexec
 SELECT format('REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM %I', :'worker_user')
 \gexec
+
+-- This retained table is an owner-only compatibility/audit surface.  Revoke
+-- it explicitly after blanket grants so neither normal API requests nor jobs
+-- can read or mutate historical verification material.
+SELECT 'REVOKE ALL ON TABLE public.billing_email_verifications FROM PUBLIC'
+WHERE to_regclass('public.billing_email_verifications') IS NOT NULL
+\gexec
+SELECT format(
+  'REVOKE ALL ON TABLE public.billing_email_verifications FROM %I', :'api_user'
+)
+WHERE to_regclass('public.billing_email_verifications') IS NOT NULL
+\gexec
+SELECT format(
+  'REVOKE ALL ON TABLE public.billing_email_verifications FROM %I', :'worker_user'
+)
+WHERE to_regclass('public.billing_email_verifications') IS NOT NULL
+\gexec
 SELECT format(
   'ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public REVOKE ALL ON TABLES FROM %I',
   :'owner_user', :'worker_user'
@@ -440,6 +457,18 @@ SELECT (
   AND NOT has_table_privilege(:'worker_user', 'public.billing_subscriptions', 'SELECT')
   AND NOT has_table_privilege(:'worker_user', 'public.billing_payment_orders', 'SELECT')
   AND NOT has_table_privilege(:'worker_user', 'public.billing_auth_tokens', 'SELECT')
+  AND NOT EXISTS (
+    SELECT 1 FROM information_schema.table_privileges
+    WHERE table_schema = 'public'
+      AND table_name = 'billing_email_verifications'
+      AND grantee IN ('PUBLIC', :'api_user', :'worker_user')
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM information_schema.column_privileges
+    WHERE table_schema = 'public'
+      AND table_name = 'billing_email_verifications'
+      AND grantee IN ('PUBLIC', :'api_user', :'worker_user')
+  )
   AND NOT has_table_privilege(:'worker_user', 'public.lecturesift_admin_account_events', 'SELECT')
   AND NOT has_table_privilege(:'worker_user', 'public.lecturesift_contact_messages', 'SELECT')
   AND NOT has_table_privilege(:'worker_user', 'public.lecturesift_cost_events', 'SELECT,INSERT,UPDATE,DELETE')

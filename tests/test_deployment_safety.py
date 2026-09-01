@@ -884,6 +884,7 @@ def test_rehearsal_hard_purge_and_schema_contract_are_fail_closed():
     purge = _read("deploy/rehearsal_purge_e2e.py")
     verifier = _read("deploy/verify_schema_transition.py")
     contract = _read("deploy/schema_contract_payment_provider_sessions_v1.txt")
+    preserved_contract = _read("deploy/schema_contract_billing_email_verifications_v1.txt")
 
     assert "SELECT 1, 'SCHEMA_OBJECT|' || item" in manifest
     assert "SCHEMA_OBJECT" in rehearsal and "SCHEMA_OBJECT" in migration
@@ -894,6 +895,11 @@ def test_rehearsal_hard_purge_and_schema_contract_are_fail_closed():
     assert "schema_contract_payment_provider_sessions_v1.txt" in rehearsal
     assert "schema_contract_payment_provider_sessions_v1.txt" in migration
     assert "schema_contract_payment_provider_sessions_v1.txt" in rollback
+    assert "schema_contract_billing_email_verifications_v1.txt" in rehearsal
+    assert "schema_contract_billing_email_verifications_v1.txt" in migration
+    assert "schema_contract_billing_email_verifications_v1.txt" in rollback
+    assert "billing_email_verifications" in preserved_contract
+    assert "PRESERVED_PREFIXES" in verifier
     assert "migration changed schema objects outside the permitted table" in verifier
     assert "SCHEMA_OBJECT|C|public.billing_payment_provider_sessions" in contract
     assert "SCHEMA_OBJECT|I|billing_payment_provider_sessions" in contract

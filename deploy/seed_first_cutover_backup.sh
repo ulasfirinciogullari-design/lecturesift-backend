@@ -36,6 +36,7 @@ RECOVERY_MANIFEST_VERSION=1
 RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v${RECOVERY_MANIFEST_VERSION}.sql"
 CUTOVER_MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest.sql"
 SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt"
+PRESERVED_SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt"
 SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition.py"
 CUTOVER_EVIDENCE_TOOL="$ROOT_DIR/deploy/provider_cutover_evidence.py"
 RENDER_WORKER_STOP_TOOL="$ROOT_DIR/deploy/render_worker_stop_evidence.py"
@@ -103,7 +104,7 @@ done
 
 for path in \
   "$ROLE_ENV_GENERATOR" "$CONFIGURATION_SNAPSHOT_TOOL" "$RECOVERY_MANIFEST" \
-  "$CUTOVER_MANIFEST" "$SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" \
+  "$CUTOVER_MANIFEST" "$SCHEMA_CONTRACT" "$PRESERVED_SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" \
   "$CUTOVER_EVIDENCE_TOOL" "$RENDER_WORKER_STOP_TOOL" \
   "$SOURCE_REDIS_GUARD" "$SOURCE_POSTGRES_TRANSPORT" \
   "$TARGET_REDIS_MANIFEST_TOOL" "$RELEASE_TOOL" "$ROOT_DIR/compose.yaml"; do
@@ -459,7 +460,8 @@ target_pending_count() {
 canonical_manifest() {
   local source="$1" destination="$2"
   python3 "$SCHEMA_VERIFIER" current \
-    --manifest "$source" --contract "$SCHEMA_CONTRACT" >/dev/null ||
+    --manifest "$source" --contract "$SCHEMA_CONTRACT" \
+    --preserved-contract "$PRESERVED_SCHEMA_CONTRACT" >/dev/null ||
     fail "a database manifest violates the exact current schema contract"
   tr -d '\r' <"$source" |
     grep -E '^(DATABASE|SCHEMA|SCHEMA_OBJECT|TABLE|ANOMALY|STATUS|SCHEMA_COMPAT|UNVALIDATED_FK|MANIFEST_COMPLETE)\|' |

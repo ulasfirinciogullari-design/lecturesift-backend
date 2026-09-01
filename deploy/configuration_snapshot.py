@@ -76,6 +76,7 @@ IDENTITY_ALLOWLIST: Final = (
     "deploy/verify_provider_first_start.sh",
     "deploy/rehearsal_manifest.sql",
     "deploy/schema_contract_payment_provider_sessions_v1.txt",
+    "deploy/schema_contract_billing_email_verifications_v1.txt",
     "deploy/verify_schema_transition.py",
     "deploy/postgres_security_manifest.sql",
     "deploy/validate_postgres_security_manifest.py",

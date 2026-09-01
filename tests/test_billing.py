@@ -110,6 +110,44 @@ def test_legacy_summary_selection_cannot_downgrade_the_detailed_profile():
     assert options["summary_style"] == "detailed"
 
 
+def test_legacy_email_verification_table_remains_a_fresh_database_compatibility_contract():
+    table = billing_service_module.LEGACY_EMAIL_VERIFICATIONS
+
+    assert table.name == "billing_email_verifications"
+    assert list(table.c.keys()) == [
+        "user_id",
+        "code_hash",
+        "expires_at",
+        "last_sent_at",
+        "window_started_at",
+        "send_count",
+        "attempt_count",
+        "verified_at",
+        "created_at",
+        "updated_at",
+    ]
+    assert [column.name for column in table.primary_key.columns] == ["user_id"]
+    assert {
+        foreign_key.target_fullname for foreign_key in table.foreign_keys
+    } == {"billing_users.id"}
+    assert table.c.code_hash.type.length == 64
+    assert table.c.last_sent_at.nullable is True
+    assert table.c.verified_at.nullable is True
+    assert all(
+        not table.c[name].nullable
+        for name in (
+            "user_id",
+            "code_hash",
+            "expires_at",
+            "window_started_at",
+            "send_count",
+            "attempt_count",
+            "created_at",
+            "updated_at",
+        )
+    )
+
+
 def test_billing_providers_distinguish_ready_state():
     response = TestClient(app).get("/billing/providers")
     assert response.status_code == 200

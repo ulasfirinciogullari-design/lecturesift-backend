@@ -111,6 +111,29 @@ AUTH_TOKENS = Table(
     Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
+# Compatibility-only schema retained from the first email-verification
+# implementation.  Current verification links and codes use AUTH_TOKENS plus
+# USER_PROFILES.email_verified_at, so application code must not write new rows
+# here.  Keeping the original table definition in metadata has two important
+# properties: existing production rows survive backup/restore unchanged, and a
+# fresh database satisfies the same strict cutover manifest without a special
+# out-of-band DDL step.  SQLAlchemy's check-first create does not alter an
+# existing table.
+LEGACY_EMAIL_VERIFICATIONS = Table(
+    "billing_email_verifications",
+    METADATA,
+    Column("user_id", String(36), ForeignKey("billing_users.id"), primary_key=True),
+    Column("code_hash", String(64), nullable=False),
+    Column("expires_at", DateTime(timezone=True), nullable=False),
+    Column("last_sent_at", DateTime(timezone=True), nullable=True),
+    Column("window_started_at", DateTime(timezone=True), nullable=False),
+    Column("send_count", Integer, nullable=False, default=0),
+    Column("attempt_count", Integer, nullable=False, default=0),
+    Column("verified_at", DateTime(timezone=True), nullable=True),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+)
+
 SUBSCRIPTIONS = Table(
     "billing_subscriptions",
     METADATA,

@@ -1,10 +1,10 @@
 """Fail-closed PostgreSQL schema-contract verification for provider cutover.
 
 The migration is intentionally allowed to add exactly one reviewed table.  A
-full production-schema golden would incorrectly reject preserved legacy tables
-that are not owned by current SQLAlchemy metadata, so this verifier instead
-binds the new table to an exact PostgreSQL-18 contract and proves every other
-catalog object is unchanged from the frozen source manifest.
+full production-schema golden would incorrectly reject unrelated preserved
+objects, so this verifier binds the migration target and the retained legacy
+email-verification table to separate exact PostgreSQL-18 contracts and proves
+every other catalog object is unchanged from the frozen source manifest.
 """
 
 from __future__ import annotations
@@ -21,6 +21,11 @@ TARGET_PREFIXES = (
     "SCHEMA_OBJECT|C|public.billing_payment_provider_sessions|",
     "SCHEMA_OBJECT|I|billing_payment_provider_sessions|",
     "SCHEMA_OBJECT|K|billing_payment_provider_sessions|",
+)
+PRESERVED_PREFIXES = (
+    "SCHEMA_OBJECT|C|public.billing_email_verifications|",
+    "SCHEMA_OBJECT|I|billing_email_verifications|",
+    "SCHEMA_OBJECT|K|billing_email_verifications|",
 )
 LEGACY_MARKER = (
     "SCHEMA_COMPAT|legacy_missing_table|billing_payment_provider_sessions|"
@@ -130,7 +135,9 @@ def _objects(path: Path) -> frozenset[str]:
     return frozenset(records)
 
 
-def _contract(path: Path) -> frozenset[str]:
+def _contract(
+    path: Path, *, prefixes: tuple[str, ...], label: str
+) -> frozenset[str]:
     records = [
         line
         for line in _read_lines(path)
@@ -140,13 +147,34 @@ def _contract(path: Path) -> frozenset[str]:
         raise ContractError("schema contract must contain only SCHEMA_OBJECT records")
     if len(records) != len(set(records)):
         raise ContractError("schema contract contains duplicate records")
-    if any(not _is_target(line) for line in records):
-        raise ContractError("schema contract escaped the permitted provider-session table")
+    if any(not line.startswith(prefixes) for line in records):
+        raise ContractError(f"{label} schema contract escaped its permitted table")
     return frozenset(records)
 
 
 def _is_target(record: str) -> bool:
     return record.startswith(TARGET_PREFIXES)
+
+
+def _is_preserved(record: str) -> bool:
+    return record.startswith(PRESERVED_PREFIXES)
+
+
+def _assert_exact_records(
+    objects: frozenset[str],
+    expected: frozenset[str],
+    *,
+    predicate,
+    label: str,
+) -> None:
+    actual = frozenset(record for record in objects if predicate(record))
+    if actual != expected:
+        missing = sorted(expected - actual)
+        extra = sorted(actual - expected)
+        raise ContractError(
+            f"{label} schema contract mismatch "
+            f"(missing={len(missing)}, extra={len(extra)})"
+        )
 
 
 def _unsigned_integer(value: str) -> bool:
@@ -329,26 +357,55 @@ def _digest(records: frozenset[str]) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def verify_current(manifest: Path, contract_path: Path) -> str:
+def verify_current(
+    manifest: Path,
+    contract_path: Path,
+    preserved_contract_path: Path,
+) -> str:
     _assert_manifest_integrity(manifest, allow_legacy=False)
     objects = _objects(manifest)
-    expected = _contract(contract_path)
-    actual = frozenset(record for record in objects if _is_target(record))
-    if actual != expected:
-        missing = sorted(expected - actual)
-        extra = sorted(actual - expected)
-        raise ContractError(
-            "provider-session schema contract mismatch "
-            f"(missing={len(missing)}, extra={len(extra)})"
-        )
+    expected = _contract(
+        contract_path, prefixes=TARGET_PREFIXES, label="provider-session"
+    )
+    preserved = _contract(
+        preserved_contract_path,
+        prefixes=PRESERVED_PREFIXES,
+        label="preserved email-verification",
+    )
+    _assert_exact_records(
+        objects, expected, predicate=_is_target, label="provider-session"
+    )
+    _assert_exact_records(
+        objects,
+        preserved,
+        predicate=_is_preserved,
+        label="preserved email-verification",
+    )
     return _digest(expected)
 
 
-def verify_legacy(manifest: Path, contract_path: Path) -> tuple[str, str]:
+def verify_legacy(
+    manifest: Path,
+    contract_path: Path,
+    preserved_contract_path: Path,
+) -> tuple[str, str]:
     _assert_manifest_integrity(manifest, allow_legacy=True)
     lines = _read_lines(manifest)
     objects = _objects(manifest)
-    expected = _contract(contract_path)
+    expected = _contract(
+        contract_path, prefixes=TARGET_PREFIXES, label="provider-session"
+    )
+    preserved = _contract(
+        preserved_contract_path,
+        prefixes=PRESERVED_PREFIXES,
+        label="preserved email-verification",
+    )
+    _assert_exact_records(
+        objects,
+        preserved,
+        predicate=_is_preserved,
+        label="preserved email-verification",
+    )
     target = frozenset(record for record in objects if _is_target(record))
     marker_present = LEGACY_MARKER in lines
     if target == expected and not marker_present:
@@ -360,13 +417,37 @@ def verify_legacy(manifest: Path, contract_path: Path) -> tuple[str, str]:
     )
 
 
-def verify_transition(before: Path, after: Path, contract_path: Path) -> tuple[str, str]:
+def verify_transition(
+    before: Path,
+    after: Path,
+    contract_path: Path,
+    preserved_contract_path: Path,
+) -> tuple[str, str]:
     _assert_manifest_integrity(before, allow_legacy=True)
     _assert_manifest_integrity(after, allow_legacy=False)
     before_lines = _read_lines(before)
     before_objects = _objects(before)
     after_objects = _objects(after)
-    expected = _contract(contract_path)
+    expected = _contract(
+        contract_path, prefixes=TARGET_PREFIXES, label="provider-session"
+    )
+    preserved = _contract(
+        preserved_contract_path,
+        prefixes=PRESERVED_PREFIXES,
+        label="preserved email-verification",
+    )
+    _assert_exact_records(
+        before_objects,
+        preserved,
+        predicate=_is_preserved,
+        label="source preserved email-verification",
+    )
+    _assert_exact_records(
+        after_objects,
+        preserved,
+        predicate=_is_preserved,
+        label="migrated preserved email-verification",
+    )
     before_target = frozenset(record for record in before_objects if _is_target(record))
     after_target = frozenset(record for record in after_objects if _is_target(record))
 
@@ -392,13 +473,16 @@ def _parser() -> argparse.ArgumentParser:
     current = subparsers.add_parser("current")
     current.add_argument("--manifest", type=Path, required=True)
     current.add_argument("--contract", type=Path, required=True)
+    current.add_argument("--preserved-contract", type=Path, required=True)
     legacy = subparsers.add_parser("legacy")
     legacy.add_argument("--manifest", type=Path, required=True)
     legacy.add_argument("--contract", type=Path, required=True)
+    legacy.add_argument("--preserved-contract", type=Path, required=True)
     transition = subparsers.add_parser("transition")
     transition.add_argument("--before", type=Path, required=True)
     transition.add_argument("--after", type=Path, required=True)
     transition.add_argument("--contract", type=Path, required=True)
+    transition.add_argument("--preserved-contract", type=Path, required=True)
     return parser
 
 
@@ -406,15 +490,24 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         if args.command == "current":
-            digest = verify_current(args.manifest, args.contract)
+            digest = verify_current(
+                args.manifest, args.contract, args.preserved_contract
+            )
             print(f"schema_contract_sha256={digest}")
             print("schema_contract_state=current")
         elif args.command == "legacy":
-            state, digest = verify_legacy(args.manifest, args.contract)
+            state, digest = verify_legacy(
+                args.manifest, args.contract, args.preserved_contract
+            )
             print(f"schema_contract_sha256={digest}")
             print(f"schema_contract_state={state}")
         else:
-            transition, digest = verify_transition(args.before, args.after, args.contract)
+            transition, digest = verify_transition(
+                args.before,
+                args.after,
+                args.contract,
+                args.preserved_contract,
+            )
             print(f"schema_contract_sha256={digest}")
             print(f"schema_transition={transition}")
     except ContractError as exc:

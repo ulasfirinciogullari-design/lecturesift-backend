@@ -702,6 +702,7 @@ snapshot_manifest() {
   python3 "$root/deploy/verify_schema_transition.py" current \
     --manifest "$output" \
     --contract "$root/deploy/schema_contract_payment_provider_sessions_v1.txt" \
+    --preserved-contract "$root/deploy/schema_contract_billing_email_verifications_v1.txt" \
     >"$output.schema-contract"
   grep -E '^(DATABASE|SCHEMA|SCHEMA_OBJECT|SCHEMA_COMPAT|TABLE|TABLE_DIFF|ANOMALY|STATUS|UNVALIDATED_FK|MANIFEST_COMPLETE)\|' \
     "$output" | LC_ALL=C sort >"$canonical"

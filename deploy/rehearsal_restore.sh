@@ -53,7 +53,8 @@ for path in "$SOURCE_ENV" "$DB_ENV" \
   "$ROOT_DIR/deploy/rehearsal_purge_e2e.py" \
   "$SOURCE_POSTGRES_TRANSPORT" \
   "$ROOT_DIR/deploy/verify_schema_transition.py" \
-  "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt"; do
+  "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" \
+  "$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt"; do
   if [[ ! -f "$path" || -L "$path" ]]; then
     echo "Missing rehearsal input: $path" >&2
     exit 1
@@ -985,9 +986,9 @@ docker compose --project-directory "$ROOT_DIR" --file "$ROOT_DIR/compose.yaml" \
 
 printf '%s\n' "$rehearsal_db" > "$run_dir/database-name.txt"
 safe_pattern='^(DATABASE|SCHEMA|SCHEMA_OBJECT|TABLE|TABLE_DIFF|ANOMALY|STATUS|SCHEMA_COMPAT|UNVALIDATED_FK|MANIFEST_COMPLETE)\|'
-python3 "$ROOT_DIR/deploy/verify_schema_transition.py" legacy --manifest "$run_dir/source-before.txt" --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" > "$run_dir/source-before.schema-contract.txt"
-python3 "$ROOT_DIR/deploy/verify_schema_transition.py" legacy --manifest "$run_dir/source-after.txt" --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" > "$run_dir/source-after.schema-contract.txt"
-python3 "$ROOT_DIR/deploy/verify_schema_transition.py" legacy --manifest "$run_dir/target.txt" --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" > "$run_dir/target.schema-contract.txt"
+python3 "$ROOT_DIR/deploy/verify_schema_transition.py" legacy --manifest "$run_dir/source-before.txt" --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" --preserved-contract "$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt" > "$run_dir/source-before.schema-contract.txt"
+python3 "$ROOT_DIR/deploy/verify_schema_transition.py" legacy --manifest "$run_dir/source-after.txt" --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" --preserved-contract "$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt" > "$run_dir/source-after.schema-contract.txt"
+python3 "$ROOT_DIR/deploy/verify_schema_transition.py" legacy --manifest "$run_dir/target.txt" --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" --preserved-contract "$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt" > "$run_dir/target.schema-contract.txt"
 grep -E "$safe_pattern" "$run_dir/source-before.txt" | sort > "$run_dir/source-before.safe"
 grep -E "$safe_pattern" "$run_dir/source-after.txt" | sort > "$run_dir/source-after.safe"
 grep -E "$safe_pattern" "$run_dir/target.txt" | sort > "$run_dir/target.safe"
@@ -1070,7 +1071,7 @@ if grep -Eq '^(TABLE_DIFF|SCHEMA_COMPAT|UNVALIDATED_FK)\|' \
   echo "The current schema migration did not produce a strict, anomaly-free clone." >&2
   exit 1
 fi
-python3 "$ROOT_DIR/deploy/verify_schema_transition.py" current --manifest "$run_dir/target-migrated.txt" --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" > "$run_dir/schema-migrated-current.txt"
+python3 "$ROOT_DIR/deploy/verify_schema_transition.py" current --manifest "$run_dir/target-migrated.txt" --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" --preserved-contract "$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt" > "$run_dir/schema-migrated-current.txt"
 grep -E '^(DATABASE|TABLE|STATUS)\|' "$run_dir/target.txt" \
   | sort > "$run_dir/target-before-migration.data"
 grep -E '^(DATABASE|TABLE|STATUS)\|' "$run_dir/target-migrated.txt" \
@@ -1098,6 +1099,7 @@ python3 "$ROOT_DIR/deploy/verify_schema_transition.py" transition \
   --before "$run_dir/target.txt" \
   --after "$run_dir/target-migrated.txt" \
   --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" \
+  --preserved-contract "$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt" \
   > "$run_dir/schema-transition.txt"
 grep -E "$safe_pattern" "$run_dir/target-migrated.txt" \
   | LC_ALL=C sort > "$run_dir/target-migrated.safe"
@@ -1158,6 +1160,7 @@ fi
 python3 "$ROOT_DIR/deploy/verify_schema_transition.py" current \
   --manifest "$run_dir/target-after-e2e.txt" \
   --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" \
+  --preserved-contract "$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt" \
   > "$run_dir/schema-after-e2e.txt"
 grep -E "$safe_pattern" "$run_dir/target-after-e2e.txt" \
   | LC_ALL=C sort > "$run_dir/target-after-e2e.safe"

@@ -29,6 +29,7 @@ RUNTIME_ENV_FILE="/etc/lecturesift/runtime.env"
 MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest.sql"
 DATABASE_INVENTORY="$ROOT_DIR/deploy/rollback_database_inventory.sql"
 SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt"
+PRESERVED_SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt"
 SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition.py"
 RENDER_WORKER_STOP_TOOL="$ROOT_DIR/deploy/render_worker_stop_evidence.py"
 SOURCE_POSTGRES_TRANSPORT="$ROOT_DIR/deploy/source_postgres_transport.py"
@@ -62,7 +63,8 @@ check_private() {
 check_private "$SOURCE_ENV_FILE" "Render environment"
 check_private "$DB_ENV_FILE" "OVH database environment"
 check_private "$RUNTIME_ENV_FILE" "OVH runtime environment"
-for path in "$MANIFEST" "$DATABASE_INVENTORY" "$SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" \
+for path in "$MANIFEST" "$DATABASE_INVENTORY" "$SCHEMA_CONTRACT" \
+  "$PRESERVED_SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" \
   "$RENDER_WORKER_STOP_TOOL" "$SOURCE_POSTGRES_TRANSPORT"; do
   [[ -f "$path" && ! -L "$path" ]] || fail "a rollback schema input is missing or unsafe"
 done
@@ -193,11 +195,13 @@ canonical() {
   local input="$1" output="$2" mode="${3:-strict}"
   if [[ "$mode" == "strict" ]]; then
     python3 "$SCHEMA_VERIFIER" current --manifest "$input" \
-      --contract "$SCHEMA_CONTRACT" >"$output.schema-contract" ||
+      --contract "$SCHEMA_CONTRACT" \
+      --preserved-contract "$PRESERVED_SCHEMA_CONTRACT" >"$output.schema-contract" ||
       fail "a strict rollback manifest failed its current schema contract"
   else
     python3 "$SCHEMA_VERIFIER" legacy --manifest "$input" \
-      --contract "$SCHEMA_CONTRACT" >"$output.schema-contract" ||
+      --contract "$SCHEMA_CONTRACT" \
+      --preserved-contract "$PRESERVED_SCHEMA_CONTRACT" >"$output.schema-contract" ||
       fail "a legacy rollback manifest failed its bounded schema contract"
   fi
   tr -d '\r' <"$input" |
@@ -458,7 +462,8 @@ cleanup() {
         "$RUN_DIR/render-rollback-inventory.safe"
       if python3 "$SCHEMA_VERIFIER" legacy \
            --manifest "$RUN_DIR/render-rollback-check.txt" \
-           --contract "$SCHEMA_CONTRACT" >/dev/null &&
+           --contract "$SCHEMA_CONTRACT" \
+           --preserved-contract "$PRESERVED_SCHEMA_CONTRACT" >/dev/null &&
          cmp --silent "$RUN_DIR/render-before.safe" \
            "$RUN_DIR/render-rollback-check.safe" &&
          cmp --silent "$RUN_DIR/render-before.schema.safe" \
@@ -517,6 +522,7 @@ canonical_database_inventory "$RUN_DIR/ovh-inventory.txt" \
 python3 "$SCHEMA_VERIFIER" current \
   --manifest "$RUN_DIR/ovh-before.txt" \
   --contract "$SCHEMA_CONTRACT" \
+  --preserved-contract "$PRESERVED_SCHEMA_CONTRACT" \
   >"$RUN_DIR/ovh-schema-contract.txt" ||
   fail "OVH does not match the exact current provider-session schema contract"
 ovh_size="$(sed -n 's/^DATABASE_SIZE|//p' "$RUN_DIR/ovh-before.txt" | tr -d '\r')"

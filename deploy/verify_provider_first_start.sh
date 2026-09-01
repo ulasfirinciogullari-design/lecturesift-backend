@@ -22,6 +22,7 @@ RELEASE_ENV_FILE="${LECTURESIFT_RELEASE_ENV_FILE:-/run/lecturesift/release.env}"
 EVIDENCE_TOOL="$ROOT_DIR/deploy/provider_cutover_evidence.py"
 DATA_MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest.sql"
 SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt"
+PRESERVED_SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt"
 SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition.py"
 SECURITY_MANIFEST="$ROOT_DIR/deploy/postgres_security_manifest.sql"
 SECURITY_VALIDATOR="$ROOT_DIR/deploy/validate_postgres_security_manifest.py"
@@ -51,7 +52,7 @@ check_private() {
 check_private "$DB_ENV_FILE" "Database environment"
 check_private "$RELEASE_ENV_FILE" "Release identity"
 for helper in "$EVIDENCE_TOOL" "$DATA_MANIFEST" "$SECURITY_MANIFEST" \
-  "$SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" "$SECURITY_VALIDATOR" \
+  "$SCHEMA_CONTRACT" "$PRESERVED_SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" "$SECURITY_VALIDATOR" \
   "$ROLE_LOGIN_PROBE" "$REDIS_MANIFEST_TOOL" \
   "$ROOT_DIR/compose.yaml"; do
   [[ -f "$helper" && ! -L "$helper" ]] || fail "a first-start helper is missing or unsafe"
@@ -132,7 +133,8 @@ if grep -Eq '^(TABLE_DIFF|UNVALIDATED_FK)\|' "$WORK_DIR/data.raw" ||
   fail "the strict target data manifest contains an anomaly"
 fi
 python3 "$SCHEMA_VERIFIER" current \
-  --manifest "$WORK_DIR/data.raw" --contract "$SCHEMA_CONTRACT" >/dev/null ||
+  --manifest "$WORK_DIR/data.raw" --contract "$SCHEMA_CONTRACT" \
+  --preserved-contract "$PRESERVED_SCHEMA_CONTRACT" >/dev/null ||
   fail "the strict target data manifest violates the exact current schema contract"
 tr -d '\r' <"$WORK_DIR/data.raw" |
   grep -E '^(DATABASE|SCHEMA|SCHEMA_OBJECT|TABLE|ANOMALY|STATUS|SCHEMA_COMPAT|UNVALIDATED_FK|MANIFEST_COMPLETE)\|' |

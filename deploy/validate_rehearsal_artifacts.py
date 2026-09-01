@@ -181,15 +181,20 @@ def validate(root: Path, run_dir: Path, revision: str) -> dict[str, str]:
         raise ArtifactError("unsafe rehearsal result directory")
 
     contract = root / "deploy" / "schema_contract_payment_provider_sessions_v1.txt"
+    preserved_contract = (
+        root / "deploy" / "schema_contract_billing_email_verifications_v1.txt"
+    )
     before = run_dir / "target.txt"
     migrated = run_dir / "target-migrated.txt"
     after_e2e = run_dir / "target-after-e2e.txt"
     for raw in (before, migrated, after_e2e):
         _private_file(raw)
     transition, contract_digest = schema_verifier.verify_transition(
-        before, migrated, contract
+        before, migrated, contract, preserved_contract
     )
-    after_digest = schema_verifier.verify_current(after_e2e, contract)
+    after_digest = schema_verifier.verify_current(
+        after_e2e, contract, preserved_contract
+    )
     if after_digest != contract_digest:
         raise ArtifactError("schema contract digest changed during E2E")
 

@@ -17,6 +17,9 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "deploy" / "rehearsal_manifest.sql"
 CONTRACT = ROOT / "deploy" / "schema_contract_payment_provider_sessions_v1.txt"
+PRESERVED_CONTRACT = (
+    ROOT / "deploy" / "schema_contract_billing_email_verifications_v1.txt"
+)
 VERIFIER_PATH = ROOT / "deploy" / "verify_schema_transition.py"
 
 SPEC = importlib.util.spec_from_file_location("schema_transition_verifier", VERIFIER_PATH)
@@ -25,16 +28,23 @@ verifier = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(verifier)
 
 
-def _contract_lines() -> list[str]:
+def _contract_lines(path: Path = CONTRACT) -> list[str]:
     return [
         line
-        for line in CONTRACT.read_text(encoding="utf-8").splitlines()
+        for line in path.read_text(encoding="utf-8").splitlines()
         if line and not line.startswith("#")
     ]
 
 
-def _manifest_text(objects: list[str], *, legacy: bool = False) -> str:
-    objects = sorted(objects)
+def _manifest_text(
+    objects: list[str],
+    *,
+    legacy: bool = False,
+    preserved: list[str] | None = None,
+) -> str:
+    if preserved is None:
+        preserved = _contract_lines(PRESERVED_CONTRACT)
+    objects = sorted({*objects, *preserved})
     object_payload = [
         line.removeprefix(verifier.PREFIX) for line in objects
     ]
@@ -104,6 +114,31 @@ def test_schema_contract_includes_postgres_18_not_null_constraints():
     assert actual == expected
 
 
+def test_preserved_email_verification_contract_is_exact_postgres_18_shape():
+    records = _contract_lines(PRESERVED_CONTRACT)
+
+    assert len([line for line in records if "|C|" in line]) == 10
+    assert len([line for line in records if "|I|" in line]) == 1
+    assert {
+        line.rsplit("|", 1)[-1]
+        for line in records
+        if "|K|" in line and "|NOT NULL " in line
+    } == {
+        "NOT NULL user_id",
+        "NOT NULL code_hash",
+        "NOT NULL expires_at",
+        "NOT NULL window_started_at",
+        "NOT NULL send_count",
+        "NOT NULL attempt_count",
+        "NOT NULL created_at",
+        "NOT NULL updated_at",
+    }
+    assert any(
+        line.endswith("FOREIGN KEY (user_id) REFERENCES billing_users(id)")
+        for line in records
+    )
+
+
 def test_schema_transition_fixture_rejects_unreviewed_catalog_deltas(tmp_path: Path):
     contract = _contract_lines()
     baseline = [
@@ -115,11 +150,24 @@ def test_schema_transition_fixture_rejects_unreviewed_catalog_deltas(tmp_path: P
     before.write_text(_manifest_text(baseline, legacy=True), encoding="utf-8")
     after.write_text(_manifest_text(baseline + contract), encoding="utf-8")
 
-    transition, _ = verifier.verify_transition(before, after, CONTRACT)
+    transition, _ = verifier.verify_transition(
+        before, after, CONTRACT, PRESERVED_CONTRACT
+    )
     assert transition == "legacy_to_current"
-    assert verifier.verify_current(after, CONTRACT)
-    assert verifier.verify_legacy(before, CONTRACT)[0] == "legacy_missing_provider_sessions"
-    assert verifier.verify_legacy(after, CONTRACT)[0] == "current"
+    assert verifier.verify_current(after, CONTRACT, PRESERVED_CONTRACT)
+    assert verifier.verify_legacy(before, CONTRACT, PRESERVED_CONTRACT)[0] == (
+        "legacy_missing_provider_sessions"
+    )
+    assert verifier.verify_legacy(after, CONTRACT, PRESERVED_CONTRACT)[0] == "current"
+
+    added_preserved = tmp_path / "added-preserved.txt"
+    added_preserved.write_text(
+        _manifest_text(baseline, legacy=True, preserved=[]), encoding="utf-8"
+    )
+    with pytest.raises(verifier.ContractError, match="preserved email-verification"):
+        verifier.verify_transition(
+            added_preserved, after, CONTRACT, PRESERVED_CONTRACT
+        )
 
     extra_column = tmp_path / "extra-column.txt"
     extra_column.write_text(
@@ -133,7 +181,7 @@ def test_schema_transition_fixture_rejects_unreviewed_catalog_deltas(tmp_path: P
         encoding="utf-8",
     )
     with pytest.raises(verifier.ContractError):
-        verifier.verify_current(extra_column, CONTRACT)
+        verifier.verify_current(extra_column, CONTRACT, PRESERVED_CONTRACT)
 
     missing_index = tmp_path / "missing-index.txt"
     missing_index.write_text(
@@ -141,7 +189,7 @@ def test_schema_transition_fixture_rejects_unreviewed_catalog_deltas(tmp_path: P
         encoding="utf-8",
     )
     with pytest.raises(verifier.ContractError):
-        verifier.verify_current(missing_index, CONTRACT)
+        verifier.verify_current(missing_index, CONTRACT, PRESERVED_CONTRACT)
 
     missing_constraint = tmp_path / "missing-constraint.txt"
     missing_constraint.write_text(
@@ -155,7 +203,7 @@ def test_schema_transition_fixture_rejects_unreviewed_catalog_deltas(tmp_path: P
         encoding="utf-8",
     )
     with pytest.raises(verifier.ContractError):
-        verifier.verify_current(missing_constraint, CONTRACT)
+        verifier.verify_current(missing_constraint, CONTRACT, PRESERVED_CONTRACT)
 
     missing_not_null = tmp_path / "missing-not-null.txt"
     missing_not_null.write_text(
@@ -169,7 +217,21 @@ def test_schema_transition_fixture_rejects_unreviewed_catalog_deltas(tmp_path: P
         encoding="utf-8",
     )
     with pytest.raises(verifier.ContractError):
-        verifier.verify_current(missing_not_null, CONTRACT)
+        verifier.verify_current(missing_not_null, CONTRACT, PRESERVED_CONTRACT)
+
+    preserved_drift = tmp_path / "preserved-drift.txt"
+    drifted_preserved = [
+        line.replace("|2|code_hash|character varying(64)|", "|2|code_hash|text|")
+        if "|2|code_hash|" in line
+        else line
+        for line in _contract_lines(PRESERVED_CONTRACT)
+    ]
+    preserved_drift.write_text(
+        _manifest_text(baseline + contract, preserved=drifted_preserved),
+        encoding="utf-8",
+    )
+    with pytest.raises(verifier.ContractError, match="preserved email-verification"):
+        verifier.verify_current(preserved_drift, CONTRACT, PRESERVED_CONTRACT)
 
     unrelated_change = tmp_path / "unrelated-change.txt"
     unrelated_change.write_text(
@@ -183,7 +245,9 @@ def test_schema_transition_fixture_rejects_unreviewed_catalog_deltas(tmp_path: P
         encoding="utf-8",
     )
     with pytest.raises(verifier.ContractError):
-        verifier.verify_transition(before, unrelated_change, CONTRACT)
+        verifier.verify_transition(
+            before, unrelated_change, CONTRACT, PRESERVED_CONTRACT
+        )
 
 
 def test_manifest_completion_rejects_truncation_old_versions_and_missing_checks(
@@ -199,7 +263,7 @@ def test_manifest_completion_rejects_truncation_old_versions_and_missing_checks(
     no_sentinel = tmp_path / "no-sentinel.txt"
     no_sentinel.write_text("\n".join(valid_lines[:-1]) + "\n", encoding="utf-8")
     with pytest.raises(verifier.ContractError, match="terminal"):
-        verifier.verify_current(no_sentinel, CONTRACT)
+        verifier.verify_current(no_sentinel, CONTRACT, PRESERVED_CONTRACT)
 
     missing_middle = tmp_path / "missing-middle.txt"
     removed_table = next(
@@ -213,7 +277,7 @@ def test_manifest_completion_rejects_truncation_old_versions_and_missing_checks(
         encoding="utf-8",
     )
     with pytest.raises(verifier.ContractError, match="counts"):
-        verifier.verify_current(missing_middle, CONTRACT)
+        verifier.verify_current(missing_middle, CONTRACT, PRESERVED_CONTRACT)
 
     old_version = tmp_path / "old-version.txt"
     old_lines = valid_lines.copy()
@@ -222,7 +286,7 @@ def test_manifest_completion_rejects_truncation_old_versions_and_missing_checks(
     )
     old_version.write_text("\n".join(old_lines) + "\n", encoding="utf-8")
     with pytest.raises(verifier.ContractError, match="completion contract"):
-        verifier.verify_current(old_version, CONTRACT)
+        verifier.verify_current(old_version, CONTRACT, PRESERVED_CONTRACT)
 
     missing_anomaly = [
         line
@@ -242,7 +306,7 @@ def test_manifest_completion_rejects_truncation_old_versions_and_missing_checks(
     missing_check = tmp_path / "missing-check.txt"
     missing_check.write_text("\n".join(missing_anomaly) + "\n", encoding="utf-8")
     with pytest.raises(verifier.ContractError, match="exact anomaly checks"):
-        verifier.verify_current(missing_check, CONTRACT)
+        verifier.verify_current(missing_check, CONTRACT, PRESERVED_CONTRACT)
 
 
 @pytest.mark.parametrize(
@@ -262,7 +326,7 @@ def test_manifest_rejects_psql_informational_chatter(tmp_path: Path, chatter: st
     )
 
     with pytest.raises(verifier.ContractError, match="unknown manifest record family"):
-        verifier.verify_current(contaminated, CONTRACT)
+        verifier.verify_current(contaminated, CONTRACT, PRESERVED_CONTRACT)
 
 
 def test_manifest_rejects_malformed_record_shapes_and_noncanonical_values(
@@ -410,7 +474,7 @@ def test_manifest_rejects_malformed_record_shapes_and_noncanonical_values(
         path = tmp_path / f"{label}.txt"
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         with pytest.raises(verifier.ContractError):
-            verifier.verify_current(path, CONTRACT)
+            verifier.verify_current(path, CONTRACT, PRESERVED_CONTRACT)
 
 
 def _run(command: list[str], **kwargs) -> subprocess.CompletedProcess[str]:
@@ -555,7 +619,14 @@ def test_manifest_legacy_strict_current_and_schema_contract_on_postgres_18(tmp_p
         else:
             assert before is not None
             arguments.extend(["--before", str(before), "--after", str(manifest_path)])
-        arguments.extend(["--contract", str(CONTRACT)])
+        arguments.extend(
+            [
+                "--contract",
+                str(CONTRACT),
+                "--preserved-contract",
+                str(PRESERVED_CONTRACT),
+            ]
+        )
         return _run(arguments, cwd=ROOT)
 
     try:
@@ -571,7 +642,6 @@ def test_manifest_legacy_strict_current_and_schema_contract_on_postgres_18(tmp_p
         assert copied.returncode == 0, copied.stderr
 
         migrate()
-        sql("CREATE TABLE billing_email_verifications (id varchar(36) PRIMARY KEY)")
         current = manifest()
         _assert_clean_manifest(current)
         current_path = tmp_path / "current.txt"
@@ -586,6 +656,49 @@ def test_manifest_legacy_strict_current_and_schema_contract_on_postgres_18(tmp_p
             if any(line.startswith(prefix) for prefix in verifier.TARGET_PREFIXES)
         }
         assert actual == expected
+        preserved_expected = set(_contract_lines(PRESERVED_CONTRACT))
+        preserved_actual = {
+            line
+            for line in current.splitlines()
+            if any(
+                line.startswith(prefix)
+                for prefix in verifier.PRESERVED_PREFIXES
+            )
+        }
+        assert preserved_actual == preserved_expected
+
+        sentinel_user = f"sentinel-{uuid.uuid4().hex[:20]}"
+        sql(
+            "INSERT INTO billing_users "
+            "(id, email, password_salt, password_hash, credit_minutes, created_at) "
+            f"VALUES ('{sentinel_user}', '{sentinel_user}@invalid.example', "
+            "repeat('0', 64), repeat('1', 64), 0, now()); "
+            "INSERT INTO billing_email_verifications "
+            "(user_id, code_hash, expires_at, last_sent_at, window_started_at, "
+            "send_count, attempt_count, verified_at, created_at, updated_at) "
+            f"VALUES ('{sentinel_user}', repeat('a', 64), now() + interval '1 hour', "
+            "NULL, now(), 3, 2, NULL, now(), now())"
+        )
+        before_sentinel = docker_exec(
+            "psql", "--no-psqlrc", "--tuples-only", "--no-align",
+            "--username", "postgres", "--dbname", database,
+            "--command",
+            "SELECT user_id || '|' || code_hash || '|' || send_count || '|' || "
+            "attempt_count FROM billing_email_verifications "
+            f"WHERE user_id = '{sentinel_user}'",
+        )
+        assert before_sentinel.returncode == 0, before_sentinel.stderr
+        migrate()
+        after_sentinel = docker_exec(
+            "psql", "--no-psqlrc", "--tuples-only", "--no-align",
+            "--username", "postgres", "--dbname", database,
+            "--command",
+            "SELECT user_id || '|' || code_hash || '|' || send_count || '|' || "
+            "attempt_count FROM billing_email_verifications "
+            f"WHERE user_id = '{sentinel_user}'",
+        )
+        assert after_sentinel.returncode == 0, after_sentinel.stderr
+        assert after_sentinel.stdout == before_sentinel.stdout
 
         sql("DROP TABLE billing_payment_provider_sessions")
         legacy = manifest(legacy=True)
@@ -618,6 +731,12 @@ def test_manifest_legacy_strict_current_and_schema_contract_on_postgres_18(tmp_p
         extra_index_path.write_text(manifest(), encoding="utf-8")
         assert verify_cli("current", extra_index_path).returncode != 0
         sql("DROP INDEX unexpected_provider_idx")
+
+        sql("ALTER TABLE billing_email_verifications ADD COLUMN unexpected text")
+        preserved_extra_path = tmp_path / "preserved-extra-real.txt"
+        preserved_extra_path.write_text(manifest(), encoding="utf-8")
+        assert verify_cli("current", preserved_extra_path).returncode != 0
+        sql("ALTER TABLE billing_email_verifications DROP COLUMN unexpected")
 
         sql(
             "ALTER TABLE billing_payment_provider_sessions DROP CONSTRAINT "
