@@ -701,7 +701,19 @@ def test_manifest_legacy_strict_current_and_schema_contract_on_postgres_18(tmp_p
     try:
         ready = False
         for _ in range(60):
-            probe = docker_exec("pg_isready", "--username", "postgres", "--dbname", database)
+            # The official entrypoint briefly starts an initialization server,
+            # stops it, and then execs the final PostgreSQL process as PID 1.
+            # pg_isready alone can observe that temporary server and race its
+            # shutdown. Require the final PID-1 process and a real SQL query.
+            probe = docker_exec(
+                "sh",
+                "-ec",
+                (
+                    'test "$(cat /proc/1/comm)" = postgres; '
+                    f"psql --no-psqlrc --username postgres --dbname {database} "
+                    "--set=ON_ERROR_STOP=1 --command 'SELECT 1' >/dev/null"
+                ),
+            )
             if probe.returncode == 0:
                 ready = True
                 break
