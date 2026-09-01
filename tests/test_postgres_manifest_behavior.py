@@ -82,6 +82,28 @@ def test_manifest_generator_quiets_psql_before_configuring_record_output():
     assert quiet < tuples_only < unaligned
 
 
+def test_schema_contract_includes_postgres_18_not_null_constraints():
+    expected = {
+        "SCHEMA_OBJECT|K|billing_payment_provider_sessions|"
+        "billing_payment_provider_sessions_created_at_not_null|t|NOT NULL created_at",
+        "SCHEMA_OBJECT|K|billing_payment_provider_sessions|"
+        "billing_payment_provider_sessions_order_reference_not_null|t|"
+        "NOT NULL order_reference",
+        "SCHEMA_OBJECT|K|billing_payment_provider_sessions|"
+        "billing_payment_provider_sessions_provider_not_null|t|NOT NULL provider",
+        "SCHEMA_OBJECT|K|billing_payment_provider_sessions|"
+        "billing_payment_provider_sessions_token_digest_not_null|t|"
+        "NOT NULL token_digest",
+    }
+    actual = {
+        line
+        for line in _contract_lines()
+        if line.startswith("SCHEMA_OBJECT|K|") and "|NOT NULL " in line
+    }
+
+    assert actual == expected
+
+
 def test_schema_transition_fixture_rejects_unreviewed_catalog_deltas(tmp_path: Path):
     contract = _contract_lines()
     baseline = [
@@ -134,6 +156,20 @@ def test_schema_transition_fixture_rejects_unreviewed_catalog_deltas(tmp_path: P
     )
     with pytest.raises(verifier.ContractError):
         verifier.verify_current(missing_constraint, CONTRACT)
+
+    missing_not_null = tmp_path / "missing-not-null.txt"
+    missing_not_null.write_text(
+        _manifest_text(
+            [
+                line
+                for line in baseline + contract
+                if "billing_payment_provider_sessions_provider_not_null" not in line
+            ]
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(verifier.ContractError):
+        verifier.verify_current(missing_not_null, CONTRACT)
 
     unrelated_change = tmp_path / "unrelated-change.txt"
     unrelated_change.write_text(
