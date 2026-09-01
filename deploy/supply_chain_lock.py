@@ -202,11 +202,20 @@ def _validate_apt_snapshot(
     suite: str,
     timestamp: str,
     expected_packages: tuple[str, ...],
+    *,
+    external_ca_image: str | None = None,
+    runtime_base_image: str | None = None,
 ) -> None:
     try:
         source = payload.decode("utf-8")
     except UnicodeError as exc:
         raise SupplyChainError("Dockerfile is not UTF-8") from exc
+    if re.search(
+        r"(?im)^[ \t]*#[ \t]*(?:syntax|escape|check)[ \t]*=", source
+    ):
+        raise SupplyChainError("Dockerfile parser directives are not locked")
+    if re.search(r"(?im)^[ \t]*SHELL(?:[ \t]|$)", source):
+        raise SupplyChainError("Dockerfile custom shells are not locked")
     repository_lines = (
         "Types: deb",
         f"URIs: https://snapshot.debian.org/archive/debian/{timestamp}",
@@ -250,6 +259,40 @@ def _validate_apt_snapshot(
     ]:
         raise SupplyChainError("Dockerfile rewrites or adds an unreviewed APT source")
 
+    expected_ca_copy = None
+    if external_ca_image is not None:
+        expected_ca_copy = (
+            f"COPY --from={external_ca_image} "
+            "/etc/ssl/certs/ca-certificates.crt "
+            "/etc/ssl/certs/ca-certificates.crt"
+        )
+    copy_or_add_lines = [
+        line.strip()
+        for line in source.splitlines()
+        if re.match(r"(?i)^[ \t]*(?:COPY|ADD)(?:[ \t]|$)", line)
+    ]
+    if (
+        expected_ca_copy is not None
+        and expected_ca_copy in source
+        and source.index(expected_ca_copy) > source.index("RUN set -eux;")
+    ):
+        raise SupplyChainError("Dockerfile CA bootstrap image is copied too late")
+    if expected_ca_copy is not None:
+        expected_copy_or_add_lines = [
+            expected_ca_copy,
+            "COPY squid.conf /etc/squid/squid.conf",
+        ]
+        if copy_or_add_lines != expected_copy_or_add_lines:
+            raise SupplyChainError("Dockerfile proxy copy instructions do not match the lock")
+    elif any(
+        re.match(r"(?i)^COPY[ \t]+--from=", line) for line in copy_or_add_lines
+    ):
+        raise SupplyChainError("Dockerfile CA bootstrap image does not match the lock")
+    if external_ca_image is not None and source.count(
+        "/etc/ssl/certs/ca-certificates.crt"
+    ) != 6:
+        raise SupplyChainError("Dockerfile CA bootstrap path is not exact")
+
     logical_source = re.sub(r"\\\r?\n", " ", source)
     logical_source = re.sub(r"[ \t]+", " ", logical_source)
     logical_lines = [
@@ -262,43 +305,109 @@ def _validate_apt_snapshot(
         "''",
         *(f"'{line}'" for line in repository_lines[6:]),
     ]
-    expected_apt_run = (
-        "RUN set -eux; "
-        "rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*; "
-        "printf '%s\\n' "
-        + " ".join(repository_arguments)
-        + " > /etc/apt/sources.list.d/debian.sources; "
-        "apt-get update; "
+    expected_update = "apt-get update --error-on=any; "
+    expected_install = (
         "apt-get install -y --no-install-recommends "
         + " ".join(expected_packages)
-        + "; rm -rf /var/lib/apt/lists/*"
+        + "; "
+    )
+    expected_prelude = ""
+    if external_ca_image is not None:
+        expected_prelude = (
+            "test -s /etc/ssl/certs/ca-certificates.crt; "
+            "test ! -L /etc/ssl/certs/ca-certificates.crt; "
+        )
+        tls_options = (
+            "-o Acquire::https::CAInfo=/etc/ssl/certs/ca-certificates.crt "
+            "-o Acquire::https::Verify-Peer=true "
+            "-o Acquire::https::Verify-Host=true "
+        )
+        expected_update = (
+            "apt-get "
+            + tls_options
+            + "update --error-on=any; "
+        )
+        expected_install = (
+            "apt-get "
+            + tls_options
+            + "install -y --no-install-recommends "
+            + " ".join(expected_packages)
+            + "; "
+        )
+    expected_apt_run = (
+        "RUN set -eux; "
+        + expected_prelude
+        + "rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*; "
+        + "printf '%s\\n' "
+        + " ".join(repository_arguments)
+        + " > /etc/apt/sources.list.d/debian.sources; "
+        + expected_update
+        + expected_install
+        + "rm -rf /var/lib/apt/lists/*"
     )
     run_lines = [
         line for line in logical_lines if re.match(r"(?i)^RUN(?:\s|$)", line)
     ]
     if not run_lines or run_lines[0] != expected_apt_run:
         raise SupplyChainError("Dockerfile APT provisioning command is not the locked command")
-    update_commands = re.findall(r"(?<![A-Za-z0-9_-])apt-get update\s*;", logical_source)
-    install_commands = re.findall(
-        r"(?<![A-Za-z0-9_-])apt-get install -y --no-install-recommends (?P<packages>[^;\r\n]+);",
-        logical_source,
-    )
+    if external_ca_image is not None:
+        if runtime_base_image is None or expected_ca_copy is None:
+            raise SupplyChainError("Dockerfile proxy instruction lock is incomplete")
+        revision_value = chr(36) + "{LECTURESIFT_BUILD_REVISION}"
+        lock_value = chr(36) + "{LECTURESIFT_SUPPLY_CHAIN_LOCK_SHA256}"
+        expected_proxy_instructions = [
+            f"FROM {runtime_base_image}",
+            "ARG LECTURESIFT_BUILD_REVISION=unknown",
+            "ARG LECTURESIFT_SUPPLY_CHAIN_LOCK_SHA256=unknown",
+            (
+                f'LABEL org.opencontainers.image.revision="{revision_value}" '
+                f'io.lecturesift.supply-chain-lock-sha256="{lock_value}"'
+            ),
+            (
+                f'ENV LECTURESIFT_BUILD_REVISION="{revision_value}" '
+                f'LECTURESIFT_SUPPLY_CHAIN_LOCK_SHA256="{lock_value}"'
+            ),
+            expected_ca_copy,
+            expected_apt_run,
+            "COPY squid.conf /etc/squid/squid.conf",
+            "USER proxy",
+            "EXPOSE 3128",
+            'CMD ["squid", "-N", "-f", "/etc/squid/squid.conf"]',
+        ]
+        if logical_lines != expected_proxy_instructions:
+            raise SupplyChainError(
+                "Dockerfile proxy instruction sequence does not match the lock"
+            )
     forbidden_package_commands = re.findall(
         r"(?:^|\bRUN\s+|[;&|]\s*)(apt|apt-key|add-apt-repository|dpkg)(?:\s|$)",
         logical_source,
         flags=re.IGNORECASE | re.MULTILINE,
     )
+    forbidden_transport_downgrades = (
+        "http://",
+        "allow-insecure",
+        "allowweak",
+        "allow-downgrade-to-insecure",
+        "--allow-unauthenticated",
+        "check-valid-until=false",
+        "check-date: no",
+        "check-date=no",
+        "trusted: yes",
+        "trusted=yes",
+        "verify-peer=false",
+        "verify-host=false",
+    )
     if (
-        len(update_commands) != 1
-        or len(install_commands) != 1
-        or tuple(install_commands[0].split()) != expected_packages
-        or logical_source.lower().count("apt-get") != 2
+        logical_source.lower().count("apt-get") != 2
         or forbidden_package_commands
+        or any(token in source.lower() for token in forbidden_transport_downgrades)
     ):
         raise SupplyChainError("Dockerfile APT install block does not match the lock contract")
     if logical_source.count("rm -rf /var/lib/apt/lists/*") != 1:
         raise SupplyChainError("Dockerfile APT metadata cleanup does not match the lock contract")
-    if source.index("snapshot.debian.org") > source.index("apt-get update"):
+    if logical_source.index("snapshot.debian.org") > logical_source.index(
+        expected_update.strip()
+    ):
         raise SupplyChainError("Debian snapshot must be configured before apt metadata is read")
 
 
@@ -469,6 +578,8 @@ def validate(root: Path) -> str:
         "bookworm",
         values["debian_snapshot"],
         PROXY_APT_PACKAGES,
+        external_ca_image=values["application_base"],
+        runtime_base_image=values["proxy_base"],
     )
     compose = _read_regular(root, "compose.yaml", MAX_REQUIREMENTS_BYTES)
     _validate_compose_images(compose, values)

@@ -30,6 +30,25 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check deployment shell syntax
         run: bash deploy/check_shell_syntax.sh
+      - name: Validate locked image inputs before building
+        run: python3 deploy/supply_chain_lock.py --root .
+      - name: Build locked egress proxy without cache
+        run: |
+          docker build --pull --no-cache --platform linux/amd64 \
+            --tag lecturesift-egress-proxy:ci \
+            deploy/egress-proxy
+      - name: Smoke test locked egress proxy
+        run: |
+          docker run --rm --network none \
+            --entrypoint /bin/sh \
+            lecturesift-egress-proxy:ci -ec '
+              test -s /etc/ssl/certs/ca-certificates.crt
+              test ! -L /etc/ssl/certs/ca-certificates.crt
+              dpkg-query -W ca-certificates squid squidclient >/dev/null
+              grep -Fqx "URIs: https://snapshot.debian.org/archive/debian/20260828T000000Z" /etc/apt/sources.list.d/debian.sources
+              grep -Fqx "URIs: https://snapshot.debian.org/archive/debian-security/20260828T000000Z" /etc/apt/sources.list.d/debian.sources
+              ! grep -q "^URIs: http://" /etc/apt/sources.list.d/debian.sources
+            '
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

