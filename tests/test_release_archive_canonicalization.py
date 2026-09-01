@@ -408,3 +408,92 @@ def test_mode_normalizer_strips_special_and_write_bits_but_keeps_exec(
     assert stat.S_IMODE(nested.stat().st_mode) == 0o755
     assert stat.S_IMODE(regular.stat().st_mode) == 0o644
     assert stat.S_IMODE(executable.stat().st_mode) == 0o755
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX file types require Linux")
+@pytest.mark.parametrize(
+    "relative",
+    (
+        "deploy/trusted_stage_release_controller.sh",
+        "deploy/stage_release_candidate.sh",
+    ),
+)
+def test_mode_normalizer_refuses_special_file_types(
+    tmp_path: Path,
+    relative: str,
+) -> None:
+    bash = shutil.which("bash")
+    assert bash
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    (tree / "regular.txt").write_bytes(b"regular")
+    (tree / "link").symlink_to("regular.txt")
+
+    harness = _extract_normalizer(relative) + '\nnormalize_release_tree_modes "$1"\n'
+    completed = subprocess.run(
+        [bash, "-c", harness, "mode-normalizer", str(tree)],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=20,
+    )
+
+    assert completed.returncode != 0
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX command shimming requires Linux")
+@pytest.mark.parametrize(
+    "relative",
+    (
+        "deploy/trusted_stage_release_controller.sh",
+        "deploy/stage_release_candidate.sh",
+    ),
+)
+@pytest.mark.parametrize("fail_at", range(1, 6))
+def test_mode_normalizer_refuses_every_find_failure(
+    tmp_path: Path,
+    relative: str,
+    fail_at: int,
+) -> None:
+    bash = shutil.which("bash")
+    real_find = shutil.which("find")
+    assert bash and real_find
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    (tree / "regular.txt").write_bytes(b"regular")
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_find = fake_bin / "find"
+    fake_find.write_text(
+        "#!/bin/sh\n"
+        'count="$(cat "$FIND_COUNT" 2>/dev/null || printf 0)"\n'
+        "count=$((count + 1))\n"
+        'printf "%s" "$count" > "$FIND_COUNT"\n'
+        'if [ "$count" -eq "$FIND_FAIL_AT" ]; then exit 71; fi\n'
+        'exec "$REAL_FIND" "$@"\n',
+        encoding="utf-8",
+    )
+    fake_find.chmod(0o755)
+    count_file = tmp_path / "find-count"
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "PATH": f"{fake_bin}{os.pathsep}{environment['PATH']}",
+            "FIND_COUNT": str(count_file),
+            "FIND_FAIL_AT": str(fail_at),
+            "REAL_FIND": real_find,
+        }
+    )
+
+    harness = _extract_normalizer(relative) + '\nnormalize_release_tree_modes "$1"\n'
+    completed = subprocess.run(
+        [bash, "-c", harness, "mode-normalizer", str(tree)],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=environment,
+        timeout=20,
+    )
+
+    assert completed.returncode != 0
+    assert int(count_file.read_text(encoding="utf-8")) == fail_at

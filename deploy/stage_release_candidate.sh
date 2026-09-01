@@ -106,7 +106,10 @@ if pending or field_index % 3:
 normalize_release_tree_modes() {
   local tree="$1" unexpected
   [[ -d "$tree" && ! -L "$tree" ]] || return 1
+  # GNU chmod may preserve setgid on directories when given only a numeric
+  # mode, so clear directory special bits explicitly after canonicalizing.
   find "$tree" -xdev -type d -exec chmod 0755 -- {} + || return 1
+  find "$tree" -xdev -type d -exec chmod u-s,g-s,o-t -- {} + || return 1
   find "$tree" -xdev -type f -perm /111 -exec chmod 0755 -- {} + || return 1
   find "$tree" -xdev -type f ! -perm /111 -exec chmod 0644 -- {} + || return 1
   unexpected="$(find "$tree" -xdev \
