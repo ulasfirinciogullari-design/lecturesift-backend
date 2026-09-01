@@ -21,7 +21,9 @@ rehearsal_succeeded=false
 inner_run_dir=""
 artifact_hashes=""
 trusted_controller=/usr/local/sbin/lecturesift-exact-rehearsal-controller
-trusted_controller_state_root=/run/lecturesift-trusted-rehearsal-controller
+trusted_controller_state_base=/var/lib/lecturesift
+trusted_controller_state_parent=$trusted_controller_state_base/controller-state
+trusted_controller_state_root=$trusted_controller_state_parent/exact-rehearsal
 trusted_handoff="${LECTURESIFT_TRUSTED_REHEARSAL_HANDOFF:-}"
 trusted_handoff_nonce="${LECTURESIFT_TRUSTED_REHEARSAL_NONCE:-}"
 trusted_handoff_sha256="${LECTURESIFT_TRUSTED_REHEARSAL_HANDOFF_SHA256:-}"
@@ -64,6 +66,16 @@ consume_trusted_controller_handoff() {
      "$(realpath -e -- "$trusted_controller_state_root")" == "$trusted_controller_state_root" && \
      "$(stat -c '%u:%g:%a' -- "$trusted_controller_state_root")" == "0:0:700" ]] || \
     fail unsafe-trusted-controller-state-root
+  [[ -d "$trusted_controller_state_parent" && ! -L "$trusted_controller_state_parent" && \
+     "$(realpath -e -- "$trusted_controller_state_parent")" == "$trusted_controller_state_parent" && \
+     "$(stat -c '%u:%g:%a' -- "$trusted_controller_state_parent")" == "0:0:700" ]] || \
+    fail unsafe-trusted-controller-state-parent
+  [[ -d "$trusted_controller_state_base" && ! -L "$trusted_controller_state_base" && \
+     "$(realpath -e -- "$trusted_controller_state_base")" == "$trusted_controller_state_base" && \
+     "$(stat -c '%u:%g' -- "$trusted_controller_state_base")" == "0:0" ]] || \
+    fail unsafe-trusted-controller-state-base
+  (( (8#$(stat -c '%a' -- "$trusted_controller_state_base") & 8#022) == 0 )) || \
+    fail writable-trusted-controller-state-base
   state_mode="$(stat -c '%u:%g:%a' -- "$trusted_handoff_state" 2>/dev/null || true)"
   [[ -d "$trusted_handoff_state" && ! -L "$trusted_handoff_state" && \
      "$(realpath -e -- "$trusted_handoff_state")" == "$trusted_handoff_state" && \
@@ -802,7 +814,8 @@ write_admission() {
       | grep -Fqx "LECTURESIFT_BUILD_REVISION=$revision" || return 1
   done
   candidate_tree_sha="$(sed -n 's/^tree_sha256=//p' "$candidate_evidence")"
-  local_tree="$state/rehearsed-local-source-tree"
+  local_tree="$trusted_handoff_state/rehearsed-local-source-tree"
+  [[ ! -e "$local_tree" && ! -L "$local_tree" ]] || return 1
   install -d -o root -g root -m 0700 "$local_tree"
   git -C "$root" ls-tree -rz --name-only "$revision" | python3 -c '
 import sys

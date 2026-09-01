@@ -23,7 +23,9 @@ trusted_stage_handoff="${LECTURESIFT_TRUSTED_STAGE_HANDOFF:-}"
 trusted_stage_nonce="${LECTURESIFT_TRUSTED_STAGE_NONCE:-}"
 trusted_stage_handoff_sha256="${LECTURESIFT_TRUSTED_STAGE_HANDOFF_SHA256:-}"
 trusted_stage_controller=/usr/local/sbin/lecturesift-release-stage-controller
-trusted_stage_state_root=/run/lecturesift-release-stage-controller
+trusted_stage_state_base=/var/lib/lecturesift
+trusted_stage_state_parent=$trusted_stage_state_base/controller-state
+trusted_stage_state_root=$trusted_stage_state_parent/release-stage
 trusted_stage_handoff_state=""
 trusted_stage_handoff_consumed=""
 trusted_stage_source_tree_sha256=""
@@ -63,6 +65,16 @@ consume_trusted_stage_handoff() {
      "$(realpath -e -- "$trusted_stage_state_root")" == "$trusted_stage_state_root" && \
      "$(stat -c '%u:%g:%a' -- "$trusted_stage_state_root")" == "0:0:700" ]] || \
     fail unsafe-trusted-stage-state-root
+  [[ -d "$trusted_stage_state_parent" && ! -L "$trusted_stage_state_parent" && \
+     "$(realpath -e -- "$trusted_stage_state_parent")" == "$trusted_stage_state_parent" && \
+     "$(stat -c '%u:%g:%a' -- "$trusted_stage_state_parent")" == "0:0:700" ]] || \
+    fail unsafe-trusted-stage-state-parent
+  [[ -d "$trusted_stage_state_base" && ! -L "$trusted_stage_state_base" && \
+     "$(realpath -e -- "$trusted_stage_state_base")" == "$trusted_stage_state_base" && \
+     "$(stat -c '%u:%g' -- "$trusted_stage_state_base")" == "0:0" ]] || \
+    fail unsafe-trusted-stage-state-base
+  (( (8#$(stat -c '%a' -- "$trusted_stage_state_base") & 8#022) == 0 )) || \
+    fail writable-trusted-stage-state-base
   state_mode="$(stat -c '%u:%g:%a' -- "$trusted_stage_handoff_state" 2>/dev/null || true)"
   [[ -d "$trusted_stage_handoff_state" && ! -L "$trusted_stage_handoff_state" && \
      "$(realpath -e -- "$trusted_stage_handoff_state")" == "$trusted_stage_handoff_state" && \
@@ -167,7 +179,7 @@ release="$release_base/$revision"
 worktree="$worktree_base/$revision"
 incoming_release="$release_base/.incoming-$revision"
 incoming_worktree="$worktree_base/.incoming-$revision"
-comparison_tree="/run/lecturesift-stage-compare-$revision"
+comparison_tree="$trusted_stage_handoff_state/comparison-tree"
 app_image="lecturesift-backend:staged-$revision"
 proxy_image="lecturesift-egress-proxy:staged-$revision"
 evidence_root=/var/lib/lecturesift/release-candidates
@@ -240,7 +252,8 @@ cleanup() {
   [[ "$created_incoming_worktree" == "false" ]] || \
     remove_created_tree "$incoming_worktree" "$incoming_worktree_identity" "$worktree_base" || cleanup_failed=true
   [[ "$created_comparison_tree" == "false" ]] || \
-    remove_created_tree "$comparison_tree" "$comparison_tree_identity" /run || cleanup_failed=true
+    remove_created_tree "$comparison_tree" "$comparison_tree_identity" \
+      "$trusted_stage_handoff_state" || cleanup_failed=true
   if [[ "$cleanup_failed" == "true" ]]; then
     echo "EXACT_RELEASE_STAGE_FAILED|unsafe-created-resource-cleanup" >&2
     status=1
@@ -393,7 +406,8 @@ PY
 [[ "$tree_sha256" =~ ^[0-9a-f]{64}$ ]] || fail tree-digest
 [[ "$tree_sha256" == "$trusted_stage_source_tree_sha256" ]] || \
   fail trusted-stage-handoff-tree-mismatch
-remove_created_tree "$comparison_tree" "$comparison_tree_identity" /run || \
+remove_created_tree "$comparison_tree" "$comparison_tree_identity" \
+  "$trusted_stage_handoff_state" || \
   fail unsafe-comparison-tree-removal
 created_comparison_tree=false
 

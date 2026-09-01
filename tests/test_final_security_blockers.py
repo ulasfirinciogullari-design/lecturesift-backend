@@ -119,8 +119,8 @@ def test_candidate_stage_requires_one_time_trusted_stage_handoff_before_transpor
     stage_lock = controller.index("flock -n 8")
     first_transport_parse = controller.index('git bundle list-heads "$bundle"')
     assert stage_lock < first_transport_parse
-    assert 'exec 8>"$STATE_ROOT/.controller.lock"' in controller
-    assert 'chown root:root "$STATE_ROOT/.controller.lock"' in controller
+    assert 'exec 8<>"$controller_lock"' in controller
+    assert 'chown root:root "$controller_lock"' in controller
 
     consume = candidate.index("consume_trusted_stage_handoff\n")
     archive_parse = candidate.index('python3 - "$archive"')
@@ -236,6 +236,72 @@ def test_trusted_controllers_use_compatible_disk_reserve_options() -> None:
         script = _read(relative)
         assert 'df -B1 --output=avail -- "$STATE_ROOT"' in script
         assert "df -PB1 --output" not in script
+
+
+def test_large_trusted_controller_workspaces_are_root_only_and_disk_backed() -> None:
+    stage_controller = _read("deploy/trusted_stage_release_controller.sh")
+    candidate = _read("deploy/stage_release_candidate.sh")
+    rehearsal_controller = _read("deploy/trusted_exact_rehearsal_controller.sh")
+    rehearsal = _read("deploy/run_exact_rehearsal.sh")
+
+    assert "STATE_BASE=/var/lib/lecturesift" in stage_controller
+    assert "STATE_PARENT=$STATE_BASE/controller-state" in stage_controller
+    assert "STATE_ROOT=$STATE_PARENT/release-stage" in stage_controller
+    assert "trusted_stage_state_base=/var/lib/lecturesift" in candidate
+    assert "trusted_stage_state_parent=$trusted_stage_state_base/controller-state" in candidate
+    assert "trusted_stage_state_root=$trusted_stage_state_parent/release-stage" in candidate
+    assert "STATE_BASE=/var/lib/lecturesift" in rehearsal_controller
+    assert "STATE_PARENT=$STATE_BASE/controller-state" in rehearsal_controller
+    assert "STATE_ROOT=$STATE_PARENT/exact-rehearsal" in rehearsal_controller
+    assert "trusted_controller_state_base=/var/lib/lecturesift" in rehearsal
+    assert "trusted_controller_state_parent=$trusted_controller_state_base/controller-state" in rehearsal
+    assert "trusted_controller_state_root=$trusted_controller_state_parent/exact-rehearsal" in rehearsal
+    assert "/run/lecturesift-release-stage-controller" not in stage_controller + candidate
+    assert "/run/lecturesift-trusted-rehearsal-controller" not in rehearsal_controller + rehearsal
+    assert '"$(stat -c \'%u:%g:%a\' -- "$directory")" == "0:0:700"' in stage_controller
+    assert '"$(stat -c \'%u:%g:%a\' -- "$directory")" == "0:0:700"' in rehearsal_controller
+    assert 'comparison_tree="$trusted_stage_handoff_state/comparison-tree"' in candidate
+    assert 'local_tree="$trusted_handoff_state/rehearsed-local-source-tree"' in rehearsal
+    assert "/run/lecturesift-stage-compare" not in candidate
+    # Secret-bearing generated dotenv state intentionally remains on tmpfs.
+    assert "staging_base=/run/lecturesift-exact-rehearsal" in rehearsal
+
+
+def test_persistent_controller_state_cleanup_is_fail_closed() -> None:
+    for relative in (
+        "deploy/trusted_stage_release_controller.sh",
+        "deploy/trusted_exact_rehearsal_controller.sh",
+    ):
+        script = _read(relative)
+        validation = script.index("reconcile_stale_controller_state()")
+        first_delete = script.index('rm -rf --one-file-system -- "${stale_paths[$index]}"')
+        assert validation < first_delete
+        assert "-mindepth 1 -maxdepth 1 -print0" in script
+        assert "^[0-9a-f]{40}\\.[A-Za-z0-9]{8}$" in script
+        assert "0:0:700:$root_device" in script
+        assert "-maxdepth 0 -mmin +60 -print" in script
+        assert "findmnt -rn -o TARGET" in script
+        assert "stale_identities" in script
+        assert script.index('findmnt -rn -o TARGET') < first_delete
+        assert script.index('stale_identities+=("$(stat -c \'%d:%i\'') < first_delete
+        assert script.index('wait "$inventory_pid"') < first_delete
+        assert script.index('"${stale_identities[$index]}" ]]') < first_delete
+
+
+def test_persistent_controller_locks_are_never_followed_or_truncated() -> None:
+    for relative, descriptor in (
+        ("deploy/trusted_stage_release_controller.sh", "8"),
+        ("deploy/trusted_exact_rehearsal_controller.sh", "9"),
+    ):
+        script = _read(relative)
+        open_lock = script.index(f'exec {descriptor}<>"$controller_lock"')
+        take_lock = script.index(f"flock -n {descriptor}")
+        assert "$(stat -c '%u:%g:%a:%h' -- \"$controller_lock\")" in script
+        assert '( umask 077; set -o noclobber; : >"$controller_lock" )' in script
+        assert f'exec {descriptor}>"$STATE_ROOT/.controller.lock"' not in script
+        assert script.index("0:0:600:1") < open_lock < take_lock
+        assert f"/proc/self/fd/{descriptor}" in script[open_lock:take_lock]
+        assert "stat -Lc '%d:%i'" in script[open_lock:take_lock]
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="requires GNU df on Linux")

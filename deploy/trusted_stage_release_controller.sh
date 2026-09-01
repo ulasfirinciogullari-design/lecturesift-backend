@@ -6,8 +6,8 @@ export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 export GIT_ATTR_NOSYSTEM=1
 IFS=$' \t\n'
 unset CDPATH ENV BASH_ENV
-unset -f id git python3 sha256sum realpath stat find flock awk install mktemp rm \
-  mv chmod chown sync tr env bash tar df timeout wc 2>/dev/null || true
+unset -f id git python3 sha256sum realpath stat find findmnt flock awk install \
+  mktemp rm mv chmod chown sync tr env bash tar df timeout wc 2>/dev/null || true
 hash -r
 
 # Fixed, independently installed trust boundary for release staging.  No file
@@ -18,7 +18,12 @@ hash -r
 STAGER_PATH=/usr/local/sbin/lecturesift-release-stage-controller
 EXACT_CONTROLLER_PATH=/usr/local/sbin/lecturesift-exact-rehearsal-controller
 ALLOWLIST_ROOT=/etc/lecturesift/exact-rehearsal-allowlist
-STATE_ROOT=/run/lecturesift-release-stage-controller
+# The reviewed Git/tree workspace can legitimately exceed the host's small
+# /run tmpfs. Keep it root-only but disk-backed so the 12-GiB reserve gate is
+# measured against the filesystem that actually holds the bounded payload.
+STATE_BASE=/var/lib/lecturesift
+STATE_PARENT=$STATE_BASE/controller-state
+STATE_ROOT=$STATE_PARENT/release-stage
 MAX_TRANSPORT_BYTES=$((512 * 1024 * 1024))
 MAX_EXPANDED_BYTES=$((2 * 1024 * 1024 * 1024))
 MAX_TREE_ENTRIES=100000
@@ -50,8 +55,8 @@ fail() {
    "$bundle" == "/var/tmp/lecturesift-$revision.bundle" ]] || \
   fail unexpected-upload-path
 
-for command_name in id git python3 sha256sum realpath stat find flock awk install \
-  mktemp rm mv chmod chown sync tr env bash tar df timeout wc; do
+for command_name in id git python3 sha256sum realpath stat find findmnt flock awk \
+  install mktemp rm mv chmod chown sync tr env bash tar df timeout wc; do
   command -v "$command_name" >/dev/null 2>&1 || fail missing-trusted-host-command
 done
 
@@ -66,15 +71,85 @@ check_fixed_program() {
 check_fixed_program "$STAGER_PATH" true || fail stager-not-fixed-root-file
 check_fixed_program "$EXACT_CONTROLLER_PATH" || fail unsafe-exact-controller
 
-install -d -o root -g root -m 0700 -- "$STATE_ROOT"
-[[ -d "$STATE_ROOT" && ! -L "$STATE_ROOT" && \
-   "$(realpath -e -- "$STATE_ROOT")" == "$STATE_ROOT" && \
-   "$(stat -c '%u:%g:%a' -- "$STATE_ROOT")" == "0:0:700" ]] || \
-  fail unsafe-stage-state-root
-exec 8>"$STATE_ROOT/.controller.lock"
-chmod 0600 "$STATE_ROOT/.controller.lock"
-chown root:root "$STATE_ROOT/.controller.lock"
+[[ -d "$STATE_BASE" && ! -L "$STATE_BASE" && \
+   "$(realpath -e -- "$STATE_BASE")" == "$STATE_BASE" && \
+   "$(stat -c '%u:%g' -- "$STATE_BASE")" == "0:0" ]] || \
+  fail unsafe-stage-state-base
+(( (8#$(stat -c '%a' -- "$STATE_BASE") & 8#022) == 0 )) || \
+  fail writable-stage-state-base
+for directory in "$STATE_PARENT" "$STATE_ROOT"; do
+  if [[ -e "$directory" || -L "$directory" ]]; then
+    [[ -d "$directory" && ! -L "$directory" && \
+       "$(realpath -e -- "$directory")" == "$directory" && \
+       "$(stat -c '%u:%g:%a' -- "$directory")" == "0:0:700" ]] || \
+      fail unsafe-stage-state-directory
+  else
+    install -d -o root -g root -m 0700 -- "$directory"
+  fi
+done
+controller_lock="$STATE_ROOT/.controller.lock"
+if [[ -e "$controller_lock" || -L "$controller_lock" ]]; then
+  [[ -f "$controller_lock" && ! -L "$controller_lock" && \
+     "$(realpath -e -- "$controller_lock")" == "$controller_lock" && \
+     "$(stat -c '%u:%g:%a:%h' -- "$controller_lock")" == "0:0:600:1" ]] || \
+    fail unsafe-stage-controller-lock
+else
+  ( umask 077; set -o noclobber; : >"$controller_lock" ) 2>/dev/null || \
+    fail stage-controller-lock-create
+  chown root:root "$controller_lock"
+fi
+[[ -f "$controller_lock" && ! -L "$controller_lock" && \
+   "$(realpath -e -- "$controller_lock")" == "$controller_lock" && \
+   "$(stat -c '%u:%g:%a:%h' -- "$controller_lock")" == "0:0:600:1" ]] || \
+  fail unsafe-stage-controller-lock
+exec 8<>"$controller_lock"
+[[ -f "$controller_lock" && ! -L "$controller_lock" && \
+   "$(realpath -e -- "$controller_lock")" == "$controller_lock" && \
+   "$(stat -c '%u:%g:%a:%h' -- "$controller_lock")" == "0:0:600:1" && \
+   "$(stat -c '%d:%i' -- "$controller_lock")" == \
+   "$(stat -Lc '%d:%i' -- /proc/self/fd/8)" ]] || fail changed-stage-controller-lock
 flock -n 8 || fail another-release-stage-controller-active
+
+reconcile_stale_controller_state() {
+  local entry name resolved root_device mounts target index inventory_pid
+  local -a stale_paths=() stale_identities=()
+  root_device="$(stat -c '%d' -- "$STATE_ROOT")"
+  [[ "$root_device" =~ ^[0-9]+$ ]] || fail invalid-stage-state-device
+  exec 6< <(find "$STATE_ROOT" -mindepth 1 -maxdepth 1 -print0)
+  inventory_pid="$!"
+  [[ "$inventory_pid" =~ ^[0-9]+$ ]] || fail stage-state-inventory-start
+  while IFS= read -r -d '' entry; do
+    [[ "$entry" == "$controller_lock" ]] && continue
+    name="${entry##*/}"
+    [[ "$name" =~ ^[0-9a-f]{40}\.[A-Za-z0-9]{8}$ ]] || \
+      fail unknown-stage-state-residue
+    [[ -d "$entry" && ! -L "$entry" && \
+       "$(stat -c '%u:%g:%a:%d' -- "$entry")" == "0:0:700:$root_device" ]] || \
+      fail unsafe-stage-state-residue
+    resolved="$(realpath -e -- "$entry")" || fail unsafe-stage-state-residue
+    [[ "$resolved" == "$STATE_ROOT/$name" && \
+       "$(find "$resolved" -maxdepth 0 -mmin +60 -print)" == "$resolved" ]] || \
+      fail recent-or-escaped-stage-state-residue
+    mounts="$(findmnt -rn -o TARGET)" || fail stage-state-mount-inspection
+    while IFS= read -r target; do
+      [[ "$target" == "$resolved" || "$target" == "$resolved/"* ]] && \
+        fail mounted-stage-state-residue
+    done <<<"$mounts"
+    stale_paths+=("$resolved")
+    stale_identities+=("$(stat -c '%d:%i' -- "$resolved")")
+  done <&6
+  exec 6<&-
+  wait "$inventory_pid" || fail stage-state-inventory-read
+  for index in "${!stale_paths[@]}"; do
+    [[ "$(stat -c '%d:%i' -- "${stale_paths[$index]}" 2>/dev/null || true)" == \
+       "${stale_identities[$index]}" ]] || fail changed-stage-state-residue
+  done
+  for index in "${!stale_paths[@]}"; do
+    rm -rf --one-file-system -- "${stale_paths[$index]}"
+  done
+  (( ${#stale_paths[@]} == 0 )) || sync -f "$STATE_ROOT"
+}
+reconcile_stale_controller_state
 [[ ! -e "$candidate_evidence" && ! -L "$candidate_evidence" ]] || \
   fail candidate-evidence-already-exists
 

@@ -6,8 +6,8 @@ export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 export GIT_ATTR_NOSYSTEM=1
 IFS=$' \t\n'
 unset CDPATH ENV BASH_ENV
-unset -f id git python3 sha256sum realpath stat find flock awk install mktemp rm \
-  mv chmod chown sync tr env bash df timeout 2>/dev/null || true
+unset -f id git python3 sha256sum realpath stat find findmnt flock awk install \
+  mktemp rm mv chmod chown sync tr env bash df timeout 2>/dev/null || true
 hash -r
 
 # This controller is effective only after it has been reviewed and installed at
@@ -20,7 +20,12 @@ ALLOWLIST_ROOT=/etc/lecturesift/exact-rehearsal-allowlist
 WORKTREE_ROOT=/srv/lecturesift/worktrees
 EVIDENCE_ROOT=/var/lib/lecturesift/release-candidates
 ADMISSION_ROOT=/var/lib/lecturesift/rehearsal-admissions
-STATE_ROOT=/run/lecturesift-trusted-rehearsal-controller
+# The independently reviewed tree may be several GiB, while /run is a small
+# tmpfs on the target VPS. Persist only this root-only controller workspace on
+# disk; the inner secret-bearing rehearsal state remains ephemeral under /run.
+STATE_BASE=/var/lib/lecturesift
+STATE_PARENT=$STATE_BASE/controller-state
+STATE_ROOT=$STATE_PARENT/exact-rehearsal
 revision="${LECTURESIFT_EXPECTED_REHEARSAL_REVISION:-}"
 requested_mode="${LECTURESIFT_TRUSTED_CONTROLLER_MODE:-rehearsal}"
 rehearsal_admission="$ADMISSION_ROOT/$revision.ok"
@@ -92,21 +97,92 @@ evidence="$EVIDENCE_ROOT/$revision.ok"
 [[ -z "$(find "$root" -xdev \( ! -user root -o -perm /022 -o -type l \) -print -quit)" ]] || \
   fail mutable-or-linked-worktree
 [[ -f "$helper" && ! -L "$helper" ]] || fail missing-orchestrator
-for command_name in git python3 sha256sum realpath stat find flock awk install \
-  mktemp rm mv chmod chown sync tr env bash df timeout; do
+for command_name in git python3 sha256sum realpath stat find findmnt flock awk \
+  install mktemp rm mv chmod chown sync tr env bash df timeout; do
   command -v "$command_name" >/dev/null 2>&1 || fail missing-trusted-host-command
 done
-install -d -o root -g root -m 0700 -- "$STATE_ROOT"
-[[ -d "$STATE_ROOT" && ! -L "$STATE_ROOT" && \
-   "$(realpath -e -- "$STATE_ROOT")" == "$STATE_ROOT" && \
-   "$(stat -c '%u:%g:%a' -- "$STATE_ROOT")" == "0:0:700" ]] || \
-  fail unsafe-controller-state-root
+[[ -d "$STATE_BASE" && ! -L "$STATE_BASE" && \
+   "$(realpath -e -- "$STATE_BASE")" == "$STATE_BASE" && \
+   "$(stat -c '%u:%g' -- "$STATE_BASE")" == "0:0" ]] || \
+  fail unsafe-controller-state-base
+(( (8#$(stat -c '%a' -- "$STATE_BASE") & 8#022) == 0 )) || \
+  fail writable-controller-state-base
+for directory in "$STATE_PARENT" "$STATE_ROOT"; do
+  if [[ -e "$directory" || -L "$directory" ]]; then
+    [[ -d "$directory" && ! -L "$directory" && \
+       "$(realpath -e -- "$directory")" == "$directory" && \
+       "$(stat -c '%u:%g:%a' -- "$directory")" == "0:0:700" ]] || \
+      fail unsafe-controller-state-directory
+  else
+    install -d -o root -g root -m 0700 -- "$directory"
+  fi
+done
+controller_lock="$STATE_ROOT/.controller.lock"
+if [[ -e "$controller_lock" || -L "$controller_lock" ]]; then
+  [[ -f "$controller_lock" && ! -L "$controller_lock" && \
+     "$(realpath -e -- "$controller_lock")" == "$controller_lock" && \
+     "$(stat -c '%u:%g:%a:%h' -- "$controller_lock")" == "0:0:600:1" ]] || \
+    fail unsafe-controller-lock
+else
+  ( umask 077; set -o noclobber; : >"$controller_lock" ) 2>/dev/null || \
+    fail controller-lock-create
+  chown root:root "$controller_lock"
+fi
+[[ -f "$controller_lock" && ! -L "$controller_lock" && \
+   "$(realpath -e -- "$controller_lock")" == "$controller_lock" && \
+   "$(stat -c '%u:%g:%a:%h' -- "$controller_lock")" == "0:0:600:1" ]] || \
+  fail unsafe-controller-lock
+exec 9<>"$controller_lock"
+[[ -f "$controller_lock" && ! -L "$controller_lock" && \
+   "$(realpath -e -- "$controller_lock")" == "$controller_lock" && \
+   "$(stat -c '%u:%g:%a:%h' -- "$controller_lock")" == "0:0:600:1" && \
+   "$(stat -c '%d:%i' -- "$controller_lock")" == \
+   "$(stat -Lc '%d:%i' -- /proc/self/fd/9)" ]] || fail changed-controller-lock
+flock -n 9 || fail another-trusted-controller-active
+
+reconcile_stale_controller_state() {
+  local entry name resolved root_device mounts target index inventory_pid
+  local -a stale_paths=() stale_identities=()
+  root_device="$(stat -c '%d' -- "$STATE_ROOT")"
+  [[ "$root_device" =~ ^[0-9]+$ ]] || fail invalid-controller-state-device
+  exec 6< <(find "$STATE_ROOT" -mindepth 1 -maxdepth 1 -print0)
+  inventory_pid="$!"
+  [[ "$inventory_pid" =~ ^[0-9]+$ ]] || fail controller-state-inventory-start
+  while IFS= read -r -d '' entry; do
+    [[ "$entry" == "$controller_lock" ]] && continue
+    name="${entry##*/}"
+    [[ "$name" =~ ^[0-9a-f]{40}\.[A-Za-z0-9]{8}$ ]] || \
+      fail unknown-controller-state-residue
+    [[ -d "$entry" && ! -L "$entry" && \
+       "$(stat -c '%u:%g:%a:%d' -- "$entry")" == "0:0:700:$root_device" ]] || \
+      fail unsafe-controller-state-residue
+    resolved="$(realpath -e -- "$entry")" || fail unsafe-controller-state-residue
+    [[ "$resolved" == "$STATE_ROOT/$name" && \
+       "$(find "$resolved" -maxdepth 0 -mmin +60 -print)" == "$resolved" ]] || \
+      fail recent-or-escaped-controller-state-residue
+    mounts="$(findmnt -rn -o TARGET)" || fail controller-state-mount-inspection
+    while IFS= read -r target; do
+      [[ "$target" == "$resolved" || "$target" == "$resolved/"* ]] && \
+        fail mounted-controller-state-residue
+    done <<<"$mounts"
+    stale_paths+=("$resolved")
+    stale_identities+=("$(stat -c '%d:%i' -- "$resolved")")
+  done <&6
+  exec 6<&-
+  wait "$inventory_pid" || fail controller-state-inventory-read
+  for index in "${!stale_paths[@]}"; do
+    [[ "$(stat -c '%d:%i' -- "${stale_paths[$index]}" 2>/dev/null || true)" == \
+       "${stale_identities[$index]}" ]] || fail changed-controller-state-residue
+  done
+  for index in "${!stale_paths[@]}"; do
+    rm -rf --one-file-system -- "${stale_paths[$index]}"
+  done
+  (( ${#stale_paths[@]} == 0 )) || sync -f "$STATE_ROOT"
+}
+reconcile_stale_controller_state
 state_free_bytes="$(df -B1 --output=avail -- "$STATE_ROOT" | awk 'NR == 2 {print $1}')"
 [[ "$state_free_bytes" =~ ^[0-9]+$ && "$state_free_bytes" -ge "$MIN_STATE_FREE_BYTES" ]] || \
   fail insufficient-controller-disk-reserve
-exec 9>"$STATE_ROOT/.controller.lock"
-chmod 0600 "$STATE_ROOT/.controller.lock"
-flock -n 9 || fail another-trusted-controller-active
 state="$(mktemp -d -- "$STATE_ROOT/$revision.XXXXXXXX")"
 [[ -d "$state" && ! -L "$state" && "$(stat -c '%u:%g:%a' -- "$state")" == "0:0:700" ]] || \
   fail unsafe-controller-state

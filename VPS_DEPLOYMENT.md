@@ -366,7 +366,21 @@ destroyed. The rehearsal never shares the production Redis/Celery queue or
 object bucket, API/worker work volumes, or public traffic. Its two dedicated
 work volumes are size-bounded, non-executable tmpfs volumes (512 MiB API,
 2 GiB worker), are empty at start and removed together with the rehearsal
-containers before the orchestrator can report success. On the next locked run,
+containers before the orchestrator can report success.
+
+The two fixed outer trust controllers keep bounded Git/archive review trees in
+root-owned mode-`0700` directories below
+`/var/lib/lecturesift/controller-state`, not the VPS's small `/run` tmpfs.
+Their 12-GiB staging and 8-GiB exact-review gates therefore measure the disk
+that holds those potentially large trees. The source-comparison scratch trees
+also stay inside the matching controller run directory. Generated dotenv and
+other secret-bearing inner state remains in root-only `/run` and is removed at
+the end of the rehearsal. Persistent controller residue is reconciled only
+under its controller lock, after every candidate directory has passed strict
+name, ownership, mode, device, age and nested-mount validation; any unknown or
+recent entry blocks all deletion.
+
+On the next locked run,
 strictly named residue older than one hour from a SIGKILL/power loss is
 reconciled under the outer lock only after a complete no-delete validation of
 every fixed name, dual label, run age, internal-network topology and endpoint.
