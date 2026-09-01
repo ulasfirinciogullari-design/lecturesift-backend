@@ -952,7 +952,7 @@ SQL
 rehearsal_db_created="true"
 docker compose --project-directory "$ROOT_DIR" --file "$ROOT_DIR/compose.yaml" \
   exec -T postgres createdb -U "$POSTGRES_USER" -T template0 \
-  --owner="$rehearsal_owner_role" --encoding=UTF8 --locale=en_US.UTF-8 \
+  --owner="$rehearsal_owner_role" --encoding=UTF8 --locale=en_US.UTF8 \
   "$rehearsal_db"
 docker compose --project-directory "$ROOT_DIR" --file "$ROOT_DIR/compose.yaml" \
   exec -T postgres psql --no-psqlrc --quiet --set=ON_ERROR_STOP=1 \

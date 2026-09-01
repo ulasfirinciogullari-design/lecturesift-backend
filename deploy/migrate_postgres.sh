@@ -335,7 +335,7 @@ reset_and_restore_target() {
     --maintenance-db postgres --if-exists --force "$POSTGRES_DB"
   "${compose[@]}" exec -T postgres createdb --username "$POSTGRES_USER" \
     --maintenance-db postgres --template template0 --encoding UTF8 \
-    --locale en_US.UTF-8 --owner "$POSTGRES_USER" "$POSTGRES_DB"
+    --locale en_US.UTF8 --owner "$POSTGRES_USER" "$POSTGRES_DB"
   "${compose[@]}" exec -T postgres pg_restore --username "$POSTGRES_USER" \
     --exit-on-error --single-transaction --no-owner --no-acl \
     --dbname "$POSTGRES_DB" <"$dump"

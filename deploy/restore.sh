@@ -258,7 +258,7 @@ docker run --rm --pull=never --network none --read-only \
   -euo pipefail -c '
     export PGDATA=/var/lib/postgresql/data
     initdb --no-sync --auth-local=trust --auth-host=reject \
-      --locale=en_US.UTF-8 --encoding=UTF8 >/dev/null
+      --locale=en_US.UTF8 --encoding=UTF8 >/dev/null
     pg_ctl -o "-c listen_addresses= -c unix_socket_directories=/tmp -c fsync=off" \
       -w start >/dev/null
     trap '\''pg_ctl -m immediate -w stop >/dev/null 2>&1 || true'\'' EXIT
@@ -400,6 +400,10 @@ docker compose exec -T postgres dropdb \
 docker compose exec -T postgres createdb \
   --username "$POSTGRES_USER" \
   --maintenance-db postgres \
+  --template template0 \
+  --encoding UTF8 \
+  --locale en_US.UTF8 \
+  --owner "$POSTGRES_USER" \
   "$POSTGRES_DB"
 docker compose exec -T postgres pg_restore \
   --username "$POSTGRES_USER" \
@@ -407,6 +411,42 @@ docker compose exec -T postgres pg_restore \
   --clean --if-exists --no-owner --no-acl --exit-on-error --single-transaction \
   /tmp/lecturesift.dump
 docker compose exec -T postgres rm -f /tmp/lecturesift.dump
+
+# Re-prove the database that was actually written into the production volume.
+# The earlier disposable rehearsal protects the live database from a bad dump;
+# this second gate closes the gap between that rehearsal and the destructive
+# restore. Application services remain stopped until every identity, schema and
+# row fingerprint matches the checksum-bound, root-private backup metadata again.
+live_manifest="$(docker compose exec -T postgres psql \
+  --no-psqlrc --quiet --set=ON_ERROR_STOP=1 \
+  --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+  < "$RECOVERY_MANIFEST")"
+live_manifest="$(printf '%s\n' "$live_manifest" | tr -d '\r')"
+live_database_count="$(printf '%s\n' "$live_manifest" | grep -c '^DATABASE|')"
+live_database_line="$(printf '%s\n' "$live_manifest" | grep '^DATABASE|')"
+live_schema_count="$(printf '%s\n' "$live_manifest" | grep -c '^SCHEMA|')"
+live_schema_line="$(printf '%s\n' "$live_manifest" | grep '^SCHEMA|')"
+live_table_count="$(printf '%s\n' "$live_manifest" | grep -c '^TABLE|')"
+live_data_sha256="$(printf '%s\n' "$live_manifest" \
+  | grep '^TABLE|' | LC_ALL=C sort | sha256sum | awk '{print $1}')"
+if printf '%s\n' "$live_manifest" | grep -Eq '^(TABLE_DIFF|UNVALIDATED_FK)\|'; then
+  echo "The production restore contains missing/unexpected tables or unvalidated foreign keys." >&2
+  exit 1
+fi
+if ! printf '%s\n' "$live_manifest" \
+  | awk -F'|' '$1 == "ANOMALY" && $3 != "0" { invalid=1 } END { exit invalid }'; then
+  echo "The production restore contains a data-integrity anomaly." >&2
+  exit 1
+fi
+if [[ "$live_database_count" != "1" || "$live_schema_count" != "1" || \
+      ! "$live_table_count" =~ ^[1-9][0-9]*$ || \
+      "$(printf '%s\n' "$live_database_line" | sha256sum | awk '{print $1}')" != \
+      "$metadata_database_identity_sha256" || \
+      "$(printf '%s\n' "$live_schema_line" | sha256sum | awk '{print $1}')" != \
+      "$metadata_schema_sha256" || "$live_data_sha256" != "$metadata_data_sha256" ]]; then
+  echo "The production database identity/schema/data fingerprints do not match backup metadata." >&2
+  exit 1
+fi
 
 # pg_restore intentionally ignores source ACLs. Recreate and verify the
 # least-privilege application grants on the new database before any API or

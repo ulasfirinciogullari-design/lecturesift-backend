@@ -414,7 +414,7 @@ docker run --rm --pull=never --network none --read-only \
   --entrypoint bash postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af -euo pipefail -c '
     export PGDATA=/var/lib/postgresql/data
     initdb --no-sync --auth-local=trust --auth-host=reject \
-      --locale=en_US.UTF-8 --encoding=UTF8 >/dev/null
+      --locale=en_US.UTF8 --encoding=UTF8 >/dev/null
     pg_ctl -o "-c listen_addresses= -c unix_socket_directories=/tmp -c fsync=off" \
       -w start >/dev/null
     trap '\''pg_ctl -m immediate -w stop >/dev/null 2>&1 || true'\'' EXIT

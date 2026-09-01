@@ -267,7 +267,7 @@ services:
     env_file:
       - ${LECTURESIFT_DB_ENV_FILE:-/etc/lecturesift/postgres.env}
     environment:
-      POSTGRES_INITDB_ARGS: "--locale=en_US.UTF-8 --encoding=UTF8"
+      POSTGRES_INITDB_ARGS: "--locale=en_US.UTF8 --encoding=UTF8"
     command:
       - postgres
       - -c

@@ -21,6 +21,10 @@ PRESERVED_CONTRACT = (
     ROOT / "deploy" / "schema_contract_billing_email_verifications_v1.txt"
 )
 VERIFIER_PATH = ROOT / "deploy" / "verify_schema_transition.py"
+POSTGRES_18_IMAGE = (
+    "postgres:18-bookworm@"
+    "sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af"
+)
 
 SPEC = importlib.util.spec_from_file_location("schema_transition_verifier", VERIFIER_PATH)
 assert SPEC and SPEC.loader
@@ -60,7 +64,7 @@ def _manifest_text(
         | (frozenset() if legacy else verifier.PROVIDER_ANOMALIES)
     )
     lines = [
-        "DATABASE|18|UTF8|en_US.UTF-8|en_US.UTF-8|c|2.36|UTC",
+        "DATABASE|18|UTF8|en_US.UTF8|en_US.UTF8|c|2.36|UTC",
         "DATABASE_SIZE|1",
         f"SCHEMA|{len(objects)}|{schema_digest}",
         *objects,
@@ -90,6 +94,69 @@ def test_manifest_generator_quiets_psql_before_configuring_record_output():
     unaligned = lines.index(r"\pset format unaligned")
 
     assert quiet < tuples_only < unaligned
+
+
+def test_postgres_locale_spelling_matches_the_render_source_manifest():
+    paths = (
+        ROOT / "compose.yaml",
+        ROOT / "deploy" / "migrate_postgres.sh",
+        ROOT / "deploy" / "rehearsal_restore.sh",
+        ROOT / "deploy" / "restic_restore_rehearsal.sh",
+        ROOT / "deploy" / "restore.sh",
+    )
+
+    for path in paths:
+        payload = path.read_text(encoding="utf-8")
+        assert "en_US.UTF8" in payload, path
+        assert "en_US.UTF-8" not in payload, path
+
+    supply_chain_lock = (ROOT / "deploy" / "supply_chain.lock").read_text(
+        encoding="utf-8"
+    )
+    assert f"postgres_image={POSTGRES_18_IMAGE}" in supply_chain_lock.splitlines()
+
+
+def test_production_restore_recreates_database_with_exact_source_identity():
+    restore = (ROOT / "deploy" / "restore.sh").read_text(encoding="utf-8")
+    start = restore.index("docker compose exec -T postgres createdb")
+    end = restore.index("docker compose exec -T postgres pg_restore", start)
+    create_database = restore[start:end]
+
+    assert "--template template0" in create_database
+    assert "--encoding UTF8" in create_database
+    assert "--locale en_US.UTF8" in create_database
+    assert '--owner "$POSTGRES_USER"' in create_database
+    assert '"$POSTGRES_DB"' in create_database
+
+
+def test_production_restore_revalidates_live_data_before_starting_services():
+    restore = (ROOT / "deploy" / "restore.sh").read_text(encoding="utf-8")
+    destructive_boundary = restore.index('fail_stop_required="true"')
+    createdb = restore.index(
+        "docker compose exec -T postgres createdb", destructive_boundary
+    )
+    pg_restore = restore.index("docker compose exec -T postgres pg_restore", createdb)
+    live_manifest = restore.index('live_manifest="$(docker compose exec', pg_restore)
+    database_fingerprint = restore.index(
+        '"$metadata_database_identity_sha256"', live_manifest
+    )
+    schema_fingerprint = restore.index('"$metadata_schema_sha256"', live_manifest)
+    data_fingerprint = restore.index('"$metadata_data_sha256"', live_manifest)
+    application_start = restore.index(
+        "docker compose up -d --no-deps --wait --wait-timeout 600 api worker",
+        live_manifest,
+    )
+
+    assert createdb < pg_restore < live_manifest
+    assert live_manifest < database_fingerprint < application_start
+    assert live_manifest < schema_fingerprint < application_start
+    assert live_manifest < data_fingerprint < application_start
+    live_gate = restore[live_manifest:application_start]
+    assert "grep -c '^DATABASE|'" in live_gate
+    assert "grep -c '^SCHEMA|'" in live_gate
+    assert "grep -c '^TABLE|'" in live_gate
+    assert "TABLE_DIFF|UNVALIDATED_FK" in live_gate
+    assert '"ANOMALY"' in live_gate
 
 
 def test_schema_contract_includes_postgres_18_not_null_constraints():
@@ -535,9 +602,11 @@ def test_manifest_legacy_strict_current_and_schema_contract_on_postgres_18(tmp_p
             f"POSTGRES_PASSWORD={password}",
             "--env",
             f"POSTGRES_DB={database}",
+            "--env",
+            "POSTGRES_INITDB_ARGS=--locale=en_US.UTF8 --encoding=UTF8",
             "--publish",
             f"127.0.0.1:{port}:5432",
-            "postgres:18-bookworm",
+            POSTGRES_18_IMAGE,
         ],
         timeout=300,
     )
@@ -638,7 +707,54 @@ def test_manifest_legacy_strict_current_and_schema_contract_on_postgres_18(tmp_p
                 break
             time.sleep(0.5)
         assert ready, "PostgreSQL 18 did not become ready"
-        copied = _run([docker, "cp", str(MANIFEST), f"{container}:/tmp/rehearsal_manifest.sql"])
+        identity = docker_exec(
+            "psql",
+            "--no-psqlrc",
+            "--tuples-only",
+            "--no-align",
+            "--username",
+            "postgres",
+            "--dbname",
+            database,
+            "--command",
+            "SELECT datcollate || '|' || datctype FROM pg_database "
+            "WHERE datname = current_database()",
+        )
+        assert identity.returncode == 0, identity.stderr
+        assert identity.stdout.strip() == "en_US.UTF8|en_US.UTF8"
+        created = docker_exec(
+            "createdb",
+            "--username",
+            "postgres",
+            "--maintenance-db",
+            "postgres",
+            "--template",
+            "template0",
+            "--encoding",
+            "UTF8",
+            "--locale",
+            "en_US.UTF8",
+            "locale_probe",
+        )
+        assert created.returncode == 0, created.stderr
+        probe_identity = docker_exec(
+            "psql",
+            "--no-psqlrc",
+            "--tuples-only",
+            "--no-align",
+            "--username",
+            "postgres",
+            "--dbname",
+            "locale_probe",
+            "--command",
+            "SELECT datcollate || '|' || datctype FROM pg_database "
+            "WHERE datname = current_database()",
+        )
+        assert probe_identity.returncode == 0, probe_identity.stderr
+        assert probe_identity.stdout.strip() == "en_US.UTF8|en_US.UTF8"
+        copied = _run(
+            [docker, "cp", str(MANIFEST), f"{container}:/tmp/rehearsal_manifest.sql"]
+        )
         assert copied.returncode == 0, copied.stderr
 
         migrate()
