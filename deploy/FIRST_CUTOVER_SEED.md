@@ -21,12 +21,20 @@ forget`/`prune`, or interprets an unproved snapshot as success.
   before the runtime/database configuration and infrastructure bootstrap exist.
 - `postgres` and `redis` must already be running from the verified provider
   migrations. API, worker and every rehearsal writer must remain stopped.
-- Render must still report exact `freeze` mode, its worker must be absent, both
+- Render must still report exact `freeze` mode, its worker must be suspended
+  with no instance according to the official GET-only Render API proof, both
   source/target queues must be empty, and both databases must have zero pending
   provider payments.
+- `/root/.lecturesift-render-cutover-control.env` must contain only the
+  root-private Render API token and exact worker service ID/name. Its secret is
+  never logged or stored in evidence. The target Redis digest is captured by a
+  trusted host standard-library RESP reader against the validated official
+  Redis container, not by the candidate application image.
 - The same 32-lowercase-hex cutover ID and 40-lowercase-hex clean Git revision
   used for PostgreSQL and Redis are required. Both migration success proofs
-  must match them and the canonical Render endpoint fingerprint.
+  must use the current evidence version and match them and the canonical Render
+  endpoint fingerprint. Version-1 proofs are deliberately rejected because
+  they did not bind the strict migrated-target manifest.
 - The Restic repository must already be initialized and must be exactly:
 
   `s3:https://<32-lowercase-hex-R2-account-id>.eu.r2.cloudflarestorage.com/lecturesift-production-backups/restic`
@@ -64,14 +72,22 @@ forget`/`prune`, or interprets an unproved snapshot as success.
      bash /opt/lecturesift/deploy/seed_first_cutover_backup.sh
    ```
 
-   The script exports one PostgreSQL MVCC snapshot, binds both `pg_dump` and
-   the recovery manifest to it, forces and validates a Redis 7.4 AOF/RDB
+   The script first opens one exported read-only PostgreSQL snapshot. Before
+   `pg_dump` consumes it, the script runs the same strict
+   `rehearsal_manifest.sql` and canonical line contract inside that snapshot
+   as PostgreSQL migration. That fresh, snapshot-bound SHA-256 must exactly equal
+   `migrated_target_manifest_sha256` in the root-only
+   `postgres-cutover.ok`; a changed target fails before any backup is taken.
+   The script then exports one PostgreSQL MVCC snapshot, binds both `pg_dump`
+   and the recovery manifest to it, forces and validates a Redis 7.4 AOF/RDB
    checkpoint, creates the exact `lecturesift-backup-v2` payload plus the
    existing `configuration-snapshot-v1`, uploads it with the fixed production
    host/tags, reopens the full 64-hex Restic snapshot, and deletes its
-   root-private plaintext staging directory before writing
-   `first-cutover-seed.ok` atomically. This is ordinary filesystem deletion,
-   not a guarantee of storage-media sanitization.
+   root-private plaintext staging directory before atomically writing
+   `first-cutover-seed.ok`. The seed proof repeats the verified migrated-target
+   manifest SHA-256 and must match the PostgreSQL proof, binding the captured
+   backup to the already-proven migrated state. Plaintext cleanup is ordinary
+   filesystem deletion, not a guarantee of storage-media sanitization.
 6. Do not allow another snapshot writer to run. Immediately execute:
 
    ```text

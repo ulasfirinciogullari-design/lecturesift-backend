@@ -52,11 +52,18 @@ def main() -> None:
     old_admin_auth = {"Authorization": "Bearer 1"}
 
     summary: dict[str, object] = {
+        "ok": False,
         "account": False,
         "admin": False,
         "old_admin_token_rejected": False,
-        "iyzico_configured": False,
+        "payment_providers_disabled": False,
+        "email_provider_disabled": config.EMAIL_PROVIDER == "none",
+        "instagram_provider_disabled": not config.INSTAGRAM_DAILY_AUTOMATION_ENABLED,
         "invalid_payment_webhook_rejected": False,
+        "ai_provider_tested": bool(config.OPENAI_API_KEY),
+        "ai_provider_skip_reason": (
+            None if config.OPENAI_API_KEY else "dedicated_rehearsal_openai_key_absent"
+        ),
         "r2_roundtrip": False,
         "analysis_completed": False,
         "durable_result_published": False,
@@ -88,11 +95,13 @@ def main() -> None:
         )
 
         billing_health = require(client.get("/billing/health"))
-        summary["iyzico_configured"] = bool(
-            billing_health.get("payments", {}).get("iyzico", {}).get("configured")
+        payments = billing_health.get("payments", {})
+        summary["payment_providers_disabled"] = not any(
+            bool((payments.get(provider) or {}).get("configured"))
+            for provider in ("iyzico", "paytr")
         )
-        if not summary["iyzico_configured"]:
-            raise RuntimeError("iyzico is not configured in the rehearsal runtime")
+        if not summary["payment_providers_disabled"]:
+            raise RuntimeError("a live payment provider entered the rehearsal runtime")
         invalid_webhook = client.post("/billing/iyzico/webhook", json={})
         summary["invalid_payment_webhook_rejected"] = invalid_webhook.status_code == 400
 
@@ -132,8 +141,8 @@ def main() -> None:
                 "translate_transcript": "false",
                 "output_formats": "pdf",
                 "job_type": "study_pack",
-                "include_summary": "true",
-                "include_transcript": "false",
+                "include_summary": "true" if config.OPENAI_API_KEY else "false",
+                "include_transcript": "false" if config.OPENAI_API_KEY else "true",
                 "include_slides": "false",
             },
         )
@@ -172,8 +181,10 @@ def main() -> None:
             raise RuntimeError("Durable result keys were not published")
 
         result = require(client.get(f"/jobs/{job_id}/result", headers=auth))
+        expected_text = result.get("summary") if config.OPENAI_API_KEY else result.get("transcript")
         summary["result_reopened"] = (
-            result.get("job_id") == job_id and bool(str(result.get("summary") or "").strip())
+            result.get("job_id") == job_id
+            and bool(str(expected_text or "").strip())
             and any(item.get("format") == "PDF" for item in result.get("artifacts", []))
         )
 
@@ -205,7 +216,9 @@ def main() -> None:
             "account",
             "admin",
             "old_admin_token_rejected",
-            "iyzico_configured",
+            "payment_providers_disabled",
+            "email_provider_disabled",
+            "instagram_provider_disabled",
             "invalid_payment_webhook_rejected",
             "r2_roundtrip",
             "analysis_completed",
@@ -215,6 +228,10 @@ def main() -> None:
         )
     ):
         raise RuntimeError("One or more rehearsal gates did not pass")
+    summary["ok"] = True
+    summary["rehearsal_user_id"] = str(account["user"]["id"])
+    summary["rehearsal_email"] = test_email
+    summary["rehearsal_job_ids"] = [job_id]
     print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
 
 

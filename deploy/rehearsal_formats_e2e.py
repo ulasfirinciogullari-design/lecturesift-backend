@@ -23,7 +23,6 @@ import uuid
 
 import httpx
 from docx import Document
-from openai import OpenAI
 from PIL import Image, ImageDraw, ImageFont
 from pptx import Presentation
 from pptx.util import Inches
@@ -223,25 +222,14 @@ def _create_ocr_images(directory: Path) -> list[tuple[Path, str]]:
     return outputs
 
 
-def _create_synthetic_speech(directory: Path) -> tuple[Path, str]:
-    if not config.OPENAI_API_KEY:
-        raise RuntimeError("OpenAI is not configured in the rehearsal runtime")
+def _prepared_synthetic_speech(directory: Path) -> tuple[Path, str]:
+    prepared = Path("/tmp/lecturesift-rehearsal-synthetic-lecture.mp3")
+    if os.getenv("LECTURESIFT_REHEARSAL_AI_PROVIDER") != "dedicated":
+        raise RuntimeError("dedicated rehearsal AI source was not enabled")
+    if not prepared.is_file() or prepared.is_symlink() or prepared.stat().st_size < 1024:
+        raise RuntimeError("dedicated rehearsal synthetic speech source is missing")
     audio_path = directory / "synthetic-lecture.mp3"
-    prompt = (
-        "Fotosentez, bitkilerin isik enerjisini kimyasal enerjiye donusturdugu "
-        "surectir. Kloroplastlarda ATP uretilir ve Calvin dongusu karbondioksiti kullanir."
-    )
-    try:
-        with OpenAI(api_key=config.OPENAI_API_KEY, timeout=90.0) as client:
-            response = client.audio.speech.create(
-                model="gpt-4o-mini-tts",
-                voice="alloy",
-                input=prompt,
-                response_format="mp3",
-            )
-            response.stream_to_file(audio_path)
-    except Exception as exc:
-        raise RuntimeError("Synthetic speech generation failed") from exc
+    shutil.copyfile(prepared, audio_path)
     if not audio_path.is_file() or audio_path.stat().st_size < 1024:
         raise RuntimeError("Synthetic MP3 was not created")
     return audio_path, "audio/mpeg"
@@ -568,6 +556,18 @@ def main() -> None:
     selected_cases = requested_cases or available_cases
     if not selected_cases or not selected_cases.issubset(available_cases):
         raise RuntimeError("Unknown rehearsal format case selection")
+    ai_provider = os.getenv("LECTURESIFT_REHEARSAL_AI_PROVIDER", "")
+    if ai_provider not in {"dedicated", "intentionally_absent"}:
+        raise RuntimeError("Rehearsal AI provider state is not explicit")
+    ai_cases = {"mp3_audio", "mp4_video"}.intersection(selected_cases)
+    skipped_cases: dict[str, str] = {}
+    if ai_provider == "intentionally_absent":
+        skipped_cases = {
+            case: "dedicated_rehearsal_openai_key_absent" for case in sorted(ai_cases)
+        }
+        selected_cases = selected_cases.difference(ai_cases)
+    if not selected_cases:
+        raise RuntimeError("All requested cases require an absent dedicated AI provider")
 
     def best_effort_cleanup() -> None:
         nonlocal account_closed, cleanup_complete
@@ -638,7 +638,7 @@ def main() -> None:
             if "ocr_images" in selected_cases:
                 cases["ocr_images"] = (_create_ocr_images(source_dir), False)
             if selected_cases.intersection({"mp3_audio", "mp4_video"}):
-                speech_audio = _create_synthetic_speech(source_dir)
+                speech_audio = _prepared_synthetic_speech(source_dir)
                 if "mp3_audio" in selected_cases:
                     cases["mp3_audio"] = ([speech_audio], False)
                 if "mp4_video" in selected_cases:
@@ -718,6 +718,10 @@ def main() -> None:
                 {
                     "ok": True,
                     "cases": sorted(cases),
+                    "requested_cases": sorted(requested_cases or available_cases),
+                    "skipped_cases": skipped_cases,
+                    "ai_provider_tested": ai_provider == "dedicated",
+                    "ai_provider_state": ai_provider,
                     "formats": sorted(
                         format_name
                         for case_name in cases
@@ -735,6 +739,9 @@ def main() -> None:
                     "job_metadata_removed": len(jobs),
                     "r2_residual_objects": residual_objects,
                     "rehearsal_account_closed": account_closed,
+                    "rehearsal_user_id": user_id,
+                    "rehearsal_email": test_email,
+                    "rehearsal_job_ids": sorted(jobs.values()),
                     "elapsed_seconds": elapsed_seconds,
                 },
                 ensure_ascii=False,

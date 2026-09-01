@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set +x
 set -euo pipefail
 
 # Valkey/Redis RDB files are not imported across different server versions.
@@ -19,6 +20,9 @@ fi
 ROOT_DIR="${LECTURESIFT_ROOT:-/opt/lecturesift}"
 SOURCE_ENV_FILE="${LECTURESIFT_SOURCE_ENV_FILE:-/root/.lecturesift-render-source.env}"
 CUTOVER_EVIDENCE_TOOL="$ROOT_DIR/deploy/provider_cutover_evidence.py"
+RENDER_WORKER_STOP_TOOL="$ROOT_DIR/deploy/render_worker_stop_evidence.py"
+SOURCE_REDIS_GUARD="$ROOT_DIR/deploy/source_redis_guard.py"
+TARGET_REDIS_MANIFEST_TOOL="$ROOT_DIR/deploy/target_redis_manifest.sh"
 FAIL_STOP_ROOT="/var/lib/lecturesift/migration-fail-stop"
 FAIL_STOP_MARKER="$FAIL_STOP_ROOT/redis-state-unproven"
 POSTGRES_FAIL_STOP_MARKER="$FAIL_STOP_ROOT/postgres-cutover-unproven"
@@ -73,19 +77,27 @@ BACKUP_ROOT="$(realpath -e -- "$BACKUP_ROOT")"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 RUN_DIR="$BACKUP_ROOT/redis-migration-$STAMP"
 mkdir -m 0700 -- "$RUN_DIR"
+TARGET_ROLLBACK_STATE="$RUN_DIR/target-before.json"
+TARGET_ROLLBACK_METADATA="$RUN_DIR/target-rollback-metadata.json"
 target_updated="false"
 migration_committed="false"
 target_had_state="0"
 target_lock_acquired="false"
 MIGRATION_LOCK_KEY="lecturesift:jobs:v2:write-lock"
 MIGRATION_LOCK_TOKEN="$(cat /proc/sys/kernel/random/uuid)"
+MIGRATION_LOCK_TOKEN_FILE="$RUN_DIR/redis-migration-lock.token"
 CUTOVER_ID="${LECTURESIFT_PROVIDER_CUTOVER_ID:-}"
 EXPECTED_BUILD_REVISION="${LECTURESIFT_EXPECTED_BUILD_REVISION:-}"
+SOURCE_WORKER_STOP_EVIDENCE_SHA256=""
+TARGET_REDIS_MANIFEST_SHA256=""
 
-[[ -f "$CUTOVER_EVIDENCE_TOOL" && ! -L "$CUTOVER_EVIDENCE_TOOL" ]] || {
-  echo "The provider-cutover evidence helper is missing or unsafe." >&2
-  exit 1
-}
+for helper in "$CUTOVER_EVIDENCE_TOOL" "$RENDER_WORKER_STOP_TOOL" \
+  "$SOURCE_REDIS_GUARD" "$TARGET_REDIS_MANIFEST_TOOL"; do
+  [[ -f "$helper" && ! -L "$helper" ]] || {
+    echo "A Redis cutover evidence helper is missing or unsafe." >&2
+    exit 1
+  }
+done
 [[ "$CUTOVER_ID" =~ ^[0-9a-f]{32}$ ]] || {
   echo "LECTURESIFT_PROVIDER_CUTOVER_ID must be exactly 32 lowercase hex characters." >&2
   exit 1
@@ -146,24 +158,23 @@ cleanup() {
          "${target_rollback_log:-/dev/null}"; then
       cleanup_failed="true"
       echo "Failed to durably restore target Redis after an aborted migration." >&2
-    elif [[ "$target_had_state" == "1" && -f "$RUN_DIR/target-before.json" ]]; then
+    elif [[ "$target_had_state" == "1" && -f "$TARGET_ROLLBACK_STATE" ]]; then
       if ! docker compose exec -T redis redis-cli --raw GET lecturesift:jobs:v2 \
           >"$rollback_current"; then
         cleanup_failed="true"
       else
-        python3 - "$rollback_current" <<'PY'
+        python3 - "$rollback_current" "$TARGET_ROLLBACK_STATE" <<'PY'
 from pathlib import Path
 import sys
 
 path = Path(sys.argv[1])
+expected = Path(sys.argv[2]).read_bytes()
 value = path.read_bytes()
-if value.endswith(b"\n"):
-    value = value[:-1]
-if value.endswith(b"\r"):
-    value = value[:-1]
-path.write_bytes(value)
+if value != expected + b"\n":
+    raise SystemExit("redis-cli rollback verification framing mismatch")
+path.write_bytes(value[:-1])
 PY
-        cmp --silent "$RUN_DIR/target-before.json" "$rollback_current" || \
+        cmp --silent "$TARGET_ROLLBACK_STATE" "$rollback_current" || \
           cleanup_failed="true"
       fi
     else
@@ -188,6 +199,7 @@ PY
     if [[ "$migration_committed" != "true" ]]; then
       rm -f -- "$FAIL_STOP_MARKER"
     fi
+    rm -f -- "$MIGRATION_LOCK_TOKEN_FILE"
   fi
   unset SOURCE_REDIS_URL SOURCE_CELERY_BROKER_URL SOURCE_HEALTH_URL
   unset REDIS_URL CELERY_BROKER_URL PUBLIC_BASE_URL
@@ -211,6 +223,8 @@ marker_tmp="$(mktemp -- "$FAIL_STOP_ROOT/.redis-migration-in-progress-XXXXXXXX")
 chmod 0600 "$marker_tmp"
 mv -- "$marker_tmp" "$FAIL_STOP_MARKER"
 trap cleanup EXIT
+printf '%s\n' "$MIGRATION_LOCK_TOKEN" >"$MIGRATION_LOCK_TOKEN_FILE"
+chmod 0600 "$MIGRATION_LOCK_TOKEN_FILE"
 
 assert_target_broker_empty() {
   local phase="$1"
@@ -220,7 +234,7 @@ assert_target_broker_empty() {
   # priority variants, as a Redis list. Scan all list keys so a custom queue
   # name cannot bypass the cutover guard. The two reserved unacked structures
   # must also be empty and have their expected Redis types when present.
-  if ! broker_state="$(docker compose exec -T redis redis-cli --raw EVAL '
+  if ! broker_state="$(docker compose exec -T redis redis-cli --raw EVAL_RO '
 local function type_name(key)
   local reply = redis.call("TYPE", key)
   if type(reply) == "table" then
@@ -286,8 +300,8 @@ set -a
 # shellcheck disable=SC1090
 source "$SOURCE_ENV_FILE" >/dev/null 2>&1
 set +a
-SOURCE_REDIS_URL="${REDIS_URL:-}"
-SOURCE_CELERY_BROKER_URL="${CELERY_BROKER_URL:-}"
+SOURCE_REDIS_URL="${SOURCE_REDIS_URL:-${REDIS_URL:-}}"
+SOURCE_CELERY_BROKER_URL="${SOURCE_CELERY_BROKER_URL:-${CELERY_BROKER_URL:-}}"
 SOURCE_HEALTH_URL="${SOURCE_HEALTH_URL:-}"
 if [[ -z "$SOURCE_HEALTH_URL" && -n "${PUBLIC_BASE_URL:-}" ]]; then
   SOURCE_HEALTH_URL="${PUBLIC_BASE_URL%/}/health"
@@ -336,9 +350,13 @@ python3 "$CUTOVER_EVIDENCE_TOOL" begin-redis \
   echo "The Redis cutover does not match a verified PostgreSQL cutover session." >&2
   exit 1
 }
+bash "$TARGET_REDIS_MANIFEST_TOOL" init-salt || {
+  echo "The confidential target Redis manifest salt could not be initialized." >&2
+  exit 1
+}
 
 check_source_frozen() {
-  local phase="$1"
+  local phase="$1" observed_stop_digest
   local health_file="$RUN_DIR/source-health-$phase.json"
   if ! curl --fail --silent --show-error --max-time 15 \
     --proto '=https' --tlsv1.2 "$SOURCE_HEALTH_URL" >"$health_file"; then
@@ -358,16 +376,17 @@ PY
     return 1
   fi
 
-  # An operator flag alone is not proof that a worker is gone. A Celery remote
-  # control ping against the source broker must return no consumers; broker
-  # connection failures also fail closed.
-  if ! timeout 30 docker run --rm --pull=never --network bridge --user 0 \
-    -e SOURCE_CELERY_BROKER_URL --entrypoint python lecturesift-backend:local -c \
-    'import os; from celery import Celery; app=Celery(broker=os.environ["SOURCE_CELERY_BROKER_URL"]); replies=app.control.ping(timeout=8); raise SystemExit(1 if replies else 0)' \
-    >>"$RUN_DIR/source-worker-check.log" 2>&1; then
-    echo "The source worker is reachable or its stopped state could not be independently proved." >&2
+  observed_stop_digest="$(python3 "$RENDER_WORKER_STOP_TOOL")" || {
+    echo "The source worker suspended state could not be independently proved." >&2
+    return 1
+  }
+  [[ "$observed_stop_digest" =~ ^[0-9a-f]{64}$ ]] || return 1
+  if [[ -n "$SOURCE_WORKER_STOP_EVIDENCE_SHA256" &&
+        "$observed_stop_digest" != "$SOURCE_WORKER_STOP_EVIDENCE_SHA256" ]]; then
+    echo "The Render worker identity/state proof changed during Redis migration." >&2
     return 1
   fi
+  SOURCE_WORKER_STOP_EVIDENCE_SHA256="$observed_stop_digest"
 }
 
 check_source_frozen before
@@ -387,35 +406,115 @@ if [[ "$lock_reply" != "OK" ]]; then
 fi
 target_lock_acquired="true"
 assert_target_broker_empty "pre-export"
+target_non_job_before_sha256="$(
+  bash "$TARGET_REDIS_MANIFEST_TOOL" manifest migration non-job \
+    "$MIGRATION_LOCK_TOKEN_FILE"
+)" || {
+  echo "The target non-job Redis state could not be captured before migration." >&2
+  exit 1
+}
+[[ "$target_non_job_before_sha256" =~ ^[0-9a-f]{64}$ ]] || exit 1
 
 export_log="$RUN_DIR/source-export.log"
-if ! docker run --rm --pull=never --network bridge --user 0 \
-  -e SOURCE_REDIS_URL \
-  -v "$ROOT_DIR/deploy:/deploy:ro" \
-  -v "$RUN_DIR:/migration" \
-  --entrypoint python lecturesift-backend:local \
-  /deploy/export_redis_state.py /migration/source-before.json >"$export_log" 2>&1; then
+if ! timeout 45 python3 "$SOURCE_REDIS_GUARD" export \
+  "$RUN_DIR/source-before.json" >"$export_log" 2>&1; then
   echo "The source Redis state could not be exported. Root-only diagnostic: $export_log" >&2
   exit 1
 fi
 
 assert_target_broker_empty "before-import"
 target_had_state="$(docker compose exec -T redis redis-cli --raw EXISTS lecturesift:jobs:v2 | tr -d '\r')"
+target_payload_bytes="$(docker compose exec -T redis redis-cli --raw STRLEN lecturesift:jobs:v2 | tr -d '\r')"
+[[ "$target_had_state" == "0" || "$target_had_state" == "1" ]] || {
+  echo "The previous target Redis key-presence state is invalid." >&2
+  exit 1
+}
+[[ "$target_payload_bytes" =~ ^[0-9]+$ ]] || {
+  echo "The previous target Redis payload length is invalid." >&2
+  exit 1
+}
 docker compose exec -T redis redis-cli --raw GET lecturesift:jobs:v2 \
-  >"$RUN_DIR/target-before.json"
-python3 - "$RUN_DIR/target-before.json" <<'PY'
+  >"$TARGET_ROLLBACK_STATE"
+python3 - "$TARGET_ROLLBACK_STATE" "$target_payload_bytes" <<'PY'
+import os
 from pathlib import Path
 import sys
 
 path = Path(sys.argv[1])
 value = path.read_bytes()
-if value.endswith(b"\n"):
-    value = value[:-1]
-if value.endswith(b"\r"):
-    value = value[:-1]
-path.write_bytes(value)
+expected = int(sys.argv[2])
+if len(value) != expected + 1 or not value.endswith(b"\n"):
+    raise SystemExit("redis-cli rollback capture framing mismatch")
+with path.open("r+b") as stream:
+    stream.truncate(expected)
+    stream.flush()
+    os.fsync(stream.fileno())
+directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+try:
+    os.fsync(directory_fd)
+finally:
+    os.close(directory_fd)
 PY
-chmod 0600 "$RUN_DIR/target-before.json" "$export_log"
+chmod 0600 "$TARGET_ROLLBACK_STATE" "$export_log"
+
+# Preserve an unambiguous, root-only rollback artifact before the first target
+# mutation.  The raw copy is deliberately kept byte-for-byte (an existing
+# empty string is distinct from an absent key); the canonical metadata records
+# that distinction and binds the copy by digest without exposing its payload.
+python3 - "$TARGET_ROLLBACK_STATE" "$TARGET_ROLLBACK_METADATA" \
+  "$target_had_state" <<'PY'
+import hashlib
+import json
+import os
+from pathlib import Path
+import sys
+import tempfile
+
+state = Path(sys.argv[1])
+destination = Path(sys.argv[2])
+if sys.argv[3] not in {"0", "1"}:
+    raise SystemExit("invalid Redis rollback presence state")
+existed = sys.argv[3] == "1"
+payload = state.read_bytes()
+if not existed and payload:
+    raise SystemExit("an absent Redis key produced a non-empty rollback payload")
+document = {
+    "existed": existed,
+    "payload_bytes": len(payload),
+    "payload_sha256": hashlib.sha256(payload).hexdigest(),
+    "redis_key": "lecturesift:jobs:v2",
+    "schema": "lecturesift-redis-rollback-v1",
+}
+encoded = json.dumps(
+    document, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+).encode("ascii") + b"\n"
+fd, temporary_name = tempfile.mkstemp(
+    prefix=".target-rollback-metadata.", dir=destination.parent
+)
+temporary = Path(temporary_name)
+try:
+    os.fchmod(fd, 0o600)
+    os.fchown(fd, 0, 0)
+    with os.fdopen(fd, "wb") as stream:
+        stream.write(encoded)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, destination)
+    directory_fd = os.open(destination.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+finally:
+    temporary.unlink(missing_ok=True)
+PY
+[[ -f "$TARGET_ROLLBACK_STATE" && ! -L "$TARGET_ROLLBACK_STATE" && \
+   -f "$TARGET_ROLLBACK_METADATA" && ! -L "$TARGET_ROLLBACK_METADATA" && \
+   "$(stat -c '%u:%g:%a' -- "$TARGET_ROLLBACK_STATE")" == "0:0:600" && \
+   "$(stat -c '%u:%g:%a' -- "$TARGET_ROLLBACK_METADATA")" == "0:0:600" ]] || {
+  echo "The Redis rollback copy or its metadata is not root-owned and private." >&2
+  exit 1
+}
 
 # Prepare the inverse write before touching the target. Cleanup can therefore
 # restore the exact previous value (or exact absence) and fsync it with WAITAOF
@@ -423,7 +522,7 @@ chmod 0600 "$RUN_DIR/target-before.json" "$export_log"
 # acknowledgement failed.
 target_rollback_resp="$RUN_DIR/target-rollback.resp"
 target_rollback_log="$RUN_DIR/target-rollback.log"
-python3 - "$RUN_DIR/target-before.json" "$target_rollback_resp" \
+python3 - "$TARGET_ROLLBACK_STATE" "$target_rollback_resp" \
   "$target_had_state" <<'PY'
 from pathlib import Path
 import sys
@@ -487,23 +586,15 @@ fi
 docker compose exec -T redis redis-cli --raw GET lecturesift:jobs:v2 \
   >"$RUN_DIR/target-written.json"
 
-if ! docker run --rm --pull=never --network bridge --user 0 \
-  -e SOURCE_REDIS_URL \
-  -v "$ROOT_DIR/deploy:/deploy:ro" \
-  -v "$RUN_DIR:/migration" \
-  --entrypoint python lecturesift-backend:local \
-  /deploy/export_redis_state.py /migration/source-after.json >>"$export_log" 2>&1; then
+if ! timeout 45 python3 "$SOURCE_REDIS_GUARD" export \
+  "$RUN_DIR/source-after.json" >>"$export_log" 2>&1; then
   echo "The source Redis state could not be rechecked. Root-only diagnostic: $export_log" >&2
   exit 1
 fi
 
 check_source_frozen final
-if ! docker run --rm --pull=never --network bridge --user 0 \
-  -e SOURCE_REDIS_URL \
-  -v "$ROOT_DIR/deploy:/deploy:ro" \
-  -v "$RUN_DIR:/migration" \
-  --entrypoint python lecturesift-backend:local \
-  /deploy/export_redis_state.py /migration/source-final.json >>"$export_log" 2>&1; then
+if ! timeout 45 python3 "$SOURCE_REDIS_GUARD" export \
+  "$RUN_DIR/source-final.json" >>"$export_log" 2>&1; then
   echo "The frozen source Redis state could not be finally re-read. Root-only diagnostic: $export_log" >&2
   exit 1
 fi
@@ -533,21 +624,89 @@ PY
 
 assert_target_broker_empty "before-commit"
 
+# The one authorized data mutation is lecturesift:jobs:v2.  Every other key,
+# type, serialized value and absolute expiry must remain byte-logically equal.
+target_non_job_after_sha256="$(
+  bash "$TARGET_REDIS_MANIFEST_TOOL" manifest migration non-job \
+    "$MIGRATION_LOCK_TOKEN_FILE"
+)" || {
+  echo "The target non-job Redis state could not be captured after migration." >&2
+  exit 1
+}
+[[ "$target_non_job_after_sha256" == "$target_non_job_before_sha256" ]] || {
+  echo "A non-job Redis key changed during the migration." >&2
+  exit 1
+}
+target_redis_manifest_before_release="$(
+  bash "$TARGET_REDIS_MANIFEST_TOOL" manifest migration full \
+    "$MIGRATION_LOCK_TOKEN_FILE"
+)" || {
+  echo "The complete target Redis manifest could not be captured before lock release." >&2
+  exit 1
+}
+[[ "$target_redis_manifest_before_release" =~ ^[0-9a-f]{64}$ ]] || exit 1
+
 redis_state_sha256="$(sha256sum "$RUN_DIR/source-final.json" | awk '{print $1}')"
-redis_rollback_sha256="$(sha256sum "$RUN_DIR/target-before.json" | awk '{print $1}')"
+redis_rollback_sha256="$(sha256sum "$TARGET_ROLLBACK_STATE" | awk '{print $1}')"
+metadata_rollback_sha256="$(python3 - "$TARGET_ROLLBACK_METADATA" \
+  "$TARGET_ROLLBACK_STATE" "$target_had_state" <<'PY'
+import hashlib
+import json
+from pathlib import Path
+import sys
+
+metadata_path = Path(sys.argv[1])
+state_path = Path(sys.argv[2])
+expected_existed = sys.argv[3] == "1"
+raw = metadata_path.read_bytes()
+metadata = json.loads(raw)
+canonical = json.dumps(
+    metadata, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+).encode("ascii") + b"\n"
+required = {"schema", "redis_key", "existed", "payload_bytes", "payload_sha256"}
+payload = state_path.read_bytes()
+if raw != canonical or set(metadata) != required:
+    raise SystemExit("non-canonical Redis rollback metadata")
+if metadata != {
+    "schema": "lecturesift-redis-rollback-v1",
+    "redis_key": "lecturesift:jobs:v2",
+    "existed": expected_existed,
+    "payload_bytes": len(payload),
+    "payload_sha256": hashlib.sha256(payload).hexdigest(),
+}:
+    raise SystemExit("Redis rollback metadata does not bind the retained state")
+print(metadata["payload_sha256"])
+PY
+)" || {
+  echo "The retained Redis rollback state could not be revalidated." >&2
+  exit 1
+}
 [[ "$redis_state_sha256" =~ ^[0-9a-f]{64}$ && \
-   "$redis_rollback_sha256" =~ ^[0-9a-f]{64}$ ]] || {
+   "$redis_rollback_sha256" =~ ^[0-9a-f]{64}$ && \
+   "$metadata_rollback_sha256" == "$redis_rollback_sha256" ]] || {
   echo "The Redis migration evidence hashes are invalid." >&2
   exit 1
 }
 release_target_lock_strict
 migration_committed="true"
+TARGET_REDIS_MANIFEST_SHA256="$(
+  bash "$TARGET_REDIS_MANIFEST_TOOL" manifest steady full
+)" || {
+  echo "The committed target Redis manifest could not be re-proved." >&2
+  exit 1
+}
+[[ "$TARGET_REDIS_MANIFEST_SHA256" == "$target_redis_manifest_before_release" ]] || {
+  echo "The target Redis manifest changed across migration-lock release." >&2
+  exit 1
+}
 python3 "$CUTOVER_EVIDENCE_TOOL" write-redis \
   --cutover-id "$CUTOVER_ID" \
   --revision "$EXPECTED_BUILD_REVISION" \
   --source-fingerprint "$SOURCE_FINGERPRINT" \
   --run-id "$(basename -- "$RUN_DIR")" \
   --state-sha256 "$redis_state_sha256" \
+  --source-worker-stop-evidence-sha256 "$SOURCE_WORKER_STOP_EVIDENCE_SHA256" \
+  --target-redis-manifest-sha256 "$TARGET_REDIS_MANIFEST_SHA256" \
   --rollback-sha256 "$redis_rollback_sha256" || {
   echo "The global Redis cutover proof could not be recorded; production remains fail-stopped." >&2
   exit 1
@@ -555,7 +714,7 @@ python3 "$CUTOVER_EVIDENCE_TOOL" write-redis \
 rm -f -- "$RUN_DIR/source-before.json" "$RUN_DIR/source-after.json" \
   "$RUN_DIR/source-final.json" "$RUN_DIR/target-written.json" \
   "$RUN_DIR/target-final.json" "$RUN_DIR/source-health-"*.json \
-  "$RUN_DIR/source-worker-check.log" "$target_write_resp" \
+  "$RUN_DIR/source-worker-check.log" "$MIGRATION_LOCK_TOKEN_FILE" "$target_write_resp" \
   "$target_write_log" "$target_rollback_resp" "$target_rollback_log" "$export_log"
 rm -f -- "$FAIL_STOP_MARKER"
 [[ ! -e "$FAIL_STOP_MARKER" && ! -L "$FAIL_STOP_MARKER" ]] || {
@@ -564,4 +723,4 @@ rm -f -- "$FAIL_STOP_MARKER"
 }
 trap - EXIT
 unset SOURCE_REDIS_URL SOURCE_CELERY_BROKER_URL SOURCE_HEALTH_URL
-echo "Rollback copy retained: $RUN_DIR/target-before.json"
+echo "Root-only rollback state and canonical metadata retained: $TARGET_ROLLBACK_STATE ; $TARGET_ROLLBACK_METADATA"

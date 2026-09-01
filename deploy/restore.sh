@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set +x
 set -euo pipefail
 
 if [[ "$(id -u)" != "0" ]]; then
@@ -211,22 +212,22 @@ trap 'cleanup_validation || true' EXIT
 
 # Validate both archives before stopping a service or dropping the live
 # database. These containers are network-isolated and mount the backup read-only.
-docker image inspect postgres:18-bookworm >/dev/null 2>&1 || {
-  echo "postgres:18-bookworm must already be present for restore validation." >&2
+docker image inspect postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af >/dev/null 2>&1 || {
+  echo "Pinned PostgreSQL image must already be present for restore validation." >&2
   exit 1
 }
-docker image inspect redis:7.4-alpine >/dev/null 2>&1 || {
-  echo "redis:7.4-alpine must already be present for restore validation." >&2
+docker image inspect redis:7.4-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf >/dev/null 2>&1 || {
+  echo "Pinned Redis image must already be present for restore validation." >&2
   exit 1
 }
 docker run --rm --pull=never --network none --read-only --cap-drop ALL \
   --security-opt no-new-privileges --pids-limit 64 \
   -v "$SOURCE:/backup:ro" --entrypoint pg_restore \
-  postgres:18-bookworm --list /backup/postgres.dump >/dev/null
+  postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af --list /backup/postgres.dump >/dev/null
 postgres_uid="$(docker run --rm --pull=never --network none --read-only \
-  --entrypoint id postgres:18-bookworm -u postgres)"
+  --entrypoint id postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af -u postgres)"
 postgres_gid="$(docker run --rm --pull=never --network none --read-only \
-  --entrypoint id postgres:18-bookworm -g postgres)"
+  --entrypoint id postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af -g postgres)"
 [[ "$postgres_uid" =~ ^[0-9]+$ && "$postgres_gid" =~ ^[0-9]+$ ]] || {
   echo "Could not resolve the disposable PostgreSQL image user." >&2
   exit 1
@@ -253,7 +254,7 @@ docker run --rm --pull=never --network none --read-only \
   --tmpfs "/tmp:rw,nosuid,nodev,size=128m,uid=$postgres_uid,gid=$postgres_gid,mode=0700" \
   -v "$SOURCE:/backup:ro" \
   -v "$RECOVERY_MANIFEST:/probe/recovery_manifest.sql:ro" \
-  --entrypoint bash postgres:18-bookworm \
+  --entrypoint bash postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af \
   -euo pipefail -c '
     export PGDATA=/var/lib/postgresql/data
     initdb --no-sync --auth-local=trust --auth-host=reject \
@@ -292,7 +293,7 @@ fi
 docker run --rm --pull=never --network none --read-only --cap-drop ALL \
   --security-opt no-new-privileges --pids-limit 64 \
   -v "$SOURCE:/backup:ro" --entrypoint redis-check-rdb \
-  redis:7.4-alpine /backup/redis-dump.rdb >/dev/null
+  redis:7.4-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf /backup/redis-dump.rdb >/dev/null
 
 cleanup_validation
 VALIDATION_RUN_DIR=""
@@ -416,7 +417,7 @@ redis_conversion_output="$(docker run --rm --pull=never --network none --user 0 
   -v lecturesift-redis-data:/data \
   -v "$SOURCE:/restore:ro" \
   -v "$ROOT_DIR/deploy:/probe:ro" \
-  --entrypoint sh redis:7.4-alpine \
+  --entrypoint sh redis:7.4-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf \
   /probe/redis_rdb_to_aof.sh)"
 restored_redis_dbsize="$(printf '%s\n' "$redis_conversion_output" \
   | sed -n 's/^RESTORED_DBSIZE=//p')"
@@ -431,7 +432,7 @@ restored_redis_dbsize="$(printf '%s\n' "$redis_conversion_output" \
 docker run --rm --user 0 \
   -v lecturesift-api-work:/api-work \
   -v lecturesift-worker-work:/worker-work \
-  --entrypoint sh redis:7.4-alpine \
+  --entrypoint sh redis:7.4-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf \
   -c 'find /api-work /worker-work -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +'
 
 # Recover private state first. Public ingress stays stopped until both the API

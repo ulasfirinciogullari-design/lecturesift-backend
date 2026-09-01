@@ -261,41 +261,169 @@ on the VPS. Netlify and private Cloudflare R2 remain external.
 
 ## Data cutover
 
-Before the maintenance window, stop the normal VPS API and worker and run the
-disposable rehearsal with `sudo deploy/rehearsal_restore.sh`. It creates a
+Before the maintenance window, stop the normal VPS API and worker. Independently
+review and install `deploy/trusted_stage_release_controller.sh` as root-owned,
+non-writable `/usr/local/sbin/lecturesift-release-stage-controller`. Generate
+the revision-pinned operator wrapper with
+`deploy/generate_stage_release_wrapper.py`; that wrapper may invoke only this
+fixed controller. The controller bounds transports/resources and proves the
+complete tree against the version-2 private allowlist before any candidate
+shell or Dockerfile is evaluated. Never clone and root-execute a staging helper
+directly from a transported bundle.
+
+Stage the exact candidate, then run the disposable rehearsal only through the separately
+reviewed, fixed
+`/usr/local/sbin/lecturesift-exact-rehearsal-controller`. Never invoke candidate
+`deploy/run_exact_rehearsal.sh` directly. The trusted controller requires the
+revision-specific root-only tree/both-controllers/orchestrator hash allowlist described
+in `deploy/EXACT_REHEARSAL_SAFETY.md` before crossing into candidate code.
+Candidate rehearsal code runs as root and controls Docker, which is
+host-root-equivalent: this is an explicit reviewed-code trust boundary, not a
+sandbox or a safe way to evaluate an unreviewed commit on the production host.
+On the OVH host, first run
+`sudo bash /opt/lecturesift/deploy/check_shell_syntax.sh`; its
+`SHELL_SYNTAX_OK` record is a mandatory pre-rehearsal gate for every tracked
+deployment shell script. CI runs the same gate on Linux. Native Windows test
+runs skip only this runtime check when Bash is unavailable.
+Do not invoke `rehearsal_restore.sh` directly: after independent allowlisting,
+the tracked candidate outer wrapper proves the base PostgreSQL roles/main
+database, Redis data, Docker resources and host listeners returned to their
+baselines on both success and failure. Follow
+`deploy/EXACT_REHEARSAL_SAFETY.md` for the trust boundary, evidence chain and
+SHA-specific bootstrap regeneration. The inner rehearsal creates a
 uniquely named PostgreSQL database, starts the localhost-only isolated stack,
 runs both the account/R2/worker E2E and every supported document/OCR/audio/video
 format E2E, then removes the rehearsal containers and force-drops the cloned
 database on success or failure. It keeps only root-only dump metadata/manifests
 and non-secret E2E reports under `/var/backups/lecturesift/rehearsal`; no database
 clone or raw production dump is handed off to a later command or retained
-indefinitely; non-secret reports are pruned after 30 days. A clean table
-diff, schema fingerprint, constraints, anomaly report and both E2Es are mandatory.
+indefinitely; non-secret reports are pruned after 30 days. The rehearsal first
+proves exact manifest equality between the read-only source and its raw restored
+clone. The sole pre-release compatibility exception is an explicitly recorded
+missing `billing_payment_provider_sessions` table; no missing-table anomaly is
+reported as zero. The owner migration then runs only on the disposable clone,
+after which a strict table diff, schema fingerprint, constraints and anomaly
+report must pass. Existing `DATABASE`, `STATUS` and table-data fingerprints must
+remain unchanged, and the new table must be empty when it was absent at source.
+The migration also emits a canonical `SCHEMA_OBJECT` inventory. The reviewed
+revision contract fixes every column, index and constraint of the sole allowed
+new table, while all other public-table column/index/constraint records must be
+byte-identical before and after migration. This is deliberately a migration
+delta contract, not a golden declaration of preserved legacy schemas, views,
+functions, grants or extensions. Both application E2Es are mandatory. Their
+generated UUIDs and addresses are then consumed by a rehearsal-only cleanup
+primitive that refuses any non-timestamped rehearsal database; the final strict
+manifest must equal the pre-E2E migrated manifest exactly.
 If the source changes between the before/after manifests, the rehearsal fails
-and must be repeated. Supply `LECTURESIFT_REHEARSAL_S3_BUCKET`,
+and must be repeated. Supply `LECTURESIFT_REHEARSAL_S3_ENDPOINT_URL`,
+`LECTURESIFT_REHEARSAL_S3_BUCKET`,
 `LECTURESIFT_REHEARSAL_S3_ACCESS_KEY_ID`, and
 `LECTURESIFT_REHEARSAL_S3_SECRET_ACCESS_KEY` in
 `/etc/lecturesift/rehearsal.env` (or the absolute path named by
-`LECTURESIFT_REHEARSAL_ENV_FILE`). The rehearsal file must be a regular,
+`LECTURESIFT_REHEARSAL_ENV_FILE`), using `deploy/rehearsal.env.example` as the
+key-name template. The rehearsal file must be a regular,
 non-symlink, root-owned file with mode `0400` or `0600`; never put these values
-in `runtime.env`. The script validates and sources this separate file before
-starting any rehearsal container. The bucket and least-privilege token must
-both be distinct from production. The orchestrator invokes
+in `runtime.env`. The endpoint must be an explicit Cloudflare R2 HTTPS
+endpoint, and both the bucket and least-privilege token must be distinct from
+production. Different names and secret values are not sufficient evidence:
+before candidate containers start, the exact rehearsal positively verifies the
+token on the rehearsal bucket and requires read-only list and random-missing-
+object GET requests against the production bucket to return an explicit
+authorization denial. It never writes to either bucket during this capability
+gate; success, an ambiguous error or an unavailable network fails closed, and
+the secret-free proof is bound into admission. The host parses this file as dotenv data without executing it and
+rejects every key outside the fixed rehearsal allowlist. It similarly reads
+the production database/API/worker dotenv files only on the host to prove that
+no rehearsal password, token or key equals a production value. It then writes
+short-lived root-owned mode-`0600` API and worker env files in the private run
+directory; it never mounts or passes production role env files to candidate
+containers. A production-admitting run requires
+`LECTURESIFT_REHEARSAL_OPENAI_API_KEY`, and it must be a dedicated
+non-production key. Without it, document/OCR diagnostics may still run and the
+AI-backed format cases are recorded as intentional provider skips rather than
+false passes, but the exact artifact validator rejects the result and no
+release admission can be written. Admission requires successful MP3 and MP4
+AI/audio/video cases with an empty skipped-case set.
+
+The API and worker attach only to the labeled internal
+`lecturesift_rehearsal_backend` network, never the production Compose backend.
+The validated production PostgreSQL container is temporarily attached to this
+network under the `postgres` alias so clone-only roles can reach only that
+necessary endpoint; production Redis stays detached and must fail runtime DNS
+probes from both candidates. Their only external paths are two
+separate Squid containers with separately generated policies and backend
+aliases. Each API/worker-to-proxy link uses a different temporary internal
+Docker network, so the API cannot resolve or connect to the worker proxy. The
+API proxy can reach only the dedicated R2 endpoint. The worker proxy can reach
+R2 and, only with the dedicated AI key, `api.openai.com`.
+The stack verifies actual container network/env state, denies arbitrary proxy
+and direct Internet probes, and proves the allowed R2 path through rollout
+health before E2E acceptance. Billing, email and Instagram providers remain
+disabled and no live provider credential enters either role. The orchestrator invokes
 `deploy/rehearsal_stack.sh` itself and binds the API to localhost port 18000;
 do not invoke the stack later with a database name because the clone is already
 destroyed. The rehearsal never shares the production Redis/Celery queue or
 object bucket, API/worker work volumes, or public traffic. Its two dedicated
-work volumes are empty at start and removed together with the rehearsal
+work volumes are size-bounded, non-executable tmpfs volumes (512 MiB API,
+2 GiB worker), are empty at start and removed together with the rehearsal
 containers before the orchestrator can report success. On the next locked run,
 strictly named residue older than one hour from a SIGKILL/power loss is
-reconciled only after proving no rehearsal container/client is attached;
-unrecognized or recent state blocks instead of being guessed away.
+reconciled under the outer lock only after a complete no-delete validation of
+every fixed name, dual label, run age, internal-network topology and endpoint.
+The validated production PostgreSQL attachment is then disconnected before the
+dedicated network is removed; unknown, mixed-run or recent state blocks without
+deleting anything. Production preflight independently fail-stops while any such
+residue or attachment exists.
+The clone receives three timestamp-derived disposable database roles: one
+clone owner plus separate API and worker roles. The restored database is owned
+by the clone owner, `pg_restore` uses `--role=<clone-owner> --no-owner --no-acl`,
+and candidate migration receives only that clone-owner URL. Production
+`POSTGRES_USER`/`POSTGRES_PASSWORD` remain confined to the trusted PostgreSQL
+client and are never passed to candidate code. Rehearsal provisioning therefore
+cannot rotate live role passwords or settings. Database and role comments bind cleanup to the
+exact timestamped clone. Before `createdb`, the orchestrator atomically writes
+and fsyncs a root-owned mode-`0600` marker under the fixed mode-`0700`
+`/var/lib/lecturesift/rehearsal-provenance` registry. This durable binding lets
+the next locked run safely recognize a power loss between database creation and
+`COMMENT ON DATABASE`; unknown, malformed or recent registry state blocks.
+Normal cleanup and stale cleanup both refuse a rehearsal-like database or role
+without the matching validated marker, and the marker is removed and its parent
+directory fsynced only after the database and all three disposable roles are proven
+absent. Roles are dropped after their database so cluster-global role settings
+cannot remain after a successful run.
+The outer gate invokes the inner script's locked `--reconcile-only` mode before
+capturing its host/database baseline. That mode never drops a database or role:
+it exits successfully only when no timestamped rehearsal database/role exists
+and the registry is empty after removing strictly parsed markers older than one
+hour whose database and all three derived roles are already absent. A recent,
+malformed or unknown marker, or any matching database/role, fails closed for
+operator inspection. Its sole success record is
+`REHEARSAL_RECONCILE_OK|database_or_role_modified=false|provenance_empty=true`.
 
 1. Populate the fixed, root-owned `/root/.lecturesift-render-source.env` with
-   `SOURCE_DATABASE_URL` (the external TLS Render PostgreSQL URL) and
+   `SOURCE_DATABASE_URL` (the external Render PostgreSQL URL with exactly
+   `sslmode=verify-full`) and
    `SOURCE_HEALTH_URL` (the direct Render `/health` URL). It must be a regular,
-   non-symlink file with mode `0400` or `0600`. Never put this URL in the
-   repository, a command line, or a Docker environment visible in logs.
+   non-symlink file with mode `0400` or `0600`. `sslmode=require` and
+   `sslmode=verify-ca` are intentionally rejected because they do not prove the
+   requested Render hostname. The migration tools parse this dotenv strictly
+   as data and pass only canonical, non-secret libpq endpoint variables to
+   PostgreSQL clients. The password is written to a single-link mode-`0600`
+   file in a root-only `/run` session, mounted read-only as `PGPASSFILE`, and
+   removed when the Docker client exits; it is never a Docker/host environment
+   value. Health and Redis child processes receive only their endpoint family;
+   only the source-identity fingerprint process receives all four source URLs.
+   Never put the database URL or password in the repository, a process command
+   line, or logs.
+   Separately create `/root/.lecturesift-render-cutover-control.env` as a
+   root-owned, single-link regular file with mode `0400` or `0600`. It must
+   contain exactly `RENDER_API_TOKEN`, the exact background-worker
+   `RENDER_WORKER_SERVICE_ID`, and `RENDER_WORKER_SERVICE_NAME`. The token needs
+   read access to that service only. Cutover tools issue only the two official
+   Render GET requests for the service and its instances, require the exact
+   service to be suspended with no listed instance, and bind the secret-free
+   result digest into every provider proof. They never send Celery remote-control
+   commands to the live Render Redis service.
 2. Put the live Render API into exact `freeze` mode, stop its worker, drain all
    queued/active work, and reconcile every provider payment. Keep Render
    fenced for the whole cutover. A manual statement that the queue is empty is
@@ -312,13 +440,27 @@ unrecognized or recent state blocks instead of being guessed away.
    LECTURESIFT_SOURCE_FROZEN=YES LECTURESIFT_SOURCE_WORKER_STOPPED=YES
    LECTURESIFT_PROVIDER_RECONCILED=YES bash deploy/migrate_postgres.sh`. It exports
    one Render MVCC snapshot, runs the manifest and `pg_dump` against that same
-   snapshot, and requires exact live before/snapshot/after equality. Before
+   read-only snapshot, and requires exact live before/snapshot/after equality.
+   The source database is never schema-migrated or otherwise written by this
+   command. A pre-release source may carry only the explicitly recorded missing
+   `billing_payment_provider_sessions` compatibility marker; every other missing
+   table, unvalidated constraint or data anomaly remains fatal. Before
    replacing OVH PostgreSQL it stops only the OVH API and worker, records a
    root-only target rollback dump, and preserves 5 GiB of host reserve. It
-   restores without source owners/ACLs, provisions the least-privilege database
-   roles, and runs real one-shot API and worker table-access probes. Exact
-   database runtime, schema, table-data, status and anomaly manifests must
-   match. The verified run and both dumps remain under the fixed root-only
+   restores without source owners/ACLs and proves the raw target manifest is
+   exactly equal to the stable Render snapshot before any owner migration runs.
+   It then applies the current schema on OVH, provisions the least-privilege
+   database roles, and requires a strict manifest with no compatibility marker,
+   table difference, unvalidated constraint or anomaly. `DATABASE`, `STATUS`
+   and every pre-existing table-data fingerprint must survive that migration;
+   if the provider-session table was absent at source it must be newly created
+   and empty, while an already existing table and all of its rows must be
+   preserved. Real one-shot API and worker table-access probes run only against
+   this migrated target and must leave its strict manifest unchanged. Render's
+   freeze, stopped worker/queue and zero pending payments are rechecked after
+   target verification. Both the source manifest hash and strict migrated-target
+   manifest hash are bound into the atomic PostgreSQL cutover proof. The
+   verified run and both dumps remain under the fixed root-only
    `/var/backups/lecturesift/postgres-cutover` directory until final acceptance.
    Any unproved post-mutation failure restores the target rollback dump when
    possible and leaves a blocking marker under
@@ -338,10 +480,23 @@ unrecognized or recent state blocks instead of being guessed away.
    `LECTURESIFT_REDIS_MIGRATION_CONFIRM=YES`,
    `LECTURESIFT_SOURCE_FROZEN=YES`, and
    `LECTURESIFT_SOURCE_WORKER_STOPPED=YES`. The script independently verifies
-   live freeze mode and the absence of a source Celery consumer, holds a target
+   live freeze mode and the independently proved suspended Render worker, holds a target
    migration lock, copies only versioned `lecturesift:jobs:v2` JSON, and
-performs final source and target rereads. Never import a Render Valkey RDB
-into VPS Redis.
+   performs final source and target rereads. Never import a Render Valkey RDB
+   into VPS Redis. Before the first target mutation it retains the exact previous
+   raw value in the root-only migration run directory and writes canonical
+   metadata recording whether the key existed, its byte length, and its SHA-256
+   digest. An existing empty value is therefore never confused with an absent
+   key. Successful cleanup deliberately preserves both rollback files and prints
+   their paths; diagnostics and terminal output never include the payload.
+   Target Redis evidence is an all-key, two-pass logical manifest over each
+   key's type, serialized `DUMP` digest and absolute-expiry policy. Key names and
+   values are HMAC-protected by a fixed root-only random salt. The reader is a
+   tracked pure-standard-library RESP client running on the trusted host against
+   the identity-stable official `redis:7.4-alpine` container; it never imports
+   the candidate application image or its packages. Only the exact migration
+   lock is excluded, and the non-job before/after comparison permits the one
+   reviewed jobs-state replacement while rejecting every other mutation.
    If a failed migration cannot durably prove restoration of the previous
    target value, it leaves the Redis write lock in place and creates
    `/var/lib/lecturesift/migration-fail-stop/redis-state-unproven`. Production
@@ -354,11 +509,17 @@ into VPS Redis.
    remains frozen and API/worker remain stopped, run
    `deploy/seed_first_cutover_backup.sh` with the same cutover ID/revision and
    all four explicit seed confirmations. The seed tool first requires the
-   matching PostgreSQL and Redis proofs; it then creates one exact-format,
-   encrypted Restic snapshot from the already-running target PostgreSQL/Redis,
-   deletes its root-private plaintext staging directory (ordinary filesystem
-   deletion, not guaranteed storage-media sanitization), and records the snapshot,
-   backup-set, repository and step-proof hashes in the root-only
+   matching version-2 PostgreSQL and Redis proofs. Inside one exported read-only
+   PostgreSQL snapshot, and before `pg_dump` consumes it, the seed runs the same
+   strict rehearsal manifest and canonical line contract used by PostgreSQL
+   migration. It hashes that snapshot-bound result and requires exact equality
+   with the migrated-target manifest hash in `postgres-cutover.ok`; any
+   post-migration drift fails closed. It then
+   creates one exact-format, encrypted Restic snapshot from the already-running
+   target PostgreSQL/Redis, deletes its root-private plaintext staging directory
+   (ordinary filesystem deletion, not guaranteed storage-media sanitization),
+   and records that target-manifest hash together with the snapshot, backup-set,
+   repository and step-proof hashes in the root-only
    `first-cutover-seed.ok`. It never runs Compose lifecycle commands, changes
    traffic, or performs Restic forget/prune. Follow
    `deploy/FIRST_CUTOVER_SEED.md` exactly.
@@ -455,9 +616,21 @@ sudo env LECTURESIFT_POSTGRES_ROLLBACK_CONFIRM=YES \
 
 Only after reviewing that evidence may an operator rerun with
 `LECTURESIFT_RENDER_REPLACE_CONFIRM=REPLACE_STILL_FENCED_RENDER`. That explicit
-mode replaces the entire still-fenced Render public schema, proves exact
-manifest equality, and attempts to restore Render's pre-operation dump on any
-failure. It still does not switch traffic. Reconcile the logical Redis job
+mode replaces the complete approved application schema set (`public` plus
+`lecturesift_worker` when present), including data and canonical schema-only
+definitions. It rejects every unapproved user schema and any extension located
+inside an application schema before mutation. Source owners/ACLs are not
+portable across providers: restored objects are explicitly reconstructed as
+the Render database owner, PUBLIC schema/table/sequence/routine privileges are
+revoked, and a catalog inventory proves the owner-only app ACL policy. Render's
+database-level ACL, role settings, default ACLs, collation attributes and
+extension inventory must remain byte-identical to their pre-operation evidence.
+The tool proves strict manifest and schema equality and attempts to restore the
+original Render dump with its original ACLs on any failure. A still-fenced pre-release Render schema is inspected with the
+same single explicit provider-session compatibility marker, so its rollback
+dump can be restored and proven without pretending the missing table is an
+anomaly-free current schema. The OVH replacement itself must always pass the
+strict current-schema manifest. It still does not switch traffic. Reconcile the logical Redis job
 state in the reverse direction with a separately reviewed procedure, reconcile
 R2 objects created after cutover, re-test signed payment callbacks, and only
 then return traffic to Render. A PostgreSQL success marker explicitly records

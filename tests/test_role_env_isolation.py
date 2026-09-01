@@ -283,7 +283,9 @@ def test_preflight_and_systemd_fail_closed_on_missing_or_stale_role_files():
         "ExecReload=/bin/bash /opt/lecturesift/deploy/release.sh build",
         "ExecReload=/usr/bin/docker compose up -d --wait --wait-timeout 300 postgres redis",
         "ExecReload=/bin/bash /opt/lecturesift/deploy/provision_database_role.sh",
+        "ExecReload=/bin/bash /opt/lecturesift/deploy/verify_provider_first_start.sh arm",
         "ExecReload=/usr/bin/docker compose up -d --remove-orphans --wait --wait-timeout 600",
+        "ExecReload=/bin/bash /opt/lecturesift/deploy/verify_provider_first_start.sh complete",
     ]
     assert "unreviewed sensitive runtime key" in _read("deploy/generate_role_envs.py")
 

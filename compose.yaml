@@ -23,7 +23,7 @@ x-app: &app
 
 services:
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
     restart: "on-failure:5"
     depends_on:
       api:
@@ -260,7 +260,7 @@ services:
     # Render uses libc collation provider en_US.UTF8 at glibc 2.36. The
     # Bookworm image matches that runtime; Alpine/musl produced a different
     # collation version and is not safe for a byte-faithful migration.
-    image: postgres:18-bookworm
+    image: postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
     restart: "on-failure:5"
     env_file:
       - ${LECTURESIFT_DB_ENV_FILE:-/etc/lecturesift/postgres.env}
@@ -310,7 +310,7 @@ services:
         max-file: "5"
 
   redis:
-    image: redis:7.4-alpine
+    image: redis:7.4-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
     restart: "on-failure:5"
     command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
     volumes:

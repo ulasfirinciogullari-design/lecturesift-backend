@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set +x
 set -euo pipefail
 
 : "${POSTGRES_DB:?Missing POSTGRES_DB}"
@@ -10,20 +11,30 @@ set -euo pipefail
 
 target_db="${LECTURESIFT_PROVISION_DATABASE:-$POSTGRES_DB}"
 phase="${LECTURESIFT_PROVISION_PHASE:-bootstrap}"
+rehearsal_role_comment="${LECTURESIFT_REHEARSAL_ROLE_COMMENT:-}"
+schema_owner="${LECTURESIFT_SCHEMA_OWNER_USER:-$POSTGRES_USER}"
 role_pattern='^[a-z_][a-z0-9_]{0,62}$'
 case "$phase" in
   bootstrap|runtime) ;;
   *) echo "Unknown PostgreSQL provisioning phase." >&2; exit 1 ;;
 esac
+if [[ -n "$rehearsal_role_comment" &&
+      ( ! "$target_db" =~ ^lecturesift_rehearsal_[0-9]{14}$ ||
+        "$rehearsal_role_comment" != "lecturesift.rehearsal-role:v2:$target_db" ) ]]; then
+  echo "Invalid rehearsal role provenance." >&2
+  exit 1
+fi
 for identifier in \
-  "$POSTGRES_USER" "$LECTURESIFT_APP_DB_USER" \
+  "$POSTGRES_USER" "$schema_owner" "$LECTURESIFT_APP_DB_USER" \
   "$LECTURESIFT_WORKER_DB_USER" "$target_db"; do
   if [[ ! "$identifier" =~ $role_pattern ]]; then
     echo "Unsafe PostgreSQL role or database identifier." >&2
     exit 1
   fi
 done
-if [[ "$POSTGRES_USER" == "$LECTURESIFT_APP_DB_USER" || \
+if [[ "$schema_owner" == "$LECTURESIFT_APP_DB_USER" || \
+      "$schema_owner" == "$LECTURESIFT_WORKER_DB_USER" || \
+      "$POSTGRES_USER" == "$LECTURESIFT_APP_DB_USER" || \
       "$POSTGRES_USER" == "$LECTURESIFT_WORKER_DB_USER" || \
       "$LECTURESIFT_APP_DB_USER" == "$LECTURESIFT_WORKER_DB_USER" ]]; then
   echo "PostgreSQL owner, API and worker roles must be distinct." >&2
@@ -45,7 +56,9 @@ psql --no-psqlrc --quiet --set=ON_ERROR_STOP=1 \
   --variable=api_password="$LECTURESIFT_APP_DB_PASSWORD" \
   --variable=worker_user="$LECTURESIFT_WORKER_DB_USER" \
   --variable=worker_password="$LECTURESIFT_WORKER_DB_PASSWORD" \
-  --variable=target_db="$target_db" <<'SQL'
+  --variable=target_db="$target_db" \
+  --variable=rehearsal_role_comment="$rehearsal_role_comment" <<'SQL'
+BEGIN;
 SELECT format(
   'CREATE ROLE %I LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD %L',
   :'api_user', :'api_password'
@@ -57,6 +70,9 @@ SELECT format(
   :'api_user', :'api_password'
 )
 \gexec
+SELECT format('COMMENT ON ROLE %I IS %L', :'api_user', :'rehearsal_role_comment')
+WHERE :'rehearsal_role_comment' <> ''
+\gexec
 SELECT format(
   'CREATE ROLE %I LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD %L',
   :'worker_user', :'worker_password'
@@ -67,6 +83,9 @@ SELECT format(
   'ALTER ROLE %I LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD %L',
   :'worker_user', :'worker_password'
 )
+\gexec
+SELECT format('COMMENT ON ROLE %I IS %L', :'worker_user', :'rehearsal_role_comment')
+WHERE :'rehearsal_role_comment' <> ''
 \gexec
 SELECT format('REVOKE ALL PRIVILEGES ON DATABASE %I FROM %I', :'target_db', :'api_user')
 \gexec
@@ -85,13 +104,14 @@ SELECT format(
   :'worker_user', :'target_db'
 )
 \gexec
+COMMIT;
 SQL
 
 psql --no-psqlrc --quiet --set=ON_ERROR_STOP=1 \
   --username "$POSTGRES_USER" --dbname "$target_db" \
   --variable=api_user="$LECTURESIFT_APP_DB_USER" \
   --variable=worker_user="$LECTURESIFT_WORKER_DB_USER" \
-  --variable=owner_user="$POSTGRES_USER" <<'SQL'
+  --variable=owner_user="$schema_owner" <<'SQL'
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 SELECT format('REVOKE ALL ON SCHEMA public FROM %I', :'api_user')
 \gexec

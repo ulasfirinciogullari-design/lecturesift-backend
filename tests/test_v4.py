@@ -47,6 +47,12 @@ def synthetic_slide() -> np.ndarray:
     return frame
 
 
+def write_test_jpeg(path: Path, frame: np.ndarray) -> None:
+    encoded, payload = cv2.imencode(".jpg", frame)
+    assert encoded
+    path.write_bytes(payload.tobytes())
+
+
 def test_streamed_upload_accepts_exact_byte_limit_and_rejects_one_extra(tmp_path):
     exact = UploadFile(filename="exact.pdf", file=io.BytesIO(b"12345678"))
     assert asyncio.run(_save_upload(exact, tmp_path / "exact.pdf", max_bytes=8)) == 8
@@ -175,7 +181,7 @@ def test_health_and_unsupported_upload():
 def test_default_zip_contains_only_pdfs(tmp_path: Path):
     slides = tmp_path / "slides"
     slides.mkdir()
-    cv2.imwrite(str(slides / "slide_001_00m05s.jpg"), synthetic_slide())
+    write_test_jpeg(slides / "slide_001_00m05s.jpg", synthetic_slide())
     result = {
         "title": "Enerjiye Giriş",
         "summary": "İş ve enerji arasındaki temel ilişki.",
@@ -414,7 +420,7 @@ def test_dual_source_uses_audio_video_for_audio_and_slide_video_for_visuals(tmp_
     audio_video = tmp_path / "speaker.mp4"
     visual_video = tmp_path / "presentation.mp4"
     speaker_frame = tmp_path / "speaker.jpg"
-    cv2.imwrite(str(speaker_frame), synthetic_scene())
+    write_test_jpeg(speaker_frame, synthetic_scene())
     subprocess.run(
         [
             "ffmpeg",

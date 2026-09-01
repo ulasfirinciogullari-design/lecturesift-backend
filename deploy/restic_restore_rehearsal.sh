@@ -362,10 +362,10 @@ esac
 
 # Validators run in short-lived, network-isolated containers with the backup
 # directory mounted read-only. No named/live volume or service is referenced.
-docker image inspect postgres:18-bookworm >/dev/null 2>&1 || \
-  fail "postgres:18-bookworm must already be present before the drill"
-docker image inspect redis:7.4-alpine >/dev/null 2>&1 || \
-  fail "redis:7.4-alpine must already be present before the drill"
+docker image inspect postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af >/dev/null 2>&1 || \
+  fail "pinned PostgreSQL image must already be present before the drill"
+docker image inspect redis:7.4-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf >/dev/null 2>&1 || \
+  fail "pinned Redis image must already be present before the drill"
 [[ -f "$RECOVERY_MANIFEST" && ! -L "$RECOVERY_MANIFEST" ]] || \
   fail "the PostgreSQL rehearsal manifest is missing"
 [[ -f "$ROOT_DIR/deploy/redis_rdb_to_aof.sh" && \
@@ -381,9 +381,9 @@ current_manifest_sha256="$(sha256sum "$RECOVERY_MANIFEST" | awk '{print $1}')"
 # database-size-bound tmpfs, run the production migration manifest, and let
 # container removal discard every database page after validation.
 postgres_uid="$(docker run --rm --pull=never --network none --read-only \
-  --entrypoint id postgres:18-bookworm -u postgres)"
+  --entrypoint id postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af -u postgres)"
 postgres_gid="$(docker run --rm --pull=never --network none --read-only \
-  --entrypoint id postgres:18-bookworm -g postgres)"
+  --entrypoint id postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af -g postgres)"
 [[ "$postgres_uid" =~ ^[0-9]+$ && "$postgres_gid" =~ ^[0-9]+$ ]] || \
   fail "could not resolve the disposable PostgreSQL image user"
 
@@ -411,7 +411,7 @@ docker run --rm --pull=never --network none --read-only \
   --tmpfs "/tmp:rw,nosuid,nodev,size=128m,uid=$postgres_uid,gid=$postgres_gid,mode=0700" \
   -v "$BACKUP_DIR:/backup:ro" \
   -v "$RECOVERY_MANIFEST:/probe/recovery_manifest.sql:ro" \
-  --entrypoint bash postgres:18-bookworm -euo pipefail -c '
+  --entrypoint bash postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af -euo pipefail -c '
     export PGDATA=/var/lib/postgresql/data
     initdb --no-sync --auth-local=trust --auth-host=reject \
       --locale=en_US.UTF-8 --encoding=UTF8 >/dev/null
@@ -453,7 +453,7 @@ docker run --rm --pull=never --network none \
   --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 64 \
   -v "$BACKUP_DIR:/backup:ro" \
   --entrypoint redis-check-rdb \
-  redis:7.4-alpine /backup/redis-dump.rdb >/dev/null
+  redis:7.4-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf /backup/redis-dump.rdb >/dev/null
 
 # Exercise the real Redis 7 startup semantics, not only the RDB checksum. The
 # production config has AOF enabled, so the drill must preload RDB with AOF
@@ -471,7 +471,7 @@ redis_conversion_output="$(docker run --rm --pull=never --network none --user 0 
   --tmpfs /data:rw,nosuid,nodev,size=1g,uid=0,gid=0,mode=0700 \
   -v "$BACKUP_DIR:/restore:ro" \
   -v "$ROOT_DIR/deploy:/probe:ro" \
-  --entrypoint sh redis:7.4-alpine /probe/redis_rdb_to_aof.sh)" || \
+  --entrypoint sh redis:7.4-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf /probe/redis_rdb_to_aof.sh)" || \
   fail "Redis RDB-to-AOF startup validation failed"
 [[ "$(printf '%s\n' "$redis_conversion_output" | grep -c '^RESTORED_DBSIZE=')" == "1" && \
    "$(printf '%s\n' "$redis_conversion_output" | sed -n 's/^RESTORED_DBSIZE=//p')" =~ ^[0-9]+$ ]] || \

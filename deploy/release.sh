@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+set +x
 umask 077
+export GIT_ATTR_NOSYSTEM=1
 
 # Build and admit exactly one clean Git commit. The marker contains no secret;
 # it is root-only so an unprivileged local process cannot make an older image
@@ -23,6 +25,7 @@ command -v git >/dev/null 2>&1 || fail "git is not installed"
 command -v find >/dev/null 2>&1 || fail "find is not installed"
 command -v realpath >/dev/null 2>&1 || fail "realpath is not installed"
 command -v tar >/dev/null 2>&1 || fail "tar is not installed"
+command -v python3 >/dev/null 2>&1 || fail "python3 is not installed"
 
 [[ "$ROOT_DIR" == /* && -d "$ROOT_DIR" && ! -L "$ROOT_DIR" ]] || \
   fail "deployment root must be an existing non-symlink absolute directory"
@@ -117,14 +120,19 @@ write_release_file() {
 }
 
 image_matches() {
-  local image="$1" expected="$2" label environment
+  local image="$1" expected="$2" expected_supply="$3" label supply_label environment
   label="$(docker image inspect --format \
     '{{ index .Config.Labels "org.opencontainers.image.revision" }}' \
     "$image" 2>/dev/null || true)"
   [[ "$label" == "$expected" ]] || return 1
+  supply_label="$(docker image inspect --format \
+    '{{ index .Config.Labels "io.lecturesift.supply-chain-lock-sha256" }}' \
+    "$image" 2>/dev/null || true)"
+  [[ "$supply_label" == "$expected_supply" ]] || return 1
   environment="$(docker image inspect --format \
     '{{range .Config.Env}}{{println .}}{{end}}' "$image" 2>/dev/null || true)"
-  grep -Fqx "LECTURESIFT_BUILD_REVISION=$expected" <<<"$environment"
+  grep -Fqx "LECTURESIFT_BUILD_REVISION=$expected" <<<"$environment" && \
+    grep -Fqx "LECTURESIFT_SUPPLY_CHAIN_LOCK_SHA256=$expected_supply" <<<"$environment"
 }
 
 revision="$(source_revision)"
@@ -138,10 +146,14 @@ expected_revision="$(read_expected_revision)"
 [[ "$revision" == "$expected_revision" ]] || \
   fail "release marker no longer matches clean source HEAD"
 command -v docker >/dev/null 2>&1 || fail "Docker is not installed"
+supply_chain_digest="$(python3 "$ROOT_DIR/deploy/supply_chain_lock.py" \
+  --root "$ROOT_DIR" --print-digest)" || fail "supply-chain lock is invalid"
+[[ "$supply_chain_digest" =~ ^[0-9a-f]{64}$ ]] || \
+  fail "supply-chain lock digest is invalid"
 
 if [[ "$MODE" == "build" ]]; then
-  if ! image_matches "$APP_IMAGE" "$expected_revision" || \
-     ! image_matches "$PROXY_IMAGE" "$expected_revision"; then
+  if ! image_matches "$APP_IMAGE" "$expected_revision" "$supply_chain_digest" || \
+     ! image_matches "$PROXY_IMAGE" "$expected_revision" "$supply_chain_digest"; then
     release_context="$(mktemp -d -- /var/tmp/lecturesift-release.XXXXXXXX)"
     candidate_app="lecturesift-backend:release-$expected_revision"
     candidate_proxy="lecturesift-egress-proxy:release-$expected_revision"
@@ -159,16 +171,18 @@ if [[ "$MODE" == "build" ]]; then
       | tar -xf - -C "$release_context"
     docker build --pull \
       --build-arg "LECTURESIFT_BUILD_REVISION=$expected_revision" \
+      --build-arg "LECTURESIFT_SUPPLY_CHAIN_LOCK_SHA256=$supply_chain_digest" \
       --tag "$candidate_app" "$release_context"
     docker build --pull \
       --build-arg "LECTURESIFT_BUILD_REVISION=$expected_revision" \
+      --build-arg "LECTURESIFT_SUPPLY_CHAIN_LOCK_SHA256=$supply_chain_digest" \
       --tag "$candidate_proxy" "$release_context/deploy/egress-proxy"
 
     [[ "$(source_revision)" == "$expected_revision" ]] || \
       fail "source HEAD or cleanliness changed during release build"
-    image_matches "$candidate_app" "$expected_revision" || \
+    image_matches "$candidate_app" "$expected_revision" "$supply_chain_digest" || \
       fail "candidate application image identity is invalid"
-    image_matches "$candidate_proxy" "$expected_revision" || \
+    image_matches "$candidate_proxy" "$expected_revision" "$supply_chain_digest" || \
       fail "candidate proxy image identity is invalid"
     docker image tag "$candidate_app" "$APP_IMAGE"
     docker image tag "$candidate_proxy" "$PROXY_IMAGE"
@@ -182,9 +196,9 @@ fi
 # otherwise healthy image with the requested label.
 [[ "$(source_revision)" == "$expected_revision" ]] || \
   fail "source HEAD or cleanliness changed during release build"
-image_matches "$APP_IMAGE" "$expected_revision" || \
+image_matches "$APP_IMAGE" "$expected_revision" "$supply_chain_digest" || \
   fail "application image label/environment does not match source HEAD"
-image_matches "$PROXY_IMAGE" "$expected_revision" || \
+image_matches "$PROXY_IMAGE" "$expected_revision" "$supply_chain_digest" || \
   fail "egress proxy image label/environment does not match source HEAD"
 
 echo "Release image verified for $expected_revision."

@@ -3,6 +3,8 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -42,6 +44,7 @@ def test_configuration_snapshot_uses_only_exact_allowlists():
         "Caddyfile",
         "Dockerfile",
         "requirements.txt",
+        "requirements.lock",
         "deploy/00-lecturesift-sshd.conf",
         "deploy/99-lecturesift-sysctl.conf",
         "deploy/docker-daemon.json",
@@ -53,11 +56,28 @@ def test_configuration_snapshot_uses_only_exact_allowlists():
         "deploy/recover_backup_runtime.sh",
         "deploy/record_restic_escrow.sh",
         "deploy/configuration_snapshot.py",
+        "deploy/supply_chain.lock",
+        "deploy/supply_chain_lock.py",
+        "deploy/egress-proxy/Dockerfile",
+        "deploy/egress-proxy/squid.conf",
         "deploy/preflight.sh",
+        "deploy/provider_cutover_evidence.py",
+        "deploy/validate_rehearsal_admission.py",
+        "deploy/prove_rehearsal_r2_isolation.py",
         "deploy/resource_guard.sh",
         "deploy/generate_role_envs.py",
         "deploy/postgres-app-role.sh",
         "deploy/provision_database_role.sh",
+        "deploy/verify_provider_first_start.sh",
+        "deploy/rehearsal_manifest.sql",
+        "deploy/schema_contract_payment_provider_sessions_v1.txt",
+        "deploy/verify_schema_transition.py",
+        "deploy/postgres_security_manifest.sql",
+        "deploy/validate_postgres_security_manifest.py",
+        "deploy/postgres_role_login_probe.sh",
+        "deploy/validate_postgres_role_login_probe.py",
+        "deploy/target_redis_manifest.sh",
+        "deploy/redis_logical_manifest.py",
         "deploy/release.sh",
         "deploy/image_smoke.py",
         "deploy/lecturesift.service",
@@ -73,6 +93,60 @@ def test_configuration_snapshot_uses_only_exact_allowlists():
         "deploy/redis.conf",
     )
     assert all(".git" not in path and ".docker" not in path for path in snapshot.IDENTITY_ALLOWLIST)
+
+
+def test_configuration_snapshot_covers_the_steady_state_startup_chain_only():
+    snapshot = _snapshot_module()
+
+    steady_state_dependencies = {
+        # preflight.sh
+        "deploy/generate_role_envs.py",
+        "deploy/release.sh",
+        "deploy/provider_cutover_evidence.py",
+        "deploy/validate_rehearsal_admission.py",
+        "deploy/resource_guard.sh",
+        "requirements.lock",
+        "deploy/supply_chain.lock",
+        "deploy/supply_chain_lock.py",
+        "deploy/egress-proxy/Dockerfile",
+        "deploy/egress-proxy/squid.conf",
+        # lecturesift.service and verify_provider_first_start.sh
+        "deploy/provision_database_role.sh",
+        "deploy/postgres-app-role.sh",
+        "deploy/verify_provider_first_start.sh",
+        "deploy/rehearsal_manifest.sql",
+        "deploy/schema_contract_payment_provider_sessions_v1.txt",
+        "deploy/verify_schema_transition.py",
+        "deploy/postgres_security_manifest.sql",
+        "deploy/validate_postgres_security_manifest.py",
+        "deploy/postgres_role_login_probe.sh",
+        "deploy/validate_postgres_role_login_probe.py",
+        "deploy/target_redis_manifest.sh",
+        "deploy/redis_logical_manifest.py",
+    }
+    assert steady_state_dependencies <= set(snapshot.IDENTITY_ALLOWLIST)
+    assert all((ROOT / path).is_file() for path in steady_state_dependencies)
+
+    # Provider-migration controllers are reviewed and installed separately;
+    # normal boot neither invokes nor restores them from this configuration
+    # package.
+    rehearsal_only = {
+        "deploy/run_exact_rehearsal.sh",
+        "deploy/trusted_exact_rehearsal_controller.sh",
+        "deploy/stage_release_candidate.sh",
+    }
+    assert rehearsal_only.isdisjoint(snapshot.IDENTITY_ALLOWLIST)
+
+
+def test_configuration_snapshot_rejects_a_missing_allowlisted_identity(tmp_path, monkeypatch):
+    snapshot = _snapshot_module()
+    # O_NOFOLLOW is unavailable on Windows, where this contract test runs too;
+    # supplying the no-op flag preserves the production error path under test.
+    monkeypatch.setattr(snapshot.os, "O_NOFOLLOW", 0, raising=False)
+
+    missing = tmp_path / "missing-steady-state-helper.sh"
+    with pytest.raises(snapshot.SnapshotError, match="required identity file is missing or unsafe"):
+        snapshot._open_validated_source(missing, "identity")
 
 
 def test_configuration_snapshot_creation_is_root_private_and_fail_closed():

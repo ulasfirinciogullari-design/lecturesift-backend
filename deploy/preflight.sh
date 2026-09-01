@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set +x
 set -euo pipefail
 
 ROOT_DIR="${LECTURESIFT_ROOT:-/opt/lecturesift}"
@@ -12,9 +13,11 @@ RELEASE_ENV_FILE="${LECTURESIFT_RELEASE_ENV_FILE:-/run/lecturesift/release.env}"
 ROLE_ENV_GENERATOR="$ROOT_DIR/deploy/generate_role_envs.py"
 RELEASE_HELPER="$ROOT_DIR/deploy/release.sh"
 CUTOVER_EVIDENCE_TOOL="$ROOT_DIR/deploy/provider_cutover_evidence.py"
+REHEARSAL_ADMISSION_TOOL="$ROOT_DIR/deploy/validate_rehearsal_admission.py"
 PROVIDER_CUTOVER_ROOT="/var/lib/lecturesift/provider-cutover"
 PROVIDER_CUTOVER_IN_PROGRESS="$PROVIDER_CUTOVER_ROOT/provider-cutover.in-progress"
 PROVIDER_CUTOVER_FINAL="$PROVIDER_CUTOVER_ROOT/provider-cutover.ok"
+PROVIDER_FIRST_START_IN_PROGRESS="$PROVIDER_CUTOVER_ROOT/provider-first-start.in-progress"
 RECOVERY_EVIDENCE_ROOT="/var/lib/lecturesift/recovery-drills"
 RECOVERY_DRILL_MAX_AGE_DAYS=90
 RECOVERY_SNAPSHOT_MAX_AGE_SECONDS=172800
@@ -65,6 +68,10 @@ fi
 if [[ "$PREFLIGHT_CONTEXT" == "production" &&
       ( -e "$PROVIDER_CUTOVER_IN_PROGRESS" || -L "$PROVIDER_CUTOVER_IN_PROGRESS" ) ]]; then
   fail "the provider cutover is still in progress; API/worker startup remains blocked"
+fi
+if [[ "$PREFLIGHT_CONTEXT" == "production" &&
+      ( -e "$PROVIDER_FIRST_START_IN_PROGRESS" || -L "$PROVIDER_FIRST_START_IN_PROGRESS" ) ]]; then
+  fail "the provider first-start fence is armed or ambiguous; API/worker startup remains blocked pending operator recovery"
 fi
 if [[ "$PREFLIGHT_CONTEXT" == "production" &&
       ( ! -f "$PROVIDER_CUTOVER_FINAL" || -L "$PROVIDER_CUTOVER_FINAL" ) ]]; then
@@ -506,6 +513,46 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
+if [[ "$PREFLIGHT_CONTEXT" == "production" ]]; then
+  # A SIGKILL cannot run rehearsal traps. Never start the production runtime
+  # into any surviving candidate data plane; the operator must run the exact
+  # rehearsal reconciler and re-establish a clean baseline first.
+  docker info >/dev/null 2>&1 || fail "Docker state cannot be inspected for rehearsal residue"
+  rehearsal_containers="$(docker ps -aq --filter label=lecturesift.rehearsal=true)" || \
+    fail "rehearsal containers cannot be enumerated"
+  rehearsal_volumes="$(docker volume ls -q --filter label=lecturesift.rehearsal=true)" || \
+    fail "rehearsal volumes cannot be enumerated"
+  rehearsal_networks="$(docker network ls -q --filter label=lecturesift.rehearsal=true)" || \
+    fail "rehearsal networks cannot be enumerated"
+  [[ -z "$rehearsal_containers" ]] || \
+    fail "rehearsal containers remain after an interrupted run"
+  [[ -z "$rehearsal_volumes" ]] || \
+    fail "rehearsal volumes remain after an interrupted run"
+  [[ -z "$rehearsal_networks" ]] || \
+    fail "rehearsal networks remain after an interrupted run"
+  # Label enumeration alone is insufficient: a killed/tampered migration must
+  # not evade the production gate merely because its labels disappeared.
+  if docker container inspect lecturesift-migration-rehearsal >/dev/null 2>&1; then
+    fail "fixed-name candidate migration container remains after an interrupted run"
+  fi
+  if docker container inspect lecturesift-source-postgres-rehearsal >/dev/null 2>&1; then
+    fail "fixed-name rehearsal source PostgreSQL client remains after an interrupted run"
+  fi
+  if docker network inspect lecturesift_rehearsal_migration >/dev/null 2>&1; then
+    fail "fixed-name candidate migration network remains after an interrupted run"
+  fi
+  if docker container inspect lecturesift-postgres-1 >/dev/null 2>&1; then
+    [[ -z "$(docker container inspect --format \
+      '{{if index .NetworkSettings.Networks "lecturesift_rehearsal_backend"}}attached{{end}}' \
+      lecturesift-postgres-1)" ]] || \
+      fail "production PostgreSQL remains attached to the rehearsal backend"
+    [[ -z "$(docker container inspect --format \
+      '{{if index .NetworkSettings.Networks "lecturesift_rehearsal_migration"}}attached{{end}}' \
+      lecturesift-postgres-1)" ]] || \
+      fail "production PostgreSQL remains attached to the candidate migration network"
+  fi
+fi
+
 if [[ ! -d "$ROOT_DIR" ]]; then
   echo "Missing deployment root: $ROOT_DIR" >&2
   exit 1
@@ -526,6 +573,17 @@ case "$PREFLIGHT_CONTEXT" in
     python3 "$CUTOVER_EVIDENCE_TOOL" validate-final \
       --expected-revision "$prepared_revision" ||
       fail "the provider cutover proof is absent, changed or belongs to another release"
+    first_start_status="$(
+      python3 "$CUTOVER_EVIDENCE_TOOL" first-start-status \
+        --expected-revision "$prepared_revision"
+    )" || fail "the provider first-start state is ambiguous or crash-fenced"
+    [[ "$first_start_status" == "required" || "$first_start_status" == "consumed" ]] ||
+      fail "the provider first-start state output is invalid"
+    [[ -f "$REHEARSAL_ADMISSION_TOOL" && ! -L "$REHEARSAL_ADMISSION_TOOL" ]] ||
+      fail "the exact rehearsal admission validator is missing or unsafe"
+    python3 "$REHEARSAL_ADMISSION_TOOL" \
+      --root "$ROOT_DIR" --expected-revision "$prepared_revision" ||
+      fail "the staged and rehearsed release admission is absent, changed or belongs to another release"
     ;;
   bootstrap-infrastructure)
     echo "WARNING: infrastructure-only bootstrap passed; API/worker production startup is not approved." >&2

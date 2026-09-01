@@ -15,6 +15,22 @@ CandidateCallback = Callable[[float, np.ndarray], None]
 _FACE_CLASSIFIER = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 
 
+def _write_jpeg(path: Path, frame: np.ndarray, quality: int = 88) -> bool:
+    """Write a JPEG through Python so Windows Unicode paths remain usable."""
+    encoded, payload = cv2.imencode(
+        ".jpg",
+        frame,
+        [int(cv2.IMWRITE_JPEG_QUALITY), quality],
+    )
+    if not encoded:
+        return False
+    try:
+        path.write_bytes(payload.tobytes())
+    except OSError:
+        return False
+    return True
+
+
 def dhash(frame: np.ndarray) -> np.ndarray:
     gray = cv2.resize(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (17, 16), interpolation=cv2.INTER_AREA)
     return (gray[:, 1:] > gray[:, :-1]).flatten()
@@ -412,7 +428,7 @@ def extract_slides(
         second = item["time"]
         filename = f"slide_{index:03d}_{int(second // 60):02d}m{int(second % 60):02d}s.jpg"
         try:
-            written = cv2.imwrite(str(slides_dir / filename), frame, [int(cv2.IMWRITE_JPEG_QUALITY), 88])
+            written = _write_jpeg(slides_dir / filename, frame)
         finally:
             del frame
         if not written:

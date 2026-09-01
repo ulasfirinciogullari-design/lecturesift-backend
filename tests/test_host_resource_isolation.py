@@ -79,17 +79,51 @@ def test_worker_can_reach_internet_only_through_private_range_denying_proxy():
     )
 
 
-def test_isolated_rehearsal_uses_and_cleans_the_same_egress_proxy():
+def test_isolated_rehearsal_uses_and_cleans_role_specific_egress_proxies():
     stack = _read("deploy/rehearsal_stack.sh")
     orchestrator = _read("deploy/rehearsal_restore.sh")
 
-    assert 'rehearsal_proxy_container="lecturesift-egress-proxy-rehearsal"' in stack
-    assert 'bash "$ROOT_DIR/deploy/release.sh" build' in stack
-    assert '--use-aliases egress-proxy' in stack
-    assert stack.index('--use-aliases egress-proxy') < stack.index(
-        'lecturesift-worker-rehearsal --no-deps'
+    assert (
+        'rehearsal_api_proxy_container="lecturesift-egress-proxy-api-rehearsal"'
+        in stack
     )
-    assert "lecturesift-egress-proxy-rehearsal" in orchestrator
+    assert (
+        'rehearsal_worker_proxy_container="lecturesift-egress-proxy-worker-rehearsal"'
+        in stack
+    )
+    assert (
+        'rehearsal_api_proxy_network="lecturesift_rehearsal_api_proxy"' in stack
+    )
+    assert (
+        'rehearsal_worker_proxy_network="lecturesift_rehearsal_worker_proxy"'
+        in stack
+    )
+    assert 'bash "$ROOT_DIR/deploy/release.sh" build' in stack
+    api_proxy_start = 'start_rehearsal_proxy "$rehearsal_api_proxy_container"'
+    worker_proxy_start = 'start_rehearsal_proxy "$rehearsal_worker_proxy_container"'
+    worker_start = 'docker create --pull=never --name "$rehearsal_worker_container"'
+    assert api_proxy_start in stack
+    assert 'egress-proxy-api "$generated_api_proxy_config"' in stack
+    assert worker_proxy_start in stack
+    assert 'egress-proxy-worker "$generated_worker_proxy_config"' in stack
+    assert (
+        'docker network connect --alias "$alias" "$proxy_network" "$container"'
+        in stack
+    )
+    assert "docker network create --driver bridge --internal" in stack
+    assert (
+        'docker network connect "$rehearsal_api_proxy_network" '
+        '"$rehearsal_api_container"' in stack
+    )
+    assert (
+        'docker network connect "$rehearsal_worker_proxy_network"' in stack
+    )
+    assert 'raise SystemExit("API can resolve the worker egress proxy")' in stack
+    assert stack.index(api_proxy_start) < stack.index(worker_start)
+    assert stack.index(worker_proxy_start) < stack.index(worker_start)
+    assert "lecturesift-egress-proxy-api-rehearsal" in orchestrator
+    assert "lecturesift-egress-proxy-worker-rehearsal" in orchestrator
+    assert "cleanup_rehearsal_proxy_networks" in orchestrator
 
 
 def test_resource_guard_reserves_host_capacity_and_bounds_work_volumes():

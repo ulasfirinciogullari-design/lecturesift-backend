@@ -27,7 +27,9 @@ POSTGRES_PROOF_NAME = "postgres-cutover.ok"
 REDIS_PROOF_NAME = "redis-cutover.ok"
 SEED_PROOF_NAME = "first-cutover-seed.ok"
 FINAL_PROOF_NAME = "provider-cutover.ok"
-VERSION = "1"
+FIRST_START_IN_PROGRESS_NAME = "provider-first-start.in-progress"
+FIRST_START_PROOF_NAME = "provider-first-start.ok"
+VERSION = "3"
 _CUTOVER_ID = re.compile(r"^[0-9a-f]{32}$")
 _REVISION = re.compile(r"^[0-9a-f]{40}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -258,6 +260,52 @@ def _matches_common(fields: dict[str, str], common: dict[str, str]) -> bool:
     return all(fields.get(key) == value for key, value in common.items())
 
 
+def _postgres_digests_valid(fields: dict[str, str]) -> bool:
+    return all(
+        _SHA256.fullmatch(fields.get(field, ""))
+        for field in (
+            "source_manifest_sha256",
+            "migrated_target_manifest_sha256",
+            "postgres_role_login_probe_sha256",
+            "postgres_security_manifest_sha256",
+            "source_dump_sha256",
+            "source_worker_stop_evidence_sha256",
+            "target_rollback_dump_sha256",
+        )
+    )
+
+
+def _redis_digests_valid(fields: dict[str, str]) -> bool:
+    return all(
+        _SHA256.fullmatch(fields.get(field, ""))
+        for field in (
+            "source_worker_stop_evidence_sha256",
+            "target_redis_manifest_sha256",
+            "target_rollback_sha256",
+            "target_state_sha256",
+        )
+    )
+
+
+def _seed_digests_valid(fields: dict[str, str]) -> bool:
+    return all(
+        _SHA256.fullmatch(fields.get(field, ""))
+        for field in (
+            "backup_set_sha256",
+            "configuration_checksums_sha256",
+            "database_dump_sha256",
+            "migrated_target_manifest_sha256",
+            "postgres_role_login_probe_sha256",
+            "postgres_security_manifest_sha256",
+            "postgres_proof_sha256",
+            "redis_dump_sha256",
+            "redis_proof_sha256",
+            "source_worker_stop_evidence_sha256",
+            "target_redis_manifest_sha256",
+        )
+    )
+
+
 def _now() -> str:
     return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -279,6 +327,8 @@ def begin_postgres(root: Path, *, cutover_id: str, revision: str, source: str) -
         POSTGRES_PROOF_NAME,
         REDIS_PROOF_NAME,
         SEED_PROOF_NAME,
+        FIRST_START_IN_PROGRESS_NAME,
+        FIRST_START_PROOF_NAME,
     ):
         _unlink(root / name)
 
@@ -298,13 +348,25 @@ def write_postgres(
     source: str,
     run_id: str,
     manifest_sha256: str,
+    migrated_manifest_sha256: str,
+    postgres_role_login_probe_sha256: str,
+    postgres_security_manifest_sha256: str,
     source_dump_sha256: str,
+    source_worker_stop_evidence_sha256: str,
     rollback_dump_sha256: str,
 ) -> None:
     common = _common_fields(cutover_id=cutover_id, revision=revision, source_fingerprint=source)
     if not _RUN_ID.fullmatch(run_id):
         raise EvidenceError("invalid PostgreSQL cutover run ID")
-    for value in (manifest_sha256, source_dump_sha256, rollback_dump_sha256):
+    for value in (
+        manifest_sha256,
+        migrated_manifest_sha256,
+        postgres_role_login_probe_sha256,
+        postgres_security_manifest_sha256,
+        source_dump_sha256,
+        source_worker_stop_evidence_sha256,
+        rollback_dump_sha256,
+    ):
         if not _SHA256.fullmatch(value):
             raise EvidenceError("PostgreSQL evidence contains an invalid SHA-256 value")
     root = _ensure_evidence_root(root)
@@ -319,9 +381,13 @@ def write_postgres(
             "pending_payments_after": "0",
             "pending_payments_before": "0",
             "run_id": run_id,
+            "migrated_target_manifest_sha256": migrated_manifest_sha256,
+            "postgres_role_login_probe_sha256": postgres_role_login_probe_sha256,
+            "postgres_security_manifest_sha256": postgres_security_manifest_sha256,
             "source_dump_sha256": source_dump_sha256,
             "source_frozen": "verified",
             "source_manifest_sha256": manifest_sha256,
+            "source_worker_stop_evidence_sha256": source_worker_stop_evidence_sha256,
             "source_worker_queue_zero": "verified",
             "status": "postgres-cutover-verified",
             "target_rollback_dump_sha256": rollback_dump_sha256,
@@ -359,17 +425,29 @@ def write_redis(
     run_id: str,
     state_sha256: str,
     rollback_sha256: str,
+    source_worker_stop_evidence_sha256: str,
+    target_redis_manifest_sha256: str,
 ) -> None:
     common = _common_fields(cutover_id=cutover_id, revision=revision, source_fingerprint=source)
     if not _RUN_ID.fullmatch(run_id):
         raise EvidenceError("invalid Redis migration run ID")
-    for value in (state_sha256, rollback_sha256):
+    for value in (
+        state_sha256,
+        rollback_sha256,
+        source_worker_stop_evidence_sha256,
+        target_redis_manifest_sha256,
+    ):
         if not _SHA256.fullmatch(value):
             raise EvidenceError("Redis evidence contains an invalid SHA-256 value")
     root = _ensure_evidence_root(root)
     _require_progress(root, common=common, phase="redis-in-progress")
     postgres = _load(root / POSTGRES_PROOF_NAME)
-    if not _matches_common(postgres, common):
+    if (
+        not _matches_common(postgres, common)
+        or not _postgres_digests_valid(postgres)
+        or postgres.get("source_worker_stop_evidence_sha256")
+        != source_worker_stop_evidence_sha256
+    ):
         raise EvidenceError("PostgreSQL and Redis cutover sessions differ")
     _atomic_write(
         root / REDIS_PROOF_NAME,
@@ -378,9 +456,11 @@ def write_redis(
             "caddy_changed": "false",
             "run_id": run_id,
             "source_frozen": "verified",
+            "source_worker_stop_evidence_sha256": source_worker_stop_evidence_sha256,
             "source_worker_queue_zero": "verified",
             "status": "redis-cutover-verified",
             "target_broker_zero": "verified",
+            "target_redis_manifest_sha256": target_redis_manifest_sha256,
             "target_rollback_sha256": rollback_sha256,
             "target_state_sha256": state_sha256,
             "verified_at_utc": _now(),
@@ -393,9 +473,19 @@ def write_redis(
 
 
 def validate_seed_ready(
-    root: Path, *, cutover_id: str, revision: str, source: str
+    root: Path,
+    *,
+    cutover_id: str,
+    revision: str,
+    source: str,
+    source_worker_stop_evidence_sha256: str,
+    target_redis_manifest_sha256: str,
 ) -> dict[str, str]:
     common = _common_fields(cutover_id=cutover_id, revision=revision, source_fingerprint=source)
+    if not _SHA256.fullmatch(source_worker_stop_evidence_sha256) or not _SHA256.fullmatch(
+        target_redis_manifest_sha256
+    ):
+        raise EvidenceError("current cutover state contains an invalid SHA-256 value")
     root = _ensure_evidence_root(root)
     _require_progress(root, common=common, phase="redis-verified")
     postgres_path = root / POSTGRES_PROOF_NAME
@@ -411,16 +501,39 @@ def validate_seed_ready(
         or postgres.get("pending_payments_before") != "0"
         or postgres.get("pending_payments_after") != "0"
         or postgres.get("api_worker_started") != "false"
+        or not _postgres_digests_valid(postgres)
         or redis.get("status") != "redis-cutover-verified"
         or redis.get("source_frozen") != "verified"
         or redis.get("source_worker_queue_zero") != "verified"
         or redis.get("target_broker_zero") != "verified"
+        or not _redis_digests_valid(redis)
+        or redis.get("source_worker_stop_evidence_sha256")
+        != postgres.get("source_worker_stop_evidence_sha256")
+        or source_worker_stop_evidence_sha256
+        != postgres.get("source_worker_stop_evidence_sha256")
+        or target_redis_manifest_sha256
+        != redis.get("target_redis_manifest_sha256")
     ):
         raise EvidenceError("PostgreSQL/Redis proofs are not ready for the first cutover seed")
     return {
         **common,
+        "migrated_target_manifest_sha256": postgres[
+            "migrated_target_manifest_sha256"
+        ],
+        "postgres_role_login_probe_sha256": postgres[
+            "postgres_role_login_probe_sha256"
+        ],
+        "postgres_security_manifest_sha256": postgres[
+            "postgres_security_manifest_sha256"
+        ],
         "postgres_proof_sha256": sha256_file(postgres_path),
         "redis_proof_sha256": sha256_file(redis_path),
+        "source_worker_stop_evidence_sha256": postgres[
+            "source_worker_stop_evidence_sha256"
+        ],
+        "target_redis_manifest_sha256": redis[
+            "target_redis_manifest_sha256"
+        ],
     }
 
 
@@ -435,7 +548,12 @@ def write_seed(
     repository_id_sha256: str,
     backup_set_sha256: str,
     database_dump_sha256: str,
+    migrated_manifest_sha256: str,
+    postgres_role_login_probe_sha256: str,
+    postgres_security_manifest_sha256: str,
     redis_dump_sha256: str,
+    source_worker_stop_evidence_sha256: str,
+    target_redis_manifest_sha256: str,
     configuration_checksums_sha256: str,
 ) -> None:
     if not _RUN_ID.fullmatch(run_id):
@@ -446,7 +564,12 @@ def write_seed(
         repository_id_sha256,
         backup_set_sha256,
         database_dump_sha256,
+        migrated_manifest_sha256,
+        postgres_role_login_probe_sha256,
+        postgres_security_manifest_sha256,
         redis_dump_sha256,
+        source_worker_stop_evidence_sha256,
+        target_redis_manifest_sha256,
         configuration_checksums_sha256,
     ):
         if not _SHA256.fullmatch(value):
@@ -458,7 +581,39 @@ def write_seed(
         cutover_id=cutover_id,
         revision=revision,
         source=source,
+        source_worker_stop_evidence_sha256=source_worker_stop_evidence_sha256,
+        target_redis_manifest_sha256=target_redis_manifest_sha256,
     )
+    if migrated_manifest_sha256 != step_hashes[
+        "migrated_target_manifest_sha256"
+    ]:
+        raise EvidenceError(
+            "first-cutover target manifest does not match the PostgreSQL cutover proof"
+        )
+    if postgres_security_manifest_sha256 != step_hashes[
+        "postgres_security_manifest_sha256"
+    ]:
+        raise EvidenceError(
+            "first-cutover PostgreSQL security manifest does not match the cutover proof"
+        )
+    if postgres_role_login_probe_sha256 != step_hashes[
+        "postgres_role_login_probe_sha256"
+    ]:
+        raise EvidenceError(
+            "first-cutover PostgreSQL login probe does not match the cutover proof"
+        )
+    if target_redis_manifest_sha256 != step_hashes[
+        "target_redis_manifest_sha256"
+    ]:
+        raise EvidenceError(
+            "first-cutover Redis manifest does not match the Redis cutover proof"
+        )
+    if source_worker_stop_evidence_sha256 != step_hashes[
+        "source_worker_stop_evidence_sha256"
+    ]:
+        raise EvidenceError(
+            "first-cutover worker-stop evidence does not match the cutover proofs"
+        )
     seed_path = root / SEED_PROOF_NAME
     _atomic_write(
         seed_path,
@@ -470,6 +625,9 @@ def write_seed(
             "configuration_checksums_sha256": configuration_checksums_sha256,
             "database_dump_sha256": database_dump_sha256,
             "dns_changed": "false",
+            "migrated_target_manifest_sha256": migrated_manifest_sha256,
+            "postgres_role_login_probe_sha256": postgres_role_login_probe_sha256,
+            "postgres_security_manifest_sha256": postgres_security_manifest_sha256,
             "postgres_proof_sha256": step_hashes["postgres_proof_sha256"],
             "redis_dump_sha256": redis_dump_sha256,
             "redis_proof_sha256": step_hashes["redis_proof_sha256"],
@@ -477,7 +635,9 @@ def write_seed(
             "run_id": run_id,
             "seeded_at_utc": _now(),
             "snapshot_id": snapshot_id,
+            "source_worker_stop_evidence_sha256": source_worker_stop_evidence_sha256,
             "status": "first-cutover-seed-verified",
+            "target_redis_manifest_sha256": target_redis_manifest_sha256,
         },
     )
     # The global stop fence already blocks production.  Publish the seed proof
@@ -496,14 +656,22 @@ def validate_seed(
     revision: str,
     source: str,
     repository_id_sha256: str,
+    source_worker_stop_evidence_sha256: str,
+    target_redis_manifest_sha256: str,
 ) -> dict[str, str]:
     common = _common_fields(cutover_id=cutover_id, revision=revision, source_fingerprint=source)
     if not _SHA256.fullmatch(repository_id_sha256):
         raise EvidenceError("first-cutover seed repository identity is invalid")
+    if not _SHA256.fullmatch(source_worker_stop_evidence_sha256) or not _SHA256.fullmatch(
+        target_redis_manifest_sha256
+    ):
+        raise EvidenceError("current cutover state contains an invalid SHA-256 value")
     root = _ensure_evidence_root(root)
     _require_progress(root, common=common, phase="seed-verified")
     postgres_path = root / POSTGRES_PROOF_NAME
     redis_path = root / REDIS_PROOF_NAME
+    postgres = _load(postgres_path)
+    redis = _load(redis_path)
     seed = _load(root / SEED_PROOF_NAME)
     if (
         not _matches_common(seed, common)
@@ -511,19 +679,27 @@ def validate_seed(
         or seed.get("repository_id_sha256") != repository_id_sha256
         or not _RUN_ID.fullmatch(seed.get("run_id", ""))
         or not _SNAPSHOT_ID.fullmatch(seed.get("snapshot_id", ""))
-        or any(
-            not _SHA256.fullmatch(seed.get(field, ""))
-            for field in (
-                "backup_set_sha256",
-                "configuration_checksums_sha256",
-                "database_dump_sha256",
-                "postgres_proof_sha256",
-                "redis_dump_sha256",
-                "redis_proof_sha256",
-            )
-        )
+        or not _postgres_digests_valid(postgres)
+        or not _redis_digests_valid(redis)
+        or not _seed_digests_valid(seed)
+        or seed.get("migrated_target_manifest_sha256")
+        != postgres.get("migrated_target_manifest_sha256")
         or seed.get("postgres_proof_sha256") != sha256_file(postgres_path)
         or seed.get("redis_proof_sha256") != sha256_file(redis_path)
+        or seed.get("postgres_security_manifest_sha256")
+        != postgres.get("postgres_security_manifest_sha256")
+        or seed.get("postgres_role_login_probe_sha256")
+        != postgres.get("postgres_role_login_probe_sha256")
+        or seed.get("target_redis_manifest_sha256")
+        != redis.get("target_redis_manifest_sha256")
+        or seed.get("source_worker_stop_evidence_sha256")
+        != postgres.get("source_worker_stop_evidence_sha256")
+        or seed.get("source_worker_stop_evidence_sha256")
+        != redis.get("source_worker_stop_evidence_sha256")
+        or source_worker_stop_evidence_sha256
+        != seed.get("source_worker_stop_evidence_sha256")
+        or target_redis_manifest_sha256
+        != seed.get("target_redis_manifest_sha256")
         or seed.get("api_worker_started") != "false"
         or seed.get("caddy_changed") != "false"
         or seed.get("dns_changed") != "false"
@@ -627,9 +803,23 @@ def finalize(
     retention_marker: Path,
     retention_sha256: str,
     repository_id_sha256: str,
+    migrated_target_manifest_sha256: str,
+    postgres_role_login_probe_sha256: str,
+    postgres_security_manifest_sha256: str,
+    source_worker_stop_evidence_sha256: str,
+    target_redis_manifest_sha256: str,
 ) -> None:
     common = _common_fields(cutover_id=cutover_id, revision=revision, source_fingerprint=source)
-    for value in (recovery_sha256, retention_sha256, repository_id_sha256):
+    for value in (
+        recovery_sha256,
+        retention_sha256,
+        repository_id_sha256,
+        migrated_target_manifest_sha256,
+        postgres_role_login_probe_sha256,
+        postgres_security_manifest_sha256,
+        source_worker_stop_evidence_sha256,
+        target_redis_manifest_sha256,
+    ):
         if not _SHA256.fullmatch(value):
             raise EvidenceError("final cutover evidence contains an invalid SHA-256 value")
     if recovery_marker.name != recovery_marker.as_posix() or retention_marker.name != retention_marker.as_posix():
@@ -647,6 +837,8 @@ def finalize(
         revision=revision,
         source=source,
         repository_id_sha256=repository_id_sha256,
+        source_worker_stop_evidence_sha256=source_worker_stop_evidence_sha256,
+        target_redis_manifest_sha256=target_redis_manifest_sha256,
     )
     recovery_path = RECOVERY_EVIDENCE_ROOT / recovery_marker.name
     retention_path = RECOVERY_EVIDENCE_ROOT / retention_marker.name
@@ -675,6 +867,30 @@ def finalize(
         or not _matches_common(redis, common)
         or postgres.get("status") != "postgres-cutover-verified"
         or redis.get("status") != "redis-cutover-verified"
+        or not _postgres_digests_valid(postgres)
+        or not _redis_digests_valid(redis)
+        or migrated_target_manifest_sha256
+        != postgres.get("migrated_target_manifest_sha256")
+        or migrated_target_manifest_sha256
+        != seed.get("migrated_target_manifest_sha256")
+        or postgres_security_manifest_sha256
+        != postgres.get("postgres_security_manifest_sha256")
+        or postgres_security_manifest_sha256
+        != seed.get("postgres_security_manifest_sha256")
+        or postgres_role_login_probe_sha256
+        != postgres.get("postgres_role_login_probe_sha256")
+        or postgres_role_login_probe_sha256
+        != seed.get("postgres_role_login_probe_sha256")
+        or target_redis_manifest_sha256
+        != redis.get("target_redis_manifest_sha256")
+        or target_redis_manifest_sha256
+        != seed.get("target_redis_manifest_sha256")
+        or source_worker_stop_evidence_sha256
+        != postgres.get("source_worker_stop_evidence_sha256")
+        or source_worker_stop_evidence_sha256
+        != redis.get("source_worker_stop_evidence_sha256")
+        or source_worker_stop_evidence_sha256
+        != seed.get("source_worker_stop_evidence_sha256")
     ):
         raise EvidenceError("PostgreSQL and Redis proofs do not exactly match the final session")
     _atomic_write(
@@ -684,7 +900,10 @@ def finalize(
             "caddy_changed": "false",
             "dns_changed": "false",
             "finalized_at_utc": _now(),
+            "migrated_target_manifest_sha256": migrated_target_manifest_sha256,
             "pending_payments": "0",
+            "postgres_role_login_probe_sha256": postgres_role_login_probe_sha256,
+            "postgres_security_manifest_sha256": postgres_security_manifest_sha256,
             "postgres_proof_sha256": sha256_file(postgres_path),
             "r2_recovery_marker": recovery_marker.name,
             "r2_recovery_marker_sha256": recovery_sha256,
@@ -696,10 +915,12 @@ def finalize(
             "seed_proof_sha256": sha256_file(seed_path),
             "seed_snapshot_id": seed["snapshot_id"],
             "source_freeze_revalidated": "true",
+            "source_worker_stop_evidence_sha256": source_worker_stop_evidence_sha256,
             "source_worker_queue_zero": "verified",
             "status": "provider-cutover-verified",
             "target_api_worker_started": "false",
             "target_queue_zero": "verified",
+            "target_redis_manifest_sha256": target_redis_manifest_sha256,
         },
     )
     # The final proof becomes usable only when the stronger in-progress fence
@@ -735,9 +956,45 @@ def validate_final(root: Path, *, expected_revision: str) -> dict[str, str]:
     if final.get("seed_proof_sha256") != sha256_file(seed):
         raise EvidenceError("first-cutover seed proof changed after finalization")
     for step in (postgres_fields, redis_fields, seed_fields):
-        for key in ("cutover_id", "release_revision", "source_fingerprint_sha256"):
+        for key in (
+            "cutover_id",
+            "release_revision",
+            "source_fingerprint_sha256",
+            "version",
+        ):
             if step.get(key) != final.get(key):
                 raise EvidenceError("step proof does not match provider final proof")
+    if not _postgres_digests_valid(postgres_fields):
+        raise EvidenceError("PostgreSQL cutover proof contains invalid digest evidence")
+    if (
+        not _seed_digests_valid(seed_fields)
+        or not _redis_digests_valid(redis_fields)
+        or seed_fields.get("migrated_target_manifest_sha256")
+        != postgres_fields.get("migrated_target_manifest_sha256")
+        or seed_fields.get("postgres_proof_sha256") != sha256_file(postgres)
+        or seed_fields.get("redis_proof_sha256") != sha256_file(redis)
+        or seed_fields.get("postgres_security_manifest_sha256")
+        != postgres_fields.get("postgres_security_manifest_sha256")
+        or seed_fields.get("postgres_role_login_probe_sha256")
+        != postgres_fields.get("postgres_role_login_probe_sha256")
+        or seed_fields.get("target_redis_manifest_sha256")
+        != redis_fields.get("target_redis_manifest_sha256")
+        or seed_fields.get("source_worker_stop_evidence_sha256")
+        != postgres_fields.get("source_worker_stop_evidence_sha256")
+        or seed_fields.get("source_worker_stop_evidence_sha256")
+        != redis_fields.get("source_worker_stop_evidence_sha256")
+        or final.get("migrated_target_manifest_sha256")
+        != seed_fields.get("migrated_target_manifest_sha256")
+        or final.get("postgres_security_manifest_sha256")
+        != seed_fields.get("postgres_security_manifest_sha256")
+        or final.get("postgres_role_login_probe_sha256")
+        != seed_fields.get("postgres_role_login_probe_sha256")
+        or final.get("target_redis_manifest_sha256")
+        != seed_fields.get("target_redis_manifest_sha256")
+        or final.get("source_worker_stop_evidence_sha256")
+        != seed_fields.get("source_worker_stop_evidence_sha256")
+    ):
+        raise EvidenceError("first-cutover seed contains invalid digest evidence")
     if not RECOVERY_EVIDENCE_ROOT.is_dir() or RECOVERY_EVIDENCE_ROOT.is_symlink():
         raise EvidenceError("recovery evidence root is missing or unsafe")
     recovery_name = final.get("r2_recovery_marker", "")
@@ -772,6 +1029,210 @@ def validate_final(root: Path, *, expected_revision: str) -> dict[str, str]:
     return final
 
 
+def _first_start_identity(
+    root: Path, *, expected_revision: str
+) -> tuple[dict[str, str], str]:
+    final = validate_final(root, expected_revision=expected_revision)
+    return final, sha256_file(root / FINAL_PROOF_NAME)
+
+
+def _consumed_first_start_valid(
+    fields: dict[str, str], *, final: dict[str, str], final_sha256: str
+) -> bool:
+    expected = {
+        "consumed_at_utc",
+        "cutover_id",
+        "final_proof_sha256",
+        "migrated_target_manifest_sha256",
+        "postgres_role_login_probe_sha256",
+        "postgres_security_manifest_sha256",
+        "release_revision",
+        "source_fingerprint_sha256",
+        "status",
+        "target_redis_manifest_sha256",
+        "version",
+    }
+    return (
+        set(fields) == expected
+        and fields.get("version") == VERSION
+        and fields.get("status") == "provider-first-start-consumed"
+        and fields.get("cutover_id") == final.get("cutover_id")
+        and fields.get("release_revision") == final.get("release_revision")
+        and fields.get("source_fingerprint_sha256")
+        == final.get("source_fingerprint_sha256")
+        and fields.get("final_proof_sha256") == final_sha256
+        and fields.get("migrated_target_manifest_sha256")
+        == final.get("migrated_target_manifest_sha256")
+        and fields.get("postgres_role_login_probe_sha256")
+        == final.get("postgres_role_login_probe_sha256")
+        and fields.get("postgres_security_manifest_sha256")
+        == final.get("postgres_security_manifest_sha256")
+        and fields.get("target_redis_manifest_sha256")
+        == final.get("target_redis_manifest_sha256")
+    )
+
+
+def first_start_status(root: Path, *, expected_revision: str) -> str:
+    root = _ensure_evidence_root(root)
+    final, final_sha256 = _first_start_identity(
+        root, expected_revision=expected_revision
+    )
+    progress = root / FIRST_START_IN_PROGRESS_NAME
+    consumed = root / FIRST_START_PROOF_NAME
+    if progress.exists() or progress.is_symlink():
+        raise EvidenceError(
+            "provider first start is in progress; manual review is required"
+        )
+    if consumed.exists() or consumed.is_symlink():
+        fields = _load(consumed)
+        if not _consumed_first_start_valid(
+            fields, final=final, final_sha256=final_sha256
+        ):
+            raise EvidenceError("provider first-start proof does not match final evidence")
+        return "consumed"
+    return "required"
+
+
+def arm_first_start(
+    root: Path,
+    *,
+    expected_revision: str,
+    migrated_target_manifest_sha256: str,
+    postgres_role_login_probe_sha256: str,
+    postgres_security_manifest_sha256: str,
+    target_redis_manifest_sha256: str,
+) -> str:
+    for value in (
+        migrated_target_manifest_sha256,
+        postgres_role_login_probe_sha256,
+        postgres_security_manifest_sha256,
+        target_redis_manifest_sha256,
+    ):
+        if not _SHA256.fullmatch(value):
+            raise EvidenceError("provider first-start state digest is invalid")
+    status = first_start_status(root, expected_revision=expected_revision)
+    if status == "consumed":
+        return status
+    root = _ensure_evidence_root(root)
+    final, final_sha256 = _first_start_identity(
+        root, expected_revision=expected_revision
+    )
+    if (
+        migrated_target_manifest_sha256
+        != final.get("migrated_target_manifest_sha256")
+        or postgres_role_login_probe_sha256
+        != final.get("postgres_role_login_probe_sha256")
+        or postgres_security_manifest_sha256
+        != final.get("postgres_security_manifest_sha256")
+        or target_redis_manifest_sha256
+        != final.get("target_redis_manifest_sha256")
+    ):
+        raise EvidenceError(
+            "provider first-start target state does not match finalized evidence"
+        )
+    _atomic_write(
+        root / FIRST_START_IN_PROGRESS_NAME,
+        {
+            "armed_at_utc": _now(),
+            "cutover_id": final["cutover_id"],
+            "final_proof_sha256": final_sha256,
+            "migrated_target_manifest_sha256": migrated_target_manifest_sha256,
+            "postgres_role_login_probe_sha256": postgres_role_login_probe_sha256,
+            "postgres_security_manifest_sha256": postgres_security_manifest_sha256,
+            "release_revision": final["release_revision"],
+            "source_fingerprint_sha256": final["source_fingerprint_sha256"],
+            "status": "provider-first-start-armed",
+            "target_redis_manifest_sha256": target_redis_manifest_sha256,
+            "version": VERSION,
+        },
+    )
+    return "armed"
+
+
+def complete_first_start(root: Path, *, expected_revision: str) -> str:
+    root = _ensure_evidence_root(root)
+    final, final_sha256 = _first_start_identity(
+        root, expected_revision=expected_revision
+    )
+    progress_path = root / FIRST_START_IN_PROGRESS_NAME
+    consumed_path = root / FIRST_START_PROOF_NAME
+    if consumed_path.exists() or consumed_path.is_symlink():
+        if progress_path.exists() or progress_path.is_symlink():
+            raise EvidenceError(
+                "provider first-start completion is ambiguous; manual review is required"
+            )
+        consumed = _load(consumed_path)
+        if not _consumed_first_start_valid(
+            consumed, final=final, final_sha256=final_sha256
+        ):
+            raise EvidenceError("provider first-start proof does not match final evidence")
+        return "consumed"
+    progress = _load(progress_path)
+    expected_progress = {
+        "armed_at_utc",
+        "cutover_id",
+        "final_proof_sha256",
+        "migrated_target_manifest_sha256",
+        "postgres_role_login_probe_sha256",
+        "postgres_security_manifest_sha256",
+        "release_revision",
+        "source_fingerprint_sha256",
+        "status",
+        "target_redis_manifest_sha256",
+        "version",
+    }
+    if (
+        set(progress) != expected_progress
+        or progress.get("version") != VERSION
+        or progress.get("status") != "provider-first-start-armed"
+        or progress.get("cutover_id") != final.get("cutover_id")
+        or progress.get("release_revision") != final.get("release_revision")
+        or progress.get("source_fingerprint_sha256")
+        != final.get("source_fingerprint_sha256")
+        or progress.get("final_proof_sha256") != final_sha256
+        or progress.get("migrated_target_manifest_sha256")
+        != final.get("migrated_target_manifest_sha256")
+        or progress.get("postgres_role_login_probe_sha256")
+        != final.get("postgres_role_login_probe_sha256")
+        or progress.get("postgres_security_manifest_sha256")
+        != final.get("postgres_security_manifest_sha256")
+        or progress.get("target_redis_manifest_sha256")
+        != final.get("target_redis_manifest_sha256")
+    ):
+        raise EvidenceError(
+            "provider first-start progress does not match finalized evidence"
+        )
+    _atomic_write(
+        consumed_path,
+        {
+            "consumed_at_utc": _now(),
+            "cutover_id": final["cutover_id"],
+            "final_proof_sha256": final_sha256,
+            "migrated_target_manifest_sha256": final[
+                "migrated_target_manifest_sha256"
+            ],
+            "postgres_role_login_probe_sha256": final[
+                "postgres_role_login_probe_sha256"
+            ],
+            "postgres_security_manifest_sha256": final[
+                "postgres_security_manifest_sha256"
+            ],
+            "release_revision": final["release_revision"],
+            "source_fingerprint_sha256": final["source_fingerprint_sha256"],
+            "status": "provider-first-start-consumed",
+            "target_redis_manifest_sha256": final[
+                "target_redis_manifest_sha256"
+            ],
+            "version": VERSION,
+        },
+    )
+    # The consumed proof is durable before the stronger crash fence is removed.
+    # If power is lost between these operations both files remain and the next
+    # preflight fails closed for operator review.
+    _unlink(progress_path)
+    return "consumed"
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -787,7 +1248,11 @@ def _parser() -> argparse.ArgumentParser:
     common(postgres)
     postgres.add_argument("--run-id", required=True)
     postgres.add_argument("--manifest-sha256", required=True)
+    postgres.add_argument("--migrated-manifest-sha256", required=True)
+    postgres.add_argument("--postgres-role-login-probe-sha256", required=True)
+    postgres.add_argument("--postgres-security-manifest-sha256", required=True)
     postgres.add_argument("--source-dump-sha256", required=True)
+    postgres.add_argument("--source-worker-stop-evidence-sha256", required=True)
     postgres.add_argument("--rollback-dump-sha256", required=True)
     common(commands.add_parser("begin-redis"))
     redis = commands.add_parser("write-redis")
@@ -795,8 +1260,12 @@ def _parser() -> argparse.ArgumentParser:
     redis.add_argument("--run-id", required=True)
     redis.add_argument("--state-sha256", required=True)
     redis.add_argument("--rollback-sha256", required=True)
+    redis.add_argument("--source-worker-stop-evidence-sha256", required=True)
+    redis.add_argument("--target-redis-manifest-sha256", required=True)
     seed_ready = commands.add_parser("validate-seed-ready")
     common(seed_ready)
+    seed_ready.add_argument("--source-worker-stop-evidence-sha256", required=True)
+    seed_ready.add_argument("--target-redis-manifest-sha256", required=True)
     seed = commands.add_parser("write-seed")
     common(seed)
     seed.add_argument("--run-id", required=True)
@@ -804,11 +1273,20 @@ def _parser() -> argparse.ArgumentParser:
     seed.add_argument("--repository-id-sha256", required=True)
     seed.add_argument("--backup-set-sha256", required=True)
     seed.add_argument("--database-dump-sha256", required=True)
+    seed.add_argument("--migrated-manifest-sha256", required=True)
+    seed.add_argument("--postgres-role-login-probe-sha256", required=True)
+    seed.add_argument("--postgres-security-manifest-sha256", required=True)
     seed.add_argument("--redis-dump-sha256", required=True)
+    seed.add_argument("--source-worker-stop-evidence-sha256", required=True)
+    seed.add_argument("--target-redis-manifest-sha256", required=True)
     seed.add_argument("--configuration-checksums-sha256", required=True)
     validate_seed_parser = commands.add_parser("validate-seed")
     common(validate_seed_parser)
     validate_seed_parser.add_argument("--repository-id-sha256", required=True)
+    validate_seed_parser.add_argument(
+        "--source-worker-stop-evidence-sha256", required=True
+    )
+    validate_seed_parser.add_argument("--target-redis-manifest-sha256", required=True)
     snapshot = commands.add_parser("validate-seed-snapshot")
     snapshot.add_argument("--snapshot-json", required=True)
     snapshot.add_argument("--expected-snapshot-id", required=True)
@@ -820,8 +1298,23 @@ def _parser() -> argparse.ArgumentParser:
     final.add_argument("--retention-marker", required=True)
     final.add_argument("--retention-sha256", required=True)
     final.add_argument("--repository-id-sha256", required=True)
+    final.add_argument("--migrated-target-manifest-sha256", required=True)
+    final.add_argument("--postgres-role-login-probe-sha256", required=True)
+    final.add_argument("--postgres-security-manifest-sha256", required=True)
+    final.add_argument("--source-worker-stop-evidence-sha256", required=True)
+    final.add_argument("--target-redis-manifest-sha256", required=True)
     validate = commands.add_parser("validate-final")
     validate.add_argument("--expected-revision", required=True)
+    first_start_status_parser = commands.add_parser("first-start-status")
+    first_start_status_parser.add_argument("--expected-revision", required=True)
+    first_start_arm = commands.add_parser("arm-first-start")
+    first_start_arm.add_argument("--expected-revision", required=True)
+    first_start_arm.add_argument("--migrated-target-manifest-sha256", required=True)
+    first_start_arm.add_argument("--postgres-role-login-probe-sha256", required=True)
+    first_start_arm.add_argument("--postgres-security-manifest-sha256", required=True)
+    first_start_arm.add_argument("--target-redis-manifest-sha256", required=True)
+    first_start_complete = commands.add_parser("complete-first-start")
+    first_start_complete.add_argument("--expected-revision", required=True)
     return parser
 
 
@@ -854,7 +1347,11 @@ def main(argv: list[str] | None = None) -> int:
                 **kwargs,
                 run_id=args.run_id,
                 manifest_sha256=args.manifest_sha256,
+                migrated_manifest_sha256=args.migrated_manifest_sha256,
+                postgres_role_login_probe_sha256=args.postgres_role_login_probe_sha256,
+                postgres_security_manifest_sha256=args.postgres_security_manifest_sha256,
                 source_dump_sha256=args.source_dump_sha256,
+                source_worker_stop_evidence_sha256=args.source_worker_stop_evidence_sha256,
                 rollback_dump_sha256=args.rollback_dump_sha256,
             )
         elif args.command == "begin-redis":
@@ -866,9 +1363,16 @@ def main(argv: list[str] | None = None) -> int:
                 run_id=args.run_id,
                 state_sha256=args.state_sha256,
                 rollback_sha256=args.rollback_sha256,
+                source_worker_stop_evidence_sha256=args.source_worker_stop_evidence_sha256,
+                target_redis_manifest_sha256=args.target_redis_manifest_sha256,
             )
         elif args.command == "validate-seed-ready":
-            validate_seed_ready(EVIDENCE_ROOT, **kwargs)
+            validate_seed_ready(
+                EVIDENCE_ROOT,
+                **kwargs,
+                source_worker_stop_evidence_sha256=args.source_worker_stop_evidence_sha256,
+                target_redis_manifest_sha256=args.target_redis_manifest_sha256,
+            )
         elif args.command == "write-seed":
             write_seed(
                 EVIDENCE_ROOT,
@@ -878,7 +1382,12 @@ def main(argv: list[str] | None = None) -> int:
                 repository_id_sha256=args.repository_id_sha256,
                 backup_set_sha256=args.backup_set_sha256,
                 database_dump_sha256=args.database_dump_sha256,
+                migrated_manifest_sha256=args.migrated_manifest_sha256,
+                postgres_role_login_probe_sha256=args.postgres_role_login_probe_sha256,
+                postgres_security_manifest_sha256=args.postgres_security_manifest_sha256,
                 redis_dump_sha256=args.redis_dump_sha256,
+                source_worker_stop_evidence_sha256=args.source_worker_stop_evidence_sha256,
+                target_redis_manifest_sha256=args.target_redis_manifest_sha256,
                 configuration_checksums_sha256=args.configuration_checksums_sha256,
             )
         elif args.command == "validate-seed":
@@ -886,6 +1395,8 @@ def main(argv: list[str] | None = None) -> int:
                 EVIDENCE_ROOT,
                 **kwargs,
                 repository_id_sha256=args.repository_id_sha256,
+                source_worker_stop_evidence_sha256=args.source_worker_stop_evidence_sha256,
+                target_redis_manifest_sha256=args.target_redis_manifest_sha256,
             )
         elif args.command == "finalize":
             finalize(
@@ -896,9 +1407,37 @@ def main(argv: list[str] | None = None) -> int:
                 retention_marker=Path(args.retention_marker),
                 retention_sha256=args.retention_sha256,
                 repository_id_sha256=args.repository_id_sha256,
+                migrated_target_manifest_sha256=args.migrated_target_manifest_sha256,
+                postgres_role_login_probe_sha256=args.postgres_role_login_probe_sha256,
+                postgres_security_manifest_sha256=args.postgres_security_manifest_sha256,
+                source_worker_stop_evidence_sha256=args.source_worker_stop_evidence_sha256,
+                target_redis_manifest_sha256=args.target_redis_manifest_sha256,
             )
         elif args.command == "validate-final":
             validate_final(EVIDENCE_ROOT, expected_revision=args.expected_revision)
+        elif args.command == "first-start-status":
+            print(
+                first_start_status(
+                    EVIDENCE_ROOT, expected_revision=args.expected_revision
+                )
+            )
+        elif args.command == "arm-first-start":
+            print(
+                arm_first_start(
+                    EVIDENCE_ROOT,
+                    expected_revision=args.expected_revision,
+                    migrated_target_manifest_sha256=args.migrated_target_manifest_sha256,
+                    postgres_role_login_probe_sha256=args.postgres_role_login_probe_sha256,
+                    postgres_security_manifest_sha256=args.postgres_security_manifest_sha256,
+                    target_redis_manifest_sha256=args.target_redis_manifest_sha256,
+                )
+            )
+        elif args.command == "complete-first-start":
+            print(
+                complete_first_start(
+                    EVIDENCE_ROOT, expected_revision=args.expected_revision
+                )
+            )
         return 0
     except EvidenceError as exc:
         print(f"Provider cutover evidence rejected: {exc}", file=os.sys.stderr)

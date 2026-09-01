@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set +x
 set -euo pipefail
 umask 077
 
@@ -26,8 +27,16 @@ DB_ENV_FILE="${LECTURESIFT_DB_ENV_FILE:-$ALLOWED_DB_ENV_FILE}"
 ALLOWED_RUNTIME_ENV_FILE="/etc/lecturesift/runtime.env"
 RUNTIME_ENV_FILE="${LECTURESIFT_ENV_FILE:-$ALLOWED_RUNTIME_ENV_FILE}"
 MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest.sql"
+SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt"
+SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition.py"
+POSTGRES_SECURITY_MANIFEST="$ROOT_DIR/deploy/postgres_security_manifest.sql"
+POSTGRES_SECURITY_VALIDATOR="$ROOT_DIR/deploy/validate_postgres_security_manifest.py"
+POSTGRES_ROLE_LOGIN_PROBE="$ROOT_DIR/deploy/postgres_role_login_probe.sh"
 PROVISION_ROLE="$ROOT_DIR/deploy/provision_database_role.sh"
 CUTOVER_EVIDENCE_TOOL="$ROOT_DIR/deploy/provider_cutover_evidence.py"
+RENDER_WORKER_STOP_TOOL="$ROOT_DIR/deploy/render_worker_stop_evidence.py"
+SOURCE_REDIS_GUARD="$ROOT_DIR/deploy/source_redis_guard.py"
+SOURCE_POSTGRES_TRANSPORT="$ROOT_DIR/deploy/source_postgres_transport.py"
 ALLOWED_BACKUP_ROOT="/var/backups/lecturesift/postgres-cutover"
 REQUESTED_BACKUP_ROOT="${LECTURESIFT_POSTGRES_CUTOVER_ROOT:-$ALLOWED_BACKUP_ROOT}"
 FAIL_STOP_ROOT="/var/lib/lecturesift/migration-fail-stop"
@@ -63,38 +72,48 @@ check_private_file() {
 check_private_file "$SOURCE_ENV_FILE" "Render source environment"
 check_private_file "$DB_ENV_FILE" "Target database environment"
 check_private_file "$RUNTIME_ENV_FILE" "Runtime environment"
-for path in "$MANIFEST" "$PROVISION_ROLE" "$CUTOVER_EVIDENCE_TOOL" "$ROOT_DIR/compose.yaml"; do
+for path in "$MANIFEST" "$SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" \
+  "$POSTGRES_SECURITY_MANIFEST" "$POSTGRES_SECURITY_VALIDATOR" \
+  "$POSTGRES_ROLE_LOGIN_PROBE" \
+  "$PROVISION_ROLE" "$CUTOVER_EVIDENCE_TOOL" "$RENDER_WORKER_STOP_TOOL" \
+  "$SOURCE_REDIS_GUARD" "$SOURCE_POSTGRES_TRANSPORT" \
+  "$ROOT_DIR/compose.yaml"; do
   [[ -f "$path" && ! -L "$path" ]] || fail "missing or unsafe cutover input: $path"
 done
 command -v docker >/dev/null 2>&1 || fail "Docker is unavailable"
 command -v python3 >/dev/null 2>&1 || fail "Python is unavailable"
 
-set -a
-# shellcheck disable=SC1090
-source "$SOURCE_ENV_FILE"
-set +a
-: "${SOURCE_DATABASE_URL:?Missing SOURCE_DATABASE_URL}"
-: "${SOURCE_HEALTH_URL:?Missing SOURCE_HEALTH_URL}"
-render_source_database_url="$SOURCE_DATABASE_URL"
-render_source_health_url="$SOURCE_HEALTH_URL"
-render_source_redis_url="${SOURCE_REDIS_URL:-${REDIS_URL:-}}"
-render_source_broker_url="${SOURCE_CELERY_BROKER_URL:-${CELERY_BROKER_URL:-}}"
+source_exec() {
+  local scope="$1"
+  shift
+  python3 "$SOURCE_POSTGRES_TRANSPORT" exec-source \
+    --source-env "$SOURCE_ENV_FILE" --scope "$scope" -- "$@"
+}
+
+source_pg_exec() {
+  python3 "$SOURCE_POSTGRES_TRANSPORT" exec-libpq-docker \
+    --source-env "$SOURCE_ENV_FILE" -- "$@"
+}
+
+SOURCE_PG_DOCKER_ENV=(
+  --env PGHOST --env PGPORT --env PGDATABASE --env PGUSER
+  --env PGSSLMODE --env PGSSLROOTCERT
+  --env PGCONNECT_TIMEOUT
+)
+python3 "$SOURCE_POSTGRES_TRANSPORT" validate --source-env "$SOURCE_ENV_FILE" \
+  >/dev/null || fail "the Render source transport contract is invalid"
+
 set -a
 # shellcheck disable=SC1090
 source "$RUNTIME_ENV_FILE"
 # shellcheck disable=SC1090
 source "$DB_ENV_FILE"
 set +a
-SOURCE_DATABASE_URL="$render_source_database_url"
-SOURCE_HEALTH_URL="$render_source_health_url"
-SOURCE_REDIS_URL="$render_source_redis_url"
-SOURCE_CELERY_BROKER_URL="$render_source_broker_url"
-export SOURCE_DATABASE_URL SOURCE_HEALTH_URL SOURCE_REDIS_URL SOURCE_CELERY_BROKER_URL
 [[ "$CUTOVER_ID" =~ ^[0-9a-f]{32}$ ]] ||
   fail "LECTURESIFT_PROVIDER_CUTOVER_ID must be exactly 32 lowercase hex characters"
 [[ "$EXPECTED_BUILD_REVISION" =~ ^[0-9a-f]{40}$ ]] ||
   fail "LECTURESIFT_EXPECTED_BUILD_REVISION must be the exact 40-character release commit"
-SOURCE_FINGERPRINT="$(python3 "$CUTOVER_EVIDENCE_TOOL" source-fingerprint)" ||
+SOURCE_FINGERPRINT="$(source_exec fingerprint python3 "$CUTOVER_EVIDENCE_TOOL" source-fingerprint)" ||
   fail "the Render source identity could not be fingerprinted"
 [[ "$SOURCE_FINGERPRINT" =~ ^[0-9a-f]{64}$ ]] ||
   fail "the Render source fingerprint is invalid"
@@ -126,38 +145,6 @@ valid = (
 )
 raise SystemExit(0 if valid else 1)
 PY
-
-# The external source must be the TLS Render endpoint, never the local target.
-python3 - <<'PY' || fail "SOURCE_DATABASE_URL is not a distinct TLS Render database"
-import os
-from urllib.parse import parse_qs, urlsplit
-
-url = urlsplit(os.environ["SOURCE_DATABASE_URL"])
-host = (url.hostname or "").lower().rstrip(".")
-query = parse_qs(url.query)
-valid = (
-    url.scheme in {"postgres", "postgresql"}
-    and bool(url.username) and bool(url.password) and bool(url.path.strip("/"))
-    and host.endswith(".render.com")
-    and host not in {"localhost", "postgres", "127.0.0.1", "::1"}
-    and query.get("sslmode", [""])[0] in {"require", "verify-ca", "verify-full"}
-)
-raise SystemExit(0 if valid else 1)
-PY
-python3 - <<'PY' || fail "SOURCE_HEALTH_URL must be an HTTPS Render health endpoint"
-import os
-from urllib.parse import urlsplit
-
-url = urlsplit(os.environ["SOURCE_HEALTH_URL"])
-host = (url.hostname or "").lower().rstrip(".")
-valid = url.scheme == "https" and host.endswith(".onrender.com") and url.path.rstrip("/").endswith("/health")
-raise SystemExit(0 if valid else 1)
-PY
-[[ "$SOURCE_REDIS_URL" =~ ^rediss?:// && "$SOURCE_REDIS_URL" != *"@redis:6379"* ]] ||
-  fail "the source environment must contain its remote Redis URL"
-[[ "$SOURCE_CELERY_BROKER_URL" =~ ^rediss?:// &&
-   "$SOURCE_CELERY_BROKER_URL" != *"@redis:6379"* ]] ||
-  fail "the source environment must contain its remote Celery broker URL"
 
 allowed_root="$(realpath -m -- "$ALLOWED_BACKUP_ROOT")"
 [[ "$allowed_root" == "$ALLOWED_BACKUP_ROOT" ]] ||
@@ -195,6 +182,7 @@ compose=(docker compose --project-directory "$ROOT_DIR" --file "$ROOT_DIR/compos
 target_mutated="false"
 migration_verified="false"
 snapshot_open="false"
+SOURCE_WORKER_STOP_EVIDENCE_SHA256=""
 
 write_fail_stop_marker() {
   local state="$1" action="$2" tmp
@@ -217,9 +205,16 @@ close_snapshot() {
 }
 
 canonical_manifest() {
-  local source="$1" destination="$2"
+  local source="$1" destination="$2" mode="${3:-strict}" compat_count
+  [[ "$mode" == "strict" || "$mode" == "legacy-provider-sessions" ]] ||
+    fail "an invalid manifest compatibility mode was requested"
+  if [[ "$mode" == "strict" ]]; then
+    python3 "$SCHEMA_VERIFIER" current \
+      --manifest "$source" --contract "$SCHEMA_CONTRACT" >/dev/null ||
+      fail "a strict database manifest violates the exact current schema contract"
+  fi
   tr -d '\r' <"$source" |
-    grep -E '^(DATABASE|SCHEMA|TABLE|ANOMALY|STATUS|UNVALIDATED_FK)\|' |
+    grep -E '^(DATABASE|SCHEMA|SCHEMA_OBJECT|TABLE|ANOMALY|STATUS|SCHEMA_COMPAT|UNVALIDATED_FK|MANIFEST_COMPLETE)\|' |
     LC_ALL=C sort >"$destination"
   [[ "$(grep -c '^DATABASE|' "$destination")" == "1" &&
      "$(grep -c '^SCHEMA|' "$destination")" == "1" &&
@@ -229,37 +224,42 @@ canonical_manifest() {
      awk -F'|' '$1 == "ANOMALY" && $3 != "0" {bad=1} END {exit(bad ? 0 : 1)}' "$source"; then
     fail "a database manifest contains an integrity anomaly"
   fi
+  compat_count="$(grep -c '^SCHEMA_COMPAT|' "$source" || true)"
+  if [[ "$mode" == "strict" ]]; then
+    [[ "$compat_count" == "0" ]] || fail "a strict database manifest used schema compatibility"
+  elif [[ "$compat_count" -gt 1 ]] ||
+       grep '^SCHEMA_COMPAT|' "$source" |
+         grep -Fvxq 'SCHEMA_COMPAT|legacy_missing_table|billing_payment_provider_sessions|integrity_checks_deferred_to_current_schema_migration'; then
+    fail "the source manifest contains an unapproved legacy schema difference"
+  fi
 }
 
 run_render_manifest() {
   local output_name="$1"
   [[ "$output_name" =~ ^[a-z0-9-]+[.]txt$ ]] || fail "unsafe manifest output name"
-  docker run --rm --user 0:0 \
-    --volume "$SOURCE_ENV_FILE:/run/secrets/render-source.env:ro" \
+  source_pg_exec docker run --rm --user 0:0 \
+    "${SOURCE_PG_DOCKER_ENV[@]}" \
     --volume "$RUN_DIR:/backup" --volume "$ROOT_DIR/deploy:/probe:ro" \
-    --env "OUTPUT_NAME=$output_name" postgres:18-bookworm bash -euc '
-      set -a
-      source /run/secrets/render-source.env
-      set +a
-      psql --no-psqlrc "$SOURCE_DATABASE_URL" -v ON_ERROR_STOP=1 \
+    --env "OUTPUT_NAME=$output_name" postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af bash -euc '
+      set +x
+      psql --no-psqlrc -v ON_ERROR_STOP=1 \
+        -v LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on \
         -f /probe/rehearsal_manifest.sql >"/backup/$OUTPUT_NAME"
     '
 }
 
 render_pending_count() {
-  docker run --rm --user 0:0 \
-    --volume "$SOURCE_ENV_FILE:/run/secrets/render-source.env:ro" \
-    --env "PENDING_SQL=$PENDING_SQL" postgres:18-bookworm bash -euc '
-      set -a
-      source /run/secrets/render-source.env
-      set +a
-      psql --no-psqlrc "$SOURCE_DATABASE_URL" -v ON_ERROR_STOP=1 \
+  source_pg_exec docker run --rm --user 0:0 \
+    "${SOURCE_PG_DOCKER_ENV[@]}" \
+    --env "PENDING_SQL=$PENDING_SQL" postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af bash -euc '
+      set +x
+      psql --no-psqlrc -v ON_ERROR_STOP=1 \
         --tuples-only --no-align --command "$PENDING_SQL"
     ' | tr -d '\r[:space:]'
 }
 
 assert_render_frozen() {
-  python3 - <<'PY'
+  source_exec health python3 - <<'PY'
 import json
 import os
 import ssl
@@ -276,50 +276,46 @@ PY
 }
 
 assert_render_worker_and_queue_stopped() {
-  # A flag is not evidence. Establish a real broker connection, prove that no
-  # Celery worker responds, then inspect all queue-priority/unacked structures
-  # and LectureSift's durable job states through the remote Redis endpoint.
-  timeout 30 docker run --rm --pull=never --network bridge --user 0 \
-    -e SOURCE_CELERY_BROKER_URL --entrypoint python lecturesift-backend:local -c '
-import os
-from celery import Celery
+  local observed_stop_digest
+  observed_stop_digest="$(python3 "$RENDER_WORKER_STOP_TOOL")" || return 1
+  [[ "$observed_stop_digest" =~ ^[0-9a-f]{64}$ ]] || return 1
+  if [[ -n "$SOURCE_WORKER_STOP_EVIDENCE_SHA256" &&
+        "$observed_stop_digest" != "$SOURCE_WORKER_STOP_EVIDENCE_SHA256" ]]; then
+    return 1
+  fi
+  SOURCE_WORKER_STOP_EVIDENCE_SHA256="$observed_stop_digest"
 
-app = Celery(broker=os.environ["SOURCE_CELERY_BROKER_URL"])
-with app.connection_for_read() as connection:
-    connection.ensure_connection(max_retries=1, timeout=8)
-replies = app.control.ping(timeout=8)
-raise SystemExit(1 if replies else 0)
-' >>"$RUN_DIR/source-worker-check.log" 2>&1 || return 1
-  timeout 30 docker run --rm --pull=never --network bridge --user 0 \
-    -e SOURCE_REDIS_URL --entrypoint python lecturesift-backend:local -c '
-import os
-from redis import Redis
-
-client = Redis.from_url(os.environ["SOURCE_REDIS_URL"], socket_connect_timeout=8, socket_timeout=15)
-assert client.ping()
-for key in client.scan_iter(match=b"celery*", count=250):
-    if client.type(key) == b"list" and client.llen(key):
-        raise SystemExit(1)
-if client.hlen("unacked") or client.zcard("unacked_index"):
-    raise SystemExit(1)
-if client.exists("lecturesift:jobs:v2:write-lock"):
-    raise SystemExit(1)
-if any(True for _ in client.scan_iter(match="lecturesift:job:*:processing", count=250)):
-    raise SystemExit(1)
-raw = client.get("lecturesift:jobs:v2")
-if raw:
-    import json
-    jobs = json.loads(raw).get("jobs", {})
-    if any(str(job.get("status", "")) in {"queued", "working"} for job in jobs.values()):
-        raise SystemExit(1)
-' >>"$RUN_DIR/source-queue-check.log" 2>&1
+  # Probe the state and broker URLs independently with a host stdlib TLS
+  # client. No source credential reaches the release-candidate image.
+  source_exec redis timeout 45 python3 "$SOURCE_REDIS_GUARD" assert-idle \
+    >>"$RUN_DIR/source-queue-check.log" 2>&1
 }
 
 target_manifest() {
-  local destination="$1"
+  local destination="$1" mode="${2:-strict}"
+  local -a compatibility_args=()
+  case "$mode" in
+    strict) ;;
+    legacy-provider-sessions)
+      compatibility_args=(-v LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on)
+      ;;
+    *) fail "an invalid target manifest compatibility mode was requested" ;;
+  esac
   "${compose[@]}" exec -T postgres psql --no-psqlrc --quiet \
     --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -v ON_ERROR_STOP=1 \
+    "${compatibility_args[@]}" \
     -f /tmp/lecturesift-cutover-manifest.sql >"$destination"
+}
+
+target_security_manifest() {
+  local raw="$1" safe="$2"
+  "${compose[@]}" exec -T postgres psql --no-psqlrc --quiet \
+    --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -v ON_ERROR_STOP=1 \
+    --variable=owner_user="$POSTGRES_USER" \
+    --variable=api_user="$LECTURESIFT_APP_DB_USER" \
+    --variable=worker_user="$LECTURESIFT_WORKER_DB_USER" \
+    <"$POSTGRES_SECURITY_MANIFEST" >"$raw"
+  python3 "$POSTGRES_SECURITY_VALIDATOR" "$raw" >"$safe"
 }
 
 install_target_manifest() {
@@ -341,6 +337,9 @@ reset_and_restore_target() {
   "${compose[@]}" exec -T postgres pg_restore --username "$POSTGRES_USER" \
     --exit-on-error --single-transaction --no-owner --no-acl \
     --dbname "$POSTGRES_DB" <"$dump"
+}
+
+provision_target_schema_and_roles() {
   "$PROVISION_ROLE"
 }
 
@@ -480,12 +479,28 @@ cleanup() {
     echo "The cutover aborted after target mutation; attempting the fixed target rollback dump." >&2
     if reset_and_restore_target "$RUN_DIR/target-before.dump" &&
        install_target_manifest &&
-       target_manifest "$RUN_DIR/target-rollback-check.txt"; then
-      tr -d '\r' <"$RUN_DIR/target-rollback-check.txt" |
-        grep -E '^(DATABASE|SCHEMA|TABLE|ANOMALY|STATUS|UNVALIDATED_FK)\|' |
-        LC_ALL=C sort >"$RUN_DIR/target-rollback-check.safe"
-      if cmp --silent "$RUN_DIR/target-before.safe" "$RUN_DIR/target-rollback-check.safe"; then
-        rollback_ok="true"
+       target_manifest "$RUN_DIR/target-rollback-raw.txt" strict; then
+      tr -d '\r' <"$RUN_DIR/target-rollback-raw.txt" |
+        grep -E '^(DATABASE|SCHEMA|SCHEMA_OBJECT|TABLE|ANOMALY|STATUS|SCHEMA_COMPAT|UNVALIDATED_FK|MANIFEST_COMPLETE)\|' |
+        LC_ALL=C sort >"$RUN_DIR/target-rollback-raw.safe"
+      if ! grep -Eq '^(TABLE_DIFF|SCHEMA_COMPAT|UNVALIDATED_FK)\|' \
+           "$RUN_DIR/target-rollback-raw.txt" &&
+         ! awk -F'|' '$1 == "ANOMALY" && $3 != "0" {bad=1} END {exit(bad ? 0 : 1)}' \
+           "$RUN_DIR/target-rollback-raw.txt" &&
+         cmp --silent "$RUN_DIR/target-before.safe" "$RUN_DIR/target-rollback-raw.safe" &&
+         provision_target_schema_and_roles &&
+         target_manifest "$RUN_DIR/target-rollback-check.txt" strict; then
+        tr -d '\r' <"$RUN_DIR/target-rollback-check.txt" |
+          grep -E '^(DATABASE|SCHEMA|SCHEMA_OBJECT|TABLE|ANOMALY|STATUS|SCHEMA_COMPAT|UNVALIDATED_FK|MANIFEST_COMPLETE)\|' |
+          LC_ALL=C sort >"$RUN_DIR/target-rollback-check.safe"
+        if ! grep -Eq '^(TABLE_DIFF|SCHEMA_COMPAT|UNVALIDATED_FK)\|' \
+             "$RUN_DIR/target-rollback-check.txt" &&
+           ! awk -F'|' '$1 == "ANOMALY" && $3 != "0" {bad=1} END {exit(bad ? 0 : 1)}' \
+             "$RUN_DIR/target-rollback-check.txt" &&
+           cmp --silent "$RUN_DIR/target-before.safe" \
+             "$RUN_DIR/target-rollback-check.safe"; then
+          rollback_ok="true"
+        fi
       fi
     fi
     if [[ "$rollback_ok" == "true" ]]; then
@@ -503,12 +518,10 @@ cleanup() {
   else
     rm -f -- "$FAIL_STOP_MARKER"
   fi
-  unset SOURCE_DATABASE_URL SOURCE_HEALTH_URL SOURCE_REDIS_URL SOURCE_CELERY_BROKER_URL
   unset POSTGRES_PASSWORD
   unset LECTURESIFT_APP_DB_PASSWORD LECTURESIFT_WORKER_DB_PASSWORD
   unset DATABASE_URL LECTURESIFT_WORKER_DATABASE_URL
-  unset render_source_database_url render_source_health_url
-  unset render_source_redis_url render_source_broker_url
+  unset SOURCE_WORKER_STOP_EVIDENCE_SHA256
   exit "$status"
 }
 trap cleanup EXIT
@@ -528,7 +541,8 @@ pending_before="$(render_pending_count)"
 [[ "$pending_before" == "0" ]] ||
   fail "pending payments are not zero; provider reconciliation must finish before cutover"
 run_render_manifest source-before.txt
-canonical_manifest "$RUN_DIR/source-before.txt" "$RUN_DIR/source-before.safe"
+canonical_manifest "$RUN_DIR/source-before.txt" "$RUN_DIR/source-before.safe" \
+  legacy-provider-sessions
 source_size="$(sed -n 's/^DATABASE_SIZE|//p' "$RUN_DIR/source-before.txt" | tr -d '\r')"
 [[ "$(grep -c '^DATABASE_SIZE|' "$RUN_DIR/source-before.txt")" == "1" &&
    "$source_size" =~ ^[1-9][0-9]*$ && "$source_size" -le 1000000000000 ]] ||
@@ -549,13 +563,11 @@ required_bytes=$((source_size * 2 + target_size * 2 + 5368709120))
 
 # Keep a single exported MVCC snapshot open while pg_dump and the authoritative
 # source manifest run. Live before/after manifests must also match it exactly.
-docker run -d --name "$SNAPSHOT_CONTAINER" --user 0:0 \
-  --volume "$SOURCE_ENV_FILE:/run/secrets/render-source.env:ro" \
-  --volume "$RUN_DIR:/backup" postgres:18-bookworm bash -euc '
-    set -a
-    source /run/secrets/render-source.env
-    set +a
-    psql --no-psqlrc "$SOURCE_DATABASE_URL" -v ON_ERROR_STOP=1 <<"SQL"
+source_pg_exec docker run -d --name "$SNAPSHOT_CONTAINER" --user 0:0 \
+  "${SOURCE_PG_DOCKER_ENV[@]}" \
+  --volume "$RUN_DIR:/backup" postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af bash -euc '
+    set +x
+    psql --no-psqlrc -v ON_ERROR_STOP=1 <<"SQL"
 BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;
 \pset tuples_only on
 \pset format unaligned
@@ -580,28 +592,28 @@ done
   fail "the Render consistent snapshot could not be exported"
 SNAPSHOT_ID="${snapshot_info#*|}"
 
-docker run --rm --user 0:0 \
-  --volume "$SOURCE_ENV_FILE:/run/secrets/render-source.env:ro" \
+source_pg_exec docker run --rm --user 0:0 \
+  "${SOURCE_PG_DOCKER_ENV[@]}" \
   --volume "$RUN_DIR:/backup" --volume "$ROOT_DIR/deploy:/probe:ro" \
-  --env "SNAPSHOT_ID=$SNAPSHOT_ID" postgres:18-bookworm bash -euc '
-    set -a
-    source /run/secrets/render-source.env
-    set +a
+  --env "SNAPSHOT_ID=$SNAPSHOT_ID" postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af bash -euc '
+    set +x
     {
       printf "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;\n"
       printf "SET TRANSACTION SNAPSHOT '\''%s'\'';\n" "$SNAPSHOT_ID"
       cat /probe/rehearsal_manifest.sql
       printf "COMMIT;\n"
-    } | psql --no-psqlrc "$SOURCE_DATABASE_URL" -v ON_ERROR_STOP=1 \
+    } | psql --no-psqlrc -v ON_ERROR_STOP=1 \
+      -v LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on \
       > /backup/source-snapshot.txt
-    pg_dump "$SOURCE_DATABASE_URL" --format=custom --no-owner --no-acl \
+    pg_dump --format=custom --no-owner --no-acl \
       --snapshot "$SNAPSHOT_ID" --file=/backup/render-final.dump
   '
 close_snapshot
-docker run --rm --user 0:0 --volume "$RUN_DIR:/backup:ro" postgres:18-bookworm \
+docker run --rm --user 0:0 --volume "$RUN_DIR:/backup:ro" postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af \
   pg_restore --list /backup/render-final.dump >"$RUN_DIR/render-final.dump.list"
 sha256sum "$RUN_DIR/render-final.dump" >"$RUN_DIR/render-final.dump.sha256"
-canonical_manifest "$RUN_DIR/source-snapshot.txt" "$RUN_DIR/source-snapshot.safe"
+canonical_manifest "$RUN_DIR/source-snapshot.txt" "$RUN_DIR/source-snapshot.safe" \
+  legacy-provider-sessions
 
 assert_render_frozen || fail "Render left freeze mode during the source capture"
 assert_render_worker_and_queue_stopped ||
@@ -609,7 +621,8 @@ assert_render_worker_and_queue_stopped ||
 pending_after="$(render_pending_count)"
 [[ "$pending_after" == "0" ]] || fail "a provider payment became pending during source capture"
 run_render_manifest source-after.txt
-canonical_manifest "$RUN_DIR/source-after.txt" "$RUN_DIR/source-after.safe"
+canonical_manifest "$RUN_DIR/source-after.txt" "$RUN_DIR/source-after.safe" \
+  legacy-provider-sessions
 cmp --silent "$RUN_DIR/source-before.safe" "$RUN_DIR/source-snapshot.safe" ||
   fail "Render data changed before the exported snapshot"
 cmp --silent "$RUN_DIR/source-snapshot.safe" "$RUN_DIR/source-after.safe" ||
@@ -625,38 +638,99 @@ canonical_manifest "$RUN_DIR/target-before.txt" "$RUN_DIR/target-before.safe"
 "${compose[@]}" exec -T postgres pg_dump --username "$POSTGRES_USER" \
   --dbname "$POSTGRES_DB" --format custom --no-owner --no-acl \
   >"$RUN_DIR/target-before.dump"
-docker run --rm --user 0:0 --volume "$RUN_DIR:/backup:ro" postgres:18-bookworm \
+docker run --rm --user 0:0 --volume "$RUN_DIR:/backup:ro" postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af \
   pg_restore --list /backup/target-before.dump >"$RUN_DIR/target-before.dump.list"
 sha256sum "$RUN_DIR/target-before.dump" >"$RUN_DIR/target-before.dump.sha256"
 
 target_mutated="true"
 reset_and_restore_target "$RUN_DIR/render-final.dump"
 install_target_manifest
-target_manifest "$RUN_DIR/target-restored.txt"
-canonical_manifest "$RUN_DIR/target-restored.txt" "$RUN_DIR/target-restored.safe"
-cmp --silent "$RUN_DIR/source-snapshot.safe" "$RUN_DIR/target-restored.safe" ||
+target_manifest "$RUN_DIR/target-restored-raw.txt" legacy-provider-sessions
+canonical_manifest "$RUN_DIR/target-restored-raw.txt" \
+  "$RUN_DIR/target-restored-raw.safe" legacy-provider-sessions
+cmp --silent "$RUN_DIR/source-snapshot.safe" "$RUN_DIR/target-restored-raw.safe" ||
   fail "the restored OVH manifest does not exactly match the stable Render snapshot"
+
+legacy_compat_marker='SCHEMA_COMPAT|legacy_missing_table|billing_payment_provider_sessions|integrity_checks_deferred_to_current_schema_migration'
+legacy_provider_sessions_missing="false"
+if grep -Fxq "$legacy_compat_marker" "$RUN_DIR/target-restored-raw.txt"; then
+  legacy_provider_sessions_missing="true"
+fi
+
+# Only after raw source/target equality is proven may the owner migration add
+# the current schema. Long-lived API/worker services remain stopped throughout.
+provision_target_schema_and_roles
+target_manifest "$RUN_DIR/target-migrated.txt" strict
+canonical_manifest "$RUN_DIR/target-migrated.txt" "$RUN_DIR/target-migrated.safe" strict
+grep -E '^(DATABASE|TABLE|STATUS)\|' "$RUN_DIR/target-restored-raw.txt" |
+  LC_ALL=C sort >"$RUN_DIR/target-before-migration.data"
+grep -E '^(DATABASE|TABLE|STATUS)\|' "$RUN_DIR/target-migrated.txt" |
+  LC_ALL=C sort >"$RUN_DIR/target-after-migration.data"
+if [[ "$legacy_provider_sessions_missing" == "true" ]]; then
+  grep -Fxq 'TABLE|billing_payment_provider_sessions|0|0|0' \
+    "$RUN_DIR/target-migrated.txt" ||
+    fail "the migrated payment-provider session table is missing or unexpectedly non-empty"
+  grep -Fv 'TABLE|billing_payment_provider_sessions|' \
+    "$RUN_DIR/target-after-migration.data" \
+    >"$RUN_DIR/target-after-migration.comparable"
+else
+  cp -- "$RUN_DIR/target-after-migration.data" \
+    "$RUN_DIR/target-after-migration.comparable"
+fi
+cmp --silent "$RUN_DIR/target-before-migration.data" \
+  "$RUN_DIR/target-after-migration.comparable" ||
+  fail "the current schema migration changed pre-existing source data"
+python3 "$SCHEMA_VERIFIER" transition \
+  --before "$RUN_DIR/target-restored-raw.txt" \
+  --after "$RUN_DIR/target-migrated.txt" \
+  --contract "$SCHEMA_CONTRACT" \
+  >"$RUN_DIR/schema-transition.txt" ||
+  fail "the current schema migration escaped its exact reviewed schema contract"
 
 # Exercise the actual role-specific API and worker images, their generated env
 # files and the least-privilege PostgreSQL role. These are one-shot probes only;
 # neither long-running writer is started.
 probe_application_role api
 probe_application_role worker
-target_manifest "$RUN_DIR/target-after-probes.txt"
-canonical_manifest "$RUN_DIR/target-after-probes.txt" "$RUN_DIR/target-after-probes.safe"
-cmp --silent "$RUN_DIR/source-snapshot.safe" "$RUN_DIR/target-after-probes.safe" ||
-  fail "application/worker probes changed the restored data"
+target_manifest "$RUN_DIR/target-after-probes.txt" strict
+canonical_manifest "$RUN_DIR/target-after-probes.txt" \
+  "$RUN_DIR/target-after-probes.safe" strict
+cmp --silent "$RUN_DIR/target-migrated.safe" "$RUN_DIR/target-after-probes.safe" ||
+  fail "application/worker probes changed the migrated target"
+target_security_manifest "$RUN_DIR/postgres-security-final.txt" \
+  "$RUN_DIR/postgres-security-final.safe" ||
+  fail "the target PostgreSQL authority manifest could not be proved"
+POSTGRES_SECURITY_MANIFEST_SHA256="$(
+  sha256sum "$RUN_DIR/postgres-security-final.safe" | awk '{print $1}'
+)"
+[[ "$POSTGRES_SECURITY_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]] ||
+  fail "the target PostgreSQL authority manifest digest is invalid"
+POSTGRES_ROLE_LOGIN_PROBE_SHA256="$(bash "$POSTGRES_ROLE_LOGIN_PROBE")" ||
+  fail "the trusted target PostgreSQL role login proof failed"
+[[ "$POSTGRES_ROLE_LOGIN_PROBE_SHA256" =~ ^[0-9a-f]{64}$ ]] ||
+  fail "the target PostgreSQL role login proof digest is invalid"
+target_stopped || fail "an OVH API/worker writer became active during target verification"
+assert_render_frozen || fail "Render left freeze mode while the target migration was verified"
+assert_render_worker_and_queue_stopped ||
+  fail "the Render worker or queue became active while the target migration was verified"
+[[ "$(render_pending_count)" == "0" ]] ||
+  fail "a provider payment became pending while the target migration was verified"
 
 {
   printf 'status=postgres-cutover-verified\n'
   printf 'verified_at_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   printf 'source_manifest_sha256=%s\n' "$(sha256sum "$RUN_DIR/source-snapshot.safe" | awk '{print $1}')"
+  printf 'migrated_target_manifest_sha256=%s\n' "$(sha256sum "$RUN_DIR/target-migrated.safe" | awk '{print $1}')"
+  printf 'source_legacy_provider_sessions_missing=%s\n' "$legacy_provider_sessions_missing"
   printf 'source_dump_sha256=%s\n' "$(cut -d' ' -f1 "$RUN_DIR/render-final.dump.sha256")"
   printf 'target_rollback_dump_sha256=%s\n' "$(cut -d' ' -f1 "$RUN_DIR/target-before.dump.sha256")"
   printf 'pending_payments_before=0\n'
   printf 'pending_payments_after=0\n'
   printf 'api_role_probe=verified\n'
   printf 'worker_role_probe=verified\n'
+  printf 'source_worker_stop_evidence_sha256=%s\n' "$SOURCE_WORKER_STOP_EVIDENCE_SHA256"
+  printf 'postgres_security_manifest_sha256=%s\n' "$POSTGRES_SECURITY_MANIFEST_SHA256"
+  printf 'postgres_role_login_probe_sha256=%s\n' "$POSTGRES_ROLE_LOGIN_PROBE_SHA256"
   printf 'caddy_changed=false\n'
   printf 'api_worker_started=false\n'
 } >"$RUN_DIR/CUTOVER_VERIFIED"
@@ -672,7 +746,11 @@ python3 "$CUTOVER_EVIDENCE_TOOL" write-postgres \
   --source-fingerprint "$SOURCE_FINGERPRINT" \
   --run-id "$(basename -- "$RUN_DIR")" \
   --manifest-sha256 "$(sha256sum "$RUN_DIR/source-snapshot.safe" | awk '{print $1}')" \
+  --migrated-manifest-sha256 "$(sha256sum "$RUN_DIR/target-migrated.safe" | awk '{print $1}')" \
+  --postgres-security-manifest-sha256 "$POSTGRES_SECURITY_MANIFEST_SHA256" \
+  --postgres-role-login-probe-sha256 "$POSTGRES_ROLE_LOGIN_PROBE_SHA256" \
   --source-dump-sha256 "$(cut -d' ' -f1 "$RUN_DIR/render-final.dump.sha256")" \
+  --source-worker-stop-evidence-sha256 "$SOURCE_WORKER_STOP_EVIDENCE_SHA256" \
   --rollback-dump-sha256 "$(cut -d' ' -f1 "$RUN_DIR/target-before.dump.sha256")" ||
   fail "the global PostgreSQL cutover proof could not be recorded"
 rm -f -- "$FAIL_STOP_MARKER"

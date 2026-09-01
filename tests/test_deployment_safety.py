@@ -17,36 +17,39 @@ def _read(path: str) -> str:
 
 def test_rehearsal_has_dedicated_queue_bucket_and_consumer_guards():
     script = _read("deploy/rehearsal_stack.sh")
+    generator = _read("deploy/generate_rehearsal_envs.py")
 
     assert 'rehearsal_redis_container="lecturesift-redis-rehearsal"' in script
-    assert 'CELERY_BROKER_URL="redis://$rehearsal_redis_container:6379/0"' in script
-    assert 'REDIS_URL="$CELERY_BROKER_URL"' in script
-    assert ': "${LECTURESIFT_WORKER_DATABASE_URL:?Missing LECTURESIFT_WORKER_DATABASE_URL}"' in script
-    assert 'api_database_url="${DATABASE_URL%/*}/$rehearsal_db"' in script
-    assert 'worker_database_url="${LECTURESIFT_WORKER_DATABASE_URL%/*}/$rehearsal_db"' in script
-    assert 'DATABASE_URL="$worker_database_url"' in script
-    assert 'DATABASE_URL="$api_database_url"' in script
-    assert "-e DATABASE_URL -e CELERY_BROKER_URL -e REDIS_URL -e S3_BUCKET" in script
-    assert "LECTURESIFT_REHEARSAL_S3_BUCKET" in script
-    assert "LECTURESIFT_REHEARSAL_S3_ACCESS_KEY_ID" in script
-    assert "LECTURESIFT_REHEARSAL_S3_SECRET_ACCESS_KEY" in script
-    assert '[[ "$LECTURESIFT_REHEARSAL_S3_BUCKET" == "$S3_BUCKET" ]]' in script
-    assert 'S3_ACCESS_KEY_ID="$LECTURESIFT_REHEARSAL_S3_ACCESS_KEY_ID"' in script
-    assert 'S3_SECRET_ACCESS_KEY="$LECTURESIFT_REHEARSAL_S3_SECRET_ACCESS_KEY"' in script
-    assert "-e S3_ACCESS_KEY_ID -e S3_SECRET_ACCESS_KEY" in script
-    assert "lecturesift-api-1 lecturesift-worker-1" in script
+    assert '"CELERY_BROKER_URL": "redis://lecturesift-redis-rehearsal:6379/0"' in generator
+    assert '"REDIS_URL": "redis://lecturesift-redis-rehearsal:6379/0"' in generator
+    assert 'requested_api_database_url="${LECTURESIFT_REHEARSAL_API_DATABASE_URL:-}"' in script
+    assert 'requested_worker_database_url="${LECTURESIFT_REHEARSAL_WORKER_DATABASE_URL:-}"' in script
+    assert "lecturesift_rehearsal_api_" in script
+    assert "lecturesift_rehearsal_worker_" in script
+    assert '"LECTURESIFT_REHEARSAL_S3_BUCKET"' in generator
+    assert '"LECTURESIFT_REHEARSAL_S3_ACCESS_KEY_ID"' in generator
+    assert '"LECTURESIFT_REHEARSAL_S3_SECRET_ACCESS_KEY"' in generator
+    assert "rehearsal bucket must differ from production" in generator
+    assert "a sensitive rehearsal value equals a production value" in generator
+    assert '--env-file "$generated_api_env"' in script
+    assert '--env-file "$generated_worker_env"' in script
+    assert '--database "$PRODUCTION_DB_ENV_FILE"' in script
+    assert 'bash "$ROOT_DIR/deploy/assert_rehearsal_production_stopped.sh"' in script
+    stop_gate = _read("deploy/assert_rehearsal_production_stopped.sh")
+    assert "lecturesift-api-1" in stop_gate
+    assert "lecturesift-worker-1" in stop_gate
+    assert "lecturesift-caddy-1" in stop_gate
+    assert "lecturesift-egress-proxy-1" in stop_gate
     assert "redis-server --save '' --appendonly no" in script
     assert (
         'REHEARSAL_ENV_FILE="${LECTURESIFT_REHEARSAL_ENV_FILE:-/etc/lecturesift/rehearsal.env}"'
         in script
     )
-    rehearsal_check = 'check_private_env "$REHEARSAL_ENV_FILE" "Rehearsal environment"'
-    rehearsal_source = 'source "$REHEARSAL_ENV_FILE"'
-    assert rehearsal_check in script
-    assert rehearsal_source in script
-    assert script.index(rehearsal_check) < script.index(rehearsal_source)
-    assert "must be a regular non-symlink file" in script
-    assert "must be owned by root" in script
+    assert 'source "$REHEARSAL_ENV_FILE"' not in script
+    assert 'source "$PRODUCTION_API_ENV_FILE"' not in script
+    assert "parse_dotenv_text" in generator
+    assert "never execute shell syntax" in generator
+    assert "root-owned regular non-symlink file" in script
     assert "must have mode 0400 or 0600" in script
 
 
@@ -70,10 +73,28 @@ def test_database_rehearsal_root_and_source_consistency_fail_closed():
     assert 'rm -f -- "$run_dir/render.dump"' in script
     assert "-mtime +30" in script
     assert "LECTURESIFT_PROVISION_DATABASE" in script
-    assert "safe_pattern='^(DATABASE|SCHEMA|TABLE|ANOMALY|STATUS|UNVALIDATED_FK)" in script
+    assert (
+        "safe_pattern='^(DATABASE|SCHEMA|SCHEMA_OBJECT|TABLE|TABLE_DIFF|ANOMALY|STATUS|SCHEMA_COMPAT|UNVALIDATED_FK|MANIFEST_COMPLETE)"
+        in script
+    )
     assert "Source and restored PostgreSQL version/encoding/collation identities differ" in script
     assert "Rehearsal data-integrity anomalies must be resolved before cutover" in script
     assert '$1 == "ANOMALY" && $3 != "0"' in script
+    assert script.count("LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on") == 3
+    assert "legacy_compat_marker='SCHEMA_COMPAT|legacy_missing_table|" in script
+    assert "target-migrated.txt" in script
+    assert "target-after-e2e.txt" in script
+    assert "The schema migration changed pre-existing table data" in script
+    assert "TABLE|billing_payment_provider_sessions|0|0|0" in script
+    assert "legacy_provider_sessions_missing" in script
+    assert "grep -E '^(DATABASE|TABLE|STATUS)" in script
+    assert 'if [[ "$legacy_provider_sessions_missing" == "true" ]]' in script
+    assert "target-after-migration.comparable" in script
+    raw_equality = script.index("Stable source and restored target manifests differ")
+    schema_migration = script.index('LECTURESIFT_PROVISION_DATABASE="$rehearsal_db"')
+    strict_manifest = script.index('> "$run_dir/target-migrated.txt"')
+    application_e2e = script.index('"$ROOT_DIR/deploy/rehearsal_stack.sh" "$rehearsal_db"')
+    assert raw_equality < schema_migration < strict_manifest < application_e2e
     assert script.index('rehearsal_db_created="true"') < script.index(
         'exec -T postgres createdb'
     )
@@ -277,11 +298,18 @@ def test_logical_redis_migration_proves_freeze_and_final_state():
         'RUN_DIR="$BACKUP_ROOT/redis-migration-$STAMP"'
     )
     assert "LECTURESIFT_SOURCE_WORKER_STOPPED" in script
-    assert 'SOURCE_REDIS_URL="${REDIS_URL:-}"' in script
-    assert 'SOURCE_CELERY_BROKER_URL="${CELERY_BROKER_URL:-}"' in script
+    assert 'SOURCE_REDIS_URL="${SOURCE_REDIS_URL:-${REDIS_URL:-}}"' in script
+    assert (
+        'SOURCE_CELERY_BROKER_URL="${SOURCE_CELERY_BROKER_URL:-${CELERY_BROKER_URL:-}}"'
+        in script
+    )
+    assert 'SOURCE_REDIS_URL="${REDIS_URL:-}"' not in script
+    assert 'SOURCE_CELERY_BROKER_URL="${CELERY_BROKER_URL:-}"' not in script
     assert 'payload.get("maintenance_mode") == "freeze"' in script
-    assert 'Celery(broker=os.environ["SOURCE_CELERY_BROKER_URL"])' in script
-    assert "app.control.ping(timeout=8)" in script
+    assert "render_worker_stop_evidence.py" in script
+    assert "source-worker-stop-evidence-sha256" in script
+    assert 'Celery(broker=os.environ["SOURCE_CELERY_BROKER_URL"])' not in script
+    assert "app.control.ping(timeout=8)" not in script
     assert "lecturesift-api-1 lecturesift-worker-1" in script
     assert 'MIGRATION_LOCK_KEY="lecturesift:jobs:v2:write-lock"' in script
     assert 'NX EX 3600' in script
@@ -304,7 +332,7 @@ def test_logical_redis_migration_proves_freeze_and_final_state():
     )
     assert "source-final.json" in script
     assert "target-final.json" in script
-    assert script.index("/migration/source-after.json") < script.rindex(
+    assert script.index('"$RUN_DIR/source-after.json"') < script.rindex(
         '>"$RUN_DIR/target-final.json"'
     )
     assert "before != after or after != final" in script
@@ -328,7 +356,7 @@ def test_logical_redis_migration_proves_freeze_and_final_state():
     assert "do-not-start-production-until-migration-exits-cleanly" in script
     assert "production preflight is blocked for manual recovery" in script
     assert "previous Redis migration left unproven target state" in script
-    assert 'cmp --silent "$RUN_DIR/target-before.json" "$rollback_current"' in script
+    assert 'cmp --silent "$TARGET_ROLLBACK_STATE" "$rollback_current"' in script
     assert script.count('command(b"WAITAOF", b"1", b"0", b"0")') >= 2
     forward_attempt = script.index('target_updated="true"')
     forward_pipe = script.index(
@@ -444,6 +472,10 @@ def test_staging_ingress_and_secret_ignores_match_production_contract():
     assert "('billing_payment_provider_sessions')" in manifest
     assert "invalid_payment_provider_token_digest" in manifest
     assert "payment_provider_session_mismatch" in manifest
+    assert "LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS" in manifest
+    assert "to_regclass('public.billing_payment_provider_sessions')" in manifest
+    assert "SCHEMA_COMPAT|legacy_missing_table|billing_payment_provider_sessions" in manifest
+    assert "ANOMALY|required_payment_provider_sessions_table_missing|1" in manifest
     assert "server_version_num')::integer / 10000" in manifest
     assert "DATABASE_SIZE|" in manifest
 
@@ -474,8 +506,14 @@ def test_disaster_rdb_restore_is_version_guarded_and_docs_split_paths():
     assert "redis-7.4-only" in restore
     assert "SHA256SUMS must contain exactly the three expected backup entries" in restore
     assert "sha256sum --check --strict" in restore
-    assert "postgres:18-bookworm --list /backup/postgres.dump" in restore
-    assert "redis:7.4-alpine /backup/redis-dump.rdb" in restore
+    assert re.search(
+        r"postgres:18-bookworm@sha256:[0-9a-f]{64} --list /backup/postgres.dump",
+        restore,
+    )
+    assert re.search(
+        r"redis:7\.4-alpine@sha256:[0-9a-f]{64} /backup/redis-dump.rdb",
+        restore,
+    )
     assert "size=2g" not in restore
     assert "restore-validation-XXXXXXXX" in restore
     assert "validation_tmpfs_bytes=$((metadata_database_size * 2 + 536870912))" in restore
@@ -494,7 +532,7 @@ def test_disaster_rdb_restore_is_version_guarded_and_docs_split_paths():
     assert 'exec 9>"$BACKUP_LOCK_ROOT/.backup.lock"' in restore
     assert "A backup or restore operation is already active" in restore
     assert '"$ROOT_DIR/deploy/provision_database_role.sh"' in restore
-    assert restore.index("postgres:18-bookworm --list") < restore.index(
+    assert restore.index("postgres:18-bookworm@sha256:") < restore.index(
         "docker compose stop caddy api worker redis"
     )
     assert '"$ROOT_DIR/deploy/preflight.sh"' in restore
@@ -569,13 +607,27 @@ def test_rehearsal_stack_replaces_production_work_volumes():
     assert "LECTURESIFT_REHEARSAL_ORCHESTRATED" in script
     assert 'rehearsal_api_work_volume="lecturesift-api-rehearsal-work"' in script
     assert 'rehearsal_worker_work_volume="lecturesift-worker-rehearsal-work"' in script
-    assert "source: rehearsal_api_work" in script
-    assert "source: rehearsal_worker_work" in script
-    assert "target: /var/lib/lecturesift" in script
-    assert 'docker volume create --label lecturesift.rehearsal=true "$volume"' in script
-    assert '--file "$ROOT_DIR/compose.yaml" --file "$rehearsal_compose_file"' in script
-    assert '"${compose[@]}" run -d --name lecturesift-api-rehearsal' in script
-    assert '"${compose[@]}" run -d --name lecturesift-worker-rehearsal' in script
+    assert '--mount "type=volume,src=$rehearsal_api_work_volume,dst=/var/lib/lecturesift"' in script
+    assert '--mount "type=volume,src=$rehearsal_worker_work_volume,dst=/var/lib/lecturesift"' in script
+    assert "docker volume create" in script
+    assert "--opt type=tmpfs --opt device=tmpfs" in script
+    assert 'rehearsal_api_work_bytes=$((512 * 1024 * 1024))' in script
+    assert 'rehearsal_worker_work_bytes=$((2 * 1024 * 1024 * 1024))' in script
+    assert "candidate work-volume quota probe failed" in script
+    assert 'os.statvfs("/var/lib/lecturesift")' in script
+    assert "--label lecturesift.rehearsal=true" in script
+    assert '--label "lecturesift.rehearsal.run=$rehearsal_run"' in script
+    assert '"$volume" >/dev/null' in script
+    assert 'docker create --pull=never --name "$rehearsal_api_container"' in script
+    assert 'docker create --pull=never --name "$rehearsal_worker_container"' in script
+    assert 'docker start "$rehearsal_api_container"' in script
+    assert 'docker start "$rehearsal_worker_container"' in script
+    assert "compose.yaml's production" in script
+    assert (
+        'networks != {os.environ["EXPECTED_NETWORK"], '
+        'os.environ["EXPECTED_PROXY_NETWORK"]}' in script
+    )
+    assert 'payload[0].get("Internal") is not True' in script
 
 
 def test_recovery_runbooks_describe_the_vps_target_not_stale_render_services():
@@ -605,19 +657,28 @@ def test_postgres_cutover_is_snapshot_consistent_reversible_and_fail_stopped():
     assert 'ALLOWED_RUNTIME_ENV_FILE="/etc/lecturesift/runtime.env"' in script
     assert 'ALLOWED_BACKUP_ROOT="/var/backups/lecturesift/postgres-cutover"' in script
     assert "must have mode 0400 or 0600" in script
-    assert 'host.endswith(".render.com")' in script
-    assert 'host.endswith(".onrender.com")' in script
+    source_transport = _read("deploy/source_postgres_transport.py")
+    assert 'host.endswith(".render.com")' in source_transport
+    assert 'host.endswith(".onrender.com")' in source_transport
+    assert 'query != [("sslmode", "verify-full")]' in source_transport
     assert 'payload.get("maintenance_mode") == "freeze"' in script
     assert "billing_manual_orders WHERE status = 'pending'" in script
     assert "billing_payment_orders WHERE status IN ('created', 'pending')" in script
     assert script.count('[[ "$pending_') >= 2
     assert "assert_render_worker_and_queue_stopped" in script
-    assert "connection.ensure_connection" in script
-    assert "app.control.ping(timeout=8)" in script
-    assert 'client.scan_iter(match=b"celery*"' in script
-    assert 'client.hlen("unacked")' in script
-    assert 'client.zcard("unacked_index")' in script
-    assert "queued\", \"working" in script
+    assert "render_worker_stop_evidence.py" in script
+    assert "source-worker-stop-evidence-sha256" in script
+    assert "connection.ensure_connection" not in script
+    assert "app.control.ping(timeout=8)" not in script
+    assert 'python3 "$SOURCE_REDIS_GUARD" assert-idle' in script
+    assert "lecturesift-backend:local -c" not in script.split(
+        "assert_render_worker_and_queue_stopped()", 1
+    )[1].split("\n}", 1)[0]
+    source_guard = _read("deploy/source_redis_guard.py")
+    assert 'os.environ.get("SOURCE_REDIS_URL", "")' in source_guard
+    assert 'os.environ.get("SOURCE_CELERY_BROKER_URL", "")' in source_guard
+    assert '"unacked", "unacked_index"' in source_guard
+    assert '{"queued", "working"}' in source_guard
     assert "LECTURESIFT_WORKER_DB_USER" in script
     assert "LECTURESIFT_WORKER_DB_PASSWORD" in script
     assert "LECTURESIFT_WORKER_DATABASE_URL" in script
@@ -634,7 +695,7 @@ def test_postgres_cutover_is_snapshot_consistent_reversible_and_fail_stopped():
     assert script.index(
         "required_bytes=$((source_size * 2 + target_size * 2 + 5368709120))"
     ) < script.index(
-        'pg_dump "$SOURCE_DATABASE_URL"'
+        "pg_dump --format=custom --no-owner --no-acl"
     )
     assert "preserving 5 GiB of host reserve" in script
 
@@ -646,7 +707,13 @@ def test_postgres_cutover_is_snapshot_consistent_reversible_and_fail_stopped():
     assert "target_stopped" in script
     assert 'reset_and_restore_target "$RUN_DIR/render-final.dump"' in script
     assert 'reset_and_restore_target "$RUN_DIR/target-before.dump"' in script
+    assert "provision_target_schema_and_roles" in script
     assert '"$PROVISION_ROLE"' in script
+    raw_restore_function = script.split("reset_and_restore_target() {", 1)[1].split(
+        "provision_target_schema_and_roles() {", 1
+    )[0]
+    assert "pg_restore" in raw_restore_function
+    assert "PROVISION_ROLE" not in raw_restore_function
     assert "probe_application_role api" in script
     assert "probe_application_role worker" in script
     assert "NOSUPERUSER" not in script  # the probe reads PostgreSQL flags directly
@@ -661,7 +728,30 @@ def test_postgres_cutover_is_snapshot_consistent_reversible_and_fail_stopped():
     assert "INSERT INTO lecturesift_runtime_metrics" in script
     assert "INSERT INTO billing_usage_events" in script
     assert "transaction.rollback()" in script
-    assert 'cmp --silent "$RUN_DIR/source-snapshot.safe" "$RUN_DIR/target-restored.safe"' in script
+    assert "LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on" in script
+    assert "legacy-provider-sessions" in script
+    assert "target-restored-raw.safe" in script
+    assert 'cmp --silent "$RUN_DIR/source-snapshot.safe" "$RUN_DIR/target-restored-raw.safe"' in script
+    assert "target-migrated.safe" in script
+    assert "target-before-migration.data" in script
+    assert "target-after-migration.data" in script
+    assert "legacy_provider_sessions_missing" in script
+    assert "TABLE|billing_payment_provider_sessions|0|0|0" in script
+    assert "grep -E '^(DATABASE|TABLE|STATUS)" in script
+    assert 'cmp --silent "$RUN_DIR/target-migrated.safe" "$RUN_DIR/target-after-probes.safe"' in script
+    raw_restore = script.index('target_manifest "$RUN_DIR/target-restored-raw.txt"')
+    raw_equality = script.index(
+        'cmp --silent "$RUN_DIR/source-snapshot.safe" "$RUN_DIR/target-restored-raw.safe"'
+    )
+    owner_migration = script.index("provision_target_schema_and_roles", raw_equality)
+    strict_manifest = script.index('target_manifest "$RUN_DIR/target-migrated.txt" strict')
+    role_probe = script.index("probe_application_role api")
+    assert raw_restore < raw_equality < owner_migration < strict_manifest < role_probe
+    assert script.count("assert_render_frozen") >= 4
+    assert "migrated_target_manifest_sha256" in script
+    assert "--migrated-manifest-sha256" in script
+    assert "source_legacy_provider_sessions_missing" in script
+    assert "an OVH API/worker writer became active during target verification" in script
     assert "postgres-cutover-target-unproven" in script
     assert 'FAIL_STOP_MARKER="$FAIL_STOP_ROOT/postgres-cutover-unproven"' in script
     assert "api_worker_started=false" in script
@@ -671,11 +761,14 @@ def test_postgres_cutover_is_snapshot_consistent_reversible_and_fail_stopped():
 
     assert "deploy/migrate_postgres.sh" in docs
     assert "/var/backups/lecturesift/postgres-cutover" in docs
+    assert "source database is never schema-migrated" in docs.lower()
+    assert "strict migrated-target" in docs
     assert "Caddy/DNS is the last" in docs and "gate, not part" in docs
 
 
 def test_postgres_reverse_reconciliation_never_guesses_a_merge_or_traffic_flip():
     script = _read("deploy/rollback_postgres_to_render.sh")
+    inventory = _read("deploy/rollback_database_inventory.sql")
     docs = _read("VPS_DEPLOYMENT.md")
 
     for flag in (
@@ -688,15 +781,29 @@ def test_postgres_reverse_reconciliation_never_guesses_a_merge_or_traffic_flip()
     ):
         assert flag in script
     assert 'ALLOWED_BACKUP_ROOT="/var/backups/lecturesift/postgres-rollback"' in script
-    assert 'host.endswith(".onrender.com")' in script
+    source_transport = _read("deploy/source_postgres_transport.py")
+    assert 'host.endswith(".onrender.com")' in source_transport
+    assert 'query != [("sslmode", "verify-full")]' in source_transport
     assert "payload.get(\"maintenance_mode\") == \"freeze\"" in script
     assert 'check_health_freeze "$OVH_HEALTH_URL" "OVH"' in script
-    assert 'check_health_freeze "$SOURCE_HEALTH_URL" "Render"' in script
+    assert script.count("check_render_health_freeze") >= 4
     assert "assert_render_worker_stopped" in script
-    assert "connection.ensure_connection" in script
-    assert "app.control.ping(timeout=8)" in script
+    assert "render_worker_stop_evidence.py" in script
+    assert "SOURCE_WORKER_STOP_EVIDENCE_SHA256" in script
+    assert "connection.ensure_connection" not in script
+    assert "app.control.ping(timeout=8)" not in script
     assert '"${compose[@]}" stop --timeout 600 api worker' in script
     assert "queue_idle" in script
+    assert "redis-cli --raw EVAL_RO" in script
+    assert 'redis.call("SCAN", cursor, "COUNT", 250)' in script
+    assert "priority_separator = string.char(6) .. string.char(22)" in script
+    assert 'if key_type == "list" then queued = queued + redis.call("LLEN", key) end' in script
+    assert 'checked_size(KEYS[2], "hash", "HLEN")' in script
+    assert 'checked_size(KEYS[3], "zset", "ZCARD")' in script
+    assert "lecturesift:jobs:v2:write-lock" in script
+    assert "lecturesift:job:*:processing" in script
+    assert "redis-cli --raw GET lecturesift:jobs:v2" in script
+    assert '"queued", "working"' in script
     assert '[[ "$(local_pending)" == "0" ]]' in script
     assert "billing_payment_orders WHERE status IN ('created', 'pending')" in script
 
@@ -708,20 +815,227 @@ def test_postgres_reverse_reconciliation_never_guesses_a_merge_or_traffic_flip()
     assert "render-before.dump" in script
     assert "render-after-capture.safe" in script
     assert 'cmp --silent "$RUN_DIR/render-before.safe" "$RUN_DIR/render-after-capture.safe"' in script
+    assert "legacy-manifest" in script
+    assert "LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on" in script
+    assert "legacy-provider-sessions" in script
+    assert "SCHEMA_COMPAT|legacy_missing_table|billing_payment_provider_sessions" in script
     assert "RECONCILIATION_REQUIRED" in script
     assert 'LECTURESIFT_RENDER_REPLACE_CONFIRM:-}" != "REPLACE_STILL_FENCED_RENDER"' in script
+    assert "DROP SCHEMA IF EXISTS lecturesift_worker CASCADE" in script
     assert "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" in script
     assert "automatic_row_merge=false" in script
-    assert "whole_database_replacement=true" in script
-    assert 'render_command reset-restore render-before.dump' in script
+    assert "whole_database_replacement=false" in script
+    assert "replacement_scope=public-and-lecturesift-worker-schemas" in script
+    assert 'render_command reset-restore-original render-before.dump' in script
+    assert 'render_command reset-restore-approved ovh-final.dump' in script
     assert 'cmp --silent "$RUN_DIR/ovh-final.safe" "$RUN_DIR/render-restored.safe"' in script
+    assert 'render_command manifest render-restored.txt' in script
+    assert 'canonical "$RUN_DIR/render-restored.txt" "$RUN_DIR/render-restored.safe" strict' in script
     assert "postgres-rollback-render-unproven" in script
     assert "redis_reconciliation_complete=false" in script
     assert "r2_reconciliation_complete=false" in script
     assert "traffic_changed=false" in script
     assert "stop caddy" not in script
+    assert "rollback_database_inventory.sql" in script
+    assert "--schema=public --schema=lecturesift_worker" in script
+    assert "REVOKE ALL PRIVILEGES ON ALL ROUTINES" in script
+    assert "complete approved OVH app schemas" in script
+    assert "database-level ACL/settings/extensions changed" in script
+    assert "target_app_acl_policy=database-owner-only" in script
+    for family in (
+        "APP_SCHEMA_SET",
+        "UNAPPROVED_SCHEMA",
+        "APP_EXTENSION_COUNT",
+        "APP_OWNER_ANOMALY",
+        "APP_ACL_DIGEST",
+        "APP_ACL_NONOWNER",
+        "DATABASE_ROLE_SETTINGS_DIGEST",
+        "DATABASE_DEFAULT_ACL_DIGEST",
+    ):
+        assert family in inventory
 
     assert "deploy/rollback_postgres_to_render.sh" in docs
     assert "There is no safe automatic row merge" in docs
     assert "REPLACE_STILL_FENCED_RENDER" in docs
     assert "Reconcile the logical Redis job" in docs
+
+
+def test_rehearsal_hard_purge_and_schema_contract_are_fail_closed():
+    rehearsal = _read("deploy/rehearsal_restore.sh")
+    manifest = _read("deploy/rehearsal_manifest.sql")
+    migration = _read("deploy/migrate_postgres.sh")
+    rollback = _read("deploy/rollback_postgres_to_render.sh")
+    provision = _read("deploy/provision_database_role.sh")
+    postgres_role = _read("deploy/postgres-app-role.sh")
+    stack = _read("deploy/rehearsal_stack.sh")
+    purge = _read("deploy/rehearsal_purge_e2e.py")
+    verifier = _read("deploy/verify_schema_transition.py")
+    contract = _read("deploy/schema_contract_payment_provider_sessions_v1.txt")
+
+    assert "SELECT 1, 'SCHEMA_OBJECT|' || item" in manifest
+    assert "SCHEMA_OBJECT" in rehearsal and "SCHEMA_OBJECT" in migration
+    assert "SCHEMA_OBJECT" in rollback
+    assert "verify_schema_transition.py" in rehearsal
+    assert "verify_schema_transition.py" in migration
+    assert "verify_schema_transition.py" in rollback
+    assert "schema_contract_payment_provider_sessions_v1.txt" in rehearsal
+    assert "schema_contract_payment_provider_sessions_v1.txt" in migration
+    assert "schema_contract_payment_provider_sessions_v1.txt" in rollback
+    assert "migration changed schema objects outside the permitted table" in verifier
+    assert "SCHEMA_OBJECT|C|public.billing_payment_provider_sessions" in contract
+    assert "SCHEMA_OBJECT|I|billing_payment_provider_sessions" in contract
+    assert "SCHEMA_OBJECT|K|billing_payment_provider_sessions" in contract
+
+    assert "LECTURESIFT_REHEARSAL" in purge
+    assert "lecturesift_rehearsal_" in purge
+    assert "E2E account identities are missing or were not anonymised" in purge
+    assert "did not remove exactly the two proven rehearsal users" in purge
+    assert "rehearsal_purge_e2e.py" in rehearsal
+    assert "--user 10001:10001" in rehearsal
+    assert "target-after-e2e.safe" in rehearsal
+    assert 'diff -u "$run_dir/target-migrated.safe"' in rehearsal
+    assert "did not return to its exact pre-E2E database state" in rehearsal
+    assert "lecturesift.rehearsal-db:v2:" in rehearsal
+    assert "lecturesift.rehearsal-role:v2:" in rehearsal
+    assert "shobj_description" in rehearsal
+    assert "lacks matching ownership provenance" in rehearsal
+    assert "LECTURESIFT_REHEARSAL_ROLE_MODE=YES" in rehearsal
+    assert "LECTURESIFT_REHEARSAL_OWNER_DB_USER" in rehearsal
+    assert "LECTURESIFT_REHEARSAL_APP_DB_USER" in rehearsal
+    assert "LECTURESIFT_REHEARSAL_WORKER_DB_USER" in rehearsal
+    assert "clone owner/database provenance is invalid" in provision
+    assert "LECTURESIFT_REHEARSAL_ROLE_COMMENT" in provision
+    assert "LECTURESIFT_SCHEMA_OWNER_USER" in postgres_role
+    assert "COMMENT ON ROLE" in postgres_role
+    assert "BEGIN;" in postgres_role and "COMMIT;" in postgres_role
+    assert postgres_role.index(
+        "WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'worker_user')"
+    ) < postgres_role.index(
+        "COMMENT ON ROLE %I IS %L', :'worker_user', :'rehearsal_role_comment'"
+    )
+    assert "requested_api_database_url" in stack
+    assert "lecturesift_rehearsal_api_" in stack
+    assert "lecturesift_rehearsal_worker_" in stack
+    assert "production API environment" in stack
+
+
+def test_rehearsal_database_provenance_closes_pre_comment_crash_window():
+    script = _read("deploy/rehearsal_restore.sh")
+
+    assert 'PROVENANCE_ROOT="/var/lib/lecturesift/rehearsal-provenance"' in script
+    assert "format=lecturesift-rehearsal-provenance-v2" in script
+    assert "database_comment=lecturesift.rehearsal-db:v2:" in script
+    assert "owner_role=lecturesift_rehearsal_owner_" in script
+    assert "role_comment=lecturesift.rehearsal-role:v2:" in script
+    assert "stat -c '%u:%g'" in script and "stat -c '%h'" in script
+    assert '[[ "$mode" == "600" ]]' in script
+    assert 'sync -f -- "$rehearsal_provenance_marker"' in script
+    assert script.count('sync -f -- "$PROVENANCE_ROOT"') >= 2
+
+    marker_create = script.index("create_rehearsal_provenance_marker\n")
+    owner_create = script.index("CREATE ROLE %I LOGIN NOSUPERUSER", marker_create)
+    created_flag = script.index('rehearsal_db_created="true"', marker_create)
+    createdb = script.index('exec -T postgres createdb', created_flag)
+    comment = script.index("COMMENT ON DATABASE", createdb)
+    assert marker_create < owner_create < created_flag < createdb < comment
+    assert '--owner="$rehearsal_owner_role"' in script
+    assert '--role="$rehearsal_owner_role" --no-owner --no-acl' in script
+
+    assert 'provenance_entries=("$PROVENANCE_ROOT"/*)' in script
+    assert "A recent rehearsal provenance marker requires operator inspection" in script
+    assert "A registered rehearsal database or role escaped stale inventory cleanup" in script
+    assert "remove_rehearsal_provenance_if_clear" in script
+    cleanup = script.split("cleanup_rehearsal() {", 1)[1].split(
+        "trap cleanup_rehearsal EXIT", 1
+    )[0]
+    assert cleanup.index("drop_rehearsal_database") < cleanup.index(
+        "cleanup_rehearsal_roles_for_database"
+    ) < cleanup.index("remove_rehearsal_provenance_if_clear")
+
+
+def test_rehearsal_provenance_reconcile_only_is_non_destructive_and_fail_closed():
+    script = _read("deploy/rehearsal_restore.sh")
+
+    assert "Usage: rehearsal_restore.sh [--reconcile-only|--reconcile-stale]" in script
+    assert '--reconcile-only) rehearsal_mode="reconcile-only"' in script
+    helper = script.split("reconcile_orphaned_provenance_markers() {", 1)[1].split(
+        "reconcile_rehearsal_provenance_only() {", 1
+    )[0]
+    reconcile_only = script.split(
+        "reconcile_rehearsal_provenance_only() {", 1
+    )[1].split("reconcile_stale_rehearsal_state() {", 1)[0]
+    assert "validate_rehearsal_provenance_marker" in helper
+    assert "created_epoch <= now - 3600" in helper
+    assert "Validation is deliberately two-phase" in helper
+    assert 'provenance_databases+=("$database")' in helper
+    assert "remove_rehearsal_provenance_if_clear" in helper
+    assert helper.index('provenance_databases+=("$database")') < helper.index(
+        'for database in "${provenance_databases[@]}"'
+    ) < helper.index('remove_rehearsal_provenance_if_clear "$database"')
+    assert "cleanup_rehearsal_roles_for_database" not in helper
+    assert "dropdb" not in helper
+    assert "DROP ROLE" not in helper
+    assert "lecturesift_rehearsal_[0-9]{14}" in reconcile_only
+    assert "lecturesift_rehearsal_(owner|api|worker)_[0-9]{14}" in reconcile_only
+    assert "reconcile-only will not modify it" in reconcile_only
+    assert "reconcile_orphaned_provenance_markers" in reconcile_only
+    assert "dropdb" not in reconcile_only
+    assert "DROP ROLE" not in reconcile_only
+    assert "cleanup_rehearsal_roles_for_database" not in reconcile_only
+
+    mode_gate = script.index('if [[ "$rehearsal_mode" == "reconcile-only" ]]')
+    normal_secrets = script.index("mapfile -t rehearsal_passwords", mode_gate)
+    normal_trap = script.index("trap cleanup_rehearsal EXIT", normal_secrets)
+    source_read = script.index("docker run --rm --user 0:0", normal_trap)
+    marker_create = script.index("create_rehearsal_provenance_marker\n", source_read)
+    createdb = script.index("exec -T postgres createdb", marker_create)
+    assert mode_gate < normal_secrets < normal_trap < source_read < marker_create < createdb
+    assert (
+        "REHEARSAL_RECONCILE_OK|database_or_role_modified=false|provenance_empty=true"
+        in script
+    )
+    assert 'rm -f -- "$PROVENANCE_ROOT/$database.provenance"' in script
+    assert script.index('rm -f -- "$PROVENANCE_ROOT/$database.provenance"') < script.index(
+        'sync -f -- "$PROVENANCE_ROOT"',
+        script.index('rm -f -- "$PROVENANCE_ROOT/$database.provenance"'),
+    )
+
+
+def test_rehearsal_clone_owner_and_candidate_secret_boundaries_are_structural():
+    restore = _read("deploy/rehearsal_restore.sh")
+    provision = _read("deploy/provision_database_role.sh")
+    postgres_role = _read("deploy/postgres-app-role.sh")
+    stack = _read("deploy/rehearsal_stack.sh")
+
+    assert restore.count('--env "PGOPTIONS=-c default_transaction_read_only=on"') == 3
+    assert "lecturesift_rehearsal_owner_" in restore
+    assert "owner_role=lecturesift_rehearsal_owner_" in restore
+    assert "WHERE rolname IN (:'owner_role', :'api_role', :'worker_role')" in restore
+    assert "DROP ROLE %I', :'owner_role'" in restore
+    assert "REASSIGN OWNED" not in restore
+    assert "not owned by its bound clone owner" in restore
+    assert "has the wrong owner; refusing deletion" in restore
+    assert "LECTURESIFT_REHEARSAL_OWNER_DATABASE_URL" in restore
+
+    rehearsal_branch = provision.split(
+        'if [[ "$rehearsal_role_mode" == "YES" ]]', 2
+    )[-1]
+    assert "requested_owner_database_url" in provision
+    assert "A rehearsal database secret equals a production database secret" in provision
+    assert "DATABASE_URL=\"$requested_owner_database_url\"" in provision
+    assert "--env DATABASE_URL --env LECTURESIFT_REHEARSAL=1" in provision
+    assert "lecturesift-backend:local python -c" in provision
+    assert "--profile maintenance run" in provision
+    candidate_branch = rehearsal_branch.split("else", 1)[0]
+    assert "--env-file" not in candidate_branch
+    assert '"${compose[@]}" --profile maintenance run' not in candidate_branch
+    assert 'schema_owner="${LECTURESIFT_SCHEMA_OWNER_USER:-$POSTGRES_USER}"' in postgres_role
+    assert '--variable=owner_user="$schema_owner"' in postgres_role
+
+    assert "Refusing to delete an unlabeled or foreign" in restore
+    assert "refusing to delete an unlabeled or foreign" in stack
+    assert '"POSTGRES_USER", "POSTGRES_PASSWORD"' in stack
+    assert 'raise SystemExit("candidate has an unexpected network attachment")' in stack
+    assert "API proxy did not explicitly deny" in stack
+    assert "API can resolve the worker egress proxy" in stack
+    assert "direct Internet egress unexpectedly succeeded" in stack

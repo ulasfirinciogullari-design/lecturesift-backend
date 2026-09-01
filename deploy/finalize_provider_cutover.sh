@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set +x
 set -euo pipefail
 umask 077
 
@@ -21,6 +22,16 @@ RUNTIME_ENV_FILE="${LECTURESIFT_ENV_FILE:-/etc/lecturesift/runtime.env}"
 DB_ENV_FILE="${LECTURESIFT_DB_ENV_FILE:-/etc/lecturesift/postgres.env}"
 RESTIC_ENV_FILE="${LECTURESIFT_RESTIC_ENV_FILE:-/etc/lecturesift/restic.env}"
 CUTOVER_EVIDENCE_TOOL="$ROOT_DIR/deploy/provider_cutover_evidence.py"
+RENDER_WORKER_STOP_TOOL="$ROOT_DIR/deploy/render_worker_stop_evidence.py"
+SOURCE_REDIS_GUARD="$ROOT_DIR/deploy/source_redis_guard.py"
+SOURCE_POSTGRES_TRANSPORT="$ROOT_DIR/deploy/source_postgres_transport.py"
+TARGET_REDIS_MANIFEST_TOOL="$ROOT_DIR/deploy/target_redis_manifest.sh"
+TARGET_DATA_MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest.sql"
+SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt"
+SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition.py"
+POSTGRES_SECURITY_MANIFEST="$ROOT_DIR/deploy/postgres_security_manifest.sql"
+POSTGRES_SECURITY_VALIDATOR="$ROOT_DIR/deploy/validate_postgres_security_manifest.py"
+POSTGRES_ROLE_LOGIN_PROBE="$ROOT_DIR/deploy/postgres_role_login_probe.sh"
 RELEASE_TOOL="$ROOT_DIR/deploy/release.sh"
 RELEASE_MARKER="/run/lecturesift/release.env"
 SEED_PROOF="/var/lib/lecturesift/provider-cutover/first-cutover-seed.ok"
@@ -30,6 +41,9 @@ EXPECTED_REPOSITORY_PATTERN='s3:https://[0-9a-f]{32}[.]eu[.]r2[.]cloudflarestora
 CUTOVER_ID="${LECTURESIFT_PROVIDER_CUTOVER_ID:-}"
 EXPECTED_BUILD_REVISION="${LECTURESIFT_EXPECTED_BUILD_REVISION:-}"
 PENDING_SQL="SELECT (SELECT count(*) FROM billing_manual_orders WHERE status = 'pending') + (SELECT count(*) FROM billing_payment_orders WHERE status IN ('created', 'pending'));"
+SOURCE_WORKER_STOP_EVIDENCE_SHA256=""
+TARGET_REDIS_MANIFEST_SHA256=""
+FINALIZER_TMP=""
 
 fail() {
   echo "Provider cutover finalization failed: $*" >&2
@@ -62,7 +76,14 @@ for item in \
   "$RESTIC_ENV_FILE:Restic environment"; do
   check_private_file "${item%%:*}" "${item#*:}"
 done
-for path in "$CUTOVER_EVIDENCE_TOOL" "$RELEASE_TOOL" "$ROOT_DIR/compose.yaml"; do
+for path in "$CUTOVER_EVIDENCE_TOOL" "$RENDER_WORKER_STOP_TOOL" \
+  "$TARGET_REDIS_MANIFEST_TOOL" "$SOURCE_REDIS_GUARD" \
+  "$SOURCE_POSTGRES_TRANSPORT" \
+  "$TARGET_DATA_MANIFEST" \
+  "$SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" \
+  "$POSTGRES_SECURITY_MANIFEST" "$POSTGRES_SECURITY_VALIDATOR" \
+  "$POSTGRES_ROLE_LOGIN_PROBE" \
+  "$RELEASE_TOOL" "$ROOT_DIR/compose.yaml"; do
   [[ -f "$path" && ! -L "$path" ]] || fail "missing or unsafe finalizer input: $path"
 done
 for command_name in docker python3 restic sha256sum realpath flock curl timeout; do
@@ -73,16 +94,26 @@ done
 [[ "$EXPECTED_BUILD_REVISION" =~ ^[0-9a-f]{40}$ ]] ||
   fail "LECTURESIFT_EXPECTED_BUILD_REVISION must be the exact 40-character release commit"
 
-set -a
-# shellcheck disable=SC1090
-source "$SOURCE_ENV_FILE"
-set +a
-: "${SOURCE_DATABASE_URL:?Missing SOURCE_DATABASE_URL}"
-: "${SOURCE_HEALTH_URL:?Missing SOURCE_HEALTH_URL}"
-render_database_url="$SOURCE_DATABASE_URL"
-render_health_url="$SOURCE_HEALTH_URL"
-render_redis_url="${SOURCE_REDIS_URL:-${REDIS_URL:-}}"
-render_broker_url="${SOURCE_CELERY_BROKER_URL:-${CELERY_BROKER_URL:-}}"
+source_exec() {
+  local scope="$1"
+  shift
+  python3 "$SOURCE_POSTGRES_TRANSPORT" exec-source \
+    --source-env "$SOURCE_ENV_FILE" --scope "$scope" -- "$@"
+}
+
+source_pg_exec() {
+  python3 "$SOURCE_POSTGRES_TRANSPORT" exec-libpq-docker \
+    --source-env "$SOURCE_ENV_FILE" -- "$@"
+}
+
+SOURCE_PG_DOCKER_ENV=(
+  --env PGHOST --env PGPORT --env PGDATABASE --env PGUSER
+  --env PGSSLMODE --env PGSSLROOTCERT
+  --env PGCONNECT_TIMEOUT
+)
+python3 "$SOURCE_POSTGRES_TRANSPORT" validate --source-env "$SOURCE_ENV_FILE" \
+  >/dev/null || fail "the Render source transport contract is invalid"
+
 set -a
 # shellcheck disable=SC1090
 source "$RUNTIME_ENV_FILE"
@@ -91,11 +122,6 @@ source "$DB_ENV_FILE"
 # shellcheck disable=SC1090
 source "$RESTIC_ENV_FILE"
 set +a
-SOURCE_DATABASE_URL="$render_database_url"
-SOURCE_HEALTH_URL="$render_health_url"
-SOURCE_REDIS_URL="$render_redis_url"
-SOURCE_CELERY_BROKER_URL="$render_broker_url"
-export SOURCE_DATABASE_URL SOURCE_HEALTH_URL SOURCE_REDIS_URL SOURCE_CELERY_BROKER_URL
 : "${POSTGRES_USER:?Missing POSTGRES_USER}"
 : "${POSTGRES_DB:?Missing POSTGRES_DB}"
 : "${RESTIC_REPOSITORY:?Missing RESTIC_REPOSITORY}"
@@ -105,7 +131,7 @@ export SOURCE_DATABASE_URL SOURCE_HEALTH_URL SOURCE_REDIS_URL SOURCE_CELERY_BROK
 [[ "$RESTIC_REPOSITORY" =~ ^${EXPECTED_REPOSITORY_PATTERN}$ ]] ||
   fail "the Restic repository is not the dedicated production backup target"
 
-SOURCE_FINGERPRINT="$(python3 "$CUTOVER_EVIDENCE_TOOL" source-fingerprint)" ||
+SOURCE_FINGERPRINT="$(source_exec fingerprint python3 "$CUTOVER_EVIDENCE_TOOL" source-fingerprint)" ||
   fail "the Render source identity could not be fingerprinted"
 [[ "$SOURCE_FINGERPRINT" =~ ^[0-9a-f]{64}$ ]] || fail "the source fingerprint is invalid"
 
@@ -126,6 +152,19 @@ shared_mode="$(stat -c '%a' -- "$SHARED_LOCK_ROOT")"
 (( (8#$shared_mode & 8#077) == 0 )) || fail "the shared lock root must be private"
 exec 9>"$SHARED_LOCK_ROOT/.backup.lock"
 flock -n 9 || fail "a backup, restore, rehearsal or migration is already active"
+FINALIZER_TMP="$(mktemp -d -- "$SHARED_LOCK_ROOT/.provider-finalizer-XXXXXXXX")"
+chmod 0700 "$FINALIZER_TMP"
+cleanup_finalizer() {
+  local resolved=""
+  trap - EXIT
+  if [[ -n "$FINALIZER_TMP" && -d "$FINALIZER_TMP" && ! -L "$FINALIZER_TMP" ]]; then
+    resolved="$(realpath -e -- "$FINALIZER_TMP" 2>/dev/null || true)"
+    if [[ "$resolved" == "$SHARED_LOCK_ROOT"/.provider-finalizer-* ]]; then
+      rm -rf --one-file-system -- "$resolved"
+    fi
+  fi
+}
+trap cleanup_finalizer EXIT
 
 for marker in \
   /var/lib/lecturesift/migration-fail-stop/redis-state-unproven \
@@ -157,7 +196,8 @@ assert_target_writers_stopped() {
 }
 
 assert_source_frozen_and_idle() {
-  python3 - <<'PY' || return 1
+  local observed_stop_digest
+  source_exec health python3 - <<'PY' || return 1
 import json
 import os
 import ssl
@@ -171,42 +211,51 @@ with urllib.request.urlopen(request, timeout=15, context=ssl.create_default_cont
 valid = response.status == 200 and payload.get("ok") is True and payload.get("maintenance_mode") == "freeze"
 raise SystemExit(0 if valid else 1)
 PY
-  timeout 30 docker run --rm --pull=never --network bridge --user 0 \
-    -e SOURCE_CELERY_BROKER_URL --entrypoint python lecturesift-backend:local -c '
-import os
-from celery import Celery
+  observed_stop_digest="$(python3 "$RENDER_WORKER_STOP_TOOL")" || return 1
+  [[ "$observed_stop_digest" == "$SOURCE_WORKER_STOP_EVIDENCE_SHA256" ]] || return 1
+  source_exec redis timeout 45 python3 "$SOURCE_REDIS_GUARD" assert-idle >/dev/null 2>&1
+}
 
-app = Celery(broker=os.environ["SOURCE_CELERY_BROKER_URL"])
-with app.connection_for_read() as connection:
-    connection.ensure_connection(max_retries=1, timeout=8)
-raise SystemExit(1 if app.control.ping(timeout=8) else 0)
-' >/dev/null 2>&1 || return 1
-  timeout 30 docker run --rm --pull=never --network bridge --user 0 \
-    -e SOURCE_REDIS_URL --entrypoint python lecturesift-backend:local -c '
-import json
-import os
-from redis import Redis
+assert_target_redis_manifest_unchanged() {
+  local observed_manifest
+  observed_manifest="$(bash "$TARGET_REDIS_MANIFEST_TOOL" manifest steady full)" || return 1
+  [[ "$observed_manifest" == "$TARGET_REDIS_MANIFEST_SHA256" ]]
+}
 
-client = Redis.from_url(os.environ["SOURCE_REDIS_URL"], socket_connect_timeout=8, socket_timeout=15)
-assert client.ping()
-for key in client.scan_iter(match="*", count=250):
-    if client.type(key) == b"list" and client.llen(key):
-        raise SystemExit(1)
-if client.hlen("unacked") or client.zcard("unacked_index"):
-    raise SystemExit(1)
-if client.exists("lecturesift:jobs:v2:write-lock"):
-    raise SystemExit(1)
-if any(True for _ in client.scan_iter(match="lecturesift:job:*:processing", count=250)):
-    raise SystemExit(1)
-raw = client.get("lecturesift:jobs:v2")
-jobs = json.loads(raw).get("jobs", {}) if raw else {}
-raise SystemExit(1 if any(str(job.get("status", "")) in {"queued", "working"} for job in jobs.values()) else 0)
-' >/dev/null 2>&1
+capture_target_data_manifest() {
+  local raw="$1" safe="$2"
+  "${compose[@]}" exec -T postgres psql --no-psqlrc --quiet \
+    --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -v ON_ERROR_STOP=1 \
+    -f - <"$TARGET_DATA_MANIFEST" >"$raw" || return 1
+  if grep -Eq '^(TABLE_DIFF|UNVALIDATED_FK)\|' "$raw" ||
+     awk -F'|' '$1 == "ANOMALY" && $3 != "0" {bad=1} END {exit(bad ? 0 : 1)}' "$raw"; then
+    return 1
+  fi
+  python3 "$SCHEMA_VERIFIER" current \
+    --manifest "$raw" --contract "$SCHEMA_CONTRACT" >/dev/null || return 1
+  tr -d '\r' <"$raw" |
+    grep -E '^(DATABASE|SCHEMA|SCHEMA_OBJECT|TABLE|ANOMALY|STATUS|SCHEMA_COMPAT|UNVALIDATED_FK|MANIFEST_COMPLETE)\|' |
+    LC_ALL=C sort >"$safe"
+  [[ "$(grep -c '^DATABASE|' "$safe")" == "1" &&
+     "$(grep -c '^SCHEMA|' "$safe")" == "1" &&
+     "$(grep -c '^TABLE|' "$safe")" -gt 0 &&
+     "$(grep -c '^SCHEMA_COMPAT|' "$safe")" == "0" ]]
+}
+
+capture_postgres_security_manifest() {
+  local raw="$1" safe="$2"
+  "${compose[@]}" exec -T postgres psql --no-psqlrc --quiet \
+    --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -v ON_ERROR_STOP=1 \
+    --variable=owner_user="$POSTGRES_USER" \
+    --variable=api_user="$LECTURESIFT_APP_DB_USER" \
+    --variable=worker_user="$LECTURESIFT_WORKER_DB_USER" \
+    <"$POSTGRES_SECURITY_MANIFEST" >"$raw" || return 1
+  python3 "$POSTGRES_SECURITY_VALIDATOR" "$raw" >"$safe"
 }
 
 assert_target_queue_idle() {
   local broker_state
-  broker_state="$("${compose[@]}" exec -T redis redis-cli --raw EVAL '
+  broker_state="$("${compose[@]}" exec -T redis redis-cli --raw EVAL_RO '
 local cursor = "0"
 local queued = 0
 repeat
@@ -234,13 +283,11 @@ return 0
 }
 
 source_pending_count() {
-  docker run --rm --pull=never --network bridge --user 0 \
-    --volume "$SOURCE_ENV_FILE:/run/secrets/render-source.env:ro" \
-    --env "PENDING_SQL=$PENDING_SQL" postgres:18-bookworm bash -euc '
-      set -a
-      source /run/secrets/render-source.env
-      set +a
-      psql --no-psqlrc "$SOURCE_DATABASE_URL" -v ON_ERROR_STOP=1 \
+  source_pg_exec docker run --rm --pull=never --network bridge --user 0 \
+    "${SOURCE_PG_DOCKER_ENV[@]}" \
+    --env "PENDING_SQL=$PENDING_SQL" postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af bash -euc '
+      set +x
+      psql --no-psqlrc -v ON_ERROR_STOP=1 \
         --tuples-only --no-align --command "$PENDING_SQL"
     ' | tr -d '\r[:space:]'
 }
@@ -317,10 +364,24 @@ unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
 # PostgreSQL/Redis cutover.  A merely recent snapshot from the same repository
 # is not sufficient evidence for the production-start gate.
 check_private_file "$SEED_PROOF" "First-cutover seed proof"
+[[ "$(grep -c '^source_worker_stop_evidence_sha256=' "$SEED_PROOF")" == "1" &&
+   "$(grep -c '^target_redis_manifest_sha256=' "$SEED_PROOF")" == "1" ]] ||
+  fail "the seed proof has ambiguous worker-stop or Redis-manifest evidence"
+SOURCE_WORKER_STOP_EVIDENCE_SHA256="$(
+  sed -n 's/^source_worker_stop_evidence_sha256=//p' "$SEED_PROOF"
+)"
+TARGET_REDIS_MANIFEST_SHA256="$(
+  sed -n 's/^target_redis_manifest_sha256=//p' "$SEED_PROOF"
+)"
+[[ "$SOURCE_WORKER_STOP_EVIDENCE_SHA256" =~ ^[0-9a-f]{64}$ &&
+   "$TARGET_REDIS_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]] ||
+  fail "the seed worker-stop or Redis-manifest digest is invalid"
 python3 "$CUTOVER_EVIDENCE_TOOL" validate-seed \
   --cutover-id "$CUTOVER_ID" \
   --revision "$EXPECTED_BUILD_REVISION" \
   --source-fingerprint "$SOURCE_FINGERPRINT" \
+  --source-worker-stop-evidence-sha256 "$SOURCE_WORKER_STOP_EVIDENCE_SHA256" \
+  --target-redis-manifest-sha256 "$TARGET_REDIS_MANIFEST_SHA256" \
   --repository-id-sha256 "$REPOSITORY_ID_SHA256" ||
   fail "the exact repository-bound first-cutover seed proof is invalid"
 [[ "$(grep -c '^snapshot_id=' "$SEED_PROOF")" == "1" &&
@@ -352,6 +413,8 @@ assert_source_frozen_and_idle || fail "Render freeze, stopped worker or empty qu
 [[ "$(source_pending_count)" == "0" ]] || fail "Render has pending provider payments"
 [[ "$(target_pending_count)" == "0" ]] || fail "OVH has pending provider payments"
 assert_target_queue_idle || fail "the OVH broker/job state is not empty and terminal"
+assert_target_redis_manifest_unchanged ||
+  fail "the complete target Redis state no longer matches the migration/seed proof"
 
 # Repeat every volatile condition immediately before the atomic final proof.
 assert_target_writers_stopped || fail "the OVH API/worker started during finalization"
@@ -359,11 +422,36 @@ assert_source_frozen_and_idle || fail "Render changed after the recovery checks"
 [[ "$(source_pending_count)" == "0" && "$(target_pending_count)" == "0" ]] ||
   fail "pending provider state appeared during finalization"
 assert_target_queue_idle || fail "target queue/job state changed during finalization"
+assert_target_redis_manifest_unchanged ||
+  fail "the target Redis manifest changed during finalization"
+capture_target_data_manifest "$FINALIZER_TMP/target-manifest.raw" \
+  "$FINALIZER_TMP/target-manifest.safe" ||
+  fail "the fresh strict target PostgreSQL manifest is invalid"
+capture_postgres_security_manifest "$FINALIZER_TMP/security-manifest.raw" \
+  "$FINALIZER_TMP/security-manifest.safe" ||
+  fail "the fresh target PostgreSQL authority manifest is invalid"
+MIGRATED_TARGET_MANIFEST_SHA256="$(
+  sha256sum "$FINALIZER_TMP/target-manifest.safe" | awk '{print $1}'
+)"
+POSTGRES_SECURITY_MANIFEST_SHA256="$(
+  sha256sum "$FINALIZER_TMP/security-manifest.safe" | awk '{print $1}'
+)"
+POSTGRES_ROLE_LOGIN_PROBE_SHA256="$(bash "$POSTGRES_ROLE_LOGIN_PROBE")" ||
+  fail "the fresh trusted PostgreSQL role login proof failed"
+[[ "$MIGRATED_TARGET_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ &&
+   "$POSTGRES_SECURITY_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ &&
+   "$POSTGRES_ROLE_LOGIN_PROBE_SHA256" =~ ^[0-9a-f]{64}$ ]] ||
+  fail "the fresh target PostgreSQL evidence digests are invalid"
 
 python3 "$CUTOVER_EVIDENCE_TOOL" finalize \
   --cutover-id "$CUTOVER_ID" \
   --revision "$EXPECTED_BUILD_REVISION" \
   --source-fingerprint "$SOURCE_FINGERPRINT" \
+  --migrated-target-manifest-sha256 "$MIGRATED_TARGET_MANIFEST_SHA256" \
+  --postgres-security-manifest-sha256 "$POSTGRES_SECURITY_MANIFEST_SHA256" \
+  --postgres-role-login-probe-sha256 "$POSTGRES_ROLE_LOGIN_PROBE_SHA256" \
+  --source-worker-stop-evidence-sha256 "$SOURCE_WORKER_STOP_EVIDENCE_SHA256" \
+  --target-redis-manifest-sha256 "$TARGET_REDIS_MANIFEST_SHA256" \
   --recovery-marker "$(basename -- "$recovery_marker")" \
   --recovery-sha256 "$(sha256sum "$recovery_marker" | awk '{print $1}')" \
   --retention-marker "$(basename -- "$RETENTION_MARKER")" \
