@@ -63,6 +63,34 @@ def test_supply_chain_manifest_matches_pinned_sources_and_hashed_lock():
     assert "io.lecturesift.supply-chain-lock-sha256" in proxy
 
 
+def test_supply_chain_requirement_digests_are_line_ending_stable(tmp_path):
+    module = _module()
+    root = _copy_contract(tmp_path)
+    for relative in ("requirements.txt", "requirements.lock", "requirements-dev.txt"):
+        path = root / relative
+        canonical = path.read_bytes().replace(b"\r\n", b"\n")
+        path.write_bytes(canonical.replace(b"\n", b"\r\n"))
+
+    module.validate(root)
+
+    root = _copy_contract(tmp_path / "mixed")
+    source = root / "requirements.txt"
+    canonical = source.read_bytes().replace(b"\r\n", b"\n")
+    source.write_bytes(canonical.replace(b"\n", b"\r\n", 1))
+
+    module.validate(root)
+
+
+def test_supply_chain_requirement_digests_reject_lone_carriage_returns(tmp_path):
+    module = _module()
+    root = _copy_contract(tmp_path)
+    source = root / "requirements.txt"
+    source.write_bytes(source.read_bytes().replace(b"\r\n", b"\n") + b"\r")
+
+    with pytest.raises(module.SupplyChainError, match="lone carriage return"):
+        module.validate(root)
+
+
 def test_supply_chain_manifest_fails_closed_on_stale_or_unhashed_inputs(tmp_path):
     module = _module()
     root = _copy_contract(tmp_path)

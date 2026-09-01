@@ -86,6 +86,15 @@ def _sha256(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def _requirements_sha256(payload: bytes) -> str:
+    # Git stores text with LF while Windows worktrees may expose CRLF. Both
+    # represent the same reviewed dependency input, so bind its canonical bytes.
+    canonical = payload.replace(b"\r\n", b"\n")
+    if b"\r" in canonical:
+        raise SupplyChainError("requirements input contains a lone carriage return")
+    return _sha256(canonical)
+
+
 def _parse_manifest(payload: bytes) -> dict[str, str]:
     try:
         lines = payload.decode("utf-8").splitlines()
@@ -433,11 +442,11 @@ def validate(root: Path) -> str:
     _validate_hashed_requirements(
         requirements_dev, required_include=REQUIREMENTS_LOCK
     )
-    if _sha256(requirements_input) != values["requirements_input_sha256"]:
+    if _requirements_sha256(requirements_input) != values["requirements_input_sha256"]:
         raise SupplyChainError("requirements input changed without regenerating the lock")
-    if _sha256(requirements_lock) != values["requirements_lock_sha256"]:
+    if _requirements_sha256(requirements_lock) != values["requirements_lock_sha256"]:
         raise SupplyChainError("requirements lock digest mismatch")
-    if _sha256(requirements_dev) != values["requirements_dev_sha256"]:
+    if _requirements_sha256(requirements_dev) != values["requirements_dev_sha256"]:
         raise SupplyChainError("development requirements digest mismatch")
     application_dockerfile = _read_regular(
         root, APPLICATION_DOCKERFILE, MAX_MANIFEST_BYTES * 8

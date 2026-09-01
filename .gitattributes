@@ -1,0 +1,4 @@
+requirements.txt text eol=lf
+requirements.lock text eol=lf
+requirements-dev.txt text eol=lf
+deploy/supply_chain.lock text eol=lf
