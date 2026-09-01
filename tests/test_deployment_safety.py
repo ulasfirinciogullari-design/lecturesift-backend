@@ -568,6 +568,7 @@ def test_postgres_runtime_uses_a_distinct_least_privilege_role():
     compose = _read("compose.yaml")
     preflight = _read("deploy/preflight.sh")
     provision = _read("deploy/postgres-app-role.sh")
+    role_provisioning = _read("deploy/provision_database_role.sh")
     service = _read("deploy/lecturesift.service")
 
     assert "POSTGRES_USER=lecturesift_owner" in database_example
@@ -585,6 +586,7 @@ def test_postgres_runtime_uses_a_distinct_least_privilege_role():
     assert "GRANT USAGE, CREATE ON SCHEMA public" not in provision
     assert "lecturesift_worker.billing_usage_events" in provision
     assert "lecturesift_worker.lecturesift_runtime_metrics" in provision
+    assert "lecturesift_worker.lecturesift_cost_events" in provision
     assert "public.billing_auth_tokens" in provision
     assert "public.lecturesift_admin_account_events" in provision
     assert "public.lecturesift_contact_messages" in provision
@@ -594,6 +596,17 @@ def test_postgres_runtime_uses_a_distinct_least_privilege_role():
     assert "${LECTURESIFT_DB_ENV_FILE:-/etc/lecturesift/postgres.env}" in migration
     assert 'profiles: ["maintenance"]' in migration
     assert "init_rollout_database" in migration
+    assert "init_cost_database" in migration
+    assert migration.count("init_cost_database()") == 1
+    assert "from lecturesift.costs import init_cost_database" in role_provisioning
+    assert role_provisioning.count("init_cost_database()") == 1
+    assert migration.index("os.environ['DATABASE_URL']") < migration.index(
+        "init_rollout_database()"
+    ) < migration.index("init_cost_database()")
+    assert role_provisioning.index("MIGRATION_REDIS_ISOLATION_OK") < role_provisioning.index(
+        "init_rollout_database()"
+    ) < role_provisioning.index("init_cost_database()")
+    assert "--profile maintenance run --rm --no-deps" in role_provisioning
     assert "${LECTURESIFT_API_ENV_FILE" not in migration
     assert "${LECTURESIFT_WORKER_ENV_FILE" not in migration
     assert service.index("up -d --wait --wait-timeout 300 postgres redis") < service.index(

@@ -420,7 +420,9 @@ else:
     raise SystemExit("production Redis became reachable during candidate migration")
 print("MIGRATION_REDIS_ISOLATION_OK", flush=True)
 from lecturesift.rollout_service import init_rollout_database
+from lecturesift.costs import init_cost_database
 init_rollout_database()
+init_cost_database()
 '
   )"
   [[ "$migration_container_id" =~ ^[0-9a-f]{64}$ ]] || exit 1

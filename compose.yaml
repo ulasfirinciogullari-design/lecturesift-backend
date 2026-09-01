@@ -238,7 +238,9 @@ services:
         quote(os.environ.get('LECTURESIFT_PROVISION_DATABASE',
         os.environ['POSTGRES_DB']), safe='');
         from lecturesift.rollout_service import init_rollout_database;
-        init_rollout_database()
+        from lecturesift.costs import init_cost_database;
+        init_rollout_database();
+        init_cost_database()
     restart: "no"
     profiles: ["maintenance"]
     healthcheck:

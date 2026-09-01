@@ -239,11 +239,19 @@ def test_worker_database_role_is_masked_and_narrowly_writable():
     assert "GRANT UPDATE (credit_minutes) ON lecturesift_worker.billing_users" in role_sql
     assert "GRANT SELECT, INSERT ON lecturesift_worker.billing_usage_events" in role_sql
     assert "GRANT SELECT, INSERT ON lecturesift_worker.lecturesift_runtime_metrics" in role_sql
+    assert "CREATE OR REPLACE VIEW lecturesift_worker.lecturesift_cost_events" in role_sql
+    assert "GRANT INSERT (id, job_id, user_id, provider, service, resource" in role_sql
+    assert "GRANT SELECT ON lecturesift_worker.lecturesift_cost_events" not in role_sql
+    assert "has_any_column_privilege(:'worker_user', 'lecturesift_worker.lecturesift_cost_events', 'INSERT')" in role_sql
+    assert "'lecturesift_worker.lecturesift_cost_events', 'SELECT,UPDATE,REFERENCES'" in role_sql
     assert "GRANT UPDATE (job_id, media_minutes, last_seen_at)" in role_sql
     assert "REVOKE ALL ON ALL TABLES IN SCHEMA public FROM %I" in role_sql
     assert "SET LOCAL ROLE :\"worker_user\"" in role_sql
     assert "INSERT INTO billing_usage_events" in role_sql
     assert "INSERT INTO lecturesift_runtime_metrics" in role_sql
+    assert "INSERT INTO lecturesift_cost_events" in role_sql
+    assert "'cost-' || substr(md5(random()::text || clock_timestamp()::text), 1, 31) AS cost_event" in role_sql
+    assert "public.lecturesift_cost_events WHERE id = :'cost_event'" in role_sql
     assert "ROLLBACK;" in role_sql
 
     bootstrap = wrapper.index("LECTURESIFT_PROVISION_PHASE=bootstrap")

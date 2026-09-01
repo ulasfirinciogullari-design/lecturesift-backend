@@ -286,6 +286,24 @@ WITH (security_barrier=true, security_invoker=false) AS
 SELECT job_id, media_minutes, elapsed_seconds, size_bytes, created_at
 FROM public.lecturesift_runtime_metrics;
 
+CREATE OR REPLACE VIEW lecturesift_worker.lecturesift_cost_events
+WITH (security_barrier=true, security_invoker=false) AS
+SELECT id,
+       job_id,
+       user_id,
+       provider,
+       service,
+       resource,
+       quantity_microunits,
+       unit,
+       cost_microusd,
+       pricing_source,
+       pricing_effective_at,
+       estimation,
+       metadata_json,
+       created_at
+FROM public.lecturesift_cost_events;
+
 REVOKE ALL ON ALL TABLES IN SCHEMA lecturesift_worker FROM PUBLIC;
 SELECT format('REVOKE ALL ON ALL TABLES IN SCHEMA lecturesift_worker FROM %I', :'worker_user')
 \gexec
@@ -299,6 +317,11 @@ SELECT format('GRANT UPDATE (credit_minutes) ON lecturesift_worker.billing_users
 SELECT format('GRANT SELECT, INSERT ON lecturesift_worker.billing_usage_events TO %I', :'worker_user')
 \gexec
 SELECT format('GRANT SELECT, INSERT ON lecturesift_worker.lecturesift_runtime_metrics TO %I', :'worker_user')
+\gexec
+SELECT format(
+  'GRANT INSERT (id, job_id, user_id, provider, service, resource, quantity_microunits, unit, cost_microusd, pricing_source, pricing_effective_at, estimation, metadata_json, created_at) ON lecturesift_worker.lecturesift_cost_events TO %I',
+  :'worker_user'
+)
 \gexec
 SELECT format('GRANT SELECT ON lecturesift_worker.lecturesift_guest_trials TO %I', :'worker_user')
 \gexec
@@ -315,6 +338,7 @@ BEGIN;
 SELECT 'role-probe-' || substr(md5(random()::text || clock_timestamp()::text), 1, 24) AS probe_user,
        'usage-probe-' || md5(random()::text || clock_timestamp()::text) AS usage_job,
        'runtime-probe-' || md5(random()::text || clock_timestamp()::text) AS runtime_job,
+       'cost-' || substr(md5(random()::text || clock_timestamp()::text), 1, 31) AS cost_event,
        md5(random()::text) || md5(clock_timestamp()::text) AS probe_fingerprint
 \gset
 INSERT INTO public.billing_users (
@@ -341,6 +365,17 @@ WHERE user_id = :'probe_user';
 INSERT INTO lecturesift_runtime_metrics (
   job_id, media_minutes, elapsed_seconds, size_bytes, created_at
 ) VALUES (:'runtime_job', 1, 1, 1, now());
+INSERT INTO lecturesift_cost_events (
+  id, job_id, user_id, provider, service, resource, quantity_microunits,
+  unit, cost_microusd, pricing_source, pricing_effective_at, estimation,
+  metadata_json, created_at
+) VALUES (
+  :'cost_event', :'runtime_job', :'probe_user', 'probe', 'probe', 'probe', 1,
+  'unit', 1, 'https://invalid.example', '1970-01-01', 'probe', '{}', now()
+);
+RESET ROLE;
+SELECT 1 / CASE WHEN count(*) = 1 THEN 1 ELSE 0 END
+FROM public.lecturesift_cost_events WHERE id = :'cost_event';
 ROLLBACK;
 SQL
 fi
@@ -407,11 +442,15 @@ SELECT (
   AND NOT has_table_privilege(:'worker_user', 'public.billing_auth_tokens', 'SELECT')
   AND NOT has_table_privilege(:'worker_user', 'public.lecturesift_admin_account_events', 'SELECT')
   AND NOT has_table_privilege(:'worker_user', 'public.lecturesift_contact_messages', 'SELECT')
+  AND NOT has_table_privilege(:'worker_user', 'public.lecturesift_cost_events', 'SELECT,INSERT,UPDATE,DELETE')
   AND has_table_privilege(:'worker_user', 'lecturesift_worker.billing_users', 'SELECT')
   AND has_column_privilege(:'worker_user', 'lecturesift_worker.billing_users', 'credit_minutes', 'UPDATE')
   AND has_table_privilege(:'worker_user', 'lecturesift_worker.billing_usage_events', 'SELECT')
   AND has_table_privilege(:'worker_user', 'lecturesift_worker.billing_usage_events', 'INSERT')
   AND NOT has_table_privilege(:'worker_user', 'lecturesift_worker.billing_usage_events', 'UPDATE,DELETE')
+  AND has_any_column_privilege(:'worker_user', 'lecturesift_worker.lecturesift_cost_events', 'INSERT')
+  AND NOT has_any_column_privilege(:'worker_user', 'lecturesift_worker.lecturesift_cost_events', 'SELECT,UPDATE,REFERENCES')
+  AND NOT has_table_privilege(:'worker_user', 'lecturesift_worker.lecturesift_cost_events', 'DELETE,TRUNCATE,TRIGGER')
 )::int;
 SQL
   )"
