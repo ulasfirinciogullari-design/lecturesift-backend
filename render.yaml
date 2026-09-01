@@ -159,7 +159,7 @@ services:
       - key: FRONTEND_BASE_URL
         value: https://lecturesift.com
       - key: INSTAGRAM_DAILY_AUTOMATION_ENABLED
-        value: true
+        value: "false"
       - key: INSTAGRAM_DAILY_MEDIA_TYPE
         value: REELS
       - key: PUBLIC_BASE_URL
@@ -323,7 +323,7 @@ services:
       - key: INSTAGRAM_APP_SECRET
         sync: false
       - key: INSTAGRAM_DAILY_AUTOMATION_ENABLED
-        value: true
+        value: "false"
       - key: INSTAGRAM_DAILY_MEDIA_TYPE
         value: REELS
       - key: PUBLIC_BASE_URL
