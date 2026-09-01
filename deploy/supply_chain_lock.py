@@ -14,6 +14,7 @@ import sys
 MANIFEST_NAME = "deploy/supply_chain.lock"
 REQUIREMENTS_INPUT = "requirements.txt"
 REQUIREMENTS_LOCK = "requirements.lock"
+REQUIREMENTS_DEV = "requirements-dev.txt"
 APPLICATION_DOCKERFILE = "Dockerfile"
 PROXY_DOCKERFILE = "deploy/egress-proxy/Dockerfile"
 FIELDS = (
@@ -28,10 +29,14 @@ FIELDS = (
     "debian_snapshot",
     "requirements_input_sha256",
     "requirements_lock_sha256",
+    "requirements_dev_sha256",
 )
 SHA256 = re.compile(r"[0-9a-f]{64}")
 IMAGE = re.compile(r"[a-z0-9][a-z0-9._/-]*:[a-zA-Z0-9._-]+@sha256:[0-9a-f]{64}")
-PACKAGE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*==[^\s\\]+ \\")
+PACKAGE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*==[^\s;\\]+ \\")
+WINDOWS_DEV_PACKAGE = re.compile(
+    r'colorama==[^\s;\\]+; sys_platform == "win32" \\'
+)
 HASH = re.compile(r"    --hash=sha256:[0-9a-f]{64}(?: \\)?")
 MAX_MANIFEST_BYTES = 4096
 MAX_REQUIREMENTS_BYTES = 2 * 1024 * 1024
@@ -109,7 +114,11 @@ def _parse_manifest(payload: bytes) -> dict[str, str]:
     ):
         if not IMAGE.fullmatch(values[field]):
             raise SupplyChainError(f"base image is not immutable: {field}")
-    for field in ("requirements_input_sha256", "requirements_lock_sha256"):
+    for field in (
+        "requirements_input_sha256",
+        "requirements_lock_sha256",
+        "requirements_dev_sha256",
+    ):
         if not SHA256.fullmatch(values[field]):
             raise SupplyChainError(f"invalid digest: {field}")
     if not re.fullmatch(r"20[0-9]{6}T[0-9]{6}Z", values["debian_snapshot"]):
@@ -135,7 +144,9 @@ def _docker_base(payload: bytes, relative: str) -> str:
     return bases[0]
 
 
-def _validate_hashed_requirements(payload: bytes) -> None:
+def _validate_hashed_requirements(
+    payload: bytes, *, required_include: str | None = None
+) -> None:
     try:
         lines = payload.decode("utf-8").splitlines()
     except UnicodeError as exc:
@@ -148,10 +159,18 @@ def _validate_hashed_requirements(payload: bytes) -> None:
         raise SupplyChainError("requirements lock contains a remote or direct reference")
     package_count = 0
     hashes_for_package = 0
+    include_count = 0
     for line in lines:
         if not line or line.startswith("#"):
             continue
-        if PACKAGE.fullmatch(line):
+        if required_include is not None and line == f"-r {required_include}":
+            if include_count or package_count or hashes_for_package:
+                raise SupplyChainError("requirements include is duplicated or misplaced")
+            include_count += 1
+            continue
+        if PACKAGE.fullmatch(line) or (
+            required_include is not None and WINDOWS_DEV_PACKAGE.fullmatch(line)
+        ):
             if package_count and not hashes_for_package:
                 raise SupplyChainError("requirements entry has no artifact hash")
             package_count += 1
@@ -165,6 +184,8 @@ def _validate_hashed_requirements(payload: bytes) -> None:
         raise SupplyChainError("requirements lock is not fully pinned and hashed")
     if not package_count or not hashes_for_package:
         raise SupplyChainError("requirements lock is empty or unhashed")
+    if required_include is not None and include_count != 1:
+        raise SupplyChainError("requirements include is missing")
 
 
 def _validate_apt_snapshot(
@@ -407,11 +428,17 @@ def validate(root: Path) -> str:
     values = _parse_manifest(manifest_payload)
     requirements_input = _read_regular(root, REQUIREMENTS_INPUT, MAX_REQUIREMENTS_BYTES)
     requirements_lock = _read_regular(root, REQUIREMENTS_LOCK, MAX_REQUIREMENTS_BYTES)
+    requirements_dev = _read_regular(root, REQUIREMENTS_DEV, MAX_REQUIREMENTS_BYTES)
     _validate_hashed_requirements(requirements_lock)
+    _validate_hashed_requirements(
+        requirements_dev, required_include=REQUIREMENTS_LOCK
+    )
     if _sha256(requirements_input) != values["requirements_input_sha256"]:
         raise SupplyChainError("requirements input changed without regenerating the lock")
     if _sha256(requirements_lock) != values["requirements_lock_sha256"]:
         raise SupplyChainError("requirements lock digest mismatch")
+    if _sha256(requirements_dev) != values["requirements_dev_sha256"]:
+        raise SupplyChainError("development requirements digest mismatch")
     application_dockerfile = _read_regular(
         root, APPLICATION_DOCKERFILE, MAX_MANIFEST_BYTES * 8
     )
