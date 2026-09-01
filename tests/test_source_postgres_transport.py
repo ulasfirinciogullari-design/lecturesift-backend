@@ -79,7 +79,7 @@ def test_source_transport_canonicalizes_to_secret_free_libpq_argv_contract(
     assert "PGPASSWORD" not in environment
     assert "PGPASSFILE" not in environment
     assert environment["PGSSLMODE"] == "verify-full"
-    assert environment["PGSSLROOTCERT"] == "system"
+    assert environment["PGSSLROOTCERT"] == helper.CONTAINER_CA_BUNDLE
     assert environment["PGCONNECT_TIMEOUT"] == "15"
     assert "SOURCE_DATABASE_URL" not in environment
     assert "PGSERVICE" not in environment
@@ -193,8 +193,14 @@ def test_libpq_docker_uses_a_private_pgpass_mount_and_cleans_it(
     pgpass = session / "pgpass"
     pgpass.write_text(helper.pgpass_record(configuration), encoding="utf-8")
     pgpass.chmod(0o600)
+    ca_bundle = tmp_path / "ca-certificates.crt"
+    ca_bundle.write_text("trusted test CA\n", encoding="utf-8")
+    ca_bundle.chmod(0o644)
     observed: dict[str, object] = {}
 
+    monkeypatch.setattr(
+        helper, "_trusted_host_ca_bundle", lambda: ca_bundle.resolve()
+    )
     monkeypatch.setattr(helper, "_create_pgpass", lambda _config: (session, pgpass))
 
     def run_child(command: list[str], environment: dict[str, str]) -> int:
@@ -216,11 +222,95 @@ def test_libpq_docker_uses_a_private_pgpass_mount_and_cleans_it(
     assert isinstance(command, list) and isinstance(environment, dict)
     assert command[:2] == ["docker", "run"]
     assert helper.CONTAINER_PGPASSFILE in " ".join(command)
+    assert str(ca_bundle.resolve()) in " ".join(command)
+    assert helper.CONTAINER_CA_BUNDLE in " ".join(command)
+    assert (
+        f"type=bind,source={ca_bundle.resolve()},"
+        f"target={helper.CONTAINER_CA_BUNDLE},readonly"
+    ) in command
+    assert environment["PGSSLROOTCERT"] == helper.CONTAINER_CA_BUNDLE
     assert configuration.password not in " ".join(command)
     assert configuration.database_url not in " ".join(command)
     assert configuration.password not in environment.values()
     assert "PGPASSWORD" not in environment
     assert observed["pgpass"].endswith(":p@ssword\n")
+    assert not pgpass.exists()
+    assert not session.exists()
+
+
+def test_libpq_docker_rejects_a_missing_ca_bundle_before_creating_a_secret_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    helper = _module()
+    configuration = helper.configuration_from_values(_source_values())
+    created = False
+
+    def should_not_create(_config: object) -> object:
+        nonlocal created
+        created = True
+        raise AssertionError("password file must not be created")
+
+    monkeypatch.setattr(helper, "HOST_CA_BUNDLE", (tmp_path / "missing.crt").resolve())
+    monkeypatch.setattr(helper, "_create_pgpass", should_not_create)
+
+    with pytest.raises(helper.TransportError, match="CA bundle"):
+        helper._run_libpq_docker(
+            ["docker", "run", "postgres:18-bookworm", "psql"],
+            configuration,
+        )
+    assert created is False
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX ownership and mode contract")
+@pytest.mark.parametrize("unsafe_kind", ("symlink", "world-writable"))
+def test_host_ca_bundle_rejects_unsafe_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, unsafe_kind: str
+):
+    helper = _module()
+    real_bundle = tmp_path / "real-ca.crt"
+    real_bundle.write_text("trusted test CA\n", encoding="utf-8")
+    if unsafe_kind == "symlink":
+        candidate = tmp_path / "ca-certificates.crt"
+        candidate.symlink_to(real_bundle)
+    else:
+        candidate = real_bundle
+        candidate.chmod(0o666)
+
+    monkeypatch.setattr(helper, "HOST_CA_BUNDLE", candidate.resolve(strict=False))
+    if unsafe_kind == "symlink":
+        monkeypatch.setattr(helper, "HOST_CA_BUNDLE", candidate)
+
+    with pytest.raises(helper.TransportError, match="CA bundle.*unsafe"):
+        helper._trusted_host_ca_bundle()
+
+
+def test_libpq_docker_cleans_pgpass_when_the_child_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    helper = _module()
+    configuration = helper.configuration_from_values(_source_values())
+    session = tmp_path / "session-test"
+    session.mkdir(mode=0o700)
+    pgpass = session / "pgpass"
+    pgpass.write_text(helper.pgpass_record(configuration), encoding="utf-8")
+    pgpass.chmod(0o600)
+    ca_bundle = tmp_path / "ca-certificates.crt"
+    ca_bundle.write_text("trusted test CA\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        helper, "_trusted_host_ca_bundle", lambda: ca_bundle.resolve()
+    )
+    monkeypatch.setattr(helper, "_create_pgpass", lambda _config: (session, pgpass))
+
+    def fail_child(_command: list[str], _environment: dict[str, str]) -> int:
+        raise RuntimeError("simulated child failure")
+
+    monkeypatch.setattr(helper, "_run_child", fail_child)
+    with pytest.raises(RuntimeError, match="simulated child failure"):
+        helper._run_libpq_docker(
+            ["docker", "run", "postgres:18-bookworm", "psql"],
+            configuration,
+        )
     assert not pgpass.exists()
     assert not session.exists()
 
@@ -241,6 +331,40 @@ def test_libpq_docker_rejects_credential_arguments_before_creating_a_secret_file
     with pytest.raises(helper.TransportError, match="forbidden credential"):
         helper._run_libpq_docker(
             ["docker", "run", "--env", "PGPASSWORD", "postgres:18-bookworm"],
+            configuration,
+        )
+    assert created is False
+
+
+@pytest.mark.parametrize(
+    "override",
+    (
+        "PGSSLMODE=require",
+        "--env=PGSSLMODE=require",
+        "-ePGSSLROOTCERT=/tmp/untrusted.crt",
+        "PGSSLROOTCERT=/tmp/untrusted.crt",
+        "--env-file",
+        "--env-file=/tmp/untrusted.env",
+        "type=bind,source=/tmp/evil,target=/run/secrets,readonly",
+        "type=bind,source=/tmp/evil,target=/run/secrets/lecturesift-source.pgpass",
+    ),
+)
+def test_libpq_docker_rejects_tls_overrides_before_creating_a_secret_file(
+    monkeypatch: pytest.MonkeyPatch, override: str
+):
+    helper = _module()
+    configuration = helper.configuration_from_values(_source_values())
+    created = False
+
+    def should_not_create(_config: object) -> object:
+        nonlocal created
+        created = True
+        raise AssertionError("password file must not be created")
+
+    monkeypatch.setattr(helper, "_create_pgpass", should_not_create)
+    with pytest.raises(helper.TransportError, match="forbidden credential"):
+        helper._run_libpq_docker(
+            ["docker", "run", "--env", override, "postgres:18-bookworm"],
             configuration,
         )
     assert created is False

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Execute trusted source operations without putting PostgreSQL secrets in argv.
 
-The fixed root-only source dotenv is parsed strictly as data.  PostgreSQL
+The fixed root-only source dotenv is parsed strictly as data. PostgreSQL
 clients receive only canonical libpq variables, with hostname verification
-forced by PGSSLMODE=verify-full.  The original URL and its password are never
-rendered to stdout/stderr or appended to a child command line.
+forced by PGSSLMODE=verify-full and the host system CA bundle mounted read-only.
+The original URL and its password are never rendered to stdout/stderr or
+appended to a child command line.
 """
 
 from __future__ import annotations
@@ -44,6 +45,8 @@ SOURCE_SCOPE_KEYS = {
 }
 RUNTIME_ROOT = Path("/run/lecturesift-source-postgres")
 CONTAINER_PGPASSFILE = "/run/secrets/lecturesift-source.pgpass"
+HOST_CA_BUNDLE = Path("/etc/ssl/certs/ca-certificates.crt")
+CONTAINER_CA_BUNDLE = "/run/secrets/lecturesift-system-ca.crt"
 ASSIGNMENT = re.compile(r"^[ \t]*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
 SESSION_NAME = re.compile(r"^session-[a-z0-9_]{8,32}$")
 
@@ -265,11 +268,32 @@ def libpq_environment(config: SourceConfiguration) -> dict[str, str]:
             "PGDATABASE": config.database,
             "PGUSER": config.user,
             "PGSSLMODE": "verify-full",
-            "PGSSLROOTCERT": "system",
+            "PGSSLROOTCERT": CONTAINER_CA_BUNDLE,
             "PGCONNECT_TIMEOUT": "15",
         }
     )
     return environment
+
+
+def _trusted_host_ca_bundle() -> Path:
+    path = HOST_CA_BUNDLE
+    try:
+        details = path.lstat()
+    except OSError as exc:
+        raise TransportError("the host system CA bundle is missing or inaccessible") from exc
+    if (
+        not path.is_absolute()
+        or path != Path(os.path.realpath(path))
+        or not stat.S_ISREG(details.st_mode)
+        or stat.S_ISLNK(details.st_mode)
+        or details.st_nlink != 1
+        or details.st_size <= 0
+        or details.st_size > 8 * 1024 * 1024
+        or (os.name == "posix" and (details.st_uid != 0 or details.st_gid != 0))
+        or (os.name == "posix" and stat.S_IMODE(details.st_mode) & 0o022)
+    ):
+        raise TransportError("the host system CA bundle is unsafe")
+    return path
 
 
 def _pgpass_escape(value: str) -> str:
@@ -456,21 +480,34 @@ def _run_libpq_docker(command: list[str], config: SourceConfiguration) -> int:
     if any(
         "PGPASSWORD" in item
         or "PGPASSFILE" in item
+        or item == "--env-file"
+        or item.startswith("--env-file=")
+        or "PGSSLMODE=" in item
+        or "PGSSLROOTCERT=" in item
+        or CONTAINER_PGPASSFILE in item
+        or CONTAINER_CA_BUNDLE in item
+        or "/run/secrets" in item
         or config.password in item
         or config.database_url in item
         for item in command
     ):
         raise TransportError("libpq Docker command contains a forbidden credential argument")
+    ca_bundle = _trusted_host_ca_bundle()
     session, pgpass = _create_pgpass(config)
     try:
-        mount = (
+        pgpass_mount = (
             f"type=bind,source={pgpass},target={CONTAINER_PGPASSFILE},readonly"
+        )
+        ca_mount = (
+            f"type=bind,source={ca_bundle},target={CONTAINER_CA_BUNDLE},readonly"
         )
         child = command[:2] + [
             "--mount",
-            mount,
+            pgpass_mount,
             "--env",
             f"PGPASSFILE={CONTAINER_PGPASSFILE}",
+            "--mount",
+            ca_mount,
         ] + command[2:]
         return _run_child(child, libpq_environment(config))
     finally:
