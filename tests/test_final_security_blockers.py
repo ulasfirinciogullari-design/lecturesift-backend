@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tarfile
 
 import pytest
@@ -225,6 +226,31 @@ def test_fixed_stage_controller_authorizes_tree_before_candidate_code() -> None:
     assert "git-object-bound" in trusted
     assert "timeout --signal=KILL" in trusted
     assert "ulimit -v" in trusted and "ulimit -t" in trusted
+
+
+def test_trusted_controllers_use_compatible_disk_reserve_options() -> None:
+    for relative in (
+        "deploy/trusted_stage_release_controller.sh",
+        "deploy/trusted_exact_rehearsal_controller.sh",
+    ):
+        script = _read(relative)
+        assert 'df -B1 --output=avail -- "$STATE_ROOT"' in script
+        assert "df -PB1 --output" not in script
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="requires GNU df on Linux")
+def test_disk_reserve_command_returns_one_numeric_value(tmp_path: Path) -> None:
+    completed = subprocess.run(
+        ["df", "-B1", "--output=avail", "--", str(tmp_path)],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=10,
+    )
+    rows = completed.stdout.splitlines()
+    assert len(rows) == 2
+    assert rows[1].strip().isdigit()
 
 
 def test_rehearsal_backend_is_dedicated_and_production_redis_is_unreachable() -> None:

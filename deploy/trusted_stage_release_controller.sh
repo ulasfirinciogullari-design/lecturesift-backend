@@ -128,7 +128,7 @@ done
 [[ "$(sha256sum "$EXACT_CONTROLLER_PATH" | awk '{print $1}')" == \
    "${reviewed[trusted_controller_sha256]}" ]] || fail exact-controller-review-hash
 
-state_free_bytes="$(df -PB1 --output=avail "$STATE_ROOT" | awk 'NR == 2 {print $1}')"
+state_free_bytes="$(df -B1 --output=avail -- "$STATE_ROOT" | awk 'NR == 2 {print $1}')"
 [[ "$state_free_bytes" =~ ^[0-9]+$ && "$state_free_bytes" -ge "$MIN_STATE_FREE_BYTES" ]] || \
   fail insufficient-stage-disk-reserve
 state="$(mktemp -d -- "$STATE_ROOT/$revision.XXXXXXXX")"

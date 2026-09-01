@@ -101,7 +101,7 @@ install -d -o root -g root -m 0700 -- "$STATE_ROOT"
    "$(realpath -e -- "$STATE_ROOT")" == "$STATE_ROOT" && \
    "$(stat -c '%u:%g:%a' -- "$STATE_ROOT")" == "0:0:700" ]] || \
   fail unsafe-controller-state-root
-state_free_bytes="$(df -PB1 --output=avail "$STATE_ROOT" | awk 'NR == 2 {print $1}')"
+state_free_bytes="$(df -B1 --output=avail -- "$STATE_ROOT" | awk 'NR == 2 {print $1}')"
 [[ "$state_free_bytes" =~ ^[0-9]+$ && "$state_free_bytes" -ge "$MIN_STATE_FREE_BYTES" ]] || \
   fail insufficient-controller-disk-reserve
 exec 9>"$STATE_ROOT/.controller.lock"
