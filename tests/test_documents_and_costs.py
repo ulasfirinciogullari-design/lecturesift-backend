@@ -24,7 +24,13 @@ import lecturesift.costs as costs
 import lecturesift.documents as document_service
 from lecturesift import config
 from lecturesift.app import app
-from lecturesift.billing_service import register_user, verify_email
+from lecturesift.billing_service import (
+    IYZICO_BANK_TRANSFER_PROVIDER,
+    PAYMENT_ORDERS,
+    create_payment_order,
+    register_user,
+    verify_email,
+)
 from lecturesift.documents import extract_documents
 from lecturesift.durable_runtime import _preflight_documents
 from lecturesift.errors import LectureSiftError
@@ -800,6 +806,41 @@ def test_cost_report_uses_turkiye_calendar_date_near_utc_midnight(monkeypatch):
     overview = costs.cost_overview(days=1, limit=1)
     assert overview["period"]["invoice_start"] == "2026-08-30"
     assert overview["period"]["invoice_end"] == "2026-08-30"
+
+
+def test_cost_report_normalizes_protected_transfer_provider(monkeypatch):
+    monkeypatch.setattr(costs, "_fx_rate", lambda: (40.0, "test rate"))
+    created = register_user(
+        f"cost-provider-{uuid.uuid4()}@example.com",
+        "Strong-test-password1",
+        "Cost",
+        "Provider",
+    )
+    order = create_payment_order(
+        created["user"]["id"],
+        IYZICO_BANK_TRANSFER_PROVIDER,
+        "plus",
+        "monthly",
+        "TRY",
+    )
+    try:
+        with costs.ENGINE.begin() as connection:
+            connection.execute(
+                PAYMENT_ORDERS.update()
+                .where(PAYMENT_ORDERS.c.reference == order["reference"])
+                .values(status="paid")
+            )
+        overview = costs.cost_overview(days=1, limit=1)
+        active = overview["accuracy"]["active_providers"]
+        assert "iyzico" in active
+        assert IYZICO_BANK_TRANSFER_PROVIDER not in active
+    finally:
+        with costs.ENGINE.begin() as connection:
+            connection.execute(
+                PAYMENT_ORDERS.delete().where(
+                    PAYMENT_ORDERS.c.reference == order["reference"]
+                )
+            )
 
 
 def test_fixed_cost_confirmation_keys_match_render_configuration():

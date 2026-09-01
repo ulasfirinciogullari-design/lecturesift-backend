@@ -409,6 +409,7 @@ async function startHostedCheckout(preferredMethod = "card") {
         plan_code: planCode,
         interval: $("checkoutInterval").value,
         currency,
+        payment_method: preferredMethod,
         first_name: $("checkoutFirstName").value.trim(),
         last_name: $("checkoutLastName").value.trim(),
         billing_address: $("checkoutAddress").value.trim(),

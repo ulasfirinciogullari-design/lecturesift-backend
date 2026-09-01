@@ -50,6 +50,65 @@ class BillingConfigurationError(BillingError):
     pass
 
 
+IYZICO_PUBLIC_PROVIDER = "iyzico"
+IYZICO_LEGACY_PROVIDER = "iyzico"
+IYZICO_CARD_PROVIDER = "iyzico_card_confirmed"
+IYZICO_BANK_TRANSFER_PROVIDER = "iyzico_bank_transfer"
+IYZICO_CARD_INTENT_PROVIDER = "iyzico_card_intent"
+IYZICO_BANK_TRANSFER_INTENT_PROVIDER = "iyzico_bank_intent"
+IYZICO_CONFIRMED_PAYMENT_PROVIDERS = frozenset(
+    {IYZICO_CARD_PROVIDER, IYZICO_BANK_TRANSFER_PROVIDER}
+)
+IYZICO_CARD_PROVIDERS = frozenset(
+    {IYZICO_LEGACY_PROVIDER, IYZICO_CARD_PROVIDER, IYZICO_CARD_INTENT_PROVIDER}
+)
+IYZICO_BANK_TRANSFER_PROVIDERS = frozenset(
+    {IYZICO_BANK_TRANSFER_PROVIDER, IYZICO_BANK_TRANSFER_INTENT_PROVIDER}
+)
+IYZICO_PAYMENT_PROVIDERS = IYZICO_CARD_PROVIDERS | IYZICO_BANK_TRANSFER_PROVIDERS
+
+
+def iyzico_provider_for_payment_method(
+    payment_method: str,
+    *,
+    confirmed: bool = True,
+) -> str:
+    """Return the durable provider discriminator for an iyzico checkout."""
+    selected = (payment_method or "").strip().lower()
+    if selected == "card":
+        return IYZICO_CARD_PROVIDER if confirmed else IYZICO_CARD_INTENT_PROVIDER
+    if selected == "bank_transfer":
+        return (
+            IYZICO_BANK_TRANSFER_PROVIDER
+            if confirmed
+            else IYZICO_BANK_TRANSFER_INTENT_PROVIDER
+        )
+    raise BillingError("Geçersiz iyzico ödeme yöntemi.")
+
+
+def iyzico_payment_method_for_provider(provider: str) -> str:
+    """Map an internal iyzico discriminator to its public payment method."""
+    selected = (provider or "").strip().lower()
+    if selected == IYZICO_LEGACY_PROVIDER:
+        return "unknown"
+    if selected in IYZICO_CARD_PROVIDERS:
+        return "card"
+    if selected in IYZICO_BANK_TRANSFER_PROVIDERS:
+        return "bank_transfer"
+    raise BillingError("Geçersiz iyzico ödeme sağlayıcısı.")
+
+
+def iyzico_provider_is_confirmed(provider: str, status: str) -> bool:
+    """Return whether provider evidence, rather than UI intent, set the method.
+
+    Historical rows used the generic ``iyzico`` provider for both card and
+    protected transfer, so they remain unconfirmed at every status until the
+    first signed provider notification classifies them.
+    """
+    selected = (provider or "").strip().lower()
+    return selected in IYZICO_CONFIRMED_PAYMENT_PROVIDERS
+
+
 def _database_url() -> str:
     value = config.DATABASE_URL
     if value.startswith("postgres://"):
@@ -788,6 +847,9 @@ def _public_manual_order(order) -> dict:
     return {
         "reference": order.reference,
         "order_number": order.reference,
+        "provider": "bank_transfer",
+        "payment_method": "bank_transfer",
+        "payment_method_confirmed": True,
         "plan_code": order.plan_code,
         "interval": order.interval,
         "amount_minor": order.amount_minor,
@@ -808,10 +870,23 @@ def _public_manual_order(order) -> dict:
 
 
 def _public_payment_order(order) -> dict:
+    stored_provider = str(order.provider)
+    if stored_provider in IYZICO_PAYMENT_PROVIDERS:
+        provider = IYZICO_PUBLIC_PROVIDER
+        payment_method = iyzico_payment_method_for_provider(stored_provider)
+    else:
+        provider = stored_provider
+        payment_method = "card"
     return {
         "reference": order.reference,
         "order_number": order.reference,
-        "provider": order.provider,
+        "provider": provider,
+        "payment_method": payment_method,
+        "payment_method_confirmed": (
+            iyzico_provider_is_confirmed(stored_provider, str(order.status))
+            if stored_provider in IYZICO_PAYMENT_PROVIDERS
+            else True
+        ),
         "plan_code": order.plan_code,
         "interval": order.interval,
         "amount_minor": order.amount_minor,
@@ -1317,6 +1392,20 @@ def payment_order(reference: str) -> dict:
     return _public_payment_order(order)
 
 
+def payment_order_provider_state(reference: str) -> str:
+    """Return the internal provider state used for token binding and migration."""
+    init_billing_database()
+    with ENGINE.connect() as connection:
+        provider = connection.execute(
+            select(PAYMENT_ORDERS.c.provider).where(
+                PAYMENT_ORDERS.c.reference == reference
+            )
+        ).scalar_one_or_none()
+    if not provider:
+        raise BillingError("Ödeme siparişi bulunamadı.")
+    return str(provider)
+
+
 def bind_payment_order_token_digest(
     reference: str,
     provider: str,
@@ -1484,6 +1573,61 @@ def mark_payment_order_pending(reference: str) -> dict:
                     failure_message=None,
                     updated_at=utcnow(),
                 )
+            )
+    return payment_order(reference)
+
+
+def mark_iyzico_payment_method(reference: str, payment_method: str) -> dict:
+    """Persist a provider-authenticated iyzico payment-method classification.
+
+    The existing provider columns are used as a backwards-compatible subtype
+    discriminator, avoiding an online schema change during in-flight payments.
+    Both the order and its immutable token binding move together under row
+    locks so callbacks can never observe a mixed provider/session pair.
+    """
+    selected_provider = iyzico_provider_for_payment_method(payment_method)
+    init_billing_database()
+    with ENGINE.begin() as connection:
+        order = connection.execute(
+            select(PAYMENT_ORDERS)
+            .where(PAYMENT_ORDERS.c.reference == reference)
+            .with_for_update()
+        ).first()
+        if (
+            not order
+            or order.provider not in IYZICO_PAYMENT_PROVIDERS
+            or order.status not in {"created", "pending", "paid", "failed"}
+        ):
+            raise BillingError("Ödeme yöntemi siparişle eşleşmiyor.")
+        session = connection.execute(
+            select(PAYMENT_PROVIDER_SESSIONS)
+            .where(PAYMENT_PROVIDER_SESSIONS.c.order_reference == reference)
+            .with_for_update()
+        ).first()
+        if not session or session.provider != order.provider:
+            raise BillingError("Ödeme oturumu siparişle eşleşmiyor.")
+        if (
+            order.provider != selected_provider
+            and (
+                order.provider in IYZICO_CONFIRMED_PAYMENT_PROVIDERS
+                or (
+                    order.status == "paid"
+                    and order.provider != IYZICO_LEGACY_PROVIDER
+                )
+            )
+        ):
+            raise BillingError("Tamamlanmış ödemenin yöntemi değiştirilemez.")
+        if order.provider != selected_provider:
+            now = utcnow()
+            connection.execute(
+                update(PAYMENT_ORDERS)
+                .where(PAYMENT_ORDERS.c.reference == reference)
+                .values(provider=selected_provider, updated_at=now)
+            )
+            connection.execute(
+                update(PAYMENT_PROVIDER_SESSIONS)
+                .where(PAYMENT_PROVIDER_SESSIONS.c.order_reference == reference)
+                .values(provider=selected_provider)
             )
     return payment_order(reference)
 
@@ -1661,7 +1805,7 @@ def admin_billing_overview(limit: int = 100) -> dict:
         pending_count += int(
             connection.execute(
                 select(func.count()).select_from(PAYMENT_ORDERS).where(
-                    PAYMENT_ORDERS.c.status == "created"
+                    PAYMENT_ORDERS.c.status.in_(("created", "pending"))
                 )
             ).scalar_one()
         )

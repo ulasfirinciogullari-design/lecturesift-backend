@@ -21,7 +21,14 @@ import httpx
 from sqlalchemy import BigInteger, Column, Date, DateTime, Integer, MetaData, String, Table, UniqueConstraint, delete, func, select, update
 
 from . import config
-from .billing_service import ENGINE, MANUAL_ORDERS, PAYMENT_ORDERS, USAGE_EVENTS, init_billing_database
+from .billing_service import (
+    ENGINE,
+    IYZICO_PAYMENT_PROVIDERS,
+    MANUAL_ORDERS,
+    PAYMENT_ORDERS,
+    USAGE_EVENTS,
+    init_billing_database,
+)
 
 
 _METADATA = MetaData()
@@ -668,7 +675,10 @@ def cost_overview(days: int = 30, limit: int = 100) -> dict[str, Any]:
     fixed_active = {"render", "netlify", "resend", "domain"}
     fixed_active.update(str(item["provider"]) for item in fixed if item["configured"])
     metered_active = {str(row.provider) for row in totals}
-    payment_active = {str(item) for item in paid_providers}
+    payment_active = {
+        "iyzico" if str(item) in IYZICO_PAYMENT_PROVIDERS else str(item)
+        for item in paid_providers
+    }
     advertising_active = {"google_ads"} if config.GOOGLE_ADS_ID else set()
     active_providers = sorted(fixed_active | metered_active | payment_active | advertising_active)
     coverage_by_provider = {

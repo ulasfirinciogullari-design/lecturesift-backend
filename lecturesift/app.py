@@ -400,6 +400,7 @@ class BillingCheckoutRequest(BaseModel):
     plan_code: str
     interval: str = "monthly"
     currency: str = "TRY"
+    payment_method: str = "card"
     first_name: str = ""
     last_name: str = ""
     billing_address: str
@@ -1034,7 +1035,13 @@ def billing_create_checkout(
 ) -> dict:
     _rate_limit(request, "checkout", user["id"], limit=10, window_seconds=10 * 60)
     try:
-        provider = preferred_card_provider()
+        payment_method = (payload.payment_method or "").strip().lower()
+        if payment_method not in {"card", "bank_transfer"}:
+            raise BillingError("Geçersiz ödeme yöntemi.")
+        # Protected transfer is an iyzico Checkout Form capability, not a
+        # fallback card-provider choice. Route the intent explicitly and let
+        # the adapter fail closed unless merchant activation is configured.
+        provider = "iyzico" if payment_method == "bank_transfer" else preferred_card_provider()
         common = {
             "plan_code": payload.plan_code,
             "interval": payload.interval,
@@ -1054,6 +1061,7 @@ def billing_create_checkout(
                 user,
                 billing_city=payload.billing_city,
                 billing_zip_code=payload.billing_zip_code,
+                payment_method=payment_method,
                 **common,
             )
         else:

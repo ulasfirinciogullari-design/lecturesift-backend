@@ -596,6 +596,7 @@ def test_profile_admin_automatic_payment_and_full_comparison_interfaces_are_pres
     assert all(value in plans for value in ("bankTransferGuide", "bankTransferContinue", "bankTransferBack"))
     assert "showBankTransferGuide" in plan_script
     assert 'startHostedCheckout("bank_transfer")' in plan_script
+    assert "payment_method: preferredMethod" in plan_script
     assert "/billing/manual-transfer" not in auth
     assert "/billing/manual-transfer" not in workspace_script
     assert "/billing/manual-transfer" not in rollout_script

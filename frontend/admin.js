@@ -141,13 +141,20 @@ function renderAdminPagination(containerId, pagination, onPage) {
 
 function renderAdminOrders(orders) {
   const rows = orders.map(order => {
-    const method = order.payment_method === "bank_transfer" || order.provider === "bank_transfer" ? "IBAN / havale" : `${String(order.provider || "kart").toUpperCase()} kart`;
+    const methodName = order.payment_method === "bank_transfer"
+      ? (order.provider === "iyzico" ? "iyzico Korumalı Havale/EFT" : "IBAN / manuel havale")
+      : order.payment_method === "unknown"
+      ? "iyzico yöntemi (eski kayıt)"
+      : `${String(order.provider || "kart").toUpperCase()} kart`;
+    const method = order.payment_method_confirmed === false
+      ? `Tercih / doğrulama bekliyor: ${methodName}`
+      : methodName;
     const activity = order.user?.last_activity;
     const details = `<details class="admin-row-details"><summary>Detay</summary><dl><div><dt>Sipariş oluşturma</dt><dd>${adminEscape(adminDate(order.created_at))}</dd></div><div><dt>Son güncelleme</dt><dd>${adminEscape(adminDate(order.updated_at))}</dd></div><div><dt>Ödeme yolu</dt><dd>${adminEscape(method)}</dd></div><div><dt>Kullanıcı ağı</dt><dd>${adminEscape(activity?.ip_network || "Yeni kayıtlarda oluşacak")}</dd></div><div><dt>Son kullanıcı hareketi</dt><dd>${adminEscape(activity?.created_at ? adminDate(activity.created_at) : "—")}</dd></div><div><dt>Onay izi</dt><dd>${adminEscape(order.consent?.ip_fingerprint || "—")}</dd></div></dl></details>`;
     return `<tr>
     <td data-label="Sipariş"><strong>${adminEscape(order.order_number || order.reference)}</strong><br><small>${adminEscape(adminDate(order.created_at))}</small></td>
     <td data-label="Müşteri">${adminEscape(order.user?.name || "—")}<br><small>${adminEscape(order.user?.email || "")}</small></td>
-    <td data-label="Ödeme"><span class="status-pill ${order.payment_method === "bank_transfer" ? "" : "paid"}">${adminEscape(method)}</span></td>
+    <td data-label="Ödeme"><span class="status-pill ${order.payment_method_confirmed === false || order.payment_method === "bank_transfer" ? "" : "paid"}">${adminEscape(method)}</span></td>
     <td data-label="Plan">${adminEscape(order.plan_code)} / ${adminEscape(order.interval)}</td><td data-label="Tutar">${adminMoney(order.amount_minor, order.currency)}</td>
     <td data-label="Durum"><span class="status-pill ${order.status === "paid" ? "paid" : ""}">${adminEscape(adminStatusLabel(order.status))}</span></td>
     <td data-label="Hata">${order.failure_message || order.failure_code ? `${adminEscape(order.failure_message || "Ödeme onaylanmadı")}${order.failure_code ? `<br><small>${adminEscape(order.failure_code)}</small>` : ""}` : "—"}</td>
@@ -459,7 +466,7 @@ async function deleteAdminActualCost(button) {
 
 function buildTimeline() {
   const events = [];
-  (adminState.orders.length ? adminState.orders : (adminState.overview.orders || [])).forEach(item => events.push({kind:"order", at:item.created_at, title:`${item.provider === "bank_transfer" ? "Havale" : String(item.provider || "Kart").toUpperCase()} siparişi`, detail:`${item.reference} · ${adminMoney(item.amount_minor, item.currency)} · ${adminStatusLabel(item.status)}`, actor:item.user?.email || ""}));
+  (adminState.orders.length ? adminState.orders : (adminState.overview.orders || [])).forEach(item => events.push({kind:"order", at:item.created_at, title:`${item.payment_method === "bank_transfer" ? (item.provider === "iyzico" ? "iyzico Korumalı Havale/EFT" : "Manuel havale") : item.payment_method === "unknown" ? "Eski iyzico" : String(item.provider || "Kart").toUpperCase()} siparişi`, detail:`${item.reference} · ${adminMoney(item.amount_minor, item.currency)} · ${adminStatusLabel(item.status)}`, actor:item.user?.email || ""}));
   (adminState.contacts || []).forEach(item => events.push({kind:"contact", at:item.created_at, title:`Destek mesajı: ${item.topic}`, detail:item.message, actor:item.email}));
   (adminState.refunds || []).forEach(item => events.push({kind:"refund", at:item.created_at, title:`İade talebi · ${adminStatusLabel(item.status)}`, detail:`${item.order_reference} · ${item.reason}`, actor:item.user?.email || ""}));
   (adminState.rewards || []).forEach(item => events.push({kind:"reward", at:item.created_at, title:`Instagram bonusu · ${adminStatusLabel(item.status)}`, detail:`@${item.handle} · +${item.minutes} dk`, actor:item.email || ""}));

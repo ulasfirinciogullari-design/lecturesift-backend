@@ -26,6 +26,8 @@ from .billing import PLAN_BY_CODE, Plan
 from .billing_service import (
     ENGINE,
     AUTH_TOKENS,
+    IYZICO_BANK_TRANSFER_PROVIDERS,
+    IYZICO_PAYMENT_PROVIDERS,
     MANUAL_ORDERS,
     METADATA,
     PAYMENT_ORDERS,
@@ -43,6 +45,8 @@ from .billing_service import (
     approve_manual_order,
     reject_manual_order,
     init_billing_database,
+    iyzico_payment_method_for_provider,
+    iyzico_provider_is_confirmed,
     issue_session,
     utcnow,
 )
@@ -1020,7 +1024,11 @@ def create_refund_request(user_id: str, order_reference: str, reason: str) -> di
         if existing:
             return _public_refund_request(existing)
         request_id = str(uuid.uuid4())
-        provider = "bank_transfer" if manual_order else str(payment_order_row.provider)
+        provider = "bank_transfer" if manual_order else (
+            "iyzico"
+            if payment_order_row.provider in IYZICO_PAYMENT_PROVIDERS
+            else str(payment_order_row.provider)
+        )
         connection.execute(
             REFUND_REQUESTS.insert().values(
                 id=request_id,
@@ -1425,7 +1433,13 @@ def list_admin_orders_page(
     elif status and status != "all":
         filters.append(orders.c.status == status)
     if provider == "card":
-        filters.append(orders.c.provider != "bank_transfer")
+        filters.append(
+            orders.c.provider.notin_(("bank_transfer", *IYZICO_BANK_TRANSFER_PROVIDERS))
+        )
+    elif provider == "bank_transfer":
+        filters.append(
+            orders.c.provider.in_(("bank_transfer", *IYZICO_BANK_TRANSFER_PROVIDERS))
+        )
     elif provider and provider != "all":
         filters.append(orders.c.provider == provider)
     base = (
@@ -1455,11 +1469,23 @@ def list_admin_orders_page(
     items = []
     for row in rows:
         activity = latest_activity.get(row.user_id)
+        iyzico_order = row.provider in IYZICO_PAYMENT_PROVIDERS
         items.append({
             "reference": row.reference,
             "order_number": row.reference,
-            "provider": row.provider,
-            "payment_method": "bank_transfer" if row.provider == "bank_transfer" else "card",
+            "provider": "iyzico" if iyzico_order else row.provider,
+            "payment_method": (
+                iyzico_payment_method_for_provider(row.provider)
+                if iyzico_order
+                else "bank_transfer"
+                if row.provider == "bank_transfer"
+                else "card"
+            ),
+            "payment_method_confirmed": (
+                iyzico_provider_is_confirmed(row.provider, row.status)
+                if iyzico_order
+                else True
+            ),
             "plan_code": row.plan_code,
             "interval": row.interval,
             "amount_minor": int(row.amount_minor),

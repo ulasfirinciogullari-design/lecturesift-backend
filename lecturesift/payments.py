@@ -26,9 +26,12 @@ from .billing_service import (
     complete_payment_order,
     commerce_identity,
     create_payment_order,
+    iyzico_provider_for_payment_method,
+    mark_iyzico_payment_method,
     mark_payment_order_pending,
     mark_payment_order_token_failed,
     payment_order,
+    payment_order_provider_state,
     payment_order_token_digest,
     record_payment_consent,
 )
@@ -64,6 +67,13 @@ IYZICO_HPP_WEBHOOK_EVENTS = {
     "PWI_TKN_AUTH",
     "PWI_TKN_THREEDS_AUTH",
 }
+IYZICO_HPP_BANK_TRANSFER_EVENTS = {"BANK_TRANSFER_AUTH"}
+IYZICO_HPP_REFUND_EVENTS = {"CONTACTLESS_REFUND"}
+IYZICO_HPP_NON_TRANSFER_EVENTS = (
+    IYZICO_HPP_WEBHOOK_EVENTS
+    - IYZICO_HPP_BANK_TRANSFER_EVENTS
+    - IYZICO_HPP_REFUND_EVENTS
+)
 IYZICO_BASE_URLS = {
     "https://api.iyzipay.com",
     "https://sandbox-api.iyzipay.com",
@@ -118,6 +128,10 @@ def iyzico_configured() -> bool:
     )
 
 
+def iyzico_bank_transfer_configured() -> bool:
+    return bool(iyzico_configured() and config.IYZICO_BANK_TRANSFER_ENABLED)
+
+
 def iyzico_public_status() -> dict:
     configured = iyzico_configured()
     sandbox = config.IYZICO_BASE_URL.rstrip("/") == "https://sandbox-api.iyzipay.com"
@@ -133,7 +147,7 @@ def iyzico_public_status() -> dict:
     # A configured iyzico account does not imply that protected bank transfer
     # was enabled for the merchant. Expose it only after iyzico confirms that
     # separate activation and the runtime flag is deliberately enabled.
-    if configured and config.IYZICO_BANK_TRANSFER_ENABLED:
+    if iyzico_bank_transfer_configured():
         capabilities.append("bank_transfer")
     return {
         "code": "iyzico",
@@ -252,9 +266,13 @@ def _iyzico_token_digest(order_reference: str, token: str) -> str:
     )
 
 
-def _require_iyzico_token_match(order_reference: str, token: str) -> None:
+def _require_iyzico_token_match(
+    order_reference: str,
+    token: str,
+    provider: str = "iyzico",
+) -> None:
     """Fail before contacting iyzico unless this token initialized the order."""
-    stored_digest = payment_order_token_digest(order_reference, "iyzico")
+    stored_digest = payment_order_token_digest(order_reference, provider)
     # Check every configured key without short-circuiting. During a deliberate
     # rotation the previous key remains accepted only for the maximum pending
     # transfer window, while all new bindings use the active key.
@@ -356,6 +374,67 @@ def _iyzico_failure(body: dict) -> tuple[str, str]:
     return code or "iyzico_failure", public_message[:240]
 
 
+def _iyzico_result_payment_method(
+    body: dict,
+    *,
+    requested_method: str,
+    verified_event_method: str = "",
+) -> str:
+    """Resolve the actual coarse payment method from provider evidence.
+
+    Checkout Form cannot preselect a tab, so the buyer may choose a card even
+    after entering through the protected-transfer button (or vice versa).
+    Provider response fields and a verified webhook therefore take precedence
+    over the original UI intent.  Any contradiction is rejected instead of
+    silently rewriting the audit trail.
+    """
+    requested = (requested_method or "").strip().lower()
+    event_method = (verified_event_method or "").strip().lower()
+    if requested not in {"card", "bank_transfer", "unknown"}:
+        raise PaymentProviderError("Geçersiz iyzico ödeme yöntemi.")
+    if event_method not in {"", "card", "bank_transfer"}:
+        raise PaymentProviderError("Geçersiz iyzico ödeme bildirimi.")
+
+    payment_status = str(body.get("paymentStatus") or "").upper()
+    response_method = ""
+    if payment_status == "INIT_BANK_TRANSFER":
+        response_method = "bank_transfer"
+    elif payment_status in IYZICO_ASYNC_PAYMENT_STATUSES:
+        # Credit, 3DS, BKM, APM and contactless are all non-transfer methods
+        # for the two-way reporting model exposed by LectureSift.
+        response_method = "card"
+    elif any(
+        str(body.get(field) or "").strip()
+        for field in (
+            "cardType",
+            "cardAssociation",
+            "cardFamily",
+            "binNumber",
+            "lastFourDigits",
+        )
+    ):
+        response_method = "card"
+
+    if event_method and response_method and event_method != response_method:
+        raise PaymentProviderError("iyzico ödeme yöntemi bildirimi sonuçla uyuşmuyor.")
+    # The requested method is only UI intent. A successful retrieve without
+    # method evidence must wait for a signed provider event instead of turning
+    # that intent into an audited fact and granting access prematurely.
+    return response_method or event_method
+
+
+def _iyzico_webhook_payment_method(event_type: str) -> str:
+    """Map a verified HPP event to the coarse method exposed by LectureSift."""
+    selected = (event_type or "").strip().upper()
+    if selected in IYZICO_HPP_BANK_TRANSFER_EVENTS:
+        return "bank_transfer"
+    if selected in IYZICO_HPP_NON_TRANSFER_EVENTS:
+        return "card"
+    if selected in IYZICO_HPP_REFUND_EVENTS:
+        return ""
+    raise PaymentProviderError("Geçersiz iyzico webhook olayı.")
+
+
 def create_iyzico_checkout(
     user: dict,
     *,
@@ -373,6 +452,7 @@ def create_iyzico_checkout(
     terms_accepted: bool,
     early_performance_requested: bool,
     user_agent: str,
+    payment_method: str = "card",
 ) -> dict:
     if not iyzico_configured():
         raise BillingConfigurationError("iyzico canlı ödeme anahtarları henüz etkinleştirilmemiş.")
@@ -383,9 +463,21 @@ def create_iyzico_checkout(
     if not terms_accepted or not early_performance_requested:
         raise BillingError("Ödeme öncesi bilgilendirmeyi ve hizmetin hemen başlamasını açıkça onaylamalısın.")
 
+    selected_payment_method = (payment_method or "").strip().lower()
+    selected_provider = iyzico_provider_for_payment_method(
+        selected_payment_method,
+        confirmed=False,
+    )
     selected_currency = currency.strip().upper()
     if selected_currency not in IYZICO_CURRENCIES:
         raise BillingError("iyzico için TRY, USD, EUR, GBP, NOK veya CHF seç.")
+    if selected_payment_method == "bank_transfer":
+        if not iyzico_bank_transfer_configured():
+            raise BillingConfigurationError(
+                "iyzico Korumalı Havale/EFT bu mağaza için etkin değil."
+            )
+        if selected_currency != "TRY":
+            raise BillingError("iyzico Korumalı Havale/EFT yalnızca TRY ile kullanılabilir.")
     selected_address = _clean_address(billing_address)
     selected_city = _clean_location(billing_city, "şehir", maximum=80)
     selected_zip = _clean_location(billing_zip_code, "posta kodu", maximum=20)
@@ -395,7 +487,9 @@ def create_iyzico_checkout(
     selected_ip = user_ip.strip()[:39]
     if not selected_ip:
         raise BillingError("Ödeme isteği için kullanıcı IP adresi alınamadı.")
-    order = create_payment_order(user["id"], "iyzico", plan_code, interval, selected_currency)
+    order = create_payment_order(
+        user["id"], selected_provider, plan_code, interval, selected_currency
+    )
     reference = order["reference"]
     record_payment_consent(
         reference,
@@ -469,7 +563,7 @@ def create_iyzico_checkout(
             raise PaymentProviderError("iyzico ödeme oturumu doğrulanamadı.")
         bind_payment_order_token_digest(
             reference,
-            "iyzico",
+            selected_provider,
             _iyzico_token_digest(reference, token),
         )
     except BillingError:
@@ -477,6 +571,7 @@ def create_iyzico_checkout(
         raise
     return {
         "provider": "iyzico",
+        "payment_method": selected_payment_method,
         "order": order,
         "checkout_url": checkout_url,
         "display_mode": "redirect",
@@ -489,12 +584,14 @@ def process_iyzico_callback(
     order_reference: str,
     token: str,
     _verified_webhook: bool = False,
+    _verified_payment_method: str = "",
 ) -> dict:
     if not iyzico_configured():
         raise BillingConfigurationError("iyzico canlı ödeme anahtarları henüz etkinleştirilmemiş.")
     order = payment_order(order_reference)
     if order["provider"] != "iyzico":
         raise PaymentProviderError("Ödeme sağlayıcısı siparişle eşleşmiyor.")
+    selected_provider = payment_order_provider_state(order_reference)
     selected_token = token.strip()
     if not selected_token or len(selected_token) > 200:
         raise PaymentProviderError("Geçersiz iyzico ödeme belirteci.")
@@ -502,7 +599,7 @@ def process_iyzico_callback(
     # replayed with a valid signature, so both paths must prove that the token
     # is the exact one returned by our initialize call before any retrieve or
     # local state transition occurs.
-    _require_iyzico_token_match(order_reference, selected_token)
+    _require_iyzico_token_match(order_reference, selected_token, selected_provider)
     body = _iyzico_post(
         IYZICO_RETRIEVE_PATH,
         {"locale": "tr", "conversationId": order_reference, "token": selected_token},
@@ -519,6 +616,10 @@ def process_iyzico_callback(
             or (not conversation_id and not _verified_webhook)
         ):
             raise PaymentProviderError("iyzico ödeme sonucu siparişle eşleşmiyor.")
+        # Failure responses do not carry the signed success-response field
+        # set. Only an already verified webhook may confirm their method.
+        if _verified_payment_method:
+            mark_iyzico_payment_method(order_reference, _verified_payment_method)
         failure_code, failure_message = _iyzico_failure(body)
         return complete_payment_order(
             order_reference,
@@ -554,7 +655,19 @@ def process_iyzico_callback(
     ):
         raise PaymentProviderError("iyzico ödeme sonucu siparişle eşleşmiyor.")
     payment_status = str(body.get("paymentStatus") or "").upper()
+    resolved_payment_method = _iyzico_result_payment_method(
+        body,
+        requested_method=order["payment_method"],
+        verified_event_method=_verified_payment_method,
+    )
+    if resolved_payment_method:
+        mark_iyzico_payment_method(order_reference, resolved_payment_method)
     if payment_status in IYZICO_ASYNC_PAYMENT_STATUSES:
+        return mark_payment_order_pending(order_reference)
+    if payment_status == "SUCCESS" and not resolved_payment_method:
+        # Do not activate an ambiguously classified payment. The signed HPP
+        # notification will re-run the authoritative retrieve with a method
+        # hint and finish the order idempotently.
         return mark_payment_order_pending(order_reference)
     succeeded = payment_status == "SUCCESS"
     failure_code, failure_message = ("", "") if succeeded else _iyzico_failure(body)
@@ -576,18 +689,29 @@ def process_iyzico_webhook(*, payload: dict, signature: str) -> dict:
     _verify_iyzico_hpp_webhook_signature(payload, signature)
     order_reference = str(payload.get("paymentConversationId") or "")
     selected_token = str(payload.get("token") or "").strip()
+    order = payment_order(order_reference)
+    if order["provider"] != "iyzico":
+        raise PaymentProviderError("Ödeme sağlayıcısı siparişle eşleşmiyor.")
+    event_type = str(payload.get("iyziEventType") or "")
+    if event_type in IYZICO_HPP_REFUND_EVENTS:
+        # Refund notifications are acknowledged separately and must never
+        # replay the purchase-completion path or grant access.
+        return {"processed": False, "event_type": event_type, "order": order}
+    selected_provider = payment_order_provider_state(order_reference)
     # Compatibility bridge for checkouts initialized before token-binding was
     # deployed. Only the signed provider notification may create this legacy
     # binding; an unsigned browser callback remains strictly fail-closed.
     adopt_payment_order_token_digest_from_verified_notification(
         order_reference,
-        "iyzico",
+        selected_provider,
         _iyzico_token_digest(order_reference, selected_token),
     )
+    verified_payment_method = _iyzico_webhook_payment_method(event_type)
     return process_iyzico_callback(
         order_reference=order_reference,
         token=selected_token,
         _verified_webhook=True,
+        _verified_payment_method=verified_payment_method,
     )
 
 
