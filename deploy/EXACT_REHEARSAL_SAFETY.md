@@ -151,6 +151,13 @@ through the worker proxy. Only the validated production PostgreSQL service is
 temporarily attached to the dedicated network under the `postgres` alias used
 by clone-only roles. Production Redis is never attached, and runtime probes in
 both candidate roles require its service names to remain unresolvable.
+The inner stack hands that temporary PostgreSQL attachment to the locked outer
+orchestrator only after every stack health and isolation proof succeeds. Before
+the first E2E, both candidate roles must then resolve `postgres`, connect as
+their exact clone-bound role, select the exact clone database, PING the isolated
+Redis service, and re-prove queue, storage and worker rollout continuity. The
+outer `EXIT` cleanup retains sole ownership after handoff and disconnects
+PostgreSQL only after the application, format and purge E2Es finish or fail.
 Instagram credentials are intentionally absent; its health probe must therefore
 return HTTP 503 with the exact safe `LS-IG-01` detail code rather than contact a
 live provider.

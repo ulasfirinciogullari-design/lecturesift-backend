@@ -115,6 +115,83 @@ test "$(stat -c "%u:%g:%a" -- "$destination")" = \
   }
 }
 
+prove_post_stack_continuity() {
+  local specification container expected_role
+  for specification in \
+    "lecturesift-api-rehearsal|$rehearsal_api_role" \
+    "lecturesift-worker-rehearsal|$rehearsal_worker_role"; do
+    container="${specification%%|*}"
+    expected_role="${specification#*|}"
+    docker exec --user 10001:10001 \
+      -e "LECTURESIFT_EXPECTED_REHEARSAL_DATABASE=$rehearsal_db" \
+      -e "LECTURESIFT_EXPECTED_REHEARSAL_ROLE=$expected_role" \
+      "$container" python -I -c '
+import os
+import socket
+
+from sqlalchemy import create_engine
+
+database_url = os.environ.get("DATABASE_URL", "")
+expected_database = os.environ["LECTURESIFT_EXPECTED_REHEARSAL_DATABASE"]
+expected_role = os.environ["LECTURESIFT_EXPECTED_REHEARSAL_ROLE"]
+
+addresses = socket.getaddrinfo("postgres", 5432, type=socket.SOCK_STREAM)
+if not addresses:
+    raise SystemExit("the rehearsal PostgreSQL alias did not resolve after stack handoff")
+
+engine = create_engine(database_url, pool_pre_ping=True, connect_args={"connect_timeout": 5})
+try:
+    with engine.connect() as connection:
+        row = connection.exec_driver_sql(
+            "SELECT current_database(), current_user"
+        ).one()
+finally:
+    engine.dispose()
+if tuple(row) != (expected_database, expected_role):
+    raise SystemExit("the post-stack database identity is not the bound clone role")
+
+with socket.create_connection(("lecturesift-redis-rehearsal", 6379), timeout=5) as client:
+    client.sendall(b"*1\r\n$4\r\nPING\r\n")
+    response = client.makefile("rb").readline(64)
+if response != b"+PONG\r\n":
+    raise SystemExit("the isolated rehearsal Redis endpoint did not answer PING")
+' || {
+      echo "Post-stack database or queue continuity proof failed for $container." >&2
+      return 1
+    }
+  done
+
+  docker exec --user 10001:10001 lecturesift-api-rehearsal python -I -c '
+import json
+import urllib.request
+
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+request = urllib.request.Request(
+    "http://127.0.0.1:8000/rollout/health",
+    headers={"Accept": "application/json"},
+    method="GET",
+)
+with opener.open(request, timeout=8) as response:
+    if response.status != 200:
+        raise SystemExit("post-stack rollout health returned a non-200 status")
+    body = response.read(1048577)
+if len(body) > 1048576:
+    raise SystemExit("post-stack rollout health exceeded the response limit")
+payload = json.loads(body)
+if not (
+    payload.get("durable_processing_ready") is True
+    and payload.get("queue", {}).get("connected") is True
+    and payload.get("storage", {}).get("connected") is True
+    and payload.get("worker", {}).get("reachable") is True
+    and int(payload.get("worker", {}).get("workers", 0)) >= 1
+):
+    raise SystemExit("post-stack rollout dependencies lost continuity")
+' || {
+    echo "Post-stack rollout continuity proof failed." >&2
+    return 1
+  }
+}
+
 check_private_env "$SOURCE_ENV" "Source database environment"
 check_private_env "$DB_ENV" "Target database environment"
 for path in "$SOURCE_ENV" "$DB_ENV" \
@@ -1195,6 +1272,7 @@ LECTURESIFT_REHEARSAL_ORCHESTRATED=YES \
   LECTURESIFT_REHEARSAL_API_DATABASE_URL="$rehearsal_api_database_url" \
   LECTURESIFT_REHEARSAL_WORKER_DATABASE_URL="$rehearsal_worker_database_url" \
   "$ROOT_DIR/deploy/rehearsal_stack.sh" "$rehearsal_db"
+prove_post_stack_continuity
 write_candidate_tmp_file lecturesift-api-rehearsal \
   "$ROOT_DIR/deploy/rehearsal_e2e.py" \
   /tmp/lecturesift-rehearsal-e2e.py 0400

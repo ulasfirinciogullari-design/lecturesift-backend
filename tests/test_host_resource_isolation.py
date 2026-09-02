@@ -170,6 +170,48 @@ def test_rehearsal_api_has_no_host_ingress_and_uses_private_loopback_probes():
     assert '.code == "LS-IG-01"' in stack
 
 
+def test_rehearsal_postgres_network_lifecycle_is_handed_to_outer_e2e_cleanup():
+    stack = _read("deploy/rehearsal_stack.sh")
+    orchestrator = _read("deploy/rehearsal_restore.sh")
+
+    cleanup = stack.split("cleanup_generated_envs() {", 1)[1].split(
+        "trap cleanup_generated_envs EXIT", 1
+    )[0]
+    assert "postgres_network_handed_off=false" in stack
+    assert (
+        '"$postgres_network_connected" == "true" &&\n'
+        '        "$postgres_network_handed_off" != "true"'
+    ) in cleanup
+    assert 'docker network disconnect "$rehearsal_backend_network"' in cleanup
+
+    final_health = 'rehearsal_api_get /instagram/health 8 503'
+    handoff = "postgres_network_handed_off=true"
+    assert stack.index(final_health) < stack.index(handoff)
+
+    stack_call = '"$ROOT_DIR/deploy/rehearsal_stack.sh" "$rehearsal_db"'
+    continuity = "prove_post_stack_continuity"
+    first_e2e = "  /tmp/lecturesift-rehearsal-e2e.py 0400"
+    assert (
+        orchestrator.index(stack_call)
+        < orchestrator.rindex(continuity)
+        < orchestrator.index(first_e2e)
+    )
+    continuity_body = orchestrator.split("prove_post_stack_continuity() {", 1)[1].split(
+        "\n}\n", 1
+    )[0]
+    assert "lecturesift-api-rehearsal|$rehearsal_api_role" in continuity_body
+    assert "lecturesift-worker-rehearsal|$rehearsal_worker_role" in continuity_body
+    assert 'socket.getaddrinfo("postgres", 5432' in continuity_body
+    assert '"SELECT current_database(), current_user"' in continuity_body
+    assert "lecturesift-redis-rehearsal" in continuity_body
+    assert 'b"+PONG\\r\\n"' in continuity_body
+    assert '"http://127.0.0.1:8000/rollout/health"' in continuity_body
+    assert 'payload.get("durable_processing_ready") is True' in continuity_body
+    assert orchestrator.index(first_e2e) < orchestrator.rindex(
+        'cleanup_rehearsal_proxy_networks "$rehearsal_suffix"'
+    )
+
+
 def test_resource_guard_reserves_host_capacity_and_bounds_work_volumes():
     guard = _read("deploy/resource_guard.sh")
     env_example = _read("deploy/env.example")

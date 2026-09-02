@@ -38,6 +38,7 @@ generated_worker_proxy_config="$REHEARSAL_RUN_DIR/rehearsal-worker-squid.conf"
 synthetic_audio="$REHEARSAL_RUN_DIR/rehearsal-synthetic-lecture.mp3"
 synthetic_audio_temporary="$REHEARSAL_RUN_DIR/.rehearsal-synthetic-lecture.mp3.partial"
 postgres_network_connected=false
+postgres_network_handed_off=false
 
 fail() {
   echo "Rehearsal stack isolation failed: $*" >&2
@@ -275,7 +276,12 @@ check_root_public_config "$generated_worker_proxy_config" "generated rehearsal w
 cleanup_generated_envs() {
   local status="$?" labels networks
   trap - EXIT
-  if [[ "$postgres_network_connected" == "true" ]]; then
+  # A failed inner stack owns and removes its temporary PostgreSQL attachment.
+  # After every stack proof succeeds, lifecycle ownership is handed to the
+  # outer restore orchestrator so the same private endpoint remains available
+  # for the application, format and purge E2Es that run after this script.
+  if [[ "$postgres_network_connected" == "true" &&
+        "$postgres_network_handed_off" != "true" ]]; then
     labels="$(network_labels "$rehearsal_backend_network" 2>/dev/null || true)"
     networks="$(docker container inspect --format \
       '{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}' \
@@ -688,3 +694,4 @@ printf '%s\n' "$instagram_health" | jq --exit-status '
 printf '%s\n' "$instagram_health"
 echo
 echo "Rehearsal API and worker use generated allowlists with no host ingress."
+postgres_network_handed_off=true
