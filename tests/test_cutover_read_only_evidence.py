@@ -412,6 +412,9 @@ def test_target_manifest_wrapper_mounts_no_production_environment():
     assert "lecturesift-backend:local" not in wrapper
     assert "docker run" not in wrapper
     assert "redis:7.4-alpine" in wrapper
+    assert "docker image inspect --format '{{.Id}}' \"$EXPECTED_IMAGE\"" in wrapper
+    assert "'{{.Id}}|{{.Image}}|{{.Config.Image}}|" in wrapper
+    assert '"$redis_image_id" == "$expected_image_id"' in wrapper
     assert "lecturesift_backend" in wrapper
     assert "redis_identity" in wrapper and '"$identity_after" == "$identity_before"' in wrapper
     assert "python3 \"$TOOL\"" in wrapper
@@ -522,8 +525,11 @@ def test_postgres_role_login_manifest_is_exact_and_rejects_elevation(tmp_path):
 def test_postgres_role_probe_uses_trusted_tcp_read_only_container():
     script = (ROOT / "deploy" / "postgres_role_login_probe.sh").read_text(encoding="utf-8")
     assert re.search(
-        r'postgres_image" == "postgres:18-bookworm@sha256:[0-9a-f]{64}"', script
+        r'pinned_postgres_image="postgres:18-bookworm@sha256:[0-9a-f]{64}"', script
     )
+    assert "docker image inspect --format '{{.Id}}' \"$pinned_postgres_image\"" in script
+    assert "'{{.Id}}|{{.Image}}|{{.Config.Image}}|" in script
+    assert '"$postgres_image_id" == "$pinned_postgres_image_id"' in script
     assert "lecturesift-backend:local" not in script
     assert "--host 127.0.0.1" in script
     assert "default_transaction_read_only=on" in script

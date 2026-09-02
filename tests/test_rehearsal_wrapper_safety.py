@@ -1,3 +1,6 @@
+import os
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -8,6 +11,39 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def _read(relative: str) -> str:
     return (ROOT / relative).read_text(encoding="utf-8")
+
+
+def _shell_function(script: str, name: str, next_name: str) -> str:
+    start = script.index(f"{name}() {{")
+    end = script.index(f"{next_name}() {{", start)
+    return script[start:end]
+
+
+def _usable_bash_for_snapshot_behavior() -> str:
+    bash = shutil.which("bash")
+    if bash is None:
+        if os.name == "nt":
+            pytest.skip("Bash is unavailable on this Windows host")
+        pytest.fail("Bash is required on Linux deployment/CI hosts")
+    try:
+        probe = subprocess.run(
+            [bash, "-c", "test -f deploy/run_exact_rehearsal.sh"],
+            cwd=ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        if os.name == "nt":
+            pytest.skip(f"Bash is not usable on this Windows host: {exc}")
+        pytest.fail(f"Bash runtime probe failed: {exc}")
+    if probe.returncode != 0:
+        if os.name == "nt":
+            pytest.skip("the Windows Bash shim cannot access the repository")
+        pytest.fail(probe.stderr or "Bash cannot access the repository")
+    return bash
 
 
 def _wrapper_revision(path: Path) -> str:
@@ -140,6 +176,13 @@ def test_exact_wrapper_attests_all_base_state_without_exposing_values() -> None:
     assert "FROM pg_auth_members" in script
     assert "FROM pg_parameter_acl" in script
     assert "FROM pg_tablespace" in script
+    assert script.count("docker exec -i lecturesift-postgres-1 psql") >= 3
+    assert script.count("--set ON_ERROR_STOP=1") >= 3
+    assert script.count('>"$output" || return 1') == 3
+    assert script.count('[[ -s "$output" && ! -L "$output" ]]') == 3
+    assert 'grep -Fq "ROLE|$POSTGRES_USER|" "$output"' in script
+    assert 'grep -Fq "ROLE|$LECTURESIFT_APP_DB_USER|" "$output"' in script
+    assert 'grep -Fq "ROLE|$LECTURESIFT_WORKER_DB_USER|" "$output"' in script
     assert "DATABASE_INVENTORY|" in script
     assert "shobj_description(oid, 'pg_database')" in script
     assert "pg_get_userbyid(datdba)" in script
@@ -147,8 +190,12 @@ def test_exact_wrapper_attests_all_base_state_without_exposing_values() -> None:
     assert 'snapshot_databases "$state/before.databases"' in script
     assert 'snapshot_databases "$state/after.databases"' in script
     assert 'cmp --silent "$state/before.databases" "$state/after.databases"' in script
+    assert 'grep -Fq "DATABASE_INVENTORY|postgres|" "$output"' in script
+    assert 'grep -Fq "DATABASE_INVENTORY|$POSTGRES_DB|" "$output"' in script
     assert "FROM pg_default_acl" in script
     assert "FROM pg_largeobject_metadata" in script
+    assert "grep -q '^SCHEMA_ACL|'" in script
+    assert "grep -q '^RELATION_ACL|'" in script
     assert 'cmp --silent "$state/before.grants" "$state/after.grants"' in script
     assert "redis.sha1hex(salt..key)" in script
     assert "redis.sha1hex(salt..value)" in script
@@ -164,6 +211,78 @@ def test_exact_wrapper_attests_all_base_state_without_exposing_values() -> None:
     assert "schema_contract_payment_provider_sessions_v1.txt" in script
     assert "schema_contract_billing_email_verifications_v1.txt" in script
     assert 'before.manifest.canonical" "$state/after.manifest.canonical' in script
+
+
+@pytest.mark.parametrize(
+    ("function_name", "next_function", "plausible_output"),
+    [
+        (
+            "snapshot_roles",
+            "snapshot_databases",
+            "ROLE|owner|f|t|f|f|t|f|f|-1|||\n"
+            "ROLE|app|f|t|f|f|t|f|f|-1|||\n"
+            "ROLE|worker|f|t|f|f|t|f|f|-1|||\n",
+        ),
+        (
+            "snapshot_databases",
+            "snapshot_grants",
+            "DATABASE_INVENTORY|postgres|owner|UTF8|C|C|c||f|t|-1|0||\n"
+            "DATABASE_INVENTORY|appdb|owner|UTF8|C|C|c||f|t|-1|0||\n",
+        ),
+        (
+            "snapshot_grants",
+            "snapshot_redis",
+            "SCHEMA_ACL|public|owner|digest\n"
+            "RELATION_ACL|public.items|owner|digest\n",
+        ),
+    ],
+)
+def test_trusted_snapshot_rejects_plausible_partial_output_when_docker_fails(
+    tmp_path: Path,
+    function_name: str,
+    next_function: str,
+    plausible_output: str,
+) -> None:
+    bash = _usable_bash_for_snapshot_behavior()
+
+    source = _read("deploy/run_exact_rehearsal.sh")
+    function = _shell_function(source, function_name, next_function)
+    probe = tmp_path / f"{function_name}.sh"
+    output = tmp_path / f"{function_name}.out"
+    probe.write_text(
+        "set -uo pipefail\n"
+        "set +e\n"
+        "printf '%s\\n' SNAPSHOT_HARNESS_STARTED >&2\n"
+        "POSTGRES_USER=owner\n"
+        "POSTGRES_DB=appdb\n"
+        "LECTURESIFT_APP_DB_USER=app\n"
+        "LECTURESIFT_WORKER_DB_USER=worker\n"
+        "docker() { printf '%s' \"$PLAUSIBLE_OUTPUT\"; return 23; }\n"
+        f"{function}\n"
+        f"{function_name} \"$1\"\n",
+        encoding="utf-8",
+    )
+    environment = os.environ.copy()
+    environment["PLAUSIBLE_OUTPUT"] = plausible_output
+    try:
+        completed = subprocess.run(
+            [bash, probe.name, output.name],
+            cwd=tmp_path,
+            env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        if os.name == "nt":
+            pytest.skip(f"Bash harness is not usable on this Windows host: {exc}")
+        raise
+    assert "SNAPSHOT_HARNESS_STARTED" in completed.stderr
+    assert completed.returncode == 1, (
+        f"{function_name} accepted plausible output from a failed docker/psql call"
+    )
 
 
 def test_candidate_admission_binds_staged_and_rehearsed_images() -> None:

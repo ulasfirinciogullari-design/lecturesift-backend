@@ -60,17 +60,30 @@ container="$("${compose[@]}" ps -q postgres)"
   echo "The exact target PostgreSQL container could not be identified." >&2
   exit 1
 }
+pinned_postgres_image="postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af"
+pinned_postgres_image_id="$(
+  docker image inspect --format '{{.Id}}' "$pinned_postgres_image"
+)" || {
+  echo "The pinned PostgreSQL image could not be resolved locally." >&2
+  exit 1
+}
+[[ "$pinned_postgres_image_id" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+  echo "The pinned PostgreSQL image identity is invalid." >&2
+  exit 1
+}
 
 postgres_identity() {
   docker inspect --format \
-    '{{.Id}}|{{.Config.Image}}|{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.service"}}|{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{end}}|{{.RestartCount}}|{{.State.StartedAt}}' \
+    '{{.Id}}|{{.Image}}|{{.Config.Image}}|{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.service"}}|{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{end}}|{{.RestartCount}}|{{.State.StartedAt}}' \
     "$container"
 }
 
 identity_before="$(postgres_identity)" || exit 1
-IFS='|' read -r postgres_id postgres_image postgres_project postgres_service \
+IFS='|' read -r postgres_id postgres_image_id postgres_image_reference \
+  postgres_project postgres_service \
   postgres_running postgres_health postgres_restarts postgres_started <<<"$identity_before"
-[[ "$postgres_id" == "$container" && "$postgres_image" == "postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af" &&
+[[ "$postgres_id" == "$container" &&
+   "$postgres_image_id" == "$pinned_postgres_image_id" &&
    "$postgres_project" == "lecturesift" && "$postgres_service" == "postgres" &&
    "$postgres_running" == "true" && "$postgres_health" == "healthy" &&
    "$postgres_restarts" =~ ^[0-9]+$ && -n "$postgres_started" ]] || {

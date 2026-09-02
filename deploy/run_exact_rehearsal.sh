@@ -597,8 +597,8 @@ snapshot_inventory() {
 
 snapshot_roles() {
   local output="$1"
-  docker exec lecturesift-postgres-1 psql --no-psqlrc --quiet --tuples-only --no-align \
-    --username "$POSTGRES_USER" --dbname postgres <<'SQL' | LC_ALL=C sort >"$output"
+  docker exec -i lecturesift-postgres-1 psql --no-psqlrc --quiet --tuples-only --no-align \
+    --set ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres <<'SQL' | LC_ALL=C sort >"$output" || return 1
 SELECT 'ROLE|' || rolname || '|' || rolsuper || '|' || rolinherit || '|' ||
        rolcreaterole || '|' || rolcreatedb || '|' || rolcanlogin || '|' ||
        rolreplication || '|' || rolbypassrls || '|' || rolconnlimit || '|' ||
@@ -626,12 +626,16 @@ SELECT 'TABLESPACE_ACL|' || spcname || '|' || pg_get_userbyid(spcowner) || '|' |
 FROM pg_tablespace
 ORDER BY 1;
 SQL
+  [[ -s "$output" && ! -L "$output" ]] || return 1
+  grep -Fq "ROLE|$POSTGRES_USER|" "$output" &&
+    grep -Fq "ROLE|$LECTURESIFT_APP_DB_USER|" "$output" &&
+    grep -Fq "ROLE|$LECTURESIFT_WORKER_DB_USER|" "$output"
 }
 
 snapshot_databases() {
   local output="$1"
-  docker exec lecturesift-postgres-1 psql --no-psqlrc --quiet --tuples-only --no-align \
-    --username "$POSTGRES_USER" --dbname postgres <<'SQL' | LC_ALL=C sort >"$output"
+  docker exec -i lecturesift-postgres-1 psql --no-psqlrc --quiet --tuples-only --no-align \
+    --set ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres <<'SQL' | LC_ALL=C sort >"$output" || return 1
 SELECT 'DATABASE_INVENTORY|' || datname || '|' || pg_get_userbyid(datdba) || '|' ||
        pg_encoding_to_char(encoding) || '|' || datcollate || '|' || datctype || '|' ||
        datlocprovider || '|' || coalesce(datcollversion, '') || '|' ||
@@ -642,12 +646,15 @@ SELECT 'DATABASE_INVENTORY|' || datname || '|' || pg_get_userbyid(datdba) || '|'
 FROM pg_database
 ORDER BY datname;
 SQL
+  [[ -s "$output" && ! -L "$output" ]] || return 1
+  grep -Fq "DATABASE_INVENTORY|postgres|" "$output" &&
+    grep -Fq "DATABASE_INVENTORY|$POSTGRES_DB|" "$output"
 }
 
 snapshot_grants() {
   local output="$1"
-  docker exec lecturesift-postgres-1 psql --no-psqlrc --quiet --tuples-only --no-align \
-    --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<'SQL' | LC_ALL=C sort >"$output"
+  docker exec -i lecturesift-postgres-1 psql --no-psqlrc --quiet --tuples-only --no-align \
+    --set ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<'SQL' | LC_ALL=C sort >"$output" || return 1
 SELECT 'SCHEMA_ACL|' || nspname || '|' || pg_get_userbyid(nspowner) || '|' ||
        md5(coalesce(array_to_string(nspacl, E'\n'), ''))
 FROM pg_namespace
@@ -681,6 +688,8 @@ SELECT 'LARGE_OBJECT_ACL|' || oid || '|' || pg_get_userbyid(lomowner) || '|' ||
 FROM pg_largeobject_metadata
 ORDER BY 1;
 SQL
+  [[ -s "$output" && ! -L "$output" ]] || return 1
+  grep -q '^SCHEMA_ACL|' "$output" && grep -q '^RELATION_ACL|' "$output"
 }
 
 redis_lua='local salt=ARGV[1]; local cursor="0"; local keys={}; repeat local page=redis.call("SCAN",cursor); cursor=page[1]; for _,key in ipairs(page[2]) do table.insert(keys,key) end until cursor=="0"; table.sort(keys); local out={}; for _,key in ipairs(keys) do local kind=redis.call("TYPE",key); if type(kind)=="table" then kind=kind["ok"] end; local value=redis.call("DUMP",key); local ttl=redis.call("PTTL",key); table.insert(out,redis.sha1hex(salt..key).."|"..kind.."|"..redis.sha1hex(salt..value).."|"..ttl) end; return out'

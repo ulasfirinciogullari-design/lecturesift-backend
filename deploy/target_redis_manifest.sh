@@ -72,10 +72,18 @@ container="$("${compose[@]}" ps -q redis)"
   echo "The exact target Redis container could not be identified." >&2
   exit 1
 }
+expected_image_id="$(docker image inspect --format '{{.Id}}' "$EXPECTED_IMAGE")" || {
+  echo "The pinned Redis image could not be resolved locally." >&2
+  exit 1
+}
+[[ "$expected_image_id" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+  echo "The pinned Redis image identity is invalid." >&2
+  exit 1
+}
 
 redis_identity() {
   docker inspect --format \
-    '{{.Id}}|{{.Config.Image}}|{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.service"}}|{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{end}}|{{.RestartCount}}|{{.State.StartedAt}}|{{with index .NetworkSettings.Networks "lecturesift_backend"}}{{.IPAddress}}{{end}}' \
+    '{{.Id}}|{{.Image}}|{{.Config.Image}}|{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.service"}}|{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{end}}|{{.RestartCount}}|{{.State.StartedAt}}|{{with index .NetworkSettings.Networks "lecturesift_backend"}}{{.IPAddress}}{{end}}' \
     "$container"
 }
 
@@ -83,9 +91,10 @@ identity_before="$(redis_identity)" || {
   echo "The target Redis container identity could not be read." >&2
   exit 1
 }
-IFS='|' read -r redis_id redis_image redis_project redis_service redis_running \
-  redis_health redis_restarts redis_started redis_ip <<<"$identity_before"
-[[ "$redis_id" == "$container" && "$redis_image" == "$EXPECTED_IMAGE" &&
+IFS='|' read -r redis_id redis_image_id redis_image_reference redis_project \
+  redis_service redis_running redis_health redis_restarts redis_started \
+  redis_ip <<<"$identity_before"
+[[ "$redis_id" == "$container" && "$redis_image_id" == "$expected_image_id" &&
    "$redis_project" == "lecturesift" && "$redis_service" == "redis" &&
    "$redis_running" == "true" && "$redis_health" == "healthy" &&
    "$redis_restarts" =~ ^[0-9]+$ && -n "$redis_started" && -n "$redis_ip" ]] || {
