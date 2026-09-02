@@ -7,10 +7,11 @@ import time
 import traceback
 import uuid
 from pathlib import Path
+from typing import Literal
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel, HttpUrl
 
 from . import config
@@ -47,6 +48,7 @@ from .billing_service import (
 )
 from .config import (
     APP_VERSION,
+    BUILD_REVISION,
     AUDIO_EXTENSIONS,
     DOCUMENT_EXTENSIONS,
     FRONTEND_BASE_URL,
@@ -74,6 +76,7 @@ from .jobs import JOBS
 from .media import download_remote_video, validate_remote_url
 from .mailer import EmailDeliveryError, email_delivery_configured, send_transactional_email
 from .pipeline import process_job
+from .provider_state import AI_PROVIDER_CIRCUIT
 from .payments import (
     PaymentProviderError,
     create_iyzico_checkout,
@@ -87,23 +90,74 @@ from .payments import (
 )
 from .security import RATE_LIMITER, RateLimitExceeded
 from .rollout_service import record_account_activity
+from .resource_limits import enforce_job_workspace
 
 
 app = FastAPI(title=f"LectureSift Backend V{APP_VERSION}")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        FRONTEND_BASE_URL,
-        "https://www.lecturesift.com",
-        "https://clever-horse-22b1a8.netlify.app",
-    ],
-    allow_origin_regex=r"^https://deploy-preview-[0-9]+--clever-horse-22b1a8\.netlify\.app$|^http://(localhost|127\.0\.0\.1)(:[0-9]+)?$",
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
-)
 from .costs import cost_context
 from .documents import effective_ocr_parallelism
+
+
+_MAINTENANCE_CALLBACK_PATHS = frozenset(
+    {
+        "/billing/iyzico/callback",
+        "/billing/iyzico/webhook",
+        "/billing/paytr/callback",
+    }
+)
+_DRAIN_BLOCKED_READ_PATHS = (
+    "/jobs",
+    "/billing/me/export",
+    "/billing/admin/jobs",
+    "/billing/me/rollout",
+    "/billing/rewarded-ads",
+)
+_FREEZE_READ_PATHS = frozenset({"/", "/health", "/billing/health"})
+
+
+def _path_matches(path: str, protected_path: str) -> bool:
+    return path == protected_path or path.startswith(f"{protected_path}/")
+
+
+def _maintenance_blocks(request: Request, mode: str) -> bool:
+    if mode == "off" or request.method == "OPTIONS":
+        return False
+    path = request.url.path
+    method = request.method.upper()
+    if mode == "freeze":
+        return method not in {"GET", "HEAD"} or path not in _FREEZE_READ_PATHS
+    if mode == "drain":
+        if method == "POST" and path in _MAINTENANCE_CALLBACK_PATHS:
+            return False
+        if method not in {"GET", "HEAD"}:
+            return True
+        return any(_path_matches(path, blocked) for blocked in _DRAIN_BLOCKED_READ_PATHS)
+    # config._maintenance_mode already fails closed. Keep this defensive guard
+    # so a runtime monkeypatch or future config loader cannot open the fence.
+    return True
+
+
+@app.middleware("http")
+async def enforce_maintenance_fence(request: Request, call_next):
+    """Stop state changes while preserving authenticated payment callbacks."""
+    mode = config.current_maintenance_mode()
+    if _maintenance_blocks(request, mode):
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": {
+                    "code": "LS-MAINT-01",
+                    "message": "LectureSift kısa süreli bakımda. Lütfen biraz sonra tekrar dene.",
+                    "mode": mode,
+                }
+            },
+            headers={
+                "Retry-After": "60",
+                "Cache-Control": "no-store",
+                "Pragma": "no-cache",
+            },
+        )
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -119,6 +173,22 @@ async def add_security_headers(request: Request, call_next):
         response.headers["Cache-Control"] = "no-store"
         response.headers["Pragma"] = "no-cache"
     return response
+
+
+# CORS is intentionally the outer middleware. Maintenance responses therefore
+# remain readable by the first-party browser client during a controlled drain.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        FRONTEND_BASE_URL,
+        "https://www.lecturesift.com",
+        "https://clever-horse-22b1a8.netlify.app",
+    ],
+    allow_origin_regex=r"^https://deploy-preview-[0-9]+--clever-horse-22b1a8\.netlify\.app$|^http://(localhost|127\.0\.0\.1)(:[0-9]+)?$",
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
+)
 
 
 def _instagram_client() -> InstagramClient:
@@ -175,6 +245,10 @@ def _owned_job(job_id: str, user: dict) -> dict:
 
 def _public_job(data: dict) -> dict:
     result = data.copy()
+    if not _job_is_publicly_complete(result) and result.get("status") == "done":
+        # A Celery pipeline writes local output before the worker durably
+        # publishes it. Never advertise that brief internal state as terminal.
+        result.update(status="working", percent=99, stage="worker_publish")
     for key in (
         "job_dir",
         "result_path",
@@ -193,6 +267,12 @@ def _public_job(data: dict) -> dict:
         if key != "billing_user_id" and not str(key).startswith("_")
     }
     return result
+
+
+def _job_is_publicly_complete(data: dict) -> bool:
+    if data.get("status") != "done":
+        return False
+    return data.get("queue_mode") != "celery" or data.get("worker_state") == "done"
 
 
 def _job_download_allowed(data: dict, user: dict) -> bool:
@@ -321,6 +401,7 @@ class BillingCheckoutRequest(BaseModel):
     plan_code: str
     interval: str = "monthly"
     currency: str = "TRY"
+    payment_method: Literal["card", "bank_transfer"]
     first_name: str = ""
     last_name: str = ""
     billing_address: str
@@ -422,7 +503,10 @@ def _options(
     return {
         "source_language": source,
         "output_language": output,
-        "summary_style": summary_style or "standard",
+        # LectureSift now ships one consistent, comprehensive study-pack
+        # profile.  Keep accepting the legacy form field so older clients do
+        # not break, but never let a stale UI downgrade the generated output.
+        "summary_style": "detailed",
         "quiz_count": max(0, min(int(quiz_count), 30)),
         "flashcard_count": max(0, min(int(flashcard_count), 60)),
         "include_summary": bool(include_summary),
@@ -445,6 +529,44 @@ def _job_path(job_id: str) -> Path:
 
 def _raise_public(error: LectureSiftError) -> None:
     raise HTTPException(status_code=error.status_code, detail=error.public())
+
+
+def _job_requires_ai(options: dict, *, document_mode: bool = False) -> bool:
+    if document_mode:
+        return bool(
+            options.get("include_summary", True)
+            or int(options.get("quiz_count") or 0) > 0
+            or int(options.get("flashcard_count") or 0) > 0
+        )
+    if options.get("job_type") in {"audio_export", "download_video"}:
+        return False
+    # Media study jobs require provider transcription even when the user
+    # chooses only a transcript and disables the generated study pack.
+    return True
+
+
+def _validate_document_job_type(options: dict, *, document_mode: bool) -> None:
+    if document_mode and options.get("job_type") != "study_pack":
+        raise LectureSiftError(
+            "LS-OUTPUT-02",
+            "Belge kaynakları yalnızca ders çalışma paketi olarak işlenebilir; "
+            "MP3'e çevirme ve video indirme yalnızca ses/video kaynaklarında kullanılabilir.",
+            status_code=400,
+        )
+
+
+def _require_ai_provider(options: dict, *, document_mode: bool = False) -> None:
+    if not _job_requires_ai(options, document_mode=document_mode):
+        return
+    try:
+        AI_PROVIDER_CIRCUIT.require_available()
+    except LectureSiftError as exc:
+        state = AI_PROVIDER_CIRCUIT.status() or {}
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.public(),
+            headers={"Retry-After": str(max(1, int(state.get("retry_after_seconds") or 60)))},
+        ) from exc
 
 
 def _client_ip(request: Request) -> str:
@@ -520,6 +642,13 @@ async def _save_upload(
                         status_code=413,
                     )
                 )
+            enforce_job_workspace(
+                destination.parent,
+                additional_bytes=len(chunk),
+                known_usage_bytes=total - len(chunk),
+                reserve_full_budget=True,
+                work_root=WORK_DIR,
+            )
             output.write(chunk)
     return total
 
@@ -572,6 +701,8 @@ def health() -> dict:
     return {
         "ok": True,
         "version": APP_VERSION,
+        "revision": BUILD_REVISION,
+        "maintenance_mode": config.current_maintenance_mode(),
         "openai_key": bool(OPENAI_API_KEY),
         "slide_engine": "v4-layout-persistence",
         "study_pack": True,
@@ -627,7 +758,10 @@ def billing_operator() -> dict:
 
 @app.get("/billing/manual-transfer")
 def billing_manual_transfer_status() -> dict:
-    return manual_transfer_details()
+    # Public pricing pages only need to know whether this option is available.
+    # Personal bank details are returned exclusively with an authenticated,
+    # newly-created manual-transfer order.
+    return {"available": manual_transfer_details()["available"]}
 
 
 @app.get("/billing/health")
@@ -644,6 +778,7 @@ def billing_health() -> dict:
     )
     return {
         "ok": True,
+        "maintenance_mode": config.current_maintenance_mode(),
         "database": database,
         "email_delivery_configured": email_delivery_configured(),
         "payments": {
@@ -904,7 +1039,13 @@ def billing_create_checkout(
 ) -> dict:
     _rate_limit(request, "checkout", user["id"], limit=10, window_seconds=10 * 60)
     try:
-        provider = preferred_card_provider()
+        payment_method = (payload.payment_method or "").strip().lower()
+        if payment_method not in {"card", "bank_transfer"}:
+            raise BillingError("Geçersiz ödeme yöntemi.")
+        # Protected transfer is an iyzico Checkout Form capability, not a
+        # fallback card-provider choice. Route the intent explicitly and let
+        # the adapter fail closed unless merchant activation is configured.
+        provider = "iyzico" if payment_method == "bank_transfer" else preferred_card_provider()
         common = {
             "plan_code": payload.plan_code,
             "interval": payload.interval,
@@ -924,6 +1065,7 @@ def billing_create_checkout(
                 user,
                 billing_city=payload.billing_city,
                 billing_zip_code=payload.billing_zip_code,
+                payment_method=payment_method,
                 **common,
             )
         else:
@@ -1156,7 +1298,7 @@ def list_jobs(limit: int = 50, user: dict = Depends(_billing_user)) -> dict:
 @app.get("/jobs/{job_id}/result")
 def get_result(job_id: str, user: dict = Depends(_billing_user)) -> dict:
     data = _owned_job(job_id, user)
-    if data.get("status") != "done":
+    if not _job_is_publicly_complete(data):
         raise HTTPException(409, detail={"code": "LS-JOB-02", "message": "Ders analizi henüz tamamlanmadı."})
     path = JOBS.ensure_local_file(
         data,
@@ -1178,9 +1320,10 @@ def ask_lesson_question(
     user: dict = Depends(_billing_user),
 ) -> dict:
     data = _owned_job(job_id, user)
-    if data.get("status") != "done":
+    if not _job_is_publicly_complete(data):
         raise HTTPException(409, detail={"code": "LS-JOB-02", "message": "Ders analizi henüz tamamlanmadı."})
     _rate_limit(request, "lesson-question", user["id"], limit=30, window_seconds=60 * 60)
+    _require_ai_provider({"job_type": "study_pack"})
     result_path = JOBS.ensure_local_file(
         data,
         str(data.get("remote_result_key") or ""),
@@ -1193,14 +1336,18 @@ def ask_lesson_question(
         language = str(result.get("options", {}).get("output_language") or "tr")
         with cost_context(job_id, user["id"]):
             answer = answer_lesson_question(result, payload.question, language)
-    except LectureSiftError as exc:
-        raise HTTPException(exc.status_code, detail=exc.public()) from exc
+    except Exception as exc:
+        normalized = normalize_error(exc)
+        AI_PROVIDER_CIRCUIT.trip_error(normalized)
+        raise HTTPException(normalized.status_code, detail=normalized.public()) from exc
     return {"ok": True, **answer}
 
 
 @app.get("/jobs/{job_id}/slide/{filename}")
 def get_slide(job_id: str, filename: str, user: dict = Depends(_billing_user)) -> FileResponse:
     data = _owned_job(job_id, user)
+    if not _job_is_publicly_complete(data):
+        raise HTTPException(409, detail={"code": "LS-JOB-02", "message": "Ders analizi henüz tamamlanmadı."})
     if Path(filename).name != filename:
         raise HTTPException(400, detail={"code": "LS-FILE-01", "message": "Geçersiz dosya adı."})
     path = JOBS.ensure_local_file(data, local_relative=f"slides/{filename}")
@@ -1212,7 +1359,7 @@ def get_slide(job_id: str, filename: str, user: dict = Depends(_billing_user)) -
 @app.get("/jobs/{job_id}/artifact/{filename}")
 def get_artifact(job_id: str, filename: str, user: dict = Depends(_billing_user)) -> FileResponse:
     data = _owned_job(job_id, user)
-    if data.get("status") != "done":
+    if not _job_is_publicly_complete(data):
         raise HTTPException(409, detail={"code": "LS-JOB-02", "message": "Ders analizi henüz tamamlanmadı."})
     _require_job_download(data, user)
     if Path(filename).name != filename:
@@ -1226,7 +1373,7 @@ def get_artifact(job_id: str, filename: str, user: dict = Depends(_billing_user)
 @app.get("/jobs/{job_id}/download")
 def download(job_id: str, user: dict = Depends(_billing_user)) -> FileResponse:
     data = _owned_job(job_id, user)
-    if data.get("status") != "done":
+    if not _job_is_publicly_complete(data):
         raise HTTPException(409, detail={"code": "LS-JOB-02", "message": "Ders analizi henüz tamamlanmadı."})
     _require_job_download(data, user)
     remote_download_key = str(data.get("remote_download_key") or "")
@@ -1349,6 +1496,16 @@ async def create_job(
             # the audio transcription path.
             options["transcript_timestamps"] = False
             options["speaker_detection"] = False
+
+    try:
+        _validate_document_job_type(options, document_mode=document_mode)
+    except LectureSiftError as exc:
+        _raise_public(exc)
+
+    # Refuse a known provider billing/authentication outage before reading the
+    # request body into local or remote storage. Local-only MP3/video export and
+    # transcript-only OCR remain available during the outage.
+    _require_ai_provider(options, document_mode=document_mode)
 
     JOBS.cleanup_expired()
     job_id = str(uuid.uuid4())
@@ -1487,6 +1644,7 @@ def create_url_job(
         )
     except BillingError as exc:
         raise HTTPException(402, detail={"code": "LS-BILL-10", "message": str(exc)}) from exc
+    _require_ai_provider(options)
     try:
         url = validate_remote_url(video_url)
     except LectureSiftError as exc:

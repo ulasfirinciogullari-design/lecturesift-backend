@@ -8,6 +8,7 @@ from typing import Any, Iterator
 
 from redis import Redis
 
+from . import config
 from .config import JOB_TTL_SECONDS, REDIS_URL, WORK_DIR
 from .storage import STORAGE
 
@@ -28,9 +29,9 @@ class JobStore:
     def _distributed_write_lock(self) -> Iterator[None]:
         """Prevent the web process and worker from overwriting each other's jobs.
 
-        The local file fallback remains available if Redis is temporarily
-        unreachable, while configured Redis deployments serialize full-state
-        read/modify/write operations with a short renewable lock.
+        A configured Redis store is authoritative.  Never continue a full-state
+        read/modify/write cycle without its lock: doing so can overwrite another
+        API/worker update and would also bypass the migration fence.
         """
         lock = None
         acquired = False
@@ -46,6 +47,8 @@ class JobStore:
             except Exception:
                 lock = None
                 acquired = False
+            if not acquired:
+                raise RuntimeError("Durable job-store write lock is unavailable.")
         try:
             yield
         finally:
@@ -134,7 +137,9 @@ class JobStore:
             jobs = payload.get("jobs", {}) if isinstance(payload, dict) else {}
             if isinstance(jobs, dict):
                 self._jobs = {str(job_id): value for job_id, value in jobs.items() if isinstance(value, dict)}
-        except Exception:
+        except Exception as exc:
+            if config.REQUIRE_DURABLE_PROCESSING:
+                raise RuntimeError("Durable job-store read is unavailable.") from exc
             return
 
     def _flush_locked(self) -> None:
@@ -149,9 +154,11 @@ class JobStore:
         if self._redis is not None:
             try:
                 self._redis.set(self.REDIS_KEY, payload)
-            except Exception:
-                # Local fallback remains usable when Redis is temporarily down.
-                pass
+            except Exception as exc:
+                if config.REQUIRE_DURABLE_PROCESSING:
+                    raise RuntimeError("Durable job-store write is unavailable.") from exc
+                # Development may deliberately run with a best-effort Redis
+                # cache and retain the local file as its fallback.
 
     def _materialize_completed(self, data: dict[str, Any]) -> dict[str, Any]:
         if data.get("status") != "done" or not data.get("remote_prefix") or not STORAGE.remote:

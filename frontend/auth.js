@@ -1,4 +1,4 @@
-const API = "https://lecturesift-backend.onrender.com";
+const API = "https://api.lecturesift.com";
 const TOKEN_KEY = "lecturesift-billing-token";
 const LOCALE_DATA = window.LECTURESIFT_LOCALE_DATA || {countries: [], currencies: [], currencyForCountry: {}};
 const I18N = window.LectureSiftI18n || {language:"tr", locale:"tr-TR", languages:{tr:"Türkçe"}, t:(key, fallback)=>fallback || key};
@@ -253,20 +253,62 @@ async function initAccount() {
     const notice = $(id); notice.textContent = message; notice.classList.toggle("error", error); notice.hidden = false;
   };
 
+  const paymentMethodLabel = order => {
+    if (order.payment_method === "bank_transfer") {
+      return order.provider === "iyzico"
+        ? t("payment.method.iyzicoProtected", "iyzico Korumalı Havale/EFT")
+        : t("payment.method.manualIban", "Kişisel IBAN'a manuel havale/EFT");
+    }
+    if (order.payment_method === "unknown") {
+      return t("payment.method.legacy", "iyzico ödeme yöntemi (eski kayıt)");
+    }
+    if (order.provider === "iyzico") return t("payment.method.iyzicoCard", "iyzico kart");
+    if (order.provider === "paytr") return t("payment.method.paytrCard", "PayTR kart");
+    return t("payment.method.legacy", "Ödeme yöntemi");
+  };
+
+  const paymentMoney = order => {
+    const amountMinor = Number(order.amount_minor);
+    if (!Number.isFinite(amountMinor)) return "—";
+    try {
+      return new Intl.NumberFormat(I18N.locale, {style:"currency", currency:String(order.currency || "TRY").toUpperCase()}).format(amountMinor / 100);
+    } catch (_) {
+      return `${(amountMinor / 100).toLocaleString(I18N.locale)} ${String(order.currency || "TRY").toUpperCase()}`;
+    }
+  };
+
+  const paymentDateTime = value => {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat(I18N.locale, {dateStyle:"medium", timeStyle:"short"}).format(date);
+  };
+
   const renderOrders = account => {
     const orders = [...(account.manual_orders || []), ...(account.payment_orders || [])]
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     $("ordersList").innerHTML = orders.length ? orders.map(order => {
+      const method = paymentMethodLabel(order);
       const failure = ["failed", "token_failed"].includes(order.status) && (order.failure_message || order.failure_code)
-        ? `<br><small>${adminSafe(order.failure_message || t("payment.declined", "Ödeme onaylanmadı."))}${order.failure_code ? ` · ${adminSafe(order.failure_code)}` : ""}</small>`
+        ? `<p class="payment-order-failure">${adminSafe(order.failure_message || t("payment.declined", "Ödeme onaylanmadı."))}${order.failure_code ? ` · ${adminSafe(order.failure_code)}` : ""}</p>`
         : "";
-      return `<div class="order-row"><span><strong>${adminSafe(order.order_number || order.reference)}</strong><br><small>${adminSafe(planName(order.plan_code))} · ${adminSafe(new Intl.DateTimeFormat(I18N.locale, {dateStyle:"medium"}).format(new Date(order.created_at)))}</small>${failure}</span><strong>${adminSafe(t(`order.${order.status}`, order.status))}</strong></div>`;
+      const pendingMethod = order.payment_method_confirmed === false
+        ? `<span class="payment-method-pending">${adminSafe(t("payment.method.pending", "Yöntem doğrulaması bekliyor"))}</span>`
+        : "";
+      return `<article class="order-row payment-order-row">
+        <div class="payment-order-heading"><strong>${adminSafe(order.order_number || order.reference || "—")}</strong><small>${adminSafe(planName(order.plan_code))}</small></div>
+        <span class="payment-order-status">${adminSafe(t(`order.${order.status}`, order.status || "—"))}</span>
+        <dl class="payment-order-meta">
+          <div><dt>${adminSafe(t("payment.method", "Ödeme yöntemi"))}</dt><dd>${adminSafe(method)}${pendingMethod}</dd></div>
+          <div><dt>${adminSafe(t("payment.amount", "Tutar"))}</dt><dd>${adminSafe(paymentMoney(order))}</dd></div>
+          <div><dt>${adminSafe(t("payment.createdAt", "Sipariş zamanı"))}</dt><dd>${adminSafe(paymentDateTime(order.created_at))}</dd></div>
+          <div><dt>${adminSafe(t("payment.status", "Durum"))}</dt><dd>${adminSafe(t(`order.${order.status}`, order.status || "—"))}</dd></div>
+        </dl>${failure}
+      </article>`;
     }).join("") : `<p class="empty-copy">${t("payment.noOrders", "Henüz ödeme siparişin yok.")}</p>`;
     const paidOrders = orders.filter(order => order.status === "paid");
     $("refundOrderSelect").replaceChildren(
       ...(
         paidOrders.length
-          ? paidOrders.map(order => new Option(`${order.order_number || order.reference} · ${planName(order.plan_code)}`, order.reference))
+          ? paidOrders.map(order => new Option(`${order.order_number || order.reference} · ${planName(order.plan_code)} · ${paymentMethodLabel(order)} · ${paymentMoney(order)}`, order.reference))
           : [new Option(t("refund.noEligibleOrders", "İadeye uygun ödenmiş sipariş yok"), "")]
       ),
     );

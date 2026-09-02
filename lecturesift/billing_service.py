@@ -29,9 +29,10 @@ from sqlalchemy import (
     create_engine,
     func,
     select,
+    text,
     update,
 )
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from . import config
 from .billing import PLAN_BY_CODE, REGIONAL_PRICES
@@ -47,6 +48,65 @@ class BillingAuthenticationError(BillingError):
 
 class BillingConfigurationError(BillingError):
     pass
+
+
+IYZICO_PUBLIC_PROVIDER = "iyzico"
+IYZICO_LEGACY_PROVIDER = "iyzico"
+IYZICO_CARD_PROVIDER = "iyzico_card_confirmed"
+IYZICO_BANK_TRANSFER_PROVIDER = "iyzico_bank_transfer"
+IYZICO_CARD_INTENT_PROVIDER = "iyzico_card_intent"
+IYZICO_BANK_TRANSFER_INTENT_PROVIDER = "iyzico_bank_intent"
+IYZICO_CONFIRMED_PAYMENT_PROVIDERS = frozenset(
+    {IYZICO_CARD_PROVIDER, IYZICO_BANK_TRANSFER_PROVIDER}
+)
+IYZICO_CARD_PROVIDERS = frozenset(
+    {IYZICO_LEGACY_PROVIDER, IYZICO_CARD_PROVIDER, IYZICO_CARD_INTENT_PROVIDER}
+)
+IYZICO_BANK_TRANSFER_PROVIDERS = frozenset(
+    {IYZICO_BANK_TRANSFER_PROVIDER, IYZICO_BANK_TRANSFER_INTENT_PROVIDER}
+)
+IYZICO_PAYMENT_PROVIDERS = IYZICO_CARD_PROVIDERS | IYZICO_BANK_TRANSFER_PROVIDERS
+
+
+def iyzico_provider_for_payment_method(
+    payment_method: str,
+    *,
+    confirmed: bool = True,
+) -> str:
+    """Return the durable provider discriminator for an iyzico checkout."""
+    selected = (payment_method or "").strip().lower()
+    if selected == "card":
+        return IYZICO_CARD_PROVIDER if confirmed else IYZICO_CARD_INTENT_PROVIDER
+    if selected == "bank_transfer":
+        return (
+            IYZICO_BANK_TRANSFER_PROVIDER
+            if confirmed
+            else IYZICO_BANK_TRANSFER_INTENT_PROVIDER
+        )
+    raise BillingError("Geçersiz iyzico ödeme yöntemi.")
+
+
+def iyzico_payment_method_for_provider(provider: str) -> str:
+    """Map an internal iyzico discriminator to its public payment method."""
+    selected = (provider or "").strip().lower()
+    if selected == IYZICO_LEGACY_PROVIDER:
+        return "unknown"
+    if selected in IYZICO_CARD_PROVIDERS:
+        return "card"
+    if selected in IYZICO_BANK_TRANSFER_PROVIDERS:
+        return "bank_transfer"
+    raise BillingError("Geçersiz iyzico ödeme sağlayıcısı.")
+
+
+def iyzico_provider_is_confirmed(provider: str, status: str) -> bool:
+    """Return whether provider evidence, rather than UI intent, set the method.
+
+    Historical rows used the generic ``iyzico`` provider for both card and
+    protected transfer, so they remain unconfirmed at every status until the
+    first signed provider notification classifies them.
+    """
+    selected = (provider or "").strip().lower()
+    return selected in IYZICO_CONFIRMED_PAYMENT_PROVIDERS
 
 
 def _database_url() -> str:
@@ -110,6 +170,29 @@ AUTH_TOKENS = Table(
     Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
+# Compatibility-only schema retained from the first email-verification
+# implementation.  Current verification links and codes use AUTH_TOKENS plus
+# USER_PROFILES.email_verified_at, so application code must not write new rows
+# here.  Keeping the original table definition in metadata has two important
+# properties: existing production rows survive backup/restore unchanged, and a
+# fresh database satisfies the same strict cutover manifest without a special
+# out-of-band DDL step.  SQLAlchemy's check-first create does not alter an
+# existing table.
+LEGACY_EMAIL_VERIFICATIONS = Table(
+    "billing_email_verifications",
+    METADATA,
+    Column("user_id", String(36), ForeignKey("billing_users.id"), primary_key=True),
+    Column("code_hash", String(64), nullable=False),
+    Column("expires_at", DateTime(timezone=True), nullable=False),
+    Column("last_sent_at", DateTime(timezone=True), nullable=True),
+    Column("window_started_at", DateTime(timezone=True), nullable=False),
+    Column("send_count", Integer, nullable=False, default=0),
+    Column("attempt_count", Integer, nullable=False, default=0),
+    Column("verified_at", DateTime(timezone=True), nullable=True),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+)
+
 SUBSCRIPTIONS = Table(
     "billing_subscriptions",
     METADATA,
@@ -156,6 +239,22 @@ PAYMENT_ORDERS = Table(
     Column("updated_at", DateTime(timezone=True), nullable=False),
 )
 
+PAYMENT_PROVIDER_SESSIONS = Table(
+    "billing_payment_provider_sessions",
+    METADATA,
+    Column(
+        "order_reference",
+        String(64),
+        ForeignKey("billing_payment_orders.reference"),
+        primary_key=True,
+    ),
+    Column("provider", String(24), nullable=False),
+    # Provider checkout tokens are bearer credentials. Store only a keyed
+    # digest so a database read cannot be used to replay a hosted checkout.
+    Column("token_digest", String(64), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+)
+
 PAYMENT_CONSENTS = Table(
     "billing_payment_consents",
     METADATA,
@@ -192,7 +291,8 @@ def utcnow() -> datetime:
 
 def init_billing_database() -> None:
     global _INITIALIZED
-    if os.getenv("RENDER") and _database_url().startswith("sqlite:"):
+    require_postgres = bool(os.getenv("RENDER")) or config.REQUIRE_POSTGRES
+    if require_postgres and _database_url().startswith("sqlite:"):
         raise BillingConfigurationError("Kalıcı abonelik veritabanı henüz bağlanmamış.")
     if _INITIALIZED:
         return
@@ -205,6 +305,14 @@ def init_billing_database() -> None:
 def billing_database_health() -> dict:
     init_billing_database()
     backend = ENGINE.url.get_backend_name()
+    # Do not report a cached initialization result as live connectivity.  The
+    # container health check calls this endpoint after startup as well, so a
+    # broken PostgreSQL connection must make the API unhealthy and restartable.
+    try:
+        with ENGINE.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except SQLAlchemyError as exc:
+        raise BillingConfigurationError("Kalıcı abonelik veritabanına ulaşılamıyor.") from exc
     return {"connected": True, "persistent": backend == "postgresql", "backend": backend}
 
 
@@ -474,6 +582,29 @@ def _token_secret() -> bytes:
     return hashlib.sha256((config.DATABASE_URL + "|lecturesift-session-v1").encode("utf-8")).digest()
 
 
+def _accepted_token_secrets() -> tuple[bytes, ...]:
+    """Return the active signing key plus an optional migration-only legacy key.
+
+    A database URL used to be the implicit session signing material when no
+    explicit secret was configured. During a database-host migration that URL
+    necessarily changes, so a precomputed SHA-256 digest can be supplied for a
+    short compatibility window. New sessions are always signed with the active
+    ``BILLING_SESSION_SECRET`` and the legacy value can be removed after the
+    maximum 14-day session lifetime.
+    """
+
+    accepted = [_token_secret()]
+    legacy_hex = config.BILLING_LEGACY_SESSION_SECRET_HEX
+    if legacy_hex:
+        try:
+            legacy = bytes.fromhex(legacy_hex)
+        except ValueError:
+            legacy = b""
+        if len(legacy) == hashlib.sha256().digest_size and legacy not in accepted:
+            accepted.append(legacy)
+    return tuple(accepted)
+
+
 def _b64encode(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
@@ -501,8 +632,11 @@ def issue_session(user_id: str, email: str, session_version: int = 1) -> str:
 def authenticate_session(token: str) -> dict:
     try:
         body, signature = token.split(".", 1)
-        expected = _b64encode(hmac.new(_token_secret(), body.encode("ascii"), hashlib.sha256).digest())
-        if not hmac.compare_digest(signature, expected):
+        signatures = (
+            _b64encode(hmac.new(secret, body.encode("ascii"), hashlib.sha256).digest())
+            for secret in _accepted_token_secrets()
+        )
+        if not any(hmac.compare_digest(signature, expected) for expected in signatures):
             raise ValueError("signature")
         payload = json.loads(_b64decode(body))
         if int(payload["exp"]) <= int(utcnow().timestamp()):
@@ -713,6 +847,9 @@ def _public_manual_order(order) -> dict:
     return {
         "reference": order.reference,
         "order_number": order.reference,
+        "provider": "bank_transfer",
+        "payment_method": "bank_transfer",
+        "payment_method_confirmed": True,
         "plan_code": order.plan_code,
         "interval": order.interval,
         "amount_minor": order.amount_minor,
@@ -733,10 +870,23 @@ def _public_manual_order(order) -> dict:
 
 
 def _public_payment_order(order) -> dict:
+    stored_provider = str(order.provider)
+    if stored_provider in IYZICO_PAYMENT_PROVIDERS:
+        provider = IYZICO_PUBLIC_PROVIDER
+        payment_method = iyzico_payment_method_for_provider(stored_provider)
+    else:
+        provider = stored_provider
+        payment_method = "card"
     return {
         "reference": order.reference,
         "order_number": order.reference,
-        "provider": order.provider,
+        "provider": provider,
+        "payment_method": payment_method,
+        "payment_method_confirmed": (
+            iyzico_provider_is_confirmed(stored_provider, str(order.status))
+            if stored_provider in IYZICO_PAYMENT_PROVIDERS
+            else True
+        ),
         "plan_code": order.plan_code,
         "interval": order.interval,
         "amount_minor": order.amount_minor,
@@ -1242,6 +1392,144 @@ def payment_order(reference: str) -> dict:
     return _public_payment_order(order)
 
 
+def payment_order_provider_state(reference: str) -> str:
+    """Return the internal provider state used for token binding and migration."""
+    init_billing_database()
+    with ENGINE.connect() as connection:
+        provider = connection.execute(
+            select(PAYMENT_ORDERS.c.provider).where(
+                PAYMENT_ORDERS.c.reference == reference
+            )
+        ).scalar_one_or_none()
+    if not provider:
+        raise BillingError("Ödeme siparişi bulunamadı.")
+    return str(provider)
+
+
+def bind_payment_order_token_digest(
+    reference: str,
+    provider: str,
+    token_digest: str,
+) -> None:
+    """Bind one provider checkout token digest to an existing order.
+
+    The raw provider token must never be passed to this persistence layer.
+    A binding is immutable: retrying with the same digest is idempotent while
+    attempting to replace it fails closed.
+    """
+    selected_provider = provider.strip().lower()
+    selected_digest = token_digest.strip().lower()
+    if (
+        not selected_provider
+        or len(selected_provider) > 24
+        or len(selected_digest) != 64
+        or any(char not in "0123456789abcdef" for char in selected_digest)
+    ):
+        raise BillingError("Geçersiz ödeme oturumu bağlaması.")
+    init_billing_database()
+    with ENGINE.begin() as connection:
+        order = connection.execute(
+            select(PAYMENT_ORDERS)
+            .where(PAYMENT_ORDERS.c.reference == reference)
+            .with_for_update()
+        ).first()
+        if not order or order.provider != selected_provider or order.status != "created":
+            raise BillingError("Ödeme oturumu siparişle eşleşmiyor.")
+        existing = connection.execute(
+            select(PAYMENT_PROVIDER_SESSIONS).where(
+                PAYMENT_PROVIDER_SESSIONS.c.order_reference == reference
+            )
+        ).first()
+        if existing:
+            if (
+                existing.provider != selected_provider
+                or not secrets.compare_digest(existing.token_digest, selected_digest)
+            ):
+                raise BillingError("Ödeme oturumu siparişle eşleşmiyor.")
+            return
+        connection.execute(
+            PAYMENT_PROVIDER_SESSIONS.insert().values(
+                order_reference=reference,
+                provider=selected_provider,
+                token_digest=selected_digest,
+                created_at=utcnow(),
+            )
+        )
+
+
+def payment_order_token_digest(reference: str, provider: str) -> str:
+    """Return the stored keyed token digest for internal callback validation."""
+    selected_provider = provider.strip().lower()
+    init_billing_database()
+    with ENGINE.connect() as connection:
+        session = connection.execute(
+            select(PAYMENT_PROVIDER_SESSIONS).where(
+                PAYMENT_PROVIDER_SESSIONS.c.order_reference == reference,
+                PAYMENT_PROVIDER_SESSIONS.c.provider == selected_provider,
+            )
+        ).first()
+    if not session:
+        raise BillingError("Ödeme oturumu siparişle eşleşmiyor.")
+    return str(session.token_digest)
+
+
+def adopt_payment_order_token_digest_from_verified_notification(
+    reference: str,
+    provider: str,
+    token_digest: str,
+) -> None:
+    """Adopt a legacy checkout token after authenticating the provider event.
+
+    Orders initialized before token bindings were deployed have no session
+    row. The caller must first verify a provider signature that covers both
+    the order reference and raw token. Existing bindings remain immutable.
+    Terminal paid/failed orders are accepted only to make late provider
+    retries idempotent; ``token_failed`` and cancelled orders stay closed.
+    """
+    selected_provider = provider.strip().lower()
+    selected_digest = token_digest.strip().lower()
+    if (
+        not selected_provider
+        or len(selected_provider) > 24
+        or len(selected_digest) != 64
+        or any(char not in "0123456789abcdef" for char in selected_digest)
+    ):
+        raise BillingError("Geçersiz ödeme oturumu bağlaması.")
+    init_billing_database()
+    with ENGINE.begin() as connection:
+        order = connection.execute(
+            select(PAYMENT_ORDERS)
+            .where(PAYMENT_ORDERS.c.reference == reference)
+            .with_for_update()
+        ).first()
+        if (
+            not order
+            or order.provider != selected_provider
+            or order.status not in {"created", "pending", "paid", "failed"}
+        ):
+            raise BillingError("Ödeme oturumu siparişle eşleşmiyor.")
+        existing = connection.execute(
+            select(PAYMENT_PROVIDER_SESSIONS).where(
+                PAYMENT_PROVIDER_SESSIONS.c.order_reference == reference
+            )
+        ).first()
+        if existing:
+            if (
+                existing.provider != selected_provider
+                or not secrets.compare_digest(existing.token_digest, selected_digest)
+            ):
+                raise BillingError("Ödeme oturumu siparişle eşleşmiyor.")
+            return
+        connection.execute(
+            PAYMENT_PROVIDER_SESSIONS.insert().values(
+                order_reference=reference,
+                provider=selected_provider,
+                token_digest=selected_digest,
+                created_at=utcnow(),
+            )
+        )
+
+
 def mark_payment_order_token_failed(reference: str) -> None:
     init_billing_database()
     with ENGINE.begin() as connection:
@@ -1271,10 +1559,13 @@ def mark_payment_order_pending(reference: str) -> dict:
         ).first()
         if not order:
             raise BillingError("Ödeme siparişi bulunamadı.")
-        if order.status in {"created", "pending"}:
+        if order.status == "created":
             connection.execute(
                 update(PAYMENT_ORDERS)
-                .where(PAYMENT_ORDERS.c.reference == reference)
+                .where(
+                    PAYMENT_ORDERS.c.reference == reference,
+                    PAYMENT_ORDERS.c.status == "created",
+                )
                 .values(
                     status="pending",
                     provider_amount_minor=None,
@@ -1282,6 +1573,61 @@ def mark_payment_order_pending(reference: str) -> dict:
                     failure_message=None,
                     updated_at=utcnow(),
                 )
+            )
+    return payment_order(reference)
+
+
+def mark_iyzico_payment_method(reference: str, payment_method: str) -> dict:
+    """Persist a provider-authenticated iyzico payment-method classification.
+
+    The existing provider columns are used as a backwards-compatible subtype
+    discriminator, avoiding an online schema change during in-flight payments.
+    Both the order and its immutable token binding move together under row
+    locks so callbacks can never observe a mixed provider/session pair.
+    """
+    selected_provider = iyzico_provider_for_payment_method(payment_method)
+    init_billing_database()
+    with ENGINE.begin() as connection:
+        order = connection.execute(
+            select(PAYMENT_ORDERS)
+            .where(PAYMENT_ORDERS.c.reference == reference)
+            .with_for_update()
+        ).first()
+        if (
+            not order
+            or order.provider not in IYZICO_PAYMENT_PROVIDERS
+            or order.status not in {"created", "pending", "paid", "failed"}
+        ):
+            raise BillingError("Ödeme yöntemi siparişle eşleşmiyor.")
+        session = connection.execute(
+            select(PAYMENT_PROVIDER_SESSIONS)
+            .where(PAYMENT_PROVIDER_SESSIONS.c.order_reference == reference)
+            .with_for_update()
+        ).first()
+        if not session or session.provider != order.provider:
+            raise BillingError("Ödeme oturumu siparişle eşleşmiyor.")
+        if (
+            order.provider != selected_provider
+            and (
+                order.provider in IYZICO_CONFIRMED_PAYMENT_PROVIDERS
+                or (
+                    order.status == "paid"
+                    and order.provider != IYZICO_LEGACY_PROVIDER
+                )
+            )
+        ):
+            raise BillingError("Tamamlanmış ödemenin yöntemi değiştirilemez.")
+        if order.provider != selected_provider:
+            now = utcnow()
+            connection.execute(
+                update(PAYMENT_ORDERS)
+                .where(PAYMENT_ORDERS.c.reference == reference)
+                .values(provider=selected_provider, updated_at=now)
+            )
+            connection.execute(
+                update(PAYMENT_PROVIDER_SESSIONS)
+                .where(PAYMENT_PROVIDER_SESSIONS.c.order_reference == reference)
+                .values(provider=selected_provider)
             )
     return payment_order(reference)
 
@@ -1304,7 +1650,7 @@ def complete_payment_order(
         ).first()
         if not order:
             raise BillingError("Ödeme siparişi bulunamadı.")
-        if order.status in {"paid", "failed", "cancelled"}:
+        if order.status in {"paid", "failed", "token_failed", "cancelled"}:
             return _public_payment_order(order)
         next_status = "paid" if succeeded else "failed"
         connection.execute(
@@ -1459,7 +1805,7 @@ def admin_billing_overview(limit: int = 100) -> dict:
         pending_count += int(
             connection.execute(
                 select(func.count()).select_from(PAYMENT_ORDERS).where(
-                    PAYMENT_ORDERS.c.status == "created"
+                    PAYMENT_ORDERS.c.status.in_(("created", "pending"))
                 )
             ).scalar_one()
         )

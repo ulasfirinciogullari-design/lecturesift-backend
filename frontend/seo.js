@@ -155,7 +155,7 @@
       featureList: [
         "Video ve ses transkripti",
         "PDF, Word, PowerPoint, TXT ve Markdown özetleme",
-        "Kısa, standart, ayrıntılı ve sınav odaklı özetler",
+        "Her kaynak için ayrıntılı ve kapsamlı özet",
         "Quiz soruları ve açıklamalı cevaplar",
         "Bilgi kartları",
         "Slayt eşleştirme",

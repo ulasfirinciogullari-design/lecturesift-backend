@@ -36,6 +36,68 @@ def test_plan_page_preserves_learning_entitlements_and_zero_decimal_prices():
     assert "accountAdMode" in (FRONTEND / "account.html").read_text(encoding="utf-8")
 
 
+def test_all_frontend_plan_fallbacks_use_only_the_detailed_summary_profile():
+    plans = (FRONTEND / "plans.js").read_text(encoding="utf-8")
+    workspace = (FRONTEND / "app.js").read_text(encoding="utf-8")
+
+    assert 'const ALL_SUMMARIES = ["detailed"];' in plans
+    plans_fallback = plans.split("const FALLBACK_META = {", 1)[1].split(
+        "const FALLBACK_PRICES = {", 1
+    )[0]
+    assert plans_fallback.count("summary_profiles: ALL_SUMMARIES") == 8
+    assert "summary_profiles: ALL_SUMMARIES" in plans.split(
+        "function normalizeCatalog", 1
+    )[1]
+
+    workspace_fallback = workspace.split("const PLAN_FALLBACK = {", 1)[1].split(
+        "const FALLBACK_PRICES = {", 1
+    )[0]
+    assert workspace_fallback.count('["detailed"]') == 7
+    assert '["short"' not in workspace_fallback
+    assert '"exam"' not in workspace_fallback
+    assert '"five_minute"' not in workspace_fallback
+    assert 'summary_profiles:["detailed"]' in workspace
+
+
+def test_public_product_copy_promises_one_detailed_summary_in_every_language():
+    features = (FRONTEND / "features.html").read_text(encoding="utf-8")
+    workspace = (FRONTEND / "workspace.html").read_text(encoding="utf-8")
+    documents = (FRONTEND / "document-summary.html").read_text(encoding="utf-8")
+    seo = (FRONTEND / "seo.js").read_text(encoding="utf-8")
+    plans = (FRONTEND / "plans.js").read_text(encoding="utf-8")
+    workspace_script = (FRONTEND / "app.js").read_text(encoding="utf-8")
+    catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+
+    legacy_claims = (
+        "Çalışma sürene göre kısa, standart, ayrıntılı, sınav odaklı veya beş dakikalık özet seç.",
+        "Hızlı, ayrıntılı, sınav odaklı veya beş dakikalık öğrenme profilleri.",
+        "Kısa, standart, ayrıntılı, sınav odaklı veya beş dakikalık öğrenme profili seç.",
+        '"Kısa, standart, ayrıntılı ve sınav odaklı özetler"',
+    )
+    public_copy = "\n".join((features, workspace, documents, seo))
+    assert not any(claim in public_copy for claim in legacy_claims)
+    assert features.count('data-i18n="copy.detailedSummaryTitle"') == 1
+    assert workspace.count('data-i18n="copy.detailedSummaryText"') == 1
+    assert documents.count('data-i18n="copy.detailedDocumentSummaryText"') == 1
+    assert '"Her kaynak için ayrıntılı ve kapsamlı özet"' in seo
+    assert 'pt("plans.alwaysDetailed", "Her zaman ayrıntılı ve kapsamlı")' in plans
+    assert 'local("plans.alwaysDetailed", "Her zaman ayrıntılı ve kapsamlı")' in workspace_script
+
+    for key in (
+        "plans.summaries",
+        "plans.alwaysDetailed",
+        "copy.detailedSummaryTitle",
+        "copy.detailedSummaryText",
+        "copy.detailedDocumentSummaryText",
+    ):
+        payload = re.search(rf'^\s*"{re.escape(key)}":\[(.*?)\],?$', catalog, re.MULTILINE)
+        assert payload, key
+        translations = json.loads(f"[{payload.group(1)}]")
+        assert len(translations) == 13, key
+        assert all(str(value).strip() for value in translations), key
+        assert len(set(translations)) >= 10, key
+
+
 def test_homepage_promotes_campaigns_without_duplicating_plan_checkout():
     homepage = (FRONTEND / "index.html").read_text(encoding="utf-8")
     workspace = (FRONTEND / "workspace.html").read_text(encoding="utf-8")
@@ -209,6 +271,16 @@ def test_workspace_outputs_are_individually_optional_and_mobile_ready():
         assert f'id="{control_id}"' in page
     for preset in ("fast", "balanced", "exam", "transcript"):
         assert f'data-pack-preset="{preset}"' in page
+    assert 'id="jobType"' not in page
+    assert 'data-i18n="operationType"' not in page
+    assert 'id="summaryStyle"' not in page
+    assert 'data-i18n="summaryStyle"' not in page
+    assert 'const DEFAULT_JOB_TYPE = "study_pack";' in script
+    assert 'const DEFAULT_SUMMARY_STYLE = "detailed";' in script
+    assert 'data.append("job_type", DEFAULT_JOB_TYPE)' in script
+    assert 'data.append("summary_style", DEFAULT_SUMMARY_STYLE)' in script
+    assert "jobType.value" not in script
+    assert "summaryStyle.value" not in script
     assert 'data.append("quiz_count", $("includeQuiz").checked ? $("quizCount").value : "0")' in script
     assert 'data.append("flashcard_count", $("includeCards").checked ? $("cardCount").value : "0")' in script
     assert 'data.append("include_summary"' in script
@@ -219,6 +291,9 @@ def test_workspace_outputs_are_individually_optional_and_mobile_ready():
     assert script.count('[data-i18n-aria-label]') == 1
     assert ".content-choice-grid" in style
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in style
+    assert ".operation-grid.single { grid-template-columns: minmax(0, 1fr); }" in style
+    assert ".settings-grid.two-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }" in style
+    assert ".settings-grid, .settings-grid.two-columns, .content-choice-grid { grid-template-columns: 1fr; }" in style
     assert ".content-choice" in theme
 
 
@@ -228,7 +303,7 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         expected_theme_version = "13" if page.name == "workspace.html" else "12"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
         assert "/theme.js?v=2" in content, page.name
-        assert "i18n.js?v=26" in content, page.name
+        assert "i18n.js?v=27" in content, page.name
         assert "page-i18n.js?v=6" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
@@ -479,6 +554,52 @@ def test_dynamic_plan_descriptions_are_localized_and_account_uses_plan_label():
     assert '$("accountPlan").textContent = planLabel(account.plan.code);' in plans
 
 
+def test_payment_routes_are_distinct_localized_and_account_history_is_auditable():
+    catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    plans_html = (FRONTEND / "plans.html").read_text(encoding="utf-8")
+    plans_js = (FRONTEND / "plans.js").read_text(encoding="utf-8")
+    account_html = (FRONTEND / "account.html").read_text(encoding="utf-8")
+    auth_js = (FRONTEND / "auth.js").read_text(encoding="utf-8")
+    admin_html = (FRONTEND / "admin.html").read_text(encoding="utf-8")
+    admin_js = (FRONTEND / "admin.js").read_text(encoding="utf-8")
+
+    for key in (
+        "payment.historyHelp",
+        "payment.method",
+        "payment.createdAt",
+        "payment.status",
+        "payment.method.manualIban",
+        "payment.method.iyzicoProtected",
+        "payment.method.iyzicoCard",
+        "payment.method.paytrCard",
+        "payment.method.legacy",
+        "payment.method.pending",
+        "admin.paymentAll",
+        "admin.paymentAllCards",
+        "admin.paymentIyzicoCard",
+        "admin.paymentPaytrCard",
+        "admin.paymentIyzicoProtected",
+        "admin.paymentManualIban",
+        "admin.paymentPendingVerification",
+    ):
+        payload = re.search(rf'^\s*"{re.escape(key)}":\[(.*?)\],?$', catalog, re.MULTILINE)
+        assert payload, key
+        values = json.loads(f"[{payload.group(1)}]")
+        assert len(values) == 13, key
+        assert all(str(value).strip() for value in values), key
+
+    assert 'src="/plans.js?v=18"' in plans_html
+    assert 'manualTransfer = {available:Boolean(transferBody?.available), bank:null};' in plans_js
+    assert 'order.bank?.iban' in plans_js
+    assert 'transferBody?.bank' not in plans_js
+    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=11"', 'href="./auth.css?v=2"'))
+    assert all(value in auth_js for value in ("paymentMethodLabel", "paymentMoney", "paymentDateTime", "payment-order-meta"))
+    assert all(value in admin_html for value in ('value="iyzico_card"', 'value="iyzico_bank_transfer"', 'value="manual_bank_transfer"', 'value="iyzico_legacy"'))
+    assert "provider:selectedProvider" in admin_js
+    assert 'selectedProvider === "manual_bank_transfer" ? "bank_transfer"' not in admin_js
+    assert "adminPaymentMethodLabel" in admin_js
+
+
 def test_profile_admin_automatic_payment_and_full_comparison_interfaces_are_present():
     account = (FRONTEND / "account.html").read_text(encoding="utf-8")
     auth = (FRONTEND / "auth.js").read_text(encoding="utf-8")
@@ -514,11 +635,14 @@ def test_profile_admin_automatic_payment_and_full_comparison_interfaces_are_pres
     assert all(value in plans for value in ("transferPanel", "transferReference", "transferAmount", "transferIban", "transferHolder", "transferBank"))
     assert "renderCompare" in plan_script and "createTransfer" in plan_script
     assert "/billing/checkout" in plan_script
+    assert "order_number || reference" in plan_script
+    assert "orderLabel" in plan_script
     assert "/billing/manual-transfer/orders" in plan_script
     assert "manual_bank_transfer" in plan_script
     assert all(value in plans for value in ("bankTransferGuide", "bankTransferContinue", "bankTransferBack"))
     assert "showBankTransferGuide" in plan_script
     assert 'startHostedCheckout("bank_transfer")' in plan_script
+    assert "payment_method: preferredMethod" in plan_script
     assert "/billing/manual-transfer" not in auth
     assert "/billing/manual-transfer" not in workspace_script
     assert "/billing/manual-transfer" not in rollout_script
@@ -651,7 +775,7 @@ def test_checkout_names_contact_inbox_and_mobile_plan_navigation_are_wired():
     assert "/billing/admin/contact-messages" in admin_js
     assert "adminContactDialog" in admin_html and "admin-contact-reply" in admin_js
     assert "/billing/admin/contact-messages/${encodeURIComponent(messageId)}/reply" in admin_js
-    assert 'href="/rollout.css?v=10"' in admin_html and 'src="/admin.js?v=17"' in admin_html
+    assert 'href="/rollout.css?v=10"' in admin_html and 'src="/admin.js?v=18"' in admin_html
     assert admin_js.count('class="admin-table admin-record-table"') >= 10
     assert all(label in admin_js for label in ('data-label="İş"', 'data-label="Bakiye"', 'data-label="Açıklama"'))
     assert "supportReplyForm" in support_html and "supportThread" in support_html
@@ -982,8 +1106,8 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=26"' in index
-    assert 'src="/rollout.js?v=5"' in index
+    assert 'src="./app.js?v=28"' in index
+    assert 'src="/rollout.js?v=6"' in index
     assert '$("plans").scrollIntoView' not in app
 
 
@@ -1156,3 +1280,32 @@ def test_google_ads_conversions_are_consent_gated_and_csp_allows_measurement():
     )
     backend = (FRONTEND.parent / "lecturesift" / "app.py").read_text(encoding="utf-8")
     assert 'allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"]' in backend
+
+
+def test_frontend_uses_stable_api_hostname_during_vps_cutover():
+    old_origin = "https://lecturesift-backend.onrender.com"
+    api_assets = (
+        "admin.js",
+        "analytics.js",
+        "app.js",
+        "auth.js",
+        "contact.js",
+        "display-ads.js",
+        "legal-operator.js",
+        "plans.js",
+        "rollout.js",
+        "site-shell.js",
+        "support.js",
+    )
+    for name in api_assets:
+        source = (FRONTEND / name).read_text(encoding="utf-8")
+        assert "https://api.lecturesift.com" in source, name
+
+    for asset in FRONTEND.rglob("*"):
+        if asset.is_file() and asset.suffix in {".html", ".js", ".css"}:
+            assert old_origin not in asset.read_text(encoding="utf-8"), asset.relative_to(FRONTEND)
+
+    headers = (FRONTEND.parent / "netlify.toml").read_text(encoding="utf-8")
+    assert "https://api.lecturesift.com" in headers
+    # Keep the old origin in CSP only during the rollback observation window.
+    assert old_origin in headers

@@ -47,6 +47,12 @@ def synthetic_slide() -> np.ndarray:
     return frame
 
 
+def write_test_jpeg(path: Path, frame: np.ndarray) -> None:
+    encoded, payload = cv2.imencode(".jpg", frame)
+    assert encoded
+    path.write_bytes(payload.tobytes())
+
+
 def test_streamed_upload_accepts_exact_byte_limit_and_rejects_one_extra(tmp_path):
     exact = UploadFile(filename="exact.pdf", file=io.BytesIO(b"12345678"))
     assert asyncio.run(_save_upload(exact, tmp_path / "exact.pdf", max_bytes=8)) == 8
@@ -131,13 +137,31 @@ def test_private_url_is_rejected():
 def test_quota_error_is_human_readable():
     error = normalize_error(RuntimeError("429 insufficient_quota: exceeded your current quota"))
     assert error.code == "LS-AI-01"
-    assert "kota" in error.user_message.lower()
+    assert "sağlayıcı kredisi" in error.user_message.lower()
+    assert "plan dakikan" in error.user_message.lower()
+
+
+def test_provider_billing_error_codes_are_not_misclassified_as_burst_rate_limits():
+    for code in (
+        "credit_balance_exhausted",
+        "organization_usage_limit_exceeded",
+        "organization_spend_limit_exceeded",
+        "project_spend_limit_exceeded",
+    ):
+        error = normalize_error(RuntimeError(f"429 {code}"))
+        assert error.code == "LS-AI-01"
+        assert error.status_code == 503
 
 
 def test_invalid_api_key_is_not_classified_as_a_retryable_system_error():
     error = normalize_error(RuntimeError("401 Unauthorized: invalid_api_key"))
-    assert error.code == "LS-AI-01"
+    assert error.code == "LS-AI-03"
     assert error.status_code == 503
+
+
+def test_unrelated_generic_401_does_not_trip_openai_auth_classification():
+    error = normalize_error(RuntimeError("401 Unauthorized while downloading a remote source"))
+    assert error.code != "LS-AI-03"
 
 
 def test_health_and_unsupported_upload():
@@ -157,7 +181,7 @@ def test_health_and_unsupported_upload():
 def test_default_zip_contains_only_pdfs(tmp_path: Path):
     slides = tmp_path / "slides"
     slides.mkdir()
-    cv2.imwrite(str(slides / "slide_001_00m05s.jpg"), synthetic_slide())
+    write_test_jpeg(slides / "slide_001_00m05s.jpg", synthetic_slide())
     result = {
         "title": "Enerjiye Giriş",
         "summary": "İş ve enerji arasındaki temel ilişki.",
@@ -396,7 +420,7 @@ def test_dual_source_uses_audio_video_for_audio_and_slide_video_for_visuals(tmp_
     audio_video = tmp_path / "speaker.mp4"
     visual_video = tmp_path / "presentation.mp4"
     speaker_frame = tmp_path / "speaker.jpg"
-    cv2.imwrite(str(speaker_frame), synthetic_scene())
+    write_test_jpeg(speaker_frame, synthetic_scene())
     subprocess.run(
         [
             "ffmpeg",

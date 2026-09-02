@@ -8,6 +8,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from . import config
 from .billing_service import require_duration_entitlement
 from .config import CELERY_BROKER_URL, REQUIRE_DURABLE_PROCESSING, STORAGE_TRANSFER_PARALLELISM
 from .duration import media_duration_seconds
@@ -20,6 +21,17 @@ from .storage import STORAGE
 
 
 _INSTALLED = False
+
+
+def _start_durable_recovery(recover) -> None:
+    """Start recovery only when the public API is open for normal writes."""
+    if config.current_maintenance_mode() != "off":
+        return
+    threading.Thread(
+        target=recover,
+        daemon=True,
+        name="lecturesift-recovery",
+    ).start()
 
 
 def _queue_ready() -> bool:
@@ -351,7 +363,7 @@ def install_durable_runtime() -> None:
             return local_start_url_job(job_id, url, job_dir, options)
 
     def recover_durable_jobs() -> None:
-        if not _queue_ready():
+        if config.current_maintenance_mode() != "off" or not _queue_ready():
             return
         from .tasks import process_uploaded_job, process_url_job
 
@@ -385,11 +397,7 @@ def install_durable_runtime() -> None:
     app_module.start_url_job = dispatch_url
     app_module.app.add_event_handler(
         "startup",
-        lambda: threading.Thread(
-            target=recover_durable_jobs,
-            daemon=True,
-            name="lecturesift-recovery",
-        ).start(),
+        lambda: _start_durable_recovery(recover_durable_jobs),
     )
     app_module._lecturesift_durable_dispatch_installed = True
     _INSTALLED = True

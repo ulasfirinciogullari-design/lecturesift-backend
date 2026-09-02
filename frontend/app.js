@@ -1,4 +1,4 @@
-const API = "https://lecturesift-backend.onrender.com";
+const API = "https://api.lecturesift.com";
 const LOCALE_DATA = window.LECTURESIFT_LOCALE_DATA || {
   countries: [], currencies: ["TRY", "USD", "EUR", "GBP"], currencyForCountry: {},
 };
@@ -53,7 +53,7 @@ const EN = {
   errorFallback: "The request could not be completed. Check the video or link and try again.", outputSelectionRequired: "Select at least one study output: summary and notes, transcript, quiz, or flashcards.",
   plansNav: "Plans", login: "Sign in", register: "Create account", logout: "Sign out",
   plansEyebrow: "Transparent usage plans", plansTitle: "Process what you need and upgrade anytime.",
-  plansSubtitle: "Cards and bank transfers are completed on iyzico's secure page; matched payments activate automatically.",
+  plansSubtitle: "The three payment methods are separate: iyzico card and iyzico Protected Bank Transfer are verified automatically; a manual transfer to the personal IBAN activates after admin review.",
   accountTitle: "Create an account or sign in", accountHelp: "Your plan, minutes, and payments are linked to this account.",
   remainingMinutes: "Processing minutes remaining", transferEyebrow: "Bank transfer details", transferTitle: "Your order is ready",
   orderReference: "Order reference", amount: "Amount", accountHolder: "Account holder", sendReceipt: "Email the receipt",
@@ -104,7 +104,7 @@ const TR = {
   errorFallback: "İşlem tamamlanamadı. Videoyu veya bağlantıyı kontrol edip yeniden deneyebilirsin.", outputSelectionRequired: "En az bir çalışma çıktısı seç: özet ve notlar, transkript, quiz veya bilgi kartı.",
   plansNav: "Planlar", login: "Giriş", register: "Hesap oluştur", logout: "Çıkış",
   plansEyebrow: "Şeffaf kullanım planları", plansTitle: "İhtiyacın kadar işle, istediğin zaman yükselt.",
-  plansSubtitle: "Kart ve Havale/EFT, iyzico’nun güvenli sayfasında tamamlanır; eşleşen ödeme otomatik etkinleştirilir.",
+  plansSubtitle: "Üç ödeme yöntemi ayrıdır: iyzico kart ve iyzico Korumalı Havale/EFT otomatik doğrulanır; kişisel IBAN’a manuel Havale/EFT ise yönetim kontrolünden sonra etkinleşir.",
   accountTitle: "Hesabını oluştur veya giriş yap", accountHelp: "Planın, dakikaların ve ödemelerin bu hesaba bağlanır.",
   remainingMinutes: "Kalan işlem dakikası", transferEyebrow: "Havale bilgileri", transferTitle: "Siparişin oluşturuldu",
   orderReference: "Sipariş referansı", amount: "Tutar", accountHolder: "Hesap sahibi", sendReceipt: "Dekontu e-postayla gönder",
@@ -149,8 +149,9 @@ const PLAN_COPY = {
 
 const ERRORS = {
   en: {
-    "LS-AI-01": "The AI usage quota is exhausted. Try again after the account quota has been renewed.",
+    "LS-AI-01": "LectureSift's AI provider credit or spend limit is exhausted. This is not your plan allowance; try again after the administrator renews the API balance.",
     "LS-AI-02": "The AI service is busy. Try again in a few minutes.",
+    "LS-AI-03": "LectureSift could not authenticate with its AI provider. The administrator must check the server configuration.",
     "LS-URL-02": "The video provider blocked server-side downloading. Upload the file or use a direct MP4/WebM link.",
     "LS-URL-03": "No downloadable video was found on this page. Use a direct video link or upload the file.",
     "LS-UPLOAD-02": "The selected sources exceed the upload size allowed by your plan.",
@@ -176,8 +177,9 @@ const ERRORS = {
     "LS-VIDEO-02": "The video could not be read. It may be damaged or use an unsupported codec."
   },
   tr: {
-    "LS-AI-01": "Yapay zekâ kullanım kotası doldu. Hesap kotası yenilendikten sonra tekrar dene.",
+    "LS-AI-01": "LectureSift'in yapay zekâ sağlayıcı kredisi veya harcama limiti doldu. Bu senin plan dakikan değil; yönetici API bakiyesini yeniledikten sonra yeniden dene.",
     "LS-AI-02": "Yapay zekâ hizmeti yoğun. Birkaç dakika sonra tekrar dene.",
+    "LS-AI-03": "LectureSift yapay zekâ sağlayıcısında kimlik doğrulayamadı. Yönetici sunucu yapılandırmasını kontrol etmeli.",
     "LS-URL-02": "Video sağlayıcısı sunucu üzerinden indirmeyi engelledi. Dosyayı yükle veya doğrudan MP4/WebM bağlantısı kullan.",
     "LS-URL-03": "Bu sayfada indirilebilir video bulunamadı. Doğrudan video bağlantısı kullan veya dosyayı yükle.",
     "LS-UPLOAD-02": "Seçilen kaynaklar planının izin verdiği yükleme boyutunu aşıyor.",
@@ -206,7 +208,9 @@ const ERRORS = {
 
 const $ = (id) => document.getElementById(id);
 const uiLanguage = $("uiLanguage"), sourceLanguage = $("sourceLanguage"), outputLanguage = $("outputLanguage");
-const summaryStyle = $("summaryStyle"), videoUrl = $("videoUrl"), jobType = $("jobType");
+const videoUrl = $("videoUrl");
+const DEFAULT_JOB_TYPE = "study_pack";
+const DEFAULT_SUMMARY_STYLE = "detailed";
 let currentLanguage = window.LectureSiftI18n?.language || localStorage.getItem("lecturesift-ui") || "tr";
 let sourceMode = "upload", sourceLayout = "classic", classicVideos = [], audioVideos = [], visualVideos = [];
 let jobId = null, timerStarted = null, timerHandle = null, pollHandle = null;
@@ -230,7 +234,6 @@ function formatTime(seconds) { const value = Math.max(0, Math.round(seconds || 0
 
 function applyLanguage() {
   const strings = stringsFor(currentLanguage);
-  const selectedSummaryStyle = summaryStyle.value || "standard";
   document.documentElement.lang = currentLanguage;
   document.documentElement.dir = currentLanguage === "ar" ? "rtl" : "ltr";
   document.querySelectorAll("[data-i18n]").forEach(node => {
@@ -241,15 +244,6 @@ function applyLanguage() {
     const key = node.dataset.i18nAriaLabel;
     node.setAttribute("aria-label", strings[key] || EN[key] || node.getAttribute("aria-label") || "");
   });
-  const central = window.LectureSiftI18n;
-  summaryStyle.innerHTML = [
-    ["short", central?.t("summary.short", t("summaryShort")) || t("summaryShort")],
-    ["standard", central?.t("summary.standard", t("summaryStandard")) || t("summaryStandard")],
-    ["detailed", central?.t("summary.detailed", t("summaryDetailed")) || t("summaryDetailed")],
-    ["exam", central?.t("summary.exam", t("summaryExam")) || t("summaryExam")],
-    ["five_minute", central?.t("summary.fiveMinute", t("summaryFive")) || t("summaryFive")]
-  ].map(([value, label]) => `<option value="${value}">${escapeHtml(label)}</option>`).join("");
-  summaryStyle.value = [...summaryStyle.options].some(option => option.value === selectedSummaryStyle) ? selectedSummaryStyle : "standard";
   const autoOption = [...sourceLanguage.options].find(option => option.value === "auto");
   if (autoOption) autoOption.textContent = t("auto");
   localStorage.setItem("lecturesift-ui", currentLanguage);
@@ -286,13 +280,13 @@ uiLanguage.addEventListener("change", () => {
 });
 const PLAN_ORDER = ["free", "credit", "lite", "plus", "pro", "max", "business"];
 const PLAN_FALLBACK = {
-  free: ["free", 60, 10, 20, ["pdf"], ["short", "standard"], "standard", false],
-  credit: ["one_time", 180, 20, 40, ["pdf", "docx", "txt"], ["short", "standard", "detailed", "exam", "five_minute"], "standard", false],
-  lite: ["subscription", 600, 20, 40, ["pdf", "docx", "txt"], ["short", "standard", "detailed", "exam", "five_minute"], "standard", false],
-  plus: ["subscription", 1800, 30, 60, ["pdf", "docx", "txt"], ["short", "standard", "detailed", "exam", "five_minute"], "standard", true],
-  pro: ["subscription", 5000, 30, 60, ["pdf", "docx", "txt"], ["short", "standard", "detailed", "exam", "five_minute"], "priority", false],
-  max: ["subscription", 12000, 30, 60, ["pdf", "docx", "txt"], ["short", "standard", "detailed", "exam", "five_minute"], "priority", false],
-  business: ["quote", null, null, null, ["pdf", "docx", "txt"], ["short", "standard", "detailed", "exam", "five_minute"], "priority", false],
+  free: ["free", 60, 10, 20, ["pdf"], ["detailed"], "standard", false],
+  credit: ["one_time", 180, 20, 40, ["pdf", "docx", "txt"], ["detailed"], "standard", false],
+  lite: ["subscription", 600, 20, 40, ["pdf", "docx", "txt"], ["detailed"], "standard", false],
+  plus: ["subscription", 1800, 30, 60, ["pdf", "docx", "txt"], ["detailed"], "standard", true],
+  pro: ["subscription", 5000, 30, 60, ["pdf", "docx", "txt"], ["detailed"], "priority", false],
+  max: ["subscription", 12000, 30, 60, ["pdf", "docx", "txt"], ["detailed"], "priority", false],
+  business: ["quote", null, null, null, ["pdf", "docx", "txt"], ["detailed"], "priority", false],
 };
 const FALLBACK_PRICES = {
   TRY: [0,19900,27900,44900,99900,199900,null], USD: [0,499,699,999,2499,4999,null],
@@ -383,7 +377,7 @@ function normalizeBillingCatalog(remote, selected) {
       return {
         ...fallbackPlan, ...plan,
         display_price:remotePrice?.currency === selected ? remotePrice : fallbackPlan.display_price,
-        entitlements:{...fallbackPlan.entitlements, ...(plan.entitlements || {})},
+        entitlements:{...fallbackPlan.entitlements, ...(plan.entitlements || {}), summary_profiles:["detailed"]},
       };
     }),
   };
@@ -466,13 +460,12 @@ function renderPlans() {
     const price = priceInfo ? formatPrice(priceInfo.amount_minor, priceInfo.currency || billingCatalog.selected_currency) : (code === "free" ? formatPrice(0, billingCatalog.selected_currency) : (window.LectureSiftI18n?.t("plans.quote", "Teklif") || "Teklif"));
     const suffix = plan.kind === "subscription" ? t("perMonth") : (plan.kind === "one_time" ? t("oneTime") : "");
     const buttonLabel = current ? t("currentPlan") : (code === "business" ? (window.LectureSiftI18n?.t("plans.contact", "Bize ulaş") || "Bize ulaş") : t("choosePlan"));
-    const summaryNames = {short:"summary.short",standard:"summary.standard",detailed:"summary.detailed",exam:"summary.exam",five_minute:"summary.fiveMinute"};
     const local = (key, fallback) => window.LectureSiftI18n?.t(key, fallback) || fallback;
     return `<article class="plan-card ${plan.featured ? "featured" : ""}">
       ${plan.featured ? `<span class="plan-badge">${escapeHtml(t("popular"))}</span>` : ""}
       <h3>${escapeHtml(copy[0])}</h3><p>${escapeHtml(copy[1])}</p>
       <div class="plan-price">${escapeHtml(price)} <small>${escapeHtml(suffix)}</small></div>
-      <ul class="plan-features"><li>${escapeHtml(copy[2])}</li><li>${entitlements.quiz_questions ?? "∞"} ${escapeHtml(local("plans.quizShort", "quiz sorusu"))}</li><li>${entitlements.flashcards ?? "∞"} ${escapeHtml(local("plans.cardsShort", "bilgi kartı"))}</li><li>${escapeHtml((entitlements.summary_profiles || []).map(profile => local(summaryNames[profile], profile)).join(", "))} ${escapeHtml(local("plans.summaryShort", "özet"))}</li><li>${escapeHtml(entitlements.download_enabled === false ? local("plans.previewOnly", "Sitede önizleme · dosya indirme yok") : (entitlements.export_formats || []).join(", ").toUpperCase())}</li><li>${escapeHtml(local(plan.priority === "priority" ? "priority.priority" : "priority.standard", plan.priority === "priority" ? "Öncelikli" : "Standart"))} ${escapeHtml(local("plans.processingSuffix", "işleme"))}</li></ul>
+      <ul class="plan-features"><li>${escapeHtml(copy[2])}</li><li>${entitlements.quiz_questions ?? "∞"} ${escapeHtml(local("plans.quizShort", "quiz sorusu"))}</li><li>${entitlements.flashcards ?? "∞"} ${escapeHtml(local("plans.cardsShort", "bilgi kartı"))}</li><li>${escapeHtml(local("plans.alwaysDetailed", "Her zaman ayrıntılı ve kapsamlı"))} ${escapeHtml(local("plans.summaryShort", "özet"))}</li><li>${escapeHtml(entitlements.download_enabled === false ? local("plans.previewOnly", "Sitede önizleme · dosya indirme yok") : (entitlements.export_formats || []).join(", ").toUpperCase())}</li><li>${escapeHtml(local(plan.priority === "priority" ? "priority.priority" : "priority.standard", plan.priority === "priority" ? "Öncelikli" : "Standart"))} ${escapeHtml(local("plans.processingSuffix", "işleme"))}</li></ul>
       <button class="plan-action" type="button" data-plan="${escapeHtml(code)}" ${current || code === "free" || code === "business" ? "disabled" : ""}>${escapeHtml(buttonLabel)}</button>
     </article>`;
   }).join("");
@@ -541,7 +534,7 @@ function setSourceMode(mode) {
   $("uploadPanel").hidden = !upload; $("uploadPanel").classList.toggle("active", upload);
   $("linkPanel").hidden = upload; $("linkPanel").classList.toggle("active", !upload);
 }
-$("uploadTab").onclick = () => { if (jobType.value === "download_video") jobType.value = "study_pack"; setSourceMode("upload"); updateOperationUI(); };
+$("uploadTab").onclick = () => { setSourceMode("upload"); updateOperationUI(); };
 $("linkTab").onclick = () => setSourceMode("link");
 
 function filesFor(role) {
@@ -592,7 +585,7 @@ function fileExtension(file) { return String(file?.name || "").split(".").pop().
 function isDocumentFile(file) { return DOCUMENT_EXTENSIONS.has(fileExtension(file)); }
 function selectedDocumentJob() { return sourceLayout === "classic" && classicVideos.length > 0 && classicVideos.every(isDocumentFile); }
 function progressProfileFor(job = null) {
-  const type = job?.options?.job_type || jobType.value;
+  const type = job?.options?.job_type || DEFAULT_JOB_TYPE;
   if (type === "audio_export" || type === "download_video") return type;
   const documentJob = String(job?.source_type || "").startsWith("document") || job?.source_layout === "documents" || (!job && selectedDocumentJob());
   return documentJob ? "document" : "media";
@@ -696,10 +689,10 @@ $("classicMode").onclick = () => setSourceLayout("classic");
 $("separateMode").onclick = () => setSourceLayout("separate");
 
 const PACK_PRESETS = {
-  fast: {summary:true, transcript:true, slides:false, quiz:false, cards:false, timestamps:false, speakers:false, style:"short", quizCount:"5", cardCount:"10", formats:["pdf"]},
-  balanced: {summary:true, transcript:true, slides:true, quiz:true, cards:true, timestamps:false, speakers:false, style:"standard", quizCount:"10", cardCount:"20", formats:["pdf"]},
-  exam: {summary:true, transcript:true, slides:true, quiz:true, cards:true, timestamps:false, speakers:false, style:"exam", quizCount:"20", cardCount:"40", formats:["pdf"]},
-  transcript: {summary:false, transcript:true, slides:false, quiz:false, cards:false, timestamps:false, speakers:false, style:"standard", quizCount:"5", cardCount:"10", formats:[]},
+  fast: {summary:true, transcript:true, slides:false, quiz:false, cards:false, timestamps:false, speakers:false, quizCount:"5", cardCount:"10", formats:["pdf"]},
+  balanced: {summary:true, transcript:true, slides:true, quiz:true, cards:true, timestamps:false, speakers:false, quizCount:"10", cardCount:"20", formats:["pdf"]},
+  exam: {summary:true, transcript:true, slides:true, quiz:true, cards:true, timestamps:false, speakers:false, quizCount:"20", cardCount:"40", formats:["pdf"]},
+  transcript: {summary:false, transcript:true, slides:false, quiz:false, cards:false, timestamps:false, speakers:false, quizCount:"5", cardCount:"10", formats:[]},
 };
 
 function selectedFormats() {
@@ -733,12 +726,12 @@ outputLanguage.addEventListener("change", syncTranslationChoice);
 function activePresetName() {
   const state = {
     summary:$("includeSummary").checked, transcript:$("includeTranscript").checked, slides:$("includeSlides").checked,
-    quiz:$("includeQuiz").checked, cards:$("includeCards").checked, style:summaryStyle.value,
+    quiz:$("includeQuiz").checked, cards:$("includeCards").checked,
     timestamps:$("transcriptTimestamps").checked, speakers:$("speakerDetection").checked,
     quizCount:$("quizCount").value, cardCount:$("cardCount").value, formats:selectedFormats(),
   };
   return Object.entries(PACK_PRESETS).find(([, preset]) =>
-    ["summary", "transcript", "slides", "quiz", "cards", "timestamps", "speakers", "style", "quizCount", "cardCount"].every(key => state[key] === preset[key])
+    ["summary", "transcript", "slides", "quiz", "cards", "timestamps", "speakers", "quizCount", "cardCount"].every(key => state[key] === preset[key])
     && state.formats.join(",") === preset.formats.join(",")
   )?.[0] || "";
 }
@@ -746,7 +739,6 @@ function activePresetName() {
 function syncContentChoices() {
   $("quizCount").disabled = !$("includeQuiz").checked;
   $("cardCount").disabled = !$("includeCards").checked;
-  summaryStyle.disabled = !$("includeSummary").checked;
   $("quizCount").closest(".content-choice").classList.toggle("is-disabled", !$("includeQuiz").checked);
   $("cardCount").closest(".content-choice").classList.toggle("is-disabled", !$("includeCards").checked);
   syncTranslationChoice();
@@ -765,26 +757,22 @@ function applyPackPreset(name) {
   $("includeSummary").checked = preset.summary; $("includeTranscript").checked = preset.transcript;
   $("includeSlides").checked = preset.slides; $("includeQuiz").checked = preset.quiz; $("includeCards").checked = preset.cards;
   $("transcriptTimestamps").checked = preset.timestamps; $("speakerDetection").checked = preset.speakers;
-  summaryStyle.value = preset.style; $("quizCount").value = preset.quizCount; $("cardCount").value = preset.cardCount;
+  $("quizCount").value = preset.quizCount; $("cardCount").value = preset.cardCount;
   [$("formatPdf"), $("formatDocx"), $("formatTxt")].forEach(input => { input.checked = preset.formats.includes(input.value); });
   $("translateTranscript").checked = preset.transcript && !(sourceLanguage.value !== "auto" && sourceLanguage.value === outputLanguage.value);
   syncContentChoices();
 }
 
 document.querySelectorAll("[data-pack-preset]").forEach(button => button.addEventListener("click", () => applyPackPreset(button.dataset.packPreset)));
-[$("includeSummary"), $("includeTranscript"), $("includeSlides"), $("includeQuiz"), $("includeCards"), $("quizCount"), $("cardCount"), summaryStyle, $("formatPdf"), $("formatDocx"), $("formatTxt"), $("transcriptTimestamps"), $("speakerDetection")]
+[$("includeSummary"), $("includeTranscript"), $("includeSlides"), $("includeQuiz"), $("includeCards"), $("quizCount"), $("cardCount"), $("formatPdf"), $("formatDocx"), $("formatTxt"), $("transcriptTimestamps"), $("speakerDetection")]
   .forEach(control => control.addEventListener("change", syncContentChoices));
 
 function updateOperationUI() {
-  const type = jobType.value, study = type === "study_pack";
-  $("studySettings").hidden = !study; $("formatChoices").hidden = !study;
-  $("recordingModeTabs").hidden = type !== "study_pack";
-  if (type === "audio_export") setSourceLayout("classic");
-  if (type === "download_video") setSourceMode("link");
-  $("analyzeButton").querySelector("span").textContent = type === "audio_export" ? t("audioExportOption") : type === "download_video" ? t("downloadVideoOption") : t("analyze");
+  $("studySettings").hidden = false; $("formatChoices").hidden = false;
+  $("recordingModeTabs").hidden = false;
+  $("analyzeButton").querySelector("span").textContent = t("analyze");
   configureProgressProfile(null, true);
 }
-jobType.addEventListener("change", updateOperationUI);
 applyLanguage();
 
 function startTimer() {
@@ -870,7 +858,7 @@ async function responseError(response) {
 function formData() {
   const data = new FormData();
   data.append("source_language", sourceLanguage.value); data.append("output_language", outputLanguage.value);
-  data.append("summary_style", summaryStyle.value);
+  data.append("summary_style", DEFAULT_SUMMARY_STYLE);
   data.append("quiz_count", $("includeQuiz").checked ? $("quizCount").value : "0");
   data.append("flashcard_count", $("includeCards").checked ? $("cardCount").value : "0");
   data.append("include_summary", $("includeSummary").checked ? "true" : "false");
@@ -881,14 +869,14 @@ function formData() {
   data.append("transcript_timestamps", timestampsEnabled ? "true" : "false");
   data.append("speaker_detection", timestampsEnabled && $("speakerDetection").checked ? "true" : "false");
   data.append("slides_offset_seconds", sourceLayout === "separate" ? ($("slidesOffset").value || "0") : "0");
-  data.append("source_layout", sourceLayout); data.append("job_type", jobType.value);
+  data.append("source_layout", sourceLayout); data.append("job_type", DEFAULT_JOB_TYPE);
   data.append("output_formats", selectedFormats().join(",") || "none");
   return data;
 }
 
 $("analyzeButton").onclick = async () => {
   $("errorBox").hidden = true;
-  if (jobType.value === "study_pack" && ![$("includeSummary"), $("includeTranscript"), $("includeQuiz"), $("includeCards")].some(input => input.checked)) {
+  if (![$("includeSummary"), $("includeTranscript"), $("includeQuiz"), $("includeCards")].some(input => input.checked)) {
     showError(t("outputSelectionRequired"), "LS-OUTPUT-01");
     return;
   }
@@ -920,7 +908,6 @@ $("analyzeButton").onclick = async () => {
   if (sourceMode === "upload" && uploadFiles.reduce((total, file) => total + file.size, 0) > uploadLimitMb * 1024 ** 2) {
     showError(uploadLimitMessage(documentUpload, uploadLimitMb), "LS-UPLOAD-02"); return;
   }
-  if (documentUpload && jobType.value !== "study_pack") { showError("Belge kaynakları çalışma paketi işleminde kullanılabilir.", "LS-UPLOAD-05"); return; }
   if (sourceMode === "link" && !videoUrl.value.trim()) { showError(TR.urlLabel, "LS-URL-01"); return; }
   $("analyzeButton").disabled = true; $("results").hidden = true; latestResult = null; jobId = null; configureProgressProfile(null, true); resetStages(); startTimer();
   setItemState("source", "active");

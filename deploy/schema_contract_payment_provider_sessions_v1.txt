@@ -1,0 +1,18 @@
+# LectureSift schema-transition contract v1 (PostgreSQL 18)
+#
+# This fixture deliberately covers the only schema object that the current
+# Render -> OVH migration may add. Every pre-existing SCHEMA_OBJECT record must
+# remain byte-for-byte identical across the migration. Change this file only
+# with a reviewed application-schema revision and matching PostgreSQL behavior
+# tests.
+SCHEMA_OBJECT|C|public.billing_payment_provider_sessions|1|order_reference|character varying(64)|t|||
+SCHEMA_OBJECT|C|public.billing_payment_provider_sessions|2|provider|character varying(24)|t|||
+SCHEMA_OBJECT|C|public.billing_payment_provider_sessions|3|token_digest|character varying(64)|t|||
+SCHEMA_OBJECT|C|public.billing_payment_provider_sessions|4|created_at|timestamp with time zone|t|||
+SCHEMA_OBJECT|I|billing_payment_provider_sessions|billing_payment_provider_sessions_pkey|CREATE UNIQUE INDEX billing_payment_provider_sessions_pkey ON public.billing_payment_provider_sessions USING btree (order_reference)
+SCHEMA_OBJECT|K|billing_payment_provider_sessions|billing_payment_provider_sessions_created_at_not_null|t|NOT NULL created_at
+SCHEMA_OBJECT|K|billing_payment_provider_sessions|billing_payment_provider_sessions_order_reference_fkey|t|FOREIGN KEY (order_reference) REFERENCES billing_payment_orders(reference)
+SCHEMA_OBJECT|K|billing_payment_provider_sessions|billing_payment_provider_sessions_order_reference_not_null|t|NOT NULL order_reference
+SCHEMA_OBJECT|K|billing_payment_provider_sessions|billing_payment_provider_sessions_pkey|t|PRIMARY KEY (order_reference)
+SCHEMA_OBJECT|K|billing_payment_provider_sessions|billing_payment_provider_sessions_provider_not_null|t|NOT NULL provider
+SCHEMA_OBJECT|K|billing_payment_provider_sessions|billing_payment_provider_sessions_token_digest_not_null|t|NOT NULL token_digest

@@ -1,4 +1,4 @@
-const API = "https://lecturesift-backend.onrender.com";
+const API = "https://api.lecturesift.com";
 const TOKEN_KEY = "lecturesift-billing-token";
 const ORDER = ["free", "test", "credit", "lite", "plus", "pro", "max", "business"];
 const LOCALE_DATA = window.LECTURESIFT_LOCALE_DATA || {
@@ -23,7 +23,7 @@ const COPY = {
   max: ["Max", "En yüksek bireysel kapasite"],
   business: ["Business", "Ekipler ve kurumlar için"],
 };
-const ALL_SUMMARIES = ["short", "standard", "detailed", "exam", "five_minute"];
+const ALL_SUMMARIES = ["detailed"];
 const PLAN_LIMITS = {
   free: {max_files_per_job:3, max_media_upload_mb:100, max_document_upload_mb:25, max_minutes_per_job:30, max_document_pages:50, max_ocr_pages:20, max_document_characters:1500000},
   test: {max_files_per_job:1, max_media_upload_mb:25, max_document_upload_mb:10, max_minutes_per_job:1, max_document_pages:10, max_ocr_pages:5, max_document_characters:1500000},
@@ -35,8 +35,8 @@ const PLAN_LIMITS = {
   business: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:1440, max_document_pages:500, max_ocr_pages:150, max_document_characters:1500000},
 };
 const FALLBACK_META = {
-  free: {kind: "free", minutes: 60, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 60, quiz_questions: 10, flashcards: 20, export_formats: ["pdf"], summary_profiles: ["short", "standard"], limits: PLAN_LIMITS.free, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: false}},
-  test: {kind: "one_time", minutes: 1, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 1, quiz_questions: 1, flashcards: 1, export_formats: ["pdf"], summary_profiles: ["short"], limits: PLAN_LIMITS.test, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: true}},
+  free: {kind: "free", minutes: 60, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 60, quiz_questions: 10, flashcards: 20, export_formats: ["pdf"], summary_profiles: ALL_SUMMARIES, limits: PLAN_LIMITS.free, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: false}},
+  test: {kind: "one_time", minutes: 1, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 1, quiz_questions: 1, flashcards: 1, export_formats: ["pdf"], summary_profiles: ALL_SUMMARIES, limits: PLAN_LIMITS.test, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: true}},
   credit: {kind: "one_time", minutes: 180, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 180, quiz_questions: 20, flashcards: 40, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, limits: PLAN_LIMITS.credit, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: true}},
   lite: {kind: "subscription", minutes: 600, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 600, quiz_questions: 20, flashcards: 40, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, limits: PLAN_LIMITS.lite, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
   plus: {kind: "subscription", minutes: 1800, priority: "standard", team_seats: 1, featured: true, entitlements: {minutes: 1800, quiz_questions: 30, flashcards: 60, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, limits: PLAN_LIMITS.plus, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
@@ -127,14 +127,18 @@ function showPaymentRedirectResult() {
   const result = params.get("payment");
   const reference = params.get("order");
   if (!result || !reference) return;
+  const orderNumber = (account?.payment_orders || []).find(
+    item => item.reference === reference,
+  )?.order_number || reference;
+  const orderLabel = `${pt("payment.orderNumber", "Sipariş no")}: ${orderNumber}`;
   if (result === "failed") {
     const order = (account?.payment_orders || []).find(item => item.reference === reference);
     showError(
-      order?.failure_message || pt("payment.declined", "Ödeme banka veya iyzico tarafından onaylanmadı."),
+      `${order?.failure_message || pt("payment.declined", "Ödeme banka veya iyzico tarafından onaylanmadı.")} ${orderLabel}`,
       order?.failure_code || "LS-PAY-DECLINED",
     );
   } else if (result === "verification_failed") {
-    showError(pt("order.failed", "Ödeme sonucu doğrulanamadı."), "LS-PAY-VERIFY");
+    showError(`${pt("order.failed", "Ödeme sonucu doğrulanamadı.")} ${orderLabel}`, "LS-PAY-VERIFY");
   }
 }
 
@@ -166,9 +170,8 @@ async function api(path, options = {}) {
   return body;
 }
 
-function summaries(items = []) {
-  const names = {short: pt("summary.short", "Hızlı"), standard: pt("summary.standard", "Standart"), detailed: pt("summary.detailed", "Ayrıntılı"), exam: pt("summary.exam", "Sınav"), five_minute: pt("summary.fiveMinute", "5 dakika")};
-  return items.map(item => names[item] || item).join(", ");
+function summaryEntitlement() {
+  return pt("plans.alwaysDetailed", "Her zaman ayrıntılı ve kapsamlı");
 }
 
 function planLabel(code) { return pt(`plan.${code}`, COPY[code]?.[0] || code); }
@@ -190,7 +193,7 @@ function renderCompare() {
     [pt("plans.documentCharacterLimit", "Çıkarılan metin karakteri / iş"), plan => Number(plan.entitlements?.limits?.max_document_characters || 0).toLocaleString(PLANS_I18N.locale)],
     [pt("plans.quiz", "Quiz sorusu / işlem"), plan => plan.entitlements?.quiz_questions ?? "∞"],
     [pt("plans.cards", "Bilgi kartı / işlem"), plan => plan.entitlements?.flashcards ?? "∞"],
-    [pt("plans.summaries", "Özet profilleri"), plan => summaries(plan.entitlements?.summary_profiles || [])],
+    [pt("plans.summaries", "Özet çıktısı"), () => summaryEntitlement()],
     [pt("plans.exports", "Dosya biçimleri"), plan => plan.entitlements?.download_enabled === false ? pt("plans.previewOnly", "Sitede önizleme · dosya indirme yok") : (plan.entitlements?.export_formats || []).join(", ").toUpperCase()],
     [pt("plans.priority", "İşlem önceliği"), plan => plan.priority === "priority" ? priority : standard],
     [pt("plans.teamSeats", "Ekip kullanıcıları"), plan => plan.entitlements?.team_seats || plan.team_seats || 1],
@@ -214,7 +217,7 @@ function normalizeCatalog(remote, selected) {
       const remotePlan = remotePlans.get(code) || {};
       const plan = {
         code, ...fallbackPlan, ...remotePlan,
-        entitlements: {...fallbackPlan.entitlements, ...(remotePlan.entitlements || {})},
+        entitlements: {...fallbackPlan.entitlements, ...(remotePlan.entitlements || {}), summary_profiles: ALL_SUMMARIES},
       };
       const fallbackAmount = amounts[index];
       const remotePrice = plan.display_price;
@@ -277,7 +280,7 @@ function renderPaymentStatus() {
     ? pt("payment.protectedAvailable", "iyzico siparişle otomatik eşleştirir; onay geldiğinde paket otomatik etkinleşir.")
     : pt("payment.protectedNotConfigured", "iyzico Korumalı Havale/EFT henüz kullanıma açık değil.");
   $("bankAvailability").textContent = manualTransfer.available
-    ? pt("payment.available", "IBAN havalesi kullanılabilir; sipariş ödeme kontrolünden sonra etkinleşir.")
+    ? pt("payment.available", "Kişisel IBAN'a manuel Havale/EFT kullanılabilir; sipariş yönetim kontrolünden sonra etkinleşir.")
     : pt("payment.notConfigured", "IBAN havale bilgileri henüz etkin değil.");
 }
 
@@ -313,7 +316,7 @@ function renderPlans() {
         <li>${Number(limits.max_document_pages || 0).toLocaleString(PLANS_I18N.locale)} ${esc(pt("plans.pagesShort", "sayfa"))} · ${Number(limits.max_ocr_pages || 0).toLocaleString(PLANS_I18N.locale)} OCR</li>
         <li>${entitlements.quiz_questions ?? "∞"} ${esc(pt("plans.quizShort", "quiz sorusu"))}</li>
         <li>${entitlements.flashcards ?? "∞"} ${esc(pt("plans.cardsShort", "bilgi kartı"))}</li>
-        <li>${esc(summaries(entitlements.summary_profiles))} ${esc(pt("plans.summaryShort", "özet"))}</li>
+        <li>${esc(summaryEntitlement())} ${esc(pt("plans.summaryShort", "özet"))}</li>
         <li>${esc(entitlements.download_enabled === false ? pt("plans.previewOnly", "Sitede önizleme · dosya indirme yok") : (entitlements.export_formats || []).join(", ").toUpperCase())}</li>
         <li>${esc(plan.priority === "priority" ? pt("priority.priority", "Öncelikli") : pt("priority.standard", "Standart"))} ${esc(pt("plans.processingSuffix", "işleme"))}</li>
         <li>${esc(entitlements.ad_free ? pt("plans.adFree", "Reklamsız kullanım") : pt("plans.rewardedOption", "İsteğe bağlı reklamla ek dakika"))}</li>
@@ -406,6 +409,7 @@ async function startHostedCheckout(preferredMethod = "card") {
         plan_code: planCode,
         interval: $("checkoutInterval").value,
         currency,
+        payment_method: preferredMethod,
         first_name: $("checkoutFirstName").value.trim(),
         last_name: $("checkoutLastName").value.trim(),
         billing_address: $("checkoutAddress").value.trim(),
@@ -520,7 +524,9 @@ async function load() {
     ]);
     providers = providerBody.providers || [];
     commerceIdentity = providerBody.commerce_identity || {configured:false};
-    manualTransfer = transferBody || {available:false, bank:null};
+    // The public capability endpoint deliberately exposes availability only.
+    // Bank details are read exclusively from the authenticated, order-specific response.
+    manualTransfer = {available:Boolean(transferBody?.available), bank:null};
     catalog = normalizeCatalog(remote, selected);
     try { account = (await api("/billing/me")).account; } catch { account = null; }
     renderAccount();

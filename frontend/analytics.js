@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const API_BASE = "https://lecturesift-backend.onrender.com";
+  const API_BASE = "https://api.lecturesift.com";
   const PUBLIC_PATHS = new Set([
     "/", "/index.html", "/features.html", "/plans.html", "/about.html",
     "/contact.html", "/privacy.html", "/terms.html", "/cookies.html", "/refund.html",

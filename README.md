@@ -13,10 +13,27 @@ LectureSift turns ordered lecture recordings—or separate ordered audio and sli
 
 Production services:
 
-- Frontend: <https://clever-horse-22b1a8.netlify.app/>
-- Backend: <https://lecturesift-backend.onrender.com/>
+- Frontend: <https://lecturesift.com/>
+- Backend: <https://api.lecturesift.com/>
 
 The production deployment stays on `main`.
+
+On the VPS, `/etc/lecturesift/runtime.env` is a root-side source of truth, not
+a container environment file. Production preflight derives independent
+root-only `api.env`, `worker.env`, and `instagram.env` files. This keeps admin,
+session, payment, email, legal and Instagram secrets out of the processing
+worker, while the scheduled Instagram job receives no database, R2, OpenAI,
+payment or admin credentials. Host-only restic repository, storage and
+encryption credentials are never copied into any application role. See
+[VPS_DEPLOYMENT.md](VPS_DEPLOYMENT.md) for
+the fail-closed generation and validation procedure.
+
+PostgreSQL also uses separate logins: the API can mutate application rows but
+cannot create schema objects, while the worker sees only masked entitlement
+views and narrowly writable usage/guest/runtime paths. A one-shot maintenance
+container, authenticated as the database owner, is the only application image
+allowed to create or update tables. Startup fails if either runtime role gains
+schema creation, direct payment/auth/admin/contact access, or shares a password.
 
 Long-running production media jobs require the separate queue, worker, and private object-storage setup described in [DURABLE_PROCESSING.md](DURABLE_PROCESSING.md). Do not enable paid processing until its health and restart-recovery checks pass in preview.
 
@@ -59,7 +76,7 @@ The automated suite covers human-readable API errors, SSRF/private-URL rejection
 - `GET /jobs/{job_id}/result`: structured result
 - `GET /jobs/{job_id}/artifact/{filename}`: individual PDF/Word/TXT/MP3/video output
 - `GET /jobs/{job_id}/download`: complete ZIP package
-- `GET /health`: deployment health and engine version
+- `GET /health`: deployment health, engine version, and exact 40-hex build revision (`unknown` when unverified)
 - `GET /instagram/health`: verify the configured Instagram account connection
 - `POST /instagram/media`: create an image, Reel, or Story media container
 - `GET /instagram/media/{container_id}`: inspect container processing status
@@ -76,13 +93,13 @@ Every job can independently request precise transcript timestamps and automatic 
 
 Configure the PayTR notification URL as:
 
-`https://lecturesift-backend.onrender.com/billing/paytr/callback`
+`https://api.lecturesift.com/billing/paytr/callback`
 
 The callback validates PayTR's HMAC signature and the original order amount, and processes repeated notifications idempotently. It must remain public and return plain `OK` only after the verified order state has been recorded. Never commit PayTR credentials or include them in logs.
 
 iyzico Checkout Form uses the application-generated callback URL under `/billing/iyzico/callback`. Every API request uses IYZWSv2 HMAC-SHA256 authentication. Initialize and retrieve response signatures, provider token, order reference, currency, basket amount, and paid amount must all match before a plan or credit pack is activated. Never commit or log iyzico credentials.
 
-Protected Bank Transfer/EFT is separate from the direct-IBAN/manual-review flow. It uses the same Checkout Form only after iyzico explicitly confirms that payment method on the merchant account. Configure the Merchant Notifications URL as `https://lecturesift-backend.onrender.com/billing/iyzico/webhook` and ask iyzico to enable both Bank Transfer/EFT and `X-IYZ-SIGNATURE-V3`. Set `IYZICO_BANK_TRANSFER_ENABLED=true` only after that separate activation is confirmed. The webhook verifies the ordered HPP signature fields, performs a second server-to-server Checkout Form retrieve, and activates access only when `paymentStatus` is `SUCCESS`; `INIT_BANK_TRANSFER` remains pending. Signature activation alone must not be treated as protected bank-transfer activation.
+Protected Bank Transfer/EFT is separate from the direct-IBAN/manual-review flow. It uses the same Checkout Form only after iyzico explicitly confirms that payment method on the merchant account. Configure the Merchant Notifications URL as `https://api.lecturesift.com/billing/iyzico/webhook` and ask iyzico to enable both Bank Transfer/EFT and `X-IYZ-SIGNATURE-V3`. Set `IYZICO_BANK_TRANSFER_ENABLED=true` only after that separate activation is confirmed. iyzico does not document a Checkout Form initialize field that preselects the transfer tab; the product UI must tell the buyer to choose the visible Bank Transfer/EFT tab instead of modifying the hosted URL or DOM. The webhook verifies the ordered HPP signature fields, performs a second server-to-server Checkout Form retrieve, and activates access only when `paymentStatus` is `SUCCESS`; `INIT_BANK_TRANSFER` remains pending. Signature activation alone must not be treated as protected bank-transfer activation.
 
 Instagram credentials are read only from `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_ACCOUNT_ID`, and
 `INSTAGRAM_APP_SECRET`. Publishing routes additionally require `INSTAGRAM_ADMIN_TOKEN` as a Bearer

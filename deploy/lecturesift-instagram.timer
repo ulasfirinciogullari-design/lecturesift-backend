@@ -1,0 +1,12 @@
+[Unit]
+Description=Publish LectureSift Instagram content daily
+
+[Timer]
+# 11:00 Europe/Istanbul (UTC+03 year-round).
+OnCalendar=*-*-* 08:00:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

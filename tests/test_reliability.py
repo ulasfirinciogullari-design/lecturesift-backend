@@ -22,6 +22,7 @@ from lecturesift.billing_service import (
 )
 from lecturesift.jobs import JOBS
 from lecturesift import config
+from lecturesift.queue import celery_app
 import lecturesift.jobs as jobs_module
 from lecturesift.tasks import _processing_error
 
@@ -101,6 +102,78 @@ def test_rollout_health_checks_connections_and_worker(monkeypatch):
     assert body["worker"]["workers"] == 1
 
 
+def test_celery_visibility_timeout_is_consistent():
+    expected = config.CELERY_VISIBILITY_TIMEOUT_SECONDS
+    assert 60 * 60 <= expected <= config.JOB_TTL_SECONDS
+    assert celery_app.conf.visibility_timeout == expected
+    assert celery_app.conf.broker_transport_options["visibility_timeout"] == expected
+    assert celery_app.conf.result_backend_transport_options["visibility_timeout"] == expected
+
+
+def test_vps_compose_keeps_datastores_private_and_trusts_only_internal_proxy():
+    root = Path(__file__).resolve().parents[1]
+    compose = (root / "compose.yaml").read_text(encoding="utf-8")
+    postgres = compose.split("\n  postgres:", 1)[1].split("\n  redis:", 1)[0]
+    redis = compose.split("\n  redis:", 1)[1].split("\nnetworks:", 1)[0]
+
+    assert "--forwarded-allow-ips=*" in compose
+    assert "LECTURESIFT_DB_ENV_FILE" in postgres
+    assert "LECTURESIFT_ENV_FILE" not in postgres
+    assert "ports:" not in postgres
+    assert "ports:" not in redis
+    assert "internal: true" in compose
+
+
+def test_vps_restore_discards_stale_redis_aof_before_loading_snapshot():
+    root = Path(__file__).resolve().parents[1]
+    restore = (root / "deploy" / "restore.sh").read_text(encoding="utf-8")
+    converter = (root / "deploy" / "redis_rdb_to_aof.sh").read_text(encoding="utf-8")
+
+    assert 'find "$DATA_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +' in converter
+    assert 'SOURCE_RDB="/restore/redis-dump.rdb"' in converter
+    assert 'DATA_DIR="/data"' in converter
+    assert "/probe/redis_rdb_to_aof.sh" in restore
+    assert "lecturesift-api-work:/api-work" in restore
+    assert "lecturesift-worker-work:/worker-work" in restore
+    assert "sha256sum --check --strict -- SHA256SUMS" in restore
+    assert "--maintenance-db postgres" in restore
+    assert "--wait --wait-timeout 600" in restore
+    assert '"$ROOT_DIR/deploy/preflight.sh"' in restore
+    assert "up -d --wait --wait-timeout 600 postgres redis" in restore
+    assert "up -d --no-deps --wait --wait-timeout 600 api worker" in restore
+    assert "up -d --no-deps --wait --wait-timeout 180 caddy" in restore
+
+
+def test_vps_backup_credentials_are_not_injected_into_application_containers():
+    root = Path(__file__).resolve().parents[1]
+    runtime_example = (root / "deploy" / "env.example").read_text(encoding="utf-8")
+    restic_example = (root / "deploy" / "restic.env.example").read_text(encoding="utf-8")
+    backup = (root / "deploy" / "backup.sh").read_text(encoding="utf-8")
+    restore_drill = (root / "deploy" / "restic_restore_rehearsal.sh").read_text(encoding="utf-8")
+    service = (root / "deploy" / "lecturesift-backup.service").read_text(encoding="utf-8")
+
+    assert "RESTIC_PASSWORD=" not in runtime_example
+    assert "RESTIC_PASSWORD=" in restic_example
+    assert "/etc/lecturesift/restic.env" in backup
+    assert "/etc/lecturesift/restic.env" in restore_drill
+    assert "LECTURESIFT_RESTIC_ENV_FILE=/etc/lecturesift/restic.env" in service
+    assert "Requires=docker.service lecturesift.service" not in service
+
+
+def test_vps_redis_cutover_is_logical_frozen_and_version_scoped():
+    root = Path(__file__).resolve().parents[1]
+    migration = (root / "deploy" / "migrate_redis_state.sh").read_text(encoding="utf-8")
+    exporter = (root / "deploy" / "export_redis_state.py").read_text(encoding="utf-8")
+
+    assert "LECTURESIFT_SOURCE_FROZEN" in migration
+    assert "source-before.json" in migration and "source-after.json" in migration
+    assert "lecturesift:jobs:v2" in migration
+    assert "redis-dump.rdb" not in migration
+    assert 'STATE_KEY = "lecturesift:jobs:v2"' in exporter
+    assert '{"queued", "working"}' in exporter
+    assert "processing_locks" in exporter
+
+
 def test_job_history_is_owned_and_redacts_runtime_fields(tmp_path: Path):
     user_id, token = _account()
     job_id = f"history-{uuid.uuid4()}"
@@ -137,6 +210,61 @@ def test_worker_lock_fails_closed_when_redis_is_unavailable(tmp_path: Path, monk
     store._redis = BrokenRedis()
     with store.processing_lock("job-one") as acquired:
         assert acquired is False
+
+
+def test_job_store_write_fails_closed_when_distributed_lock_is_held(tmp_path: Path, monkeypatch):
+    class HeldLock:
+        def acquire(self, *, blocking):
+            return False
+
+    class LockedRedis:
+        def lock(self, *args, **kwargs):
+            return HeldLock()
+
+    monkeypatch.setattr(jobs_module, "WORK_DIR", tmp_path)
+    monkeypatch.setattr(jobs_module, "REDIS_URL", "")
+    store = jobs_module.JobStore()
+    store._redis = LockedRedis()
+
+    with pytest.raises(RuntimeError, match="write lock"):
+        store.create("fenced-job", tmp_path / "fenced-job", {})
+    assert "fenced-job" not in store._jobs
+
+
+def test_required_job_store_does_not_swallow_redis_read_or_write_failures(tmp_path: Path, monkeypatch):
+    class AcquiredLock:
+        def acquire(self, *, blocking):
+            return True
+
+        def release(self):
+            return None
+
+    class BrokenRedis:
+        fail_read = True
+
+        def lock(self, *args, **kwargs):
+            return AcquiredLock()
+
+        def get(self, key):
+            if self.fail_read:
+                raise RuntimeError("read failed")
+            return ""
+
+        def set(self, key, value):
+            raise RuntimeError("write failed")
+
+    monkeypatch.setattr(jobs_module, "WORK_DIR", tmp_path)
+    monkeypatch.setattr(jobs_module, "REDIS_URL", "")
+    monkeypatch.setattr(config, "REQUIRE_DURABLE_PROCESSING", True)
+    store = jobs_module.JobStore()
+    broken = BrokenRedis()
+    store._redis = broken
+
+    with pytest.raises(RuntimeError, match="job-store read"):
+        store.get("missing")
+    broken.fail_read = False
+    with pytest.raises(RuntimeError, match="job-store write"):
+        store.create("uncommitted-job", tmp_path / "uncommitted-job", {})
 
 
 def test_transient_pipeline_errors_are_retryable():

@@ -1,4 +1,4 @@
-const SUPPORT_API = "https://lecturesift-backend.onrender.com";
+const SUPPORT_API = "https://api.lecturesift.com";
 const support$ = id => document.getElementById(id);
 const supportT = (key, fallback) => window.LectureSiftI18n?.t(key) || fallback;
 const supportEscape = value => String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"})[char]);

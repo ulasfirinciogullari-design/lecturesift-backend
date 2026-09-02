@@ -13,7 +13,18 @@ import lecturesift.jobs as jobs_module
 import lecturesift.rollout_service as rollout_service
 import lecturesift.exports as exports_module
 from lecturesift import config, pipeline
-from lecturesift.billing_service import ENGINE, USER_PROFILES, register_user, verify_email
+from lecturesift.billing_service import (
+    ENGINE,
+    IYZICO_BANK_TRANSFER_INTENT_PROVIDER,
+    IYZICO_BANK_TRANSFER_PROVIDER,
+    IYZICO_CARD_INTENT_PROVIDER,
+    IYZICO_CARD_PROVIDER,
+    IYZICO_LEGACY_PROVIDER,
+    USER_PROFILES,
+    create_payment_order,
+    register_user,
+    verify_email,
+)
 from lecturesift.pipeline_enhancements import install_pipeline_enhancements
 from main import app
 
@@ -688,6 +699,70 @@ def test_admin_paginated_users_orders_activity_and_bulk_actions(monkeypatch):
     assert listed_order["payment_method"] == "bank_transfer"
     assert listed_order["user"]["email"] == first_email
     assert listed_order["created_at"] and listed_order["updated_at"]
+
+    protected_order = create_payment_order(
+        first_user["id"], IYZICO_BANK_TRANSFER_PROVIDER, "plus", "monthly", "TRY"
+    )
+    protected_intent = create_payment_order(
+        first_user["id"], IYZICO_BANK_TRANSFER_INTENT_PROVIDER, "plus", "monthly", "TRY"
+    )
+    card_order = create_payment_order(
+        first_user["id"], IYZICO_CARD_PROVIDER, "plus", "monthly", "TRY"
+    )
+    card_intent = create_payment_order(
+        first_user["id"], IYZICO_CARD_INTENT_PROVIDER, "plus", "monthly", "TRY"
+    )
+    legacy_order = create_payment_order(
+        first_user["id"], IYZICO_LEGACY_PROVIDER, "plus", "monthly", "TRY"
+    )
+    manual_only = client.get(
+        f"/billing/admin/orders?search={first_email}&provider=manual_bank_transfer&page_size=10",
+        headers=auth("admin-secret"),
+    )
+    assert manual_only.status_code == 200
+    assert manual_only.json()["pagination"]["total"] == 1
+    assert manual_only.json()["orders"][0]["provider"] == "bank_transfer"
+
+    for protected_reference in (protected_order["reference"], protected_intent["reference"]):
+        protected_only = client.get(
+            f"/billing/admin/orders?search={protected_reference}&provider=iyzico_bank_transfer&page_size=10",
+            headers=auth("admin-secret"),
+        )
+        assert protected_only.status_code == 200
+        assert protected_only.json()["pagination"]["total"] == 1
+        assert protected_only.json()["orders"][0]["provider"] == "iyzico"
+        assert protected_only.json()["orders"][0]["payment_method"] == "bank_transfer"
+
+    protected_page = client.get(
+        f"/billing/admin/orders?search={first_email}&provider=iyzico_bank_transfer&page_size=10",
+        headers=auth("admin-secret"),
+    ).json()
+    assert protected_page["pagination"]["total"] == 2
+    assert {item["reference"] for item in protected_page["orders"]} == {
+        protected_order["reference"], protected_intent["reference"]
+    }
+
+    card_only = client.get(
+        f"/billing/admin/orders?search={first_email}&provider=iyzico_card&page_size=10",
+        headers=auth("admin-secret"),
+    )
+    assert card_only.status_code == 200
+    assert card_only.json()["pagination"]["total"] == 2
+    assert {item["reference"] for item in card_only.json()["orders"]} == {
+        card_order["reference"], card_intent["reference"]
+    }
+    assert all(item["provider"] == "iyzico" for item in card_only.json()["orders"])
+    assert all(item["payment_method"] == "card" for item in card_only.json()["orders"])
+
+    for legacy_filter in ("iyzico", "iyzico_legacy"):
+        legacy_only = client.get(
+            f"/billing/admin/orders?search={first_email}&provider={legacy_filter}&page_size=10",
+            headers=auth("admin-secret"),
+        )
+        assert legacy_only.status_code == 200
+        assert legacy_only.json()["pagination"]["total"] == 1
+        assert legacy_only.json()["orders"][0]["reference"] == legacy_order["reference"]
+        assert legacy_only.json()["orders"][0]["payment_method"] == "unknown"
 
     refused = client.post(
         "/billing/admin/users/bulk-action",

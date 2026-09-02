@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import hashlib
 import uuid
 
 import lecturesift.app as app_module
@@ -6,6 +7,7 @@ import lecturesift.billing_service as billing_service_module
 from lecturesift import config
 from lecturesift.app import app
 from lecturesift.billing_service import (
+    authenticate_session,
     approve_manual_order,
     create_manual_order,
     create_password_reset_token,
@@ -35,6 +37,10 @@ def test_billing_catalog_has_hybrid_plans_and_translation_keys():
     assert plans["plus"]["entitlements"]["quiz_questions"] == 30
     assert plans["plus"]["entitlements"]["flashcards"] == 60
     assert plans["plus"]["entitlements"]["export_formats"] == ["pdf", "docx", "txt"]
+    assert all(
+        plan["entitlements"]["summary_profiles"] == ["detailed"]
+        for plan in plans.values()
+    )
     assert plans["free"]["entitlements"]["ad_free"] is False
     assert plans["free"]["entitlements"]["rewarded_minutes_eligible"] is True
     assert plans["free"]["entitlements"]["download_enabled"] is False
@@ -92,6 +98,56 @@ def test_billing_catalog_has_hybrid_plans_and_translation_keys():
     assert {"CAD", "AUD", "INR", "BRL", "AED", "SGD"} <= set(jpy["supported_currencies"])
 
 
+def test_legacy_summary_selection_cannot_downgrade_the_detailed_profile():
+    options = app_module._options(
+        "auto",
+        "tr",
+        "short",
+        0,
+        0,
+        False,
+    )
+    assert options["summary_style"] == "detailed"
+
+
+def test_legacy_email_verification_table_remains_a_fresh_database_compatibility_contract():
+    table = billing_service_module.LEGACY_EMAIL_VERIFICATIONS
+
+    assert table.name == "billing_email_verifications"
+    assert list(table.c.keys()) == [
+        "user_id",
+        "code_hash",
+        "expires_at",
+        "last_sent_at",
+        "window_started_at",
+        "send_count",
+        "attempt_count",
+        "verified_at",
+        "created_at",
+        "updated_at",
+    ]
+    assert [column.name for column in table.primary_key.columns] == ["user_id"]
+    assert {
+        foreign_key.target_fullname for foreign_key in table.foreign_keys
+    } == {"billing_users.id"}
+    assert table.c.code_hash.type.length == 64
+    assert table.c.last_sent_at.nullable is True
+    assert table.c.verified_at.nullable is True
+    assert all(
+        not table.c[name].nullable
+        for name in (
+            "user_id",
+            "code_hash",
+            "expires_at",
+            "window_started_at",
+            "send_count",
+            "attempt_count",
+            "created_at",
+            "updated_at",
+        )
+    )
+
+
 def test_billing_providers_distinguish_ready_state():
     response = TestClient(app).get("/billing/providers")
     assert response.status_code == 200
@@ -125,6 +181,7 @@ def test_billing_health_reports_local_database_and_fails_closed_on_render(monkey
 
     monkeypatch.setattr(config, "IYZICO_API_KEY", "live-api-key")
     monkeypatch.setattr(config, "IYZICO_SECRET_KEY", "live-secret-key")
+    monkeypatch.setattr(config, "PAYMENT_TOKEN_BINDING_SECRET", "payment-binding-secret-at-least-32-chars")
     response = client.get("/billing/health")
     assert response.status_code == 200
     assert response.json()["payments"]["bank_transfer"]["configured"] is False
@@ -138,12 +195,61 @@ def test_billing_health_reports_local_database_and_fails_closed_on_render(monkey
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "LS-BILL-00"
 
+    monkeypatch.delenv("RENDER", raising=False)
+    monkeypatch.setattr(config, "REQUIRE_POSTGRES", True)
+    response = client.get("/billing/health")
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "LS-BILL-00"
+
+
+def test_billing_health_executes_a_live_database_probe(monkeypatch):
+    import lecturesift.billing_service as billing_service
+
+    class BrokenConnection:
+        def __enter__(self):
+            raise billing_service.SQLAlchemyError("database unavailable")
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(billing_service.ENGINE, "connect", lambda: BrokenConnection())
+    client = TestClient(app)
+    response = client.get("/billing/health")
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "LS-BILL-00"
+    assert "ulaşılamıyor" in response.json()["detail"]["message"]
+
 
 def _new_account(client: TestClient) -> tuple[str, str]:
     email = f"billing-{uuid.uuid4()}@example.com"
     registration = register_user(email, "Strong-test-password1", "Test", "User", country_code="TR")
     result = verify_email(registration["verification_token"])
     return email, result["token"]
+
+
+def test_existing_session_survives_database_url_migration(monkeypatch):
+    old_database_url = "postgresql+psycopg://old-host/lecturesift"
+    monkeypatch.setattr(config, "BILLING_SESSION_SECRET", "")
+    monkeypatch.setattr(config, "BILLING_LEGACY_SESSION_SECRET_HEX", "")
+    monkeypatch.setattr(config, "DATABASE_URL", old_database_url)
+    email, token = _new_account(TestClient(app))
+
+    legacy_digest = hashlib.sha256(
+        f"{old_database_url}|lecturesift-session-v1".encode("utf-8")
+    ).hexdigest()
+    monkeypatch.setattr(config, "DATABASE_URL", "postgresql+psycopg://postgres/lecturesift")
+    monkeypatch.setattr(config, "BILLING_SESSION_SECRET", "new-production-secret-32-characters-minimum")
+    monkeypatch.setattr(config, "BILLING_LEGACY_SESSION_SECRET_HEX", legacy_digest)
+
+    assert authenticate_session(token)["email"] == email
+
+
+def test_invalid_legacy_session_secret_is_ignored(monkeypatch):
+    monkeypatch.setattr(config, "BILLING_SESSION_SECRET", "new-production-secret-32-characters-minimum")
+    monkeypatch.setattr(config, "BILLING_LEGACY_SESSION_SECRET_HEX", "not-hex")
+    email, token = _new_account(TestClient(app))
+
+    assert authenticate_session(token)["email"] == email
 
 
 def test_same_six_digit_verification_code_can_be_issued_to_different_users(monkeypatch):
@@ -348,7 +454,9 @@ def test_manual_transfer_order_and_admin_approval(monkeypatch):
 
     public_details = client.get("/billing/manual-transfer")
     assert public_details.status_code == 200
-    assert public_details.json()["bank"]["account_holder"] == "LectureSift Test"
+    assert public_details.json() == {"available": True}
+    assert "bank" not in public_details.json()
+    assert "support_email" not in public_details.json()
 
     approval = client.post(
         f"/billing/manual-transfer/orders/{order['reference']}/approve",
@@ -445,6 +553,56 @@ def test_payment_orders_fail_closed_without_identity_or_explicit_consent(monkeyp
         json={"plan_code": "plus", "interval": "monthly"},
     )
     assert missing_consent.status_code == 400
+
+
+def test_mark_payment_order_pending_is_idempotent_without_touching_timestamp(monkeypatch):
+    client = TestClient(app)
+    _, token = _new_account(client)
+    user_id = client.get(
+        "/billing/me", headers={"Authorization": f"Bearer {token}"}
+    ).json()["account"]["user"]["id"]
+    order = billing_service_module.create_payment_order(
+        user_id, "iyzico", "credit", "one_time", "TRY"
+    )
+
+    first_pending_at = billing_service_module.datetime(
+        2030, 1, 1, tzinfo=billing_service_module.timezone.utc
+    )
+    monkeypatch.setattr(billing_service_module, "utcnow", lambda: first_pending_at)
+    pending = billing_service_module.mark_payment_order_pending(order["reference"])
+    assert pending["status"] == "pending"
+    assert pending["updated_at"] == first_pending_at.replace(tzinfo=None).isoformat()
+
+    duplicate_attempt_at = billing_service_module.datetime(
+        2030, 1, 2, tzinfo=billing_service_module.timezone.utc
+    )
+    monkeypatch.setattr(billing_service_module, "utcnow", lambda: duplicate_attempt_at)
+    duplicate = billing_service_module.mark_payment_order_pending(order["reference"])
+    assert duplicate["status"] == "pending"
+    assert duplicate["updated_at"] == pending["updated_at"]
+
+
+def test_token_failed_payment_order_cannot_be_completed_or_grant_credit():
+    client = TestClient(app)
+    _, token = _new_account(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    user_id = client.get("/billing/me", headers=headers).json()["account"]["user"]["id"]
+    order = billing_service_module.create_payment_order(
+        user_id, "iyzico", "credit", "one_time", "TRY"
+    )
+    billing_service_module.mark_payment_order_token_failed(order["reference"])
+    terminal = billing_service_module.payment_order(order["reference"])
+
+    repeated = billing_service_module.complete_payment_order(
+        order["reference"],
+        succeeded=True,
+        provider_amount_minor=order["amount_minor"],
+    )
+
+    assert repeated == terminal
+    assert repeated["status"] == "token_failed"
+    assert repeated["provider_amount_minor"] is None
+    assert client.get("/billing/me", headers=headers).json()["account"]["credit_minutes"] == 0
 
 def test_job_creation_requires_account():
     response = TestClient(app).post("/jobs", files={"file": ("notes.txt", b"not a video", "text/plain")})

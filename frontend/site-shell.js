@@ -1,5 +1,5 @@
 (function () {
-  const API = "https://lecturesift-backend.onrender.com";
+  const API = "https://api.lecturesift.com";
   const TOKEN_KEY = "lecturesift-billing-token";
   const CODES = ["tr", "en", "de", "fr", "es", "it", "pt", "ru", "ar", "zh", "ja", "ko", "hi"];
   const COPY = {

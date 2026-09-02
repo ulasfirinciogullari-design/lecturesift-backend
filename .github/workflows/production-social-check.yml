@@ -16,14 +16,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          health_url="https://lecturesift-backend.onrender.com/health"
+          health_url="https://api.lecturesift.com/health"
+          expected_revision="${GITHUB_SHA,,}"
+          [[ "$expected_revision" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "GITHUB_SHA is not one full commit id." >&2
+            exit 1
+          }
           for attempt in $(seq 1 40); do
             if body=$(curl --silent --show-error --fail --max-time 20 "$health_url"); then
-              echo "Production health: $body"
-              break
+              revision=$(python -c \
+                'import json,sys; print(str(json.loads(sys.argv[1]).get("revision", "unknown")).lower())' \
+                "$body")
+              if [ "$revision" = "$expected_revision" ]; then
+                echo "Production is serving expected revision $expected_revision."
+                break
+              fi
+              echo "Production still serves revision $revision; waiting for $expected_revision."
             fi
             if [ "$attempt" -eq 40 ]; then
-              echo "Production API did not become healthy in time." >&2
+              echo "Production API did not serve GITHUB_SHA in time; social checks are blocked." >&2
               exit 1
             fi
             sleep 15
@@ -33,8 +44,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          instagram_health="https://lecturesift-backend.onrender.com/instagram/health"
-          launch_status="https://lecturesift-backend.onrender.com/instagram/launch/status"
+          instagram_health="https://api.lecturesift.com/instagram/health"
+          launch_status="https://api.lecturesift.com/instagram/launch/status"
 
           echo "Instagram health:"
           curl --silent --show-error --fail --max-time 25 "$instagram_health"
@@ -59,7 +70,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bootstrap="https://lecturesift-backend.onrender.com/instagram/launch/bootstrap"
+          bootstrap="https://api.lecturesift.com/instagram/launch/bootstrap"
           for attempt in $(seq 1 24); do
             if body=$(curl --silent --show-error --fail --max-time 25 "$bootstrap"); then
               echo "Instagram repair status: $body"
@@ -90,7 +101,7 @@ jobs:
           fi
 
           today=$(date -u +%F)
-          daily_status="https://lecturesift-backend.onrender.com/instagram/daily/status?day=$today"
+          daily_status="https://api.lecturesift.com/instagram/daily/status?day=$today"
           for attempt in $(seq 1 32); do
             if body=$(curl --silent --show-error --fail --max-time 25 "$daily_status"); then
               echo "Daily status: $body"

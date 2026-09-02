@@ -2,6 +2,9 @@
 .skip-link{position:fixed;z-index:10000;inset-block-start:10px;inset-inline-start:10px;padding:10px 14px;border:2px solid #4aaeff;border-radius:10px;background:#07152c;color:#fff;font:800 13px Inter,ui-sans-serif,system-ui,sans-serif;box-shadow:0 12px 32px rgba(0,0,0,.28);transform:translateY(-160%);transition:transform .16s ease}.skip-link:focus{transform:translateY(0)}
 :where(a,button,input,select,textarea,[tabindex]):focus-visible{outline:3px solid rgba(74,174,255,.55);outline-offset:3px}
 .theme-toggle{flex:0 0 auto;min-width:38px;min-height:36px;padding:7px 9px;display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--line,var(--theme-border));border-radius:10px;background:rgba(10,25,49,.72);color:var(--text,var(--theme-text));font:800 10px Inter,ui-sans-serif,system-ui,sans-serif;cursor:pointer;transition:transform .18s ease,border-color .18s ease,background .18s ease}.theme-toggle:hover{border-color:rgba(57,166,255,.5);transform:translateY(-1px)}.theme-toggle:focus-visible{outline:3px solid rgba(57,166,255,.2);outline-offset:2px}.theme-toggle svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.theme-toggle[data-mode="dark"] .theme-toggle-sun,.theme-toggle[data-mode="light"] .theme-toggle-moon{display:none}.theme-toggle-label{white-space:nowrap}.auth-topbar>.theme-toggle{margin-inline-start:auto}.auth-topbar>.language-switcher+.theme-toggle{margin-inline-start:0}
+/* Retired blue/purple light-theme patch. Kept inert while the Study Atelier
+   layer below owns all active colour and material decisions. */
+@media not all {
 html[data-theme="light"]{color-scheme:light;--bg:#f4f7fc;--bg-soft:#edf3fb;--panel:rgba(255,255,255,.92);--panel-strong:#fff;--line:rgba(49,75,113,.16);--line-strong:rgba(49,75,113,.28);--text:#16233a;--muted:#5f718c;--blue:#167bd1;--violet:#6848d8;--green:#15865f;--orange:#b96612;--red:#c93d59;--shadow:0 24px 70px rgba(45,72,110,.14);--theme-surface:#fff;--theme-surface-strong:#f4f7fc;--theme-input:#fff;--theme-raised:#edf4fc;--theme-text:#16233a;--theme-muted:#5f718c;--theme-border:rgba(49,75,113,.16);background:#f4f7fc!important}
 html[data-theme="light"] body{background:radial-gradient(circle at 50% -10%,rgba(75,141,255,.14),transparent 34%),linear-gradient(180deg,#f8fbff 0%,#f1f6fc 52%,#eaf1f9 100%)!important;color:var(--text)!important}
 html[data-theme="light"] :is(.topbar,.auth-topbar,.legal-topbar){background:rgba(248,251,255,.92)!important;border-color:var(--line)!important}
@@ -103,6 +106,7 @@ html[data-theme="light"] :is(.consent-banner a,.consent-card a){color:#075a9e!im
 html[data-theme="light"] :is(.back-link,.admin-login label span){color:#314d70!important}
 html[data-theme="light"] :is(.legal-nav-divider,.payment-method-grid article>span){color:#314d70!important}
 html[data-theme="light"] ::selection{background:rgba(8,107,191,.22);color:#071a31}
+}
 @media (max-width:700px){html[data-theme="light"] :is(.field-help,.control>span,.control small,.upload-source-card p,.combined-limit,.source-file-list small,.stage-list p,.process-metric small,.result-card p,.legal-note,.admin-section-note,.admin-command-bar small,.admin-growth-grid p,.empty-copy,.footer-links,.site-footer,.legal-footer){font-size:12px}}
 @media(max-width:860px){.theme-toggle-label{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}.auth-topbar{flex-wrap:wrap;gap:8px}.auth-topbar>.theme-toggle{margin-inline-start:auto}}
 @media(prefers-reduced-motion:reduce){.theme-toggle,.skip-link{transition:none}}
@@ -132,15 +136,15 @@ html[data-theme="light"] ::selection{background:rgba(8,107,191,.22);color:#071a3
 #adminCostsView :is(.admin-cost-status,.admin-growth-grid header span,.admin-count-badge){border:1px solid var(--cost-warning-border);background:var(--cost-warning-bg);color:var(--cost-warning-text);font-size:11px;line-height:1.35;font-weight:850}
 #adminCostsView :is(.admin-cost-status.verified,.admin-growth-grid .ready header span){border-color:var(--cost-ok-border);background:var(--cost-ok-bg);color:var(--cost-ok-text)}
 
-html[data-theme="light"] #adminCostsView{--cost-text:#091c34;--cost-muted:#334d6d;--cost-subtle:#425d7e;--cost-row:#f8fbff;--cost-row-alt:#edf4fb;--cost-row-hover:#dfedfa;--cost-source:#075a9e;--cost-warning-bg:#fff0ce;--cost-warning-border:#b96c08;--cost-warning-text:#754100;--cost-ok-bg:#d9f3e7;--cost-ok-border:#16835f;--cost-ok-text:#075b42}
-html[data-theme="light"] #adminCostsView .dashboard-card{background:#fff!important;color:var(--cost-text)!important;border-color:rgba(26,56,94,.26)!important}
+html[data-theme="light"] #adminCostsView{--cost-text:var(--atelier-ink);--cost-muted:var(--atelier-muted);--cost-subtle:var(--atelier-subtle);--cost-row:var(--atelier-surface);--cost-row-alt:var(--atelier-surface-raised);--cost-row-hover:var(--atelier-green-wash);--cost-source:var(--atelier-green);--cost-warning-bg:var(--atelier-ochre-wash);--cost-warning-border:var(--atelier-ochre);--cost-warning-text:#754100;--cost-ok-bg:var(--atelier-green-wash);--cost-ok-border:var(--atelier-green);--cost-ok-text:#075b42}
+html[data-theme="light"] #adminCostsView .dashboard-card{background:var(--atelier-surface)!important;color:var(--cost-text)!important;border-color:var(--atelier-line)!important}
 html[data-theme="light"] #adminCostsView :is(.admin-view-heading>p,.admin-section-note,.admin-metrics span,.admin-metrics small,.admin-cost-period,.admin-growth-grid p,.empty-copy,.admin-cost-form .field>span){color:var(--cost-muted)!important}
 html[data-theme="light"] #adminCostsView :is(h2,h3,.admin-metrics strong,.admin-growth-grid strong,.admin-table strong){color:var(--cost-text)!important}
-html[data-theme="light"] #adminCostsView .admin-metrics article{background:linear-gradient(145deg,#f8fbff,#eaf3fc)!important;border-color:rgba(26,56,94,.26)!important;box-shadow:none!important}
-html[data-theme="light"] #adminCostsView .admin-growth-grid article{background:var(--cost-row-alt)!important;color:var(--cost-text)!important;border-color:rgba(26,56,94,.24)!important}
-html[data-theme="light"] #adminCostsView .admin-growth-grid code{background:#dceaf8!important;color:#064f8b!important;border:1px solid rgba(7,90,158,.2)}
-html[data-theme="light"] #adminCostsView .admin-table th{background:#d9e8f6!important;color:#123b63!important}
-html[data-theme="light"] #adminCostsView .admin-table td{background:var(--cost-row)!important;color:#263f5f!important}
+html[data-theme="light"] #adminCostsView .admin-metrics article{background:var(--atelier-surface-raised)!important;border-color:var(--atelier-line)!important;box-shadow:none!important}
+html[data-theme="light"] #adminCostsView .admin-growth-grid article{background:var(--cost-row-alt)!important;color:var(--cost-text)!important;border-color:var(--atelier-line)!important}
+html[data-theme="light"] #adminCostsView .admin-growth-grid code{background:var(--atelier-surface-soft)!important;color:var(--cost-source)!important;border:1px solid var(--atelier-line)}
+html[data-theme="light"] #adminCostsView .admin-table th{background:var(--atelier-ochre-wash)!important;color:var(--atelier-ink)!important}
+html[data-theme="light"] #adminCostsView .admin-table td{background:var(--cost-row)!important;color:var(--atelier-muted)!important}
 html[data-theme="light"] #adminCostsView .admin-table tbody tr:nth-child(even) td{background:var(--cost-row-alt)!important}
 html[data-theme="light"] #adminCostsView .admin-table tbody tr:hover td{background:var(--cost-row-hover)!important}
 html[data-theme="light"] #adminCostsView .admin-cost-source{color:var(--cost-source)!important}
@@ -148,3 +152,1412 @@ html[data-theme="light"] #adminCostsView :is(.admin-cost-status,.admin-growth-gr
 html[data-theme="light"] #adminCostsView :is(.admin-cost-status.verified,.admin-growth-grid .ready header span){border-color:var(--cost-ok-border)!important;background:var(--cost-ok-bg)!important;color:var(--cost-ok-text)!important}
 
 @media(max-width:620px){#adminCostsView .admin-section-head{gap:10px}#adminCostsView .admin-cost-period{width:100%;justify-content:space-between}#adminCostsView .admin-cost-period .admin-filter{min-width:132px}#adminCostsView .admin-table :is(th,td){font-size:12px}}
+
+/* Study Atelier -----------------------------------------------------------
+   A quiet, annotated-textbook skin for every public, workspace, account,
+   legal and administration surface. The legacy component styles stay in
+   place for layout compatibility; this final layer owns colour, material,
+   type, focus and motion. */
+:root,
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --atelier-page: #111914;
+  --atelier-surface: #18231d;
+  --atelier-surface-raised: #202d25;
+  --atelier-surface-soft: #26342b;
+  --atelier-ink: #f5f0e7;
+  --atelier-muted: #c5bbab;
+  --atelier-subtle: #a99f91;
+  --atelier-green: #82c9ae;
+  --atelier-green-strong: #a5dcc6;
+  --atelier-green-wash: rgba(130, 201, 174, .12);
+  --atelier-terracotta: #d9825b;
+  --atelier-terracotta-strong: #efa17c;
+  --atelier-terracotta-wash: rgba(217, 130, 91, .13);
+  --atelier-ochre: #e1ab5b;
+  --atelier-ochre-wash: rgba(225, 171, 91, .14);
+  --atelier-danger: #f1a09a;
+  --atelier-danger-wash: rgba(241, 160, 154, .12);
+  --atelier-line: rgba(245, 240, 231, .18);
+  --atelier-line-strong: rgba(245, 240, 231, .3);
+  --atelier-shadow: 0 16px 38px rgba(0, 0, 0, .22);
+  --atelier-shadow-soft: 0 8px 22px rgba(0, 0, 0, .16);
+  --bg: var(--atelier-page);
+  --bg-soft: var(--atelier-surface);
+  --panel: var(--atelier-surface);
+  --panel-strong: var(--atelier-surface-raised);
+  --line: var(--atelier-line);
+  --line-strong: var(--atelier-line-strong);
+  --text: var(--atelier-ink);
+  --muted: var(--atelier-muted);
+  --blue: var(--atelier-green);
+  --violet: var(--atelier-terracotta);
+  --green: var(--atelier-green);
+  --orange: var(--atelier-ochre);
+  --red: var(--atelier-danger);
+  --shadow: var(--atelier-shadow);
+  --theme-surface: var(--atelier-surface);
+  --theme-surface-strong: var(--atelier-page);
+  --theme-input: var(--atelier-surface-raised);
+  --theme-raised: var(--atelier-surface-soft);
+  --theme-text: var(--atelier-ink);
+  --theme-muted: var(--atelier-muted);
+  --theme-border: var(--atelier-line);
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+  --atelier-page: #f4f0e6;
+  --atelier-surface: #fffdf8;
+  --atelier-surface-raised: #f8f4ea;
+  --atelier-surface-soft: #ece6d9;
+  --atelier-ink: #17231f;
+  --atelier-muted: #526158;
+  --atelier-subtle: #69766f;
+  --atelier-green: #0f6656;
+  --atelier-green-strong: #0a5145;
+  --atelier-green-wash: rgba(15, 102, 86, .09);
+  --atelier-terracotta: #9f4725;
+  --atelier-terracotta-strong: #81381d;
+  --atelier-terracotta-wash: rgba(159, 71, 37, .09);
+  --atelier-ochre: #a46c10;
+  --atelier-ochre-wash: rgba(164, 108, 16, .1);
+  --atelier-danger: #a73434;
+  --atelier-danger-wash: rgba(167, 52, 52, .08);
+  --atelier-line: rgba(23, 35, 31, .18);
+  --atelier-line-strong: rgba(23, 35, 31, .32);
+  --atelier-shadow: 0 15px 34px rgba(53, 45, 32, .1);
+  --atelier-shadow-soft: 0 7px 18px rgba(53, 45, 32, .08);
+  --bg: var(--atelier-page);
+  --bg-soft: var(--atelier-surface-raised);
+  --panel: var(--atelier-surface);
+  --panel-strong: var(--atelier-surface);
+  --line: var(--atelier-line);
+  --line-strong: var(--atelier-line-strong);
+  --text: var(--atelier-ink);
+  --muted: var(--atelier-muted);
+  --blue: var(--atelier-green);
+  --violet: var(--atelier-terracotta);
+  --green: var(--atelier-green);
+  --orange: var(--atelier-ochre);
+  --red: var(--atelier-danger);
+  --shadow: var(--atelier-shadow);
+  --theme-surface: var(--atelier-surface);
+  --theme-surface-strong: var(--atelier-page);
+  --theme-input: var(--atelier-surface);
+  --theme-raised: var(--atelier-surface-raised);
+  --theme-text: var(--atelier-ink);
+  --theme-muted: var(--atelier-muted);
+  --theme-border: var(--atelier-line);
+  background: var(--atelier-page) !important;
+}
+
+html,
+body {
+  background: var(--atelier-page) !important;
+  background-image: none !important;
+  color: var(--atelier-ink) !important;
+}
+
+body {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-weight: 450;
+  text-rendering: optimizeLegibility;
+}
+
+:is(h1, h2, h3, h4, .brand, .brand > span, .metric strong, .admin-metrics strong) {
+  color: var(--atelier-ink) !important;
+  font-family: Georgia, Cambria, "Times New Roman", serif;
+  font-weight: 700;
+  letter-spacing: -.025em;
+}
+
+:is(p, li, dd, figcaption, small, .intro, .lead, .empty-copy) {
+  color: var(--atelier-muted);
+}
+
+a {
+  text-decoration-color: color-mix(in srgb, var(--atelier-green) 50%, transparent);
+  text-underline-offset: .18em;
+}
+
+a:hover {
+  text-decoration-color: var(--atelier-terracotta);
+}
+
+::selection {
+  background: var(--atelier-ochre-wash) !important;
+  color: var(--atelier-ink) !important;
+}
+
+::placeholder {
+  color: var(--atelier-subtle) !important;
+  opacity: .9;
+}
+
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--atelier-ochre) !important;
+  outline-offset: 3px !important;
+}
+
+.skip-link {
+  border-color: var(--atelier-ochre) !important;
+  border-radius: 7px;
+  background: var(--atelier-ink) !important;
+  color: var(--atelier-page) !important;
+  box-shadow: var(--atelier-shadow-soft) !important;
+}
+
+/* Navigation and identity */
+:is(.topbar, .auth-topbar, .legal-topbar) {
+  background: var(--atelier-surface) !important;
+  background-image: none !important;
+  border-color: var(--atelier-line) !important;
+  box-shadow: 0 1px 0 var(--atelier-line) !important;
+  backdrop-filter: none !important;
+}
+
+.brand-mark {
+  border: 1px solid color-mix(in srgb, var(--atelier-green) 72%, var(--atelier-line));
+  border-radius: 7px !important;
+  background: var(--atelier-green) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.brand-mark i {
+  background: var(--atelier-page) !important;
+  background-image: none !important;
+}
+
+.brand span span,
+.brand > span > span {
+  color: var(--atelier-terracotta) !important;
+}
+
+:is(.public-nav-link, .public-account-link, .top-link, .top-links, .back-link, .footer-links a, .footer-instagram, .footer-bottom, .legal-footer, .legal-nav a) {
+  color: var(--atelier-muted) !important;
+}
+
+:is(.public-nav-link, .public-account-link, .top-link, .account-button, .public-social-link, .theme-toggle) {
+  border-radius: 7px !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+:is(.public-nav-link:hover, .public-nav-link.active, .public-account-link:hover, .top-link:hover, .top-link.active) {
+  border-color: var(--atelier-line-strong) !important;
+  background: var(--atelier-green-wash) !important;
+  color: var(--atelier-green-strong) !important;
+}
+
+html:not([data-theme="light"]) :is(.public-nav-link:hover, .public-nav-link.active, .public-account-link:hover, .top-link:hover, .top-link.active) {
+  color: var(--atelier-green) !important;
+}
+
+.public-nav-link.active {
+  box-shadow: inset 0 -2px var(--atelier-terracotta) !important;
+}
+
+.public-account-link[data-session-state="signed-in"] {
+  border-color: color-mix(in srgb, var(--atelier-green) 48%, transparent) !important;
+  background: var(--atelier-green-wash) !important;
+  color: var(--atelier-green) !important;
+}
+
+.theme-toggle {
+  border: 1px solid var(--atelier-line) !important;
+  background: var(--atelier-surface-raised) !important;
+  color: var(--atelier-ink) !important;
+}
+
+.theme-toggle:hover {
+  border-color: var(--atelier-green) !important;
+  background: var(--atelier-green-wash) !important;
+}
+
+/* Paper, cards and editorial sections */
+:is(
+  .panel,
+  .billing-section,
+  .feature-band,
+  .campaign-section,
+  .detail-section,
+  .auth-card,
+  .dashboard-card,
+  .admin-metrics article,
+  .legal-card,
+  .legal-nav,
+  .rollout-card,
+  .admin-command-bar,
+  .admin-detail-dialog,
+  .consent-card,
+  .consent-banner,
+  .checkout-panel,
+  .results,
+  .public-support-card
+) {
+  border-color: var(--atelier-line) !important;
+  background: var(--atelier-surface) !important;
+  background-image: none !important;
+  color: var(--atelier-ink) !important;
+  box-shadow: var(--atelier-shadow) !important;
+  backdrop-filter: none !important;
+}
+
+:is(.panel, .billing-section, .feature-band, .campaign-section, .detail-section, .legal-card, .public-support-card) {
+  border-radius: 14px !important;
+}
+
+:is(.detail-section, .billing-section, .legal-card, .public-support-card) {
+  border-inline-start: 4px solid var(--atelier-green) !important;
+}
+
+:is(.detail-hero, .auth-story, .account-hero, .workspace-intro) {
+  border: 1px solid var(--atelier-line) !important;
+  border-inline-start: 5px solid var(--atelier-terracotta) !important;
+  border-radius: 14px !important;
+  background: var(--atelier-surface-raised) !important;
+  background-image: none !important;
+  color: var(--atelier-ink) !important;
+  box-shadow: var(--atelier-shadow) !important;
+}
+
+:is(.detail-hero, .workspace-intro) h1 {
+  max-width: 18ch;
+  line-height: 1.04;
+}
+
+:is(.eyebrow, .step-number, .secure-note, .metric-label, .plan-kicker, .admin-sidebar-label) {
+  color: var(--atelier-terracotta) !important;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: .12em;
+}
+
+:is(.detail-hero > p:not(.eyebrow), .auth-story > p:not(.eyebrow), .workspace-intro > div > p:last-child, .lead) {
+  color: var(--atelier-muted) !important;
+}
+
+:is(
+  .capability-card,
+  .flow-grid article,
+  .faq-list details,
+  .payment-method-grid article,
+  .account-panel,
+  .account-meta div,
+  .story-item,
+  .feature-grid article,
+  .campaign-card,
+  .plan-card,
+  .transfer-panel,
+  .transfer-grid > div,
+  .key-item,
+  .note-item,
+  .file-item,
+  .quiz-item,
+  .flash-card,
+  .lesson-answer,
+  .exam-readiness,
+  .checkout-summary,
+  .checkout-summary dl div,
+  .checkout-legal-links,
+  .iyzico-checkout-brand,
+  .bank-transfer-guide,
+  .source-tabs,
+  .recording-mode-tabs,
+  .upload-source-card,
+  .process-metric,
+  .result-card,
+  .content-choice,
+  .promise-card,
+  .rollout-admin-row,
+  .admin-readiness article,
+  .admin-provider-summary article,
+  .admin-alerts article,
+  .admin-timeline article,
+  .admin-detail-summary article,
+  .admin-growth-grid article,
+  .admin-user-card,
+  .admin-user-form,
+  .admin-user-stats span,
+  .admin-plan-distribution article,
+  .admin-row-details dl
+) {
+  border-color: var(--atelier-line) !important;
+  background: var(--atelier-surface-raised) !important;
+  background-image: none !important;
+  color: var(--atelier-ink) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+:is(.capability-card, .feature-grid article, .campaign-card, .plan-card) {
+  border-radius: 10px !important;
+  border-block-start: 3px solid var(--atelier-ochre) !important;
+}
+
+:is(.plan-card.featured, .campaign-card.featured) {
+  border-block-start-color: var(--atelier-terracotta) !important;
+  background: var(--atelier-terracotta-wash) !important;
+}
+
+:is(.capability-card span, .flow-grid article::before, .payment-method-grid article > span, .admin-nav-icon, .admin-timeline-icon) {
+  border: 1px solid color-mix(in srgb, var(--atelier-ochre) 45%, transparent) !important;
+  border-radius: 6px !important;
+  background: var(--atelier-ochre-wash) !important;
+  color: var(--atelier-ochre) !important;
+}
+
+html[data-theme="light"] :is(.capability-card span, .flow-grid article::before, .payment-method-grid article > span, .admin-nav-icon, .admin-timeline-icon) {
+  color: #77500f !important;
+}
+
+:is(.capability-card p, .capability-card li, .flow-grid p, .faq-list p, .feature-grid p, .campaign-card p, .plan-card p, .plan-features li, .credit-callout p) {
+  color: var(--atelier-muted) !important;
+}
+
+.faq-list summary {
+  color: var(--atelier-ink) !important;
+}
+
+.faq-list summary::marker {
+  color: var(--atelier-terracotta);
+}
+
+.legal-card section {
+  border-color: var(--atelier-line) !important;
+}
+
+.legal-note,
+.notice:not(.error),
+.transcript-view-note {
+  border-color: color-mix(in srgb, var(--atelier-ochre) 52%, transparent) !important;
+  border-inline-start: 4px solid var(--atelier-ochre) !important;
+  background: var(--atelier-ochre-wash) !important;
+  color: var(--atelier-ink) !important;
+}
+
+.notice.error,
+.danger-zone {
+  border-color: color-mix(in srgb, var(--atelier-danger) 50%, transparent) !important;
+  background: var(--atelier-danger-wash) !important;
+  color: var(--atelier-danger) !important;
+}
+
+.social-card,
+.credit-callout,
+.bank-summary {
+  border-color: color-mix(in srgb, var(--atelier-green) 42%, transparent) !important;
+  background: var(--atelier-green-wash) !important;
+  color: var(--atelier-ink) !important;
+}
+
+/* The product preview should feel like a marked-up study desk, not a neon
+   dashboard. These rules deliberately cover the dark theme as well as light. */
+.hero-visual {
+  isolation: isolate;
+}
+
+.visual-window {
+  border-color: var(--atelier-line-strong) !important;
+  border-radius: 12px !important;
+  background: var(--atelier-surface) !important;
+  background-image: none !important;
+  color: var(--atelier-ink) !important;
+  box-shadow: var(--atelier-shadow) !important;
+  transform: rotate(.45deg) !important;
+}
+
+.visual-bar {
+  border-color: var(--atelier-line) !important;
+  background: var(--atelier-surface-raised) !important;
+  color: var(--atelier-muted) !important;
+}
+
+.visual-bar i {
+  border: 1px solid color-mix(in srgb, var(--atelier-ink) 20%, transparent);
+  background: var(--atelier-muted) !important;
+}
+
+.visual-bar i:first-child {
+  background: var(--atelier-terracotta) !important;
+}
+
+.visual-bar i:nth-child(2) {
+  background: var(--atelier-ochre) !important;
+}
+
+.visual-bar i:nth-child(3) {
+  background: var(--atelier-green) !important;
+}
+
+.visual-content {
+  background: var(--atelier-surface) !important;
+  background-image: none !important;
+}
+
+.visual-menu {
+  border-color: var(--atelier-line) !important;
+  background: var(--atelier-surface-raised) !important;
+  color: var(--atelier-muted) !important;
+}
+
+.visual-menu > * {
+  border: 1px solid transparent;
+}
+
+.visual-menu b {
+  border-color: color-mix(in srgb, var(--atelier-green) 38%, transparent) !important;
+  background: var(--atelier-green-wash) !important;
+  color: var(--atelier-green) !important;
+}
+
+.visual-summary small {
+  color: var(--atelier-terracotta) !important;
+}
+
+.visual-summary h3 {
+  color: var(--atelier-ink) !important;
+  font-family: Georgia, Cambria, "Times New Roman", serif;
+}
+
+.visual-summary p,
+.visual-menu span,
+.visual-chips span {
+  color: var(--atelier-muted) !important;
+}
+
+.visual-chips span {
+  border-color: var(--atelier-line) !important;
+  background: var(--atelier-ochre-wash) !important;
+}
+
+.floating-card {
+  border-color: var(--atelier-line-strong) !important;
+  border-block-start: 3px solid var(--atelier-ochre) !important;
+  border-radius: 9px !important;
+  background: var(--atelier-surface-raised) !important;
+  background-image: none !important;
+  color: var(--atelier-ink) !important;
+  box-shadow: var(--atelier-shadow-soft) !important;
+}
+
+.floating-card.quiz-float {
+  border-block-start-color: var(--atelier-terracotta) !important;
+}
+
+.floating-card.time-float {
+  border-block-start-color: var(--atelier-green) !important;
+}
+
+.floating-card small {
+  color: var(--atelier-terracotta) !important;
+}
+
+.floating-card strong {
+  color: var(--atelier-ink) !important;
+  font-family: Georgia, Cambria, "Times New Roman", serif;
+}
+
+.floating-card span {
+  color: var(--atelier-muted) !important;
+}
+
+/* Controls and actions */
+:is(
+  .field input,
+  .field select,
+  .field textarea,
+  .auth-form input,
+  .admin-filter,
+  .admin-inline-input,
+  .rollout-form input,
+  .rollout-form select,
+  .contact-form input,
+  .contact-form select,
+  .contact-form textarea,
+  .checkout-form input,
+  .checkout-form textarea,
+  .language-switcher,
+  .language-picker select,
+  .currency-picker select,
+  .control select,
+  .url-field input,
+  .sync-control input,
+  .lesson-ask textarea,
+  .public-support-card textarea,
+  .content-choice.with-count select
+) {
+  border-color: var(--atelier-line-strong) !important;
+  border-radius: 7px !important;
+  background: var(--atelier-surface) !important;
+  background-image: none !important;
+  color: var(--atelier-ink) !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--atelier-ink) 4%, transparent) !important;
+}
+
+:is(.field select, .rollout-form select, .contact-form select, .language-switcher, .language-picker select, .currency-picker select, .control select, .content-choice.with-count select) {
+  appearance: auto !important;
+  padding-inline: 11px !important;
+}
+
+:is(
+  .field input,
+  .field select,
+  .field textarea,
+  .auth-form input,
+  .admin-filter,
+  .admin-inline-input,
+  .rollout-form input,
+  .rollout-form select,
+  .contact-form input,
+  .contact-form select,
+  .contact-form textarea,
+  .checkout-form input,
+  .checkout-form textarea,
+  .control select,
+  .url-field input,
+  .sync-control input,
+  .lesson-ask textarea,
+  .public-support-card textarea,
+  .content-choice.with-count select
+):focus {
+  border-color: var(--atelier-green) !important;
+  box-shadow: 0 0 0 3px var(--atelier-green-wash) !important;
+}
+
+.admin-action {
+  min-height: 36px;
+  max-width: 100%;
+  padding: 8px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--atelier-line-strong) !important;
+  border-radius: 7px !important;
+  background: var(--atelier-surface-raised) !important;
+  background-image: none !important;
+  color: var(--atelier-ink) !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px !important;
+  font-weight: 800;
+  line-height: 1.35 !important;
+  text-align: center;
+  white-space: normal;
+}
+
+.admin-action:hover:not(:disabled) {
+  border-color: var(--atelier-green) !important;
+  background: var(--atelier-green-wash) !important;
+  color: var(--atelier-green) !important;
+}
+
+.admin-action:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+:is(
+  .primary-button,
+  .primary-action,
+  .auth-form button,
+  .account-status button,
+  .plan-action,
+  .copy-transfer,
+  .download-button,
+  .hero-primary,
+  .cta-register,
+  .campaign-card a,
+  .detail-actions .primary,
+  .checkout-form .primary,
+  .bank-transfer-guide .primary,
+  .rollout-form button:not(.secondary),
+  .rollout-action,
+  .lesson-ask form button,
+  .public-support-card button,
+  .consent-actions button.primary,
+  .contact-form button,
+  .admin-action.approve,
+  .admin-contact-reply .admin-action.approve,
+  .house-campaign-action
+) {
+  border-color: var(--atelier-green-strong) !important;
+  border-radius: 8px !important;
+  background: var(--atelier-green) !important;
+  background-image: none !important;
+  color: #fffdf8 !important;
+  box-shadow: none !important;
+}
+
+html:not([data-theme="light"]) :is(
+  .primary-button,
+  .primary-action,
+  .auth-form button,
+  .account-status button,
+  .plan-action,
+  .copy-transfer,
+  .download-button,
+  .hero-primary,
+  .cta-register,
+  .campaign-card a,
+  .detail-actions .primary,
+  .checkout-form .primary,
+  .bank-transfer-guide .primary,
+  .rollout-form button:not(.secondary),
+  .rollout-action,
+  .lesson-ask form button,
+  .public-support-card button,
+  .consent-actions button.primary,
+  .contact-form button,
+  .admin-action.approve,
+  .admin-contact-reply .admin-action.approve,
+  .house-campaign-action
+) {
+  background: #2f745f !important;
+}
+
+:is(
+  .primary-button,
+  .primary-action,
+  .auth-form button,
+  .account-status button,
+  .plan-action,
+  .copy-transfer,
+  .download-button,
+  .hero-primary,
+  .cta-register,
+  .campaign-card a,
+  .detail-actions .primary,
+  .checkout-form .primary,
+  .bank-transfer-guide .primary,
+  .rollout-action,
+  .lesson-ask form button,
+  .public-support-card button,
+  .consent-actions button.primary,
+  .contact-form button,
+  .admin-action.approve,
+  .admin-contact-reply .admin-action.approve,
+  .house-campaign-action
+):hover:not(:disabled) {
+  background: var(--atelier-terracotta) !important;
+  border-color: var(--atelier-terracotta-strong) !important;
+  filter: none !important;
+}
+
+html:not([data-theme="light"]) :is(
+  .primary-button,
+  .primary-action,
+  .auth-form button,
+  .account-status button,
+  .plan-action,
+  .copy-transfer,
+  .download-button,
+  .hero-primary,
+  .cta-register,
+  .campaign-card a,
+  .detail-actions .primary,
+  .checkout-form .primary,
+  .bank-transfer-guide .primary,
+  .rollout-action,
+  .lesson-ask form button,
+  .public-support-card button,
+  .consent-actions button.primary,
+  .contact-form button,
+  .admin-action.approve,
+  .admin-contact-reply .admin-action.approve,
+  .house-campaign-action
+):hover:not(:disabled) {
+  border-color: #d9825b !important;
+  background: #8f442a !important;
+}
+
+:is(
+  .secondary-action,
+  .hero-secondary,
+  .cta-login,
+  .detail-actions .secondary,
+  .checkout-form .secondary,
+  .bank-transfer-guide .secondary,
+  .rollout-form button.secondary,
+  .workspace-intro-actions a,
+  .flash-actions button,
+  .exam-prep > button,
+  .admin-dialog-close,
+  .consent-actions button:not(.primary),
+  .consent-manage
+) {
+  border: 1px solid var(--atelier-line-strong) !important;
+  border-radius: 8px !important;
+  background: var(--atelier-surface-raised) !important;
+  background-image: none !important;
+  color: var(--atelier-ink) !important;
+  box-shadow: none !important;
+}
+
+:is(
+  .secondary-action,
+  .hero-secondary,
+  .cta-login,
+  .detail-actions .secondary,
+  .checkout-form .secondary,
+  .bank-transfer-guide .secondary,
+  .rollout-form button.secondary,
+  .workspace-intro-actions a,
+  .flash-actions button,
+  .exam-prep > button,
+  .admin-dialog-close,
+  .consent-actions button:not(.primary),
+  .consent-manage
+):hover:not(:disabled) {
+  border-color: var(--atelier-terracotta) !important;
+  background: var(--atelier-terracotta-wash) !important;
+  color: var(--atelier-terracotta-strong) !important;
+}
+
+.secondary-action.danger,
+.danger-zone .secondary-action.danger {
+  border-color: color-mix(in srgb, var(--atelier-danger) 58%, transparent) !important;
+  background: var(--atelier-danger-wash) !important;
+  color: var(--atelier-danger) !important;
+}
+
+.secondary-action.danger:hover:not(:disabled),
+.danger-zone .secondary-action.danger:hover:not(:disabled) {
+  border-color: var(--atelier-danger) !important;
+  background: var(--atelier-danger) !important;
+  color: #fffdf8 !important;
+}
+
+:is(button, [role="button"], input, select, textarea, summary) {
+  accent-color: var(--atelier-green);
+}
+
+/* Upload, processing and study outputs */
+:is(.drop-zone, .mini-drop-zone) {
+  border: 1px dashed color-mix(in srgb, var(--atelier-green) 58%, var(--atelier-line)) !important;
+  border-radius: 10px !important;
+  background: var(--atelier-green-wash) !important;
+  background-image: none !important;
+  color: var(--atelier-ink) !important;
+}
+
+:is(.drop-zone:hover, .mini-drop-zone:hover) {
+  border-color: var(--atelier-terracotta) !important;
+  background: var(--atelier-terracotta-wash) !important;
+}
+
+:is(.drop-zone, .mini-drop-zone):focus-within,
+.format-choices input:focus-visible + span,
+.content-choice input:focus-visible + i {
+  outline: 3px solid var(--atelier-ochre) !important;
+  outline-offset: 3px !important;
+}
+
+.upload-icon {
+  border: 1px solid var(--atelier-line) !important;
+  border-radius: 7px !important;
+  background: var(--atelier-surface) !important;
+  background-image: none !important;
+  color: var(--atelier-green) !important;
+}
+
+.promise-card > span {
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--atelier-ochre) 45%, transparent);
+  border-radius: 50%;
+  background: var(--atelier-ochre-wash) !important;
+  color: var(--atelier-ochre) !important;
+  font-size: 16px;
+  line-height: 1;
+}
+
+:is(.source-tab.active, .recording-mode-tabs button.active, .format-choices input:checked + span, .pack-presets button.active) {
+  border-color: color-mix(in srgb, var(--atelier-green) 52%, transparent) !important;
+  background: var(--atelier-green-wash) !important;
+  background-image: none !important;
+  color: var(--atelier-green) !important;
+  box-shadow: inset 0 -2px var(--atelier-green) !important;
+}
+
+.content-choice label > i {
+  border-color: var(--atelier-line-strong) !important;
+  background: var(--atelier-surface) !important;
+}
+
+.content-choice input:checked + i {
+  border-color: var(--atelier-green) !important;
+  background: var(--atelier-green) !important;
+  background-image: none !important;
+}
+
+.toggle-control input:checked + i {
+  background: var(--atelier-green) !important;
+  background-image: none !important;
+}
+
+:is(.usage-track, .admin-progress, .admin-plan-distribution i) {
+  background: var(--atelier-surface-soft) !important;
+}
+
+:is(.usage-track i, .admin-progress span, .admin-plan-distribution b) {
+  background: var(--atelier-green) !important;
+  background-image: none !important;
+}
+
+.progress-ring {
+  background: conic-gradient(var(--atelier-green) var(--progress), var(--atelier-surface-soft) var(--progress)) !important;
+}
+
+.progress-ring::after {
+  background: var(--atelier-surface) !important;
+}
+
+:is(
+  .format-choices,
+  .sync-control,
+  .url-field,
+  .toggle-control,
+  .stage-list li,
+  .transcript-box,
+  .transcript-enhancements,
+  .transcript-timeline,
+  .transcript-segment,
+  .speaker-legend span,
+  .slide-card,
+  .quiz-option,
+  .lesson-ask textarea,
+  .exam-prep > button,
+  .account-section-nav,
+  .admin-bulk-toolbar,
+  .pack-presets button
+) {
+  border-color: var(--atelier-line) !important;
+  background: var(--atelier-surface-raised) !important;
+  background-image: none !important;
+  color: var(--atelier-ink) !important;
+  backdrop-filter: none !important;
+}
+
+:is(.format-legend, .format-choices label span, .sync-control b, .sync-control small, .toggle-control b, .toggle-control small, .result-tab, .transcript-box, .transcript-plain, .transcript-segment-text, .transcript-speaker, .speaker-legend span, .slide-card figcaption, .quiz-option, .quiz-explanation, .flash-card p, .lesson-answer p, .lesson-answer li, .exam-readiness span, .exam-readiness p) {
+  color: var(--atelier-muted) !important;
+}
+
+.transcript-waveform {
+  border-color: var(--atelier-line) !important;
+  background-color: var(--atelier-surface-raised) !important;
+}
+
+.transcript-wave-track {
+  background: transparent !important;
+  background-image: repeating-linear-gradient(90deg, transparent 0, transparent calc(10% - 1px), var(--atelier-line) 10%) !important;
+}
+
+.transcript-timeline-head > span,
+.elapsed {
+  border-color: var(--atelier-line) !important;
+  background: var(--atelier-ochre-wash) !important;
+  color: var(--atelier-ochre) !important;
+}
+
+.transcript-segment time,
+.section-detail-link,
+.feature-deep-links a,
+.social-card a,
+.legal-card a {
+  color: var(--atelier-green) !important;
+}
+
+.transcript-segment:hover,
+.transcript-segment.active {
+  background: var(--atelier-green-wash) !important;
+  color: var(--atelier-ink) !important;
+}
+
+.feature-deep-links a {
+  border-color: var(--atelier-line) !important;
+  border-radius: 8px !important;
+  background: var(--atelier-surface-raised) !important;
+}
+
+.feature-deep-links a:hover {
+  border-color: var(--atelier-terracotta) !important;
+  background: var(--atelier-terracotta-wash) !important;
+  color: var(--atelier-terracotta-strong) !important;
+}
+
+/* Tables, status and commerce */
+:is(.compare-wrap, .admin-table-wrap, .data-table) {
+  border-color: var(--atelier-line) !important;
+}
+
+:is(.compare-table, .admin-table, .admin-record-table, .data-table) {
+  background: var(--atelier-surface) !important;
+  color: var(--atelier-ink) !important;
+}
+
+:is(.compare-table th, .admin-table th, .admin-record-table th, .data-table th) {
+  border-color: var(--atelier-line) !important;
+  background: var(--atelier-ochre-wash) !important;
+  color: var(--atelier-ink) !important;
+}
+
+:is(.compare-table td, .admin-table td, .admin-record-table td, .data-table td) {
+  border-color: var(--atelier-line) !important;
+  background: var(--atelier-surface) !important;
+  color: var(--atelier-muted) !important;
+}
+
+:is(.compare-table tbody tr:nth-child(even) td, .admin-table tbody tr:nth-child(even) td, .admin-record-table tbody tr:nth-child(even) td, .data-table tbody tr:nth-child(even) td) {
+  background: var(--atelier-surface-raised) !important;
+}
+
+:is(.compare-table tbody tr:hover td, .admin-table tbody tr:hover td, .admin-record-table tbody tr:hover td, .data-table tbody tr:hover td) {
+  background: var(--atelier-green-wash) !important;
+}
+
+.status-pill {
+  border: 1px solid color-mix(in srgb, var(--atelier-ochre) 48%, transparent) !important;
+  background: var(--atelier-ochre-wash) !important;
+  color: var(--atelier-ochre) !important;
+}
+
+.status-pill.paid,
+.verified-pill,
+.delivery-sent {
+  border-color: color-mix(in srgb, var(--atelier-green) 48%, transparent) !important;
+  background: var(--atelier-green-wash) !important;
+  color: var(--atelier-green) !important;
+}
+
+.admin-action.reject {
+  border-color: var(--atelier-danger) !important;
+  background: var(--atelier-danger-wash) !important;
+  color: var(--atelier-danger) !important;
+}
+
+.admin-action.reject:hover:not(:disabled) {
+  border-color: var(--atelier-danger) !important;
+  background: #913737 !important;
+  color: #fffdf8 !important;
+}
+
+.delivery-failed {
+  background: transparent !important;
+  color: var(--atelier-danger) !important;
+}
+
+.plan-badge,
+.campaign-value {
+  border: 1px solid color-mix(in srgb, var(--atelier-terracotta) 45%, transparent) !important;
+  background: var(--atelier-terracotta-wash) !important;
+  color: var(--atelier-terracotta) !important;
+}
+
+.checkout-panel iframe {
+  border: 1px solid var(--atelier-line) !important;
+  border-radius: 8px !important;
+  background: #fffdf8 !important;
+}
+
+.checkout-panel {
+  z-index: 120 !important;
+}
+
+.iyzico-checkout-brand img {
+  filter: sepia(.18) saturate(.78);
+}
+
+/* Auth, consent and legal */
+.auth-story::after {
+  display: none !important;
+}
+
+.story-item i,
+.status-orb,
+.bank-transfer-guide-icon {
+  border: 1px solid color-mix(in srgb, var(--atelier-green) 42%, transparent) !important;
+  border-radius: 7px !important;
+  background: var(--atelier-green-wash) !important;
+  background-image: none !important;
+  color: var(--atelier-green) !important;
+  box-shadow: none !important;
+}
+
+:is(.text-button, .inline-links a, .verify-inline-link, .check-row a, .back-link) {
+  color: var(--atelier-green) !important;
+}
+
+.legal-nav a:hover,
+.legal-nav a.active {
+  background: var(--atelier-terracotta-wash) !important;
+  color: var(--atelier-terracotta-strong) !important;
+}
+
+.legal-nav a.active {
+  box-shadow: inset 3px 0 var(--atelier-terracotta);
+}
+
+[dir="rtl"] .legal-nav a.active {
+  box-shadow: inset -3px 0 var(--atelier-terracotta);
+}
+
+.consent-banner {
+  color: var(--atelier-ink) !important;
+  box-shadow: var(--atelier-shadow) !important;
+}
+
+:is(.consent-banner p, .consent-heading p, .consent-card label small) {
+  color: var(--atelier-muted) !important;
+}
+
+:is(.consent-banner a, .consent-card a) {
+  color: var(--atelier-green) !important;
+}
+
+.consent-modal {
+  background: rgba(17, 25, 20, .74) !important;
+}
+
+.consent-heading > button {
+  border-color: var(--atelier-line) !important;
+  background: var(--atelier-surface-raised) !important;
+  color: var(--atelier-ink) !important;
+}
+
+.consent-card input {
+  accent-color: var(--atelier-green) !important;
+}
+
+/* Workspace has a practical notebook character; admin stays denser and
+   visually separate from customer pages without becoming a different brand. */
+.workspace-intro {
+  border-inline-start-color: var(--atelier-green) !important;
+}
+
+.admin-sidebar {
+  border-color: color-mix(in srgb, var(--atelier-green) 34%, transparent) !important;
+  border-radius: 10px !important;
+  background: #0f1d18 !important;
+  background-image: none !important;
+  box-shadow: var(--atelier-shadow-soft) !important;
+  backdrop-filter: none !important;
+}
+
+html[data-theme="light"] .admin-sidebar {
+  background: #17231f !important;
+}
+
+.admin-sidebar-label {
+  color: var(--atelier-ochre) !important;
+}
+
+.admin-section-nav button {
+  border-radius: 7px !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: #d9d2c7 !important;
+}
+
+.admin-section-nav button small {
+  color: #afa79a !important;
+}
+
+.admin-section-nav button:hover {
+  border-color: rgba(225, 171, 91, .42) !important;
+  background: rgba(225, 171, 91, .1) !important;
+  color: #fffdf8 !important;
+  transform: none !important;
+}
+
+.admin-section-nav button[aria-selected="true"] {
+  border-color: rgba(130, 201, 174, .48) !important;
+  background: rgba(130, 201, 174, .12) !important;
+  background-image: none !important;
+  color: #fffdf8 !important;
+  box-shadow: inset 3px 0 #82c9ae !important;
+}
+
+[dir="rtl"] .admin-section-nav button[aria-selected="true"] {
+  box-shadow: inset -3px 0 #82c9ae !important;
+}
+
+.admin-section-nav button[aria-selected="true"] small {
+  color: #c8e5d9 !important;
+}
+
+:is(.account-section-nav, .admin-bulk-toolbar, .admin-command-bar) {
+  border-color: var(--atelier-line) !important;
+  background: var(--atelier-surface) !important;
+  box-shadow: var(--atelier-shadow-soft) !important;
+  backdrop-filter: none !important;
+}
+
+:is(.account-section-nav button, .admin-bulk-toolbar button) {
+  border-radius: 7px !important;
+  color: var(--atelier-muted) !important;
+}
+
+:is(.account-section-nav button[aria-selected="true"], .account-section-nav button:hover) {
+  border-color: color-mix(in srgb, var(--atelier-green) 50%, transparent) !important;
+  background: var(--atelier-green-wash) !important;
+  background-image: none !important;
+  color: var(--atelier-green) !important;
+}
+
+.support-thread {
+  background: var(--atelier-surface-raised) !important;
+}
+
+.support-bubble {
+  border-color: var(--atelier-line) !important;
+  background: var(--atelier-surface) !important;
+  color: var(--atelier-ink) !important;
+  box-shadow: var(--atelier-shadow-soft) !important;
+}
+
+.support-bubble.outgoing {
+  border-color: color-mix(in srgb, var(--atelier-green) 42%, transparent) !important;
+  background: var(--atelier-green-wash) !important;
+  color: var(--atelier-ink) !important;
+}
+
+.support-bubble :is(time, small) {
+  color: var(--atelier-subtle) !important;
+}
+
+/* Ads and house campaigns should read like a print margin notice, not a
+   bright SaaS promotion. */
+.display-ad,
+.display-ad.house-campaign {
+  border-color: var(--atelier-line) !important;
+  border-inline-start: 4px solid var(--atelier-ochre) !important;
+  border-radius: 9px !important;
+  background: var(--atelier-surface) !important;
+  background-image: none !important;
+  box-shadow: var(--atelier-shadow-soft) !important;
+}
+
+:is(.display-ad-label, .house-campaign .display-ad-label) {
+  color: var(--atelier-terracotta) !important;
+}
+
+.house-campaign strong {
+  color: var(--atelier-ink) !important;
+  font-family: Georgia, Cambria, "Times New Roman", serif;
+}
+
+.house-campaign p {
+  color: var(--atelier-muted) !important;
+}
+
+/* Cost centre keeps its semantic warning/ok contrast while adopting the
+   same paper-and-ledger material as the rest of the admin area. */
+#adminCostsView {
+  --cost-text: var(--atelier-ink);
+  --cost-muted: var(--atelier-muted);
+  --cost-subtle: var(--atelier-subtle);
+  --cost-row: var(--atelier-surface);
+  --cost-row-alt: var(--atelier-surface-raised);
+  --cost-row-hover: var(--atelier-green-wash);
+  --cost-source: var(--atelier-green);
+  --cost-warning-bg: var(--atelier-ochre-wash);
+  --cost-warning-border: var(--atelier-ochre);
+  --cost-warning-text: var(--atelier-ochre);
+  --cost-ok-bg: var(--atelier-green-wash);
+  --cost-ok-border: var(--atelier-green);
+  --cost-ok-text: var(--atelier-green);
+}
+
+#adminCostsView :is(.dashboard-card, .admin-metrics article, .admin-growth-grid article, .admin-growth-grid code, .admin-table th, .admin-table td) {
+  border-color: var(--atelier-line) !important;
+  background: var(--atelier-surface) !important;
+  background-image: none !important;
+  color: var(--atelier-ink) !important;
+  box-shadow: none !important;
+}
+
+#adminCostsView :is(.admin-metrics article, .admin-growth-grid article, .admin-table tbody tr:nth-child(even) td) {
+  background: var(--atelier-surface-raised) !important;
+}
+
+#adminCostsView .admin-growth-grid code {
+  background: var(--atelier-surface-soft) !important;
+  color: var(--atelier-green) !important;
+}
+
+#adminCostsView .admin-table th {
+  background: var(--atelier-ochre-wash) !important;
+}
+
+#adminCostsView .admin-table tbody tr:hover td {
+  background: var(--atelier-green-wash) !important;
+}
+
+/* Bidirectional text and compact screens */
+[dir="rtl"] :is(.legal-card, .legal-nav, .auth-card, .detail-main, .workspace-intro, .admin-view, .admin-section-nav button, .support-bubble) {
+  text-align: right;
+}
+
+[dir="rtl"] :is(th, td, .quiz-option, .admin-view-heading > p, .admin-timeline time) {
+  text-align: right !important;
+}
+
+[dir="rtl"] .support-bubble.outgoing {
+  margin-inline-start: 0 !important;
+  margin-inline-end: auto !important;
+}
+
+[dir="rtl"] :is(.legal-card, .detail-section, .billing-section, .public-support-card, .detail-hero, .auth-story, .account-hero, .workspace-intro, .display-ad) {
+  border-inline-start-width: 1px !important;
+  border-inline-end: 4px solid var(--atelier-green) !important;
+}
+
+[dir="rtl"] :is(.detail-hero, .auth-story, .account-hero) {
+  border-inline-end-color: var(--atelier-terracotta) !important;
+}
+
+[dir="rtl"] .display-ad {
+  border-inline-end-color: var(--atelier-ochre) !important;
+}
+
+@media (max-width: 860px) {
+  :is(.topbar, .auth-topbar, .legal-topbar) {
+    row-gap: 9px;
+  }
+
+  .public-header-tools {
+    max-width: 100%;
+  }
+
+  :is(.public-nav, .account-section-nav) {
+    scroll-snap-type: inline proximity;
+  }
+
+  :is(.public-nav, .account-section-nav, .admin-section-nav, .topbar .top-actions, .legal-topbar .top-links) {
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scroll-padding-inline: 12px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
+    mask-image: linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
+  }
+
+  :is(.public-nav, .account-section-nav, .admin-section-nav, .topbar .top-actions, .legal-topbar .top-links)::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  :is(.public-nav-link, .public-account-link, .account-section-nav button) {
+    scroll-snap-align: start;
+  }
+
+  :is(.detail-hero, .auth-story, .account-hero, .workspace-intro, .panel, .billing-section, .feature-band, .campaign-section, .detail-section, .legal-card) {
+    border-radius: 10px !important;
+  }
+
+  .admin-sidebar {
+    position: static;
+    max-width: 100%;
+  }
+
+  .account-section-nav {
+    position: static;
+  }
+
+  .admin-section-nav {
+    display: flex;
+    gap: 7px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: inline proximity;
+    scrollbar-width: none;
+  }
+
+  .admin-section-nav button {
+    flex: 0 0 min(76vw, 230px);
+    min-width: 0;
+    scroll-snap-align: start;
+  }
+
+  .admin-section-nav button small {
+    white-space: normal;
+  }
+}
+
+@media (max-width: 620px) {
+  :is(.detail-main, .account-layout, .admin-layout, .public-support-shell) {
+    width: min(100% - 20px, 1240px);
+  }
+
+  :is(.panel, .billing-section, .feature-band, .campaign-section, .detail-section, .legal-card, .auth-card, .dashboard-card) {
+    box-shadow: 0 7px 18px rgba(53, 45, 32, .08) !important;
+  }
+
+  :is(.detail-hero, .workspace-intro, .account-hero) {
+    padding: 22px !important;
+  }
+
+  .consent-banner {
+    inset-inline: 10px !important;
+    bottom: 10px !important;
+    width: auto !important;
+    max-height: min(72vh, 520px);
+    overflow-y: auto;
+  }
+
+  :is(.admin-table-wrap, .compare-wrap, .data-table) {
+    scrollbar-color: var(--atelier-green) var(--atelier-surface-soft);
+  }
+
+  .format-choices {
+    grid-template-columns: 1fr !important;
+  }
+
+  .admin-action {
+    min-height: 42px;
+    padding: 10px 12px;
+  }
+
+  .admin-actions .admin-action {
+    flex: 1 1 120px;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root,
+  html[data-theme="dark"],
+  html[data-theme="light"] {
+    --atelier-line: currentColor;
+    --atelier-line-strong: currentColor;
+  }
+
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline-width: 4px !important;
+  }
+}
+
+@media(prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior: auto !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+}

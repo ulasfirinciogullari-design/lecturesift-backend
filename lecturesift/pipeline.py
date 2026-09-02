@@ -18,10 +18,11 @@ from .config import (
 from .costs import cost_context
 from .documents import extract_documents
 from .duration import media_duration_seconds, media_duration_values
-from .errors import normalize_error
+from .errors import LectureSiftError, normalize_error
 from .exports import build_artifacts, build_binary_artifact
 from .jobs import JOBS
 from .media import convert_videos_to_mp3, extract_audio_chunks, has_audio_stream
+from .provider_state import AI_PROVIDER_CIRCUIT
 from .rollout_service import is_guest_user, reserve_guest_job
 from .slides import extract_slides
 
@@ -97,6 +98,24 @@ def _make_selected_study_pack(source: str, options: dict) -> dict:
 
 def _source_duration_seconds(paths: list[Path]) -> float:
     return media_duration_seconds(paths)
+
+
+def _prepare_study_audio(audio_sources: list[Path], job_dir: Path) -> Path | None:
+    """Create the single MP3 shipped with every media-backed study pack.
+
+    An actually silent video remains a valid study-pack input, matching the
+    existing pipeline behavior.  Other conversion failures remain fatal so a
+    completed job never silently promises an audio file that is absent.
+    """
+    audio_dir = job_dir / "study_audio_export"
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        return convert_videos_to_mp3(audio_sources, audio_dir)
+    except LectureSiftError as exc:
+        if exc.code != "LS-AUDIO-01":
+            raise
+        shutil.rmtree(audio_dir, ignore_errors=True)
+        return None
 
 
 def _record_billing_usage(
@@ -567,6 +586,11 @@ def _process_job(
     data = JOBS.get(job_id)
     if not data:
         return
+    # Enforce the current product contract again at the worker boundary.  This
+    # also upgrades jobs queued by an older web process before a rolling
+    # deployment, rather than allowing their legacy short/standard profile to
+    # bypass the API-side normalization.
+    options["summary_style"] = "detailed"
     job_dir = Path(data["job_dir"])
     slides_dir = job_dir / "slides"
     audio_sources = _path_list(audio_video_paths)
@@ -579,7 +603,14 @@ def _process_job(
     started = time.time()
 
     try:
-        JOBS.update(job_id, status="working", percent=8, stage="parallel_analysis", started=started)
+        JOBS.update(
+            job_id,
+            status="working",
+            percent=8,
+            stage="parallel_analysis",
+            started=started,
+            options=options,
+        )
 
         document_sources = [path for path in audio_sources if path.suffix.casefold() in DOCUMENT_EXTENSIONS]
         if document_sources:
@@ -811,7 +842,13 @@ def _process_job(
         diagnostics["source_mode"] = source_mode
 
         JOBS.update(job_id, percent=73, stage="study_pack")
-        study_pack, translated_transcript = _build_text_outputs(job_id, original_transcript, options)
+        # MP3 conversion is local CPU/I/O work, while text generation waits on
+        # the AI provider.  Overlap them so adding the requested source audio to
+        # the ZIP does not serialize another full stage onto the job latency.
+        with ThreadPoolExecutor(max_workers=2, thread_name_prefix="lecturesift-package") as executor:
+            audio_future = executor.submit(_prepare_study_audio, audio_sources, job_dir)
+            study_pack, translated_transcript = _build_text_outputs(job_id, original_transcript, options)
+            study_audio = audio_future.result()
 
         JOBS.update(job_id, percent=90, stage="exports")
         result = {
@@ -865,7 +902,12 @@ def _process_job(
             ),
             **study_pack,
         }
-        artifacts, zip_path = build_artifacts(job_dir, result, slides_dir)
+        artifacts, zip_path = build_artifacts(
+            job_dir,
+            result,
+            slides_dir,
+            audio_source=study_audio,
+        )
         result["artifacts"] = artifacts
 
         elapsed = round(time.time() - started, 1)
@@ -881,6 +923,7 @@ def _process_job(
         _record_billing_usage(job_id, options, audio_sources)
     except Exception as exc:
         normalized = normalize_error(exc)
+        AI_PROVIDER_CIRCUIT.trip_error(normalized)
         print(f"PROCESS ERROR [{normalized.code}]: {normalized.technical_message}", flush=True)
         traceback.print_exc()
         JOBS.update(
@@ -893,6 +936,11 @@ def _process_job(
             technical_error=normalized.technical_message,
             elapsed_seconds=round(time.time() - started, 1),
         )
+    finally:
+        # The package copy and ZIP are durable outputs; the conversion
+        # workspace is transient and must not survive success, errors, or an AI
+        # provider retry path.
+        shutil.rmtree(job_dir / "study_audio_export", ignore_errors=True)
 
 
 def process_job(

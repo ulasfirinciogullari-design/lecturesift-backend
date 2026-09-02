@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const API_BASE = "https://lecturesift-backend.onrender.com";
+  const API_BASE = "https://api.lecturesift.com";
   const GPT_SRC = "https://securepubads.g.doubleclick.net/tag/js/gpt.js";
   const PUBLIC_AD_PATHS = new Set(["/", "/index.html", "/features.html", "/plans.html", "/about.html"]);
   const TOKEN_KEY = "lecturesift-billing-token";

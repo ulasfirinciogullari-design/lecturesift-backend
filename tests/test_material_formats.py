@@ -152,8 +152,12 @@ def test_audio_only_study_pack_skips_visual_pipeline(tmp_path: Path, monkeypatch
             "",
         ),
     )
+    # This unit test uses placeholder bytes and isolates visual routing.  MP3
+    # generation has its own real-FFmpeg and packaging coverage.
+    monkeypatch.setattr(pipeline, "_prepare_study_audio", lambda *_args, **_kwargs: None)
 
-    def fake_artifacts(job_dir, result, _slides_dir):
+    def fake_artifacts(job_dir, result, _slides_dir, *, audio_source=None):
+        del audio_source
         captured.update(result)
         archive = Path(job_dir) / "package.zip"
         archive.write_bytes(b"zip")

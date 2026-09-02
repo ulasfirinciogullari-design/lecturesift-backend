@@ -1,5 +1,24 @@
 LECTURESIFT V4 — TÜRKÇE KISA REHBER
 
+VPS GİZLİ AYAR AYRIMI
+`/etc/lecturesift/runtime.env` yalnızca root tarafındaki ana kaynaktır ve
+hiçbir konteynıra verilmez. Ön kontrol, root izinli ayrı `api.env`,
+`worker.env` ve `instagram.env` dosyalarını üretir ve birebir doğrular.
+İşleyici; yönetici, oturum, ödeme, e-posta, yasal veya Instagram
+anahtarlarını alamaz. Instagram zamanlayıcısı da veritabanı, R2, OpenAI,
+ödeme veya yönetici anahtarlarını alamaz. Restic depo, depolama ve şifreleme
+anahtarları hiçbir uygulama rolüne kopyalanmaz. Ayrıntılı ve hatada kapalı
+kurulum adımları `VPS_DEPLOYMENT.md` dosyasındadır.
+
+POSTGRESQL ROL AYRIMI
+API ve işleyici farklı kullanıcı/parola ve farklı DATABASE_URL kullanır. API
+uygulama kayıtlarını yönetebilir ama tablo/şema oluşturamaz. İşleyici yalnızca
+maskelenmiş plan-kredi görünümlerini, kullanım kaydı eklemeyi, kredi düşmeyi,
+misafir işini ayırmayı ve çalışma süresi ölçümünü kullanabilir; parola özeti,
+oturum, ham ödeme, yönetici/denetim ve iletişim tablolarına erişemez. Şema
+değişikliklerini sadece tek seferlik sahip rolü migration konteynırı yapar.
+Rol/parola eşleşmesi ya da izin denetimi başarısızsa servis açılmaz.
+
 LectureSift bir ders videosundan şunları üretir:
 - Orijinal ve isteğe bağlı çevrilmiş transkript
 - Yapılandırılmış ders notları ve özet
@@ -15,8 +34,8 @@ varsa saniye cinsinden düzeltme uygulanabilir. İki dosyanın toplam yükleme s
 1 GB'dır.
 
 CANLI ADRESLER
-Arayüz: https://clever-horse-22b1a8.netlify.app/
-Backend: https://lecturesift-backend.onrender.com/
+Arayüz: https://lecturesift.com/
+Backend: https://api.lecturesift.com/
 
 V4'TEKİ ANA DEĞİŞİKLİKLER
 - Ses ve görüntü paralel işlenir.
@@ -56,7 +75,7 @@ PAYTR TEST KURULUMU
 Render'da PAYTR_MERCHANT_ID, PAYTR_MERCHANT_KEY ve PAYTR_MERCHANT_SALT gizli
 ortam değişkenleri tanımlanana kadar kartlı ödeme kapalı kalır. Test sırasında
 PAYTR_TEST_MODE=true kullanılmalıdır. PayTR Bildirim URL adresi:
-https://lecturesift-backend.onrender.com/billing/paytr/callback
+https://api.lecturesift.com/billing/paytr/callback
 Bu adres kullanıcı sayfası değildir; PayTR'ın imzalı ödeme sonucunu gönderdiği
 sunucu adresidir. Anahtarlar koda, GitHub'a veya uygulama kayıtlarına yazılmaz.
 

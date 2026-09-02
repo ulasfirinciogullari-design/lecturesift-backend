@@ -1,5 +1,5 @@
 (() => {
-  const API_BASE = "https://lecturesift-backend.onrender.com";
+  const API_BASE = "https://api.lecturesift.com";
   const TOKEN_KEY = "lecturesift-billing-token";
   const GUEST_TOKEN_KEY = "lecturesift-guest-token";
   const DEVICE_KEY = "lecturesift-guest-device";
@@ -280,7 +280,7 @@
     if (!document.querySelector("#plans .rollout-guest-note")) {
       const note = document.createElement("p");
       note.className = "rollout-guest-note";
-      note.textContent = rt("rollout.pricingNote", "Fiyatlar seçilen para biriminde gösterilir. Kart ve Havale/EFT iyzico’nun güvenli sayfasında tamamlanır; eşleşen ödeme otomatik etkinleştirilir.");
+      note.textContent = rt("rollout.pricingNote", "Fiyatlar seçilen para biriminde gösterilir. iyzico kart ve iyzico Korumalı Havale/EFT otomatik doğrulanır; kişisel IBAN’a manuel Havale/EFT yönetim kontrolü gerektirir.");
       grid.insertAdjacentElement("beforebegin", note);
     }
     async function load() {
