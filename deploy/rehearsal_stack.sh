@@ -36,6 +36,7 @@ generated_r2_capability_proof="$REHEARSAL_RUN_DIR/rehearsal-r2-negative-capabili
 generated_api_proxy_config="$REHEARSAL_RUN_DIR/rehearsal-api-squid.conf"
 generated_worker_proxy_config="$REHEARSAL_RUN_DIR/rehearsal-worker-squid.conf"
 synthetic_audio="$REHEARSAL_RUN_DIR/rehearsal-synthetic-lecture.mp3"
+synthetic_audio_temporary="$REHEARSAL_RUN_DIR/.rehearsal-synthetic-lecture.mp3.partial"
 postgres_network_connected=false
 
 fail() {
@@ -69,6 +70,61 @@ check_root_public_config() {
   [[ -f "$path" && ! -L "$path" && "$(realpath -e -- "$path")" == "$path" && \
      "$(stat -c '%u:%g:%a' -- "$path")" == "0:0:644" ]] || \
     fail "$label must be a root-owned regular mode 0644 file"
+}
+
+write_candidate_tmp_file() {
+  local container="$1" source="$2" destination="$3" mode="${4:-0400}"
+  local uid="${5:-10001}" gid="${6:-10001}" labels source_resolved
+  case "$container" in
+    "$rehearsal_api_container"|"$rehearsal_worker_container") ;;
+    *) fail "refusing to write into an unknown candidate container" ;;
+  esac
+  [[ "$destination" == /tmp/* && "$destination" != *"/../"* && \
+     "$destination" != *"/./"* && "$destination" != *"//"* ]] || \
+    fail "candidate write destination must be an absolute safe /tmp path"
+  case "$destination" in
+    /tmp/lecturesift-rehearsal-synthetic-audio.py|\
+    /tmp/lecturesift-rehearsal-synthetic-lecture.mp3) ;;
+    *) fail "candidate write destination is not allowlisted" ;;
+  esac
+  case "$mode" in
+    0400|0600) ;;
+    *) fail "candidate write mode is not allowlisted" ;;
+  esac
+  [[ "$uid" == "10001" && "$gid" == "10001" ]] || \
+    fail "candidate writes must use the unprivileged application identity"
+  [[ -f "$source" && ! -L "$source" ]] || \
+    fail "candidate write source must be a regular non-symlink file"
+  source_resolved="$(realpath -e -- "$source")" || \
+    fail "candidate write source cannot be resolved"
+  [[ "$source_resolved" == "$source" ]] || \
+    fail "candidate write source must already be canonical"
+  labels="$(container_labels "$container")" || \
+    fail "cannot inspect candidate container labels"
+  [[ "$labels" == "true|$rehearsal_run" ]] || \
+    fail "refusing to write into an unlabeled or foreign candidate container"
+
+  docker exec --user "$uid:$gid" -i "$container" sh -eu -c '
+destination="$1"
+mode="$2"
+expected_uid="$3"
+expected_gid="$4"
+case "$destination" in /tmp/*) ;; *) exit 64 ;; esac
+temporary="$(mktemp /tmp/.lecturesift-rehearsal-write.XXXXXX)"
+cleanup_candidate_write() { rm -f -- "$temporary"; }
+trap cleanup_candidate_write EXIT HUP INT TERM
+cat >"$temporary"
+chmod "$mode" "$temporary"
+test -f "$temporary"
+test ! -L "$temporary"
+mv -fT -- "$temporary" "$destination"
+trap - EXIT HUP INT TERM
+test -f "$destination"
+test ! -L "$destination"
+test "$(stat -c "%u:%g:%a" -- "$destination")" = \
+  "$expected_uid:$expected_gid:${mode#0}"
+' sh "$destination" "$mode" "$uid" "$gid" <"$source" || \
+    fail "candidate tmpfs write failed"
 }
 
 container_labels() {
@@ -186,7 +242,8 @@ cleanup_generated_envs() {
     fi
   fi
   rm -f -- "$generated_api_env" "$generated_worker_env" \
-    "$generated_api_proxy_config" "$generated_worker_proxy_config" "$synthetic_audio"
+    "$generated_api_proxy_config" "$generated_worker_proxy_config" \
+    "$synthetic_audio" "$synthetic_audio_temporary"
   exit "$status"
 }
 trap cleanup_generated_envs EXIT
@@ -377,17 +434,26 @@ print(value)
 PY
 )" || fail "cannot verify the rehearsal AI provider proof"
 if [[ "$ai_provider" == "dedicated" ]]; then
-  docker cp "$ROOT_DIR/deploy/rehearsal_synthetic_audio.py" \
-    "$rehearsal_worker_container:/tmp/lecturesift-rehearsal-synthetic-audio.py"
+  write_candidate_tmp_file "$rehearsal_worker_container" \
+    "$ROOT_DIR/deploy/rehearsal_synthetic_audio.py" \
+    /tmp/lecturesift-rehearsal-synthetic-audio.py 0400
   docker exec "$rehearsal_worker_container" \
     python /tmp/lecturesift-rehearsal-synthetic-audio.py
-  docker cp \
-    "$rehearsal_worker_container:/var/lib/lecturesift/rehearsal-synthetic-lecture.mp3" \
-    "$synthetic_audio"
-  [[ -f "$synthetic_audio" && ! -L "$synthetic_audio" && \
-     "$(stat -c '%u:%g' -- "$synthetic_audio")" == "0:0" ]] || \
+  [[ ! -e "$synthetic_audio_temporary" && ! -L "$synthetic_audio_temporary" ]] || \
+    fail "dedicated rehearsal synthetic-audio staging path already exists"
+  docker exec --user 10001:10001 "$rehearsal_worker_container" sh -eu -c '
+source=/var/lib/lecturesift/rehearsal-synthetic-lecture.mp3
+test -f "$source"
+test ! -L "$source"
+test "$(stat -c "%u:%g" -- "$source")" = "10001:10001"
+cat -- "$source"
+' >"$synthetic_audio_temporary" || \
+    fail "dedicated rehearsal synthetic audio could not be streamed privately"
+  [[ -f "$synthetic_audio_temporary" && ! -L "$synthetic_audio_temporary" && \
+     "$(stat -c '%u:%g' -- "$synthetic_audio_temporary")" == "0:0" ]] || \
     fail "dedicated rehearsal synthetic audio was not staged privately"
-  chmod 0600 "$synthetic_audio"
+  chmod 0600 "$synthetic_audio_temporary"
+  mv -fT -- "$synthetic_audio_temporary" "$synthetic_audio"
 fi
 
 docker create --pull=never --name "$rehearsal_api_container" \
@@ -406,12 +472,8 @@ docker start "$rehearsal_api_container" >/dev/null
 bash "$ROOT_DIR/deploy/assert_rehearsal_production_stopped.sh" >/dev/null || \
   fail "production runtime or egress proxy became active"
 if [[ "$ai_provider" == "dedicated" ]]; then
-  docker cp "$synthetic_audio" \
-    "$rehearsal_api_container:/tmp/lecturesift-rehearsal-synthetic-lecture.mp3"
-  docker exec --user 0:0 "$rehearsal_api_container" \
-    chown 10001:10001 /tmp/lecturesift-rehearsal-synthetic-lecture.mp3
-  docker exec --user 0:0 "$rehearsal_api_container" \
-    chmod 0400 /tmp/lecturesift-rehearsal-synthetic-lecture.mp3
+  write_candidate_tmp_file "$rehearsal_api_container" "$synthetic_audio" \
+    /tmp/lecturesift-rehearsal-synthetic-lecture.mp3 0400
 fi
 
 # Resolve the actual container topology and environment.  The API has only the

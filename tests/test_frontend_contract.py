@@ -303,7 +303,7 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         expected_theme_version = "13" if page.name == "workspace.html" else "12"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
         assert "/theme.js?v=2" in content, page.name
-        assert "i18n.js?v=26" in content, page.name
+        assert "i18n.js?v=27" in content, page.name
         assert "page-i18n.js?v=6" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
@@ -554,6 +554,52 @@ def test_dynamic_plan_descriptions_are_localized_and_account_uses_plan_label():
     assert '$("accountPlan").textContent = planLabel(account.plan.code);' in plans
 
 
+def test_payment_routes_are_distinct_localized_and_account_history_is_auditable():
+    catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    plans_html = (FRONTEND / "plans.html").read_text(encoding="utf-8")
+    plans_js = (FRONTEND / "plans.js").read_text(encoding="utf-8")
+    account_html = (FRONTEND / "account.html").read_text(encoding="utf-8")
+    auth_js = (FRONTEND / "auth.js").read_text(encoding="utf-8")
+    admin_html = (FRONTEND / "admin.html").read_text(encoding="utf-8")
+    admin_js = (FRONTEND / "admin.js").read_text(encoding="utf-8")
+
+    for key in (
+        "payment.historyHelp",
+        "payment.method",
+        "payment.createdAt",
+        "payment.status",
+        "payment.method.manualIban",
+        "payment.method.iyzicoProtected",
+        "payment.method.iyzicoCard",
+        "payment.method.paytrCard",
+        "payment.method.legacy",
+        "payment.method.pending",
+        "admin.paymentAll",
+        "admin.paymentAllCards",
+        "admin.paymentIyzicoCard",
+        "admin.paymentPaytrCard",
+        "admin.paymentIyzicoProtected",
+        "admin.paymentManualIban",
+        "admin.paymentPendingVerification",
+    ):
+        payload = re.search(rf'^\s*"{re.escape(key)}":\[(.*?)\],?$', catalog, re.MULTILINE)
+        assert payload, key
+        values = json.loads(f"[{payload.group(1)}]")
+        assert len(values) == 13, key
+        assert all(str(value).strip() for value in values), key
+
+    assert 'src="/plans.js?v=18"' in plans_html
+    assert 'manualTransfer = {available:Boolean(transferBody?.available), bank:null};' in plans_js
+    assert 'order.bank?.iban' in plans_js
+    assert 'transferBody?.bank' not in plans_js
+    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=11"', 'href="./auth.css?v=2"'))
+    assert all(value in auth_js for value in ("paymentMethodLabel", "paymentMoney", "paymentDateTime", "payment-order-meta"))
+    assert all(value in admin_html for value in ('value="iyzico_card"', 'value="iyzico_bank_transfer"', 'value="manual_bank_transfer"', 'value="iyzico_legacy"'))
+    assert "provider:selectedProvider" in admin_js
+    assert 'selectedProvider === "manual_bank_transfer" ? "bank_transfer"' not in admin_js
+    assert "adminPaymentMethodLabel" in admin_js
+
+
 def test_profile_admin_automatic_payment_and_full_comparison_interfaces_are_present():
     account = (FRONTEND / "account.html").read_text(encoding="utf-8")
     auth = (FRONTEND / "auth.js").read_text(encoding="utf-8")
@@ -729,7 +775,7 @@ def test_checkout_names_contact_inbox_and_mobile_plan_navigation_are_wired():
     assert "/billing/admin/contact-messages" in admin_js
     assert "adminContactDialog" in admin_html and "admin-contact-reply" in admin_js
     assert "/billing/admin/contact-messages/${encodeURIComponent(messageId)}/reply" in admin_js
-    assert 'href="/rollout.css?v=10"' in admin_html and 'src="/admin.js?v=17"' in admin_html
+    assert 'href="/rollout.css?v=10"' in admin_html and 'src="/admin.js?v=18"' in admin_html
     assert admin_js.count('class="admin-table admin-record-table"') >= 10
     assert all(label in admin_js for label in ('data-label="İş"', 'data-label="Bakiye"', 'data-label="Açıklama"'))
     assert "supportReplyForm" in support_html and "supportThread" in support_html
@@ -1060,8 +1106,8 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=27"' in index
-    assert 'src="/rollout.js?v=5"' in index
+    assert 'src="./app.js?v=28"' in index
+    assert 'src="/rollout.js?v=6"' in index
     assert '$("plans").scrollIntoView' not in app
 
 

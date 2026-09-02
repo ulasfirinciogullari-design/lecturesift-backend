@@ -133,6 +133,7 @@ def test_iyzico_checkout_and_callback_verify_signatures_amount_and_order(monkeyp
             "plan_code": "plus",
             "interval": "monthly",
             "currency": "TRY",
+            "payment_method": "card",
             "billing_address": "Örnek Mahallesi No 1",
             "billing_city": "İstanbul",
             "billing_zip_code": "34000",
@@ -248,6 +249,7 @@ def test_iyzico_one_lira_test_pack_uses_exact_live_amount(monkeypatch):
         headers={"Authorization": f"Bearer {session}", "X-Forwarded-For": "203.0.113.42"},
         json={
             "plan_code": "test", "interval": "one_time", "currency": "TRY",
+            "payment_method": "card",
             "billing_address": "Örnek Mahallesi No 3", "billing_city": "Hatay",
             "billing_zip_code": "31800", "phone": "+905551112233", "language": "tr",
             "terms_accepted": True, "early_performance_requested": True,
@@ -289,6 +291,17 @@ def test_iyzico_bank_transfer_checkout_fails_closed_without_activation_or_try(mo
         "X-Forwarded-For": "203.0.113.52",
     }
 
+    missing_method = client.post(
+        "/billing/checkout",
+        headers=headers,
+        json={key: value for key, value in payload.items() if key != "payment_method"},
+    )
+    assert missing_method.status_code == 422
+    assert any(
+        error.get("loc", [])[-1:] == ["payment_method"]
+        for error in missing_method.json()["detail"]
+    )
+
     disabled = client.post("/billing/checkout", headers=headers, json=payload)
     assert disabled.status_code == 503
     assert disabled.json()["detail"]["code"] == "LS-PAY-01"
@@ -305,8 +318,11 @@ def test_iyzico_bank_transfer_checkout_fails_closed_without_activation_or_try(mo
         headers=headers,
         json={**payload, "payment_method": "provider_redirect"},
     )
-    assert invalid.status_code == 400
-    assert invalid.json()["detail"]["code"] == "LS-PAY-02"
+    assert invalid.status_code == 422
+    assert any(
+        error.get("loc", [])[-1:] == ["payment_method"]
+        for error in invalid.json()["detail"]
+    )
 
 
 @pytest.mark.parametrize(
@@ -560,6 +576,7 @@ def test_iyzico_merchant_category_failure_is_actionable_and_keeps_code(monkeypat
         headers={"Authorization": f"Bearer {session}", "X-Forwarded-For": "203.0.113.47"},
         json={
             "plan_code": "test", "interval": "one_time", "currency": "TRY",
+            "payment_method": "card",
             "billing_address": "Örnek Mahallesi No 6", "billing_city": "Hatay",
             "billing_zip_code": "31800", "phone": "+905551112233", "language": "tr",
             "terms_accepted": True, "early_performance_requested": True,
@@ -624,6 +641,7 @@ def test_iyzico_uncorrelated_failure_cannot_terminally_fail_order(monkeypatch):
         headers={"Authorization": f"Bearer {session}", "X-Forwarded-For": "203.0.113.48"},
         json={
             "plan_code": "test", "interval": "one_time", "currency": "TRY",
+            "payment_method": "card",
             "billing_address": "Örnek Mahallesi No 7", "billing_city": "Hatay",
             "billing_zip_code": "31800", "phone": "+905551112233", "language": "tr",
             "terms_accepted": True, "early_performance_requested": True,
@@ -683,6 +701,7 @@ def test_iyzico_browser_callback_rejects_wrong_or_legacy_unbound_token_before_re
         headers={"Authorization": f"Bearer {session}", "X-Forwarded-For": "203.0.113.49"},
         json={
             "plan_code": "test", "interval": "one_time", "currency": "TRY",
+            "payment_method": "card",
             "billing_address": "Örnek Mahallesi No 8", "billing_city": "Hatay",
             "billing_zip_code": "31800", "phone": "+905551112233", "language": "tr",
             "terms_accepted": True, "early_performance_requested": True,
@@ -759,6 +778,7 @@ def test_iyzico_signed_webhook_rejects_wrong_bound_token_before_retrieve(monkeyp
         headers={"Authorization": f"Bearer {session}", "X-Forwarded-For": "203.0.113.50"},
         json={
             "plan_code": "test", "interval": "one_time", "currency": "TRY",
+            "payment_method": "card",
             "billing_address": "Örnek Mahallesi No 9", "billing_city": "Hatay",
             "billing_zip_code": "31800", "phone": "+905551112233", "language": "tr",
             "terms_accepted": True, "early_performance_requested": True,
@@ -834,6 +854,7 @@ def test_iyzico_signed_webhook_adopts_legacy_token_and_terminalizes_correlated_1
         headers={"Authorization": f"Bearer {session}", "X-Forwarded-For": "203.0.113.51"},
         json={
             "plan_code": "test", "interval": "one_time", "currency": "TRY",
+            "payment_method": "card",
             "billing_address": "Örnek Mahallesi No 10", "billing_city": "Hatay",
             "billing_zip_code": "31800", "phone": "+905551112233", "language": "tr",
             "terms_accepted": True, "early_performance_requested": True,
@@ -1427,6 +1448,7 @@ def test_iyzico_callback_rejects_tampered_response(monkeypatch):
         headers={"Authorization": f"Bearer {session}", "X-Forwarded-For": "203.0.113.41"},
         json={
             "plan_code": "credit", "interval": "one_time", "currency": "TRY",
+            "payment_method": "card",
             "billing_address": "Örnek Mahallesi No 2", "billing_city": "Ankara",
             "billing_zip_code": "06000", "phone": "+905551112233", "language": "tr",
             "terms_accepted": True, "early_performance_requested": True,

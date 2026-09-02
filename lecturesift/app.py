@@ -7,6 +7,7 @@ import time
 import traceback
 import uuid
 from pathlib import Path
+from typing import Literal
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -400,7 +401,7 @@ class BillingCheckoutRequest(BaseModel):
     plan_code: str
     interval: str = "monthly"
     currency: str = "TRY"
-    payment_method: str = "card"
+    payment_method: Literal["card", "bank_transfer"]
     first_name: str = ""
     last_name: str = ""
     billing_address: str
@@ -757,7 +758,10 @@ def billing_operator() -> dict:
 
 @app.get("/billing/manual-transfer")
 def billing_manual_transfer_status() -> dict:
-    return manual_transfer_details()
+    # Public pricing pages only need to know whether this option is available.
+    # Personal bank details are returned exclusively with an authenticated,
+    # newly-created manual-transfer order.
+    return {"available": manual_transfer_details()["available"]}
 
 
 @app.get("/billing/health")

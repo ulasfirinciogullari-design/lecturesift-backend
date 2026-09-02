@@ -38,6 +38,83 @@ check_private_env() {
     *) echo "$label must have mode 0400 or 0600." >&2; exit 1 ;;
   esac
 }
+
+write_candidate_tmp_file() {
+  local container="$1" source="$2" destination="$3" mode="${4:-0400}"
+  local uid="${5:-10001}" gid="${6:-10001}" labels source_resolved
+  case "$container" in
+    lecturesift-api-rehearsal) ;;
+    *) echo "Refusing to write into an unknown candidate container." >&2; return 1 ;;
+  esac
+  [[ "$destination" == /tmp/* && "$destination" != *"/../"* && \
+     "$destination" != *"/./"* && "$destination" != *"//"* ]] || {
+    echo "Candidate write destination must be an absolute safe /tmp path." >&2
+    return 1
+  }
+  case "$destination" in
+    /tmp/lecturesift-rehearsal-e2e.py|\
+    /tmp/lecturesift-rehearsal-formats-e2e.py|\
+    /tmp/lecturesift-rehearsal-purge-e2e.py|\
+    /tmp/lecturesift-application-e2e.json|\
+    /tmp/lecturesift-formats-e2e.json) ;;
+    *) echo "Candidate write destination is not allowlisted." >&2; return 1 ;;
+  esac
+  case "$mode" in
+    0400|0600) ;;
+    *) echo "Candidate write mode is not allowlisted." >&2; return 1 ;;
+  esac
+  [[ "$uid" == "10001" && "$gid" == "10001" ]] || {
+    echo "Candidate writes must use the unprivileged application identity." >&2
+    return 1
+  }
+  [[ -f "$source" && ! -L "$source" ]] || {
+    echo "Candidate write source must be a regular non-symlink file." >&2
+    return 1
+  }
+  source_resolved="$(realpath -e -- "$source")" || {
+    echo "Candidate write source cannot be resolved." >&2
+    return 1
+  }
+  [[ "$source_resolved" == "$source" ]] || {
+    echo "Candidate write source must already be canonical." >&2
+    return 1
+  }
+  labels="$(docker container inspect --format \
+    '{{ index .Config.Labels "lecturesift.rehearsal" }}|{{ index .Config.Labels "lecturesift.rehearsal.run" }}' \
+    "$container")" || {
+    echo "Cannot inspect candidate container labels." >&2
+    return 1
+  }
+  [[ "$labels" == "true|$rehearsal_suffix" ]] || {
+    echo "Refusing to write into an unlabeled or foreign candidate container." >&2
+    return 1
+  }
+
+  docker exec --user "$uid:$gid" -i "$container" sh -eu -c '
+destination="$1"
+mode="$2"
+expected_uid="$3"
+expected_gid="$4"
+case "$destination" in /tmp/*) ;; *) exit 64 ;; esac
+temporary="$(mktemp /tmp/.lecturesift-rehearsal-write.XXXXXX)"
+cleanup_candidate_write() { rm -f -- "$temporary"; }
+trap cleanup_candidate_write EXIT HUP INT TERM
+cat >"$temporary"
+chmod "$mode" "$temporary"
+test -f "$temporary"
+test ! -L "$temporary"
+mv -fT -- "$temporary" "$destination"
+trap - EXIT HUP INT TERM
+test -f "$destination"
+test ! -L "$destination"
+test "$(stat -c "%u:%g:%a" -- "$destination")" = \
+  "$expected_uid:$expected_gid:${mode#0}"
+' sh "$destination" "$mode" "$uid" "$gid" <"$source" || {
+    echo "Candidate tmpfs write failed." >&2
+    return 1
+  }
+}
+
 check_private_env "$SOURCE_ENV" "Source database environment"
 check_private_env "$DB_ENV" "Target database environment"
 for path in "$SOURCE_ENV" "$DB_ENV" \
@@ -1118,30 +1195,25 @@ LECTURESIFT_REHEARSAL_ORCHESTRATED=YES \
   LECTURESIFT_REHEARSAL_API_DATABASE_URL="$rehearsal_api_database_url" \
   LECTURESIFT_REHEARSAL_WORKER_DATABASE_URL="$rehearsal_worker_database_url" \
   "$ROOT_DIR/deploy/rehearsal_stack.sh" "$rehearsal_db"
-docker cp "$ROOT_DIR/deploy/rehearsal_e2e.py" \
-  lecturesift-api-rehearsal:/tmp/lecturesift-rehearsal-e2e.py
+write_candidate_tmp_file lecturesift-api-rehearsal \
+  "$ROOT_DIR/deploy/rehearsal_e2e.py" \
+  /tmp/lecturesift-rehearsal-e2e.py 0400
 docker exec lecturesift-api-rehearsal \
   python /tmp/lecturesift-rehearsal-e2e.py >"$run_dir/application-e2e.json"
-docker cp "$ROOT_DIR/deploy/rehearsal_formats_e2e.py" \
-  lecturesift-api-rehearsal:/tmp/lecturesift-rehearsal-formats-e2e.py
+write_candidate_tmp_file lecturesift-api-rehearsal \
+  "$ROOT_DIR/deploy/rehearsal_formats_e2e.py" \
+  /tmp/lecturesift-rehearsal-formats-e2e.py 0400
 docker exec lecturesift-api-rehearsal \
   python /tmp/lecturesift-rehearsal-formats-e2e.py >"$run_dir/formats-e2e.json"
-docker cp "$ROOT_DIR/deploy/rehearsal_purge_e2e.py" \
-  lecturesift-api-rehearsal:/tmp/lecturesift-rehearsal-purge-e2e.py
-docker cp "$run_dir/application-e2e.json" \
-  lecturesift-api-rehearsal:/tmp/lecturesift-application-e2e.json
-docker cp "$run_dir/formats-e2e.json" \
-  lecturesift-api-rehearsal:/tmp/lecturesift-formats-e2e.json
-docker exec --user 0:0 lecturesift-api-rehearsal \
-  chown 10001:10001 \
-    /tmp/lecturesift-rehearsal-purge-e2e.py \
-    /tmp/lecturesift-application-e2e.json \
-    /tmp/lecturesift-formats-e2e.json
-docker exec --user 0:0 lecturesift-api-rehearsal \
-  chmod 0400 \
-    /tmp/lecturesift-rehearsal-purge-e2e.py \
-    /tmp/lecturesift-application-e2e.json \
-    /tmp/lecturesift-formats-e2e.json
+write_candidate_tmp_file lecturesift-api-rehearsal \
+  "$ROOT_DIR/deploy/rehearsal_purge_e2e.py" \
+  /tmp/lecturesift-rehearsal-purge-e2e.py 0400
+write_candidate_tmp_file lecturesift-api-rehearsal \
+  "$run_dir/application-e2e.json" \
+  /tmp/lecturesift-application-e2e.json 0400
+write_candidate_tmp_file lecturesift-api-rehearsal \
+  "$run_dir/formats-e2e.json" \
+  /tmp/lecturesift-formats-e2e.json 0400
 docker exec --user 10001:10001 lecturesift-api-rehearsal \
   python /tmp/lecturesift-rehearsal-purge-e2e.py \
     --application-result /tmp/lecturesift-application-e2e.json \

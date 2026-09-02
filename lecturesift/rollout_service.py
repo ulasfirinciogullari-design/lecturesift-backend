@@ -27,6 +27,8 @@ from .billing_service import (
     ENGINE,
     AUTH_TOKENS,
     IYZICO_BANK_TRANSFER_PROVIDERS,
+    IYZICO_CARD_INTENT_PROVIDER,
+    IYZICO_CARD_PROVIDER,
     IYZICO_PAYMENT_PROVIDERS,
     MANUAL_ORDERS,
     METADATA,
@@ -1436,6 +1438,14 @@ def list_admin_orders_page(
         filters.append(
             orders.c.provider.notin_(("bank_transfer", *IYZICO_BANK_TRANSFER_PROVIDERS))
         )
+    elif provider == "iyzico_card":
+        filters.append(orders.c.provider.in_((IYZICO_CARD_PROVIDER, IYZICO_CARD_INTENT_PROVIDER)))
+    elif provider in {"iyzico", "iyzico_legacy"}:
+        filters.append(orders.c.provider == "iyzico")
+    elif provider == "manual_bank_transfer":
+        filters.append(orders.c.provider == "bank_transfer")
+    elif provider == "iyzico_bank_transfer":
+        filters.append(orders.c.provider.in_(tuple(IYZICO_BANK_TRANSFER_PROVIDERS)))
     elif provider == "bank_transfer":
         filters.append(
             orders.c.provider.in_(("bank_transfer", *IYZICO_BANK_TRANSFER_PROVIDERS))

@@ -53,6 +53,46 @@ def test_rehearsal_has_dedicated_queue_bucket_and_consumer_guards():
     assert "must have mode 0400 or 0600" in script
 
 
+def test_candidate_rehearsal_files_stream_atomically_into_allowlisted_tmpfs_paths():
+    stack = _read("deploy/rehearsal_stack.sh")
+    restore = _read("deploy/rehearsal_restore.sh")
+
+    assert stack.count("docker cp") == 0
+    assert restore.count("docker cp") == 1
+    assert (
+        'docker cp "$ROOT_DIR/deploy/rehearsal_manifest.sql" \\\n'
+        "  lecturesift-postgres-1:/tmp/rehearsal_manifest.sql"
+    ) in restore
+
+    for script in (stack, restore):
+        helper = script.split("write_candidate_tmp_file() {", 1)[1].split("\n}\n", 1)[0]
+        assert 'local uid="${5:-10001}" gid="${6:-10001}"' in helper
+        assert '[[ "$destination" == /tmp/*' in helper
+        assert 'case "$mode" in' in helper
+        assert "0400|0600" in helper
+        assert '[[ "$uid" == "10001" && "$gid" == "10001" ]]' in helper
+        assert 'docker exec --user "$uid:$gid" -i "$container"' in helper
+        assert "mktemp /tmp/.lecturesift-rehearsal-write.XXXXXX" in helper
+        assert 'cat >"$temporary"' in helper
+        assert 'mv -fT -- "$temporary" "$destination"' in helper
+        assert 'stat -c "%u:%g:%a"' in helper
+        assert "candidate tmpfs write failed" in helper.lower()
+
+    for destination in (
+        "/tmp/lecturesift-rehearsal-synthetic-audio.py",
+        "/tmp/lecturesift-rehearsal-synthetic-lecture.mp3",
+    ):
+        assert destination in stack
+    for destination in (
+        "/tmp/lecturesift-rehearsal-e2e.py",
+        "/tmp/lecturesift-rehearsal-formats-e2e.py",
+        "/tmp/lecturesift-rehearsal-purge-e2e.py",
+        "/tmp/lecturesift-application-e2e.json",
+        "/tmp/lecturesift-formats-e2e.json",
+    ):
+        assert destination in restore
+
+
 def test_database_rehearsal_root_and_source_consistency_fail_closed():
     script = _read("deploy/rehearsal_restore.sh")
 

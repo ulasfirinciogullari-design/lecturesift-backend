@@ -280,7 +280,7 @@ function renderPaymentStatus() {
     ? pt("payment.protectedAvailable", "iyzico siparişle otomatik eşleştirir; onay geldiğinde paket otomatik etkinleşir.")
     : pt("payment.protectedNotConfigured", "iyzico Korumalı Havale/EFT henüz kullanıma açık değil.");
   $("bankAvailability").textContent = manualTransfer.available
-    ? pt("payment.available", "IBAN havalesi kullanılabilir; sipariş ödeme kontrolünden sonra etkinleşir.")
+    ? pt("payment.available", "Kişisel IBAN'a manuel Havale/EFT kullanılabilir; sipariş yönetim kontrolünden sonra etkinleşir.")
     : pt("payment.notConfigured", "IBAN havale bilgileri henüz etkin değil.");
 }
 
@@ -524,7 +524,9 @@ async function load() {
     ]);
     providers = providerBody.providers || [];
     commerceIdentity = providerBody.commerce_identity || {configured:false};
-    manualTransfer = transferBody || {available:false, bank:null};
+    // The public capability endpoint deliberately exposes availability only.
+    // Bank details are read exclusively from the authenticated, order-specific response.
+    manualTransfer = {available:Boolean(transferBody?.available), bank:null};
     catalog = normalizeCatalog(remote, selected);
     try { account = (await api("/billing/me")).account; } catch { account = null; }
     renderAccount();

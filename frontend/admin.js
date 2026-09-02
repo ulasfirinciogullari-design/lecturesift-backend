@@ -129,6 +129,18 @@ function adminStatusLabel(status) {
   return labels[status] || adminT(`order.${status}`, status || "—");
 }
 
+function adminPaymentMethodLabel(order) {
+  if (order.payment_method === "bank_transfer") {
+    return order.provider === "iyzico"
+      ? adminT("admin.paymentIyzicoProtected", "iyzico Korumalı Havale/EFT")
+      : adminT("admin.paymentManualIban", "Kişisel IBAN'a manuel havale/EFT");
+  }
+  if (order.payment_method === "unknown") return adminT("payment.method.legacy", "iyzico yöntemi (eski kayıt)");
+  if (order.provider === "iyzico") return adminT("admin.paymentIyzicoCard", "iyzico kart");
+  if (order.provider === "paytr") return adminT("admin.paymentPaytrCard", "PayTR kart");
+  return `${String(order.provider || "kart").toUpperCase()} ${adminT("payment.card", "kart")}`;
+}
+
 function renderAdminPagination(containerId, pagination, onPage) {
   const container = admin$(containerId);
   if (!container) return;
@@ -141,13 +153,9 @@ function renderAdminPagination(containerId, pagination, onPage) {
 
 function renderAdminOrders(orders) {
   const rows = orders.map(order => {
-    const methodName = order.payment_method === "bank_transfer"
-      ? (order.provider === "iyzico" ? "iyzico Korumalı Havale/EFT" : "IBAN / manuel havale")
-      : order.payment_method === "unknown"
-      ? "iyzico yöntemi (eski kayıt)"
-      : `${String(order.provider || "kart").toUpperCase()} kart`;
+    const methodName = adminPaymentMethodLabel(order);
     const method = order.payment_method_confirmed === false
-      ? `Tercih / doğrulama bekliyor: ${methodName}`
+      ? `${adminT("admin.paymentPendingVerification", "Tercih / doğrulama bekliyor")}: ${methodName}`
       : methodName;
     const activity = order.user?.last_activity;
     const details = `<details class="admin-row-details"><summary>Detay</summary><dl><div><dt>Sipariş oluşturma</dt><dd>${adminEscape(adminDate(order.created_at))}</dd></div><div><dt>Son güncelleme</dt><dd>${adminEscape(adminDate(order.updated_at))}</dd></div><div><dt>Ödeme yolu</dt><dd>${adminEscape(method)}</dd></div><div><dt>Kullanıcı ağı</dt><dd>${adminEscape(activity?.ip_network || "Yeni kayıtlarda oluşacak")}</dd></div><div><dt>Son kullanıcı hareketi</dt><dd>${adminEscape(activity?.created_at ? adminDate(activity.created_at) : "—")}</dd></div><div><dt>Onay izi</dt><dd>${adminEscape(order.consent?.ip_fingerprint || "—")}</dd></div></dl></details>`;
@@ -581,10 +589,11 @@ async function loadAdminUsers(page = 1) {
 }
 
 function orderQuery(page = 1) {
+  const selectedProvider = admin$("adminOrderProvider")?.value || "all";
   const params = new URLSearchParams({
     search:admin$("adminOrderSearch")?.value.trim() || "",
     status:admin$("adminOrderStatus")?.value || "all",
-    provider:admin$("adminOrderProvider")?.value || "all",
+    provider:selectedProvider,
     page:String(page),
     page_size:admin$("adminOrderPageSize")?.value || "50",
   });
@@ -879,7 +888,7 @@ admin$("adminBulkAction").addEventListener("change", syncAdminBulkFields);
 admin$("adminBulkApply").addEventListener("click", applyAdminBulkAction);
 admin$("adminClearSelection").addEventListener("click", () => { selectedAdminUsers.clear(); renderAdminUsers(adminState.users); });
 syncAdminBulkFields();
-admin$("adminExportOrders").addEventListener("click", () => downloadAdminCsv("lecturesift-siparisler.csv", adminState.orders.map(item => ({siparis_no:item.order_number || item.reference, olusturma_zamani:item.created_at, son_guncelleme:item.updated_at, musteri:item.user?.name || "", eposta:item.user?.email || "", odeme_yontemi:item.payment_method, saglayici:item.provider, plan:item.plan_code, donem:item.interval, tutar_minor:item.amount_minor, para_birimi:item.currency, durum:item.status, guvenli_ag:item.user?.last_activity?.ip_network || ""}))));
+admin$("adminExportOrders").addEventListener("click", () => downloadAdminCsv("lecturesift-siparisler.csv", adminState.orders.map(item => ({siparis_no:item.order_number || item.reference, olusturma_zamani:item.created_at, son_guncelleme:item.updated_at, musteri:item.user?.name || "", eposta:item.user?.email || "", odeme_yontemi:adminPaymentMethodLabel(item), saglayici:item.provider, plan:item.plan_code, donem:item.interval, tutar_minor:item.amount_minor, para_birimi:item.currency, durum:item.status, guvenli_ag:item.user?.last_activity?.ip_network || ""}))));
 admin$("adminExportMessages").addEventListener("click", () => downloadAdminCsv("lecturesift-mesajlar.csv", adminState.contacts.map(item => ({tarih:item.created_at, ad_soyad:item.name, eposta:item.email, konu:item.topic, siparis_no:item.order_reference || "", durum:item.status, mesaj:item.message}))));
 admin$("adminExportUsers").addEventListener("click", () => downloadAdminCsv("lecturesift-kullanicilar.csv", adminState.users.map(item => ({kayit_tarihi:item.created_at, son_guncelleme:item.updated_at, ad_soyad:item.name, eposta:item.email, telefon:item.phone || "", ulke:item.country_code || "", eposta_dogrulandi:item.email_verified ? "evet" : "hayir", plan:item.plan_code || "free", kredi_dakika:item.credit_minutes, son_guvenli_ag:item.last_activity?.ip_network || ""}))));
 setInterval(() => { if (adminAccessToken && admin$("adminAutoRefresh").checked && document.visibilityState === "visible") loadAdmin({silent:true}).catch(() => {}); }, 60000);

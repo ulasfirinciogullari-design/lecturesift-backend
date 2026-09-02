@@ -454,7 +454,9 @@ def test_manual_transfer_order_and_admin_approval(monkeypatch):
 
     public_details = client.get("/billing/manual-transfer")
     assert public_details.status_code == 200
-    assert public_details.json()["bank"]["account_holder"] == "LectureSift Test"
+    assert public_details.json() == {"available": True}
+    assert "bank" not in public_details.json()
+    assert "support_email" not in public_details.json()
 
     approval = client.post(
         f"/billing/manual-transfer/orders/{order['reference']}/approve",
