@@ -644,7 +644,7 @@ snapshot_databases() {
     --set ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres <<'SQL' | LC_ALL=C sort >"$output" || return 1
 SELECT 'DATABASE_INVENTORY|' || datname || '|' || pg_get_userbyid(datdba) || '|' ||
        pg_encoding_to_char(encoding) || '|' || datcollate || '|' || datctype || '|' ||
-       datlocprovider || '|' || coalesce(datcollversion, '') || '|' ||
+       datlocprovider::text || '|' || coalesce(datcollversion, '') || '|' ||
        datistemplate || '|' || datallowconn || '|' || datconnlimit || '|' ||
        length(coalesce(shobj_description(oid, 'pg_database'), '')) || '|' ||
        md5(coalesce(shobj_description(oid, 'pg_database'), '')) || '|' ||
@@ -685,7 +685,7 @@ FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
 WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
 UNION ALL
 SELECT 'DEFAULT_ACL|' || pg_get_userbyid(d.defaclrole) || '|' ||
-       coalesce(n.nspname, '') || '|' || d.defaclobjtype || '|' ||
+       coalesce(n.nspname, '') || '|' || d.defaclobjtype::text || '|' ||
        md5(coalesce(array_to_string(d.defaclacl, E'\n'), ''))
 FROM pg_default_acl d LEFT JOIN pg_namespace n ON n.oid = d.defaclnamespace
 UNION ALL

@@ -189,13 +189,14 @@ def test_exact_wrapper_attests_all_base_state_without_exposing_values() -> None:
     assert "DATABASE_INVENTORY|" in script
     assert "shobj_description(oid, 'pg_database')" in script
     assert "pg_get_userbyid(datdba)" in script
-    assert "datlocprovider" in script and "datcollversion" in script
+    assert "datlocprovider::text" in script and "datcollversion" in script
     assert 'snapshot_databases "$state/before.databases"' in script
     assert 'snapshot_databases "$state/after.databases"' in script
     assert 'cmp --silent "$state/before.databases" "$state/after.databases"' in script
     assert 'grep -Fq "DATABASE_INVENTORY|postgres|" "$output"' in script
     assert 'grep -Fq "DATABASE_INVENTORY|$POSTGRES_DB|" "$output"' in script
     assert "FROM pg_default_acl" in script
+    assert "d.defaclobjtype::text" in script
     assert "FROM pg_largeobject_metadata" in script
     assert "grep -q '^SCHEMA_ACL|'" in script
     assert "grep -q '^RELATION_ACL|'" in script
