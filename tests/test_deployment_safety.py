@@ -1007,6 +1007,18 @@ def test_rehearsal_hard_purge_and_schema_contract_are_fail_closed():
     assert "lecturesift_rehearsal_" in purge
     assert "E2E account identities are missing or were not anonymised" in purge
     assert "did not remove exactly the two proven rehearsal users" in purge
+    assert "OWNER_ONLY_USER_FOREIGN_KEYS" in purge
+    assert '("billing_email_verifications", "user_id")' in purge
+    assert "mutable_foreign_keys = _mutable_user_foreign_keys(foreign_keys)" in purge
+    assert "for foreign_key in mutable_foreign_keys" in purge
+    assert "_assert_no_matches(connection, mutable_foreign_keys" in purge
+    assert "owner-only user foreign-key contract is missing" in purge
+    assert "owner-only user foreign-key contract is ambiguous" in purge
+    assert "owner-only user foreign-key contract is unsafe" in purge
+    assert 'foreign_key.delete_action != "a"' in purge
+    assert "foreign_key.deferrable" in purge
+    assert "foreign_key.initially_deferred" in purge
+    assert "foreign_key.column_count != 1" in purge
     assert "rehearsal_purge_e2e.py" in rehearsal
     assert "--user 10001:10001" in rehearsal
     assert "target-after-e2e.safe" in rehearsal

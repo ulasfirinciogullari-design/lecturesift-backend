@@ -10,6 +10,7 @@ application or run against a non-rehearsal database.
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
@@ -29,10 +30,28 @@ EMAIL_PATTERNS = (
     re.compile(r"^ovh-rehearsal-[0-9a-f]{32}@example[.]invalid$"),
     re.compile(r"^format-rehearsal-[0-9a-f]{32}@example[.]invalid$"),
 )
+# This retained compatibility table is deliberately owner-only.  The runtime
+# API role cannot inspect or mutate it, including during rehearsal cleanup.
+# Keep the exact table/column pair explicit so a newly restricted foreign key
+# fails closed instead of being silently skipped.
+OWNER_ONLY_USER_FOREIGN_KEYS = frozenset(
+    {("billing_email_verifications", "user_id")}
+)
 
 
 class PurgeError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class UserForeignKey:
+    table_name: str
+    column_name: str
+    constraint_name: str
+    delete_action: str
+    deferrable: bool
+    initially_deferred: bool
+    column_count: int
 
 
 def _database_url() -> str:
@@ -90,11 +109,17 @@ def _delete_in(connection: Connection, sql: str, values: list[str]) -> int:
     return int(connection.execute(statement, {"values": values}).rowcount or 0)
 
 
-def _direct_user_foreign_keys(connection: Connection) -> list[tuple[str, str]]:
+def _direct_user_foreign_keys(connection: Connection) -> list[UserForeignKey]:
     rows = connection.execute(
         text(
             """
-            SELECT c.relname, a.attname
+            SELECT c.relname,
+                   a.attname,
+                   fk.conname,
+                   fk.confdeltype,
+                   fk.condeferrable,
+                   fk.condeferred,
+                   cardinality(fk.conkey)
             FROM pg_constraint fk
             JOIN pg_class c ON c.oid = fk.conrelid
             JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -103,23 +128,75 @@ def _direct_user_foreign_keys(connection: Connection) -> list[tuple[str, str]]:
             WHERE fk.contype = 'f'
               AND fk.confrelid = 'public.billing_users'::regclass
               AND n.nspname = 'public'
-            ORDER BY c.relname, a.attname
+            ORDER BY c.relname, a.attname, fk.conname
             """
         )
     ).all()
     if not rows:
         raise PurgeError("billing_users foreign-key inventory is unexpectedly empty")
-    return [(str(row[0]), str(row[1])) for row in rows]
+    return [
+        UserForeignKey(
+            table_name=str(row[0]),
+            column_name=str(row[1]),
+            constraint_name=str(row[2]),
+            delete_action=str(row[3]),
+            deferrable=bool(row[4]),
+            initially_deferred=bool(row[5]),
+            column_count=int(row[6]),
+        )
+        for row in rows
+    ]
+
+
+def _mutable_user_foreign_keys(
+    foreign_keys: list[UserForeignKey],
+) -> list[UserForeignKey]:
+    owner_only = [
+        foreign_key
+        for foreign_key in foreign_keys
+        if (foreign_key.table_name, foreign_key.column_name)
+        in OWNER_ONLY_USER_FOREIGN_KEYS
+    ]
+    owner_only_pairs = [
+        (foreign_key.table_name, foreign_key.column_name)
+        for foreign_key in owner_only
+    ]
+    if any(
+        owner_only_pairs.count(expected) == 0
+        for expected in OWNER_ONLY_USER_FOREIGN_KEYS
+    ):
+        raise PurgeError("owner-only user foreign-key contract is missing")
+    if any(
+        owner_only_pairs.count(expected) != 1
+        for expected in OWNER_ONLY_USER_FOREIGN_KEYS
+    ):
+        raise PurgeError("owner-only user foreign-key contract is ambiguous")
+    if any(
+        foreign_key.delete_action != "a"
+        or foreign_key.deferrable
+        or foreign_key.initially_deferred
+        or foreign_key.column_count != 1
+        for foreign_key in owner_only
+    ):
+        raise PurgeError("owner-only user foreign-key contract is unsafe")
+    return [
+        foreign_key
+        for foreign_key in foreign_keys
+        if (foreign_key.table_name, foreign_key.column_name)
+        not in OWNER_ONLY_USER_FOREIGN_KEYS
+    ]
 
 
 def _assert_no_matches(
     connection: Connection,
-    foreign_keys: list[tuple[str, str]],
+    foreign_keys: list[UserForeignKey],
     user_ids: list[str],
     job_ids: list[str],
 ) -> None:
     preparer = connection.dialect.identifier_preparer
-    for table_name, column_name in foreign_keys:
+    for foreign_key in foreign_keys:
+        table_name = foreign_key.table_name
+        column_name = foreign_key.column_name
         table = preparer.quote(table_name)
         column = preparer.quote(column_name)
         remaining = connection.execute(
@@ -205,8 +282,11 @@ def purge(application_result: Path, formats_result: Path) -> dict[str, object]:
             )
 
             foreign_keys = _direct_user_foreign_keys(connection)
+            mutable_foreign_keys = _mutable_user_foreign_keys(foreign_keys)
             preparer = connection.dialect.identifier_preparer
-            for table_name, column_name in foreign_keys:
+            for foreign_key in mutable_foreign_keys:
+                table_name = foreign_key.table_name
+                column_name = foreign_key.column_name
                 table = preparer.quote(table_name)
                 column = preparer.quote(column_name)
                 deleted[table_name] = deleted.get(table_name, 0) + _delete_in(
@@ -243,7 +323,13 @@ def purge(application_result: Path, formats_result: Path) -> dict[str, object]:
             )
             if deleted["billing_users"] != len(user_ids):
                 raise PurgeError("did not remove exactly the two proven rehearsal users")
-            _assert_no_matches(connection, foreign_keys, user_ids, job_ids)
+            # The owner-only compatibility table is intentionally not queried
+            # with the API role.  Its NO ACTION user foreign key makes the
+            # billing_users delete fail and roll back if an unexpected row
+            # references either rehearsal identity.  The outer manifest check
+            # then proves the compatibility surface remained byte-for-byte
+            # unchanged.
+            _assert_no_matches(connection, mutable_foreign_keys, user_ids, job_ids)
 
             # The generated registration addresses must no longer be present
             # in live identity columns. Audit rows use an unrelated anonymised

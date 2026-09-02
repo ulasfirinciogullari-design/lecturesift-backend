@@ -158,6 +158,14 @@ their exact clone-bound role, select the exact clone database, PING the isolated
 Redis service, and re-prove queue, storage and worker rollout continuity. The
 outer `EXIT` cleanup retains sole ownership after handoff and disconnects
 PostgreSQL only after the application, format and purge E2Es finish or fail.
+The hard purge enumerates every direct `billing_users` foreign key. Its one
+owner-only compatibility surface, `billing_email_verifications.user_id`, is
+excluded from API-role DELETE and SELECT statements only after PostgreSQL's
+catalog proves that exact foreign key is unique, single-column, immediate and
+`NO ACTION`. An unexpected compatibility row therefore blocks the parent user
+delete and rolls back the transaction; the owner-run final manifest also proves
+the compatibility table remained unchanged. No runtime grant or owner secret is
+introduced for cleanup.
 Instagram credentials are intentionally absent; its health probe must therefore
 return HTTP 503 with the exact safe `LS-IG-01` detail code rather than contact a
 live provider.
