@@ -140,17 +140,22 @@ or transport failure blocks admission. The gate never sends a write or delete,
 and its root-private, secret-free negative-capability artifact is hashed into
 the exact rehearsal admission. Each clone has a timestamp-derived owner, API and
 worker role; the candidate migration sees only the clone-owner URL. The API is
-on a dedicated labeled internal rehearsal backend network with localhost ingress and its own generated
-R2-only proxy container and alias. The worker has a different proxy container,
+on a dedicated labeled internal rehearsal backend network with no host-published
+ingress. It binds only to loopback inside its own container, where fixed
+allowlisted health paths are probed as the unprivileged application user. It
+has its own generated R2-only proxy container and alias. The worker has a different proxy container,
 alias and policy: it permits R2 plus `api.openai.com` only when a dedicated
 non-production rehearsal AI key exists. Separate temporary internal Docker
 networks carry the two role-to-proxy links, so the API cannot use or resolve
 through the worker proxy. Only the validated production PostgreSQL service is
 temporarily attached to the dedicated network under the `postgres` alias used
 by clone-only roles. Production Redis is never attached, and runtime probes in
-both candidate roles require its service names to remain unresolvable. A runtime
-gate requires the production API, worker, Caddy, and especially the production
-`egress-proxy` container to remain stopped before the build, before candidate
+both candidate roles require its service names to remain unresolvable.
+Instagram credentials are intentionally absent; its health probe must therefore
+return HTTP 503 with the exact safe `LS-IG-01` detail code rather than contact a
+live provider.
+A runtime gate requires the production API, worker, Caddy, and especially the
+production `egress-proxy` container to remain stopped before the build, before candidate
 start, and immediately before E2E probes. Production preflight also refuses any
 surviving rehearsal-labeled resource or PostgreSQL rehearsal attachment after
 an untrappable crash.

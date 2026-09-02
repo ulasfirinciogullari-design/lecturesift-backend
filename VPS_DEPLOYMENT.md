@@ -360,10 +360,15 @@ The stack verifies actual container network/env state, denies arbitrary proxy
 and direct Internet probes, and proves the allowed R2 path through rollout
 health before E2E acceptance. Billing, email and Instagram providers remain
 disabled and no live provider credential enters either role. The orchestrator invokes
-`deploy/rehearsal_stack.sh` itself and binds the API to localhost port 18000;
-do not invoke the stack later with a database name because the clone is already
+`deploy/rehearsal_stack.sh` itself. The candidate API publishes no host port,
+binds only to its own container loopback on port 8000, and is probed through
+fixed allowlisted paths from an unprivileged process inside that container.
+Do not invoke the stack later with a database name because the clone is already
 destroyed. The rehearsal never shares the production Redis/Celery queue or
-object bucket, API/worker work volumes, or public traffic. Its two dedicated
+object bucket, API/worker work volumes, or public traffic.
+The Instagram health probe must return the exact safe `LS-IG-01` disabled-provider
+response because no live Instagram credential is admitted to the candidate.
+Its two dedicated
 work volumes are size-bounded, non-executable tmpfs volumes (512 MiB API,
 2 GiB worker), are empty at start and removed together with the rehearsal
 containers before the orchestrator can report success.

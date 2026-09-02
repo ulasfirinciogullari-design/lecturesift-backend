@@ -528,7 +528,6 @@ PY
 }
 
 reconcile_stale_labeled_resources || fail unsafe-or-recent-rehearsal-runtime-residue
-[[ -z "$(ss -Hlnut 'sport = :18000')" ]] || fail rehearsal-port-in-use
 
 run_inner_rehearsal() {
   local -a run_identity=()

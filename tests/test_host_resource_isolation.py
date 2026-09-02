@@ -126,6 +126,50 @@ def test_isolated_rehearsal_uses_and_cleans_role_specific_egress_proxies():
     assert "cleanup_rehearsal_proxy_networks" in orchestrator
 
 
+def test_rehearsal_api_has_no_host_ingress_and_uses_private_loopback_probes():
+    stack = _read("deploy/rehearsal_stack.sh")
+
+    assert "--publish" not in stack
+    assert "127.0.0.1:18000" not in stack
+    assert "uvicorn main:app --host 127.0.0.1 --port 8000" in stack
+    assert "--forwarded-allow-ips=127.0.0.1" in stack
+    assert "--forwarded-allow-ips='*'" not in stack
+
+    worker_create = stack.split(
+        'docker create --pull=never --name "$rehearsal_worker_container"', 1
+    )[1].split('docker network connect "$rehearsal_worker_proxy_network"', 1)[0]
+    api_create = stack.split(
+        'docker create --pull=never --name "$rehearsal_api_container"', 1
+    )[1].split('docker network connect "$rehearsal_api_proxy_network"', 1)[0]
+    assert "--user 10001:10001" in worker_create
+    assert "--user 10001:10001" in api_create
+
+    helper = stack.split("rehearsal_api_get() {", 1)[1].split("container_labels() {", 1)[0]
+    assert "docker exec --user 10001:10001" in helper
+    assert "python -I -c" in helper
+    assert '"http://127.0.0.1:8000" + path' in helper
+    assert "urllib.request.ProxyHandler({})" in helper
+    assert "timeout >= 1 && timeout <= 30" in helper
+    assert "response.read(1048577)" in helper
+    assert "len(body) > 1048576" in helper
+    for request in (
+        "/health\\|200",
+        "/billing/health\\|200",
+        "/rollout/health\\|200",
+        "/instagram/health\\|503",
+    ):
+        assert request in helper
+
+    assert 'payload.get("HostConfig", {}).get("PortBindings") or {}' in stack
+    assert 'payload.get("NetworkSettings", {}).get("Ports") or {}' in stack
+    assert "if host_bindings:" in stack
+    assert "if any(value is not None for value in runtime_ports.values()):" in stack
+    assert "candidate has an unexpected host port binding" in stack
+    assert "candidate has an unexpected runtime host port binding" in stack
+    assert "rehearsal_api_get /instagram/health 8 503" in stack
+    assert '.code == "LS-IG-01"' in stack
+
+
 def test_resource_guard_reserves_host_capacity_and_bounds_work_volumes():
     guard = _read("deploy/resource_guard.sh")
     env_example = _read("deploy/env.example")

@@ -254,6 +254,21 @@ def test_rehearsal_runtime_resources_have_cleanup_labels() -> None:
     assert 'rehearsal_run="${rehearsal_db#lecturesift_rehearsal_}"' in stack
 
 
+def test_exact_rehearsal_has_no_host_listener_dependency() -> None:
+    stack = _read("deploy/rehearsal_stack.sh")
+    exact = _read("deploy/run_exact_rehearsal.sh")
+    safety = _read("deploy/EXACT_REHEARSAL_SAFETY.md")
+    deployment = _read("VPS_DEPLOYMENT.md")
+
+    assert "18000" not in stack
+    assert "sport = :18000" not in exact
+    assert "rehearsal-port-in-use" not in exact
+    assert "no host-published" in safety
+    assert "publishes no host port" in deployment
+    assert "LS-IG-01" in safety
+    assert "LS-IG-01" in deployment
+
+
 @pytest.mark.skipif(
     not (ROOT / ".local-secrets/run_exact_rehearsal.sh").exists(),
     reason="operator-only ignored wrappers are not present in repository clones",

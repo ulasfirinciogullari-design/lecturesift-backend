@@ -127,6 +127,54 @@ test "$(stat -c "%u:%g:%a" -- "$destination")" = \
     fail "candidate tmpfs write failed"
 }
 
+rehearsal_api_get() {
+  local path="$1" timeout="${2:-8}" expected_status="${3:-200}"
+  case "$path|$expected_status" in
+    /health\|200|/billing/health\|200|/rollout/health\|200|/instagram/health\|503) ;;
+    *) fail "rehearsal API probe path and status are not allowlisted" ;;
+  esac
+  [[ "$timeout" =~ ^[0-9]+$ ]] || fail "rehearsal API probe timeout is invalid"
+  (( timeout >= 1 && timeout <= 30 )) || \
+    fail "rehearsal API probe timeout must be between 1 and 30 seconds"
+
+  docker exec --user 10001:10001 "$rehearsal_api_container" \
+    python -I -c '
+import sys
+import urllib.error
+import urllib.request
+
+path = sys.argv[1]
+timeout = int(sys.argv[2])
+expected_status = int(sys.argv[3])
+allowed_requests = {
+    ("/health", 200),
+    ("/billing/health", 200),
+    ("/rollout/health", 200),
+    ("/instagram/health", 503),
+}
+if (path, expected_status) not in allowed_requests:
+    raise SystemExit("rehearsal API probe path and status are not allowlisted")
+if not 1 <= timeout <= 30:
+    raise SystemExit("rehearsal API probe timeout is outside the safe range")
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+request = urllib.request.Request(
+    "http://127.0.0.1:8000" + path,
+    headers={"Accept": "application/json"},
+)
+try:
+    response = opener.open(request, timeout=timeout)
+except urllib.error.HTTPError as error:
+    response = error
+with response:
+    if response.status != expected_status:
+        raise SystemExit(f"unexpected rehearsal API status: {response.status}")
+    body = response.read(1048577)
+if len(body) > 1048576:
+    raise SystemExit("rehearsal API response exceeds 1 MiB")
+sys.stdout.buffer.write(body)
+' "$path" "$timeout" "$expected_status"
+}
+
 container_labels() {
   docker container inspect --format \
     '{{ index .Config.Labels "lecturesift.rehearsal" }}|{{ index .Config.Labels "lecturesift.rehearsal.run" }}' \
@@ -409,7 +457,7 @@ done
 docker create --pull=never --name "$rehearsal_worker_container" \
   --label lecturesift.rehearsal=true \
   --label "lecturesift.rehearsal.run=$rehearsal_run" \
-  --network "$rehearsal_backend_network" --read-only --init \
+  --network "$rehearsal_backend_network" --read-only --init --user 10001:10001 \
   --security-opt no-new-privileges --pids-limit 768 \
   --memory 3584m --memory-swap 3584m --cpus 3.25 \
   --tmpfs /tmp:rw,noexec,nosuid,nodev,size=768m,mode=1777 \
@@ -459,14 +507,14 @@ fi
 docker create --pull=never --name "$rehearsal_api_container" \
   --label lecturesift.rehearsal=true \
   --label "lecturesift.rehearsal.run=$rehearsal_run" \
-  --network "$rehearsal_backend_network" --read-only --init \
+  --network "$rehearsal_backend_network" --read-only --init --user 10001:10001 \
   --security-opt no-new-privileges --pids-limit 384 \
   --memory 768m --memory-swap 768m --cpus 1.00 \
   --tmpfs /tmp:rw,noexec,nosuid,nodev,size=128m,mode=1777 \
   --mount "type=volume,src=$rehearsal_api_work_volume,dst=/var/lib/lecturesift" \
-  --env-file "$generated_api_env" --publish 127.0.0.1:18000:8000 \
-  lecturesift-backend:local uvicorn main:app --host 0.0.0.0 --port 8000 \
-    --proxy-headers --forwarded-allow-ips='*' >/dev/null
+  --env-file "$generated_api_env" \
+  lecturesift-backend:local uvicorn main:app --host 127.0.0.1 --port 8000 \
+    --proxy-headers --forwarded-allow-ips=127.0.0.1 >/dev/null
 docker network connect "$rehearsal_api_proxy_network" "$rehearsal_api_container"
 docker start "$rehearsal_api_container" >/dev/null
 bash "$ROOT_DIR/deploy/assert_rehearsal_production_stopped.sh" >/dev/null || \
@@ -502,6 +550,12 @@ for item in payload["Config"].get("Env") or []:
 networks = set((payload["NetworkSettings"].get("Networks") or {}).keys())
 if networks != {os.environ["EXPECTED_NETWORK"], os.environ["EXPECTED_PROXY_NETWORK"]}:
     raise SystemExit("candidate has an unexpected network attachment")
+host_bindings = payload.get("HostConfig", {}).get("PortBindings") or {}
+runtime_ports = payload.get("NetworkSettings", {}).get("Ports") or {}
+if host_bindings:
+    raise SystemExit("candidate has an unexpected host port binding")
+if any(value is not None for value in runtime_ports.values()):
+    raise SystemExit("candidate has an unexpected runtime host port binding")
 url = urlsplit(environment.get("DATABASE_URL", ""))
 if url.username != os.environ["EXPECTED_ROLE"] or url.hostname != "postgres":
     raise SystemExit("candidate database identity is not isolated")
@@ -558,8 +612,7 @@ done
 
 ready=false
 for _ in $(seq 1 90); do
-  if curl --fail --silent --show-error --max-time 5 \
-      http://127.0.0.1:18000/health >/dev/null; then
+  if rehearsal_api_get /health 5 >/dev/null 2>&1; then
     ready=true
     break
   fi
@@ -600,8 +653,7 @@ else:
 
 worker_ready=false
 for _ in $(seq 1 60); do
-  if curl --fail --silent --show-error --max-time 8 \
-      http://127.0.0.1:18000/rollout/health \
+  if rehearsal_api_get /rollout/health 8 \
     | jq --exit-status \
       '.durable_processing_ready == true and .queue.connected == true and
        .storage.connected == true and .worker.reachable == true and
@@ -617,15 +669,22 @@ if [[ "$worker_ready" != "true" ]]; then
 fi
 
 echo "HEALTH"
-curl --fail --silent --show-error http://127.0.0.1:18000/health
+rehearsal_api_get /health 8
 echo
 echo "BILLING"
-curl --fail --silent --show-error http://127.0.0.1:18000/billing/health
+rehearsal_api_get /billing/health 8
 echo
 echo "ROLLOUT"
-curl --fail --silent --show-error http://127.0.0.1:18000/rollout/health
+rehearsal_api_get /rollout/health 8
 echo
 echo "INSTAGRAM"
-curl --fail --silent --show-error http://127.0.0.1:18000/instagram/health
+instagram_health="$(rehearsal_api_get /instagram/health 8 503)" || \
+  fail "Instagram provider-disable health proof failed"
+printf '%s\n' "$instagram_health" | jq --exit-status '
+  type == "object" and keys == ["detail"] and
+  (.detail | type == "object" and keys == ["code", "message"] and
+    .code == "LS-IG-01" and (.message | type == "string" and length > 0))
+' >/dev/null || fail "Instagram health did not prove the exact safe disabled-provider response"
+printf '%s\n' "$instagram_health"
 echo
-echo "Rehearsal API and worker use generated allowlists and localhost-only ingress."
+echo "Rehearsal API and worker use generated allowlists with no host ingress."
