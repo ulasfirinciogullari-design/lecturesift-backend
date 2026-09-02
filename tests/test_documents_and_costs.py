@@ -713,6 +713,40 @@ def test_cost_ledger_attributes_provider_usage_without_storing_payload(monkeypat
             connection.execute(costs.COST_EVENTS.delete().where(costs.COST_EVENTS.c.job_id == job_id))
 
 
+def test_r2_roundtrip_costs_can_be_bound_to_a_user_without_a_job():
+    user_id = str(uuid.uuid4())
+    try:
+        with costs.cost_context(None, user_id):
+            costs.record_r2_operation("write", bytes_count=61)
+            costs.record_r2_operation("read", bytes_count=61)
+
+        with costs.ENGINE.connect() as connection:
+            rows = connection.execute(
+                costs.COST_EVENTS.select().where(
+                    costs.COST_EVENTS.c.user_id == user_id
+                )
+            ).mappings().all()
+
+        assert len(rows) == 2
+        assert all(row["job_id"] is None for row in rows)
+        assert {row["resource"] for row in rows} == {
+            "class_a_operation",
+            "class_b_operation",
+        }
+        assert {json.loads(row["metadata_json"])["operation"] for row in rows} == {
+            "write",
+            "read",
+        }
+    finally:
+        costs.init_cost_database()
+        with costs.ENGINE.begin() as connection:
+            connection.execute(
+                costs.COST_EVENTS.delete().where(
+                    costs.COST_EVENTS.c.user_id == user_id
+                )
+            )
+
+
 def test_admin_cost_endpoint_is_protected_and_separates_external_invoices(monkeypatch):
     install_rollout_routes(app)
     monkeypatch.setattr(config, "ADMIN_ADMIN", "cost-admin-secret")

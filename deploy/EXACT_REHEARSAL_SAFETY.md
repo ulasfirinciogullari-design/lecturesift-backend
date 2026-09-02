@@ -166,6 +166,10 @@ catalog proves that exact foreign key is unique, single-column, immediate and
 delete and rolls back the transaction; the owner-run final manifest also proves
 the compatibility table remained unchanged. No runtime grant or owner secret is
 introduced for cleanup.
+The standalone R2 write/read roundtrip is attributed at creation time to the
+already verified rehearsal user. This lets the same proof-bound user purge
+remove its two ledger rows; provider, timestamp and null-field predicates are
+never used to broaden cost cleanup.
 Instagram credentials are intentionally absent; its health probe must therefore
 return HTTP 503 with the exact safe `LS-IG-01` detail code rather than contact a
 live provider.

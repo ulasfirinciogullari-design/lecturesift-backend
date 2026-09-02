@@ -973,6 +973,7 @@ def test_postgres_reverse_reconciliation_never_guesses_a_merge_or_traffic_flip()
 
 def test_rehearsal_hard_purge_and_schema_contract_are_fail_closed():
     rehearsal = _read("deploy/rehearsal_restore.sh")
+    application_e2e = _read("deploy/rehearsal_e2e.py")
     manifest = _read("deploy/rehearsal_manifest.sql")
     migration = _read("deploy/migrate_postgres.sh")
     rollback = _read("deploy/rollback_postgres_to_render.sh")
@@ -1019,6 +1020,11 @@ def test_rehearsal_hard_purge_and_schema_contract_are_fail_closed():
     assert "foreign_key.deferrable" in purge
     assert "foreign_key.initially_deferred" in purge
     assert "foreign_key.column_count != 1" in purge
+    assert "rehearsal_user_id = str(account[\"user\"][\"id\"])" in application_e2e
+    assert "with cost_context(None, rehearsal_user_id):" in application_e2e
+    assert "STORAGE.upload_file(probe_source, probe_key)" in application_e2e
+    assert "STORAGE.download_file(probe_key, probe_target)" in application_e2e
+    assert "provider/time/NULL" in application_e2e
     assert "rehearsal_purge_e2e.py" in rehearsal
     assert "--user 10001:10001" in rehearsal
     assert "target-after-e2e.safe" in rehearsal

@@ -16,6 +16,7 @@ from sqlalchemy.engine import make_url
 
 from lecturesift import config
 from lecturesift.billing_service import register_user, verify_email
+from lecturesift.costs import cost_context
 from lecturesift.jobs import JOBS
 from lecturesift.storage import STORAGE
 
@@ -46,6 +47,7 @@ def main() -> None:
         country_code="TR",
     )
     account = verify_email(registration["verification_token"])
+    rehearsal_user_id = str(account["user"]["id"])
     token = account["token"]
     auth = {"Authorization": f"Bearer {token}"}
     admin_auth = {"Authorization": f"Bearer {config.ADMIN_ADMIN}"}
@@ -111,8 +113,14 @@ def main() -> None:
         probe_payload = f"LectureSift OVH R2 rehearsal {run_id}".encode("utf-8")
         try:
             probe_source.write_bytes(probe_payload)
-            STORAGE.upload_file(probe_source, probe_key)
-            STORAGE.download_file(probe_key, probe_target)
+            # The roundtrip is not a normal jobs/<uuid>/... object, so storage
+            # cannot infer a job id. Attribute its two cost events to the exact
+            # verified rehearsal user; the hard purge can then remove them by
+            # the same proof-bound identity without a broad provider/time/NULL
+            # predicate.
+            with cost_context(None, rehearsal_user_id):
+                STORAGE.upload_file(probe_source, probe_key)
+                STORAGE.download_file(probe_key, probe_target)
             if probe_target.read_bytes() != probe_payload:
                 raise RuntimeError("R2 roundtrip payload mismatch")
             summary["r2_roundtrip"] = True
@@ -192,7 +200,7 @@ def main() -> None:
         closed = require(
             client.request(
                 "DELETE",
-                f"/billing/admin/users/{account['user']['id']}",
+                f"/billing/admin/users/{rehearsal_user_id}",
                 headers=admin_auth,
                 json={
                     "confirmation_email": test_email,
@@ -229,7 +237,7 @@ def main() -> None:
     ):
         raise RuntimeError("One or more rehearsal gates did not pass")
     summary["ok"] = True
-    summary["rehearsal_user_id"] = str(account["user"]["id"])
+    summary["rehearsal_user_id"] = rehearsal_user_id
     summary["rehearsal_email"] = test_email
     summary["rehearsal_job_ids"] = [job_id]
     print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
