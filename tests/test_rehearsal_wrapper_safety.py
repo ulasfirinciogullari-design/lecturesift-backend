@@ -171,7 +171,10 @@ def test_exact_wrapper_attests_all_base_state_without_exposing_values() -> None:
         assert f'"$state/before.{suffix}"' in script
         assert f'"$state/after.{suffix}"' in script
     assert "FROM pg_authid" in script
-    assert "md5(coalesce(rolpassword, ''))" in script
+    assert "md5(coalesce(auth.rolpassword, ''))" in script
+    assert "array_to_string(rolconfig" not in script
+    assert "global_setting.setrole = auth.oid" in script
+    assert "global_setting.setdatabase = 0" in script
     assert "FROM pg_db_role_setting" in script
     assert "FROM pg_auth_members" in script
     assert "FROM pg_parameter_acl" in script

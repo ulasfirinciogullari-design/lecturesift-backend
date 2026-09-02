@@ -599,13 +599,19 @@ snapshot_roles() {
   local output="$1"
   docker exec -i lecturesift-postgres-1 psql --no-psqlrc --quiet --tuples-only --no-align \
     --set ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres <<'SQL' | LC_ALL=C sort >"$output" || return 1
-SELECT 'ROLE|' || rolname || '|' || rolsuper || '|' || rolinherit || '|' ||
-       rolcreaterole || '|' || rolcreatedb || '|' || rolcanlogin || '|' ||
-       rolreplication || '|' || rolbypassrls || '|' || rolconnlimit || '|' ||
-       coalesce(rolvaliduntil::text, '') || '|' ||
-       md5(coalesce(rolpassword, '')) || '|' ||
-       md5(coalesce(array_to_string(rolconfig, E'\n'), ''))
-FROM pg_authid
+SELECT 'ROLE|' || auth.rolname || '|' || auth.rolsuper || '|' ||
+       auth.rolinherit || '|' || auth.rolcreaterole || '|' ||
+       auth.rolcreatedb || '|' || auth.rolcanlogin || '|' ||
+       auth.rolreplication || '|' || auth.rolbypassrls || '|' ||
+       auth.rolconnlimit || '|' || coalesce(auth.rolvaliduntil::text, '') || '|' ||
+       md5(coalesce(auth.rolpassword, '')) || '|' ||
+       md5(coalesce((
+         SELECT array_to_string(global_setting.setconfig, E'\n')
+         FROM pg_db_role_setting AS global_setting
+         WHERE global_setting.setrole = auth.oid
+           AND global_setting.setdatabase = 0
+       ), ''))
+FROM pg_authid AS auth
 UNION ALL
 SELECT 'SETTING|' || setdatabase || '|' || setrole || '|' ||
        md5(coalesce(array_to_string(setconfig, E'\n'), ''))
