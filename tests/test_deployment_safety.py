@@ -93,6 +93,64 @@ def test_candidate_rehearsal_files_stream_atomically_into_allowlisted_tmpfs_path
         assert destination in restore
 
 
+def test_candidate_tmp_scripts_receive_only_the_fixed_application_import_path():
+    stack = _read("deploy/rehearsal_stack.sh")
+    restore = _read("deploy/rehearsal_restore.sh")
+    dockerfile = _read("Dockerfile")
+
+    assert "WORKDIR /app" in dockerfile
+    assert "COPY lecturesift ./lecturesift" in dockerfile
+
+    assert (
+        'docker exec --user 10001:10001 -e PYTHONPATH=/app '
+        '"$rehearsal_worker_container" \\\n'
+        "    python -P /tmp/lecturesift-rehearsal-synthetic-audio.py"
+    ) in stack
+    for script_name in (
+        "lecturesift-rehearsal-e2e.py",
+        "lecturesift-rehearsal-formats-e2e.py",
+    ):
+        assert (
+            "docker exec --user 10001:10001 -e PYTHONPATH=/app "
+            "lecturesift-api-rehearsal \\\n"
+            f"  python -P /tmp/{script_name}"
+        ) in restore
+    assert (
+        "docker exec --user 10001:10001 -e PYTHONPATH=/app lecturesift-api-rehearsal \\\n"
+        "  python -P /tmp/lecturesift-rehearsal-purge-e2e.py"
+    ) in restore
+
+    combined = stack + "\n" + restore
+    docker_exec_commands: list[str] = []
+    lines = combined.splitlines()
+    line_index = 0
+    while line_index < len(lines):
+        line = lines[line_index].strip()
+        if re.search(r"(?:^|\s)docker exec(?:\s|$)", line):
+            command_parts = [line]
+            while command_parts[-1].endswith("\\") and line_index + 1 < len(lines):
+                command_parts[-1] = command_parts[-1][:-1].rstrip()
+                line_index += 1
+                command_parts.append(lines[line_index].strip())
+            command = " ".join(command_parts)
+            if re.search(
+                r"\bpython(?:3(?:[.]\d+)?)?\b.*"
+                r"/tmp/lecturesift-rehearsal-[a-z0-9-]+[.]py\b",
+                command,
+            ):
+                docker_exec_commands.append(command)
+        line_index += 1
+
+    assert len(docker_exec_commands) == 4
+    for command in docker_exec_commands:
+        assert "--user 10001:10001" in command
+        assert "-e PYTHONPATH=/app" in command
+        assert re.search(
+            r"\bpython -P /tmp/lecturesift-rehearsal-[a-z0-9-]+[.]py\b",
+            command,
+        )
+
+
 def test_database_rehearsal_root_and_source_consistency_fail_closed():
     script = _read("deploy/rehearsal_restore.sh")
 

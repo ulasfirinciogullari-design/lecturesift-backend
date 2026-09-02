@@ -437,8 +437,8 @@ if [[ "$ai_provider" == "dedicated" ]]; then
   write_candidate_tmp_file "$rehearsal_worker_container" \
     "$ROOT_DIR/deploy/rehearsal_synthetic_audio.py" \
     /tmp/lecturesift-rehearsal-synthetic-audio.py 0400
-  docker exec "$rehearsal_worker_container" \
-    python /tmp/lecturesift-rehearsal-synthetic-audio.py
+  docker exec --user 10001:10001 -e PYTHONPATH=/app "$rehearsal_worker_container" \
+    python -P /tmp/lecturesift-rehearsal-synthetic-audio.py
   [[ ! -e "$synthetic_audio_temporary" && ! -L "$synthetic_audio_temporary" ]] || \
     fail "dedicated rehearsal synthetic-audio staging path already exists"
   docker exec --user 10001:10001 "$rehearsal_worker_container" sh -eu -c '

@@ -1198,13 +1198,13 @@ LECTURESIFT_REHEARSAL_ORCHESTRATED=YES \
 write_candidate_tmp_file lecturesift-api-rehearsal \
   "$ROOT_DIR/deploy/rehearsal_e2e.py" \
   /tmp/lecturesift-rehearsal-e2e.py 0400
-docker exec lecturesift-api-rehearsal \
-  python /tmp/lecturesift-rehearsal-e2e.py >"$run_dir/application-e2e.json"
+docker exec --user 10001:10001 -e PYTHONPATH=/app lecturesift-api-rehearsal \
+  python -P /tmp/lecturesift-rehearsal-e2e.py >"$run_dir/application-e2e.json"
 write_candidate_tmp_file lecturesift-api-rehearsal \
   "$ROOT_DIR/deploy/rehearsal_formats_e2e.py" \
   /tmp/lecturesift-rehearsal-formats-e2e.py 0400
-docker exec lecturesift-api-rehearsal \
-  python /tmp/lecturesift-rehearsal-formats-e2e.py >"$run_dir/formats-e2e.json"
+docker exec --user 10001:10001 -e PYTHONPATH=/app lecturesift-api-rehearsal \
+  python -P /tmp/lecturesift-rehearsal-formats-e2e.py >"$run_dir/formats-e2e.json"
 write_candidate_tmp_file lecturesift-api-rehearsal \
   "$ROOT_DIR/deploy/rehearsal_purge_e2e.py" \
   /tmp/lecturesift-rehearsal-purge-e2e.py 0400
@@ -1214,8 +1214,8 @@ write_candidate_tmp_file lecturesift-api-rehearsal \
 write_candidate_tmp_file lecturesift-api-rehearsal \
   "$run_dir/formats-e2e.json" \
   /tmp/lecturesift-formats-e2e.json 0400
-docker exec --user 10001:10001 lecturesift-api-rehearsal \
-  python /tmp/lecturesift-rehearsal-purge-e2e.py \
+docker exec --user 10001:10001 -e PYTHONPATH=/app lecturesift-api-rehearsal \
+  python -P /tmp/lecturesift-rehearsal-purge-e2e.py \
     --application-result /tmp/lecturesift-application-e2e.json \
     --formats-result /tmp/lecturesift-formats-e2e.json \
   >"$run_dir/e2e-purge.json"
