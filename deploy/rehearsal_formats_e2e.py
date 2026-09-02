@@ -12,14 +12,17 @@ import atexit
 import json
 import os
 from pathlib import Path
+from pathlib import PurePosixPath, PureWindowsPath
 import re
 import secrets
 import shutil
+import stat
 import subprocess
 import tempfile
 import time
 from typing import Any
 import uuid
+import zipfile
 
 import httpx
 from docx import Document
@@ -472,14 +475,118 @@ def _assert_result(case_name: str, job_id: str, result: dict[str, Any]) -> None:
             raise RuntimeError("MP4 audio/visual coverage was incomplete")
 
 
-def _verify_r2_payloads(job_id: str, result: dict[str, Any], local_dir: Path) -> int:
-    artifacts = [item for item in result.get("artifacts", []) if isinstance(item, dict)]
+def _verify_mp3(path: Path) -> None:
+    if path.is_symlink() or not path.is_file() or path.stat().st_size <= 0:
+        raise RuntimeError("R2 MP3 artifact was empty or unsafe")
+    completed = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "a:0",
+            "-show_entries",
+            "stream=codec_name",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(path),
+        ],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=30,
+    )
+    if completed.returncode != 0 or completed.stdout.strip().casefold() != "mp3":
+        raise RuntimeError("R2 MP3 artifact did not contain a valid MP3 audio stream")
+
+
+_WINDOWS_RESERVED_NAMES = {
+    "con",
+    "prn",
+    "aux",
+    "nul",
+    *(f"com{number}" for number in range(1, 10)),
+    *(f"lpt{number}" for number in range(1, 10)),
+}
+_MAX_REHEARSAL_ZIP_MEMBERS = 64
+_MAX_REHEARSAL_ZIP_MEMBER_BYTES = 64 * 1024 * 1024
+_MAX_REHEARSAL_ZIP_TOTAL_BYTES = 128 * 1024 * 1024
+
+
+def _safe_leaf_name(value: object, *, label: str) -> str:
+    """Reject names that could escape or alias on POSIX or Windows clients."""
+
+    if not isinstance(value, str) or not value:
+        raise RuntimeError(f"{label} was missing or was not a string")
+    name = value
+    posix_name = PurePosixPath(name)
+    windows_name = PureWindowsPath(name)
+    windows_stem = name.split(".", 1)[0].rstrip(" .").casefold()
+    if (
+        name in {".", ".."}
+        or "/" in name
+        or "\\" in name
+        or posix_name.is_absolute()
+        or windows_name.is_absolute()
+        or posix_name.name != name
+        or windows_name.name != name
+        or bool(windows_name.drive)
+        or bool(windows_name.root)
+        or name.endswith((" ", "."))
+        or windows_stem in _WINDOWS_RESERVED_NAMES
+        or any(character in '<>:"|?*' for character in name)
+        or any(ord(character) < 32 or ord(character) == 127 for character in name)
+    ):
+        raise RuntimeError(f"{label} was not a safe cross-platform leaf name")
+    return name
+
+
+def _has_casefold_duplicates(names: list[str]) -> bool:
+    return len(names) != len({name.casefold() for name in names})
+
+
+def _verify_r2_payloads(
+    case_name: str,
+    job_id: str,
+    result: dict[str, Any],
+    local_dir: Path,
+    archive_key: str,
+) -> list[str]:
+    raw_artifacts = result.get("artifacts")
+    if not isinstance(raw_artifacts, list) or any(
+        not isinstance(item, dict) for item in raw_artifacts
+    ):
+        raise RuntimeError("R2 artifact manifest was missing or malformed")
+    artifacts = raw_artifacts
+    artifact_names = [
+        _safe_leaf_name(item.get("file"), label="R2 artifact filename")
+        for item in artifacts
+    ]
+    raw_artifact_sizes = [item.get("size_bytes") for item in artifacts]
+    if any(
+        isinstance(size, bool) or not isinstance(size, int)
+        for size in raw_artifact_sizes
+    ):
+        raise RuntimeError("R2 artifact manifest contained an invalid size")
+    artifact_sizes = raw_artifact_sizes
+    if (
+        not artifact_names
+        or len(artifact_names) > _MAX_REHEARSAL_ZIP_MEMBERS
+        or len(artifact_names) != len(set(artifact_names))
+        or _has_casefold_duplicates(artifact_names)
+        or any(
+            size <= 0 or size > _MAX_REHEARSAL_ZIP_MEMBER_BYTES
+            for size in artifact_sizes
+        )
+        or sum(artifact_sizes) > _MAX_REHEARSAL_ZIP_TOTAL_BYTES
+    ):
+        raise RuntimeError("R2 artifact manifest contained an unsafe or empty file")
     pdf_artifact = next(
         (
             item
             for item in artifacts
             if str(item.get("format") or "").casefold() == "pdf"
-            and Path(str(item.get("file") or "")).name == str(item.get("file") or "")
         ),
         None,
     )
@@ -487,30 +594,131 @@ def _verify_r2_payloads(job_id: str, result: dict[str, Any], local_dir: Path) ->
         raise RuntimeError("R2 payload probe could not identify a PDF artifact")
     pdf_name = str(pdf_artifact["file"])
     pdf_key = f"jobs/{job_id}/package/{pdf_name}"
-    package_dir = local_dir / "package"
-    shutil.rmtree(package_dir, ignore_errors=True)
-    if STORAGE.materialize_files(job_id, local_dir, [pdf_key]) != 1:
-        raise RuntimeError("PDF artifact could not be materialized from R2")
-    if not (package_dir / pdf_name).read_bytes().startswith(b"%PDF-"):
+
+    prefix = f"jobs/{job_id}/"
+    if not archive_key.startswith(prefix):
+        raise RuntimeError("R2 result did not bind its ZIP archive to the owning job")
+    archive_relative = archive_key[len(prefix) :]
+    archive_relative_path = PurePosixPath(archive_relative)
+    archive_parts = archive_relative.split("/")
+    if (
+        not archive_relative
+        or "\\" in archive_relative
+        or archive_relative_path.is_absolute()
+        or ".." in archive_relative_path.parts
+        or any(part in {"", "."} for part in archive_parts)
+        or any(ord(character) < 32 or ord(character) == 127 for character in archive_relative)
+        or archive_relative_path.suffix.casefold() != ".zip"
+    ):
+        raise RuntimeError("R2 result exposed an unsafe ZIP archive path")
+    for archive_part in archive_parts:
+        _safe_leaf_name(archive_part, label="R2 ZIP archive path segment")
+
+    media_case = case_name in {"mp3_audio", "mp4_video"}
+    audio_artifacts = [
+        item
+        for item in artifacts
+        if str(item.get("format") or "").casefold() == "mp3"
+    ]
+    if (media_case and len(audio_artifacts) != 1) or (
+        not media_case and audio_artifacts
+    ):
+        raise RuntimeError("R2 media artifact manifest did not match its format case")
+
+    evidence = ["pdf_sample", "archive_zip"]
+    keys = [pdf_key, archive_key]
+    audio_name = ""
+    if media_case:
+        audio_name = str(audio_artifacts[0]["file"])
+        keys.append(f"jobs/{job_id}/package/{audio_name}")
+        evidence.append("audio_mp3")
+
+    raw_slides = result.get("slides", [])
+    if not isinstance(raw_slides, list) or any(
+        not isinstance(item, dict) for item in raw_slides
+    ):
+        raise RuntimeError("R2 slide manifest was malformed")
+    slides = raw_slides
+    if case_name == "mp4_video" and not slides:
+        raise RuntimeError("R2 video result did not expose a slide sample")
+    if case_name != "mp4_video" and slides:
+        raise RuntimeError("R2 non-video result unexpectedly exposed slide payloads")
+    slide_name = ""
+    if case_name == "mp4_video":
+        slide_names = [
+            _safe_leaf_name(item.get("file"), label="R2 slide filename")
+            for item in slides
+        ]
+        if _has_casefold_duplicates(slide_names):
+            raise RuntimeError("R2 slide manifest contained aliased filenames")
+        slide_name = slide_names[0]
+        keys.append(f"jobs/{job_id}/slides/{slide_name}")
+        evidence.append("slide_sample")
+
+    shutil.rmtree(local_dir / "package", ignore_errors=True)
+    archive_local = local_dir.joinpath(*archive_relative_path.parts)
+    archive_local.unlink(missing_ok=True)
+    if STORAGE.materialize_files(job_id, local_dir, keys) != len(keys):
+        raise RuntimeError("Expected R2 payloads could not all be materialized")
+
+    pdf_path = local_dir / "package" / pdf_name
+    if not pdf_path.read_bytes().startswith(b"%PDF-"):
         raise RuntimeError("R2 PDF artifact signature was invalid")
 
-    verified = 1
-    slides = [item for item in result.get("slides", []) if isinstance(item, dict)]
-    if slides:
-        slide_name = Path(str(slides[0].get("file") or "")).name
-        if not slide_name:
-            raise RuntimeError("R2 slide probe could not identify a slide image")
-        slide_key = f"jobs/{job_id}/slides/{slide_name}"
-        slides_dir = local_dir / "slides"
-        shutil.rmtree(slides_dir, ignore_errors=True)
-        if STORAGE.materialize_files(job_id, local_dir, [slide_key]) != 1:
-            raise RuntimeError("Slide image could not be materialized from R2")
-        with Image.open(slides_dir / slide_name) as slide_image:
+    audio_path = local_dir / "package" / audio_name if audio_name else None
+    if audio_path is not None:
+        _verify_mp3(audio_path)
+
+    if slide_name:
+        with Image.open(local_dir / "slides" / slide_name) as slide_image:
             slide_image.verify()
             if slide_image.format != "JPEG":
                 raise RuntimeError("R2 slide image was not a valid JPEG")
-        verified += 1
-    return verified
+
+    try:
+        with zipfile.ZipFile(archive_local) as archive:
+            members = archive.infolist()
+            if len(members) > _MAX_REHEARSAL_ZIP_MEMBERS:
+                raise RuntimeError("R2 ZIP archive exceeded the rehearsal member limit")
+            names = [
+                _safe_leaf_name(member.filename, label="R2 ZIP member filename")
+                for member in members
+            ]
+            total_uncompressed_bytes = sum(member.file_size for member in members)
+            if (
+                not names
+                or len(names) != len(set(names))
+                or _has_casefold_duplicates(names)
+                or set(names) != set(artifact_names)
+                or total_uncompressed_bytes > _MAX_REHEARSAL_ZIP_TOTAL_BYTES
+                or any(
+                    member.is_dir()
+                    or member.file_size < 0
+                    or member.file_size > _MAX_REHEARSAL_ZIP_MEMBER_BYTES
+                    or stat.S_ISLNK(member.external_attr >> 16)
+                    or stat.S_IFMT(member.external_attr >> 16)
+                    not in {0, stat.S_IFREG}
+                    for member in members
+                )
+            ):
+                raise RuntimeError("R2 ZIP archive manifest was unsafe or incomplete")
+            if archive.testzip() is not None:
+                raise RuntimeError("R2 ZIP archive failed its CRC check")
+            for artifact in artifacts:
+                name = str(artifact["file"])
+                payload = archive.read(name)
+                if len(payload) != int(artifact["size_bytes"]):
+                    raise RuntimeError("R2 ZIP member size did not match its manifest")
+                if str(artifact.get("format") or "").casefold() == "pdf" and not payload.startswith(
+                    b"%PDF-"
+                ):
+                    raise RuntimeError("R2 ZIP contained an invalid PDF member")
+            if audio_path is not None and archive.read(audio_name) != audio_path.read_bytes():
+                raise RuntimeError("R2 ZIP did not contain the verified MP3 payload")
+    except (OSError, zipfile.BadZipFile) as exc:
+        raise RuntimeError("R2 ZIP archive could not be verified") from exc
+
+    return evidence
 
 
 def _job_is_durably_terminal(job: dict[str, Any]) -> bool:
@@ -665,6 +873,7 @@ def main() -> None:
                 CURRENT_STAGE = "r2_reopen"
                 reopened = 0
                 payloads_verified = 0
+                payload_evidence_by_case: dict[str, list[str]] = {}
                 for case_name, job_id in jobs.items():
                     persisted = JOBS.get(job_id) or {}
                     if not (
@@ -681,7 +890,15 @@ def main() -> None:
                         raise RuntimeError("Local eviction failed before the R2 reopen probe")
                     result = require(client.get(f"/jobs/{job_id}/result", headers=auth))
                     _assert_result(case_name, job_id, result)
-                    payloads_verified += _verify_r2_payloads(job_id, result, local_dir)
+                    evidence = _verify_r2_payloads(
+                        case_name,
+                        job_id,
+                        result,
+                        local_dir,
+                        str(persisted.get("remote_download_key") or ""),
+                    )
+                    payload_evidence_by_case[case_name] = evidence
+                    payloads_verified += len(evidence)
                     if not (local_dir / "result.json").is_file():
                         raise RuntimeError(f"{case_name} result was not reopened from R2")
                     reopened += 1
@@ -736,6 +953,7 @@ def main() -> None:
                     "celery_jobs_done": len(jobs),
                     "r2_results_reopened": reopened,
                     "r2_payloads_verified": payloads_verified,
+                    "r2_payloads_verified_by_case": payload_evidence_by_case,
                     "job_metadata_removed": len(jobs),
                     "r2_residual_objects": residual_objects,
                     "rehearsal_account_closed": account_closed,

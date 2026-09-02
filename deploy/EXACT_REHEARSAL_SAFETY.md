@@ -184,6 +184,14 @@ and successful MP3 and MP4 AI/audio/video format cases. Without that key, the
 runner may produce explicit skipped-case diagnostics for document/OCR
 troubleshooting, but the artifact validator rejects the result before admission
 creation. Any skipped format case is non-admitting.
+Durable format evidence is bound to each exact case rather than accepted as a
+global lower bound. Every case reopens a PDF sample and the complete ZIP from
+R2; both media cases also reopen and probe the packaged MP3, while the MP4 case
+reopens a JPEG slide sample. The ZIP member set must exactly match the artifact
+manifest, contain no paths, links, duplicate members or corruption, and contain
+the same verified MP3 bytes. Full admission therefore requires the exact
+case-bound 2 + 2 + 3 + 4 evidence matrix (11 named payload proofs); missing,
+extra, duplicated or reassigned evidence fails closed.
 The version-5 admission also binds `rehearsal_ai_provider=dedicated` into the
 version-3 aggregate artifact digest, so older admissions and reports created
 before this mandatory AI/media gate are rejected rather than reused.

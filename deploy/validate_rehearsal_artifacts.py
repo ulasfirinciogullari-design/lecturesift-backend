@@ -53,6 +53,14 @@ FORMATS_BY_CASE = {
     "mp3_audio": frozenset({"mp3"}),
     "mp4_video": frozenset({"mp4_8s"}),
 }
+R2_PAYLOAD_EVIDENCE_BY_CASE = {
+    "native_documents": frozenset({"pdf_sample", "archive_zip"}),
+    "ocr_images": frozenset({"pdf_sample", "archive_zip"}),
+    "mp3_audio": frozenset({"pdf_sample", "archive_zip", "audio_mp3"}),
+    "mp4_video": frozenset(
+        {"pdf_sample", "archive_zip", "audio_mp3", "slide_sample"}
+    ),
+}
 
 
 class ArtifactError(RuntimeError):
@@ -159,6 +167,38 @@ def _validate_format_coverage(formats: dict[str, object], submitted: int) -> str
     return "dedicated"
 
 
+def _validate_r2_payload_evidence(formats: dict[str, object], submitted: int) -> int:
+    """Bind every durable R2 payload proof to one exact format case.
+
+    A result reopen is counted per job, while payload evidence is counted per
+    independently downloaded object.  The video case therefore proves more
+    than one object.  An exact case-to-evidence map prevents a forged global
+    total from hiding a missing PDF, ZIP, MP3 or slide proof.
+    """
+
+    raw = formats.get("r2_payloads_verified_by_case")
+    if not isinstance(raw, dict) or set(raw) != ALL_FORMAT_CASES:
+        raise ArtifactError("format E2E R2 payload evidence cases are malformed")
+    if submitted != len(R2_PAYLOAD_EVIDENCE_BY_CASE):
+        raise ArtifactError("format E2E R2 payload evidence job count is inconsistent")
+
+    total = 0
+    for case_name, expected in R2_PAYLOAD_EVIDENCE_BY_CASE.items():
+        actual = _unique_string_set(
+            raw.get(case_name), label=f"R2 {case_name} payload evidence"
+        )
+        if actual != expected:
+            raise ArtifactError(
+                f"format E2E R2 {case_name} payload evidence is incomplete"
+            )
+        total += len(actual)
+
+    recorded = formats.get("r2_payloads_verified")
+    if isinstance(recorded, bool) or not isinstance(recorded, int) or recorded != total:
+        raise ArtifactError("format E2E R2 payload evidence total is inconsistent")
+    return total
+
+
 def validate(root: Path, run_dir: Path, revision: str) -> dict[str, str]:
     if not REVISION.fullmatch(revision):
         raise ArtifactError("invalid rehearsal revision")
@@ -261,12 +301,12 @@ def validate(root: Path, run_dir: Path, revision: str) -> dict[str, str]:
         or len(format_jobs) != submitted
         or formats.get("celery_jobs_done") != submitted
         or formats.get("r2_results_reopened") != submitted
-        or formats.get("r2_payloads_verified") != submitted
         or formats.get("job_metadata_removed") != submitted
         or formats.get("r2_residual_objects") != 0
     ):
         raise ArtifactError("format E2E artifact is not successful")
     format_ai_provider = _validate_format_coverage(formats, submitted)
+    _validate_r2_payload_evidence(formats, submitted)
 
     purge, purge_payload = _json_artifact(run_dir / "e2e-purge.json")
     if (
