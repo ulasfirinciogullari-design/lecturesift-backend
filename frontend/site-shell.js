@@ -29,7 +29,8 @@
     const parts = location.pathname.split("/").filter(Boolean);
     if (CODES.includes(parts[0])) parts.shift();
     const pathname = parts.length ? `/${parts.join("/")}` : "/";
-    return pathname === "/index.html" ? "/" : pathname;
+    if (pathname === "/index.html") return "/";
+    return pathname.replace(/\.html$/i, "");
   })();
 
   const existingNav = header.querySelector("nav");
@@ -44,9 +45,9 @@
   const links = [
     ["home", "/"],
     ["workspace", "/workspace.html"],
-    ["features", "/features.html"],
-    ["plans", "/plans.html"],
-    ["about", "/about.html"],
+    ["features", "/features"],
+    ["plans", "/plans"],
+    ["about", "/about"],
   ];
   links.forEach(([key, path]) => {
     const anchor = document.createElement("a");
@@ -88,16 +89,16 @@
   const rebuildInformationNavigation = () => {
     const aside = document.querySelector(".legal-nav");
     if (!aside) return;
-    const corporatePages = ["/about.html", "/contact.html"];
-    const legalPages = ["/privacy.html", "/terms.html", "/cookies.html", "/refund.html", "/distance-sales.html"];
+    const corporatePages = ["/about", "/contact"];
+    const legalPages = ["/privacy", "/terms", "/cookies", "/refund", "/distance-sales"];
     if (![...corporatePages, ...legalPages].includes(currentBasePath)) return;
     const groups = [
-      ["LectureSift", [["Hakkımızda", "/about.html"], ["İletişim", "/contact.html"]]],
-      ["Ürün", [["Çalışma Alanı", "/workspace.html"], ["Özellikler", "/features.html"], ["Planlar", "/plans.html"]]],
+      ["LectureSift", [["Hakkımızda", "/about"], ["İletişim", "/contact"]]],
+      ["Ürün", [["Çalışma Alanı", "/workspace.html"], ["Özellikler", "/features"], ["Planlar", "/plans"]]],
       ["Yasal belgeler", [
-        ["Gizlilik ve KVKK", "/privacy.html"], ["Kullanım koşulları", "/terms.html"],
-        ["Çerez ve depolama", "/cookies.html"], ["Teslimat, iptal ve iade", "/refund.html"],
-        ["Mesafeli Satış Sözleşmesi", "/distance-sales.html"],
+        ["Gizlilik ve KVKK", "/privacy"], ["Kullanım koşulları", "/terms"],
+        ["Çerez ve depolama", "/cookies"], ["Teslimat, iptal ve iade", "/refund"],
+        ["Mesafeli Satış Sözleşmesi", "/distance-sales"],
       ]],
     ];
     aside.replaceChildren();
@@ -122,9 +123,9 @@
     if (footerNav) {
       footerNav.replaceChildren();
       [
-        ["İletişim", "/contact.html"], ["Gizlilik", "/privacy.html"],
-        ["Koşullar", "/terms.html"], ["İptal ve iade", "/refund.html"],
-        ["Mesafeli satış", "/distance-sales.html"], ["Çerezler", "/cookies.html"],
+        ["İletişim", "/contact"], ["Gizlilik", "/privacy"],
+        ["Koşullar", "/terms"], ["İptal ve iade", "/refund"],
+        ["Mesafeli satış", "/distance-sales"], ["Çerezler", "/cookies"],
       ].forEach(([text, path]) => {
         const anchor = document.createElement("a");
         anchor.href = pathFor(path);
@@ -135,7 +136,7 @@
   };
 
   rebuildInformationNavigation();
-  if (currentBasePath === "/terms.html") {
+  if (currentBasePath === "/terms") {
     const notice = document.querySelector(".legal-card .notice");
     if (notice) notice.textContent = exact(
       "Satıcı/hizmet sağlayıcı kimliği, siparişe özgü toplam fiyat, vergi, dönem, ödeme yöntemi ve dijital hizmet başlangıcı; kullanıcı onayından hemen önce sipariş özetinde ve Mesafeli Satış Sözleşmesi'nde gösterilir."
