@@ -20,6 +20,7 @@ const ARTICLE_PATHS = new Set([
 const GUIDE_PATHS = new Set([
   "/features.html", "/document-summary.html", "/lecture-video-summary.html", "/quiz-flashcards.html",
 ]);
+const PUBLIC_PATH_SET = new Set(PUBLIC_PATHS);
 
 const pageCopySource = await readFile(path.join(SOURCE, "page-i18n.js"), "utf8");
 const marker = "window.LECTURESIFT_PAGE_COPY=";
@@ -40,9 +41,33 @@ for (const match of dynamicCopySource.matchAll(/^\s*,?["']([^"']+)["']\s*:\s*(\[
   }
 }
 
+function canonicalPublicPath(publicPath) {
+  if (publicPath === "/" || publicPath === "/index.html") return "/";
+  return publicPath.endsWith(".html") ? publicPath.slice(0, -5) : publicPath;
+}
+
 function localizedPath(language, publicPath) {
-  if (language === "tr") return publicPath;
-  return publicPath === "/" ? `/${language}/` : `/${language}${publicPath}`;
+  const canonicalPath = canonicalPublicPath(publicPath);
+  if (language === "tr") return canonicalPath;
+  return canonicalPath === "/" ? `/${language}/` : `/${language}${canonicalPath}`;
+}
+
+function canonicalizePublicLinks(html) {
+  return html.replace(/<a\b[^>]*>/gi, tag => tag.replace(/\bhref="(\/[^\"]*)"/i, (match, href) => {
+    const boundary = href.search(/[?#]/);
+    const pathname = boundary >= 0 ? href.slice(0, boundary) : href;
+    const suffix = boundary >= 0 ? href.slice(boundary) : "";
+    const segments = pathname.split("/").filter(Boolean);
+    const language = LANGUAGES.includes(segments[0]) ? segments.shift() : null;
+    const route = segments.length ? `/${segments.join("/")}` : "/";
+    const physicalRoute = route === "/index.html" ? "/" : route;
+    if (!PUBLIC_PATH_SET.has(physicalRoute)) return match;
+    const canonicalRoute = canonicalPublicPath(physicalRoute);
+    const localized = language && language !== "tr"
+      ? (canonicalRoute === "/" ? `/${language}/` : `/${language}${canonicalRoute}`)
+      : canonicalRoute;
+    return `href="${localized}${suffix}"`;
+  }));
 }
 
 function translate(source, language) {
@@ -186,7 +211,7 @@ function staticSeo(html, language, publicPath) {
 ${staticDescription}
   <link rel="canonical" href="${canonical}">
 ${alternates}
-  <link rel="alternate" hreflang="x-default" href="${ORIGIN}${publicPath}">
+  <link rel="alternate" hreflang="x-default" href="${ORIGIN}${localizedPath("tr", publicPath)}">
   <meta property="og:type" content="${ARTICLE_PATHS.has(publicPath) ? "article" : "website"}">
   <meta property="og:site_name" content="LectureSift">
   <meta property="og:title" content="${escapeAttribute(title)}">
@@ -239,6 +264,7 @@ for (const language of LANGUAGES) {
     const sourceName = publicPath === "/" ? "index.html" : publicPath.slice(1);
     let html = await readFile(path.join(SOURCE, sourceName), "utf8");
     html = translateDocument(html, language);
+    html = canonicalizePublicLinks(html);
     html = removeStaticTranslationCatalog(html);
     html = deferNonCriticalScripts(html);
     html = staticSeo(html, language, publicPath);

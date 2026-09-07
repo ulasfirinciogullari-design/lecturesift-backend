@@ -2,15 +2,31 @@
   const codes = ["tr","en","de","fr","es","it","pt","ru","ar","zh","ja","ko","hi"];
   const languages = {tr:"Türkçe",en:"English",de:"Deutsch",fr:"Français",es:"Español",it:"Italiano",pt:"Português",ru:"Русский",ar:"العربية",zh:"中文",ja:"日本語",ko:"한국어",hi:"हिन्दी"};
   const locales = {tr:"tr-TR",en:"en-US",de:"de-DE",fr:"fr-FR",es:"es-ES",it:"it-IT",pt:"pt-BR",ru:"ru-RU",ar:"ar-SA",zh:"zh-CN",ja:"ja-JP",ko:"ko-KR",hi:"hi-IN"};
+  const publicRoutes = new Set([
+    "/", "/features.html", "/document-summary.html", "/lecture-video-summary.html",
+    "/quiz-flashcards.html", "/plans.html", "/about.html", "/contact.html",
+    "/privacy.html", "/terms.html", "/distance-sales.html", "/cookies.html", "/refund.html",
+  ]);
+  const logicalRoute = pathname => {
+    const normalized = pathname === "/index.html" ? "/" : (pathname.startsWith("/") ? pathname : `/${pathname}`);
+    if (normalized !== "/" && !normalized.endsWith(".html") && publicRoutes.has(`${normalized}.html`)) {
+      return `${normalized}.html`;
+    }
+    return normalized;
+  };
+  const canonicalRoute = pathname => {
+    const logical = logicalRoute(pathname);
+    return publicRoutes.has(logical) && logical.endsWith(".html") ? logical.slice(0, -5) : logical;
+  };
   const pathParts = location.pathname.split("/").filter(Boolean);
   const pathLanguage = codes.includes(pathParts[0]) ? pathParts[0] : null;
   const basePath = (() => {
-    if (!pathLanguage) return location.pathname || "/";
+    if (!pathLanguage) return logicalRoute(location.pathname || "/");
     const rest = pathParts.slice(1).join("/");
-    return rest ? `/${rest}` : "/";
+    return logicalRoute(rest ? `/${rest}` : "/");
   })();
   const localizedPath = (language, pathname = basePath) => {
-    const normalized = pathname === "/index.html" ? "/" : (pathname.startsWith("/") ? pathname : `/${pathname}`);
+    const normalized = canonicalRoute(pathname);
     return language === "tr" ? normalized : `/${language}${normalized === "/" ? "/" : normalized}`;
   };
   const rows = {
@@ -556,6 +572,10 @@
 
   const selected = (() => {
     if (pathLanguage) return pathLanguage;
+    // An indexable URL has one stable language. Saved/browser preferences are
+    // expressed by navigating to a language-prefixed URL, never by mutating
+    // the canonical content at the unprefixed Turkish URL.
+    if (publicRoutes.has(basePath)) return "tr";
     const saved = localStorage.getItem("lecturesift-ui");
     if (codes.includes(saved)) return saved;
     const browser = (navigator.language || "tr").split("-")[0].toLowerCase();

@@ -7,40 +7,41 @@
   const OG_LOCALES = {tr:"tr_TR",en:"en_US",de:"de_DE",fr:"fr_FR",es:"es_ES",it:"it_IT",pt:"pt_BR",ru:"ru_RU",ar:"ar_SA",zh:"zh_CN",ja:"ja_JP",ko:"ko_KR",hi:"hi_IN"};
   const PUBLIC_PATHS = new Set([
     "/",
-    "/index.html",
-    "/features.html",
-    "/document-summary.html",
-    "/lecture-video-summary.html",
-    "/quiz-flashcards.html",
-    "/plans.html",
-    "/about.html",
-    "/contact.html",
-    "/privacy.html",
-    "/terms.html",
-    "/cookies.html",
-    "/refund.html",
-    "/distance-sales.html",
+    "/features",
+    "/document-summary",
+    "/lecture-video-summary",
+    "/quiz-flashcards",
+    "/plans",
+    "/about",
+    "/contact",
+    "/privacy",
+    "/terms",
+    "/cookies",
+    "/refund",
+    "/distance-sales",
   ]);
   const PAGE_TYPES = {
     "/": "website",
-    "/features.html": "article",
-    "/document-summary.html": "article",
-    "/lecture-video-summary.html": "article",
-    "/quiz-flashcards.html": "article",
-    "/plans.html": "website",
-    "/about.html": "article",
-    "/contact.html": "website",
-    "/privacy.html": "article",
-    "/terms.html": "article",
-    "/cookies.html": "article",
-    "/refund.html": "article",
-    "/distance-sales.html": "article",
+    "/features": "article",
+    "/document-summary": "article",
+    "/lecture-video-summary": "article",
+    "/quiz-flashcards": "article",
+    "/plans": "website",
+    "/about": "article",
+    "/contact": "website",
+    "/privacy": "article",
+    "/terms": "article",
+    "/cookies": "article",
+    "/refund": "article",
+    "/distance-sales": "article",
   };
 
   const parts = location.pathname.split("/").filter(Boolean);
-  const language = LANGUAGES.includes(parts[0]) ? parts.shift() : (document.documentElement.lang || "tr");
-  const unlocalizedPath = `/${parts.join("/")}` || "/";
-  const path = unlocalizedPath === "/index.html" ? "/" : unlocalizedPath;
+  const language = LANGUAGES.includes(parts[0]) ? parts.shift() : "tr";
+  const requestedPath = `/${parts.join("/")}` || "/";
+  const path = requestedPath === "/index.html"
+    ? "/"
+    : requestedPath.replace(/\.html$/i, "");
   let adsenseAccountMeta = document.head.querySelector('meta[name="google-adsense-account"]');
   if (!adsenseAccountMeta) {
     adsenseAccountMeta = document.createElement("meta");
@@ -184,7 +185,7 @@
   }).filter(Boolean);
   if (questions.length) graph.push({"@type": "FAQPage", "@id": `${canonicalUrl}#faq`, mainEntity: questions});
 
-  if (new Set(["/features.html", "/document-summary.html", "/lecture-video-summary.html", "/quiz-flashcards.html"]).has(path)) {
+  if (new Set(["/features", "/document-summary", "/lecture-video-summary", "/quiz-flashcards"]).has(path)) {
     graph.push({
       "@type": "Article",
       "@id": `${canonicalUrl}#article`,

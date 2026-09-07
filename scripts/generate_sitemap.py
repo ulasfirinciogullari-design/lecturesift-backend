@@ -18,10 +18,17 @@ PATHS = (
     "/cookies.html",
     "/refund.html",
 )
-LAST_MODIFIED = "2026-08-29"
+LAST_MODIFIED = "2026-09-07"
+
+
+def canonical_path(path: str) -> str:
+    if path in {"/", "/index.html"}:
+        return "/"
+    return path.removesuffix(".html")
 
 
 def localized_path(language: str, path: str) -> str:
+    path = canonical_path(path)
     if language == "tr":
         return path
     return f"/{language}/" if path == "/" else f"/{language}{path}"
@@ -40,7 +47,10 @@ def build_sitemap() -> str:
             for alternate in LANGUAGES:
                 href = f"{ORIGIN}{localized_path(alternate, path)}"
                 lines.append(f'    <xhtml:link rel="alternate" hreflang="{alternate}" href="{href}"/>')
-            lines.append(f'    <xhtml:link rel="alternate" hreflang="x-default" href="{ORIGIN}{path}"/>')
+            lines.append(
+                f'    <xhtml:link rel="alternate" hreflang="x-default" '
+                f'href="{ORIGIN}{canonical_path(path)}"/>'
+            )
             lines.append("  </url>")
     lines.append("</urlset>")
     return "\n".join(lines) + "\n"
