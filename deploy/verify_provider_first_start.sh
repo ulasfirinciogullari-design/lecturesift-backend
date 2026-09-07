@@ -3,18 +3,24 @@ set -euo pipefail
 umask 077
 set +x
 
-# Arm the one-time provider first-start fence from fresh target evidence, then
-# consume it only after systemd's full-stack health wait succeeds.
+# Arm the one-time provider first-start fence from fresh target evidence,
+# consume it only after the private core health wait succeeds, or recover a
+# crash-fenced attempt only after the stopped target state is freshly re-proved.
 
 [[ "$(id -u)" == "0" ]] || {
   echo "Provider first-start verification must run as root." >&2
   exit 1
 }
 MODE="${1:-}"
-[[ "$MODE" == "arm" || "$MODE" == "complete" ]] || {
-  echo "Usage: $0 arm|complete" >&2
+[[ "$MODE" == "arm" || "$MODE" == "complete" || "$MODE" == "recover" ]] || {
+  echo "Usage: $0 arm|complete|recover" >&2
   exit 1
 }
+if [[ "$MODE" == "recover" &&
+      "${LECTURESIFT_PROVIDER_FIRST_START_RECOVERY_CONFIRM:-}" != "YES" ]]; then
+  echo "Provider first-start recovery requires explicit confirmation." >&2
+  exit 1
+fi
 
 ROOT_DIR="${LECTURESIFT_ROOT:-/opt/lecturesift}"
 DB_ENV_FILE="${LECTURESIFT_DB_ENV_FILE:-/etc/lecturesift/postgres.env}"
@@ -28,6 +34,7 @@ SECURITY_MANIFEST="$ROOT_DIR/deploy/postgres_security_manifest.sql"
 SECURITY_VALIDATOR="$ROOT_DIR/deploy/validate_postgres_security_manifest.py"
 ROLE_LOGIN_PROBE="$ROOT_DIR/deploy/postgres_role_login_probe.sh"
 REDIS_MANIFEST_TOOL="$ROOT_DIR/deploy/target_redis_manifest.sh"
+INSTAGRAM_STOP_GATE="$ROOT_DIR/deploy/verify_instagram_publishers_stopped.sh"
 LOCK_ROOT="/var/backups/lecturesift"
 WORK_DIR=""
 
@@ -54,6 +61,7 @@ check_private "$RELEASE_ENV_FILE" "Release identity"
 for helper in "$EVIDENCE_TOOL" "$DATA_MANIFEST" "$SECURITY_MANIFEST" \
   "$SCHEMA_CONTRACT" "$PRESERVED_SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" "$SECURITY_VALIDATOR" \
   "$ROLE_LOGIN_PROBE" "$REDIS_MANIFEST_TOOL" \
+  "$INSTAGRAM_STOP_GATE" \
   "$ROOT_DIR/compose.yaml"; do
   [[ -f "$helper" && ! -L "$helper" ]] || fail "a first-start helper is missing or unsafe"
 done
@@ -62,6 +70,9 @@ EXPECTED_REVISION="$(sed -n 's/^LECTURESIFT_EXPECTED_BUILD_REVISION=//p' "$RELEA
 [[ "$(wc -l <"$RELEASE_ENV_FILE")" == "1" &&
    "$EXPECTED_REVISION" =~ ^[0-9a-f]{40}$ ]] ||
   fail "the release identity is invalid"
+
+bash "$INSTAGRAM_STOP_GATE" >/dev/null ||
+  fail "an Instagram publisher remains enabled, active, running, or configured on"
 
 if [[ "$MODE" == "complete" ]]; then
   completion="$(
@@ -72,14 +83,16 @@ if [[ "$MODE" == "complete" ]]; then
   exit 0
 fi
 
-status="$(python3 "$EVIDENCE_TOOL" first-start-status --expected-revision "$EXPECTED_REVISION")" ||
-  fail "the first-start status is ambiguous or crash-fenced"
-[[ "$status" == "required" || "$status" == "consumed" ]] ||
-  fail "the first-start status output is invalid"
+if [[ "$MODE" == "arm" ]]; then
+  status="$(python3 "$EVIDENCE_TOOL" first-start-status --expected-revision "$EXPECTED_REVISION")" ||
+    fail "the first-start status is ambiguous or crash-fenced; use only the documented validated recovery path"
+  [[ "$status" == "required" || "$status" == "consumed" ]] ||
+    fail "the first-start status output is invalid"
 
-if [[ "$status" == "consumed" ]]; then
-  echo "Provider first-start gate was already consumed."
-  exit 0
+  if [[ "$status" == "consumed" ]]; then
+    echo "Provider first-start gate was already consumed."
+    exit 0
+  fi
 fi
 
 set -a
@@ -115,11 +128,15 @@ cleanup() {
 trap cleanup EXIT
 
 compose=(docker compose --project-directory "$ROOT_DIR" --file "$ROOT_DIR/compose.yaml")
-for service in api worker; do
+stopped_services=(api worker)
+if [[ "$MODE" == "recover" ]]; then
+  stopped_services+=(caddy egress-proxy)
+fi
+for service in "${stopped_services[@]}"; do
   writer="$("${compose[@]}" ps -q "$service")"
   if [[ -n "$writer" ]]; then
     [[ "$(docker inspect -f '{{.State.Running}}' "$writer" 2>/dev/null)" == "false" ]] ||
-      fail "the target $service writer is already running"
+      fail "the target $service service must be stopped"
   fi
 done
 
@@ -165,14 +182,28 @@ for digest in "$DATA_SHA256" "$SECURITY_SHA256" "$ROLE_LOGIN_SHA256" "$REDIS_SHA
   [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || fail "a first-start target digest is invalid"
 done
 
-armed="$(
-  python3 "$EVIDENCE_TOOL" arm-first-start \
+evidence_command=(
+  python3 "$EVIDENCE_TOOL"
+)
+if [[ "$MODE" == "recover" ]]; then
+  evidence_command+=(recover-first-start)
+else
+  evidence_command+=(arm-first-start)
+fi
+result="$(
+  "${evidence_command[@]}" \
     --expected-revision "$EXPECTED_REVISION" \
     --migrated-target-manifest-sha256 "$DATA_SHA256" \
     --postgres-role-login-probe-sha256 "$ROLE_LOGIN_SHA256" \
     --postgres-security-manifest-sha256 "$SECURITY_SHA256" \
     --target-redis-manifest-sha256 "$REDIS_SHA256"
-)" || fail "the target state does not match the finalized provider proof"
-[[ "$armed" == "armed" || "$armed" == "consumed" ]] ||
-  fail "the first-start arm output is invalid"
-echo "Provider first-start gate: $armed."
+)" || fail "the target state does not match the finalized first-start evidence"
+if [[ "$MODE" == "recover" ]]; then
+  [[ "$result" == "recovered-for-retry" || "$result" == "consumed-reconciled" ]] ||
+    fail "the first-start recovery output is invalid"
+  echo "Provider first-start recovery: $result."
+else
+  [[ "$result" == "armed" || "$result" == "consumed" ]] ||
+    fail "the first-start arm output is invalid"
+  echo "Provider first-start gate: $result."
+fi

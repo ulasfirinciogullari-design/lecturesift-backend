@@ -17,6 +17,7 @@ from urllib.parse import parse_qsl, unquote, urlsplit
 
 EVIDENCE_ROOT = Path("/var/lib/lecturesift/provider-cutover")
 RECOVERY_EVIDENCE_ROOT = Path("/var/lib/lecturesift/recovery-drills")
+INGRESS_STATE_ROOT = Path("/var/lib/lecturesift/ingress-state")
 # Production evidence is always owned by root:root.  Tests may monkeypatch
 # these process-local constants to the unprivileged CI runner's effective IDs;
 # they are deliberately not configurable through environment variables or CLI.
@@ -29,13 +30,26 @@ SEED_PROOF_NAME = "first-cutover-seed.ok"
 FINAL_PROOF_NAME = "provider-cutover.ok"
 FIRST_START_IN_PROGRESS_NAME = "provider-first-start.in-progress"
 FIRST_START_PROOF_NAME = "provider-first-start.ok"
+FIRST_START_RECOVERY_PROOF_NAME = "provider-first-start-recovery.ok"
+INGRESS_STATE_NAME = "provider-ingress.state"
 VERSION = "3"
+CANONICAL_SOURCE_HEALTH_URL = "https://lecturesift-backend.onrender.com/health"
 _CUTOVER_ID = re.compile(r"^[0-9a-f]{32}$")
 _REVISION = re.compile(r"^[0-9a-f]{40}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.-]{0,126}$")
 _SNAPSHOT_ID = re.compile(r"^[0-9a-f]{64}$")
 _SAFE_VALUE = re.compile(r"^[A-Za-z0-9_.:@/+,-]{1,512}$")
+_INGRESS_STATUSES = frozenset(
+    {
+        "provider-ingress-required",
+        "provider-ingress-handoff-in-progress",
+        "provider-ingress-awaiting-activation",
+        "provider-ingress-activated",
+        "provider-ingress-restore-in-progress",
+        "provider-ingress-render-restored",
+    }
+)
 
 
 class EvidenceError(RuntimeError):
@@ -102,16 +116,13 @@ def _canonical_endpoint(value: str, *, kind: str) -> dict[str, object]:
 
 
 def source_fingerprint_from_environment(environment: dict[str, str]) -> str:
-    health = urlsplit(environment.get("SOURCE_HEALTH_URL", ""))
+    health_url = environment.get("SOURCE_HEALTH_URL", "")
+    if health_url != CANONICAL_SOURCE_HEALTH_URL:
+        raise EvidenceError(
+            "source health endpoint must be the canonical LectureSift Render health URL"
+        )
+    health = urlsplit(health_url)
     health_host = (health.hostname or "").lower().rstrip(".")
-    if (
-        health.scheme != "https"
-        or not health_host.endswith(".onrender.com")
-        or not health.path.rstrip("/").endswith("/health")
-        or health.query
-        or health.fragment
-    ):
-        raise EvidenceError("source health endpoint must be the direct HTTPS Render health URL")
     canonical = {
         "database": _canonical_endpoint(
             environment.get("SOURCE_DATABASE_URL", ""), kind="database"
@@ -187,6 +198,80 @@ def _atomic_write(path: Path, fields: dict[str, str]) -> None:
             temporary.unlink()
         except FileNotFoundError:
             pass
+
+
+def _ensure_ingress_state_root(root: Path) -> Path:
+    if not root.parent.is_dir() or root.parent.is_symlink():
+        raise EvidenceError("ingress state parent is missing or unsafe")
+    root.mkdir(mode=0o755, exist_ok=True)
+    resolved = root.resolve(strict=True)
+    if resolved != root or root.is_symlink():
+        raise EvidenceError("ingress state root escaped its fixed path")
+    details = root.stat()
+    if os.name == "posix" and (
+        details.st_uid != EVIDENCE_OWNER_UID
+        or details.st_gid != EVIDENCE_OWNER_GID
+        or stat.S_IMODE(details.st_mode) != 0o755
+    ):
+        raise EvidenceError("ingress state root must be root-owned mode 0755")
+    return resolved
+
+
+def _atomic_write_ingress_state(path: Path, fields: dict[str, str]) -> None:
+    """Publish non-secret, container-readable state without weakening proofs."""
+
+    _validate_fields(fields)
+    root = _ensure_ingress_state_root(path.parent)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}-", dir=root)
+    temporary = Path(temporary_name)
+    try:
+        published_mode = 0o444 if os.name == "posix" else 0o600
+        if hasattr(os, "fchmod"):
+            os.fchmod(descriptor, published_mode)
+        else:
+            os.chmod(temporary, published_mode)
+        if hasattr(os, "fchown"):
+            os.fchown(descriptor, EVIDENCE_OWNER_UID, EVIDENCE_OWNER_GID)
+        payload = "".join(f"{key}={fields[key]}\n" for key in sorted(fields)).encode()
+        with os.fdopen(descriptor, "wb", closefd=True) as stream:
+            descriptor = -1
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+        if os.name == "posix":
+            directory_fd = os.open(root, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def _load_ingress_state(path: Path) -> dict[str, str]:
+    if not path.is_file() or path.is_symlink():
+        raise EvidenceError(f"missing or unsafe ingress state: {path.name}")
+    details = path.stat()
+    if os.name == "posix" and (
+        details.st_uid != EVIDENCE_OWNER_UID
+        or details.st_gid != EVIDENCE_OWNER_GID
+        or stat.S_IMODE(details.st_mode) != 0o444
+    ):
+        raise EvidenceError("ingress state must be root-owned mode 0444")
+    fields: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        key, separator, value = line.partition("=")
+        if not separator or key in fields:
+            raise EvidenceError("malformed ingress state")
+        fields[key] = value
+    _validate_fields(fields)
+    return fields
 
 
 def _unlink(path: Path) -> None:
@@ -329,6 +414,7 @@ def begin_postgres(root: Path, *, cutover_id: str, revision: str, source: str) -
         SEED_PROOF_NAME,
         FIRST_START_IN_PROGRESS_NAME,
         FIRST_START_PROOF_NAME,
+        FIRST_START_RECOVERY_PROOF_NAME,
     ):
         _unlink(root / name)
 
@@ -798,6 +884,7 @@ def finalize(
     cutover_id: str,
     revision: str,
     source: str,
+    source_revision: str,
     recovery_marker: Path,
     recovery_sha256: str,
     retention_marker: Path,
@@ -810,6 +897,8 @@ def finalize(
     target_redis_manifest_sha256: str,
 ) -> None:
     common = _common_fields(cutover_id=cutover_id, revision=revision, source_fingerprint=source)
+    if not _REVISION.fullmatch(source_revision):
+        raise EvidenceError("final Render source revision is invalid")
     for value in (
         recovery_sha256,
         retention_sha256,
@@ -915,6 +1004,7 @@ def finalize(
             "seed_proof_sha256": sha256_file(seed_path),
             "seed_snapshot_id": seed["snapshot_id"],
             "source_freeze_revalidated": "true",
+            "source_revision": source_revision,
             "source_worker_stop_evidence_sha256": source_worker_stop_evidence_sha256,
             "source_worker_queue_zero": "verified",
             "status": "provider-cutover-verified",
@@ -941,6 +1031,7 @@ def validate_final(root: Path, *, expected_revision: str) -> dict[str, str]:
         or final.get("release_revision") != expected_revision
         or final.get("caddy_changed") != "false"
         or final.get("dns_changed") != "false"
+        or not _REVISION.fullmatch(final.get("source_revision", ""))
     ):
         raise EvidenceError("provider cutover final proof is not valid for this exact release")
     postgres = root / POSTGRES_PROOF_NAME
@@ -1072,6 +1163,42 @@ def _consumed_first_start_valid(
     )
 
 
+def _armed_first_start_valid(
+    fields: dict[str, str], *, final: dict[str, str], final_sha256: str
+) -> bool:
+    expected = {
+        "armed_at_utc",
+        "cutover_id",
+        "final_proof_sha256",
+        "migrated_target_manifest_sha256",
+        "postgres_role_login_probe_sha256",
+        "postgres_security_manifest_sha256",
+        "release_revision",
+        "source_fingerprint_sha256",
+        "status",
+        "target_redis_manifest_sha256",
+        "version",
+    }
+    return (
+        set(fields) == expected
+        and fields.get("version") == VERSION
+        and fields.get("status") == "provider-first-start-armed"
+        and fields.get("cutover_id") == final.get("cutover_id")
+        and fields.get("release_revision") == final.get("release_revision")
+        and fields.get("source_fingerprint_sha256")
+        == final.get("source_fingerprint_sha256")
+        and fields.get("final_proof_sha256") == final_sha256
+        and fields.get("migrated_target_manifest_sha256")
+        == final.get("migrated_target_manifest_sha256")
+        and fields.get("postgres_role_login_probe_sha256")
+        == final.get("postgres_role_login_probe_sha256")
+        and fields.get("postgres_security_manifest_sha256")
+        == final.get("postgres_security_manifest_sha256")
+        and fields.get("target_redis_manifest_sha256")
+        == final.get("target_redis_manifest_sha256")
+    )
+
+
 def first_start_status(root: Path, *, expected_revision: str) -> str:
     root = _ensure_evidence_root(root)
     final, final_sha256 = _first_start_identity(
@@ -1168,36 +1295,8 @@ def complete_first_start(root: Path, *, expected_revision: str) -> str:
             raise EvidenceError("provider first-start proof does not match final evidence")
         return "consumed"
     progress = _load(progress_path)
-    expected_progress = {
-        "armed_at_utc",
-        "cutover_id",
-        "final_proof_sha256",
-        "migrated_target_manifest_sha256",
-        "postgres_role_login_probe_sha256",
-        "postgres_security_manifest_sha256",
-        "release_revision",
-        "source_fingerprint_sha256",
-        "status",
-        "target_redis_manifest_sha256",
-        "version",
-    }
-    if (
-        set(progress) != expected_progress
-        or progress.get("version") != VERSION
-        or progress.get("status") != "provider-first-start-armed"
-        or progress.get("cutover_id") != final.get("cutover_id")
-        or progress.get("release_revision") != final.get("release_revision")
-        or progress.get("source_fingerprint_sha256")
-        != final.get("source_fingerprint_sha256")
-        or progress.get("final_proof_sha256") != final_sha256
-        or progress.get("migrated_target_manifest_sha256")
-        != final.get("migrated_target_manifest_sha256")
-        or progress.get("postgres_role_login_probe_sha256")
-        != final.get("postgres_role_login_probe_sha256")
-        or progress.get("postgres_security_manifest_sha256")
-        != final.get("postgres_security_manifest_sha256")
-        or progress.get("target_redis_manifest_sha256")
-        != final.get("target_redis_manifest_sha256")
+    if not _armed_first_start_valid(
+        progress, final=final, final_sha256=final_sha256
     ):
         raise EvidenceError(
             "provider first-start progress does not match finalized evidence"
@@ -1231,6 +1330,289 @@ def complete_first_start(root: Path, *, expected_revision: str) -> str:
     # preflight fails closed for operator review.
     _unlink(progress_path)
     return "consumed"
+
+
+def recover_first_start(
+    root: Path,
+    *,
+    expected_revision: str,
+    migrated_target_manifest_sha256: str,
+    postgres_role_login_probe_sha256: str,
+    postgres_security_manifest_sha256: str,
+    target_redis_manifest_sha256: str,
+) -> str:
+    """Recover an armed first-start fence only from freshly re-proved state.
+
+    This is deliberately not a marker-deletion escape hatch. The armed marker,
+    final proof, optional consumed proof, and all four current target digests
+    must agree before a durable recovery audit proof is written. Only then is
+    the stronger in-progress fence removed.
+    """
+
+    current = {
+        "migrated_target_manifest_sha256": migrated_target_manifest_sha256,
+        "postgres_role_login_probe_sha256": postgres_role_login_probe_sha256,
+        "postgres_security_manifest_sha256": postgres_security_manifest_sha256,
+        "target_redis_manifest_sha256": target_redis_manifest_sha256,
+    }
+    if any(not _SHA256.fullmatch(value) for value in current.values()):
+        raise EvidenceError("provider first-start recovery state digest is invalid")
+
+    root = _ensure_evidence_root(root)
+    final, final_sha256 = _first_start_identity(
+        root, expected_revision=expected_revision
+    )
+    progress_path = root / FIRST_START_IN_PROGRESS_NAME
+    consumed_path = root / FIRST_START_PROOF_NAME
+    progress = _load(progress_path)
+    if not _armed_first_start_valid(
+        progress, final=final, final_sha256=final_sha256
+    ):
+        raise EvidenceError(
+            "provider first-start recovery marker does not match finalized evidence"
+        )
+    if any(current[key] != final.get(key) for key in current):
+        raise EvidenceError(
+            "provider first-start recovery target state changed after finalization"
+        )
+
+    outcome = "recovered-for-retry"
+    consumed_sha256 = "absent"
+    if consumed_path.exists() or consumed_path.is_symlink():
+        consumed = _load(consumed_path)
+        if not _consumed_first_start_valid(
+            consumed, final=final, final_sha256=final_sha256
+        ):
+            raise EvidenceError(
+                "provider first-start recovery found an invalid consumed proof"
+            )
+        outcome = "consumed-reconciled"
+        consumed_sha256 = sha256_file(consumed_path)
+
+    _atomic_write(
+        root / FIRST_START_RECOVERY_PROOF_NAME,
+        {
+            "armed_proof_sha256": sha256_file(progress_path),
+            "consumed_proof_sha256": consumed_sha256,
+            "cutover_id": final["cutover_id"],
+            "final_proof_sha256": final_sha256,
+            **current,
+            "recovered_at_utc": _now(),
+            "release_revision": final["release_revision"],
+            "status": f"provider-first-start-{outcome}",
+            "version": VERSION,
+        },
+    )
+    _unlink(progress_path)
+    return outcome
+
+
+def _ingress_state_status_name(status: str) -> str:
+    prefix = "provider-ingress-"
+    if not status.startswith(prefix):
+        raise EvidenceError("ingress state status is invalid")
+    return status.removeprefix(prefix)
+
+
+def _validated_ingress_state(
+    evidence_root: Path,
+    state_root: Path,
+    *,
+    expected_revision: str,
+) -> tuple[dict[str, str], dict[str, str], str]:
+    final, final_sha256 = _first_start_identity(
+        evidence_root, expected_revision=expected_revision
+    )
+    state = _load_ingress_state(state_root / INGRESS_STATE_NAME)
+    expected_fields = {
+        "cutover_id",
+        "final_proof_sha256",
+        "release_revision",
+        "source_revision",
+        "status",
+        "updated_at_utc",
+        "version",
+    }
+    source_revision = state.get("source_revision", "")
+    if (
+        set(state) != expected_fields
+        or state.get("version") != VERSION
+        or state.get("status") not in _INGRESS_STATUSES
+        or state.get("cutover_id") != final.get("cutover_id")
+        or state.get("release_revision") != final.get("release_revision")
+        or state.get("final_proof_sha256") != final_sha256
+        or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z", state.get("updated_at_utc", ""))
+        or not _REVISION.fullmatch(source_revision)
+        or source_revision != final.get("source_revision")
+    ):
+        raise EvidenceError("ingress state does not match finalized evidence")
+    return state, final, final_sha256
+
+
+def _write_ingress_state(
+    state_root: Path,
+    *,
+    final: dict[str, str],
+    final_sha256: str,
+    source_revision: str,
+    status: str,
+) -> None:
+    if status not in _INGRESS_STATUSES:
+        raise EvidenceError("ingress state transition target is invalid")
+    if not _REVISION.fullmatch(source_revision):
+        raise EvidenceError("Render source revision is invalid")
+    _atomic_write_ingress_state(
+        state_root / INGRESS_STATE_NAME,
+        {
+            "cutover_id": final["cutover_id"],
+            "final_proof_sha256": final_sha256,
+            "release_revision": final["release_revision"],
+            "source_revision": source_revision,
+            "status": status,
+            "updated_at_utc": _now(),
+            "version": VERSION,
+        },
+    )
+
+
+def ensure_ingress_freeze(
+    evidence_root: Path, state_root: Path, *, expected_revision: str
+) -> str:
+    state_root = _ensure_ingress_state_root(state_root)
+    path = state_root / INGRESS_STATE_NAME
+    if path.exists() or path.is_symlink():
+        state, _, _ = _validated_ingress_state(
+            evidence_root, state_root, expected_revision=expected_revision
+        )
+        return _ingress_state_status_name(state["status"])
+    final, final_sha256 = _first_start_identity(
+        evidence_root, expected_revision=expected_revision
+    )
+    _write_ingress_state(
+        state_root,
+        final=final,
+        final_sha256=final_sha256,
+        source_revision=final["source_revision"],
+        status="provider-ingress-required",
+    )
+    return "required"
+
+
+def ingress_status(
+    evidence_root: Path, state_root: Path, *, expected_revision: str
+) -> str:
+    state, _, _ = _validated_ingress_state(
+        evidence_root, state_root, expected_revision=expected_revision
+    )
+    return _ingress_state_status_name(state["status"])
+
+
+def ingress_source_revision(
+    evidence_root: Path, state_root: Path, *, expected_revision: str
+) -> str:
+    state, _, _ = _validated_ingress_state(
+        evidence_root, state_root, expected_revision=expected_revision
+    )
+    return state["source_revision"]
+
+
+def ingress_source_contract_field(
+    evidence_root: Path,
+    state_root: Path,
+    *,
+    expected_revision: str,
+    field: str,
+) -> str:
+    _state, final, _final_sha256 = _validated_ingress_state(
+        evidence_root, state_root, expected_revision=expected_revision
+    )
+    validators = {
+        "source-fingerprint": ("source_fingerprint_sha256", _SHA256),
+        "source-executor-stop-digest": (
+            "source_worker_stop_evidence_sha256",
+            _SHA256,
+        ),
+    }
+    if field not in validators:
+        raise EvidenceError("ingress source contract field is invalid")
+    key, pattern = validators[field]
+    value = final.get(key, "")
+    if pattern.fullmatch(value) is None:
+        raise EvidenceError("ingress source contract field is invalid")
+    return value
+
+
+def begin_ingress_handoff(
+    evidence_root: Path,
+    state_root: Path,
+    *,
+    expected_revision: str,
+) -> str:
+    current = ensure_ingress_freeze(
+        evidence_root, state_root, expected_revision=expected_revision
+    )
+    state, final, final_sha256 = _validated_ingress_state(
+        evidence_root, state_root, expected_revision=expected_revision
+    )
+    source_revision = final["source_revision"]
+    if current == "handoff-in-progress":
+        if state["source_revision"] != source_revision:
+            raise EvidenceError("Render source revision changed during ingress handoff")
+        return current
+    if current not in {"required", "render-restored"}:
+        raise EvidenceError("ingress handoff cannot begin from the current state")
+    _write_ingress_state(
+        state_root,
+        final=final,
+        final_sha256=final_sha256,
+        source_revision=source_revision,
+        status="provider-ingress-handoff-in-progress",
+    )
+    return "handoff-in-progress"
+
+
+def transition_ingress_state(
+    evidence_root: Path,
+    state_root: Path,
+    *,
+    expected_revision: str,
+    action: str,
+) -> str:
+    transitions = {
+        "await-activation": (
+            {"handoff-in-progress"},
+            "provider-ingress-awaiting-activation",
+        ),
+        "activate": ({"awaiting-activation"}, "provider-ingress-activated"),
+        "begin-restore": (
+            {"handoff-in-progress", "awaiting-activation", "restore-in-progress"},
+            "provider-ingress-restore-in-progress",
+        ),
+        "complete-restore": (
+            {"restore-in-progress"},
+            "provider-ingress-render-restored",
+        ),
+    }
+    if action not in transitions:
+        raise EvidenceError("ingress state action is invalid")
+    allowed, target = transitions[action]
+    state, final, final_sha256 = _validated_ingress_state(
+        evidence_root, state_root, expected_revision=expected_revision
+    )
+    current = _ingress_state_status_name(state["status"])
+    target_name = _ingress_state_status_name(target)
+    if current == target_name:
+        return current
+    if current not in allowed:
+        raise EvidenceError("ingress state transition is not allowed")
+    _write_ingress_state(
+        state_root,
+        final=final,
+        final_sha256=final_sha256,
+        source_revision=state["source_revision"],
+        status=target,
+    )
+    return target_name
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -1303,6 +1685,7 @@ def _parser() -> argparse.ArgumentParser:
     final.add_argument("--postgres-security-manifest-sha256", required=True)
     final.add_argument("--source-worker-stop-evidence-sha256", required=True)
     final.add_argument("--target-redis-manifest-sha256", required=True)
+    final.add_argument("--source-revision", required=True)
     validate = commands.add_parser("validate-final")
     validate.add_argument("--expected-revision", required=True)
     first_start_status_parser = commands.add_parser("first-start-status")
@@ -1315,6 +1698,36 @@ def _parser() -> argparse.ArgumentParser:
     first_start_arm.add_argument("--target-redis-manifest-sha256", required=True)
     first_start_complete = commands.add_parser("complete-first-start")
     first_start_complete.add_argument("--expected-revision", required=True)
+    first_start_recover = commands.add_parser("recover-first-start")
+    first_start_recover.add_argument("--expected-revision", required=True)
+    first_start_recover.add_argument(
+        "--migrated-target-manifest-sha256", required=True
+    )
+    first_start_recover.add_argument(
+        "--postgres-role-login-probe-sha256", required=True
+    )
+    first_start_recover.add_argument(
+        "--postgres-security-manifest-sha256", required=True
+    )
+    first_start_recover.add_argument("--target-redis-manifest-sha256", required=True)
+    for command in (
+        "ensure-ingress-freeze",
+        "ingress-status",
+        "ingress-source-revision",
+        "ingress-source-fingerprint",
+        "ingress-source-executor-stop-digest",
+    ):
+        ingress = commands.add_parser(command)
+        ingress.add_argument("--expected-revision", required=True)
+    ingress_begin = commands.add_parser("begin-ingress-handoff")
+    ingress_begin.add_argument("--expected-revision", required=True)
+    ingress_transition = commands.add_parser("transition-ingress-state")
+    ingress_transition.add_argument("--expected-revision", required=True)
+    ingress_transition.add_argument(
+        "--action",
+        required=True,
+        choices=("await-activation", "activate", "begin-restore", "complete-restore"),
+    )
     return parser
 
 
@@ -1402,6 +1815,7 @@ def main(argv: list[str] | None = None) -> int:
             finalize(
                 EVIDENCE_ROOT,
                 **kwargs,
+                source_revision=args.source_revision,
                 recovery_marker=Path(args.recovery_marker),
                 recovery_sha256=args.recovery_sha256,
                 retention_marker=Path(args.retention_marker),
@@ -1436,6 +1850,70 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 complete_first_start(
                     EVIDENCE_ROOT, expected_revision=args.expected_revision
+                )
+            )
+        elif args.command == "recover-first-start":
+            print(
+                recover_first_start(
+                    EVIDENCE_ROOT,
+                    expected_revision=args.expected_revision,
+                    migrated_target_manifest_sha256=args.migrated_target_manifest_sha256,
+                    postgres_role_login_probe_sha256=args.postgres_role_login_probe_sha256,
+                    postgres_security_manifest_sha256=args.postgres_security_manifest_sha256,
+                    target_redis_manifest_sha256=args.target_redis_manifest_sha256,
+                )
+            )
+        elif args.command == "ensure-ingress-freeze":
+            print(
+                ensure_ingress_freeze(
+                    EVIDENCE_ROOT,
+                    INGRESS_STATE_ROOT,
+                    expected_revision=args.expected_revision,
+                )
+            )
+        elif args.command == "ingress-status":
+            print(
+                ingress_status(
+                    EVIDENCE_ROOT,
+                    INGRESS_STATE_ROOT,
+                    expected_revision=args.expected_revision,
+                )
+            )
+        elif args.command == "ingress-source-revision":
+            print(
+                ingress_source_revision(
+                    EVIDENCE_ROOT,
+                    INGRESS_STATE_ROOT,
+                    expected_revision=args.expected_revision,
+                )
+            )
+        elif args.command in {
+            "ingress-source-fingerprint",
+            "ingress-source-executor-stop-digest",
+        }:
+            print(
+                ingress_source_contract_field(
+                    EVIDENCE_ROOT,
+                    INGRESS_STATE_ROOT,
+                    expected_revision=args.expected_revision,
+                    field=args.command.removeprefix("ingress-"),
+                )
+            )
+        elif args.command == "begin-ingress-handoff":
+            print(
+                begin_ingress_handoff(
+                    EVIDENCE_ROOT,
+                    INGRESS_STATE_ROOT,
+                    expected_revision=args.expected_revision,
+                )
+            )
+        elif args.command == "transition-ingress-state":
+            print(
+                transition_ingress_state(
+                    EVIDENCE_ROOT,
+                    INGRESS_STATE_ROOT,
+                    expected_revision=args.expected_revision,
+                    action=args.action,
                 )
             )
         return 0

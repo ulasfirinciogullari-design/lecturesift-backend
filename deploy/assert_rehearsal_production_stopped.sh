@@ -17,6 +17,7 @@ for container in \
   lecturesift-api-1 \
   lecturesift-worker-1 \
   lecturesift-caddy-1 \
+  lecturesift-caddy-staging \
   lecturesift-egress-proxy-1; do
   if docker container inspect "$container" >/dev/null 2>&1; then
     running="$(docker container inspect --format '{{.State.Running}}' "$container")" || \

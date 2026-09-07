@@ -66,6 +66,8 @@ def _render_control():
         "RENDER_API_TOKEN": "rnd_" + "T" * 32,
         "RENDER_WORKER_SERVICE_ID": "srv-" + "a" * 20,
         "RENDER_WORKER_SERVICE_NAME": "lecturesift-worker",
+        "RENDER_INSTAGRAM_CRON_SERVICE_ID": "crn-" + "b" * 20,
+        "RENDER_INSTAGRAM_CRON_SERVICE_NAME": "lecturesift-instagram-daily",
     }
 
 
@@ -83,13 +85,33 @@ def _render_service(**updates):
     return service
 
 
-def test_render_stop_proof_uses_only_two_exact_gets_and_is_stable():
+def _render_cron(**updates):
+    service = {
+        "id": "crn-" + "b" * 20,
+        "name": "lecturesift-instagram-daily",
+        "ownerId": "tea-12345678",
+        "type": "cron_job",
+        "suspended": "suspended",
+        "suspenders": ["user"],
+    }
+    service.update(updates)
+    return service
+
+
+def test_render_executor_stop_proof_uses_only_four_exact_gets_and_is_stable():
     connections = []
 
     def factory(host, port, *, context, timeout):
         assert (host, port, timeout) == ("api.render.com", 443, 15)
         assert context is not None
-        connection = FakeConnection([FakeResponse(_render_service()), FakeResponse([])])
+        connection = FakeConnection(
+            [
+                FakeResponse(_render_service()),
+                FakeResponse([]),
+                FakeResponse(_render_cron()),
+                FakeResponse([]),
+            ]
+        )
         connections.append(connection)
         return connection
 
@@ -99,6 +121,8 @@ def test_render_stop_proof_uses_only_two_exact_gets_and_is_stable():
     assert [item[:2] for item in connection.requests] == [
         ("GET", "/v1/services/srv-" + "a" * 20),
         ("GET", "/v1/services/srv-" + "a" * 20 + "/instances"),
+        ("GET", "/v1/services/crn-" + "b" * 20),
+        ("GET", "/v1/services/crn-" + "b" * 20 + "/instances"),
     ]
     assert all(
         item[2]["Authorization"] == "Bearer " + _render_control()["RENDER_API_TOKEN"]
@@ -110,6 +134,8 @@ def test_render_stop_proof_uses_only_two_exact_gets_and_is_stable():
         return FakeConnection(
             [
                 FakeResponse(_render_service(suspenders=["billing", "user"], extra="ignored")),
+                FakeResponse([]),
+                FakeResponse(_render_cron(extra="ignored")),
                 FakeResponse([]),
             ]
         )
@@ -131,7 +157,38 @@ def test_render_stop_proof_uses_only_two_exact_gets_and_is_stable():
 def test_render_stop_proof_fails_closed_on_wrong_identity_state_or_instances(
     service, instances
 ):
-    connection = FakeConnection([FakeResponse(service), FakeResponse(instances)])
+    connection = FakeConnection(
+        [
+            FakeResponse(service),
+            FakeResponse(instances),
+            FakeResponse(_render_cron()),
+            FakeResponse([]),
+        ]
+    )
+    with pytest.raises(render_stop.StopEvidenceError):
+        render_stop.worker_stop_digest(
+            _render_control(), connection_factory=lambda *_args, **_kwargs: connection
+        )
+
+
+@pytest.mark.parametrize(
+    "cron,instances",
+    [
+        (_render_cron(suspended="not_suspended"), []),
+        (_render_cron(type="background_worker"), []),
+        (_render_cron(name="another-cron"), []),
+        (_render_cron(), [{"id": "ins-active"}]),
+    ],
+)
+def test_render_stop_proof_fails_closed_when_instagram_cron_can_run(cron, instances):
+    connection = FakeConnection(
+        [
+            FakeResponse(_render_service()),
+            FakeResponse([]),
+            FakeResponse(cron),
+            FakeResponse(instances),
+        ]
+    )
     with pytest.raises(render_stop.StopEvidenceError):
         render_stop.worker_stop_digest(
             _render_control(), connection_factory=lambda *_args, **_kwargs: connection
@@ -145,6 +202,8 @@ def test_render_stop_parser_is_exact_and_token_never_enters_errors():
             f"RENDER_API_TOKEN={token}\n"
             f"RENDER_WORKER_SERVICE_ID=srv-{'b' * 20}\n"
             "RENDER_WORKER_SERVICE_NAME=worker-prod\n"
+            f"RENDER_INSTAGRAM_CRON_SERVICE_ID=crn-{'c' * 20}\n"
+            "RENDER_INSTAGRAM_CRON_SERVICE_NAME=instagram-prod\n"
         ).encode()
     )
     assert parsed["RENDER_API_TOKEN"] == token
@@ -154,6 +213,8 @@ def test_render_stop_parser_is_exact_and_token_never_enters_errors():
                 f"RENDER_API_TOKEN={token}\n"
                 f"RENDER_WORKER_SERVICE_ID=srv-{'b' * 20}\n"
                 "RENDER_WORKER_SERVICE_NAME=worker-prod\n"
+                f"RENDER_INSTAGRAM_CRON_SERVICE_ID=crn-{'c' * 20}\n"
+                "RENDER_INSTAGRAM_CRON_SERVICE_NAME=instagram-prod\n"
                 "UNKNOWN=value\n"
             ).encode()
         )
@@ -162,7 +223,14 @@ def test_render_stop_parser_is_exact_and_token_never_enters_errors():
 
 def test_render_stop_rejects_duplicate_json_without_echoing_body():
     secret_body = b'{"id":"one","id":"secret-value"}'
-    connection = FakeConnection([FakeResponse(secret_body), FakeResponse([])])
+    connection = FakeConnection(
+        [
+            FakeResponse(secret_body),
+            FakeResponse([]),
+            FakeResponse(_render_cron()),
+            FakeResponse([]),
+        ]
+    )
     with pytest.raises(render_stop.StopEvidenceError) as exc:
         render_stop.worker_stop_digest(
             _render_control(), connection_factory=lambda *_args, **_kwargs: connection
@@ -176,7 +244,9 @@ def test_render_control_file_requires_private_single_link(tmp_path, monkeypatch)
     path.write_text(
         "RENDER_API_TOKEN=rnd_" + "A" * 32 + "\n"
         "RENDER_WORKER_SERVICE_ID=srv-" + "c" * 20 + "\n"
-        "RENDER_WORKER_SERVICE_NAME=worker-prod\n",
+        "RENDER_WORKER_SERVICE_NAME=worker-prod\n"
+        "RENDER_INSTAGRAM_CRON_SERVICE_ID=crn-" + "d" * 20 + "\n"
+        "RENDER_INSTAGRAM_CRON_SERVICE_NAME=instagram-prod\n",
         encoding="utf-8",
     )
     path.chmod(0o600)
@@ -540,17 +610,28 @@ def test_postgres_role_probe_uses_trusted_tcp_read_only_container():
 def test_first_start_is_crash_fenced_and_failure_stops_all_public_writers():
     preflight = (ROOT / "deploy" / "preflight.sh").read_text(encoding="utf-8")
     service = (ROOT / "deploy" / "lecturesift.service").read_text(encoding="utf-8")
+    ingress = (ROOT / "deploy" / "lecturesift-ingress.service").read_text(
+        encoding="utf-8"
+    )
     verifier = (ROOT / "deploy" / "verify_provider_first_start.sh").read_text(encoding="utf-8")
     assert "provider-first-start.in-progress" in preflight
     assert "first-start-status" in preflight
     assert "verify_provider_first_start.sh arm" in service
     assert "verify_provider_first_start.sh complete" in service
-    assert "ExecStopPost=/usr/bin/docker compose stop --timeout 120 api worker caddy egress-proxy" in service
+    assert " caddy" not in "\n".join(
+        line for line in service.splitlines() if line.startswith("ExecStart=")
+    )
+    assert "ExecStopPost=/usr/bin/docker compose stop --timeout 600 worker api egress-proxy redis postgres" in service
+    assert "ExecStart=/usr/bin/docker compose up -d --no-deps --wait --wait-timeout 180 caddy" in ingress
+    assert "verify_production_ingress.sh prestart" in ingress
+    assert "verify_production_ingress.sh live" in ingress
     assert service.index("verify_provider_first_start.sh arm") < service.index(
-        "docker compose up -d --remove-orphans"
+        "docker compose up -d --no-deps --wait --wait-timeout 600 egress-proxy api worker"
     ) < service.index("verify_provider_first_start.sh complete")
     assert "MANIFEST_COMPLETE" in verifier
     assert "verify_schema_transition.py" in verifier
+    assert "recover-first-start" in verifier
+    assert "LECTURESIFT_PROVIDER_FIRST_START_RECOVERY_CONFIRM" in verifier
 
 
 def test_first_start_complete_bypasses_status_while_the_gate_is_armed():

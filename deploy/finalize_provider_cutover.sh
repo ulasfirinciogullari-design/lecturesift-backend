@@ -22,6 +22,7 @@ RUNTIME_ENV_FILE="${LECTURESIFT_ENV_FILE:-/etc/lecturesift/runtime.env}"
 DB_ENV_FILE="${LECTURESIFT_DB_ENV_FILE:-/etc/lecturesift/postgres.env}"
 RESTIC_ENV_FILE="${LECTURESIFT_RESTIC_ENV_FILE:-/etc/lecturesift/restic.env}"
 CUTOVER_EVIDENCE_TOOL="$ROOT_DIR/deploy/provider_cutover_evidence.py"
+PROVIDER_BASELINE_TOOL="$ROOT_DIR/deploy/record_payment_provider_baseline.py"
 RENDER_WORKER_STOP_TOOL="$ROOT_DIR/deploy/render_worker_stop_evidence.py"
 SOURCE_REDIS_GUARD="$ROOT_DIR/deploy/source_redis_guard.py"
 SOURCE_POSTGRES_TRANSPORT="$ROOT_DIR/deploy/source_postgres_transport.py"
@@ -44,6 +45,7 @@ EXPECTED_BUILD_REVISION="${LECTURESIFT_EXPECTED_BUILD_REVISION:-}"
 PENDING_SQL="SELECT (SELECT count(*) FROM billing_manual_orders WHERE status = 'pending') + (SELECT count(*) FROM billing_payment_orders WHERE status IN ('created', 'pending'));"
 SOURCE_WORKER_STOP_EVIDENCE_SHA256=""
 TARGET_REDIS_MANIFEST_SHA256=""
+SOURCE_REVISION=""
 FINALIZER_TMP=""
 
 fail() {
@@ -78,6 +80,7 @@ for item in \
   check_private_file "${item%%:*}" "${item#*:}"
 done
 for path in "$CUTOVER_EVIDENCE_TOOL" "$RENDER_WORKER_STOP_TOOL" \
+  "$PROVIDER_BASELINE_TOOL" \
   "$TARGET_REDIS_MANIFEST_TOOL" "$SOURCE_REDIS_GUARD" \
   "$SOURCE_POSTGRES_TRANSPORT" \
   "$TARGET_DATA_MANIFEST" \
@@ -196,11 +199,11 @@ assert_target_writers_stopped() {
   done
 }
 
-assert_source_frozen_and_idle() {
-  local observed_stop_digest
+source_health_revision() {
   source_exec health python3 - <<'PY' || return 1
 import json
 import os
+import re
 import ssl
 import urllib.request
 
@@ -208,10 +211,26 @@ request = urllib.request.Request(
     os.environ["SOURCE_HEALTH_URL"], headers={"User-Agent": "LectureSift-Final-Cutover/1"}
 )
 with urllib.request.urlopen(request, timeout=15, context=ssl.create_default_context()) as response:
+    if response.geturl() != os.environ["SOURCE_HEALTH_URL"]:
+        raise SystemExit(1)
     payload = json.load(response)
-valid = response.status == 200 and payload.get("ok") is True and payload.get("maintenance_mode") == "freeze"
-raise SystemExit(0 if valid else 1)
+revision = str(payload.get("revision") or "").lower()
+valid = (
+    response.status == 200
+    and payload.get("ok") is True
+    and payload.get("maintenance_mode") == "freeze"
+    and payload.get("deployment_provider") == "render"
+    and re.fullmatch(r"[0-9a-f]{40}", revision) is not None
+)
+if not valid:
+    raise SystemExit(1)
+print(revision)
 PY
+}
+
+assert_source_frozen_and_idle() {
+  local observed_stop_digest
+  source_health_revision >/dev/null || return 1
   observed_stop_digest="$(python3 "$RENDER_WORKER_STOP_TOOL")" || return 1
   [[ "$observed_stop_digest" == "$SOURCE_WORKER_STOP_EVIDENCE_SHA256" ]] || return 1
   source_exec redis timeout 45 python3 "$SOURCE_REDIS_GUARD" assert-idle >/dev/null 2>&1
@@ -412,6 +431,8 @@ validate_retention_marker || fail "no recent repository-bound R2 retention-lock 
 "${compose[@]}" up -d --wait --wait-timeout 300 postgres redis
 assert_target_writers_stopped || fail "the OVH API/worker are running before finalization"
 assert_source_frozen_and_idle || fail "Render freeze, stopped worker or empty queue could not be re-proved"
+SOURCE_REVISION="$(source_health_revision)" ||
+  fail "the exact frozen Render provider revision could not be captured"
 [[ "$(source_pending_count)" == "0" ]] || fail "Render has pending provider payments"
 [[ "$(target_pending_count)" == "0" ]] || fail "OVH has pending provider payments"
 assert_target_queue_idle || fail "the OVH broker/job state is not empty and terminal"
@@ -421,6 +442,8 @@ assert_target_redis_manifest_unchanged ||
 # Repeat every volatile condition immediately before the atomic final proof.
 assert_target_writers_stopped || fail "the OVH API/worker started during finalization"
 assert_source_frozen_and_idle || fail "Render changed after the recovery checks"
+[[ "$(source_health_revision)" == "$SOURCE_REVISION" ]] ||
+  fail "the Render provider revision changed during finalization"
 [[ "$(source_pending_count)" == "0" && "$(target_pending_count)" == "0" ]] ||
   fail "pending provider state appeared during finalization"
 assert_target_queue_idle || fail "target queue/job state changed during finalization"
@@ -449,6 +472,7 @@ python3 "$CUTOVER_EVIDENCE_TOOL" finalize \
   --cutover-id "$CUTOVER_ID" \
   --revision "$EXPECTED_BUILD_REVISION" \
   --source-fingerprint "$SOURCE_FINGERPRINT" \
+  --source-revision "$SOURCE_REVISION" \
   --migrated-target-manifest-sha256 "$MIGRATED_TARGET_MANIFEST_SHA256" \
   --postgres-security-manifest-sha256 "$POSTGRES_SECURITY_MANIFEST_SHA256" \
   --postgres-role-login-probe-sha256 "$POSTGRES_ROLE_LOGIN_PROBE_SHA256" \
@@ -460,5 +484,13 @@ python3 "$CUTOVER_EVIDENCE_TOOL" finalize \
   --retention-sha256 "$(sha256sum "$RETENTION_MARKER" | awk '{print $1}')" \
   --repository-id-sha256 "$REPOSITORY_ID_SHA256" ||
   fail "the exact matching provider-cutover proof could not be finalized"
+
+# Capture the provider census from the fixed root-only runtime configuration,
+# not from an operator-authored rollback bundle.  The immutable baseline is
+# bound to the final proof and is required by any later rollback validator.
+python3 "$PROVIDER_BASELINE_TOOL" \
+  --cutover-id "$CUTOVER_ID" \
+  --revision "$EXPECTED_BUILD_REVISION" ||
+  fail "the immutable pre-traffic payment-provider baseline could not be recorded"
 
 echo "Provider cutover gate verified and recorded. API/worker remain stopped; Caddy/DNS are unchanged. Redis/R2 rollback was not asserted or performed."

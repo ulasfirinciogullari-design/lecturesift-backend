@@ -34,6 +34,9 @@ def _build_revision(environment: Mapping[str, str] | None = None) -> str:
 
 
 BUILD_REVISION = _build_revision()
+DEPLOYMENT_PROVIDER = os.getenv("LECTURESIFT_DEPLOYMENT_PROVIDER", "unknown").strip().lower()
+if DEPLOYMENT_PROVIDER not in {"render", "ovh"}:
+    DEPLOYMENT_PROVIDER = "unknown"
 _EXPECTED_BUILD_REVISION_RAW = os.getenv("LECTURESIFT_EXPECTED_BUILD_REVISION", "").strip()
 EXPECTED_BUILD_REVISION_CONFIGURED = bool(_EXPECTED_BUILD_REVISION_RAW)
 EXPECTED_BUILD_REVISION = (
@@ -53,10 +56,74 @@ def _maintenance_mode(value: str) -> str:
 
 MAINTENANCE_MODE = _maintenance_mode(os.getenv("LECTURESIFT_MAINTENANCE_MODE", "off"))
 MAINTENANCE_STATE_FILE = WORK_DIR / ".runtime-maintenance.json"
+INGRESS_CUTOVER_STATE_FILE = os.getenv("LECTURESIFT_INGRESS_CUTOVER_STATE_FILE", "").strip()
 _BOOT_ID_FILE = Path("/proc/sys/kernel/random/boot_id")
 _BOOT_ID_PATTERN = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 )
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_INGRESS_STATE_STATUSES = frozenset(
+    {
+        "provider-ingress-required",
+        "provider-ingress-handoff-in-progress",
+        "provider-ingress-awaiting-activation",
+        "provider-ingress-activated",
+        "provider-ingress-restore-in-progress",
+        "provider-ingress-render-restored",
+    }
+)
+
+
+def _ingress_cutover_mode() -> str | None:
+    """Honor the root-owned durable ingress fence mounted read-only by OVH."""
+
+    if not INGRESS_CUTOVER_STATE_FILE:
+        return None
+    if INGRESS_CUTOVER_STATE_FILE != "/run/lecturesift-ingress-state/provider-ingress.state":
+        return "freeze"
+    try:
+        lines = Path(INGRESS_CUTOVER_STATE_FILE).read_text(encoding="utf-8").splitlines()
+        fields: dict[str, str] = {}
+        for line in lines:
+            key, separator, value = line.partition("=")
+            if not separator or key in fields:
+                return "freeze"
+            fields[key] = value
+    except (OSError, UnicodeError):
+        return "freeze"
+    expected = {
+        "cutover_id",
+        "final_proof_sha256",
+        "release_revision",
+        "source_revision",
+        "status",
+        "updated_at_utc",
+        "version",
+    }
+    source_revision = fields.get("source_revision", "")
+    if (
+        set(fields) != expected
+        or fields.get("version") != "3"
+        or fields.get("status") not in _INGRESS_STATE_STATUSES
+        or not re.fullmatch(r"[0-9a-f]{32}", fields.get("cutover_id", ""))
+        or not _SHA256_PATTERN.fullmatch(fields.get("final_proof_sha256", ""))
+        or not _FULL_BUILD_REVISION.fullmatch(fields.get("release_revision", ""))
+        or fields.get("release_revision") != BUILD_REVISION
+        or (
+            source_revision != "unbound"
+            and not _FULL_BUILD_REVISION.fullmatch(source_revision)
+        )
+        or (
+            fields.get("status") != "provider-ingress-required"
+            and source_revision == "unbound"
+        )
+        or not re.fullmatch(
+            r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z",
+            fields.get("updated_at_utc", ""),
+        )
+    ):
+        return "freeze"
+    return "off" if fields["status"] == "provider-ingress-activated" else "freeze"
 
 
 def current_maintenance_mode() -> str:
@@ -70,6 +137,9 @@ def current_maintenance_mode() -> str:
     """
     if MAINTENANCE_MODE != "off":
         return MAINTENANCE_MODE
+    ingress_mode = _ingress_cutover_mode()
+    if ingress_mode == "freeze":
+        return "freeze"
     try:
         raw = MAINTENANCE_STATE_FILE.read_text(encoding="utf-8")
     except FileNotFoundError:

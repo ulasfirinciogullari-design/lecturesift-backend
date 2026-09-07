@@ -1,0 +1,29 @@
+[Unit]
+Description=LectureSift public production ingress
+Requires=docker.service lecturesift.service
+BindsTo=docker.service lecturesift.service
+PartOf=docker.service lecturesift.service
+After=docker.service network-online.target lecturesift.service lecturesift-caddy-staging.service
+Wants=network-online.target
+Conflicts=lecturesift-caddy-staging.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/lecturesift
+Environment=LECTURESIFT_ENV_FILE=/etc/lecturesift/runtime.env
+Environment=LECTURESIFT_API_ENV_FILE=/etc/lecturesift/api.env
+Environment=LECTURESIFT_WORKER_ENV_FILE=/etc/lecturesift/worker.env
+Environment=LECTURESIFT_INSTAGRAM_ENV_FILE=/etc/lecturesift/instagram.env
+Environment=LECTURESIFT_DB_ENV_FILE=/etc/lecturesift/postgres.env
+Environment=LECTURESIFT_RELEASE_ENV_FILE=/run/lecturesift/release.env
+ExecStartPre=/bin/bash /opt/lecturesift/deploy/verify_production_ingress.sh prestart
+ExecStart=/usr/bin/docker compose up -d --no-deps --wait --wait-timeout 180 caddy
+ExecStartPost=/bin/bash /opt/lecturesift/deploy/verify_production_ingress.sh live
+ExecStop=/usr/bin/docker compose stop --timeout 120 caddy
+ExecStopPost=/usr/bin/docker compose stop --timeout 120 caddy
+TimeoutStartSec=600
+TimeoutStopSec=180
+
+[Install]
+WantedBy=multi-user.target

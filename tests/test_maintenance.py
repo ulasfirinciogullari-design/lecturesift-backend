@@ -14,6 +14,7 @@ from main import app
 def normal_service(monkeypatch):
     monkeypatch.setattr(config, "MAINTENANCE_MODE", "off")
     monkeypatch.setattr(config, "MAINTENANCE_STATE_FILE", Path("missing-runtime-maintenance"))
+    monkeypatch.setattr(config, "INGRESS_CUTOVER_STATE_FILE", "")
     app.dependency_overrides.clear()
     yield
     app.dependency_overrides.clear()
@@ -66,6 +67,64 @@ def test_runtime_maintenance_file_is_same_boot_bounded_and_fail_closed(monkeypat
     marker.write_text(marker.read_text().replace(boot_id, "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"))
     assert config.current_maintenance_mode() == "off"
     marker.write_text("not-json", encoding="utf-8")
+    assert config.current_maintenance_mode() == "freeze"
+
+
+def test_durable_ingress_state_freezes_until_atomic_activation(monkeypatch, tmp_path):
+    state = tmp_path / "provider-ingress.state"
+    monkeypatch.setattr(
+        config,
+        "INGRESS_CUTOVER_STATE_FILE",
+        "/run/lecturesift-ingress-state/provider-ingress.state",
+    )
+    monkeypatch.setattr(config, "BUILD_REVISION", "2" * 40)
+    original_read_text = Path.read_text
+    monkeypatch.setattr(
+        config.Path,
+        "read_text",
+        lambda path, **kwargs: original_read_text(state, **kwargs)
+        if path.as_posix() == "/run/lecturesift-ingress-state/provider-ingress.state"
+        else original_read_text(path, **kwargs),
+    )
+
+    state.write_text("malformed", encoding="utf-8")
+    assert config.current_maintenance_mode() == "freeze"
+
+    fields = {
+        "cutover_id": "1" * 32,
+        "final_proof_sha256": "3" * 64,
+        "release_revision": "2" * 40,
+        "source_revision": "unbound",
+        "status": "provider-ingress-required",
+        "updated_at_utc": "2026-09-07T12:00:00Z",
+        "version": "3",
+    }
+    state.write_text(
+        "".join(f"{key}={value}\n" for key, value in sorted(fields.items())),
+        encoding="utf-8",
+    )
+    assert config.current_maintenance_mode() == "freeze"
+
+    fields["source_revision"] = "4" * 40
+    fields["status"] = "provider-ingress-awaiting-activation"
+    state.write_text(
+        "".join(f"{key}={value}\n" for key, value in sorted(fields.items())),
+        encoding="utf-8",
+    )
+    assert config.current_maintenance_mode() == "freeze"
+
+    fields["status"] = "provider-ingress-activated"
+    state.write_text(
+        "".join(f"{key}={value}\n" for key, value in sorted(fields.items())),
+        encoding="utf-8",
+    )
+    assert config.current_maintenance_mode() == "off"
+
+    fields["release_revision"] = "5" * 40
+    state.write_text(
+        "".join(f"{key}={value}\n" for key, value in sorted(fields.items())),
+        encoding="utf-8",
+    )
     assert config.current_maintenance_mode() == "freeze"
 
 
@@ -164,6 +223,7 @@ def test_freeze_exposes_only_exact_health_reads_and_options(monkeypatch):
     assert client.get("/").status_code == 200
     assert client.get("/health").status_code == 200
     assert client.get("/billing/health").status_code == 200
+    assert client.get("/rollout/health").json().get("detail", {}).get("code") != "LS-MAINT-01"
     assert client.head("/health").status_code != 503
     _assert_maintenance(client.get("/billing/plans"), "freeze")
     _assert_maintenance(client.post("/health"), "freeze")

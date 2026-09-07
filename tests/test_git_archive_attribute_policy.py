@@ -282,6 +282,7 @@ def _current_benign_attributes() -> str:
         "requirements.lock text eol=lf\n"
         "requirements-dev.txt text eol=lf\n"
         "deploy/supply_chain.lock text eol=lf\n"
+        "*.sh text eol=lf\n"
     )
     assert (ROOT / ".gitattributes").read_text(encoding="utf-8") == expected
     return expected

@@ -1,0 +1,18 @@
+[Unit]
+Description=LectureSift durable public-ingress owner reconciler
+Requires=docker.service
+PartOf=docker.service
+After=docker.service network-online.target lecturesift.service
+Wants=network-online.target lecturesift.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/lecturesift
+Environment=LECTURESIFT_RELEASE_ENV_FILE=/run/lecturesift/release.env
+ExecStart=/bin/bash /opt/lecturesift/deploy/reconcile_production_ingress.sh
+Restart=always
+RestartSec=10
+TimeoutStopSec=90
+
+[Install]
+WantedBy=multi-user.target
