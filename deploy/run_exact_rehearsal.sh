@@ -364,6 +364,8 @@ check_provenance_residue() {
 }
 
 for unit in lecturesift.service lecturesift-api.service lecturesift-worker.service \
+  lecturesift-ingress.service \
+  lecturesift-ingress-selector.service \
   lecturesift-instagram.service lecturesift-instagram.timer \
   lecturesift-caddy-staging.service caddy.service; do
   systemctl is-active --quiet "$unit" && fail "active-unit:$unit"

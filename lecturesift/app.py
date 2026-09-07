@@ -112,7 +112,9 @@ _DRAIN_BLOCKED_READ_PATHS = (
     "/billing/me/rollout",
     "/billing/rewarded-ads",
 )
-_FREEZE_READ_PATHS = frozenset({"/", "/health", "/billing/health"})
+_FREEZE_READ_PATHS = frozenset(
+    {"/", "/health", "/billing/health", "/rollout/health"}
+)
 
 
 def _path_matches(path: str, protected_path: str) -> bool:
@@ -702,6 +704,7 @@ def health() -> dict:
         "ok": True,
         "version": APP_VERSION,
         "revision": BUILD_REVISION,
+        "deployment_provider": config.DEPLOYMENT_PROVIDER,
         "maintenance_mode": config.current_maintenance_mode(),
         "openai_key": bool(OPENAI_API_KEY),
         "slide_engine": "v4-layout-persistence",

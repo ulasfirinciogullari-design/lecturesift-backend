@@ -1,0 +1,24 @@
+[Unit]
+Description=LectureSift Render-proxy staging ingress
+Requires=docker.service
+BindsTo=docker.service
+PartOf=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+Conflicts=lecturesift-ingress.service
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=5
+ExecStartPre=/usr/bin/docker volume create --label com.docker.compose.project=lecturesift --label com.docker.compose.volume=caddy_data lecturesift_caddy_data
+ExecStartPre=/usr/bin/docker volume create --label com.docker.compose.project=lecturesift --label com.docker.compose.volume=caddy_config lecturesift_caddy_config
+ExecStartPre=-/usr/bin/docker rm -f lecturesift-caddy-staging
+ExecStart=/usr/bin/docker run --rm --name lecturesift-caddy-staging --pull missing --read-only --security-opt no-new-privileges:true --cpus 0.50 --memory 192m --memory-swap 192m --pids-limit 128 --tmpfs /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777 --publish 80:80 --publish 443:443 --publish 443:443/udp --volume /opt/lecturesift/deploy/Caddyfile.staging:/etc/caddy/Caddyfile:ro --volume lecturesift_caddy_data:/data --volume lecturesift_caddy_config:/config caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+ExecStop=-/usr/bin/docker stop --time 120 lecturesift-caddy-staging
+ExecStopPost=-/usr/bin/docker rm -f lecturesift-caddy-staging
+TimeoutStartSec=300
+TimeoutStopSec=180
+
+[Install]
+WantedBy=multi-user.target

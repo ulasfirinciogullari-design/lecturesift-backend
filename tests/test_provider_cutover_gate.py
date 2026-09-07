@@ -28,9 +28,17 @@ assert SECURITY_SPEC and SECURITY_SPEC.loader
 security_manifest = importlib.util.module_from_spec(SECURITY_SPEC)
 sys.modules[SECURITY_SPEC.name] = security_manifest
 SECURITY_SPEC.loader.exec_module(security_manifest)
+HEALTH_SPEC = importlib.util.spec_from_file_location(
+    "validate_ingress_health", ROOT / "deploy" / "validate_ingress_health.py"
+)
+assert HEALTH_SPEC and HEALTH_SPEC.loader
+ingress_health = importlib.util.module_from_spec(HEALTH_SPEC)
+sys.modules[HEALTH_SPEC.name] = ingress_health
+HEALTH_SPEC.loader.exec_module(ingress_health)
 
 CUTOVER_ID = "1" * 32
 REVISION = "2" * 40
+SOURCE_REVISION = "e" * 40
 SOURCE = "3" * 64
 SOURCE_MANIFEST = "4" * 64
 SOURCE_DUMP = "5" * 64
@@ -42,6 +50,33 @@ SOURCE_WORKER_STOP = "a" * 64
 POSTGRES_SECURITY = "b" * 64
 TARGET_REDIS_MANIFEST = "c" * 64
 POSTGRES_ROLE_LOGIN_PROBE = "d" * 64
+
+
+def test_ingress_health_contract_rejects_source_off_wrong_origin_or_revision():
+    expected = {
+        "ok": True,
+        "deployment_provider": "render",
+        "maintenance_mode": "freeze",
+        "revision": SOURCE_REVISION,
+    }
+    assert ingress_health.validate_health(
+        expected,
+        expected_provider="render",
+        expected_revision=SOURCE_REVISION,
+        expected_mode="freeze",
+    ) == SOURCE_REVISION
+    for changed in (
+        {**expected, "maintenance_mode": "off"},
+        {**expected, "deployment_provider": "ovh"},
+        {**expected, "revision": REVISION},
+    ):
+        with pytest.raises(ingress_health.HealthContractError):
+            ingress_health.validate_health(
+                changed,
+                expected_provider="render",
+                expected_revision=SOURCE_REVISION,
+                expected_mode="freeze",
+            )
 
 
 @pytest.fixture(autouse=True)
@@ -181,7 +216,8 @@ def test_source_fingerprint_omits_secrets_but_binds_every_source_endpoint():
     assert evidence.source_fingerprint_from_environment(environment) == first
 
     environment["SOURCE_HEALTH_URL"] = "https://other-backend.onrender.com/health"
-    assert evidence.source_fingerprint_from_environment(environment) != first
+    with pytest.raises(evidence.EvidenceError, match="canonical LectureSift Render"):
+        evidence.source_fingerprint_from_environment(environment)
 
 
 def test_atomic_state_machine_requires_matching_postgres_redis_r2_and_revision(
@@ -357,6 +393,7 @@ def test_atomic_state_machine_requires_matching_postgres_redis_r2_and_revision(
             cutover_id=CUTOVER_ID,
             revision=REVISION,
             source=SOURCE,
+            source_revision=SOURCE_REVISION,
             recovery_marker=Path(recovery.name),
             recovery_sha256=evidence.sha256_file(recovery),
             retention_marker=Path(retention.name),
@@ -377,6 +414,7 @@ def test_atomic_state_machine_requires_matching_postgres_redis_r2_and_revision(
         cutover_id=CUTOVER_ID,
         revision=REVISION,
         source=SOURCE,
+        source_revision=SOURCE_REVISION,
         recovery_marker=Path(recovery.name),
         recovery_sha256=evidence.sha256_file(recovery),
         retention_marker=Path(retention.name),
@@ -397,6 +435,90 @@ def test_atomic_state_machine_requires_matching_postgres_redis_r2_and_revision(
     assert evidence.validate_final(root, expected_revision=REVISION)["cutover_id"] == CUTOVER_ID
     with pytest.raises(evidence.EvidenceError, match="exact release"):
         evidence.validate_final(root, expected_revision="b" * 40)
+
+    ingress_root = tmp_path / "ingress-state"
+    assert (
+        evidence.ensure_ingress_freeze(
+            root, ingress_root, expected_revision=REVISION
+        )
+        == "required"
+    )
+    ingress_path = ingress_root / evidence.INGRESS_STATE_NAME
+    assert ingress_path.is_file()
+    if os.name == "posix":
+        assert stat.S_IMODE(ingress_root.stat().st_mode) == 0o755
+        assert stat.S_IMODE(ingress_path.stat().st_mode) == 0o444
+    assert evidence.ingress_source_revision(
+        root, ingress_root, expected_revision=REVISION
+    ) == SOURCE_REVISION
+    assert evidence.ingress_source_contract_field(
+        root,
+        ingress_root,
+        expected_revision=REVISION,
+        field="source-fingerprint",
+    ) == SOURCE
+    assert evidence.ingress_source_contract_field(
+        root,
+        ingress_root,
+        expected_revision=REVISION,
+        field="source-executor-stop-digest",
+    ) == SOURCE_WORKER_STOP
+    assert (
+        evidence.begin_ingress_handoff(
+            root,
+            ingress_root,
+            expected_revision=REVISION,
+        )
+        == "handoff-in-progress"
+    )
+    assert (
+        evidence.ingress_source_revision(
+            root, ingress_root, expected_revision=REVISION
+        )
+        == SOURCE_REVISION
+    )
+    assert evidence.transition_ingress_state(
+        root,
+        ingress_root,
+        expected_revision=REVISION,
+        action="await-activation",
+    ) == "awaiting-activation"
+    assert evidence.transition_ingress_state(
+        root,
+        ingress_root,
+        expected_revision=REVISION,
+        action="begin-restore",
+    ) == "restore-in-progress"
+    assert evidence.transition_ingress_state(
+        root,
+        ingress_root,
+        expected_revision=REVISION,
+        action="complete-restore",
+    ) == "render-restored"
+    assert evidence.begin_ingress_handoff(
+        root,
+        ingress_root,
+        expected_revision=REVISION,
+    ) == "handoff-in-progress"
+    assert evidence.transition_ingress_state(
+        root,
+        ingress_root,
+        expected_revision=REVISION,
+        action="await-activation",
+    ) == "awaiting-activation"
+    assert evidence.transition_ingress_state(
+        root,
+        ingress_root,
+        expected_revision=REVISION,
+        action="activate",
+    ) == "activated"
+    with pytest.raises(evidence.EvidenceError, match="not allowed"):
+        evidence.transition_ingress_state(
+            root,
+            ingress_root,
+            expected_revision=REVISION,
+            action="begin-restore",
+        )
 
     assert evidence.first_start_status(root, expected_revision=REVISION) == "required"
     with pytest.raises(evidence.EvidenceError, match="does not match"):
@@ -422,6 +544,45 @@ def test_atomic_state_machine_requires_matching_postgres_redis_r2_and_revision(
     )
     with pytest.raises(evidence.EvidenceError, match="manual review"):
         evidence.first_start_status(root, expected_revision=REVISION)
+    with pytest.raises(evidence.EvidenceError, match="changed after finalization"):
+        evidence.recover_first_start(
+            root,
+            expected_revision=REVISION,
+            migrated_target_manifest_sha256="0" * 64,
+            postgres_role_login_probe_sha256=POSTGRES_ROLE_LOGIN_PROBE,
+            postgres_security_manifest_sha256=POSTGRES_SECURITY,
+            target_redis_manifest_sha256=TARGET_REDIS_MANIFEST,
+        )
+    assert (root / evidence.FIRST_START_IN_PROGRESS_NAME).is_file()
+    assert not (root / evidence.FIRST_START_RECOVERY_PROOF_NAME).exists()
+    assert (
+        evidence.recover_first_start(
+            root,
+            expected_revision=REVISION,
+            migrated_target_manifest_sha256=MIGRATED_MANIFEST,
+            postgres_role_login_probe_sha256=POSTGRES_ROLE_LOGIN_PROBE,
+            postgres_security_manifest_sha256=POSTGRES_SECURITY,
+            target_redis_manifest_sha256=TARGET_REDIS_MANIFEST,
+        )
+        == "recovered-for-retry"
+    )
+    assert not (root / evidence.FIRST_START_IN_PROGRESS_NAME).exists()
+    recovery_fields = evidence._load(
+        root / evidence.FIRST_START_RECOVERY_PROOF_NAME
+    )
+    assert recovery_fields["status"] == "provider-first-start-recovered-for-retry"
+    assert evidence.first_start_status(root, expected_revision=REVISION) == "required"
+    assert (
+        evidence.arm_first_start(
+            root,
+            expected_revision=REVISION,
+            migrated_target_manifest_sha256=MIGRATED_MANIFEST,
+            postgres_role_login_probe_sha256=POSTGRES_ROLE_LOGIN_PROBE,
+            postgres_security_manifest_sha256=POSTGRES_SECURITY,
+            target_redis_manifest_sha256=TARGET_REDIS_MANIFEST,
+        )
+        == "armed"
+    )
     assert evidence.complete_first_start(root, expected_revision=REVISION) == "consumed"
     assert not (root / evidence.FIRST_START_IN_PROGRESS_NAME).exists()
     assert evidence.first_start_status(root, expected_revision=REVISION) == "consumed"
@@ -458,7 +619,19 @@ def test_atomic_state_machine_requires_matching_postgres_redis_r2_and_revision(
         evidence.first_start_status(root, expected_revision=REVISION)
     with pytest.raises(evidence.EvidenceError, match="ambiguous"):
         evidence.complete_first_start(root, expected_revision=REVISION)
-    evidence._unlink(root / evidence.FIRST_START_IN_PROGRESS_NAME)
+    assert (
+        evidence.recover_first_start(
+            root,
+            expected_revision=REVISION,
+            migrated_target_manifest_sha256=MIGRATED_MANIFEST,
+            postgres_role_login_probe_sha256=POSTGRES_ROLE_LOGIN_PROBE,
+            postgres_security_manifest_sha256=POSTGRES_SECURITY,
+            target_redis_manifest_sha256=TARGET_REDIS_MANIFEST,
+        )
+        == "consumed-reconciled"
+    )
+    assert not (root / evidence.FIRST_START_IN_PROGRESS_NAME).exists()
+    assert evidence.first_start_status(root, expected_revision=REVISION) == "consumed"
 
     # Old final evidence is rejected even if it otherwise names the current
     # release and still hashes all current step proofs.
@@ -680,6 +853,7 @@ def test_normal_preflight_requires_exact_final_gate_and_nonproduction_is_explici
     assert "provider-cutover.in-progress" in preflight
     assert "provider-cutover.ok" in preflight
     assert "validate-final" in preflight
+    assert "ensure-ingress-freeze" in preflight
     assert "--expected-revision" in preflight
     assert "bootstrap-infrastructure requires both explicit one-time confirmations" in preflight
     assert "bootstrap-infrastructure cannot run from a persistent systemd service" in preflight

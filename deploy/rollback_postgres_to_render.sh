@@ -32,12 +32,19 @@ SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.t
 PRESERVED_SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt"
 SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition.py"
 RENDER_WORKER_STOP_TOOL="$ROOT_DIR/deploy/render_worker_stop_evidence.py"
+INSTAGRAM_STOP_GATE="$ROOT_DIR/deploy/verify_instagram_publishers_stopped.sh"
 SOURCE_POSTGRES_TRANSPORT="$ROOT_DIR/deploy/source_postgres_transport.py"
+CUTOVER_EVIDENCE_TOOL="$ROOT_DIR/deploy/provider_cutover_evidence.py"
+PROVIDER_CUTOVER_PROOF="/var/lib/lecturesift/provider-cutover/provider-cutover.ok"
 ALLOWED_BACKUP_ROOT="/var/backups/lecturesift/postgres-rollback"
 FAIL_STOP_ROOT="/var/lib/lecturesift/migration-fail-stop"
 FAIL_STOP_MARKER="$FAIL_STOP_ROOT/postgres-rollback-unproven"
 PENDING_SQL="SELECT (SELECT count(*) FROM billing_manual_orders WHERE status = 'pending') + (SELECT count(*) FROM billing_payment_orders WHERE status IN ('created', 'pending'));"
 compose=(docker compose --project-directory "$ROOT_DIR" --file "$ROOT_DIR/compose.yaml")
+ROLLBACK_ID="${LECTURESIFT_PROVIDER_ROLLBACK_ID:-}"
+EXPECTED_CUTOVER_ID="${LECTURESIFT_PROVIDER_CUTOVER_ID:-}"
+OVH_RELEASE_REVISION="${LECTURESIFT_OVH_RELEASE_REVISION:-}"
+RENDER_RELEASE_REVISION="${LECTURESIFT_RENDER_RELEASE_REVISION:-}"
 
 fail() {
   echo "PostgreSQL rollback reconciliation failed: $*" >&2
@@ -65,9 +72,52 @@ check_private "$DB_ENV_FILE" "OVH database environment"
 check_private "$RUNTIME_ENV_FILE" "OVH runtime environment"
 for path in "$MANIFEST" "$DATABASE_INVENTORY" "$SCHEMA_CONTRACT" \
   "$PRESERVED_SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" \
-  "$RENDER_WORKER_STOP_TOOL" "$SOURCE_POSTGRES_TRANSPORT"; do
+  "$RENDER_WORKER_STOP_TOOL" "$INSTAGRAM_STOP_GATE" \
+  "$SOURCE_POSTGRES_TRANSPORT" \
+  "$CUTOVER_EVIDENCE_TOOL"; do
   [[ -f "$path" && ! -L "$path" ]] || fail "a rollback schema input is missing or unsafe"
 done
+[[ "$ROLLBACK_ID" =~ ^[0-9a-f]{32}$ ]] ||
+  fail "LECTURESIFT_PROVIDER_ROLLBACK_ID must be exactly 32 lowercase hex characters"
+[[ "$EXPECTED_CUTOVER_ID" =~ ^[0-9a-f]{32}$ ]] ||
+  fail "LECTURESIFT_PROVIDER_CUTOVER_ID must be the original 32-character cutover ID"
+[[ "$OVH_RELEASE_REVISION" =~ ^[0-9a-f]{40}$ ]] ||
+  fail "LECTURESIFT_OVH_RELEASE_REVISION must be the exact OVH release commit"
+[[ "$RENDER_RELEASE_REVISION" =~ ^[0-9a-f]{40}$ ]] ||
+  fail "LECTURESIFT_RENDER_RELEASE_REVISION must be the exact Render release commit"
+command -v git >/dev/null 2>&1 || fail "git is required to bind the OVH release"
+actual_ovh_revision="$(git -C "$ROOT_DIR" rev-parse --verify HEAD)" ||
+  fail "the OVH checkout revision could not be resolved"
+[[ "$actual_ovh_revision" == "$OVH_RELEASE_REVISION" ]] ||
+  fail "the OVH checkout does not match LECTURESIFT_OVH_RELEASE_REVISION"
+ovh_checkout_status="$(git -C "$ROOT_DIR" status --porcelain --untracked-files=normal)" ||
+  fail "the OVH checkout status could not be resolved"
+[[ -z "$ovh_checkout_status" ]] ||
+  fail "the OVH rollback checkout is not clean"
+python3 "$CUTOVER_EVIDENCE_TOOL" validate-final \
+  --expected-revision "$OVH_RELEASE_REVISION" >/dev/null ||
+  fail "the original provider-cutover proof does not match the OVH release"
+ORIGINAL_CUTOVER_ID="$(python3 - "$PROVIDER_CUTOVER_PROOF" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+fields = {}
+for line in path.read_text(encoding="ascii").splitlines():
+    key, separator, value = line.partition("=")
+    if not separator or key in fields or not re.fullmatch(r"[a-z][a-z0-9_]*", key):
+        raise SystemExit(1)
+    fields[key] = value
+value = fields.get("cutover_id")
+if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{32}", value) is None:
+    raise SystemExit(1)
+print(value)
+PY
+)" || fail "the original cutover ID could not be read from verified evidence"
+[[ "$ORIGINAL_CUTOVER_ID" == "$EXPECTED_CUTOVER_ID" ]] ||
+  fail "LECTURESIFT_PROVIDER_CUTOVER_ID does not match the original cutover proof"
+export EXPECTED_RENDER_REVISION="$RENDER_RELEASE_REVISION"
 
 source_exec() {
   local scope="$1"
@@ -245,7 +295,8 @@ require_owner_only_app_acl() {
 
 check_health_freeze() {
   local url="$1" label="$2"
-  HEALTH_CHECK_URL="$url" python3 - <<'PY' || fail "$label did not acknowledge exact freeze mode"
+  HEALTH_CHECK_URL="$url" HEALTH_EXPECTED_REVISION="$OVH_RELEASE_REVISION" \
+    python3 - <<'PY' || fail "$label did not acknowledge exact freeze mode and revision"
 import json
 import os
 import ssl
@@ -254,7 +305,14 @@ import urllib.request
 request = urllib.request.Request(os.environ["HEALTH_CHECK_URL"], headers={"User-Agent": "LectureSift-Rollback/1"})
 with urllib.request.urlopen(request, timeout=15, context=ssl.create_default_context()) as response:
     payload = json.load(response)
-raise SystemExit(0 if response.status == 200 and payload.get("ok") is True and payload.get("maintenance_mode") == "freeze" else 1)
+raise SystemExit(
+    0
+    if response.status == 200
+    and payload.get("ok") is True
+    and payload.get("maintenance_mode") == "freeze"
+    and payload.get("revision") == os.environ["HEALTH_EXPECTED_REVISION"]
+    else 1
+)
 PY
 }
 
@@ -278,6 +336,7 @@ raise SystemExit(
     if response.status == 200
     and payload.get("ok") is True
     and payload.get("maintenance_mode") == "freeze"
+    and payload.get("revision") == os.environ["EXPECTED_RENDER_REVISION"]
     else 1
 )
 PY
@@ -368,6 +427,37 @@ local_pending() {
   "${compose[@]}" exec -T postgres psql --no-psqlrc --quiet \
     --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
     --tuples-only --no-align --command "$PENDING_SQL" | tr -d '\r[:space:]'
+}
+
+assert_ovh_instagram_publishers_stopped() {
+  bash "$INSTAGRAM_STOP_GATE" >/dev/null
+}
+
+capture_local_payment_provider_census() {
+  local output="$1" raw="$output.raw"
+  "${compose[@]}" exec -T postgres psql --no-psqlrc --quiet \
+    --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+    --tuples-only --no-align -v ON_ERROR_STOP=1 >"$raw" <<'SQL'
+WITH provider_values AS (
+  SELECT provider FROM billing_payment_orders
+  UNION
+  SELECT provider FROM billing_payment_provider_sessions
+)
+SELECT DISTINCT CASE
+  WHEN provider = 'paytr' THEN 'paytr'
+  WHEN provider IN (
+    'iyzico', 'iyzico_card_confirmed', 'iyzico_bank_transfer',
+    'iyzico_card_intent', 'iyzico_bank_intent'
+  ) THEN 'iyzico'
+  ELSE 'unsupported:' || provider
+END
+FROM provider_values
+ORDER BY 1;
+SQL
+  tr -d '\r' <"$raw" | sed '/^$/d' | LC_ALL=C sort -u >"$output"
+  if grep -Evq '^(iyzico|paytr)$' "$output"; then
+    fail "the historical payment-provider census contains an unsupported provider"
+  fi
 }
 
 queue_idle() {
@@ -502,6 +592,8 @@ for service in api worker; do
   [[ -z "$container" || "$(docker inspect -f '{{.State.Running}}' "$container")" == "false" ]] ||
     fail "the OVH $service writer is still running"
 done
+assert_ovh_instagram_publishers_stopped ||
+  fail "an OVH Instagram publisher or scheduler is still active or enabled"
 queue_idle || fail "the OVH queue is not completely drained"
 [[ "$(local_pending)" == "0" ]] || fail "OVH still has pending provider payments"
 [[ "$(render_command pending | tr -d '\r[:space:]')" == "0" ]] ||
@@ -514,6 +606,7 @@ queue_idle || fail "the OVH queue is not completely drained"
   --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -v ON_ERROR_STOP=1 \
   -f /tmp/lecturesift-rollback-manifest.sql >"$RUN_DIR/ovh-before.txt"
 canonical "$RUN_DIR/ovh-before.txt" "$RUN_DIR/ovh-before.safe"
+capture_local_payment_provider_census "$RUN_DIR/ovh-provider-census-before.safe"
 "${compose[@]}" exec -T postgres psql --no-psqlrc --quiet \
   --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -v ON_ERROR_STOP=1 \
   -f /tmp/lecturesift-rollback-database-inventory.sql >"$RUN_DIR/ovh-inventory.txt"
@@ -587,11 +680,30 @@ docker run --rm --user 0:0 --volume "$RUN_DIR:/backup:ro" postgres:18-bookworm@s
   --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -v ON_ERROR_STOP=1 \
   -f /tmp/lecturesift-rollback-manifest.sql >"$RUN_DIR/ovh-after.txt"
 canonical "$RUN_DIR/ovh-after.txt" "$RUN_DIR/ovh-after.safe"
+capture_local_payment_provider_census "$RUN_DIR/ovh-provider-census-after.safe"
 cmp --silent "$RUN_DIR/ovh-before.safe" "$RUN_DIR/ovh-final.safe" ||
   fail "OVH changed before its exported rollback snapshot"
 cmp --silent "$RUN_DIR/ovh-final.safe" "$RUN_DIR/ovh-after.safe" ||
   fail "OVH changed during its final rollback dump"
+cmp --silent "$RUN_DIR/ovh-provider-census-before.safe" \
+  "$RUN_DIR/ovh-provider-census-after.safe" ||
+  fail "the historical payment-provider census changed during the frozen snapshot"
 [[ "$(local_pending)" == "0" ]] || fail "an OVH provider payment became pending during reconciliation"
+
+RECONCILED_DATABASE_MANIFEST_SHA256="$(
+  sha256sum "$RUN_DIR/ovh-final.safe" | awk '{print $1}'
+)"
+HISTORICAL_PROVIDER_MANIFEST_SHA256="$(
+  sha256sum "$RUN_DIR/ovh-provider-census-after.safe" | awk '{print $1}'
+)"
+HISTORICAL_PAYMENT_PROVIDERS="$(
+  paste -sd, "$RUN_DIR/ovh-provider-census-after.safe"
+)"
+[[ -n "$HISTORICAL_PAYMENT_PROVIDERS" ]] || HISTORICAL_PAYMENT_PROVIDERS=none
+[[ "$RECONCILED_DATABASE_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ && \
+   "$HISTORICAL_PROVIDER_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ && \
+   "$HISTORICAL_PAYMENT_PROVIDERS" =~ ^(none|iyzico|paytr|iyzico,paytr)$ ]] ||
+  fail "the frozen database/provider census identity is invalid"
 
 render_command legacy-manifest render-before.txt
 canonical "$RUN_DIR/render-before.txt" "$RUN_DIR/render-before.safe" \
@@ -643,6 +755,13 @@ if cmp --silent "$RUN_DIR/ovh-final.safe" "$RUN_DIR/render-before.safe" &&
   {
     printf 'status=postgres-reconciliation-not-required\n'
     printf 'verified_at_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'rollback_id=%s\n' "$ROLLBACK_ID"
+    printf 'cutover_id=%s\n' "$ORIGINAL_CUTOVER_ID"
+    printf 'ovh_release_revision=%s\n' "$OVH_RELEASE_REVISION"
+    printf 'render_release_revision=%s\n' "$RENDER_RELEASE_REVISION"
+    printf 'reconciled_database_manifest_sha256=%s\n' "$RECONCILED_DATABASE_MANIFEST_SHA256"
+    printf 'historical_payment_providers=%s\n' "$HISTORICAL_PAYMENT_PROVIDERS"
+    printf 'historical_provider_manifest_sha256=%s\n' "$HISTORICAL_PROVIDER_MANIFEST_SHA256"
     printf 'both_databases_identical=true\n'
     printf 'source_worker_stop_evidence_sha256=%s\n' "$SOURCE_WORKER_STOP_EVIDENCE_SHA256"
     printf 'traffic_changed=false\n'
@@ -667,6 +786,10 @@ if [[ "${LECTURESIFT_RENDER_REPLACE_CONFIRM:-}" != "REPLACE_STILL_FENCED_RENDER"
   exit 2
 fi
 
+# The snapshot and review interval may be arbitrarily long. Re-prove every
+# OVH publisher path immediately adjacent to the first Render mutation.
+assert_ovh_instagram_publishers_stopped ||
+  fail "an OVH Instagram publisher or scheduler became active before replacement"
 render_mutated="true"
 render_command reset-restore-approved ovh-final.dump
 render_command manifest render-restored.txt
@@ -704,6 +827,13 @@ check_render_health_freeze
 {
   printf 'status=postgres-rollback-reconciled\n'
   printf 'verified_at_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf 'rollback_id=%s\n' "$ROLLBACK_ID"
+  printf 'cutover_id=%s\n' "$ORIGINAL_CUTOVER_ID"
+  printf 'ovh_release_revision=%s\n' "$OVH_RELEASE_REVISION"
+  printf 'render_release_revision=%s\n' "$RENDER_RELEASE_REVISION"
+  printf 'reconciled_database_manifest_sha256=%s\n' "$RECONCILED_DATABASE_MANIFEST_SHA256"
+  printf 'historical_payment_providers=%s\n' "$HISTORICAL_PAYMENT_PROVIDERS"
+  printf 'historical_provider_manifest_sha256=%s\n' "$HISTORICAL_PROVIDER_MANIFEST_SHA256"
   printf 'render_matches_ovh=true\n'
   printf 'automatic_row_merge=false\n'
   printf 'whole_database_replacement=false\n'

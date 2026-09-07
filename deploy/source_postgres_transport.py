@@ -47,6 +47,7 @@ RUNTIME_ROOT = Path("/run/lecturesift-source-postgres")
 CONTAINER_PGPASSFILE = "/run/secrets/lecturesift-source.pgpass"
 HOST_CA_BUNDLE = Path("/etc/ssl/certs/ca-certificates.crt")
 CONTAINER_CA_BUNDLE = "/run/secrets/lecturesift-system-ca.crt"
+CANONICAL_SOURCE_HEALTH_URL = "https://lecturesift-backend.onrender.com/health"
 ASSIGNMENT = re.compile(r"^[ \t]*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
 SESSION_NAME = re.compile(r"^session-[a-z0-9_]{8,32}$")
 
@@ -163,23 +164,10 @@ def _postgres_endpoint(value: str) -> tuple[str, int, str, str, str]:
 
 
 def _health_endpoint(value: str) -> str:
-    try:
-        parsed = urlsplit(value)
-        port = parsed.port or 443
-    except ValueError as exc:
-        raise TransportError("source health URL is invalid") from exc
-    host = (parsed.hostname or "").lower().rstrip(".")
-    if (
-        parsed.scheme != "https"
-        or not host.endswith(".onrender.com")
-        or port != 443
-        or not parsed.path.rstrip("/").endswith("/health")
-        or parsed.username
-        or parsed.password
-        or parsed.query
-        or parsed.fragment
-    ):
-        raise TransportError("source health URL is not the direct HTTPS Render endpoint")
+    if value != CANONICAL_SOURCE_HEALTH_URL:
+        raise TransportError(
+            "source health URL is not the canonical LectureSift Render endpoint"
+        )
     return value
 
 

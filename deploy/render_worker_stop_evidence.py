@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Produce a stable, GET-only proof that the Render worker is suspended.
+"""Produce a stable, GET-only proof that Render source executors are suspended.
 
 The Render API token is read from one fixed root-only control file.  The token
 is never included in output, diagnostics, or the resulting digest.
@@ -26,10 +26,11 @@ API_HOST: Final = "api.render.com"
 API_PORT: Final = 443
 MAX_CONTROL_BYTES: Final = 16 * 1024
 MAX_RESPONSE_BYTES: Final = 1024 * 1024
-SCHEMA: Final = "lecturesift-render-worker-stop-v1"
+SCHEMA: Final = "lecturesift-render-source-executors-stop-v2"
 
 _TOKEN = re.compile(r"[A-Za-z0-9._~-]{20,512}")
 _SERVICE_ID = re.compile(r"srv-[a-z0-9]{16,40}")
+_CRON_SERVICE_ID = re.compile(r"crn-[a-z0-9]{16,40}")
 _SERVICE_NAME = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9._ -]{0,126}[A-Za-z0-9])?")
 _OWNER_ID = re.compile(r"[A-Za-z][A-Za-z0-9_-]{2,127}")
 _ALLOWED_SUSPENDERS: Final = {
@@ -45,6 +46,8 @@ _EXPECTED_KEYS: Final = {
     "RENDER_API_TOKEN",
     "RENDER_WORKER_SERVICE_ID",
     "RENDER_WORKER_SERVICE_NAME",
+    "RENDER_INSTAGRAM_CRON_SERVICE_ID",
+    "RENDER_INSTAGRAM_CRON_SERVICE_NAME",
 }
 
 
@@ -94,6 +97,10 @@ def parse_control(data: bytes) -> dict[str, str]:
         raise StopEvidenceError("the Render worker service ID has an invalid format")
     if _SERVICE_NAME.fullmatch(fields["RENDER_WORKER_SERVICE_NAME"]) is None:
         raise StopEvidenceError("the Render worker service name has an invalid format")
+    if _CRON_SERVICE_ID.fullmatch(fields["RENDER_INSTAGRAM_CRON_SERVICE_ID"]) is None:
+        raise StopEvidenceError("the Render Instagram cron service ID has an invalid format")
+    if _SERVICE_NAME.fullmatch(fields["RENDER_INSTAGRAM_CRON_SERVICE_NAME"]) is None:
+        raise StopEvidenceError("the Render Instagram cron service name has an invalid format")
     return fields
 
 
@@ -190,48 +197,75 @@ def worker_stop_digest(
     *,
     connection_factory: Callable[..., http.client.HTTPSConnection] = http.client.HTTPSConnection,
 ) -> str:
-    service_id = control["RENDER_WORKER_SERVICE_ID"]
-    service_name = control["RENDER_WORKER_SERVICE_NAME"]
     token = control["RENDER_API_TOKEN"]
     context = ssl.create_default_context()
     connection = connection_factory(API_HOST, API_PORT, context=context, timeout=15)
     try:
-        service = _get_json(connection, f"/v1/services/{service_id}", token)
-        instances = _get_json(connection, f"/v1/services/{service_id}/instances", token)
+        observed: list[tuple[dict[str, str], object, object]] = []
+        for service_id_key, service_name_key, service_type in (
+            ("RENDER_WORKER_SERVICE_ID", "RENDER_WORKER_SERVICE_NAME", "background_worker"),
+            (
+                "RENDER_INSTAGRAM_CRON_SERVICE_ID",
+                "RENDER_INSTAGRAM_CRON_SERVICE_NAME",
+                "cron_job",
+            ),
+        ):
+            identity = {
+                "id": control[service_id_key],
+                "name": control[service_name_key],
+                "type": service_type,
+            }
+            service = _get_json(connection, f"/v1/services/{identity['id']}", token)
+            instances = _get_json(
+                connection, f"/v1/services/{identity['id']}/instances", token
+            )
+            observed.append((identity, service, instances))
     finally:
         try:
             connection.close()
         except Exception:
             pass
-    if not isinstance(service, dict):
-        raise StopEvidenceError("the Render service response is not an object")
-    owner_id = service.get("ownerId")
-    suspenders = service.get("suspenders")
-    if (
-        service.get("id") != service_id
-        or service.get("name") != service_name
-        or service.get("type") != "background_worker"
-        or service.get("suspended") != "suspended"
-        or not isinstance(owner_id, str)
-        or _OWNER_ID.fullmatch(owner_id) is None
-        or not isinstance(suspenders, list)
-        or any(not isinstance(value, str) or value not in _ALLOWED_SUSPENDERS for value in suspenders)
-        or len(set(suspenders)) != len(suspenders)
-    ):
-        raise StopEvidenceError("the Render worker identity or suspended state is not exact")
-    if not isinstance(instances, list) or instances:
-        raise StopEvidenceError("the suspended Render worker still has a listed instance")
+    canonical_services = []
+    for identity, service, instances in observed:
+        if not isinstance(service, dict):
+            raise StopEvidenceError("a Render service response is not an object")
+        owner_id = service.get("ownerId")
+        suspenders = service.get("suspenders")
+        if (
+            service.get("id") != identity["id"]
+            or service.get("name") != identity["name"]
+            or service.get("type") != identity["type"]
+            or service.get("suspended") != "suspended"
+            or not isinstance(owner_id, str)
+            or _OWNER_ID.fullmatch(owner_id) is None
+            or not isinstance(suspenders, list)
+            or any(
+                not isinstance(value, str) or value not in _ALLOWED_SUSPENDERS
+                for value in suspenders
+            )
+            or len(set(suspenders)) != len(suspenders)
+        ):
+            raise StopEvidenceError(
+                "a Render source executor identity or suspended state is not exact"
+            )
+        if not isinstance(instances, list) or instances:
+            raise StopEvidenceError(
+                "a suspended Render source executor still has a listed instance"
+            )
+        canonical_services.append(
+            {
+                "id": identity["id"],
+                "instances": [],
+                "name": identity["name"],
+                "ownerId": owner_id,
+                "suspended": "suspended",
+                "suspenders": sorted(suspenders),
+                "type": identity["type"],
+            }
+        )
     canonical = {
-        "instances": [],
         "schema": SCHEMA,
-        "service": {
-            "id": service_id,
-            "name": service_name,
-            "ownerId": owner_id,
-            "suspended": "suspended",
-            "suspenders": sorted(suspenders),
-            "type": "background_worker",
-        },
+        "services": canonical_services,
     }
     encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
@@ -243,10 +277,10 @@ def main() -> int:
         print(worker_stop_digest(control))
         return 0
     except StopEvidenceError as exc:
-        print(f"Render worker stop proof failed: {exc}", file=sys.stderr)
+        print(f"Render source executor stop proof failed: {exc}", file=sys.stderr)
         return 1
     except Exception:
-        print("Render worker stop proof failed unexpectedly", file=sys.stderr)
+        print("Render source executor stop proof failed unexpectedly", file=sys.stderr)
         return 1
 
 

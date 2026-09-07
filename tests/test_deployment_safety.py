@@ -559,12 +559,20 @@ def test_recovery_escrow_repository_id_hash_accepts_a_valid_repository():
 def test_staging_ingress_and_secret_ignores_match_production_contract():
     staging = _read("deploy/Caddyfile.staging")
     production = _read("Caddyfile")
+    source_transport = _read("deploy/source_postgres_transport.py")
+    cutover_evidence = _read("deploy/provider_cutover_evidence.py")
     gitignore = _read(".gitignore")
     dockerignore = _read(".dockerignore")
     manifest = _read("deploy/rehearsal_manifest.sql")
 
     assert "max_size 1100MB" in production
     assert "max_size 1100MB" in staging
+    assert "reverse_proxy https://lecturesift-backend.onrender.com" in staging
+    canonical_health = (
+        'CANONICAL_SOURCE_HEALTH_URL = "https://lecturesift-backend.onrender.com/health"'
+    )
+    assert canonical_health in source_transport
+    assert canonical_health in cutover_evidence
     assert "deploy/rehearsal.env" in gitignore
     assert "deploy/rehearsal.env" in dockerignore
     assert "('billing_payment_provider_sessions')" in manifest
@@ -593,6 +601,175 @@ def test_shared_image_smoke_is_build_time_and_health_is_role_specific():
     service = _read("deploy/lecturesift.service")
     assert "BindsTo=docker.service" in service
     assert "PartOf=docker.service" in service
+
+
+def test_public_ingress_is_separate_fail_closed_and_handed_off_after_private_acceptance():
+    compose = _read("compose.yaml")
+    runtime_example = _read("deploy/env.example")
+    core = _read("deploy/lecturesift.service")
+    ingress = _read("deploy/lecturesift-ingress.service")
+    staging = _read("deploy/lecturesift-caddy-staging.service")
+    selector = _read("deploy/lecturesift-ingress-selector.service")
+    gate = _read("deploy/verify_production_ingress.sh")
+    health_validator = _read("deploy/validate_ingress_health.py")
+    handoff = _read("deploy/handoff_production_ingress.sh")
+
+    assert "INSTAGRAM_DAILY_AUTOMATION_ENABLED=false" in runtime_example
+    assert "INSTAGRAM_DAILY_AUTOMATION_ENABLED=true" not in runtime_example
+    api_service = compose.split("\n  api:\n", 1)[1].split("\n  worker:\n", 1)[0]
+    assert '"127.0.0.1:8000:8000"' not in compose
+    assert "\n    ports:" not in api_service
+    assert 'expose:\n      - "8000"' in api_service
+    assert "LECTURESIFT_INGRESS_CUTOVER_STATE_FILE" in compose
+    assert "source: /var/lib/lecturesift/ingress-state" in compose
+    assert compose.count("target: /run/lecturesift-ingress-state") == 2
+    core_starts = "\n".join(
+        line for line in core.splitlines() if line.startswith("ExecStart=")
+    )
+    assert " caddy" not in core_starts
+    assert "docker compose down" not in core
+    assert "Conflicts=lecturesift-caddy-staging.service" in ingress
+    assert "Conflicts=lecturesift-ingress.service" in staging
+    assert re.search(r"caddy:2-alpine@sha256:[0-9a-f]{64}", staging)
+    assert "first-start-status" in gate and '== "consumed"' in gate
+    assert '--resolve "$PUBLIC_HOST:443:127.0.0.1"' in gate
+    assert '"${compose[@]}" exec -T api python -I -c' in gate
+    assert 'http.client.HTTPConnection("127.0.0.1", 8000, timeout=20)' in gate
+    assert 'health_url="http://127.0.0.1:8000/health"' not in gate
+    assert "source_postgres_transport.py" in gate
+    assert 'python3 "$HEALTH_VALIDATOR"' in gate
+    assert 'payload.get("maintenance_mode") != expected_mode' in health_validator
+    assert 'payload.get("deployment_provider") != expected_provider' in health_validator
+    assert '[[ "$public_revision" == "$direct_revision" ]]' in gate
+    assert "Render worker/scheduler stop proof changed after finalization" in gate
+    assert 'source_exec redis python3 "$SOURCE_REDIS_GUARD" assert-idle' in gate
+    assert 'bash "$INSTAGRAM_STOP_GATE"' in gate
+    assert "for attempt in {1..20}" in gate
+    reconciler = _read("deploy/reconcile_production_ingress.sh")
+    assert "ExecStart=/bin/bash /opt/lecturesift/deploy/reconcile_production_ingress.sh" in selector
+    assert "WantedBy=multi-user.target" in selector
+    assert "Restart=always" in selector and "PartOf=docker.service" in selector
+    assert 'bash "$HANDOFF" reconcile' in reconciler and "sleep 30" in reconciler
+    private_gate = handoff.index('bash "$GATE" prepare')
+    durable_fence = handoff.index("begin-ingress-handoff", private_gate)
+    stop_staging = handoff.index('systemctl stop "$STAGING_UNIT"', durable_fence)
+    start_production = handoff.index('systemctl start "$PRODUCTION_UNIT"', stop_staging)
+    assert private_gate < durable_fence < stop_staging < start_production
+    assert 'systemctl enable "$STAGING_UNIT"' not in handoff
+    assert 'systemctl enable "$PRODUCTION_UNIT"' not in handoff
+    assert 'systemctl disable "$STAGING_UNIT"' not in handoff
+    assert 'systemctl disable "$PRODUCTION_UNIT"' not in handoff
+    assert 'exec 9<>"$LOCK_FILE"' in handoff and "flock -n 9" in handoff
+    assert "trap on_signal HUP INT TERM" in handoff and "trap on_exit EXIT" in handoff
+    assert "restore_render_proxy" in handoff
+    assert "begin-ingress-handoff" in handoff
+    assert "transition-ingress-state" in handoff
+    assert "handoff|activate|rollback|reconcile" in handoff
+    assert "activation_required=true" in handoff
+    assert "OVH activation may have admitted writes; traffic rollback is forbidden" in handoff
+    restore_start = handoff.index("restore_render_proxy()")
+    target_stop_proof = handoff.index("prove_or_stop_target_writers", restore_start)
+    source_gate = handoff.index('bash "$GATE" source', target_stop_proof)
+    restore_fence = handoff.index("transition begin-restore", source_gate)
+    stop_production = handoff.index('systemctl stop "$PRODUCTION_UNIT"', restore_fence)
+    start_staging = handoff.index('systemctl start "$STAGING_UNIT"', stop_production)
+    verify_staging = handoff.index('bash "$GATE" staging', start_staging)
+    complete_restore = handoff.index("transition complete-restore", verify_staging)
+    assert target_stop_proof < source_gate < restore_fence < stop_production
+    assert stop_production < start_staging < verify_staging < complete_restore
+    activation_gate = handoff.index('bash "$GATE" activation')
+    activate_transition = handoff.index("transition activate", activation_gate)
+    assert activation_gate < activate_transition
+
+    rehearsal = _read("deploy/run_exact_rehearsal.sh")
+    assert "lecturesift-ingress.service" in rehearsal.split(
+        "for unit in", 1
+    )[1].split("; do", 1)[0]
+    assert "lecturesift-ingress-selector.service" in rehearsal.split(
+        "for unit in", 1
+    )[1].split("; do", 1)[0]
+
+
+def test_ingress_reconciler_closes_each_interrupted_owner_transition():
+    selector = _read("deploy/lecturesift-ingress-selector.service")
+    loop = _read("deploy/reconcile_production_ingress.sh")
+    handoff = _read("deploy/handoff_production_ingress.sh")
+
+    # SIGTERM is trapped; SIGKILL/abnormal exit is repaired by systemd. Docker
+    # restarts also propagate to the selector, and ordinary child failures are
+    # retried within the bounded loop interval.
+    assert "trap stop_loop HUP INT TERM" in loop
+    assert "Restart=always" in selector
+    assert "PartOf=docker.service" in selector
+    assert "sleep 30" in loop
+    assert 'if ! bash "$HANDOFF" reconcile' in loop
+
+    # Every traffic mutation is preceded by a durable state, and every
+    # pre-activation crash state is explicitly mapped by reconcile_owner.
+    begin = handoff.index("begin-ingress-handoff")
+    stop_render = handoff.index('systemctl stop "$STAGING_UNIT"', begin)
+    start_ovh = handoff.index('systemctl start "$PRODUCTION_UNIT"', stop_render)
+    awaiting = handoff.index("transition await-activation", start_ovh)
+    assert begin < stop_render < start_ovh < awaiting
+    reconcile = handoff.split("reconcile_owner() {", 1)[1].split(
+        '\n}\n\nstate="$(state_status)"', 1
+    )[0]
+    for crash_state in (
+        "required|render-restored|handoff-in-progress|restore-in-progress",
+        "awaiting-activation",
+        "activated",
+    ):
+        assert crash_state in reconcile
+    restore = handoff.split("restore_render_proxy()", 1)[1].split(
+        "reconcile_owner()", 1
+    )[0]
+    assert restore.index("prove_or_stop_target_writers") < restore.index(
+        'bash "$GATE" source'
+    ) < restore.index("transition begin-restore")
+    assert restore.index("transition begin-restore") < restore.index(
+        'systemctl stop "$PRODUCTION_UNIT"'
+    ) < restore.index('systemctl start "$STAGING_UNIT"')
+
+    # Once the atomic activated state can admit writes, no automatic Render
+    # branch is allowed and manual rollback points to reconciliation.
+    activated_branch = reconcile.split("activated)", 1)[1].split(";;", 1)[0]
+    assert 'systemctl start "$PRODUCTION_UNIT"' in activated_branch
+    assert 'systemctl start "$STAGING_UNIT"' not in activated_branch
+    assert '[[ "$state" != "activated" ]] || reconciliation_required' in handoff
+
+
+def test_first_start_and_activation_share_the_instagram_dual_publisher_gate():
+    first_start = _read("deploy/verify_provider_first_start.sh")
+    ingress = _read("deploy/verify_production_ingress.sh")
+    service = _read("deploy/lecturesift.service")
+    assert 'bash "$INSTAGRAM_STOP_GATE"' in first_start
+    assert first_start.index('bash "$INSTAGRAM_STOP_GATE"') < first_start.index(
+        'if [[ "$MODE" == "complete" ]]'
+    )
+    assert service.index("verify_provider_first_start.sh arm") < service.index(
+        "up -d --no-deps --wait --wait-timeout 600 egress-proxy api worker"
+    )
+    activation = ingress.split("activation)", 1)[1].split(";;", 1)[0]
+    assert 'verify_source_frozen_idle' in activation
+    assert 'bash "$INSTAGRAM_STOP_GATE"' in activation
+
+
+def test_exact_rehearsal_promotion_and_systemd_install_are_admission_bound():
+    promotion = _read("deploy/promote_rehearsed_release.sh")
+    installer = _read("deploy/install_systemd_units.sh")
+    rehearsal = _read("deploy/run_exact_rehearsal.sh")
+
+    assert "validate_rehearsal_admission.py" in promotion
+    assert promotion.count("--expected-revision \"$revision\"") >= 3
+    assert "release.sh\" prepare" in promotion
+    assert "release.sh\" verify" in promotion
+    assert "services_started=false" in promotion
+    assert "INSTALL-EXACT-ADMITTED-SYSTEMD-UNITS" in installer
+    assert "cat-file blob" in installer and "cmp --silent" in installer
+    assert "systemd-analyze verify" in installer
+    assert "NeedDaemonReload" in installer and "DropInPaths" in installer
+    assert "enable " not in installer and "disable " not in installer
+    assert "lecturesift-ingress.service" in rehearsal
 
 
 def test_disaster_rdb_restore_is_version_guarded_and_docs_split_paths():
@@ -709,7 +886,9 @@ def test_postgres_runtime_uses_a_distinct_least_privilege_role():
     assert "${LECTURESIFT_WORKER_ENV_FILE" not in migration
     assert service.index("up -d --wait --wait-timeout 300 postgres redis") < service.index(
         "provision_database_role.sh"
-    ) < service.index("up -d --remove-orphans --wait --wait-timeout 600")
+    ) < service.index(
+        "up -d --no-deps --wait --wait-timeout 600 egress-proxy api worker"
+    )
 
 
 def test_rehearsal_stack_replaces_production_work_volumes():
@@ -770,7 +949,11 @@ def test_postgres_cutover_is_snapshot_consistent_reversible_and_fail_stopped():
     assert "must have mode 0400 or 0600" in script
     source_transport = _read("deploy/source_postgres_transport.py")
     assert 'host.endswith(".render.com")' in source_transport
-    assert 'host.endswith(".onrender.com")' in source_transport
+    assert (
+        'CANONICAL_SOURCE_HEALTH_URL = "https://lecturesift-backend.onrender.com/health"'
+        in source_transport
+    )
+    assert "value != CANONICAL_SOURCE_HEALTH_URL" in source_transport
     assert 'query != [("sslmode", "verify-full")]' in source_transport
     assert 'payload.get("maintenance_mode") == "freeze"' in script
     assert "billing_manual_orders WHERE status = 'pending'" in script
@@ -893,7 +1076,11 @@ def test_postgres_reverse_reconciliation_never_guesses_a_merge_or_traffic_flip()
         assert flag in script
     assert 'ALLOWED_BACKUP_ROOT="/var/backups/lecturesift/postgres-rollback"' in script
     source_transport = _read("deploy/source_postgres_transport.py")
-    assert 'host.endswith(".onrender.com")' in source_transport
+    assert (
+        'CANONICAL_SOURCE_HEALTH_URL = "https://lecturesift-backend.onrender.com/health"'
+        in source_transport
+    )
+    assert "value != CANONICAL_SOURCE_HEALTH_URL" in source_transport
     assert 'query != [("sslmode", "verify-full")]' in source_transport
     assert "payload.get(\"maintenance_mode\") == \"freeze\"" in script
     assert 'check_health_freeze "$OVH_HEALTH_URL" "OVH"' in script
@@ -901,6 +1088,8 @@ def test_postgres_reverse_reconciliation_never_guesses_a_merge_or_traffic_flip()
     assert "assert_render_worker_stopped" in script
     assert "render_worker_stop_evidence.py" in script
     assert "SOURCE_WORKER_STOP_EVIDENCE_SHA256" in script
+    assert "verify_instagram_publishers_stopped.sh" in script
+    assert script.count("assert_ovh_instagram_publishers_stopped") >= 3
     assert "connection.ensure_connection" not in script
     assert "app.control.ping(timeout=8)" not in script
     assert '"${compose[@]}" stop --timeout 600 api worker' in script

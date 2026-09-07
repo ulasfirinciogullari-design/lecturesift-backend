@@ -12,6 +12,8 @@ services:
     plan: free
     autoDeploy: true
     envVars:
+      - key: LECTURESIFT_DEPLOYMENT_PROVIDER
+        value: render
       - key: OPENAI_API_KEY
         sync: false
       - key: LECTURESIFT_PRECISE_TRANSCRIPT_TIMESTAMPS

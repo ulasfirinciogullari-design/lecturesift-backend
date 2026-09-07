@@ -112,6 +112,24 @@ def test_source_child_scopes_disclose_only_the_endpoint_family_they_need():
 
 
 @pytest.mark.parametrize(
+    "health_url",
+    (
+        "https://other-backend.onrender.com/health",
+        "https://lecturesift-backend.onrender.com/other/health",
+        "https://lecturesift-backend.onrender.com:443/health",
+        "https://lecturesift-backend.onrender.com/health/",
+    ),
+)
+def test_source_transport_rejects_noncanonical_render_health_origin(health_url: str):
+    helper = _module()
+    values = _source_values()
+    values["SOURCE_HEALTH_URL"] = health_url
+
+    with pytest.raises(helper.TransportError, match="canonical LectureSift Render endpoint"):
+        helper.configuration_from_values(values)
+
+
+@pytest.mark.parametrize(
     "query",
     (
         "",

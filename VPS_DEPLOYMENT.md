@@ -1,7 +1,8 @@
 # LectureSift OVH VPS deployment
 
 The production stack runs API, one Celery worker, PostgreSQL, Redis and Caddy
-on the VPS. Netlify and private Cloudflare R2 remain external.
+on the VPS. The private core and public ingress have separate systemd owners.
+Netlify and private Cloudflare R2 remain external.
 
 ## Safety rules
 
@@ -23,6 +24,8 @@ on the VPS. Netlify and private Cloudflare R2 remain external.
 - Keep Render available for rollback until data, payment callbacks, uploads
   and one real analysis job pass on the new API.
 - Never run both Instagram schedulers at the same time.
+  `INSTAGRAM_DAILY_AUTOMATION_ENABLED` stays `false` through cutover and is
+  changed only after the Render cron is confirmed disabled.
 - The Compose stack is a single-host 4-vCPU/8-GB profile. Every long-running
   container has a hard memory/CPU/PID ceiling, a lower reservation and a
   bounded `/tmp`. The one worker stays at concurrency 1 so FFmpeg, Tesseract
@@ -90,11 +93,13 @@ on the VPS. Netlify and private Cloudflare R2 remain external.
    once as `POSTGRES_USER`, installs masked worker views, and proves the final
    grants before API or worker can start. Never run the migration profile with
    an API/worker environment file and never grant either runtime role `CREATE`.
-4. Copy all four `.service` files (including
-   `lecturesift-backup-alert@.service`) and both `.timer` files from `deploy/` to
-   `/etc/systemd/system/`.
+4. Do not copy systemd fragments manually. Keep every LectureSift unit inactive
+   and disabled through the exact rehearsal. The exact admitted promotion under
+   Data cutover installs and verifies the complete unit set without starting or
+   enabling anything.
 5. Point `api.lecturesift.com` to the VPS IPv4 as a DNS-only record.
-6. During the very first bootstrap only, run
+6. Only after the exact rehearsal and admitted promotion have succeeded, during
+   the very first bootstrap run
    `sudo env LECTURESIFT_PREFLIGHT_CONTEXT=bootstrap-infrastructure
    LECTURESIFT_RECOVERY_BOOTSTRAP_OVERRIDE=YES
    LECTURESIFT_BOOTSTRAP_INFRASTRUCTURE_ONLY=YES
@@ -104,15 +109,20 @@ on the VPS. Netlify and private Cloudflare R2 remain external.
    override in `runtime.env` or a persistent service file. Then run
    `sudo bash /opt/lecturesift/deploy/release.sh build`; it idempotently builds the
    pinned application/proxy images only when the clean HEAD is not already the
-   verified local image, and its build-time image smoke check must pass. While
-   the temporary staging Caddy owns ports 80/443,
+   verified local image, and its build-time image smoke check must pass. Then
+   run the staging-Caddy command shown immediately after promotion under Data
+   cutover. This is the first permitted service start after promotion; the digest-pinned
+   temporary Caddy owns ports 80/443 and continues proxying the still-frozen
+   Render API. While it is active,
    start and verify only `postgres` and `redis`; the infrastructure bootstrap
    is not permission to start API/worker. Complete the provider-cutover steps
    below and create the atomic `provider-cutover.ok` gate before invoking
-   `lecturesift.service`. Only after the private health/payment/processing
-   acceptance passes may the exact `lecturesift-caddy-staging` container be
-   stopped and production Caddy/DNS be changed. If that final handoff fails,
-   stop production Caddy and restart the staging container before investigating.
+   `lecturesift.service`. Its first production preflight creates the durable
+   ingress state, which keeps both target API and worker in `freeze`. Only after
+   frozen health/revision/readiness and the prior exact rehearsal are accepted
+   may the dedicated handoff tool exchange staging Caddy for production Caddy.
+   Never stop the staging container by hand; use the exact handoff/activation/
+   rollback sequence under Data cutover.
    Startup and reload also run `deploy/resource_guard.sh`. It refuses fewer
    than four online CPUs or 7 GiB of visible RAM, validates the 1-GiB media and
    100-MiB document ingress contracts, checks existing API/worker work-volume
@@ -215,11 +225,11 @@ on the VPS. Netlify and private Cloudflare R2 remain external.
    stale, symlinked or failed evidence blocks startup.
    Compose uses bounded `on-failure` restart policies rather than
    `unless-stopped`; systemd owns daemon/host boot and runs preflight before
-   any public container. After preflight prepares the exact marker, systemd
+   the private core. After preflight prepares the exact marker, systemd
    runs the idempotent release builder before any Compose `up`; reload follows
    the same order. Restarting Docker also restarts the bound LectureSift unit
-   through the same gates, so an old Caddy/image cannot serve around a failed
-   recovery or revision check. Keep Docker `live-restore` disabled as supplied in
+   through the same gates; the separately bound ingress unit cannot start until
+   that private core and its exact ingress gate pass. Keep Docker `live-restore` disabled as supplied in
    `deploy/docker-daemon.json`; enabling it would deliberately keep public
    containers alive while systemd cannot enforce the preflight boundary.
    Set `LECTURESIFT_OPS_ALERT_EMAIL` to a monitored mailbox. A failed scheduled
@@ -419,6 +429,57 @@ malformed or unknown marker, or any matching database/role, fails closed for
 operator inspection. Its sole success record is
 `REHEARSAL_RECONCILE_OK|database_or_role_modified=false|provenance_empty=true`.
 
+After the exact rehearsal succeeds, promote that same admitted commit into the
+fixed production root before any migration or service start:
+
+```sh
+REVISION=<exact-40-hex-rehearsed-commit>
+sudo env LECTURESIFT_PROMOTE_RELEASE_CONFIRM=PROMOTE-EXACT-REHEARSED-RELEASE \
+  LECTURESIFT_PROMOTE_LEGACY_ROOT_CONFIRM=PRESERVE-UNVERIFIED-LEGACY-ROOT \
+  bash "/srv/lecturesift/worktrees/$REVISION/deploy/promote_rehearsed_release.sh" \
+  "$REVISION"
+```
+
+The promotion clones only the clean admitted revision into a root-owned
+same-filesystem incoming tree, replaces `/opt/lecturesift` using two atomic
+same-filesystem renames under a durable fail-stop transaction marker, preserves the previous tree under
+`/opt/.lecturesift-previous`, revalidates the admission and pinned images, and
+installs the exact systemd fragments. It neither enables nor starts a service.
+Any validation or installation failure restores the prior production tree and
+release marker. A successful retry is verification-only and does not create a
+second rollback copy. If
+`/var/lib/lecturesift/release-promotion/release-promotion.in-progress` remains,
+the rollback is not proven: keep every service stopped and investigate instead
+of deleting the marker or retrying. Do not copy candidate files into `/opt` or systemd manually and
+do not continue unless the command reports the exact revision with
+`services_started=false`.
+
+The unit installer separately fences fragment replacement with
+`/var/lib/lecturesift/systemd-unit-backups/systemd-install.in-progress` only
+after its complete root-only rollback set is durable. Production preflight
+rejects either transaction marker. If either remains after interruption, keep
+the selector and every application unit stopped and restore/verify the recorded
+rollback set; never delete a marker merely to make startup pass.
+
+The extra legacy-root confirmation is valid only for this first promotion from
+the reviewed `ubuntu:ubuntu` mode-`0775`, extracted `/opt/lecturesift` tree.
+The tool never executes or sources that untrusted tree: it requires the exact
+fixed path and reviewed ownership/mode, rejects nested mounts, and moves it
+intact into the root-private rollback directory. It accepts this path only
+while that rollback directory has never existed and verifies the same
+filesystem inode identity if rollback is needed. Omit the confirmation on every later
+promotion; an existing Git production tree must always be clean and exact.
+
+Only now return to bootstrap step 6 and start (but do not enable) staging Caddy:
+
+```sh
+sudo systemctl start lecturesift-caddy-staging.service
+```
+
+Starting it
+before rehearsal/promotion invalidates the stopped-unit admission contract;
+the installer also refuses an already-enabled staging unit.
+
 1. Populate the fixed, root-owned `/root/.lecturesift-render-source.env` with
    `SOURCE_DATABASE_URL` (the external Render PostgreSQL URL with exactly
    `sslmode=verify-full`) and
@@ -437,10 +498,12 @@ operator inspection. Its sole success record is
    Separately create `/root/.lecturesift-render-cutover-control.env` as a
    root-owned, single-link regular file with mode `0400` or `0600`. It must
    contain exactly `RENDER_API_TOKEN`, the exact background-worker
-   `RENDER_WORKER_SERVICE_ID`, and `RENDER_WORKER_SERVICE_NAME`. The token needs
-   read access to that service only. Cutover tools issue only the two official
-   Render GET requests for the service and its instances, require the exact
-   service to be suspended with no listed instance, and bind the secret-free
+   `RENDER_WORKER_SERVICE_ID`, `RENDER_WORKER_SERVICE_NAME`,
+   `RENDER_INSTAGRAM_CRON_SERVICE_ID`, and
+   `RENDER_INSTAGRAM_CRON_SERVICE_NAME`. The token needs
+   read access to those two services only. Cutover tools issue only four
+   official Render GET requests (each service plus its instances), require the
+   exact worker and cron to be suspended with no listed instance, and bind the secret-free
    result digest into every provider proof. They never send Celery remote-control
    commands to the live Render Redis service.
 2. Put the live Render API into exact `freeze` mode, stop its worker, drain all
@@ -551,24 +614,124 @@ operator inspection. Its sole success record is
    payments/queues, run `deploy/finalize_provider_cutover.sh` with the same
    ID/revision and
    `LECTURESIFT_PROVIDER_CUTOVER_FINALIZE_CONFIRM=YES`. The finalizer rechecks
-   the direct Render freeze response, absence of its worker, both queues,
+   the direct Render freeze response and provider identity, the exact Render
+   revision, absence of both its worker and Instagram cron instances, both queues,
    pending provider orders, clean Git revision, seed proof, and
    repository-bound recovery and retention evidence. Only exact-matching
    PostgreSQL, Redis and first-cutover seed proofs can
    create `/var/lib/lecturesift/provider-cutover/provider-cutover.ok`; its
    atomic creation does not start API/worker and does not touch Caddy or DNS.
    It is not evidence that a Redis or R2 rollback was performed.
-6. Start the private API/worker only through `lecturesift.service`; its full
-   preflight and exact-release build must finish first. Prove that
-   `/health.revision` is the same full commit as the clean OVH checkout, then
-   test account login, email verification, admin access, R2 upload/download,
-   OCR/PDF/PPTX/video processing and payment callbacks.
-7. Change frontend API configuration and CSP to `https://api.lecturesift.com`.
-8. Change iyzico and PayTR webhook URLs to the private API hostname only after
-   their pending/retry windows and signature tests are reconciled.
-9. Observe the new stack before pausing Render; retain the still-fenced Render
-   database and its direct health hostname for rollback. Caddy/DNS is the last
-   gate, not part of either data migration command.
+6. Keep the disabled `lecturesift-caddy-staging.service` active and Render
+   public. Start only the private core, then enable the single durable selector
+   (never either concrete ingress unit) and prove the independently routed endpoints:
+
+   ```sh
+   sudo systemctl enable lecturesift.service
+   sudo systemctl start lecturesift.service
+   sudo systemctl enable lecturesift-ingress-selector.service
+   sudo systemctl start lecturesift-ingress-selector.service
+   sudo bash /opt/lecturesift/deploy/verify_production_ingress.sh prepare
+   ```
+
+   `lecturesift.service` starts only PostgreSQL, Redis, the egress proxy, API
+   and worker; it never starts Caddy. Production preflight creates and validates
+   root-owned `/var/lib/lecturesift/ingress-state/provider-ingress.state` before
+   the containers start. That state is mounted read-only into API and worker;
+   every state except `activated` forces runtime `freeze`. The `prepare` gate
+   runs the OVH health/readiness/revision probes from inside the API container
+   against its private loopback listener and requires `freeze`,
+   then separately requires the public staging TLS `/health` response to match
+   the final-evidence-bound direct Render source fingerprint, full revision,
+   explicit `render` provider identity and `freeze` mode. The selector is the
+   only enabled ingress unit. On every boot and at a bounded 30-second runtime
+   interval it reconciles durable state to one
+   runtime owner: pre-handoff/interrupted states converge to Render, awaiting
+   activation converges to frozen OVH (or safely restores Render), and activated
+   converges only to OVH. Because OVH is
+   deliberately non-writable, do not attempt login, upload, callback or job
+   mutations here; those were exercised by the exact isolated rehearsal.
+7. Perform the only approved public ingress handoff:
+
+   ```sh
+   sudo bash /opt/lecturesift/deploy/handoff_production_ingress.sh handoff
+   ```
+
+   Before changing either unit, the tool atomically records
+   `handoff-in-progress` bound to the OVH release/final proof and the Render
+   source revision captured by finalization. It stops staging, starts production
+   without changing either concrete unit's enablement, and requires the
+   public OVH HTTPS health/readiness/revision contract while OVH still reports
+   `freeze`. Success durably records `awaiting-activation`; it does **not** open
+   writes. Re-running the command reconciles a complete frozen handoff or safely
+   restores Render from an ambiguous pre-activation crash. Every transition is
+   serialized by a fixed root-only lock. Never start Compose Caddy directly and
+   never enable either concrete ingress unit; only the selector is enabled.
+8. Before activation, any ingress/TLS/read-only acceptance failure may use:
+
+   ```sh
+   sudo bash /opt/lecturesift/deploy/handoff_production_ingress.sh rollback
+   ```
+
+   Restoration first proves OVH still reports `freeze`. If OVH health is
+   unavailable, it first stops the production ingress and target core and proves
+   API, worker and Instagram publishers inactive. Only then may it prove the
+   finalized direct Render source is still frozen, worker/cron-suspended and
+   queue-idle, record `restore-in-progress`, and start staging. Bounded polling
+   declares success only when public TLS reports the exact final-bound Render
+   revision and `render` identity. The private OVH probe is never evidence that public
+   traffic returned to Render.
+9. When the frozen public OVH checks pass, perform the separate write activation:
+
+   ```sh
+   sudo bash /opt/lecturesift/deploy/handoff_production_ingress.sh activate
+   ```
+
+   Immediately before the transition, the tool re-proves the direct Render
+   `freeze`, exact final-bound revision/source identity, worker and Instagram
+   cron suspension, empty source queue, and stopped/disabled OVH Instagram
+   timer/service/container. Any failure preserves `awaiting-activation`.
+   The single atomic, fsynced transition from `awaiting-activation` to
+   `activated` is the write-enablement point. Only afterward run external login,
+   email, admin, upload/download, processing and real signed payment-callback
+   acceptance. Keep Render frozen and retain its data. A manual `rollback`
+   request at or after activation always refuses and points to
+   `deploy/ROLLBACK_RECONCILIATION.md`; never switch traffic back based on a
+   belief that OVH received no writes. Freeze both sides and complete the full
+   PostgreSQL, Redis, R2 and provider reconciliation procedure. Do not enable
+   either Instagram scheduler until the final production acceptance is complete.
+   Caddy/DNS is the last gate, not part of either data migration command.
+
+### First-start crash recovery
+
+An interrupted start after the one-time first-start marker is armed is
+deliberately crash-fenced. Never delete
+`provider-first-start.in-progress`. Keep the Render proxy public, stop every
+target writer/ingress, bring up only the target data stores, and run the
+validated recovery:
+
+```sh
+sudo systemctl stop lecturesift-ingress-selector.service
+sudo systemctl stop lecturesift-ingress.service lecturesift.service
+sudo systemctl start lecturesift-caddy-staging.service
+sudo docker compose --project-directory /opt/lecturesift \
+  --file /opt/lecturesift/compose.yaml up -d --wait --wait-timeout 300 postgres redis
+sudo docker compose --project-directory /opt/lecturesift \
+  --file /opt/lecturesift/compose.yaml stop --timeout 120 worker api caddy egress-proxy
+sudo env LECTURESIFT_PROVIDER_FIRST_START_RECOVERY_CONFIRM=YES \
+  bash /opt/lecturesift/deploy/verify_provider_first_start.sh recover
+sudo systemctl reset-failed lecturesift.service
+sudo systemctl start lecturesift.service
+sudo systemctl enable lecturesift-ingress-selector.service
+sudo systemctl restart lecturesift-ingress-selector.service
+sudo bash /opt/lecturesift/deploy/verify_production_ingress.sh prepare
+```
+
+Recovery revalidates the final release proof, armed marker, optional consumed
+proof, current PostgreSQL data/authority/role-login evidence and complete Redis
+manifest under the shared migration lock. It writes a durable recovery audit
+proof before removing the fence. Any mismatch leaves the fence in place for
+investigation; there is no marker-deletion bypass.
 
 ## Post-cutover disaster recovery
 
@@ -630,6 +793,10 @@ sudo env LECTURESIFT_POSTGRES_ROLLBACK_CONFIRM=YES \
   LECTURESIFT_OVH_FROZEN=YES LECTURESIFT_OVH_WORKER_STOPPED=YES \
   LECTURESIFT_RENDER_FROZEN=YES LECTURESIFT_RENDER_WORKER_STOPPED=YES \
   LECTURESIFT_PROVIDER_RECONCILED=YES \
+  LECTURESIFT_PROVIDER_ROLLBACK_ID=<32-hex-rollback-id> \
+  LECTURESIFT_PROVIDER_CUTOVER_ID=<original-32-hex-cutover-id> \
+  LECTURESIFT_OVH_RELEASE_REVISION=<exact-40-hex-ovh-commit> \
+  LECTURESIFT_RENDER_RELEASE_REVISION=<exact-40-hex-render-commit> \
   bash deploy/rollback_postgres_to_render.sh
 ```
 

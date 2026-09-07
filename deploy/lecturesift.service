@@ -1,10 +1,11 @@
 [Unit]
-Description=LectureSift production stack
+Description=LectureSift private production core
 Requires=docker.service
 BindsTo=docker.service
 PartOf=docker.service
 After=docker.service network-online.target
 Wants=network-online.target
+Before=lecturesift-ingress.service lecturesift-ingress-selector.service
 
 [Service]
 Type=oneshot
@@ -21,17 +22,17 @@ ExecStartPre=/bin/bash /opt/lecturesift/deploy/release.sh build
 ExecStart=/usr/bin/docker compose up -d --wait --wait-timeout 300 postgres redis
 ExecStart=/bin/bash /opt/lecturesift/deploy/provision_database_role.sh
 ExecStart=/bin/bash /opt/lecturesift/deploy/verify_provider_first_start.sh arm
-ExecStart=/usr/bin/docker compose up -d --remove-orphans --wait --wait-timeout 600
+ExecStart=/usr/bin/docker compose up -d --no-deps --wait --wait-timeout 600 egress-proxy api worker
 ExecStart=/bin/bash /opt/lecturesift/deploy/verify_provider_first_start.sh complete
 ExecReload=/bin/bash /opt/lecturesift/deploy/preflight.sh
 ExecReload=/bin/bash /opt/lecturesift/deploy/release.sh build
 ExecReload=/usr/bin/docker compose up -d --wait --wait-timeout 300 postgres redis
 ExecReload=/bin/bash /opt/lecturesift/deploy/provision_database_role.sh
 ExecReload=/bin/bash /opt/lecturesift/deploy/verify_provider_first_start.sh arm
-ExecReload=/usr/bin/docker compose up -d --remove-orphans --wait --wait-timeout 600
+ExecReload=/usr/bin/docker compose up -d --no-deps --wait --wait-timeout 600 egress-proxy api worker
 ExecReload=/bin/bash /opt/lecturesift/deploy/verify_provider_first_start.sh complete
-ExecStop=/usr/bin/docker compose down
-ExecStopPost=/usr/bin/docker compose stop --timeout 120 api worker caddy egress-proxy
+ExecStop=/usr/bin/docker compose stop --timeout 600 worker api egress-proxy redis postgres
+ExecStopPost=/usr/bin/docker compose stop --timeout 600 worker api egress-proxy redis postgres
 TimeoutStartSec=1200
 TimeoutStopSec=900
 

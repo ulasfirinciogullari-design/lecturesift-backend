@@ -13,6 +13,7 @@ RELEASE_ENV_FILE="${LECTURESIFT_RELEASE_ENV_FILE:-/run/lecturesift/release.env}"
 ROLE_ENV_GENERATOR="$ROOT_DIR/deploy/generate_role_envs.py"
 RELEASE_HELPER="$ROOT_DIR/deploy/release.sh"
 CUTOVER_EVIDENCE_TOOL="$ROOT_DIR/deploy/provider_cutover_evidence.py"
+PROVIDER_BASELINE_TOOL="$ROOT_DIR/deploy/record_payment_provider_baseline.py"
 REHEARSAL_ADMISSION_TOOL="$ROOT_DIR/deploy/validate_rehearsal_admission.py"
 PROVIDER_CUTOVER_ROOT="/var/lib/lecturesift/provider-cutover"
 PROVIDER_CUTOVER_IN_PROGRESS="$PROVIDER_CUTOVER_ROOT/provider-cutover.in-progress"
@@ -25,6 +26,8 @@ RESTIC_ESCROW_MARKER="$RECOVERY_EVIDENCE_ROOT/restic-password-escrow.ok"
 REDIS_FAIL_STOP_MARKER="/var/lib/lecturesift/migration-fail-stop/redis-state-unproven"
 POSTGRES_CUTOVER_FAIL_STOP_MARKER="/var/lib/lecturesift/migration-fail-stop/postgres-cutover-unproven"
 POSTGRES_ROLLBACK_FAIL_STOP_MARKER="/var/lib/lecturesift/migration-fail-stop/postgres-rollback-unproven"
+RELEASE_PROMOTION_IN_PROGRESS="/var/lib/lecturesift/release-promotion/release-promotion.in-progress"
+SYSTEMD_INSTALL_IN_PROGRESS="/var/lib/lecturesift/systemd-unit-backups/systemd-install.in-progress"
 REQUIRED_BACKUP_SET_SHA256="${LECTURESIFT_REQUIRED_BACKUP_SET_SHA256:-}"
 BOOTSTRAP_OVERRIDE="${LECTURESIFT_RECOVERY_BOOTSTRAP_OVERRIDE:-}"
 PREFLIGHT_CONTEXT="${LECTURESIFT_PREFLIGHT_CONTEXT:-production}"
@@ -64,6 +67,14 @@ if [[ -e "$POSTGRES_CUTOVER_FAIL_STOP_MARKER" || -L "$POSTGRES_CUTOVER_FAIL_STOP
 fi
 if [[ -e "$POSTGRES_ROLLBACK_FAIL_STOP_MARKER" || -L "$POSTGRES_ROLLBACK_FAIL_STOP_MARKER" ]]; then
   fail "PostgreSQL rollback state is unproven; manual recovery and fail-stop marker clearance are required"
+fi
+if [[ "$PREFLIGHT_CONTEXT" == "production" &&
+      ( -e "$RELEASE_PROMOTION_IN_PROGRESS" || -L "$RELEASE_PROMOTION_IN_PROGRESS" ) ]]; then
+  fail "release promotion is interrupted or unproven; production startup remains blocked"
+fi
+if [[ "$PREFLIGHT_CONTEXT" == "production" &&
+      ( -e "$SYSTEMD_INSTALL_IN_PROGRESS" || -L "$SYSTEMD_INSTALL_IN_PROGRESS" ) ]]; then
+  fail "systemd installation is interrupted or unproven; production startup remains blocked"
 fi
 if [[ "$PREFLIGHT_CONTEXT" == "production" &&
       ( -e "$PROVIDER_CUTOVER_IN_PROGRESS" || -L "$PROVIDER_CUTOVER_IN_PROGRESS" ) ]]; then
@@ -565,6 +576,8 @@ bash "$RELEASE_HELPER" prepare
 
 [[ -f "$CUTOVER_EVIDENCE_TOOL" && ! -L "$CUTOVER_EVIDENCE_TOOL" ]] || \
   fail "the provider cutover evidence validator is missing or unsafe"
+[[ -f "$PROVIDER_BASELINE_TOOL" && ! -L "$PROVIDER_BASELINE_TOOL" ]] || \
+  fail "the immutable payment-provider baseline validator is missing or unsafe"
 case "$PREFLIGHT_CONTEXT" in
   production)
     prepared_revision="$(sed -n 's/^LECTURESIFT_EXPECTED_BUILD_REVISION=//p' "$RELEASE_ENV_FILE")"
@@ -573,12 +586,22 @@ case "$PREFLIGHT_CONTEXT" in
     python3 "$CUTOVER_EVIDENCE_TOOL" validate-final \
       --expected-revision "$prepared_revision" ||
       fail "the provider cutover proof is absent, changed or belongs to another release"
+    python3 "$PROVIDER_BASELINE_TOOL" --check --revision "$prepared_revision" ||
+      fail "the immutable pre-traffic payment-provider baseline is absent or changed"
     first_start_status="$(
       python3 "$CUTOVER_EVIDENCE_TOOL" first-start-status \
         --expected-revision "$prepared_revision"
     )" || fail "the provider first-start state is ambiguous or crash-fenced"
     [[ "$first_start_status" == "required" || "$first_start_status" == "consumed" ]] ||
       fail "the provider first-start state output is invalid"
+    ingress_state="$(
+      python3 "$CUTOVER_EVIDENCE_TOOL" ensure-ingress-freeze \
+        --expected-revision "$prepared_revision"
+    )" || fail "the durable ingress activation fence is absent, unsafe or belongs to another release"
+    case "$ingress_state" in
+      required|handoff-in-progress|awaiting-activation|activated|restore-in-progress|render-restored) ;;
+      *) fail "the durable ingress activation state output is invalid" ;;
+    esac
     [[ -f "$REHEARSAL_ADMISSION_TOOL" && ! -L "$REHEARSAL_ADMISSION_TOOL" ]] ||
       fail "the exact rehearsal admission validator is missing or unsafe"
     python3 "$REHEARSAL_ADMISSION_TOOL" \

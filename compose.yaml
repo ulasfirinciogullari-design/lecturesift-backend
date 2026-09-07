@@ -72,6 +72,8 @@ services:
       PORT: "8000"
       LECTURESIFT_REQUIRE_POSTGRES: "true"
       LECTURESIFT_REQUIRE_DURABLE_PROCESSING: "true"
+      LECTURESIFT_DEPLOYMENT_PROVIDER: ovh
+      LECTURESIFT_INGRESS_CUTOVER_STATE_FILE: /run/lecturesift-ingress-state/provider-ingress.state
     expose:
       - "8000"
     depends_on:
@@ -81,6 +83,12 @@ services:
         condition: service_healthy
     volumes:
       - api_work:/var/lib/lecturesift
+      - type: bind
+        source: /var/lib/lecturesift/ingress-state
+        target: /run/lecturesift-ingress-state
+        read_only: true
+        bind:
+          create_host_path: true
     networks:
       - edge
       - backend
@@ -129,6 +137,7 @@ services:
       LECTURESIFT_WORKER: "1"
       LECTURESIFT_REQUIRE_POSTGRES: "true"
       LECTURESIFT_REQUIRE_DURABLE_PROCESSING: "true"
+      LECTURESIFT_INGRESS_CUTOVER_STATE_FILE: /run/lecturesift-ingress-state/provider-ingress.state
       HTTP_PROXY: http://egress-proxy:3128
       HTTPS_PROXY: http://egress-proxy:3128
       http_proxy: http://egress-proxy:3128
@@ -145,6 +154,12 @@ services:
         condition: service_healthy
     volumes:
       - worker_work:/var/lib/lecturesift
+      - type: bind
+        source: /var/lib/lecturesift/ingress-state
+        target: /run/lecturesift-ingress-state
+        read_only: true
+        bind:
+          create_host_path: true
     networks:
       - backend
     cpus: "3.25"
