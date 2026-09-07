@@ -40,6 +40,13 @@ set +a
 : "${LECTURESIFT_WORKER_DB_PASSWORD:?Missing LECTURESIFT_WORKER_DB_PASSWORD}"
 
 compose=(docker compose --project-directory "$ROOT_DIR" --file "$ROOT_DIR/compose.yaml")
+role_provisioner="$ROOT_DIR/deploy/postgres-app-role.sh"
+if [[ ! -f "$role_provisioner" || -L "$role_provisioner" ||
+      "$(realpath -e -- "$role_provisioner")" != "$role_provisioner" ||
+      "$(stat -c '%u:%g' -- "$role_provisioner")" != "0:0" ]]; then
+  echo "The PostgreSQL role provisioner is missing or unsafe." >&2
+  exit 1
+fi
 target_db="${LECTURESIFT_PROVISION_DATABASE:-$POSTGRES_DB}"
 migration_network="lecturesift_rehearsal_migration"
 migration_container="lecturesift-migration-rehearsal"
@@ -341,7 +348,7 @@ fi
   -e LECTURESIFT_APP_DB_USER -e LECTURESIFT_APP_DB_PASSWORD \
   -e LECTURESIFT_WORKER_DB_USER -e LECTURESIFT_WORKER_DB_PASSWORD \
   -e LECTURESIFT_SCHEMA_OWNER_USER -e LECTURESIFT_REHEARSAL_ROLE_COMMENT \
-  postgres /bin/bash /usr/local/sbin/lecturesift-provision-app-role
+  postgres /bin/bash -s -- <"$role_provisioner"
 
 if [[ "$rehearsal_role_mode" == "YES" ]]; then
   # Candidate migration gets a one-use, internal network containing only the
@@ -461,4 +468,4 @@ fi
   -e LECTURESIFT_APP_DB_USER -e LECTURESIFT_APP_DB_PASSWORD \
   -e LECTURESIFT_WORKER_DB_USER -e LECTURESIFT_WORKER_DB_PASSWORD \
   -e LECTURESIFT_SCHEMA_OWNER_USER -e LECTURESIFT_REHEARSAL_ROLE_COMMENT \
-  postgres /bin/bash /usr/local/sbin/lecturesift-provision-app-role
+  postgres /bin/bash -s -- <"$role_provisioner"

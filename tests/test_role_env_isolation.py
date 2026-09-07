@@ -263,6 +263,11 @@ def test_worker_database_role_is_masked_and_narrowly_writable():
     migration = wrapper.index("--profile maintenance run --rm --no-deps")
     runtime = wrapper.index("LECTURESIFT_PROVISION_PHASE=runtime")
     assert bootstrap < migration < runtime
+    assert wrapper.count('postgres /bin/bash -s -- <"$role_provisioner"') == 2
+    assert "/usr/local/sbin/lecturesift-provision-app-role" not in wrapper
+    assert 'role_provisioner="$ROOT_DIR/deploy/postgres-app-role.sh"' in wrapper
+    assert '"$(stat -c \'%u:%g\' -- "$role_provisioner")" != "0:0"' in wrapper
+    assert "/usr/local/sbin/lecturesift-provision-app-role" not in _read("compose.yaml")
 
 
 def test_preflight_and_systemd_fail_closed_on_missing_or_stale_role_files():

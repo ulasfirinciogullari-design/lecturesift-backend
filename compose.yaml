@@ -303,7 +303,6 @@ services:
       # real database on an anonymous layer.
       - postgres_data:/var/lib/postgresql
       - ./deploy/postgres-app-role.sh:/docker-entrypoint-initdb.d/10-lecturesift-app-role.sh:ro
-      - ./deploy/postgres-app-role.sh:/usr/local/sbin/lecturesift-provision-app-role:ro
     networks:
       - backend
     cpus: "1.00"
