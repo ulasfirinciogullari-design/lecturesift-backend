@@ -221,10 +221,10 @@ def test_public_navigation_is_consistent_localized_and_session_aware():
     assert '@media(max-width:860px)' in rollout
     assert 'grid-template-areas:"theme language" "navigation navigation"' in rollout
     assert "rebuildInformationNavigation" in shell
-    assert 'corporatePages = ["/about.html", "/contact.html"]' in shell
+    assert 'corporatePages = ["/about", "/contact"]' in shell
     assert '"Yasal belgeler"' in shell
-    assert '["Gizlilik ve KVKK", "/privacy.html"]' in shell
-    assert '["Mesafeli Satış Sözleşmesi", "/distance-sales.html"]' in shell
+    assert '["Gizlilik ve KVKK", "/privacy"]' in shell
+    assert '["Mesafeli Satış Sözleşmesi", "/distance-sales"]' in shell
     assert 'script.src = "/legal-operator.js?v=1"' not in shell
 
 
@@ -956,13 +956,13 @@ def test_private_pages_are_excluded_from_search_indexing():
     robots = (FRONTEND / "robots.txt").read_text(encoding="utf-8")
     for page in private_pages:
         assert page not in sitemap
-        assert f"Disallow: /{page}" in robots
+        assert f"Disallow: /{page}" not in robots
 
     for page in (
         "features.html", "document-summary.html", "lecture-video-summary.html",
         "quiz-flashcards.html", "plans.html", "about.html", "contact.html",
     ):
-        assert page in sitemap
+        assert f"https://lecturesift.com/{page.removesuffix('.html')}" in sitemap
 
 
 def test_public_pages_have_share_metadata_canonical_urls_and_structured_data():
@@ -987,9 +987,9 @@ def test_public_pages_have_share_metadata_canonical_urls_and_structured_data():
     assert "noindex,nofollow,noarchive" in seo
     assert "max-image-preview:large" in seo
     assert 'url: `${PRODUCTION_ORIGIN}/`' in seo
-    assert '"/distance-sales.html"' in seo
+    assert '"/distance-sales"' in seo
     assert (FRONTEND / "og-image.png").stat().st_size > 100_000
-    assert sitemap.count("<lastmod>2026-08-29</lastmod>") == 13 * 13
+    assert sitemap.count("<lastmod>2026-09-07</lastmod>") == 13 * 13
 
 
 def test_netlify_build_prerenders_every_public_language_with_static_seo():
@@ -1213,7 +1213,7 @@ def test_contact_form_has_a_branded_noindex_success_page():
     assert 'localizedPath(selected, "/thanks.html")' in i18n
     assert '<meta name="robots" content="noindex,nofollow">' in thanks
     assert 'data-i18n="thanks.title"' in thanks
-    assert "Disallow: /thanks.html" in robots
+    assert "Disallow: /thanks.html" not in robots
 
 
 def test_every_supported_language_has_a_stable_indexable_url():

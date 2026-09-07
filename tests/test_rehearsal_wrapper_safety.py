@@ -265,6 +265,7 @@ def test_trusted_snapshot_rejects_plausible_partial_output_when_docker_fails(
         f"{function}\n"
         f"{function_name} \"$1\"\n",
         encoding="utf-8",
+        newline="\n",
     )
     environment = os.environ.copy()
     environment["PLAUSIBLE_OUTPUT"] = plausible_output
