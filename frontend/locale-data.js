@@ -14,6 +14,20 @@
     "BRL", "MXN", "CHF", "SEK", "NOK", "DKK", "PLN", "AED", "SAR", "SGD", "HKD",
   ];
 
+  // Codes identify currencies unambiguously; symbols stay stable in all UI languages.
+  // Use established text forms where a dedicated glyph lacks broad font support.
+  const currencySymbols = Object.freeze({
+    TRY: "₺", USD: "$", EUR: "€", GBP: "£", CAD: "$", AUD: "$", NZD: "$",
+    JPY: "¥", KRW: "₩", CNY: "¥", INR: "₹", BRL: "R$", MXN: "$",
+    CHF: "Fr.", SEK: "kr", NOK: "kr", DKK: "kr", PLN: "zł",
+    AED: "د.إ", SAR: "ر.س", SGD: "$", HKD: "$",
+  });
+  function currencyLabel(code) {
+    const symbol = currencySymbols[code];
+    // Isolate the Arabic symbol so it cannot reorder the Latin ISO code.
+    return symbol ? `${code} \u2068${symbol}\u2069` : code;
+  }
+
   const euroCountries = "AD AT BE CY DE EE ES FI FR GR HR IE IT LT LU LV MC ME MT NL PT SI SK SM VA".split(" ");
   const currencyForCountry = Object.fromEntries(euroCountries.map(code => [code, "EUR"]));
   Object.assign(currencyForCountry, {
@@ -24,5 +38,5 @@
     HK: "HKD",
   });
 
-  window.LECTURESIFT_LOCALE_DATA = Object.freeze({countries, currencies, currencyForCountry});
+  window.LECTURESIFT_LOCALE_DATA = Object.freeze({countries, currencies, currencyForCountry, currencySymbols, currencyLabel});
 })();

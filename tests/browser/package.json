@@ -1,0 +1,16 @@
+{
+  "name": "lecturesift-browser-smoke",
+  "private": true,
+  "type": "module",
+  "description": "Synthetic, network-isolated GitHub-hosted browser checks",
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  },
+  "overrides": {
+    "playwright": "1.63.0",
+    "playwright-core": "1.63.0"
+  },
+  "scripts": {
+    "test": "playwright test --config playwright.config.mjs"
+  }
+}
