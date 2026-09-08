@@ -32,7 +32,6 @@ RUN set -eux; \
     apt-get update --error-on=any; \
     apt-get install -y --no-install-recommends \
     ffmpeg \
-    nodejs \
     libgl1 \
     libglib2.0-0 \
     fonts-dejavu-core \

@@ -53,9 +53,9 @@ for binary in ("ffmpeg", "ffprobe"):
         stderr=subprocess.DEVNULL,
     )
 
-node_version = subprocess.check_output(["node", "--version"], text=True).strip()
-if not re.fullmatch(r"v\d+\.\d+\.\d+", node_version) or int(node_version[1:].split(".")[0]) < 22:
-    raise SystemExit("YouTube downloads require Node.js 22 or newer")
+deno_version = subprocess.check_output(["deno", "--version"], text=True).splitlines()[0].strip()
+if re.match(r"^deno 2\.9\.5(?:\s|$)", deno_version) is None:
+    raise SystemExit("YouTube downloads require the locked Deno 2.9.5 Linux runtime")
 
 language_output = subprocess.check_output(
     ["tesseract", "--list-langs"],
@@ -79,7 +79,7 @@ print(
             "ocr_languages": sorted(OCR_LANGUAGES),
             "revision": build_revision,
             "work_dir_writable": True,
-            "youtube_js_runtime": node_version,
+            "youtube_js_runtime": deno_version,
         },
         sort_keys=True,
     )

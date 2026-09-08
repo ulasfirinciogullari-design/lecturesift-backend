@@ -16,14 +16,18 @@ The prior image installed the base yt-dlp Python package without its EJS
 component or a JavaScript runtime. Full YouTube support requires both:
 https://github.com/yt-dlp/yt-dlp/wiki/EJS
 
-This revision adds Node.js from the existing immutable Debian snapshot and
-explicitly enables it in yt-dlp. The extractor is pinned to `2026.8.19` and EJS
-to its required `0.8.0` version. EJS has no Python dependencies; its wheel and
-source hashes were read from PyPI release metadata and appended to the existing
-lock without upgrading other packages. The input and lock fingerprints were
-updated. EJS scripts are installed at build time; runtime component downloads
-are disabled. The image capability check requires Node 22+ and imports both
-Python components. CI now builds the application image to run that check.
+This revision installs the pinned Deno `2.9.5` Linux x86_64 wheel and explicitly
+selects it in yt-dlp. The extractor is pinned to `2026.8.19` and EJS to its
+required `0.8.0` version. Both additions have no Python dependencies. Their
+artifact hashes were read from PyPI release metadata and appended to the
+existing lock without upgrading other packages. Only the prebuilt Linux wheel
+is allowed for Deno; no source build can fetch an unpinned runtime. The lock
+platform floor is manylinux 2.27 (supported by the existing Debian image).
+
+The input and lock fingerprints were updated. EJS scripts are installed at
+build time; runtime component downloads are disabled. The image capability
+check executes Deno and imports both Python components. CI builds the
+application image to run that check.
 
 YouTube goes directly through its maintained extractor. Generic page scraping
 and direct-media URL handling were removed from this input. Empty or partial

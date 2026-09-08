@@ -52,7 +52,7 @@ def test_youtube_uses_extractor_and_packaged_solver_before_page_discovery(downlo
     path = media.download_remote_video(url, tmp_path, job_type="audio_export")
     assert path.read_bytes() == downloader["data"]
     assert downloader["options"]["format"] == "bestaudio/best"
-    assert downloader["options"]["js_runtimes"] == {"node": {}}
+    assert downloader["options"]["js_runtimes"] == {"deno": {}}
     assert downloader["options"]["remote_components"] == []
 
 

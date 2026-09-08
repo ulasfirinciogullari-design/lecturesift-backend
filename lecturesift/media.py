@@ -132,7 +132,7 @@ def _download_with_ytdlp(url: str, job_dir: Path, job_type: str, include_slides:
         "retries": 2,
         "socket_timeout": 30,
         "max_filesize": MAX_VIDEO_BYTES,
-        "js_runtimes": {"node": {}},
+        "js_runtimes": {"deno": {}},
         # Solver code is a pinned build dependency, never fetched at job time.
         "remote_components": [],
     }

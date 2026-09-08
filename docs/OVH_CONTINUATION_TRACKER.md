@@ -127,7 +127,7 @@ yalnız görünüm incelemesine uygundur; gerçek ödeme kabul kanıtı değildi
 
 Kullanıcı daha sonra `LS-URL-02` indirme hatasının çözülmesini ve bağlantı
 alanının yalnız YouTube kabul etmesini istedi. Kaynakta YouTube doğrulaması,
-13 dilde açık alan açıklaması, Node/EJS bileşenleri ve indirme regresyonları
+13 dilde açık alan açıklaması, Deno/EJS bileşenleri ve indirme regresyonları
 eklendi. Uzak CI uygulama imajını da doğrulayacak. Gerçek başarısız video
 bağlantısı verilmedi; canlı indirme çözümü doğrulandı denmiyor. Ayrıntılar:
 `docs/YOUTUBE_DOWNLOAD_SUPPORT.md`.
