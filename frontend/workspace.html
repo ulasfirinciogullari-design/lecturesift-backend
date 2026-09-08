@@ -85,7 +85,7 @@
 
         <div class="source-tabs" role="tablist" aria-label="Video kaynağı">
           <button class="source-tab active" id="uploadTab" type="button" role="tab" aria-selected="true" aria-controls="uploadPanel" data-i18n="uploadTab">Dosya yükle</button>
-          <button class="source-tab" id="linkTab" type="button" role="tab" aria-selected="false" aria-controls="linkPanel" data-i18n="linkTab">Bağlantı kullan</button>
+          <button class="source-tab" id="linkTab" type="button" role="tab" aria-selected="false" aria-controls="linkPanel" data-i18n="linkTab">YouTube’dan ekle</button>
         </div>
 
         <div id="uploadPanel" class="source-panel active" role="tabpanel" aria-labelledby="uploadTab">
@@ -128,12 +128,12 @@
         </div>
 
         <div id="linkPanel" class="source-panel" role="tabpanel" aria-labelledby="linkTab" hidden>
-          <label class="field-label" for="videoUrl" data-i18n="urlLabel">Video veya eğitim sayfası bağlantısı</label>
+          <label class="field-label" for="videoUrl" data-i18n="urlLabel">YouTube videolarını analiz et</label>
           <div class="url-field">
             <span aria-hidden="true">↗</span>
-            <input id="videoUrl" type="url" inputmode="url" placeholder="https://site.com/lecture/video.mp4" autocomplete="url">
+            <input id="videoUrl" type="url" inputmode="url" placeholder="https://www.youtube.com/watch?v=…" autocomplete="url" aria-describedby="youtubeUrlHelp">
           </div>
-          <p class="field-help" data-i18n="urlHelp">Doğrudan MP4/WebM bağlantıları ve desteklenen eğitim sayfaları kabul edilir. YouTube bazı sunucularda indirmeyi kısıtlayabilir.</p>
+          <p id="youtubeUrlHelp" class="field-help" data-i18n="urlHelp">Yalnızca YouTube bağlantısı. Video, Shorts veya canlı yayın kaydı bağlantısını yapıştır.</p>
         </div>
 
         <div class="divider"></div>
@@ -318,8 +318,8 @@
   </div>
 
   <script src="./locale-data.js?v=4"></script>
-  <script src="./page-i18n.js?v=6"></script><script src="/i18n.js?v=33"></script><script src="/site-shell.js?v=6"></script>
-  <script src="./app.js?v=29"></script>
+  <script src="./page-i18n.js?v=6"></script><script src="/i18n.js?v=35"></script><script src="/site-shell.js?v=6"></script>
+  <script src="./app.js?v=30"></script>
   <script src="/rollout.js?v=6"></script>
 <script src="/product-layout.js?v=1"></script></body>
 </html>

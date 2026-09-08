@@ -303,7 +303,7 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         expected_theme_version = "17"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
         assert "/theme.js?v=8" in content, page.name
-        assert "i18n.js?v=33" in content, page.name
+        assert "i18n.js?v=35" in content, page.name
         assert "page-i18n.js?v=6" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")

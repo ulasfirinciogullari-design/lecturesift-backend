@@ -14,14 +14,14 @@ const EN = {
   eyebrow: "AI-powered lecture workspace",
   title: "Turn every lecture source into one organized study pack.",
   subtitle: "Add video, audio, PDF, Word, PowerPoint, TXT, or Markdown and turn it into one organized study pack.",
-  sourceTitle: "Add the lecture source", secure: "Secure processing", uploadTab: "Upload file", linkTab: "Use a link",
+  sourceTitle: "Add the lecture source", secure: "Secure processing", uploadTab: "Upload file", linkTab: "Add from YouTube",
   dropTitle: "Drop a source here", dropText: "or choose from your device", fileHelp: "Your per-job upload limits are loading from your active plan.",
   audioSourceTitle: "Audio sources", audioSourceHelp: "Add audio-bearing recordings in lecture order.",
   slidesSourceTitle: "Visual / slide sources", slidesSourceHelp: "Add slide recordings in lecture order.", addSlidesVideo: "Add slide video",
   required: "Required", optional: "Optional", syncOffset: "Slide time offset", syncOffsetHelp: "Leave at 0 if both recordings started together.",
   classicMode: "Video, audio, or document", separateMode: "Separate audio and visuals", addVideos: "Add video, audio, or documents", sortHelp: "PDF, images, Word, PowerPoint, TXT, and Markdown; automatic OCR for scanned pages",
   addAudioFiles: "Add audio videos", addVisualFiles: "Add slide videos", moveUp: "Move up", moveDown: "Move down", remove: "Remove",
-  urlLabel: "Video or education-page URL", urlHelp: "LectureSift tries direct media discovery and provider extraction. Login, DRM, membership, or provider restrictions can still block a download.",
+  urlLabel: "Analyze YouTube videos", urlHelp: "YouTube links only. Paste a video, Shorts, or recorded livestream link.",
   operationType: "Operation", studyPackOption: "Create a study pack", audioExportOption: "Convert video to MP3", downloadVideoOption: "Download video from URL",
   outputFormats: "Downloadable files (optional)", formatOptional: "Leave all unchecked to keep the result only in your account and on the website.",
   sameLanguageHelp: "Source and output languages match; one transcript will be created.", transcriptDisabledHelp: "Select transcript to enable translation.",
@@ -65,14 +65,14 @@ const TR = {
   eyebrow: "Yapay zekâ destekli ders çalışma alanı",
   title: "Tüm ders kaynaklarını tek düzenli çalışma paketine dönüştür.",
   subtitle: "Video, ses, PDF, Word, PowerPoint, TXT veya Markdown ekle; tek düzenli çalışma paketine dönüştür.",
-  sourceTitle: "Ders kaynağını ekle", secure: "Güvenli işlem", uploadTab: "Dosya yükle", linkTab: "Bağlantı kullan",
+  sourceTitle: "Ders kaynağını ekle", secure: "Güvenli işlem", uploadTab: "Dosya yükle", linkTab: "YouTube’dan ekle",
   dropTitle: "Kaynağı buraya bırak", dropText: "veya cihazından seç", fileHelp: "Tek iş yükleme sınırların aktif planından yükleniyor.",
   audioSourceTitle: "Ses kaynakları", audioSourceHelp: "Sesli kayıtları ders sırasına göre ekle.",
   slidesSourceTitle: "Görüntü / slayt kaynakları", slidesSourceHelp: "Slayt kayıtlarını ders sırasına göre ekle.", addSlidesVideo: "Slayt videosu ekle",
   required: "Zorunlu", optional: "İsteğe bağlı", syncOffset: "Slayt zaman farkı", syncOffsetHelp: "Aynı anda başladıysa 0 bırak.",
   classicMode: "Video, ses veya belge", separateMode: "Ses ve görüntü ayrı", addVideos: "Video, ses veya belge ekle", sortHelp: "PDF, görsel, Word, PowerPoint, TXT ve Markdown; taranmış sayfalarda otomatik OCR",
   addAudioFiles: "Ses videolarını ekle", addVisualFiles: "Slayt videolarını ekle", moveUp: "Yukarı taşı", moveDown: "Aşağı taşı", remove: "Kaldır",
-  urlLabel: "Video veya eğitim sayfası bağlantısı", urlHelp: "LectureSift doğrudan medya bulmayı ve sağlayıcı indirmesini dener. Giriş, DRM, üyelik veya sağlayıcı engeli olan içerikler indirilemeyebilir.",
+  urlLabel: "YouTube videolarını analiz et", urlHelp: "Yalnızca YouTube bağlantısı. Video, Shorts veya canlı yayın kaydı bağlantısını yapıştır.",
   operationType: "İşlem türü", studyPackOption: "Ders çalışma paketi hazırla", audioExportOption: "Videoyu MP3'e çevir", downloadVideoOption: "URL'den video indir",
   outputFormats: "İndirilecek dosyalar (isteğe bağlı)", formatOptional: "Hiçbirini seçmezsen sonuç yalnızca hesabında ve sitede gösterilir.",
   sameLanguageHelp: "Kaynak ve çıktı dili aynı; tek transkript oluşturulacak.", transcriptDisabledHelp: "Çeviriyi açmak için transkripti seç.",
@@ -205,6 +205,22 @@ const ERRORS = {
     "LS-VIDEO-02": "Video okunamadı. Dosya bozuk olabilir veya desteklenmeyen bir codec kullanıyor olabilir."
   }
 };
+
+function normalizeYouTubeUrl(value) {
+  try {
+    const url = new URL(value.trim());
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.port) return '';
+    let id = '';
+    if (url.hostname === 'youtu.be') id = url.pathname.slice(1);
+    else if (['youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtube-nocookie.com', 'www.youtube-nocookie.com'].includes(url.hostname)) {
+      if (url.pathname === '/watch' && !url.hostname.includes('nocookie')) {
+        const ids = url.searchParams.getAll('v');
+        if (ids.length === 1) id = ids[0];
+      } else if (/^\/(shorts|live|embed)\/[A-Za-z0-9_-]{11}$/.test(url.pathname)) id = url.pathname.split('/').pop();
+    }
+    return /^[A-Za-z0-9_-]{11}$/.test(id) ? `https://www.youtube.com/watch?v=${id}` : '';
+  } catch { return ''; }
+}
 
 const $ = (id) => document.getElementById(id);
 const uiLanguage = $("uiLanguage"), sourceLanguage = $("sourceLanguage"), outputLanguage = $("outputLanguage");
@@ -833,7 +849,7 @@ function updateJobView(job) {
 
 function showError(message, code = "LS-SYSTEM-01") {
   const known = ERRORS.tr[code];
-  const centralKey = ({"LS-AI-03":"error.ai03","LS-AI-04":"error.ai04","LS-AI-05":"error.ai05","LS-AI-06":"error.ai06","LS-AI-07":"error.ai07","LS-AI-08":"error.ai08"})[code];
+  const centralKey = ({"LS-URL-05":"error.url05","LS-AI-03":"error.ai03","LS-AI-04":"error.ai04","LS-AI-05":"error.ai05","LS-AI-06":"error.ai06","LS-AI-07":"error.ai07","LS-AI-08":"error.ai08"})[code];
   const translated = code === "LS-UPLOAD-02" && message
     ? message
     : centralKey
@@ -873,6 +889,12 @@ function formData() {
 
 $("analyzeButton").onclick = async () => {
   $("errorBox").hidden = true;
+  const youtubeUrl = sourceMode === "link" ? normalizeYouTubeUrl(videoUrl.value) : "";
+  if (sourceMode === "link" && !youtubeUrl) {
+    showError("Yalnızca geçerli bir YouTube video bağlantısı gir.", "LS-URL-05");
+    videoUrl.focus();
+    return;
+  }
   if (![$("includeSummary"), $("includeTranscript"), $("includeQuiz"), $("includeCards")].some(input => input.checked)) {
     showError(t("outputSelectionRequired"), "LS-OUTPUT-01");
     return;
@@ -905,13 +927,12 @@ $("analyzeButton").onclick = async () => {
   if (sourceMode === "upload" && uploadFiles.reduce((total, file) => total + file.size, 0) > uploadLimitMb * 1024 ** 2) {
     showError(uploadLimitMessage(documentUpload, uploadLimitMb), "LS-UPLOAD-02"); return;
   }
-  if (sourceMode === "link" && !videoUrl.value.trim()) { showError(TR.urlLabel, "LS-URL-01"); return; }
   $("analyzeButton").disabled = true; $("results").hidden = true; latestResult = null; jobId = null; configureProgressProfile(null, true); resetStages(); startTimer();
   setItemState("source", "active");
   updateProgress(2, sourceMode === "link" ? t("url_download") : t("uploadingSource"), profileDetail(progressProfileFor()));
   const data = formData();
   if (sourceMode === "link") {
-    data.append("video_url", videoUrl.value.trim());
+    data.append("video_url", youtubeUrl);
     try {
       const response = await fetch(`${API}/jobs/url`, {method: "POST", body: data, headers:{Authorization:`Bearer ${billingToken}`}});
       if (!response.ok) { const error = await responseError(response); showError(error.message, error.code); return; }
