@@ -25,6 +25,7 @@ const stubs = new Map([
   ['/billing/me/rollout', {guest_trial: null, rewarded_ads: {enabled: false}}],
   ['/billing/me/referrals', {enabled: false}],
   ['/ads/config', {enabled: false, provider: 'off'}],
+  ['/analytics/config', {enabled: false, google_ads: {enabled: false}}],
   [`/jobs/${JOB_ID}`, {job_id: JOB_ID, status: 'done', stage: 'done', percent: 100, source_type: 'document', options: {job_type: 'study_pack'}}],
   [`/jobs/${JOB_ID}/result`, result],
 ]);

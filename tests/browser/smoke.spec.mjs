@@ -33,7 +33,14 @@ test('localized home, navigation and demo quiz respond to real clicks', async ({
     await expect(menu).toHaveAttribute('aria-expanded', 'false');
     await expect(menu).toBeFocused();
     await menu.click();
-    await page.locator('#pageTitle').click();
+    // The expanded menu intentionally overlays the heading. Click an exposed
+    // point below the header to exercise genuine outside-click dismissal.
+    const outside = {x: page.viewportSize().width - 8, y: page.viewportSize().height - 8};
+    expect(await page.evaluate(({x, y}) => {
+      const target = document.elementFromPoint(x, y);
+      return Boolean(target && !target.closest('.topbar'));
+    }, outside)).toBe(true);
+    await page.mouse.click(outside.x, outside.y);
     await expect(navigation).toBeHidden();
   } else {
     await expect(menu).toBeHidden();

@@ -213,7 +213,7 @@ def read_central_sources(path: Path) -> set[str]:
             row = json.loads(f"[{payload}]")
         except json.JSONDecodeError:
             continue
-        if row:
+        if len(row) == len(LANGUAGES) and all(isinstance(value, str) and value.strip() for value in row):
             values.add(normalize(str(row[0])))
     return values
 
@@ -309,6 +309,7 @@ def main() -> int:
         write_catalog(catalog_path, catalog)
         catalog = read_catalog(catalog_path)
     central_sources = read_central_sources(frontend / "i18n.js")
+    central_sources.update(read_central_sources(frontend / "referral-i18n.js"))
     required = collect_static_copy(frontend) | RUNTIME_COPY
     missing = sorted(required - catalog.keys() - central_sources, key=str.casefold)
     if args.limit:
