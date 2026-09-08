@@ -1209,7 +1209,11 @@ def test_rehearsal_hard_purge_and_schema_contract_are_fail_closed():
     assert '("billing_email_verifications", "user_id")' in purge
     assert "mutable_foreign_keys = _mutable_user_foreign_keys(foreign_keys)" in purge
     assert "for foreign_key in mutable_foreign_keys" in purge
-    assert "_assert_no_matches(connection, mutable_foreign_keys" in purge
+    assert re.search(
+        r"_assert_no_matches\(\s*connection,\s*mutable_foreign_keys,\s*"
+        r"user_ids,\s*job_ids,\s*term_references,?\s*\)",
+        purge,
+    )
     assert "owner-only user foreign-key contract is missing" in purge
     assert "owner-only user foreign-key contract is ambiguous" in purge
     assert "owner-only user foreign-key contract is unsafe" in purge
