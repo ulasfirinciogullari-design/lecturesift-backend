@@ -1794,3 +1794,17 @@ html:not([data-theme="light"]) .hero-primary { background: var(--ui-action) !imp
     transition-duration: .01ms !important;
   }
 }
+
+/* Official white payment marks require a stable dark plate in both themes. */
+:is(.footer-payment-band,.payment-brand-band,.iyzico-pay-mark) {
+  background: #11233b !important;
+  padding: 12px 16px;
+  border-radius: 8px;
+  box-sizing: border-box;
+  max-width: 100%;
+  height: auto;
+  filter: none !important;
+}
+.footer-payment-band { width: min(390px,100%); max-width: 390px; }
+.iyzico-checkout-brand { background: #11233b !important; }
+.iyzico-checkout-brand img { filter: none !important; }

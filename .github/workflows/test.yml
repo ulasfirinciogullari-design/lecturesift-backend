@@ -153,8 +153,17 @@ jobs:
             "$(command -v node)" \
             "$GITHUB_WORKSPACE/tests/browser/node_modules/@playwright/test/cli.js" \
             test --config "$GITHUB_WORKSPACE/tests/browser/playwright.config.mjs"
-      - name: Upload synthetic browser failure evidence
-        if: failure()
+      - name: Emit synthetic layout review images
+        if: always()
+        run: |
+          python3 - <<'PYIMAGES'
+          import base64
+          from pathlib import Path
+          for p in sorted(Path('tests/browser/test-results').glob('**/*-layout.jpg')):
+              print('LAYOUT_REVIEW|' + str(p) + '|' + base64.b64encode(p.read_bytes()).decode())
+          PYIMAGES
+      - name: Upload synthetic browser review evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: browser-smoke-failure-${{ github.run_attempt }}

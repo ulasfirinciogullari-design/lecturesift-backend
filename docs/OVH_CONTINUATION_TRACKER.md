@@ -1,5 +1,38 @@
 # LectureSift tek devam kaydı
 
+## Güncel durum — 8 Eylül 2026, tema yayını sonrası
+
+Kullanıcı tekrar onay sorulmadan ilerlemeyi ve temanın canlıya alınmasını açıkça
+onayladı. Aşağıdaki eski devir metnindeki onay bekleme ifadeleri bu yetkiyi
+geçersiz kılmaz. Ağır işler mevcut GitHub Actions üzerinde çalıştırıldı;
+üretim VPS'si test çalıştırıcısı yapılmadı.
+
+- PR #68 ilk tema ve 22 para birimi simgesini yayımladı. Kullanıcı tasarımı
+  yetersiz buldu; bu görünüm son tasarım değildir.
+- PR #69 beyaz iyzico/kart logolarını iki temada koyu zeminde okunur hale
+  getirdi ve Hakkımızda yan menüsündeki Ürün grubunu kaldırdı. Canlı dosyalar
+  doğrulandı; ödeme görsellerinin baytları veya ödeme mantığı değiştirilmedi.
+- PR #70 kaynak seçimi odaklı ana sayfa, çalışma alanı yan menüsü, hesap
+  sekmeleri, plan düzeni ve mobilde önce giriş formu ile kapsamlı düzeni
+  yayımladı. Ana sürüm `08d3270`; Netlify yayını ve canlı dosya eşleşmesi
+  doğrulandı. `0378d395` üzerinde 831 test (3 atlama) ve 16 tarayıcı senaryosu
+  geçti. Türkçe/Arapça mobil ve ana sayfa/çalışma/plan/giriş görüntüleri incelendi.
+- Canlı dil ana sayfası doğrulaması, eski zorunlu son-eğik-çizgi kurallarının
+  kendine 301 döndürdüğünü yakaladı. PR #71 bu kuralları kaldırır; tüm 13 dilde
+  canlı HTTP doğrulaması tamamlanmadan dil sorunu çözülmüş sayılmaz.
+- PR #67 kişisel asistan, kredi paketleri, davet yenilemeleri, hesap/ödeme
+  düzeltmeleri ve YouTube değişikliklerini taslakta tutar. Tema onayı bu
+  şema geçişlerini veya ücretli asistan aktivasyonunu açmak anlamına gelmez.
+  Asistan ve davet şema/kurtarma yetenek bayrakları hâlâ false.
+- Asistan: resim ve üç video karesi analizi; resim/video üretimi yok.
+  Model erişimi, kredi kurtarma/migrasyon ve periyodik veri temizliği hâlâ
+  yayın koşullarıdır. Gerçek ücretli model çağrısı veya ödeme yapılmadı.
+- YouTube gerçek izole denemesi, PO token üretildiği halde LS-URL-02 / bot
+  engeli veriyor. İndirme çözüldü denmeyecek. Kullanıcı tekrar örnek URL
+  istenmesini istemiyor; özel hesap çerezi veya satın alınmış proxy yok.
+
+## Arşiv: önceki devir incelemesi
+
 8 Eylül 2026; kaynak tabanı: `f21b45b587d1d293c4a40cc0b0b93aa32b5b0c88`.
 Bu kayıt sınırlı kaynak incelemesidir; test başarısı veya canlı kabul raporu değildir.
 

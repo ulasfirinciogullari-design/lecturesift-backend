@@ -361,7 +361,7 @@ async function initAccount() {
       button.addEventListener("click", () => activateAccountView(button.dataset.accountViewButton, {focus:true}));
       button.addEventListener("keydown", event => {
         const direction = document.documentElement.dir === "rtl" ? -1 : 1;
-        const moves = {ArrowRight:direction, ArrowLeft:-direction, Home:-index, End:buttons.length - 1 - index};
+        const moves = {ArrowRight:direction, ArrowLeft:-direction, ArrowDown:1, ArrowUp:-1, Home:-index, End:buttons.length - 1 - index};
         if (moves[event.key] === undefined) return;
         event.preventDefault();
         const target = (index + moves[event.key] + buttons.length) % buttons.length;

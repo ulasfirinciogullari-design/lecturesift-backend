@@ -78,7 +78,7 @@ function sampleDocument(markup) {
   host.addEventListener = (type, callback) => { assert.equal(listeners[type], undefined); listeners[type] = callback; };
   const document = {
     documentElement:{lang:'tr', dir:'ltr'}, body:{}, head:{append() {}}, title:'LectureSift',
-    querySelector: selector => selector === '.home-page .hero-visual' ? host : null,
+    querySelector: selector => selector === '.home-page [data-study-demo]' ? host : null,
     querySelectorAll: selector => host.querySelectorAll(selector),
     getElementById: id => nodes.find(node => node.attributes.id === id) || null,
     createElement: () => new Element(), createTreeWalker: () => ({nextNode:() => false}),
@@ -171,7 +171,7 @@ for (const [index, language] of languages.entries()) {
 
 // Shared loading cannot attach quiz handlers to authenticated/workspace pages.
 let pageQueries = 0;
-vm.runInNewContext(demoSource, {document:{querySelector(selector) { pageQueries++; assert.equal(selector, '.home-page .hero-visual'); return null; }}});
+vm.runInNewContext(demoSource, {document:{querySelector(selector) { pageQueries++; assert.equal(selector, '.home-page [data-study-demo]'); return null; }}});
 assert.equal(pageQueries, 1);
 console.log(JSON.stringify({languages:results, catalogKeys:keys.length}));
 """

@@ -1,6 +1,6 @@
 /* A local, illustrative sample. No account, API request or user data involved. */
 (function () {
-  const host = document.querySelector('.home-page .hero-visual');
+  const host = document.querySelector('.home-page [data-study-demo]');
   if (!host) return;
   const text = (key, fallback = '') => window.LectureSiftI18n?.t(`homeDemo.${key}`, fallback) || fallback;
   host.querySelectorAll('[data-demo-copy]').forEach(node => { node.textContent = text(node.dataset.demoCopy, node.textContent); });

@@ -16,8 +16,18 @@ http.createServer(async (request, response) => {
   try {
     const pathname = decodeURIComponent(new URL(request.url, 'http://127.0.0.1:4173').pathname);
     const requested = path.resolve(root, `.${pathname}`);
+    // Netlify rewrites /:lang/* to root assets/private pages after checking
+    // generated public files. Keep public-page fallbacks forbidden, so a missing
+    // localized public build still fails instead of quietly returning Turkish.
+    const localePath = pathname.match(/^\/(?:en|de|fr|es|it|pt|ru|ar|zh|ja|ko|hi)\/(.+)$/);
+    const privatePages = new Set(['workspace','login','register','account','admin','support','verify','reset-password','forgot-password','thanks']);
+    const tail = localePath?.[1];
+    const allowRewrite = tail && (privatePages.has(tail.replace(/\.html$/, '')) || /\.(?:js|css|png|svg|jpg|webp|ico|woff2)$/.test(tail));
+    const rewritten = allowRewrite ? path.resolve(root, tail) : null;
+    const candidates = [requested, requested + '.html', path.join(requested, 'index.html')];
+    if (rewritten) candidates.push(rewritten, rewritten + '.html');
     // Canonical /en/features and /features map to the actual generated .html files.
-    for (const candidate of [requested, requested + '.html', path.join(requested, 'index.html')]) {
+    for (const candidate of candidates) {
       if (!inside(candidate)) continue;
       try {
         const resolved = await realpath(candidate);
