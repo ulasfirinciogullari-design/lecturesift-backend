@@ -102,5 +102,21 @@ bağımlılık kurulmadı. Önceki test sayıları yeni çalışmaya mal edilmed
 
 Referans kaynak yeteneği hâlâ `False`. Yeni beş tablonun sürümlü şema, rol,
 geri yükleme, gerçek PostgreSQL eşzamanlılığı ve eski ödemelerin kampanya
-başlangıcına göre kapsamı açık yayın kapılarıdır. Kamuya push/CI/otomatik
-önizleme için kesin sürüm kapsamlı onay henüz alınmadı; canlı dağıtım yok.
+başlangıcına göre kapsamı açık yayın kapılarıdır; canlı dağıtım yok.
+
+## 8 Eylül — onaylı önizleme ve CI takibi
+
+Kullanıcı `7734528` kapsamının taslak PR #67'ye gönderilmesini, uzak CI ve
+otomatik önizlemeyi onayladı; yetkili rutin düzeltmeler için tekrar onay
+istenmemesini belirtti. Yukarıdaki onay bekleyen geliştirme kayıtları bu
+güncellemeyle aşılmıştır; canlı aktivasyon kapıları devam eder.
+
+GitHub bağlantısıyla oluşturulan `e62b3db` sürümünün kaynak ağacı
+`ff45da59e000354bf7435cb35048c5a61faf6125`, onaylanan yerel sürümle birebir
+aynıdır. Netlify bu sürümün önizlemesini başarıyla yayımladı. GitHub Actions
+34271910101 çalışması, iş düzeyinde kullanılamayan `runner.temp` ifadesi
+nedeniyle testler başlamadan reddedildi. Tarayıcı dizini artık ayrılan işçide
+bir adımla belirleniyor; düzeltmenin uzak test sonuçları bekleniyor.
+
+PR taslak, davet yeteneği kapalıdır. Önizleme üretim API'sini kullandığından
+yalnız görünüm incelemesine uygundur; gerçek ödeme kabul kanıtı değildir.
