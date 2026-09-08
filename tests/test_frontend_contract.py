@@ -302,8 +302,8 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         content = page.read_text(encoding="utf-8")
         expected_theme_version = "17"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
-        assert "/theme.js?v=6" in content, page.name
-        assert "i18n.js?v=31" in content, page.name
+        assert "/theme.js?v=8" in content, page.name
+        assert "i18n.js?v=33" in content, page.name
         assert "page-i18n.js?v=6" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
@@ -592,7 +592,7 @@ def test_payment_routes_are_distinct_localized_and_account_history_is_auditable(
     assert 'manualTransfer = {available:Boolean(transferBody?.available), bank:null};' in plans_js
     assert 'order.bank?.iban' in plans_js
     assert 'transferBody?.bank' not in plans_js
-    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=11"', 'href="./auth.css?v=2"'))
+    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=14"', 'href="./auth.css?v=2"'))
     assert all(value in auth_js for value in ("paymentMethodLabel", "paymentMoney", "paymentDateTime", "payment-order-meta"))
     assert all(value in admin_html for value in ('value="iyzico_card"', 'value="iyzico_bank_transfer"', 'value="manual_bank_transfer"', 'value="iyzico_legacy"'))
     assert "provider:selectedProvider" in admin_js
