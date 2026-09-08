@@ -52,6 +52,23 @@ class BillingConfigurationError(BillingError):
     pass
 
 
+def protected_account_emails() -> set[str]:
+    """Keep the owner's account protected even with an empty runtime list.
+
+    This is a deletion/identity safeguard, never an administrator credential.
+    Runtime configuration may add protected accounts but cannot remove the owner.
+    """
+    return {
+        email.strip().casefold()
+        for email in (
+            "ulasfirinciogullari@gmail.com",
+            *config.BILLING_PROTECTED_EMAILS,
+            config.LEGAL_OPERATOR_EMAIL,
+        )
+        if email and email.strip()
+    }
+
+
 IYZICO_PUBLIC_PROVIDER = "iyzico"
 IYZICO_LEGACY_PROVIDER = "iyzico"
 IYZICO_CARD_PROVIDER = "iyzico_card_confirmed"
@@ -501,6 +518,7 @@ def register_user(
     last_name: str,
     phone: str = "",
     country_code: str = "TR",
+    referral_code: str = "",
 ) -> dict:
     init_billing_database()
     normalized = email.strip().casefold()
@@ -549,6 +567,18 @@ def register_user(
                 verification_code,
                 expires_at,
             )
+            # Referral failure must not prevent account creation. Attribution
+            # itself is still inside this new-account transaction, never late.
+            referral_status = "not_provided"
+            if referral_code:
+                try:
+                    with connection.begin_nested():
+                        from .referrals import attach_at_registration
+                        referral_status = attach_at_registration(
+                            connection, values["id"], normalized, referral_code, now,
+                        )
+                except Exception:
+                    referral_status = "unavailable"
     except IntegrityError as exc:
         raise BillingError("Bu e-posta adresiyle daha önce hesap oluşturulmuş.") from exc
     user = {
@@ -567,6 +597,7 @@ def register_user(
         "verification_token": verification_token,
         "verification_code": verification_code,
         "expires_at": expires_at,
+        "referral_status": referral_status,
     }
 
 
@@ -1258,6 +1289,7 @@ def cancel_active_subscription(user_id: str) -> dict:
     init_billing_database()
     now = utcnow()
     with ENGINE.begin() as connection:
+        _lock_billing_user(connection, user_id)
         subscription = _active_subscription(connection, user_id, now)
         if not subscription:
             raise BillingError("İptal edilebilecek aktif bir abonelik bulunamadı.")
@@ -1573,6 +1605,32 @@ def record_usage(user_id: str, job_id: str, duration_seconds: float) -> None:
         return
 
 
+def _lock_billing_user(connection, user_id: str) -> None:
+    """Serialize entitlement changes against purchases and account administration."""
+    user = connection.execute(
+        select(USERS.c.id).where(USERS.c.id == user_id).with_for_update()
+    ).first()
+    if not user:
+        raise BillingAuthenticationError("Hesap bulunamadı.")
+
+
+def _lock_purchase_order(connection, orders, reference: str):
+    # Resolve the immutable owner without locking the order first. Account
+    # closure locks USERS before its orders; taking these locks in reverse
+    # order would deadlock with closure. Re-read order state after both locks.
+    user_id = connection.execute(
+        select(orders.c.user_id).where(orders.c.reference == reference)
+    ).scalar_one_or_none()
+    if user_id is None:
+        return None
+    _lock_billing_user(connection, user_id)
+    return connection.execute(
+        select(orders)
+        .where(orders.c.reference == reference, orders.c.user_id == user_id)
+        .with_for_update()
+    ).first()
+
+
 def _activate_purchase(
     connection,
     *,
@@ -1582,6 +1640,8 @@ def _activate_purchase(
     reference: str,
     now: datetime,
 ) -> None:
+    # Completion callers hold the owner lock before the order lock so two
+    # different purchases cannot both observe an empty subscription set.
     source = _assert_purchase_source_binding(
         connection,
         reference=reference,
@@ -1607,7 +1667,7 @@ def _activate_purchase(
         update(SUBSCRIPTIONS)
         .where(
             SUBSCRIPTIONS.c.user_id == user_id,
-            SUBSCRIPTIONS.c.status == "active",
+            SUBSCRIPTIONS.c.status.in_(("active", "cancel_at_end")),
         )
         .values(status="replaced")
     )
@@ -1633,6 +1693,7 @@ def create_payment_order(
     plan_code: str,
     interval: str,
     currency: str,
+    coupon_code: str = "",
 ) -> dict:
     selected_provider = provider.strip().lower()
     selected_currency = currency.strip().upper()
@@ -1656,6 +1717,13 @@ def create_payment_order(
         user = connection.execute(select(USERS.c.id).where(USERS.c.id == user_id)).first()
         if not user:
             raise BillingAuthenticationError("Hesap bulunamadı.")
+        if coupon_code:
+            from .referrals import reserve_coupon
+            amount_minor = reserve_coupon(
+                connection, user_id=user_id, code=coupon_code, reference=reference,
+                plan_code=plan_code, interval=interval, currency=selected_currency,
+                amount_minor=int(amount_minor),
+            )
         connection.execute(
             PAYMENT_ORDERS.insert().values(
                 reference=reference,
@@ -1845,6 +1913,7 @@ def mark_payment_order_token_failed(reference: str) -> None:
             )
             .values(status="token_failed", updated_at=utcnow())
         )
+    _reconcile_referral_order(reference)
 
 
 def mark_payment_order_pending(reference: str) -> dict:
@@ -1947,37 +2016,49 @@ def complete_payment_order(
     init_billing_database()
     now = utcnow()
     with ENGINE.begin() as connection:
-        order = connection.execute(
-            select(PAYMENT_ORDERS)
-            .where(PAYMENT_ORDERS.c.reference == reference)
-            .with_for_update()
-        ).first()
+        order = _lock_purchase_order(connection, PAYMENT_ORDERS, reference)
         if not order:
             raise BillingError("Ödeme siparişi bulunamadı.")
-        if order.status in {"paid", "failed", "token_failed", "cancelled"}:
-            return _public_payment_order(order)
-        next_status = "paid" if succeeded else "failed"
-        connection.execute(
-            update(PAYMENT_ORDERS)
-            .where(PAYMENT_ORDERS.c.reference == reference)
-            .values(
-                status=next_status,
-                provider_amount_minor=max(0, int(provider_amount_minor)),
-                failure_code=(failure_code or "")[:32] or None,
-                failure_message=(failure_message or "")[:240] or None,
-                updated_at=now,
-            )
-        )
-        if succeeded:
-            _activate_purchase(
-                connection,
-                user_id=order.user_id,
-                plan_code=order.plan_code,
-                interval=order.interval,
-                reference=reference,
-                now=now,
-            )
+        # A terminal webhook retry still repairs deferred referral work below.
+        if order.status not in {"paid", "failed", "token_failed", "cancelled"}:
+            _complete_unsettled_payment(connection, order, succeeded, provider_amount_minor,
+                                        failure_code, failure_message, reference, now)
+    _reconcile_referral_order(reference)
     return payment_order(reference)
+
+
+def _reconcile_referral_order(reference: str) -> None:
+    try:
+        from .referrals import after_order_change
+        after_order_change(reference)
+    except Exception:
+        # Never undo/obscure a committed payment due to optional referral code.
+        pass
+
+
+def _complete_unsettled_payment(connection, order, succeeded, provider_amount_minor,
+                                failure_code, failure_message, reference, now) -> None:
+    next_status = "paid" if succeeded else "failed"
+    connection.execute(
+        update(PAYMENT_ORDERS)
+        .where(PAYMENT_ORDERS.c.reference == reference)
+        .values(
+            status=next_status,
+            provider_amount_minor=max(0, int(provider_amount_minor)),
+            failure_code=(failure_code or "")[:32] or None,
+            failure_message=(failure_message or "")[:240] or None,
+            updated_at=now,
+        )
+    )
+    if succeeded:
+        _activate_purchase(
+            connection,
+            user_id=order.user_id,
+            plan_code=order.plan_code,
+            interval=order.interval,
+            reference=reference,
+            now=now,
+        )
 
 
 def bank_transfer_available() -> bool:
@@ -2011,7 +2092,7 @@ def manual_transfer_details() -> dict:
     }
 
 
-def create_manual_order(user_id: str, plan_code: str, interval: str) -> dict:
+def create_manual_order(user_id: str, plan_code: str, interval: str, coupon_code: str = "") -> dict:
     if not bank_transfer_available():
         raise BillingConfigurationError("Havale ödeme bilgileri henüz etkinleştirilmemiş.")
     plan = PLAN_BY_CODE.get(plan_code)
@@ -2025,6 +2106,12 @@ def create_manual_order(user_id: str, plan_code: str, interval: str) -> dict:
     now = utcnow()
     init_billing_database()
     with ENGINE.begin() as connection:
+        if coupon_code:
+            from .referrals import reserve_coupon
+            amount_minor = reserve_coupon(
+                connection, user_id=user_id, code=coupon_code, reference=reference,
+                plan_code=plan_code, interval=interval, currency="TRY", amount_minor=int(amount_minor),
+            )
         connection.execute(
             MANUAL_ORDERS.insert().values(
                 reference=reference,
@@ -2223,9 +2310,7 @@ def admin_billing_overview(limit: int = 100) -> dict:
                 func.coalesce(func.sum(USAGE_EVENTS.c.minutes), 0).label("total_minutes"),
             ).group_by(USAGE_EVENTS.c.user_id)
         ).all()
-    protected_emails = set(config.BILLING_PROTECTED_EMAILS)
-    if config.LEGAL_OPERATOR_EMAIL:
-        protected_emails.add(config.LEGAL_OPERATOR_EMAIL.casefold())
+    protected_emails = protected_account_emails()
     subscriptions_by_user = {}
     plan_distribution: dict[str, int] = {"free": max(0, user_count - active_subscription_count)}
     for row in active_subscription_rows:
@@ -2306,11 +2391,11 @@ def approve_manual_order(reference: str) -> dict:
     init_billing_database()
     now = utcnow()
     with ENGINE.begin() as connection:
-        order = connection.execute(
-            select(MANUAL_ORDERS).where(MANUAL_ORDERS.c.reference == reference)
-        ).first()
+        order = _lock_purchase_order(connection, MANUAL_ORDERS, reference)
         if not order:
             raise BillingError("Sipariş bulunamadı.")
+        if order.status not in {"pending", "paid"}:
+            raise BillingError("Yalnızca bekleyen havale siparişi onaylanabilir.")
         if order.status != "paid":
             connection.execute(
                 update(MANUAL_ORDERS)
@@ -2325,6 +2410,7 @@ def approve_manual_order(reference: str) -> dict:
                 reference=reference,
                 now=now,
             )
+    _reconcile_referral_order(reference)
     return account_status(order.user_id)
 
 
@@ -2334,7 +2420,7 @@ def reject_manual_order(reference: str) -> dict:
     now = utcnow()
     with ENGINE.begin() as connection:
         order = connection.execute(
-            select(MANUAL_ORDERS).where(MANUAL_ORDERS.c.reference == reference)
+            select(MANUAL_ORDERS).where(MANUAL_ORDERS.c.reference == reference).with_for_update()
         ).first()
         if not order:
             raise BillingError("Sipariş bulunamadı.")
@@ -2346,4 +2432,5 @@ def reject_manual_order(reference: str) -> dict:
                 .where(MANUAL_ORDERS.c.reference == reference)
                 .values(status="rejected", updated_at=now)
             )
+    _reconcile_referral_order(reference)
     return {"reference": reference, "status": "rejected"}

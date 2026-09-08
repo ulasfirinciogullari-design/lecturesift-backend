@@ -335,6 +335,8 @@ def purge(application_result: Path, formats_result: Path) -> dict[str, object]:
                 raise PurgeError("E2E account identities are missing or were not anonymised")
 
             term_references = _term_references_for_users(connection, user_ids)
+            from lecturesift.referrals import purge_rehearsal
+            purge_rehearsal(connection, user_ids)
             order_references = connection.execute(
                 text(
                     "SELECT reference FROM public.billing_payment_orders "

@@ -215,6 +215,7 @@ let currentLanguage = window.LectureSiftI18n?.language || localStorage.getItem("
 let sourceMode = "upload", sourceLayout = "classic", classicVideos = [], audioVideos = [], visualVideos = [];
 let jobId = null, timerStarted = null, timerHandle = null, pollHandle = null;
 let latestResult = null, cardIndex = 0, cardRevealed = false, quizScore = 0, quizAnswered = 0;
+let activeQuizItems = [], quizAnswers = new Map(), quizRendered = false;
 let billingToken = localStorage.getItem("lecturesift-billing-token") || "";
 let billingAccount = null, billingCatalog = null;
 let billingCurrency = localStorage.getItem("lecturesift-currency") || "";
@@ -252,6 +253,7 @@ function applyLanguage() {
   if (billingCatalog) renderPlans();
   renderBillingAccount();
   updateSourceLimitHelp();
+  if (quizRendered) renderQuiz(undefined, {reset:false});
 }
 
 uiLanguage.replaceChildren();
@@ -1299,18 +1301,70 @@ $("lessonQuestionForm").addEventListener("submit", async event => {
 });
 $("showTranslated").onclick = () => renderTranscript(true); $("showOriginal").onclick = () => renderTranscript(false);
 
-function renderQuiz(items) {
-  quizScore = 0; quizAnswered = 0; $("quizStatus").textContent = `${t("score")}: 0/${items.length}`;
-  $("quizContent").innerHTML = items.map((item, index) => `<div class="quiz-item" data-question="${index}"><h3>${index + 1}. ${escapeHtml(item.question)}</h3><div class="quiz-options">${(item.options || []).map((option, optionIndex) => `<button class="quiz-option" data-option="${optionIndex}">${String.fromCharCode(65 + optionIndex)}. ${escapeHtml(option)}</button>`).join("")}</div><p class="quiz-explanation">${escapeHtml(item.explanation)}</p></div>`).join("") || `<div class="empty-state">${escapeHtml(t("noContent"))}</div>`;
-  document.querySelectorAll(".quiz-option").forEach(button => button.onclick = () => {
-    const shell = button.closest(".quiz-item"); if (shell.classList.contains("answered")) return;
-    const question = items[Number(shell.dataset.question)], selected = Number(button.dataset.option), correct = Number(question.answer_index);
-    shell.classList.add("answered"); quizAnswered += 1;
-    shell.querySelectorAll(".quiz-option").forEach(option => { option.disabled = true; if (Number(option.dataset.option) === correct) option.classList.add("correct"); });
-    if (selected === correct) quizScore += 1; else button.classList.add("wrong");
-    $("quizStatus").textContent = `${t("score")}: ${quizScore}/${items.length} · ${quizAnswered}/${items.length}`; updateExamReadiness(items.length);
+function renderQuiz(items, {reset = true} = {}) {
+  if (reset) {
+    activeQuizItems = Array.isArray(items) ? [...items] : [];
+    quizAnswers = new Map();
+    quizRendered = true;
+  } else if (!quizRendered) return;
+
+  quizScore = 0; quizAnswered = 0;
+  quizAnswers.forEach((selected, questionIndex) => {
+    const question = activeQuizItems[questionIndex];
+    if (!question) return;
+    quizAnswered += 1;
+    if (selected === Number(question.answer_index)) quizScore += 1;
   });
+  const total = activeQuizItems.length;
+  $("quizStatus").textContent = quizAnswered
+    ? `${t("score")}: ${quizScore}/${total} · ${quizAnswered}/${total}`
+    : `${t("score")}: 0/${total}`;
+  $("quizContent").innerHTML = activeQuizItems.map((item, index) => {
+    const options = Array.isArray(item.options) ? item.options : [];
+    const correct = Number(item.answer_index);
+    const answered = quizAnswers.has(index);
+    const selected = quizAnswers.get(index);
+    const feedbackId = `quiz-feedback-${index}`;
+    const questionId = `quiz-question-${index}`;
+    const buttons = options.map((option, optionIndex) => {
+      const isSelected = answered && selected === optionIndex;
+      const isCorrect = answered && correct === optionIndex;
+      const classes = ["quiz-option"];
+      if (isSelected) classes.push("selected");
+      if (isCorrect) classes.push("correct");
+      if (isSelected && !isCorrect) classes.push("wrong");
+      const resultLabel = isCorrect ? t("correct") : (isSelected && answered ? t("incorrect") : "");
+      return `<button type="button" class="${classes.join(" ")}" data-option="${optionIndex}" aria-pressed="${String(isSelected)}"${answered ? ` aria-describedby="${feedbackId}" disabled` : ""}>${String.fromCharCode(65 + optionIndex)}. ${escapeHtml(option)}${resultLabel ? ` <span class="quiz-option-result">— ${escapeHtml(resultLabel)}</span>` : ""}</button>`;
+    }).join("");
+    const feedback = answered
+      ? `<p id="${feedbackId}" class="quiz-explanation" role="status" tabindex="-1"><strong>${escapeHtml(selected === correct ? t("correct") : t("incorrect"))}</strong>${item.explanation ? ` · ${escapeHtml(item.explanation)}` : ""}</p>`
+      : `<p id="${feedbackId}" class="quiz-explanation" hidden></p>`;
+    return `<div class="quiz-item${answered ? " answered" : ""}" data-question="${index}"><h3 id="${questionId}">${index + 1}. ${escapeHtml(item.question)}</h3><div class="quiz-options" role="group" aria-labelledby="${questionId}">${buttons}</div>${feedback}</div>`;
+  }).join("") || `<div class="empty-state">${escapeHtml(t("noContent"))}</div>`;
+  updateExamReadiness(total);
 }
+
+const quizContentElement = $("quizContent");
+quizContentElement.addEventListener("click", event => {
+  const button = event.target?.closest?.(".quiz-option");
+  if (!button || button.disabled || !quizContentElement.contains(button)) return;
+  const shell = button.closest(".quiz-item");
+  if (!shell || !quizContentElement.contains(shell)) return;
+  const questionIndex = Number(shell.dataset.question);
+  const selected = Number(button.dataset.option);
+  const question = activeQuizItems[questionIndex];
+  const options = Array.isArray(question?.options) ? question.options : [];
+  const correct = Number(question?.answer_index);
+  if (
+    quizAnswers.has(questionIndex)
+    || !Number.isInteger(questionIndex) || questionIndex < 0
+    || !Number.isInteger(selected) || selected < 0 || selected >= options.length
+    || !Number.isInteger(correct) || correct < 0 || correct >= options.length
+  ) return;
+  quizAnswers.set(questionIndex, selected);
+  renderQuiz(undefined, {reset:false});
+  $(`quiz-feedback-${questionIndex}`)?.focus();
+});
 
 function updateExamReadiness(total = latestResult?.quiz?.length || 0) {
   const answered = Math.min(quizAnswered, total);

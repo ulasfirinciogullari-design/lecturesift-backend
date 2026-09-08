@@ -51,6 +51,7 @@ from .billing_service import (
     iyzico_payment_method_for_provider,
     iyzico_provider_is_confirmed,
     issue_session,
+    protected_account_emails,
     utcnow,
 )
 from .mailer import EmailDeliveryError, email_delivery_configured, send_transactional_email
@@ -278,6 +279,8 @@ def export_account_data(user_id: str) -> dict[str, Any]:
     """Return a portable, secret-free snapshot of one user's stored account data."""
     init_rollout_database()
     account = account_status(user_id)
+    from .referrals import export_data as export_referrals
+    referral_data = export_referrals(user_id)
     with ENGINE.connect() as connection:
         subscriptions = connection.execute(
             select(SUBSCRIPTIONS)
@@ -345,6 +348,7 @@ def export_account_data(user_id: str) -> dict[str, Any]:
     return {
         "generated_at": utcnow().isoformat(),
         "account": account,
+        "referrals": referral_data,
         "subscriptions": [
             {
                 "plan_code": row.plan_code,
@@ -433,7 +437,9 @@ def close_user_account(
     init_rollout_database()
     now = utcnow()
     with ENGINE.begin() as connection:
-        user = connection.execute(select(USERS).where(USERS.c.id == user_id)).first()
+        user = connection.execute(
+            select(USERS).where(USERS.c.id == user_id).with_for_update()
+        ).first()
         profile = connection.execute(
             select(USER_PROFILES).where(USER_PROFILES.c.user_id == user_id)
         ).first()
@@ -444,7 +450,11 @@ def close_user_account(
         candidate = _hash_password(current_password, bytes.fromhex(user.password_salt))
         if not secrets.compare_digest(candidate, user.password_hash):
             raise BillingAuthenticationError("Mevcut parola hatalı.")
+        if user.email.casefold() in _protected_admin_emails():
+            raise BillingError("Korumalı hesap kapatılamaz.")
 
+        from .referrals import close_account as close_referrals
+        close_referrals(connection, user_id)
         anonymized_email = f"deleted+{uuid.uuid4().hex}@users.invalid"
         salt = secrets.token_bytes(16)
         connection.execute(
@@ -494,7 +504,7 @@ def close_user_account(
             update(PAYMENT_ORDERS)
             .where(
                 PAYMENT_ORDERS.c.user_id == user_id,
-                PAYMENT_ORDERS.c.status.in_(("created", "token_failed")),
+                PAYMENT_ORDERS.c.status.in_(("created", "pending", "token_failed")),
             )
             .values(status="cancelled", updated_at=now)
         )
@@ -712,9 +722,15 @@ def request_email_change(user_id: str, new_email: str) -> dict:
     now = utcnow()
     expires_at = now + timedelta(minutes=15)
     with ENGINE.begin() as connection:
-        user = connection.execute(select(USERS).where(USERS.c.id == user_id)).first()
+        # Serialize replacement and redemption even when no request exists yet.
+        # Keep the user-before-request lock order consistent with account updates.
+        user = connection.execute(
+            select(USERS).where(USERS.c.id == user_id).with_for_update()
+        ).first()
         if not user:
             raise BillingAuthenticationError("Hesap bulunamadı.")
+        if str(user.email).strip().casefold() in _protected_admin_emails():
+            raise BillingError("Korunan yönetici hesabının e-posta adresi değiştirilemez.")
         if user.email == email:
             raise BillingError("Yeni e-posta mevcut e-posta adresinden farklı olmalı.")
         if connection.execute(select(USERS.c.id).where(USERS.c.email == email)).first():
@@ -736,23 +752,41 @@ def request_email_change(user_id: str, new_email: str) -> dict:
         send_transactional_email(email, subject, body, text)
     except EmailDeliveryError:
         with ENGINE.begin() as connection:
-            connection.execute(delete(EMAIL_CHANGE_REQUESTS).where(EMAIL_CHANGE_REQUESTS.c.user_id == user_id))
+            connection.execute(select(USERS.c.id).where(USERS.c.id == user_id).with_for_update()).first()
+            # A later resend may already have replaced this failed delivery.
+            connection.execute(
+                delete(EMAIL_CHANGE_REQUESTS).where(
+                    EMAIL_CHANGE_REQUESTS.c.user_id == user_id,
+                    EMAIL_CHANGE_REQUESTS.c.token_hash == _hash(token),
+                )
+            )
         raise
-    return {"ok": True, "new_email": email, "expires_at": expires_at.isoformat(), "token": token}
+    return {"ok": True, "new_email": email, "expires_at": expires_at.isoformat()}
 
 
 def verify_email_change(user_id: str, code: str = "", token: str = "") -> dict:
     init_rollout_database()
-    now = utcnow()
     normalized_code = "".join(char for char in code if char.isdigit())
+    invalid_code = False
     with ENGINE.begin() as connection:
-        request = connection.execute(
-            select(EMAIL_CHANGE_REQUESTS).where(EMAIL_CHANGE_REQUESTS.c.user_id == user_id)
+        user = connection.execute(
+            select(USERS).where(USERS.c.id == user_id).with_for_update()
         ).first()
-        if not request or _as_utc(request.expires_at) <= now:
+        if not user:
+            raise BillingAuthenticationError("Hesap bulunamadı.")
+        if str(user.email).strip().casefold() in _protected_admin_emails():
+            raise BillingError("Korunan yönetici hesabının e-posta adresi değiştirilemez.")
+        request = connection.execute(
+            select(EMAIL_CHANGE_REQUESTS)
+            .where(EMAIL_CHANGE_REQUESTS.c.user_id == user_id)
+            .with_for_update()
+        ).first()
+        # A request can expire while this transaction waits for another user operation.
+        now = utcnow()
+        if not request or _as_utc(request.expires_at) <= now or int(request.attempt_count) >= 5:
             raise BillingAuthenticationError("E-posta değiştirme doğrulaması geçersiz veya süresi dolmuş.")
-        valid = (normalized_code and _hash(normalized_code) == request.code_hash) or (
-            token and _hash(token) == request.token_hash
+        valid = (len(normalized_code) == 6 and hmac.compare_digest(_hash(normalized_code), request.code_hash)) or (
+            token and hmac.compare_digest(_hash(token), request.token_hash)
         )
         if not valid:
             attempts = int(request.attempt_count) + 1
@@ -763,24 +797,30 @@ def verify_email_change(user_id: str, code: str = "", token: str = "") -> dict:
             )
             if attempts >= 5:
                 connection.execute(delete(EMAIL_CHANGE_REQUESTS).where(EMAIL_CHANGE_REQUESTS.c.user_id == user_id))
-            raise BillingAuthenticationError("Doğrulama kodu geçersiz.")
-        profile = connection.execute(
-            select(USER_PROFILES).where(USER_PROFILES.c.user_id == user_id)
-        ).first()
-        if not profile:
-            raise BillingAuthenticationError("Hesap bulunamadı.")
-        new_version = int(profile.session_version) + 1
-        try:
-            connection.execute(update(USERS).where(USERS.c.id == user_id).values(email=request.new_email))
-        except IntegrityError as exc:
-            raise BillingError("Bu e-posta adresi başka bir hesapta kullanılıyor.") from exc
-        connection.execute(
-            update(USER_PROFILES)
-            .where(USER_PROFILES.c.user_id == user_id)
-            .values(session_version=new_version, updated_at=now)
-        )
-        connection.execute(delete(EMAIL_CHANGE_REQUESTS).where(EMAIL_CHANGE_REQUESTS.c.user_id == user_id))
-        new_email = request.new_email
+            invalid_code = True
+        else:
+            profile = connection.execute(
+                select(USER_PROFILES)
+                .where(USER_PROFILES.c.user_id == user_id)
+                .with_for_update()
+            ).first()
+            if not profile:
+                raise BillingAuthenticationError("Hesap bulunamadı.")
+            new_version = int(profile.session_version) + 1
+            try:
+                connection.execute(update(USERS).where(USERS.c.id == user_id).values(email=request.new_email))
+            except IntegrityError as exc:
+                raise BillingError("Bu e-posta adresi başka bir hesapta kullanılıyor.") from exc
+            connection.execute(
+                update(USER_PROFILES)
+                .where(USER_PROFILES.c.user_id == user_id)
+                .values(session_version=new_version, updated_at=now)
+            )
+            connection.execute(delete(EMAIL_CHANGE_REQUESTS).where(EMAIL_CHANGE_REQUESTS.c.user_id == user_id))
+            new_email = request.new_email
+    # Raising inside ENGINE.begin() would roll back the failed-attempt limit.
+    if invalid_code:
+        raise BillingAuthenticationError("Doğrulama kodu geçersiz.")
     return {
         "token": issue_session(user_id, new_email, new_version),
         "account": account_status(user_id),
@@ -1001,6 +1041,9 @@ def create_refund_request(user_id: str, order_reference: str, reason: str) -> di
     init_rollout_database()
     now = utcnow()
     with ENGINE.begin() as connection:
+        # Serialize creation of a blocking refund with referral release.
+        from .referrals import _lock_users
+        _lock_users(connection, user_id)
         manual_order = connection.execute(
             select(MANUAL_ORDERS).where(
                 MANUAL_ORDERS.c.reference == reference,
@@ -1193,10 +1236,7 @@ def list_admin_user_activity(user_id: str, limit: int = 30) -> list[dict[str, An
 
 
 def _protected_admin_emails() -> set[str]:
-    protected = {item.casefold() for item in config.BILLING_PROTECTED_EMAILS}
-    if config.LEGAL_OPERATOR_EMAIL:
-        protected.add(config.LEGAL_OPERATOR_EMAIL.casefold())
-    return protected
+    return protected_account_emails()
 
 
 def _latest_activity_map(connection, user_ids: list[str]) -> dict[str, dict[str, Any]]:
@@ -1608,6 +1648,8 @@ def admin_update_user(
             if not user or not profile:
                 raise BillingError("Kullanıcı bulunamadı.")
             old_email = str(user.email)
+            if old_email.casefold() in _protected_admin_emails() and normalized_email != old_email.casefold():
+                raise BillingError("Korumalı hesabın e-posta adresi değiştirilemez.")
             connection.execute(
                 update(USERS).where(USERS.c.id == user_id).values(email=normalized_email)
             )
@@ -1778,10 +1820,7 @@ def admin_close_user_account(
             raise BillingError("Kullanıcı bulunamadı.")
         if confirmation_email.strip().casefold() != user.email.casefold():
             raise BillingError("Onay e-postası kullanıcı hesabıyla eşleşmiyor.")
-        protected_admin_emails = set(config.BILLING_PROTECTED_EMAILS)
-        if config.LEGAL_OPERATOR_EMAIL:
-            protected_admin_emails.add(config.LEGAL_OPERATOR_EMAIL.casefold())
-        if user.email.casefold() in protected_admin_emails:
+        if user.email.casefold() in _protected_admin_emails():
             raise BillingError("Yönetici hesabı panelden kapatılamaz.")
 
         anonymized_audit_email = f"deleted-account-{user_id[:8]}@users.invalid"
@@ -1801,6 +1840,8 @@ def admin_close_user_account(
             summary=f"Hesap kapatıldı ve kimlikten arındırıldı: {normalized_reason}",
             actor=actor,
         )
+        from .referrals import close_account as close_referrals
+        close_referrals(connection, user_id)
         anonymized_email = f"deleted+{uuid.uuid4().hex}@users.invalid"
         salt = secrets.token_bytes(16)
         connection.execute(
@@ -1853,7 +1894,7 @@ def admin_close_user_account(
             update(PAYMENT_ORDERS)
             .where(
                 PAYMENT_ORDERS.c.user_id == user_id,
-                PAYMENT_ORDERS.c.status.in_(("created", "token_failed")),
+                PAYMENT_ORDERS.c.status.in_(("created", "pending", "token_failed")),
             )
             .values(status="cancelled", updated_at=now)
         )

@@ -2,9 +2,110 @@ const API = "https://api.lecturesift.com";
 const TOKEN_KEY = "lecturesift-billing-token";
 const LOCALE_DATA = window.LECTURESIFT_LOCALE_DATA || {countries: [], currencies: [], currencyForCountry: {}};
 const I18N = window.LectureSiftI18n || {language:"tr", locale:"tr-TR", languages:{tr:"Türkçe"}, t:(key, fallback)=>fallback || key};
+const REFERRAL_I18N = window.LectureSiftReferralI18n || {t:(_key, fallback)=>fallback || "", format:(_key, _values, fallback)=>fallback || ""};
 const page = document.body.dataset.page || "login";
 const $ = id => document.getElementById(id);
 const t = (key, fallback) => I18N.t(key, fallback);
+const rt = (key, fallback) => REFERRAL_I18N.t(key, fallback);
+const rf = (key, values, fallback) => REFERRAL_I18N.format(key, values, fallback);
+const referralCode = value => {
+  const normalized = String(value || "").trim().toUpperCase();
+  return /^LSR-[A-F0-9]{24}$/.test(normalized) ? normalized : "";
+};
+const referralCouponCode = value => {
+  const normalized = String(value || "").trim().toUpperCase();
+  return /^LSC-[A-F0-9]{24}$/.test(normalized) ? normalized : "";
+};
+
+function validatedReferralSummary(body) {
+  const value = body?.ok === true && body.referrals && typeof body.referrals === "object" ? body.referrals : null;
+  if (!value || typeof value.enabled !== "boolean") return null;
+  if (!value.enabled) return {enabled:false};
+  const integers = [
+    value.reward_minutes, value.invitee_reward_minutes, value.monthly_invitation_cap,
+    value.monthly_reserved_count, value.monthly_remaining_count, value.earned_minutes,
+    value.pending_minutes, value.hold_days,
+  ];
+  if (
+    integers.some(number => !Number.isInteger(number) || number < 0)
+    || value.reward_minutes !== 60 || value.invitee_reward_minutes !== 30
+    || value.monthly_invitation_cap !== 5 || value.hold_days !== 14
+    || value.monthly_reserved_count > value.monthly_invitation_cap
+    || value.monthly_remaining_count !== value.monthly_invitation_cap - value.monthly_reserved_count
+    || value.history_limit !== 50 || typeof value.has_more_rewards !== "boolean" || typeof value.has_more_coupons !== "boolean"
+    || value.settlement !== "admin_reconciliation_after_14_days"
+    || !/^\d{4}-(0[1-9]|1[0-2])$/.test(value.month_utc || "")
+  ) return null;
+  const coupon = value.coupon;
+  if (
+    !coupon || coupon.percent !== 10 || coupon.max_discount_minor !== 5000
+    || coupon.currency !== "TRY" || coupon.valid_days !== 90 || coupon.monthly_only !== true
+  ) return null;
+  const renewal = value.renewal;
+  if (
+    !renewal || renewal.reward_minutes !== 30 || renewal.invitee_reward_minutes !== 0
+    || renewal.monthly_per_invitee_cap !== 1 || renewal.coupon?.percent !== 5
+    || renewal.coupon.max_discount_minor !== 2500 || renewal.coupon.currency !== "TRY"
+    || renewal.coupon.valid_days !== 90 || renewal.coupon.monthly_only !== true
+  ) return null;
+  const policies = value.coupon_policies;
+  const policyKinds = {"referral-2026-09-v1":"first_purchase", "referral-2026-09-v2":"first_purchase", "referral-2026-09-renewal-v1":"renewal"};
+  if (!policies || typeof policies !== "object" || Object.keys(policies).length !== Object.keys(policyKinds).length
+    || Object.keys(policies).some(version => !Object.hasOwn(policyKinds, version))) return null;
+  if (!Array.isArray(value.redemption_currencies)
+    || new Set(value.redemption_currencies).size !== value.redemption_currencies.length
+    || value.redemption_currencies.some(currency => !LOCALE_DATA.currencies?.includes(currency))) return null;
+  for (const [version, kind] of Object.entries(policyKinds)) {
+    const terms = policies[version];
+    if (!terms || typeof terms !== "object" || !terms.TRY) return null;
+    if (Object.entries(terms).some(([currency, item]) =>
+      !LOCALE_DATA.currencies?.includes(currency) || !item || item.currency !== currency
+      || item.percent !== (kind === "renewal" ? 5 : 10)
+      || !Number.isSafeInteger(item.max_discount_minor) || item.max_discount_minor <= 0
+      || item.valid_days !== 90 || item.monthly_only !== true
+      || (version === "referral-2026-09-v1" && currency !== "TRY")
+    )) return null;
+  }
+  const code = value.referral_code === null ? null : referralCode(value.referral_code);
+  if (value.referral_code !== null && !code) return null;
+  if (code) {
+    if (value.referral_url !== `https://lecturesift.com/register.html?ref=${code}`) return null;
+  } else if (value.referral_url !== null) return null;
+  if (!Array.isArray(value.rewards) || !Array.isArray(value.coupons) || value.rewards.length > 500 || value.coupons.length > 500) return null;
+  const rewardIds = new Set();
+  const rewardsValid = value.rewards.every(reward => {
+    if (!reward || typeof reward !== "object" || rewardIds.has(reward.id)) return false;
+    rewardIds.add(reward.id);
+    const isRenewal = reward.kind === "renewal";
+    if (!isRenewal && reward.kind !== "first_purchase") return false;
+    const terms = policies[reward.policy_version]?.[reward.coupon_currency];
+    if (!terms || policyKinds[reward.policy_version] !== reward.kind
+      || typeof reward.coupon_currency_selected !== "boolean") return false;
+    const validId = isRenewal ? /^rr-[0-9a-f]{32}$/i.test(reward.id || "")
+      : /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(reward.id || "");
+    return validId
+      && reward.inviter_minutes === (isRenewal ? 30 : 60)
+      && reward.invitee_minutes === (isRenewal ? 0 : 30)
+      && reward.coupon_percent === (isRenewal ? 5 : 10)
+      && reward.coupon_max_discount_minor === terms.max_discount_minor
+      && ["inviter", "invitee"].includes(reward.role)
+      && ["invited", "pending", "released", "blocked", "cap_reached", "monthly_limit"].includes(reward.status)
+      && [null, "minutes", "coupon"].includes(reward.reward_choice)
+      && !Number.isNaN(Date.parse(reward.created_at))
+      && (reward.pending_until === null || !Number.isNaN(Date.parse(reward.pending_until)));
+  });
+  const couponCodes = new Set();
+  const couponsValid = value.coupons.every(item => {
+    const selected = referralCouponCode(item?.code);
+    if (!selected || couponCodes.has(selected)) return false;
+    couponCodes.add(selected);
+    return ["ready", "reserved", "used", "void", "expired"].includes(item.status)
+      && Object.values(policies).some(terms => terms[item.currency]?.percent === item.percent
+        && terms[item.currency]?.max_discount_minor === item.max_discount_minor)
+      && !Number.isNaN(Date.parse(item.expires_at));
+  });
+  return rewardsValid && couponsValid ? value : null;
+}
 
 function recordAnalytics(type, name, parameters = {}) {
   const analytics = window.LectureSiftAnalytics;
@@ -67,12 +168,29 @@ function safeNext() {
 
 async function initRegister() {
   populateCountrySelect($("countryCode"), selectedCountry());
+  const referralInput = $("referralCode");
+  const queryReferral = new URLSearchParams(location.search).get("ref");
+  if (queryReferral !== null) {
+    const normalized = referralCode(queryReferral);
+    if (normalized) {
+      referralInput.value = normalized;
+      $("referralCodeNotice").textContent = rt("registerDetected", "Bağlantıdaki davet kodu forma eklendi.");
+      $("referralCodeNotice").hidden = false;
+    } else if (queryReferral.trim()) {
+      $("referralCodeNotice").textContent = rt("registerInvalid", "Bağlantıdaki davet kodu geçerli biçimde değil; istersen doğru kodu elle yazabilirsin.");
+      $("referralCodeNotice").classList.add("error");
+      $("referralCodeNotice").hidden = false;
+    }
+  }
   $("registerForm").addEventListener("submit", async event => {
     event.preventDefault();
     const button = $("registerSubmit");
     const password = $("password").value;
+    const rawReferral = referralInput.value.trim();
+    const normalizedReferral = referralCode(rawReferral);
     if (password !== $("passwordConfirm").value) return showNotice(t("auth.passwordMismatch", "Parolalar birbiriyle eşleşmiyor."), true);
     if (!$("terms").checked) return showNotice(t("auth.acceptRequired", "Devam etmek için kullanım ve gizlilik koşullarını kabul et."), true);
+    if (rawReferral && !normalizedReferral) return showNotice(rt("registerInvalid", "Davet kodu geçerli biçimde değil."), true);
     setBusy(button, true, t("auth.preparing", "Hesap hazırlanıyor…"));
     try {
       const body = await request("/billing/register", {
@@ -84,12 +202,22 @@ async function initRegister() {
           phone: $("phone").value.trim(),
           country_code: $("countryCode").value,
           password,
+          ...(normalizedReferral ? {referral_code: normalizedReferral} : {}),
         }),
       });
       $("registerForm").hidden = true;
       $("successBox").hidden = false;
       $("successEmail").textContent = body.user.email;
       $("enterCodeLink").href = `/verify.html?email=${encodeURIComponent(body.user.email)}`;
+      const referralResult = $("registerReferralStatus");
+      referralResult.hidden = !normalizedReferral;
+      referralResult.textContent = "";
+      if (normalizedReferral) {
+        const statusKey = body.referral_status === "accepted" ? "registerAccepted"
+          : body.referral_status === "disabled" ? "registerDisabled"
+          : body.referral_status === "invalid" ? "registerRejected" : "registerUnconfirmed";
+        referralResult.textContent = rt(statusKey);
+      }
       localStorage.setItem("lecturesift-country", body.user.country_code);
       const suggestedCurrency = LOCALE_DATA.currencyForCountry[body.user.country_code];
       if (suggestedCurrency) localStorage.setItem("lecturesift-currency", suggestedCurrency);
@@ -200,7 +328,8 @@ async function initAccount() {
   let token = localStorage.getItem(TOKEN_KEY);
   if (!token) return location.replace("/login.html?next=/account.html");
   let currentAccount = null;
-  const accountViews = ["overview", "profile", "payments", "lessons", "security"];
+  let referralLoadStarted = false;
+  const accountViews = ["overview", "profile", "payments", "lessons", "referrals", "security"];
   const accountViewKey = "lecturesift-account-view";
 
   const activateAccountView = (requested, {focus = false, updateHash = true} = {}) => {
@@ -231,7 +360,8 @@ async function initAccount() {
       panel?.setAttribute("aria-labelledby", button.id);
       button.addEventListener("click", () => activateAccountView(button.dataset.accountViewButton, {focus:true}));
       button.addEventListener("keydown", event => {
-        const moves = {ArrowRight:1, ArrowLeft:-1, Home:-index, End:buttons.length - 1 - index};
+        const direction = document.documentElement.dir === "rtl" ? -1 : 1;
+        const moves = {ArrowRight:direction, ArrowLeft:-direction, Home:-index, End:buttons.length - 1 - index};
         if (moves[event.key] === undefined) return;
         event.preventDefault();
         const target = (index + moves[event.key] + buttons.length) % buttons.length;
@@ -329,6 +459,108 @@ async function initAccount() {
 
   const adminSafe = value => String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[char]);
 
+  const referralDate = value => new Intl.DateTimeFormat(I18N.locale, {dateStyle:"medium"}).format(new Date(value));
+  let currentReferralSummary = null;
+  const referralCouponValue = (percent, maxMinor, currency) => rf("couponValue", {
+    percent:new Intl.NumberFormat(I18N.locale, {style:"percent"}).format(percent / 100),
+    amount:new Intl.NumberFormat(I18N.locale, {style:"currency", currency}).format(maxMinor / (["JPY", "KRW"].includes(currency) ? 1 : 100)),
+  }, "Kupon {percent}, en fazla {amount}");
+
+  const showReferralNotice = (message, error = false) => {
+    const notice = $("referralNotice");
+    notice.textContent = message;
+    notice.classList.toggle("error", error);
+    notice.hidden = false;
+  };
+
+  const disableReferralUi = message => {
+    currentReferralSummary = null;
+    $("referralLoading").hidden = true;
+    $("referralContent").hidden = true;
+    $("referralUnavailable").textContent = message;
+    $("referralUnavailable").hidden = false;
+  };
+
+  const renderReferralSummary = summary => {
+    if (!summary?.enabled) {
+      disableReferralUi(rt("disabled", "Davet programı bu ortamda henüz etkin değil."));
+      return;
+    }
+    currentReferralSummary = summary;
+    $("referralLoading").hidden = true;
+    $("referralUnavailable").hidden = true;
+    $("referralContent").hidden = false;
+    $("referralNoCode").hidden = Boolean(summary.referral_code);
+    $("referralLinkWrap").hidden = !summary.referral_code;
+    $("referralLink").value = summary.referral_url || "";
+    $("referralReserved").textContent = `${summary.monthly_reserved_count.toLocaleString(I18N.locale)} / ${summary.monthly_invitation_cap.toLocaleString(I18N.locale)}`;
+    $("referralRemaining").textContent = summary.monthly_remaining_count.toLocaleString(I18N.locale);
+    $("referralEarned").textContent = `${summary.earned_minutes.toLocaleString(I18N.locale)} ${t("unit.minuteShort", "dk")}`;
+    $("referralPending").textContent = `${summary.pending_minutes.toLocaleString(I18N.locale)} ${t("unit.minuteShort", "dk")}`;
+    $("referralHistoryNotice").hidden = !summary.has_more_rewards && !summary.has_more_coupons;
+
+    const rewardKind = reward => reward.kind === "renewal"
+      ? rt("renewal", "Abonelik yenilemesi") : rt("firstPurchase", "İlk abonelik alışverişi");
+    const selectedCurrency = reward => {
+      const saved = localStorage.getItem("lecturesift-currency");
+      const preferred = saved || LOCALE_DATA.currencyForCountry[currentAccount?.user?.country_code] || "TRY";
+      return reward.status === "pending" && !reward.coupon_currency_selected && summary.coupon_policies[reward.policy_version][preferred]
+        ? preferred : reward.coupon_currency;
+    };
+
+    const choices = summary.rewards.filter(reward => reward.role === "inviter" && reward.status === "pending");
+    $("referralRewards").innerHTML = choices.length ? choices.map(reward => {
+      const pendingDate = reward.pending_until ? referralDate(reward.pending_until) : "—";
+      const currency = selectedCurrency(reward);
+      const terms = summary.coupon_policies[reward.policy_version][currency];
+      const couponAvailable = summary.redemption_currencies.includes(currency);
+      const options = Object.keys(summary.coupon_policies[reward.policy_version]).map(code => `<option value="${adminSafe(code)}"${code === currency ? " selected" : ""}>${adminSafe(code)}</option>`).join("");
+      return `<article class="referral-reward" data-referral-reward="${adminSafe(reward.id)}"><div class="referral-reward-copy"><strong>${adminSafe(rewardKind(reward))}</strong><small>${adminSafe(pendingDate)}</small><small data-coupon-preview>${adminSafe(referralCouponValue(terms.percent, terms.max_discount_minor, currency))}</small><small data-coupon-unavailable${couponAvailable ? " hidden" : ""}>${adminSafe(rt("couponUnavailable", "Bu para biriminde kupon kullanımı şu anda desteklenmiyor. Dakika seçebilir veya desteklenen bir para birimi seçebilirsin."))}</small></div><div class="referral-choice-actions"><label class="field"><span>${adminSafe(rt("couponCurrency", "Kupon para birimi"))}</span><select data-referral-currency>${options}</select></label><button class="secondary-action${reward.reward_choice === "minutes" ? " selected" : ""}" type="button" data-referral-choice="minutes" aria-pressed="${String(reward.reward_choice === "minutes")}">${adminSafe(rf("minutesChoiceDynamic", {minutes:reward.inviter_minutes}, "{minutes} dakika seç"))}</button><button class="secondary-action${reward.reward_choice === "coupon" ? " selected" : ""}" type="button" data-referral-choice="coupon" aria-pressed="${String(reward.reward_choice === "coupon")}"${couponAvailable ? "" : " disabled"}>${adminSafe(rf("couponChoiceDynamic", {percent:reward.coupon_percent}, "%{percent} kupon seç"))}</button></div></article>`;
+    }).join("") : `<p class="empty-copy">${adminSafe(rt("noChoices", "Şu anda seçim bekleyen davet ödülün yok."))}</p>`;
+
+    const statuses = {invited:"statusInvited", pending:"statusPending", released:"statusReleased", blocked:"statusBlocked", cap_reached:"statusCapReached", monthly_limit:"statusMonthlyLimit"};
+    const history = summary.rewards.filter(reward => reward.role === "inviter" || reward.kind === "first_purchase");
+    $("referralHistory").innerHTML = history.length ? history.map(reward => {
+      const benefit = !["pending", "released"].includes(reward.status) ? "—"
+        : reward.role === "inviter" && reward.reward_choice === "coupon"
+        ? referralCouponValue(reward.coupon_percent, reward.coupon_max_discount_minor, reward.coupon_currency)
+        : `${(reward.role === "inviter" ? reward.inviter_minutes : reward.invitee_minutes).toLocaleString(I18N.locale)} ${t("unit.minuteShort", "dk")}`;
+      return `<article class="referral-reward"><div class="referral-reward-copy"><strong>${adminSafe(rewardKind(reward))}</strong><small>${adminSafe(referralDate(reward.created_at))}</small></div><div class="referral-reward-copy"><strong>${adminSafe(rt(statuses[reward.status], reward.status))}</strong><small>${adminSafe(benefit)}</small></div></article>`;
+    }).join("") : `<p class="empty-copy">${adminSafe(rt("historyEmpty", "Henüz davet ödülü kaydın yok."))}</p>`;
+
+    const readyCoupons = summary.coupons.filter(coupon => coupon.status === "ready");
+    $("referralCoupons").innerHTML = readyCoupons.length ? readyCoupons.map(coupon => {
+      const expires = rf("couponExpires", {date:referralDate(coupon.expires_at)}, "Son kullanım: {date}");
+      return `<article class="referral-coupon"><strong>${adminSafe(referralCouponValue(coupon.percent, coupon.max_discount_minor, coupon.currency))}</strong><div class="referral-code-row"><input value="${adminSafe(coupon.code)}" readonly aria-label="${adminSafe(rt("couponsTitle", "Hazır kuponların"))}"><button class="secondary-action" type="button" data-copy-referral-coupon="${adminSafe(coupon.code)}">${adminSafe(rt("copy", "Kopyala"))}</button></div><small>${adminSafe(expires)}</small></article>`;
+    }).join("") : `<p class="empty-copy">${adminSafe(rt("noCoupons", "Şu anda kullanıma hazır kuponun yok."))}</p>`;
+  };
+
+  const referralSummaryFromResponse = body => {
+    const summary = validatedReferralSummary(body);
+    if (!summary) throw new Error(rt("unavailable", "Davet bilgileri şu anda doğrulanamıyor."));
+    return summary;
+  };
+
+  const loadReferralSummary = async () => {
+    try {
+      renderReferralSummary(referralSummaryFromResponse(await request("/billing/referrals", {}, token)));
+    } catch {
+      disableReferralUi(rt("unavailable", "Davet bilgileri şu anda doğrulanamıyor. Herhangi bir ödül kazanılmış veya beklemede olarak gösterilmiyor."));
+    }
+  };
+
+  const copyReferralText = async (value, fallbackInput = null) => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("clipboard unavailable");
+      await navigator.clipboard.writeText(value);
+      showReferralNotice(rt("copied", "Bağlantı kopyalandı."));
+    } catch {
+      fallbackInput?.focus();
+      fallbackInput?.select();
+      showReferralNotice(rt("copyFailed", "Bağlantı kopyalanamadı; metni elle seçebilirsin."), true);
+    }
+  };
+
   const loadJobHistory = async () => {
     try {
       const body = await request("/jobs?limit=30", {}, token);
@@ -402,6 +634,10 @@ async function initAccount() {
     $("accountPage").hidden = false;
     void loadJobHistory();
     void loadRefundRequests();
+    if (!referralLoadStarted) {
+      referralLoadStarted = true;
+      void loadReferralSummary();
+    }
   };
 
   const reconcilePaymentRedirect = async () => {
@@ -462,6 +698,61 @@ async function initAccount() {
     location.replace("/login.html?next=/account.html");
   }
   void reconcilePaymentRedirect();
+  $("createReferralCodeButton").addEventListener("click", async () => {
+    const button = $("createReferralCodeButton");
+    setBusy(button, true, rt("creating", "Bağlantı oluşturuluyor…"));
+    try {
+      renderReferralSummary(referralSummaryFromResponse(await request("/billing/referrals/code", {method:"POST"}, token)));
+    } catch {
+      showReferralNotice(rt("unavailable", "Davet bilgileri şu anda doğrulanamıyor."), true);
+    } finally {
+      setBusy(button, false, rt("create", "Davet bağlantısı oluştur"));
+    }
+  });
+  $("copyReferralLinkButton").addEventListener("click", () => {
+    const input = $("referralLink");
+    if (input.value) void copyReferralText(input.value, input);
+  });
+  $("referralRewards").addEventListener("change", event => {
+    const selector = event.target?.closest?.("[data-referral-currency]");
+    const card = selector?.closest?.("[data-referral-reward]");
+    if (!selector || !card || !$("referralRewards").contains(card)) return;
+    const reward = currentReferralSummary?.rewards.find(item => item.id === card.dataset.referralReward);
+    const terms = reward && currentReferralSummary.coupon_policies[reward.policy_version]?.[selector.value];
+    if (terms) {
+      card.querySelector("[data-coupon-preview]").textContent = referralCouponValue(terms.percent, terms.max_discount_minor, terms.currency);
+      const available = currentReferralSummary.redemption_currencies.includes(selector.value);
+      card.querySelector('[data-referral-choice="coupon"]').disabled = !available;
+      card.querySelector("[data-coupon-unavailable]").hidden = available;
+    }
+  });
+  $("referralRewards").addEventListener("click", async event => {
+    const button = event.target?.closest?.("[data-referral-choice]");
+    const reward = button?.closest?.("[data-referral-reward]");
+    if (!button || button.disabled || !reward || !$("referralRewards").contains(button)) return;
+    const choice = button.dataset.referralChoice;
+    if (!["minutes", "coupon"].includes(choice)) return;
+    const buttons = [...reward.querySelectorAll("[data-referral-choice]")];
+    const original = button.textContent;
+    buttons.forEach(item => { item.disabled = true; });
+    button.textContent = rt("savingChoice", "Seçim kaydediliyor…");
+    try {
+      const body = await request(`/billing/referrals/rewards/${encodeURIComponent(reward.dataset.referralReward)}/choice`, {
+        method:"POST", body:JSON.stringify({reward_choice:choice, currency:reward.querySelector("[data-referral-currency]")?.value}),
+      }, token);
+      renderReferralSummary(referralSummaryFromResponse(body));
+    } catch (error) {
+      showReferralNotice(error.message || rt("unavailable", "Davet bilgileri şu anda doğrulanamıyor."), true);
+      buttons.forEach(item => { item.disabled = false; });
+      button.textContent = original;
+    }
+  });
+  $("referralCoupons").addEventListener("click", event => {
+    const button = event.target?.closest?.("[data-copy-referral-coupon]");
+    if (!button || !$("referralCoupons").contains(button)) return;
+    const code = referralCouponCode(button.dataset.copyReferralCoupon);
+    if (code) void copyReferralText(code, button.closest(".referral-code-row")?.querySelector("input"));
+  });
   $("preferencesForm").addEventListener("submit", async event => {
     event.preventDefault();
     const button = $("preferencesSubmit");

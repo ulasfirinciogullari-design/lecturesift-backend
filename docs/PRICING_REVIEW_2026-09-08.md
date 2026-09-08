@@ -70,6 +70,49 @@ veya ön ödemeli bakiye yüklemesiyle mükerrer sayılmamalıdır.
 
 ## İşletim kuralları
 
+### Referans ödülü senaryosu — henüz canlı değil
+
+Önerilen edinim ödülü, yeni ve doğrulanmış hesabın ilk uygun ücretli
+aboneliğine bağlıdır. Davet eden 60 dakika veya sonraki TRY aylık abonelikte
+%10 indirim (en fazla 50 TL) seçer; davet edilen 30 dakika kazanır. Kupon
+tek kullanımlık, 90 gün geçerli ve diğer indirimlerle/yıllık fiyatla birleşmez.
+Davet eden başına UTC takvim ayında en fazla beş ödüllü davet vardır; kota
+çifte uygulanır. Sırf kayıt, ücretsiz/test paketleri ve ek kredi alımı ödül
+üretmez. En az 14 günlük bekleme ve yönetici ödeme mutabakatı gerekir.
+
+Yukarıdaki **varsayımsal** 0,35 TL/dakika stres bedeliyle, dakika seçeneğinde
+çiftin 90 dakikası 31,50 TL değişken maliyet getirir. Kupon seçeneğinde en fazla
+50 TL gelir indirimi ve 30 dakika için 10,50 TL değişken gider vardır; bunlar
+muhasebede aynı gider türü değildir. Kupon kullanılmazsa nominal tutarı
+gerçekleşmiş gider/gelir kaybı olarak yazmamak gerekir. Yıllık alımdaki tek
+seferlik edinim maliyeti 12 ay boyunca tekrar oluşuyormuş gibi sayılmamalıdır.
+
+Bunlar doğrulanmış kâr veya bütçe garantisi değildir. Gerçek iş maliyeti,
+iade/itiraz, ücretler ve ödül kullanım oranı izlenmeli; kullanım pahalılaşırsa
+yeni davetler için program durdurulabilmelidir. Kazanılmış koşullar sonradan
+sessizce değiştirilmemelidir. Önizleme kodu şema/yedekleme geçişi tamamlanana
+kadar programı kapalı tutar; bu belge canlıda ödül dağıtıldığını göstermez.
+
+### Katalog ve ölçüm kontrolleri
+
+8 Eylül devam taslağı: kullanıcı, davet ilişkisinin sonraki abonelik paketleri
+ve yenilemelerde de ödül oluşturmasını seçti; ek dakika alımları hariç.
+İlk alışveriş koşulları korunuyor. Yenileme için uygulama taslağı davetçiye
+30 dakika veya %5/en fazla 25 TL kupon; davet edilene tekrar hoş geldin bonusu
+yok. İlk ve sonraki ödüller aynı aylık beş işlem kotasını paylaşır; aynı davet
+edilen kişi için ayda en fazla bir yenileme ödülü ayrılır. Yıllık paketin aylık
+kota açılışı yeni ödeme sayılmaz. Sürümlü defter, eski hakların korunması ve
+yeni şema/kurtarma kanıtları `deploy/REFERRAL_RELEASE_GATES.md` kapsamındadır.
+Kullanıcının dil/para birimi düzeltmesiyle yeni kuponlar 22 katalog para biriminde
+sabit bölgesel tavanlara sahip; 13 arayüz dili ile para birimi seçimi bağımsızdır.
+TL cinsinden yukarıdaki tavanlar diğer para birimlerine doğrudan aynı sayıyla
+taşınmaz. Sürümlü politika tavanları Lite bölgesel fiyat oranlarından sabitlenir;
+canlı kur değildir. Kupon seçilen para biriminde verilir ve aynı para biriminde
+kullanılır. Mevcut ödeme seçeneğinin desteklemediği para biriminde yeni kupon
+verilmez; dakika seçeneği kullanılabilir. Eski TRY kuponlarının koşulları korunur.
+Bu değişiklik de kapalı önizleme kodudur; canlı kampanya veya doğrulanmış kâr
+değildir. Üstteki ilk alışveriş hesaplarına ek ayrı bir aylık kota yaratmaz.
+
 - Gerçek son 30 gün API/altyapı faturaları ve iyzico mutabakatı olmadan
   yüzde yüz doğrulanmış marj gösterme. Eksik veri açıkça işaretlenmeli.
 - Tam kota ve yıllık indirim senaryosunu her fiyat revizyonunda tekrar hesapla.

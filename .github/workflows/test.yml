@@ -2,7 +2,15 @@ name: tests
 
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
+
+# Feature branches are tested through their PR, not again for the same push.
+# Keep default-branch coverage after merge and discard superseded revisions.
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -28,6 +36,8 @@ jobs:
       S3_SECRET_ACCESS_KEY: ""
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Check deployment shell syntax
         run: bash deploy/check_shell_syntax.sh
       - name: Validate locked image inputs before building
@@ -70,3 +80,52 @@ jobs:
         run: python -c "import yaml; yaml.safe_load(open('render.yaml', encoding='utf-8'))"
       - name: Run tests
         run: pytest -q
+
+  browser-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: "true"
+      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/lecturesift-browsers
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pinned browser test dependencies (no lifecycle scripts)
+        working-directory: tests/browser
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Build the actual localized static site
+        run: node scripts/build_localized_site.mjs
+      - name: Install Chromium and its system dependencies
+        working-directory: tests/browser
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Run browser smoke tests without external network access
+        # Both Chromium and its loopback-only static server inherit this network
+        # namespace. No interface/route to production, ads, payments or DNS exists.
+        # Dependency downloads happen above; artifact upload happens below.
+        # Root only creates the namespace; tests and Chromium run as the runner.
+        run: |
+          sudo env CI=true PLAYWRIGHT_BROWSERS_PATH="$PLAYWRIGHT_BROWSERS_PATH" \
+            unshare --net -- bash -c '
+              set -eu
+              ip link set lo up
+              ci_uid="$1"; ci_gid="$2"; ci_home="$3"; shift 3
+              exec setpriv --reuid "$ci_uid" --regid "$ci_gid" --init-groups \
+                -- env HOME="$ci_home" "$@"
+            ' bash "$(id -u)" "$(id -g)" "$HOME" \
+            "$(command -v node)" \
+            "$GITHUB_WORKSPACE/tests/browser/node_modules/@playwright/test/cli.js" \
+            test --config "$GITHUB_WORKSPACE/tests/browser/playwright.config.mjs"
+      - name: Upload synthetic browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-smoke-failure-${{ github.run_attempt }}
+          path: |
+            tests/browser/test-results/
+            tests/browser/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 3

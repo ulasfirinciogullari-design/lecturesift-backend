@@ -39,6 +39,7 @@
   tools.className = "public-header-tools";
   const nav = existingNav || document.createElement("nav");
   nav.className = "public-nav";
+  nav.id = "publicNavigation";
   nav.setAttribute("aria-label", label("menu"));
   nav.replaceChildren();
 
@@ -77,6 +78,32 @@
   nav.append(account);
 
   if (existingPicker) tools.append(existingPicker);
+  const menuButton = document.createElement("button");
+  menuButton.type = "button";
+  menuButton.className = "public-menu-toggle";
+  menuButton.setAttribute("aria-label", label("menu"));
+  menuButton.setAttribute("aria-controls", nav.id);
+  menuButton.setAttribute("aria-expanded", "false");
+  menuButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>';
+  const setMenuOpen = open => {
+    header.classList.toggle("public-menu-open", open);
+    menuButton.setAttribute("aria-expanded", String(open));
+  };
+  menuButton.addEventListener("click", () => setMenuOpen(menuButton.getAttribute("aria-expanded") !== "true"));
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && header.classList.contains("public-menu-open")) {
+      setMenuOpen(false);
+      menuButton.focus();
+    }
+  });
+  document.addEventListener("click", event => {
+    if (!header.contains(event.target)) setMenuOpen(false);
+  });
+  nav.addEventListener("click", event => {
+    if (event.target.closest("a")) setMenuOpen(false);
+  });
+  window.matchMedia("(min-width: 861px)").addEventListener?.("change", () => setMenuOpen(false));
+  tools.append(menuButton);
   tools.append(nav);
   header.append(tools);
 

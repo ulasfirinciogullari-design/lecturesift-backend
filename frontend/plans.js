@@ -7,6 +7,13 @@ const LOCALE_DATA = window.LECTURESIFT_LOCALE_DATA || {
 const ZERO_DECIMAL_CURRENCIES = new Set(["JPY", "KRW"]);
 const PLANS_I18N = window.LectureSiftI18n || {language:"tr",locale:"tr-TR",t:(key,fallback)=>fallback || key};
 const pt = (key, fallback) => PLANS_I18N.t(key, fallback);
+const REFERRAL_I18N = window.LectureSiftReferralI18n || {t:(_key, fallback)=>fallback || ""};
+const rpt = (key, fallback) => REFERRAL_I18N.t(key, fallback);
+const COUPON_PLANS = new Set(["lite", "plus", "pro", "max"]);
+const referralCouponCode = value => {
+  const normalized = String(value || "").trim().toUpperCase();
+  return /^LSC-[A-F0-9]{24}$/.test(normalized) ? normalized : "";
+};
 
 function recordPlanAnalytics(name, parameters = {}) {
   if (window.LectureSiftAnalytics?.track) return void window.LectureSiftAnalytics.track(name, parameters);
@@ -367,6 +374,11 @@ async function buy(planCode, interval = "monthly") {
   $("checkoutSummaryTotal").textContent = price
     ? format(price.amount_minor * multiplier, price.currency || currency)
     : pt("plans.quote", "Teklif");
+  const couponEligible = LOCALE_DATA.currencies.includes(currency) && interval === "monthly" && COUPON_PLANS.has(planCode);
+  $("checkoutCouponRow").hidden = !couponEligible;
+  $("checkoutCoupon").disabled = !couponEligible;
+  $("checkoutCoupon").value = "";
+  $("checkoutCoupon").setCustomValidity("");
   $("checkoutPhone").value = account?.user?.phone || "";
   $("checkoutFirstName").value = account?.user?.first_name || "";
   $("checkoutLastName").value = account?.user?.last_name || "";
@@ -386,8 +398,27 @@ async function buy(planCode, interval = "monthly") {
   $("checkoutPanel").hidden = false;
 }
 
+function selectedCheckoutCoupon() {
+  const input = $("checkoutCoupon");
+  if (input.disabled || !input.value.trim()) {
+    input.setCustomValidity("");
+    return "";
+  }
+  const selected = referralCouponCode(input.value);
+  if (!selected) {
+    input.setCustomValidity(rpt("checkoutCouponInvalid", "Geçerli bir davet kuponu gir."));
+    input.reportValidity();
+    return null;
+  }
+  input.value = selected;
+  input.setCustomValidity("");
+  return selected;
+}
+
 async function startHostedCheckout(preferredMethod = "card") {
   if (!$("checkoutForm").reportValidity()) return;
+  const couponCode = selectedCheckoutCoupon();
+  if (couponCode === null) return;
   const cardButton = $("checkoutCardButton");
   const protectedButton = $("checkoutProtectedBankButton");
   const manualButton = $("checkoutBankButton");
@@ -421,6 +452,7 @@ async function startHostedCheckout(preferredMethod = "card") {
         billing_zip_code: $("checkoutZipCode").value.trim(),
         phone: $("checkoutPhone").value.trim(),
         language: PLANS_I18N.language,
+        coupon_code: couponCode,
         terms_accepted:$("checkoutTerms").checked,
         early_performance_requested:$("checkoutEarlyPerformance").checked,
       }),
@@ -459,6 +491,8 @@ function hideBankTransferGuide() {
 async function createTransfer() {
   const bankButton = $("checkoutBankButton");
   if (bankButton.disabled || !$("checkoutForm").reportValidity()) return;
+  const couponCode = selectedCheckoutCoupon();
+  if (couponCode === null) return;
   const cardButton = $("checkoutCardButton");
   const protectedButton = $("checkoutProtectedBankButton");
   bankButton.disabled = true;
@@ -476,6 +510,7 @@ async function createTransfer() {
         terms_accepted: $("checkoutTerms").checked,
         early_performance_requested: $("checkoutEarlyPerformance").checked,
         language: PLANS_I18N.language,
+        coupon_code: couponCode,
       }),
     });
     const order = body.order;
@@ -554,6 +589,7 @@ $("checkoutClose").onclick = $("checkoutCancel").onclick = () => {
   $("paytrFrame").src = "about:blank";
 };
 $("checkoutBankButton").onclick = createTransfer;
+$("checkoutCoupon").addEventListener("input", event => { event.currentTarget.setCustomValidity(""); });
 $("checkoutProtectedBankButton").onclick = showBankTransferGuide;
 $("bankTransferBack").onclick = hideBankTransferGuide;
 $("bankTransferContinue").onclick = () => startHostedCheckout("bank_transfer");

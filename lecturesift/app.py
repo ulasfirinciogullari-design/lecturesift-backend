@@ -12,7 +12,7 @@ from typing import Literal
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, StrictBool
 
 from . import config
 from .billing import public_catalog, public_providers
@@ -354,6 +354,7 @@ class BillingRegisterRequest(BillingAuthRequest):
     last_name: str
     phone: str = ""
     country_code: str = "TR"
+    referral_code: str = ""
 
 
 class BillingEmailRequest(BaseModel):
@@ -381,6 +382,7 @@ class ManualOrderRequest(BaseModel):
     terms_accepted: bool = False
     early_performance_requested: bool = False
     language: str = "tr"
+    coupon_code: str = ""
 
 
 class BillingPreferencesRequest(BaseModel):
@@ -413,6 +415,21 @@ class BillingCheckoutRequest(BaseModel):
     language: str = "tr"
     terms_accepted: bool = False
     early_performance_requested: bool = False
+    coupon_code: str = ""
+
+
+class ReferralChoiceRequest(BaseModel):
+    reward_choice: Literal["minutes", "coupon"]
+    currency: str | None = Field(default=None, min_length=3, max_length=3)
+
+
+class ReferralReleaseRequest(BaseModel):
+    provider_reconciled: StrictBool = False
+    evidence_reference: str = ""
+
+
+class ReferralReconcileRequest(BaseModel):
+    order_reference: str
 
 
 class LessonQuestionRequest(BaseModel):
@@ -817,6 +834,7 @@ def billing_register(payload: BillingRegisterRequest, request: Request) -> dict:
             payload.last_name,
             payload.phone,
             payload.country_code,
+            referral_code=payload.referral_code,
         )
         record_account_activity(
             result["user"]["id"],
@@ -840,6 +858,7 @@ def billing_register(payload: BillingRegisterRequest, request: Request) -> dict:
         "verification_required": True,
         "message": "Doğrulama kodunu ve bağlantısını e-posta adresine gönderdik.",
         "user": result["user"],
+        "referral_status": result.get("referral_status", "not_provided"),
     }
 
 
@@ -938,6 +957,58 @@ def billing_me(user: dict = Depends(_billing_user)) -> dict:
     return {"ok": True, "account": account_status(user["id"])}
 
 
+def _referral_response(callback, *args, **kwargs) -> dict:
+    from .referrals import ReferralError
+    try:
+        return callback(*args, **kwargs)
+    except ReferralError as exc:
+        code = 503 if exc.code in {"LS-REF-DISABLED", "LS-REF-SCHEMA"} else 400
+        raise HTTPException(code, detail={"code": exc.code, "message": str(exc)}) from exc
+
+
+@app.get("/billing/referrals")
+def billing_referrals(user: dict = Depends(_billing_user)) -> dict:
+    from .referrals import summary
+    return {"ok": True, "referrals": _referral_response(summary, user["id"])}
+
+
+@app.post("/billing/referrals/code")
+def billing_referral_code(request: Request, user: dict = Depends(_billing_user)) -> dict:
+    from .referrals import create_code
+    _rate_limit(request, "referral-code", user["id"], limit=10, window_seconds=3600)
+    return {"ok": True, "referrals": _referral_response(create_code, user["id"])}
+
+
+@app.post("/billing/referrals/rewards/{reward_id}/choice")
+def billing_referral_choice(reward_id: str, payload: ReferralChoiceRequest,
+                            user: dict = Depends(_billing_user)) -> dict:
+    from .referrals import choose_reward
+    return {"ok": True, "referrals": _referral_response(
+        choose_reward, user["id"], reward_id, payload.reward_choice, currency=payload.currency,
+    )}
+
+
+@app.get("/billing/admin/referrals", dependencies=[Depends(_billing_admin)])
+def billing_admin_referrals() -> dict:
+    from .referrals import admin_pending
+    return {"ok": True, "rewards": _referral_response(admin_pending)}
+
+
+@app.post("/billing/admin/referrals/reconcile-order", dependencies=[Depends(_billing_admin)])
+def billing_admin_referral_reconcile(payload: ReferralReconcileRequest) -> dict:
+    from .referrals import reconcile_order
+    return {"ok": True, **_referral_response(reconcile_order, payload.order_reference)}
+
+
+@app.post("/billing/admin/referrals/{reward_id}/release", dependencies=[Depends(_billing_admin)])
+def billing_admin_referral_release(reward_id: str, payload: ReferralReleaseRequest) -> dict:
+    from .referrals import release_reward
+    return {"ok": True, "reward": _referral_response(
+        release_reward, reward_id, provider_reconciled=payload.provider_reconciled,
+        evidence_reference=payload.evidence_reference,
+    )}
+
+
 @app.patch("/billing/me/preferences")
 def billing_update_preferences(
     payload: BillingPreferencesRequest,
@@ -1017,7 +1088,8 @@ def billing_create_manual_order(
             payload.last_name or user.get("last_name", ""),
             user.get("phone") or "",
         )
-        order = create_manual_order(user["id"], payload.plan_code, payload.interval)
+        order = create_manual_order(user["id"], payload.plan_code, payload.interval,
+                                    coupon_code=payload.coupon_code)
         record_payment_consent(
             order["reference"],
             user["id"],
@@ -1062,6 +1134,7 @@ def billing_create_checkout(
             "terms_accepted": payload.terms_accepted,
             "early_performance_requested": payload.early_performance_requested,
             "user_agent": request.headers.get("user-agent", ""),
+            "coupon_code": payload.coupon_code,
         }
         if provider == "iyzico":
             checkout = create_iyzico_checkout(

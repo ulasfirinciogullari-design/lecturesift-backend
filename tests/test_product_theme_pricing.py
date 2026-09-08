@@ -30,8 +30,8 @@ def test_product_palette_normal_text_meets_aa(mode):
     for text in ("ink", "muted", "subtle"):
         for surface in ("page", "surface", "surface-raised"):
             assert _contrast(colors[text], colors[surface]) >= 4.5, (mode, text, surface)
-    assert _contrast("#202722", "#d8ef91") >= 4.5
-    assert _contrast("#202722", "#e5f4b8") >= 4.5
+    for surface in ("action", "action-hover"):
+        assert _contrast(colors["action-ink"], colors[surface]) >= 4.5, (mode, surface)
 
 
 def _frontend_catalogs():
