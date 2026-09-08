@@ -106,6 +106,11 @@ test('rebuilt study entry opens the real workspace and key screens remain usable
     if (testInfo.project.name.endsWith('light')) await page.screenshot({path:testInfo.outputPath(name+'.jpg'), quality:75, fullPage:false});
   };
   await capture('home-layout');
+  const illustration = page.locator('.study-illustration');
+  await illustration.scrollIntoViewIfNeeded();
+  await expect.poll(() => illustration.evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true);
+  await noHorizontalOverflow(page);
+  await page.locator('#study-example').screenshot({path:testInfo.outputPath('study-illustration-layout.jpg'), quality:80});
   await page.locator('.source-youtube').click();
   await expect(page).toHaveURL(/workspace\.html\?source=link/);
   await expect(page.locator('#linkTab')).toHaveAttribute('aria-selected','true');

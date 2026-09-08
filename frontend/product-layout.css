@@ -62,3 +62,9 @@ html[dir="rtl"] .workspace-page>.page-shell{margin:0 252px 60px 30px}
 .plans-page .billing-heading{display:flex;justify-content:space-between;align-items:center;gap:28px;margin-bottom:18px}
 @media(max-width:860px){.auth-shell:not(.single){min-height:0!important;align-items:start;margin-bottom:40px}.auth-shell:not(.single)>.auth-card{order:0;margin-top:0}.auth-shell:not(.single)>.auth-story{order:1;padding:22px!important}.auth-shell:not(.single) .story-stack{display:none}.auth-story h1{font-size:28px!important}.auth-story>p:not(.eyebrow){font-size:14px!important}.auth-topbar>.theme-toggle{margin-inline-start:auto}.auth-topbar>.language-switcher{margin-inline-start:8px}}
 @media(max-width:600px){.plans-page .detail-hero{padding:20px 0!important}.plans-page .detail-hero h1{font-size:30px!important}.plans-page .billing-heading{flex-direction:column;align-items:flex-start;gap:12px}.plans-page .billing-heading h2{font-size:23px!important}.plans-page .detail-hero>p{font-size:14px;line-height:1.75}.billing-side p{margin:0 0 8px}}
+
+/* Original study illustration stays decorative; the adjacent demo is interactive. */
+.home-page .study-illustration{display:block;width:100%;height:auto;aspect-ratio:3/2;object-fit:contain;border-radius:20px;margin:0 0 26px;background:#f2f5fc;border:1px solid var(--ui-line)}
+.home-page .study-example{align-items:center}
+@media(min-width:861px){.home-page .example-intro h2{font-size:32px;margin-bottom:14px}.home-page .study-illustration{max-width:400px}}
+@media(max-width:860px){.home-page .study-illustration{max-width:480px;margin-inline:auto}.home-page .example-intro{width:100%;margin-inline:auto}}
