@@ -85,3 +85,9 @@ Official sources reviewed 2026-09-08:
 - https://developers.openai.com/api/docs/models/gpt-5.6-luna
 - https://developers.openai.com/api/docs/guides/images-vision
 - https://developers.openai.com/api/docs/guides/structured-outputs
+
+
+Image creation is now implemented as a separate authenticated action and remains
+off until its provider is verified. See [the image release contract](ASSISTANT_IMAGE_RELEASE.md).
+Text chat does not silently invoke paid image creation. Video generation remains
+unavailable; video attachment analysis samples visual frames only.

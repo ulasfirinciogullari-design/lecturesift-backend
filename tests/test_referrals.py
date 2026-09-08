@@ -540,7 +540,8 @@ def test_genuine_renewal_survives_replacement_and_expiration(state):
 
 
 @pytest.mark.parametrize("blocker", ["refund", "cancel", "closed"])
-def test_renewal_release_blocks_refund_cancellation_or_closed_account(state, blocker):
+def test_renewal_release_blocks_refund_cancellation_or_closed_account(state, blocker, monkeypatch):
+    monkeypatch.setenv('LECTURESIFT_REFERRAL_CAMPAIGN_START_AT', '2026-09-01T00:00:00Z')
     state["now"] = datetime(2026, 9, 1, 12, tzinfo=timezone.utc)
     inviter, invitee, _, _ = released(state, "minutes")
     source = pay(invitee)

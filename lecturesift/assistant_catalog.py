@@ -3,6 +3,8 @@
 import os
 
 MODEL = "gpt-5.6-luna"
+IMAGE_MODEL = "gpt-image-1.5"
+IMAGE_CREDITS = 220
 VERSION = "2026-09-08-assistant-v1"
 # This capability stays closed until the three-table recovery contract and
 # provider access have been verified in the release environment.
@@ -30,12 +32,17 @@ def enabled() -> bool:
     return SCHEMA_RECOVERY_RELEASE_READY and os.getenv("ASSISTANT_ENABLED", "").lower() == "true"
 
 
+def images_enabled() -> bool:
+    return enabled() and os.getenv("ASSISTANT_IMAGES_ENABLED", "").lower() == "true"
+
+
 def offers(currency: str) -> dict:
     selected = currency if currency in PRICES else "USD"
     return {
         "available": enabled(), "version": VERSION, "currency": selected,
         "included": INCLUDED, "input_tokens_per_credit": 1000,
         "output_token_weight": 6, "topup_valid_days": 365,
+        "image": {"available": images_enabled(), "credits": IMAGE_CREDITS, "size": "1024x1024"},
         "packs": [
             {"code": code, "credits": credits, "amount_minor": PRICES[selected][i], "currency": selected}
             for i, (code, credits) in enumerate(PACKS.items())

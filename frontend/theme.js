@@ -83,12 +83,12 @@
   const loadAssistant = () => {
     const loadWidget = () => {
       const assistant = document.createElement("script");
-      assistant.src = "/assistant.js?v=2";
+      assistant.src = "/assistant.js?v=3";
       document.body.append(assistant);
     };
     if (window.LectureSiftAssistantCopy) {loadWidget();return;}
     const copy = document.createElement("script");
-    copy.src = "/assistant-i18n.js?v=1";
+    copy.src = "/assistant-i18n.js?v=2";
     copy.onload = loadWidget;
     document.body.append(copy);
   };

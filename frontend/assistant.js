@@ -5,7 +5,7 @@
   const language = () => window.LectureSiftI18n?.language || document.documentElement.lang || 'tr';
   const token = () => localStorage.getItem('lecturesift-billing-token') || '';
   const path = value => window.LectureSiftI18n?.localizedPath?.(language(), value) || value;
-  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/assistant.css?v=1'; document.head.append(css);
+  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/assistant.css?v=2'; document.head.append(css);
   const launch = document.createElement('button'); launch.className = 'assistant-launch'; launch.textContent = t('title'); launch.type = 'button'; launch.setAttribute('aria-haspopup', 'dialog'); document.body.append(launch);
   const positionLaunch = () => {
     const banner=document.querySelector('.consent-banner:not([hidden])');
@@ -22,7 +22,7 @@
   document.addEventListener('lecturesift:consent',observeConsent);
   window.addEventListener('resize',positionLaunch);observeConsent();
   const dialog = document.createElement('dialog'); dialog.className = 'assistant-dialog'; dialog.setAttribute('aria-labelledby', 'assistantTitle');
-  dialog.innerHTML = '<div class="assistant-layout"><header class="assistant-header"><h2 id="assistantTitle"></h2><button type="button" class="assistant-close">×</button></header><div class="assistant-messages" role="log" aria-live="polite"></div><p class="assistant-status" role="status"></p><details class="assistant-details"><summary></summary><p></p></details><form class="assistant-compose"><div class="assistant-attachment" hidden><span></span><button type="button">×</button></div><textarea maxlength="3000" required></textarea><div class="assistant-toolbar"><button type="button" class="assistant-attach">＋</button><button type="button" class="assistant-clear"></button><button type="submit"></button></div><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" hidden></form></div>';
+  dialog.innerHTML = '<div class="assistant-layout"><header class="assistant-header"><h2 id="assistantTitle"></h2><button type="button" class="assistant-close">×</button></header><div class="assistant-messages" role="log" aria-live="polite"></div><p class="assistant-status" role="status"></p><details class="assistant-details"><summary></summary><p></p></details><form class="assistant-compose"><select class="assistant-mode" hidden><option value="chat"></option><option value="image"></option></select><div class="assistant-attachment" hidden><span></span><button type="button">×</button></div><textarea maxlength="3000" required></textarea><div class="assistant-toolbar"><button type="button" class="assistant-attach">＋</button><button type="button" class="assistant-clear"></button><button type="submit"></button></div><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" hidden></form></div>';
   document.body.append(dialog);
   const $ = selector => dialog.querySelector(selector);
   $('#assistantTitle').textContent = t('title'); $('.assistant-close').setAttribute('aria-label',t('close'));
@@ -31,12 +31,15 @@
   $('.assistant-attach').setAttribute('aria-label',t('attach')); $('.assistant-details summary').textContent=t('credits');
   $('.assistant-details p').textContent = t('rules') + ' ' + t('media');
   $('.assistant-attachment button').setAttribute('aria-label',t('close'));
+  $('.assistant-mode').setAttribute('aria-label',t('mode'));
+  $('.assistant-mode option[value=chat]').textContent=t('chatmode');
+  let imageCredits=0;
   let history = [], attachment = null, sessionToken = token(), busy = false, available = false, trialCount = 0, pending = null;
   const setStatus = text => { $('.assistant-status').textContent = text; };
   async function request(endpoint, data, auth = true) {
     const headers = {'Content-Type':'application/json'};
     if (auth && token()) headers.Authorization = `Bearer ${token()}`;
-    const response = await fetch(API + endpoint, {method:data ? 'POST':'GET', headers, body:data ? JSON.stringify(data):undefined, signal:AbortSignal.timeout(65000)});
+    const response = await fetch(API + endpoint, {method:data ? 'POST':'GET', headers, body:data ? JSON.stringify(data):undefined, signal:AbortSignal.timeout(endpoint==='/assistant/image'?110000:65000)});
     const body = await response.json();
     if (!response.ok) { const error = new Error(body.detail?.code || 'LS-ASSIST-07'); error.status=response.status; throw error; }
     return body;
@@ -54,14 +57,27 @@
     $('.assistant-messages').append(node); node.scrollIntoView({block:'nearest'});
     return node;
   }
-  function reset() { history=[]; pending=null; attachment=null; $('.assistant-attachment').hidden=true; $('.assistant-messages').replaceChildren(); $('textarea').value=''; setStatus(''); }
-  function setBusy(value) { busy=value; dialog.querySelectorAll('form button').forEach(button=>{button.disabled=value;}); $('textarea').disabled=value; }
+  function reset() { $('.assistant-mode').value='chat';updateMode();history=[]; pending=null; attachment=null; $('.assistant-attachment').hidden=true; $('.assistant-messages').replaceChildren(); $('textarea').value=''; setStatus(''); }
+  function setBusy(value) { busy=value; dialog.querySelectorAll('form button,form select').forEach(button=>{button.disabled=value;}); $('textarea').disabled=value; }
+  function updateMode() {
+    const creating=$('.assistant-mode').value==='image';
+    $('.assistant-attach').hidden=creating;
+    $('textarea').placeholder=t(creating?'imageprompt':'ask');
+    $('textarea').setAttribute('aria-label',t(creating?'imageprompt':'ask'));
+    $('textarea').maxLength=creating?1000:3000;
+    if(creating){attachment=null;$('.assistant-attachment').hidden=true;}
+  }
+  $('.assistant-mode').addEventListener('change',()=>{pending=null;updateMode();});
   launch.addEventListener('click',async()=>{
     if (sessionToken !== token()) { reset(); sessionToken=token(); }
     dialog.showModal(); $('textarea').focus();
     if (!$('.assistant-messages').children.length) addMessage(t('welcome'), 'assistant', token() ? 'workspace' : 'register');
     try {
       const offers=await request('/assistant/catalog', null, false); available=offers.available===true;
+      imageCredits=offers.image?.credits||0;
+      $('.assistant-mode').hidden=!(available&&offers.image?.available===true&&token());
+      $('.assistant-mode option[value=image]').textContent=`${t('imagemode')} · ${imageCredits} ${t('credits')}`;
+      if($('.assistant-mode').hidden){$('.assistant-mode').value='chat';updateMode();}
       if (!available) { setStatus(t('unavailable')); return; }
       if (token()) { const wallet=await request('/assistant/wallet'); setStatus(`${wallet.balance} · ${t('credits')}`); }
       else setStatus(t('trial'));
@@ -113,10 +129,17 @@
     const message=$('textarea').value.trim();if(!message)return;
     if(!available){addMessage(t('unavailable'),'assistant',token()?'workspace':'register');return;}
     if(!token()&&trialCount>=3){addMessage(t('signup'),'assistant','register');return;}
+    const creating=token()&&$('.assistant-mode').value==='image';
+    if(creating&&new TextEncoder().encode(message).length>1000){setStatus(t('shortprompt'));return;}
     setBusy(true);setStatus(t('waiting'));addMessage(message,'user');
     try {
       let answer;
       if(!token()) {answer=await request('/assistant/trial',{message:message.slice(0,500),language:language()},false);trialCount++;}
+      else if(creating) {
+        const signature='image:'+message;
+        if(!pending||pending.signature!==signature)pending={signature,payload:{request_id:crypto.randomUUID(),prompt:message}};
+        answer=await request('/assistant/image',pending.payload);
+      }
       else {
         const lessonId=new URLSearchParams(location.search).get('job') || '';
         const payload={message,language:language(),currency:localStorage.getItem('lecturesift-currency')||'USD',history:history.slice(-6),lesson_id:lessonId,...(attachment||{images:[],media_kind:'none'})};
@@ -125,7 +148,12 @@
         answer=await request('/assistant/chat',pending.payload);
       }
       if(sessionToken!==token()){reset();sessionToken=token();return;}
-      addMessage(answer.answer,'assistant',answer.action);
+      if(answer.kind==='image'&&/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(answer.image||'')&&answer.image.length<=1500100){
+        const node=addMessage(t('generated'));
+        const picture=document.createElement('img');picture.src=answer.image;picture.alt=message;picture.width=1024;picture.height=1024;node.append(picture);
+        const download=document.createElement('a');download.className='assistant-action';download.href=answer.image;download.download='lecturesift-image.jpg';download.textContent=t('downloadimage');node.append(download);
+        answer.answer=t('generated');
+      }else addMessage(answer.answer,'assistant',answer.action);
       pending=null;
       history.push({role:'user',content:message.slice(0,2000)},{role:'assistant',content:answer.answer.slice(0,2000)});
       history=history.slice(-6);$('textarea').value='';attachment=null;$('.assistant-attachment').hidden=true;

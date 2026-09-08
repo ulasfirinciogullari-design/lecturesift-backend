@@ -329,3 +329,100 @@ def test_postgres_parallel_reservations_cannot_overspend(monkeypatch):
         assert wallet.status(user_id)["balance"] == 48
     finally:
         engine.dispose()
+
+
+@pytest.fixture
+def image_provider(state, monkeypatch):
+    from lecturesift import assistant_images
+    monkeypatch.setenv('ASSISTANT_IMAGES_ENABLED', 'true')
+    monkeypatch.setattr(assistant_images.config, 'OPENAI_API_KEY', 'synthetic-not-a-real-key')
+    content = io.BytesIO()
+    Image.new('RGB', (1024, 1024), 'blue').save(content, 'JPEG')
+    captured = {'calls': [], 'costs': [], 'failure': False}
+    class Client:
+        def __init__(self, **kwargs):
+            assert kwargs['max_retries'] == 0 and kwargs['timeout'] < 120
+            self.images = self
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def generate(self, **kwargs):
+            captured['calls'].append(kwargs)
+            if captured['failure']:
+                raise RuntimeError('private-provider-error')
+            return SimpleNamespace(data=[SimpleNamespace(b64_json=base64.b64encode(content.getvalue()).decode())],
+                                   usage=SimpleNamespace(input_tokens=200, output_tokens=1056))
+    monkeypatch.setattr(assistant_images, 'OpenAI', Client)
+    monkeypatch.setattr(assistant_images, 'record_cost', lambda **values: captured['costs'].append(values))
+    return assistant_images, captured
+
+
+def test_image_fixed_price_replay_and_provider_budget_are_distinct(image_provider):
+    images, captured = image_provider
+    owner = user()
+    paid(owner, 'ai_1000')
+    payload = images.ImageRequest(request_id='synthetic-image-123', prompt='Water cycle illustration')
+    result = images.generate(owner, payload)
+    assert result['charged_credits'] == 220 and result['balance'] == 830
+    assert result['image'].startswith('data:image/jpeg;base64,')
+    assert images.generate(owner, payload) == result
+    assert len(captured['calls']) == 1 and len(captured['costs']) == 2
+    call = captured['calls'][0]
+    assert call['model'] == 'gpt-image-1.5' and call['n'] == 1
+    assert call['quality'] == 'medium' and call['size'] == '1024x1024'
+    assert 'Water cycle' not in str(captured['costs'])
+    with billing.ENGINE.connect() as connection:
+        assert connection.execute(select(wallet.BUDGET.c.credits)).scalar_one() == 174
+    other = user()
+    with pytest.raises(LectureSiftError) as error:
+        images.generate(other, payload)
+    assert error.value.status_code == 402 and len(captured['calls']) == 1
+
+
+def test_failed_image_refunds_user_but_retains_unknown_platform_cost(image_provider):
+    images, captured = image_provider
+    owner = user()
+    paid(owner, 'ai_1000')
+    captured['failure'] = True
+    payload = images.ImageRequest(request_id='synthetic-image-fail', prompt='Synthetic diagram')
+    with pytest.raises(LectureSiftError) as error:
+        images.generate(owner, payload)
+    assert error.value.code == 'LS-ASSIST-07'
+    assert 'private-provider-error' not in str(error.value)
+    assert wallet.status(owner)['balance'] == 1050
+    with billing.ENGINE.connect() as connection:
+        assert connection.execute(select(wallet.BUDGET.c.credits)).scalar_one() == 220
+    with pytest.raises(LectureSiftError):
+        images.generate(owner, payload)
+    assert len(captured['calls']) == 1
+
+
+def test_image_switch_and_utf8_limit_prevent_any_charge(image_provider, monkeypatch):
+    images, captured = image_provider
+    owner = user()
+    paid(owner, 'ai_1000')
+    with pytest.raises(LectureSiftError) as error:
+        images.generate(owner, images.ImageRequest(request_id='synthetic-too-large', prompt='图' * 400))
+    assert error.value.status_code == 422
+    monkeypatch.setenv('ASSISTANT_IMAGES_ENABLED', 'false')
+    assert catalog.offers('TRY')['image']['available'] is False
+    with pytest.raises(LectureSiftError) as error:
+        images.generate(owner, images.ImageRequest(request_id='synthetic-disabled', prompt='Diagram'))
+    assert error.value.status_code == 503
+    assert captured['calls'] == [] and wallet.status(owner)['balance'] == 1050
+
+
+def test_image_endpoint_requires_authentication_and_sanitizes_large_bodies(image_provider):
+    images, captured = image_provider
+    client = TestClient(app_module.app)
+    assert client.post('/assistant/image', json={'prompt': 'Diagram'}).status_code == 401
+    app_module.app.dependency_overrides[app_module._billing_user] = lambda: {'id': user_id}
+    user_id = user()
+    try:
+        response = client.post('/assistant/image', content=b'x' * 9000)
+        assert response.status_code == 413
+        assert response.headers['Cache-Control'] == 'no-store'
+        response = client.post('/assistant/image', json={'prompt': 'private-input', 'request_id': 'bad'})
+        assert response.status_code == 422 and 'private-input' not in response.text
+    finally:
+        app_module.app.dependency_overrides.clear()
+    assert not captured['calls']

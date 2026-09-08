@@ -54,5 +54,15 @@ Historical cutover v2/v3 and recovery v1/v2 files retain their exact meaning.
 
 The API lifespan contains the minute-by-minute cache maintenance schedule; no
 new paid scheduler is needed. Disabled chat still prunes after schema capability
-is enabled. Image/video analysis is bounded; image/video generation is a separate
-unfinished capability and is not advertised as available.
+is enabled. Image/video analysis is bounded. Image creation is now a separately switched,
+owned 220-credit action using one 1024x1024 medium-quality JPEG. It requires a
+real image provider check before setting `ASSISTANT_IMAGES_ENABLED=true`; chat
+access alone does not prove image access. The current development account has
+no provider key, so the synthetic tests do not claim a generated provider image.
+See `docs/ASSISTANT_IMAGE_RELEASE.md` for cost and retention details.
+
+Video generation remains unavailable. OpenAI has announced the Sora/Videos API
+shutdown for September 24, 2026 with no replacement listed:
+https://developers.openai.com/api/docs/deprecations . A durable video provider
+with verified account access, pricing and owned asynchronous job recovery must
+be selected before offering paid video generation.

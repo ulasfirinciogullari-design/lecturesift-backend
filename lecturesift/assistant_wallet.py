@@ -281,7 +281,8 @@ def reserve(user_id, request_id, fingerprint, credits):
     return key, None
 
 
-def settle(user_id, key, *, input_tokens=0, output_tokens=0, response=None, unknown_cost=False):
+def settle(user_id, key, *, input_tokens=0, output_tokens=0, response=None, unknown_cost=False,
+           fixed_charge=None, provider_cost_credits=None):
     now = billing.utcnow()
     with billing.ENGINE.begin() as connection:
         _owner(connection, user_id)
@@ -289,6 +290,15 @@ def settle(user_id, key, *, input_tokens=0, output_tokens=0, response=None, unkn
         if not row or row.state != "reserved":
             _fail("LS-ASSIST-04")
         actual = max(1, (input_tokens + 6 * output_tokens + 999) // 1000) if response else 0
+        if response and fixed_charge is not None:
+            if not isinstance(fixed_charge, int) or not 1 <= fixed_charge <= row.reserved:
+                _fail("LS-ASSIST-04")
+            actual = fixed_charge
+        budget_cost = actual
+        if response and provider_cost_credits is not None:
+            if not isinstance(provider_cost_credits, int) or provider_cost_credits < 1:
+                _fail("LS-ASSIST-04")
+            budget_cost = provider_cost_credits
         # Customer is never charged for an unanswered request. Unknown provider
         # cost still counts at the full reservation against the platform ceiling.
         charge = min(row.reserved, actual)
@@ -297,11 +307,11 @@ def settle(user_id, key, *, input_tokens=0, output_tokens=0, response=None, unkn
             restored = min(refund, amount)
             connection.execute(update(GRANTS).where(GRANTS.c.id == grant_id, GRANTS.c.user_id == user_id).values(remaining=GRANTS.c.remaining + restored))
             refund -= restored
-        if actual > row.reserved:
+        if budget_cost > row.reserved:
             unknown_cost = True  # Estimate drift closes the budget for this day.
             connection.execute(update(BUDGET).where(BUDGET.c.day == row.budget_day).values(credits=DAILY_CREDIT_CEILING))
         elif not unknown_cost:
-            connection.execute(update(BUDGET).where(BUDGET.c.day == row.budget_day).values(credits=BUDGET.c.credits - (row.reserved - actual)))
+            connection.execute(update(BUDGET).where(BUDGET.c.day == row.budget_day).values(credits=BUDGET.c.credits - (row.reserved - budget_cost)))
         if response is not None:
             response["charged_credits"] = charge
         connection.execute(update(REQUESTS).where(REQUESTS.c.id == key).values(

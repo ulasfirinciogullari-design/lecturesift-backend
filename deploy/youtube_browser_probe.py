@@ -14,7 +14,7 @@ from pathlib import Path
 from lecturesift import media
 from lecturesift.errors import normalize_error
 
-diagnostics = {'provider_seen': False, 'token_generated': False, 'provider_error': False}
+diagnostics = {'provider_seen': False, 'token_generated': False, 'provider_error': False, 'provider_failure': 'none'}
 
 
 class Logger:
@@ -27,6 +27,18 @@ class Logger:
     def warning(self, message):
         if 'wpc' in message.lower() or 'WebPoClient' in message:
             diagnostics['provider_error'] = True
+            lowered = message.lower()
+            for category, needles in (
+                ('browser_start', ('start browser', 'connect to browser', 'browser closed')),
+                ('client_unavailable', ('webpoclient', 'wpc not found', 'initialization')),
+                ('timeout', ('timeout', 'timed out')),
+                ('attestation_rejected', ('rejected', 'invalid token')),
+            ):
+                if any(needle in lowered for needle in needles):
+                    diagnostics['provider_failure'] = category
+                    break
+            else:
+                diagnostics['provider_failure'] = 'other'
 
     def error(self, message):
         pass

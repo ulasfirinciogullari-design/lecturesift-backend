@@ -3,9 +3,12 @@ import os
 from pathlib import Path
 import subprocess
 import uuid
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
+from threading import Barrier
 
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, select, text, update
 
 from deploy import product_schema_release as release
 from deploy import verify_schema_transition_v4 as verifier
@@ -163,3 +166,146 @@ def test_runtime_roles_cannot_expose_product_ledgers_to_workers(database, tmp_pa
                                           dict(role=name+'_api',table='public.'+table,privilege=privilege)).scalar_one()
             assert not connection.execute(text("SELECT has_table_privilege(:role,:table,'SELECT,INSERT,UPDATE,DELETE')"),
                                           dict(role=name+'_worker',table='public.'+table)).scalar_one()
+
+
+@pytest.fixture
+def product_state(database, tmp_path, monkeypatch):
+    engine, name, _ = database
+    before = tmp_path / 'before.txt'
+    before.write_text(manifest(name, legacy=True))
+    with engine.begin() as connection:
+        release.migrate(connection, before, tmp_path / 'after.txt')
+    monkeypatch.setattr(billing, 'ENGINE', engine)
+    monkeypatch.setattr(rollout_service, 'ENGINE', engine)
+    monkeypatch.setattr(billing, '_INITIALIZED', True)
+    monkeypatch.setattr(referrals, 'SCHEMA_RECOVERY_RELEASE_READY', True)
+    monkeypatch.setenv('LECTURESIFT_REFERRALS_ENABLED', 'true')
+    monkeypatch.setenv('LECTURESIFT_REFERRAL_CAMPAIGN_START_AT', '2026-09-08T00:00:00Z')
+    monkeypatch.setattr(referrals, 'redemption_currencies', lambda: ['TRY'])
+    # Reconciliation below runs in competing real transactions and raises on
+    # errors; the best-effort payment wrapper must not swallow a race failure.
+    monkeypatch.setattr(referrals, 'after_order_change', lambda _reference: None)
+    clock = {'now': datetime(2026, 9, 8, 12, tzinfo=timezone.utc)}
+    monkeypatch.setattr(billing, 'utcnow', lambda: clock['now'])
+    monkeypatch.setattr(rollout_service, 'utcnow', lambda: clock['now'])
+    return clock
+
+
+def product_user(code=''):
+    email = 'product-' + uuid.uuid4().hex + '@example.invalid'
+    result = billing.register_user(email, 'Synthetic-password-123', 'Synthetic', 'Test', referral_code=code)
+    owner = result['user']['id']
+    with billing.ENGINE.begin() as connection:
+        connection.execute(update(billing.USER_PROFILES).where(
+            billing.USER_PROFILES.c.user_id == owner).values(email_verified_at=billing.utcnow()))
+    return owner
+
+
+def product_payment(owner):
+    order = billing.create_payment_order(owner, 'synthetic-provider', 'lite', 'monthly', 'TRY')
+    billing.complete_payment_order(order['reference'], succeeded=True, provider_amount_minor=order['amount_minor'])
+    return order
+
+
+def race(operation, values):
+    barrier = Barrier(len(values), timeout=20)
+    def attempt(value):
+        barrier.wait()
+        return operation(value)
+    with ThreadPoolExecutor(max_workers=len(values)) as pool:
+        return list(pool.map(attempt, values, timeout=60))
+
+
+def test_postgres_first_and_renewal_purchases_share_one_atomic_cap(product_state):
+    inviter = product_user()
+    code = referrals.create_code(inviter)['referral_code']
+    existing = [product_user(code) for _ in range(3)]
+    for owner in existing:
+        referrals._qualify(product_payment(owner)['reference'])
+    product_state['now'] += timedelta(days=31)
+    new = [product_user(code) for _ in range(4)]
+    references = [product_payment(owner)['reference'] for owner in existing + new]
+    race(referrals._qualify, references)
+    race(referrals._qualify, references)
+    with billing.ENGINE.connect() as connection:
+        rows = [row for table in (referrals.REWARDS, referrals.RENEWAL_REWARDS)
+                for row in connection.execute(select(table).where(table.c.reservation_month == '2026-10'))]
+    assert len(rows) == 7
+    assert sum(row.status == 'pending' for row in rows) == 5
+    assert sum(row.status == 'cap_reached' for row in rows) == 2
+    assert len({row.order_reference for row in rows}) == 7
+
+
+def test_postgres_renewal_month_slot_and_release_are_exactly_once(product_state):
+    inviter = product_user()
+    invitee = product_user(referrals.create_code(inviter)['referral_code'])
+    referrals._qualify(product_payment(invitee)['reference'])
+    product_state['now'] += timedelta(days=31)
+    references = [product_payment(invitee)['reference'] for _ in range(4)]
+    race(referrals._qualify, references)
+    with billing.ENGINE.connect() as connection:
+        rows = connection.execute(select(referrals.RENEWAL_REWARDS)).all()
+    assert len(rows) == 4
+    assert sum(row.status == 'monthly_limit' for row in rows) == 3
+    selected = next(row for row in rows if row.status == 'pending')
+    referrals.choose_reward(inviter, selected.id, 'minutes')
+    product_state['now'] += timedelta(days=14)
+    results = race(lambda _: referrals.release_reward(selected.id, provider_reconciled=True,
+                                                      evidence_reference='synthetic-review-123'), list(range(8)))
+    assert all(result['status'] == 'released' for result in results)
+    with billing.ENGINE.connect() as connection:
+        balances = dict(connection.execute(select(billing.USERS.c.id, billing.USERS.c.credit_minutes)).all())
+    assert balances[inviter] == 30
+    assert balances[invitee] == 0
+
+
+def test_postgres_coupon_race_failure_reuse_and_refund_block(product_state):
+    inviter = product_user()
+    invitee = product_user(referrals.create_code(inviter)['referral_code'])
+    source = product_payment(invitee)
+    referrals._qualify(source['reference'])
+    with billing.ENGINE.connect() as connection:
+        reward = connection.execute(select(referrals.REWARDS)).one()
+    referrals.choose_reward(inviter, reward.id, 'coupon', 'TRY')
+    product_state['now'] += timedelta(days=14)
+    referrals.release_reward(reward.id, provider_reconciled=True, evidence_reference='synthetic-review-123')
+    with billing.ENGINE.connect() as connection:
+        coupon = connection.execute(select(referrals.COUPONS.c.code)).scalar_one()
+    def checkout(_):
+        try:
+            return billing.create_payment_order(inviter, 'synthetic-provider', 'lite', 'monthly', 'TRY', coupon_code=coupon)
+        except referrals.ReferralError:
+            return None
+    orders = [order for order in race(checkout, list(range(8))) if order]
+    assert len(orders) == 1
+    billing.complete_payment_order(orders[0]['reference'], succeeded=False)
+    referrals._coupon_order_changed(orders[0]['reference'])
+    with billing.ENGINE.connect() as connection:
+        assert connection.execute(select(referrals.COUPONS.c.status)).scalar_one() == 'ready'
+    rollout_service.create_refund_request(invitee, source['reference'], 'Synthetic source purchase refund')
+    assert checkout(None) is None
+    with billing.ENGINE.connect() as connection:
+        assert connection.execute(select(referrals.COUPONS.c.order_reference)).scalar_one() is None
+
+
+def test_postgres_account_erasure_removes_private_assistant_rows_with_feature_off(product_state, monkeypatch):
+    from lecturesift import assistant_catalog
+    monkeypatch.setattr(assistant_catalog, 'SCHEMA_RECOVERY_RELEASE_READY', True)
+    monkeypatch.setenv('ASSISTANT_ENABLED', 'true')
+    owner = product_user()
+    peer = product_user(referrals.create_code(owner)['referral_code'])
+    key, _ = assistant_wallet.reserve(owner, 'synthetic-request', 'synthetic-hash', 20)
+    assistant_wallet.settle(owner, key, input_tokens=1000, response={'answer': 'synthetic-private-answer'})
+    assert assistant_wallet.status(peer)['balance'] == 50
+    exported = rollout_service.export_account_data(owner)
+    assert 'synthetic-private-answer' not in str(exported)
+    with billing.ENGINE.connect() as connection:
+        email = connection.execute(select(billing.USERS.c.email).where(billing.USERS.c.id == owner)).scalar_one()
+    monkeypatch.setenv('ASSISTANT_ENABLED', 'false')
+    monkeypatch.setenv('LECTURESIFT_REFERRALS_ENABLED', 'false')
+    rollout_service.close_user_account(owner, 'Synthetic-password-123', email)
+    with billing.ENGINE.connect() as connection:
+        for table in (assistant_wallet.GRANTS, assistant_wallet.REQUESTS):
+            assert not connection.execute(select(table).where(table.c.user_id == owner)).first()
+        assert connection.execute(select(assistant_wallet.GRANTS).where(assistant_wallet.GRANTS.c.user_id == peer)).first()
+    assert referrals.export_data(owner) == {'rewards': [], 'coupons': []}

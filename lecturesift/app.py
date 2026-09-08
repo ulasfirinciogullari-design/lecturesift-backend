@@ -1466,6 +1466,28 @@ async def assistant_chat(request: Request, user: dict = Depends(_billing_user)) 
         raise HTTPException(exc.status_code, detail=exc.public()) from exc
 
 
+@app.post("/assistant/image")
+async def assistant_image(request: Request, user: dict = Depends(_billing_user)) -> dict:
+    from pydantic import ValidationError
+    from starlette.concurrency import run_in_threadpool
+    from .assistant_images import ImageRequest, generate
+    try:
+        _rate_limit(request, "assistant-image", user["id"], limit=10, window_seconds=3600)
+        body = bytearray()
+        async for chunk in request.stream():
+            if len(body) + len(chunk) > 8192:
+                raise HTTPException(413, detail={"code": "LS-ASSIST-06"})
+            body.extend(chunk)
+        try:
+            payload = ImageRequest.model_validate_json(body)
+        except ValidationError:
+            raise HTTPException(422, detail={"code": "LS-ASSIST-06"})
+        _require_ai_provider({"job_type": "study_pack"})
+        return await run_in_threadpool(generate, user["id"], payload)
+    except LectureSiftError as exc:
+        raise HTTPException(exc.status_code, detail=exc.public()) from exc
+
+
 @app.post("/assistant/trial")
 async def assistant_trial(request: Request) -> dict:
     import hashlib
