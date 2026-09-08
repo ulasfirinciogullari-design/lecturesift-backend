@@ -220,6 +220,18 @@ def _public_support_conversation(conversation: dict) -> dict:
     return safe
 
 
+def _display_ads_provider() -> str | None:
+    if config.DISPLAY_ADS_ENABLED and config.DISPLAY_AD_UNIT_PATH.startswith("/"):
+        return "google_gpt"
+    if (
+        config.ADSENSE_ENABLED
+        and config.ADSENSE_CMP_READY
+        and re.fullmatch(r"ca-pub-[0-9]+", config.ADSENSE_PUBLISHER_ID)
+    ):
+        return "google_adsense_auto"
+    return None
+
+
 @router.get("/rollout/health")
 def rollout_health(readiness: bool = False) -> dict:
     queue = JOBS.redis_health()
@@ -259,10 +271,7 @@ def rollout_health(readiness: bool = False) -> dict:
             and config.GOOGLE_ADS_SIGNUP_LABEL
             and config.GOOGLE_ADS_PURCHASE_LABEL
         ),
-        "display_ads_configured": bool(
-            (config.DISPLAY_ADS_ENABLED and config.DISPLAY_AD_UNIT_PATH)
-            or re.fullmatch(r"ca-pub-[0-9]+", config.ADSENSE_PUBLISHER_ID)
-        ),
+        "display_ads_configured": _display_ads_provider() is not None,
         "contact_email": config.CONTACT_EMAIL,
         "durable_queue_configured": bool(config.CELERY_BROKER_URL),
         "durable_processing_required": config.REQUIRE_DURABLE_PROCESSING,
@@ -301,20 +310,17 @@ def rollout_health(readiness: bool = False) -> dict:
 
 @router.get("/ads/config")
 def ads_config() -> dict:
-    configured = bool(config.DISPLAY_ADS_ENABLED and config.DISPLAY_AD_UNIT_PATH)
+    provider = _display_ads_provider()
+    adsense_enabled = provider == "google_adsense_auto"
     return {
-        "enabled": configured,
-        "provider": "google_gpt" if configured else None,
-        "banner_unit_path": config.DISPLAY_AD_UNIT_PATH if configured else None,
+        "enabled": provider is not None,
+        "provider": provider,
+        "banner_unit_path": config.DISPLAY_AD_UNIT_PATH if provider == "google_gpt" else None,
         "consent_required": True,
         "paid_plans_ad_free": True,
         "adsense_auto_ads": {
-            "enabled": bool(re.fullmatch(r"ca-pub-[0-9]+", config.ADSENSE_PUBLISHER_ID)),
-            "publisher_id": (
-                config.ADSENSE_PUBLISHER_ID
-                if re.fullmatch(r"ca-pub-[0-9]+", config.ADSENSE_PUBLISHER_ID)
-                else None
-            ),
+            "enabled": adsense_enabled,
+            "publisher_id": config.ADSENSE_PUBLISHER_ID if adsense_enabled else None,
         },
         "house_campaign": {
             "enabled": bool(

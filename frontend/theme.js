@@ -20,7 +20,7 @@
     root.dataset.theme = theme;
     root.style.colorScheme = theme;
     const themeColor = document.querySelector('meta[name="theme-color"]');
-    if (themeColor) themeColor.content = theme === "light" ? "#f4f7fc" : "#061022";
+    if (themeColor) themeColor.content = theme === "light" ? "#f6f7f4" : "#151918";
   };
 
   applyTheme(activeTheme);

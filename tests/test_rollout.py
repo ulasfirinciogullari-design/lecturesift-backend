@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
 import lecturesift.jobs as jobs_module
+import lecturesift.rollout_routes as rollout_routes
 import lecturesift.rollout_service as rollout_service
 import lecturesift.exports as exports_module
 from lecturesift import config, pipeline
@@ -46,6 +47,9 @@ def auth(token: str) -> dict:
 def test_display_ads_are_disabled_by_default_and_hide_unit_details(monkeypatch):
     monkeypatch.setattr(config, "DISPLAY_ADS_ENABLED", False)
     monkeypatch.setattr(config, "DISPLAY_AD_UNIT_PATH", "/1234567/lecturesift_banner")
+    monkeypatch.setattr(config, "ADSENSE_ENABLED", False)
+    monkeypatch.setattr(config, "ADSENSE_CMP_READY", False)
+    monkeypatch.setattr(config, "ADSENSE_PUBLISHER_ID", "ca-pub-7608481350058806")
     monkeypatch.setattr(config, "SITE_BANNER_ENABLED", True)
     disabled = client.get("/ads/config")
     assert disabled.status_code == 200
@@ -56,8 +60,8 @@ def test_display_ads_are_disabled_by_default_and_hide_unit_details(monkeypatch):
         "consent_required": True,
         "paid_plans_ad_free": True,
         "adsense_auto_ads": {
-            "enabled": True,
-            "publisher_id": config.ADSENSE_PUBLISHER_ID,
+            "enabled": False,
+            "publisher_id": None,
         },
         "house_campaign": {
             "enabled": True,
@@ -73,6 +77,68 @@ def test_display_ads_are_disabled_by_default_and_hide_unit_details(monkeypatch):
     assert enabled["enabled"] is True
     assert enabled["provider"] == "google_gpt"
     assert enabled["banner_unit_path"] == "/1234567/lecturesift_banner"
+    assert enabled["adsense_auto_ads"] == {"enabled": False, "publisher_id": None}
+
+
+@pytest.mark.parametrize(
+    "activated,cmp_ready,publisher_id,expected",
+    [
+        (False, False, "ca-pub-7608481350058806", False),
+        (False, True, "ca-pub-7608481350058806", False),
+        (True, False, "ca-pub-7608481350058806", False),
+        (True, True, "", False),
+        (True, True, "pub-7608481350058806", False),
+        (True, True, "ca-pub-7608481350058806-extra", False),
+        (True, True, "ca-pub-7608481350058806", True),
+    ],
+)
+def test_adsense_requires_manual_activation_cmp_readiness_and_valid_id(
+    monkeypatch, activated, cmp_ready, publisher_id, expected
+):
+    monkeypatch.setattr(config, "DISPLAY_ADS_ENABLED", False)
+    monkeypatch.setattr(config, "ADSENSE_ENABLED", activated)
+    monkeypatch.setattr(config, "ADSENSE_CMP_READY", cmp_ready)
+    monkeypatch.setattr(config, "ADSENSE_PUBLISHER_ID", publisher_id)
+    body = client.get("/ads/config").json()
+    assert body["enabled"] is expected
+    assert body["provider"] == ("google_adsense_auto" if expected else None)
+    assert body["banner_unit_path"] is None
+    assert body["adsense_auto_ads"] == {
+        "enabled": expected,
+        "publisher_id": publisher_id if expected else None,
+    }
+
+    # The health endpoint must use the same activation gate, not publisher-ID
+    # presence. Stub infrastructure checks so this remains a local config test.
+    monkeypatch.setattr(rollout_routes.JOBS, "redis_health", lambda: {"connected": False})
+    monkeypatch.setattr(rollout_routes.STORAGE, "health", lambda: {"connected": False})
+    health = client.get("/rollout/health").json()
+    assert health["display_ads_configured"] is expected
+
+
+def test_explicit_gpt_configuration_takes_precedence_over_adsense(monkeypatch):
+    monkeypatch.setattr(config, "DISPLAY_ADS_ENABLED", True)
+    monkeypatch.setattr(config, "DISPLAY_AD_UNIT_PATH", "/1234567/lecturesift_banner")
+    monkeypatch.setattr(config, "ADSENSE_ENABLED", True)
+    monkeypatch.setattr(config, "ADSENSE_CMP_READY", True)
+    monkeypatch.setattr(config, "ADSENSE_PUBLISHER_ID", "ca-pub-7608481350058806")
+    body = client.get("/ads/config").json()
+    assert body["enabled"] is True
+    assert body["provider"] == "google_gpt"
+    assert body["banner_unit_path"] == "/1234567/lecturesift_banner"
+    assert body["adsense_auto_ads"] == {"enabled": False, "publisher_id": None}
+
+
+@pytest.mark.parametrize("unit_path", ["", "1234567/banner"])
+def test_invalid_gpt_unit_does_not_enable_publisher_ads(monkeypatch, unit_path):
+    monkeypatch.setattr(config, "DISPLAY_ADS_ENABLED", True)
+    monkeypatch.setattr(config, "DISPLAY_AD_UNIT_PATH", unit_path)
+    monkeypatch.setattr(config, "ADSENSE_ENABLED", False)
+    monkeypatch.setattr(config, "ADSENSE_CMP_READY", False)
+    body = client.get("/ads/config").json()
+    assert body["enabled"] is False
+    assert body["provider"] is None
+    assert body["banner_unit_path"] is None
 
 
 def test_analytics_config_requires_opt_in_and_a_valid_public_measurement_id(monkeypatch):
@@ -352,7 +418,7 @@ def test_manual_order_admin_rejection_and_instagram_approval(monkeypatch):
     )
     assert order.status_code == 200
     reference = order.json()["order"]["reference"]
-    assert order.json()["order"]["amount_minor"] == 449000
+    assert order.json()["order"]["amount_minor"] == 599000
 
     pending = client.get("/admin/manual-orders?status=pending", headers=auth("admin-secret"))
     assert pending.status_code == 200

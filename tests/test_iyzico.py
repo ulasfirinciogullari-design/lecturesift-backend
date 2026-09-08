@@ -106,7 +106,7 @@ def test_iyzico_checkout_and_callback_verify_signatures_amount_and_order(monkeyp
                 "signature": _response_signature([reference, token]),
             })
         reference = payload["conversationId"]
-        values = ["SUCCESS", "payment-123", "TRY", reference, reference, "449", "449", token]
+        values = ["SUCCESS", "payment-123", "TRY", reference, reference, "599", "599", token]
         return FakeResponse({
             "status": "success",
             "paymentStatus": "SUCCESS",
@@ -114,8 +114,8 @@ def test_iyzico_checkout_and_callback_verify_signatures_amount_and_order(monkeyp
             "currency": "TRY",
             "basketId": reference,
             "conversationId": reference,
-            "paidPrice": "449.00",
-            "price": "449.0",
+            "paidPrice": "599.00",
+            "price": "599.0",
             "token": token,
             "cardType": "CREDIT_CARD",
             "cardAssociation": "VISA",
@@ -167,7 +167,7 @@ def test_iyzico_checkout_and_callback_verify_signatures_amount_and_order(monkeyp
     assert initialize["payload"]["buyer"]["identityNumber"] == "11111111111"
     assert initialize["payload"]["basketItems"][0]["itemType"] == "VIRTUAL"
     assert "shippingAddress" not in initialize["payload"]
-    assert initialize["payload"]["price"] == "449.00"
+    assert initialize["payload"]["price"] == "599.00"
     assert initialize["payload"]["callbackUrl"].endswith(f"?order={reference}")
     assert "live-secret-key" not in initialize["raw"]
     assert "live-api-key" not in initialize["raw"]
@@ -928,7 +928,7 @@ def test_iyzico_bank_transfer_waits_for_signed_webhook_before_activation(monkeyp
                 "signature": _response_signature([reference, token]),
             })
         payment_status = "SUCCESS" if state["matched"] else "INIT_BANK_TRANSFER"
-        values = [payment_status, "bank-payment-123", "TRY", reference, reference, "449", "449", token]
+        values = [payment_status, "bank-payment-123", "TRY", reference, reference, "599", "599", token]
         return FakeResponse({
             "status": "success",
             "paymentStatus": payment_status,
@@ -936,8 +936,8 @@ def test_iyzico_bank_transfer_waits_for_signed_webhook_before_activation(monkeyp
             "currency": "TRY",
             "basketId": reference,
             "conversationId": reference,
-            "paidPrice": "449.00",
-            "price": "449.00",
+            "paidPrice": "599.00",
+            "price": "599.00",
             "token": token,
             "signature": _response_signature(values),
         })
@@ -1083,7 +1083,7 @@ def test_legacy_iyzico_order_accepts_signed_bank_transfer_evidence(
                 "paymentPageUrl": f"https://api.iyzipay.com/checkoutform/{token}",
                 "signature": _response_signature([reference, token]),
             })
-        values = ["SUCCESS", "legacy-bank-payment", "TRY", reference, reference, "449", "449", token]
+        values = ["SUCCESS", "legacy-bank-payment", "TRY", reference, reference, "599", "599", token]
         return FakeResponse({
             "status": "success",
             "paymentStatus": "SUCCESS",
@@ -1091,8 +1091,8 @@ def test_legacy_iyzico_order_accepts_signed_bank_transfer_evidence(
             "currency": "TRY",
             "basketId": reference,
             "conversationId": reference,
-            "paidPrice": "449.00",
-            "price": "449.00",
+            "paidPrice": "599.00",
+            "price": "599.00",
             "token": token,
             "signature": _response_signature(values),
         })
@@ -1122,7 +1122,7 @@ def test_legacy_iyzico_order_accepts_signed_bank_transfer_evidence(
             .values(
                 provider="iyzico",
                 status=legacy_status,
-                provider_amount_minor=44900 if legacy_status == "paid" else None,
+                provider_amount_minor=59900 if legacy_status == "paid" else None,
             )
         )
         connection.execute(
@@ -1196,7 +1196,7 @@ def test_iyzico_ambiguous_success_waits_for_signed_method_notification(monkeypat
                 "paymentPageUrl": f"https://api.iyzipay.com/checkoutform/{token}",
                 "signature": _response_signature([reference, token]),
             })
-        values = ["SUCCESS", "ambiguous-payment-1", "TRY", reference, reference, "449", "449", token]
+        values = ["SUCCESS", "ambiguous-payment-1", "TRY", reference, reference, "599", "599", token]
         return FakeResponse({
             "status": "success",
             "paymentStatus": "SUCCESS",
@@ -1204,8 +1204,8 @@ def test_iyzico_ambiguous_success_waits_for_signed_method_notification(monkeypat
             "currency": "TRY",
             "basketId": reference,
             "conversationId": reference,
-            "paidPrice": "449.00",
-            "price": "449.00",
+            "paidPrice": "599.00",
+            "price": "599.00",
             "token": token,
             "signature": _response_signature(values),
         })
@@ -1320,7 +1320,7 @@ def test_iyzico_transfer_intent_is_reconciled_to_actual_card_payment(monkeypatch
                 "paymentPageUrl": f"https://api.iyzipay.com/checkoutform/{token}",
                 "signature": _response_signature([reference, token]),
             })
-        values = ["SUCCESS", "card-payment-456", "TRY", reference, reference, "449", "449", token]
+        values = ["SUCCESS", "card-payment-456", "TRY", reference, reference, "599", "599", token]
         return FakeResponse({
             "status": "success",
             "paymentStatus": "SUCCESS",
@@ -1328,8 +1328,8 @@ def test_iyzico_transfer_intent_is_reconciled_to_actual_card_payment(monkeypatch
             "currency": "TRY",
             "basketId": reference,
             "conversationId": reference,
-            "paidPrice": "449.00",
-            "price": "449.00",
+            "paidPrice": "599.00",
+            "price": "599.00",
             "token": token,
             "cardType": "CREDIT_CARD",
             "cardAssociation": "VISA",

@@ -130,19 +130,19 @@ const PLAN_COPY = {
   tr: {
     free: ["Ücretsiz", "LectureSift'i denemek ve kısa dersleri işlemek için.", "60 dk / ay"],
     credit: ["Dakika Paketi", "Abonelik olmadan ek işlem hakkı.", "180 dakika"],
-    lite: ["Lite", "Düzenli bireysel ders çalışması için.", "600 dk / ay"],
-    plus: ["Plus", "Yoğun ders dönemi ve çoklu kaynaklar için.", "1.800 dk / ay"],
-    pro: ["Pro", "Uzun kayıtlar ve öncelikli işleme için.", "5.000 dk / ay"],
-    max: ["Max", "En yüksek bireysel kullanım kapasitesi.", "12.000 dk / ay"],
+    lite: ["Lite", "Düzenli bireysel ders çalışması için.", "400 dk / ay"],
+    plus: ["Plus", "Yoğun ders dönemi ve çoklu kaynaklar için.", "900 dk / ay"],
+    pro: ["Pro", "Uzun kayıtlar ve öncelikli işleme için.", "2.000 dk / ay"],
+    max: ["Max", "En yüksek bireysel kullanım kapasitesi.", "4.000 dk / ay"],
     business: ["Business", "Ekipler, kurumlar ve özel kapasite için.", "10 kullanıcı"]
   },
   en: {
     free: ["Free", "Try LectureSift and process short lectures.", "60 min / month"],
     credit: ["Minute Pack", "Extra processing without a subscription.", "180 minutes"],
-    lite: ["Lite", "For regular individual study.", "600 min / month"],
-    plus: ["Plus", "For intensive study and multiple sources.", "1,800 min / month"],
-    pro: ["Pro", "For long recordings and priority processing.", "5,000 min / month"],
-    max: ["Max", "The highest individual processing capacity.", "12,000 min / month"],
+    lite: ["Lite", "For regular individual study.", "400 min / month"],
+    plus: ["Plus", "For intensive study and multiple sources.", "900 min / month"],
+    pro: ["Pro", "For long recordings and priority processing.", "2,000 min / month"],
+    max: ["Max", "The highest individual processing capacity.", "4,000 min / month"],
     business: ["Business", "For teams, institutions, and custom capacity.", "10 seats"]
   }
 };
@@ -282,32 +282,43 @@ const PLAN_ORDER = ["free", "credit", "lite", "plus", "pro", "max", "business"];
 const PLAN_FALLBACK = {
   free: ["free", 60, 10, 20, ["pdf"], ["detailed"], "standard", false],
   credit: ["one_time", 180, 20, 40, ["pdf", "docx", "txt"], ["detailed"], "standard", false],
-  lite: ["subscription", 600, 20, 40, ["pdf", "docx", "txt"], ["detailed"], "standard", false],
-  plus: ["subscription", 1800, 30, 60, ["pdf", "docx", "txt"], ["detailed"], "standard", true],
-  pro: ["subscription", 5000, 30, 60, ["pdf", "docx", "txt"], ["detailed"], "priority", false],
-  max: ["subscription", 12000, 30, 60, ["pdf", "docx", "txt"], ["detailed"], "priority", false],
+  lite: ["subscription", 400, 10, 20, ["pdf", "docx", "txt"], ["detailed"], "standard", false],
+  plus: ["subscription", 900, 20, 40, ["pdf", "docx", "txt"], ["detailed"], "standard", true],
+  pro: ["subscription", 2000, 30, 60, ["pdf", "docx", "txt"], ["detailed"], "priority", false],
+  max: ["subscription", 4000, 30, 60, ["pdf", "docx", "txt"], ["detailed"], "priority", false],
   business: ["quote", null, null, null, ["pdf", "docx", "txt"], ["detailed"], "priority", false],
 };
 const FALLBACK_PRICES = {
-  TRY: [0,19900,27900,44900,99900,199900,null], USD: [0,499,699,999,2499,4999,null],
-  EUR: [0,499,649,949,2399,4799,null], GBP: [0,399,599,849,2099,4199,null],
-  CAD: [0,699,949,1349,3399,6799,null], AUD: [0,799,1099,1549,3799,7599,null],
-  NZD: [0,899,1199,1699,4199,8399,null], JPY: [0,750,1050,1500,3750,7500,null],
-  KRW: [0,6900,9500,13900,34900,69900,null], CNY: [0,3500,4900,6900,17500,34900,null],
-  INR: [0,39900,54900,79900,199900,399900,null], BRL: [0,2499,3499,4999,12499,24999,null],
-  MXN: [0,9900,13900,19900,49900,99900,null], CHF: [0,449,599,849,2199,4399,null],
-  SEK: [0,5299,7299,10499,25999,51999,null], NOK: [0,5499,7699,10999,27499,54999,null],
-  DKK: [0,3499,4499,6699,16999,33999,null], PLN: [0,1999,2699,3999,9999,19999,null],
-  AED: [0,1899,2599,3699,9199,18399,null], SAR: [0,1899,2599,3799,9399,18799,null],
-  SGD: [0,699,949,1349,3399,6799,null], HKD: [0,3899,5499,7799,19499,38999,null],
+  TRY: [0, 19900, 29900, 59900, 119900, 229900, null],
+  USD: [0, 499, 899, 1699, 3299, 5999, null],
+  EUR: [0, 499, 849, 1599, 3099, 5699, null],
+  GBP: [0, 399, 642, 1133, 2519, 4829, null],
+  CAD: [0, 699, 1017, 1800, 4079, 7819, null],
+  AUD: [0, 799, 1178, 2066, 4560, 8739, null],
+  NZD: [0, 899, 1285, 2267, 5040, 9659, null],
+  JPY: [0, 750, 1125, 2001, 4501, 8626, null],
+  KRW: [0, 6900, 10181, 18544, 41887, 80390, null],
+  CNY: [0, 3500, 5251, 9205, 21004, 40138, null],
+  INR: [0, 39900, 58835, 106593, 239920, 459915, null],
+  BRL: [0, 2499, 3750, 6669, 15001, 28751, null],
+  MXN: [0, 9900, 14896, 26548, 59890, 114892, null],
+  CHF: [0, 449, 642, 1133, 2639, 5059, null],
+  SEK: [0, 5299, 7822, 14006, 31204, 59803, null],
+  NOK: [0, 5499, 8251, 14673, 33004, 63253, null],
+  DKK: [0, 3499, 4822, 8937, 20402, 39101, null],
+  PLN: [0, 1999, 2892, 5335, 12001, 23000, null],
+  AED: [0, 1899, 2785, 4935, 11041, 21160, null],
+  SAR: [0, 1899, 2785, 5068, 11281, 21620, null],
+  SGD: [0, 699, 1017, 1800, 4079, 7819, null],
+  HKD: [0, 3899, 5893, 10404, 23403, 44852, null],
 };
 const PLAN_SOURCE_LIMITS = {
   free: {max_files_per_job:3, max_media_upload_mb:100, max_document_upload_mb:25, max_minutes_per_job:30, max_document_pages:50, max_ocr_pages:20},
   credit: {max_files_per_job:8, max_media_upload_mb:500, max_document_upload_mb:50, max_minutes_per_job:180, max_document_pages:150, max_ocr_pages:50},
-  lite: {max_files_per_job:12, max_media_upload_mb:750, max_document_upload_mb:75, max_minutes_per_job:180, max_document_pages:250, max_ocr_pages:75},
-  plus: {max_files_per_job:16, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:300, max_document_pages:350, max_ocr_pages:100},
-  pro: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:600, max_document_pages:500, max_ocr_pages:150},
-  max: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:900, max_document_pages:500, max_ocr_pages:150},
+  lite: {max_files_per_job:12, max_media_upload_mb:750, max_document_upload_mb:75, max_minutes_per_job:120, max_document_pages:250, max_ocr_pages:75},
+  plus: {max_files_per_job:16, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:240, max_document_pages:350, max_ocr_pages:100},
+  pro: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:360, max_document_pages:500, max_ocr_pages:150},
+  max: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:600, max_document_pages:500, max_ocr_pages:150},
   business: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:1440, max_document_pages:500, max_ocr_pages:150},
 };
 
@@ -325,7 +336,7 @@ function planCopy(code) {
   if (currentLanguage === "tr") return fallback;
   if (currentLanguage === "en") return PLAN_COPY.en[code] || fallback;
   const central = window.LectureSiftI18n;
-  const amount = {free:60, credit:180, lite:600, plus:1800, pro:5000, max:12000, business:10}[code];
+  const amount = code === "business" ? 10 : PLAN_FALLBACK[code]?.[1];
   const units = code === "business"
     ? central?.t("plans.userUnit", "kullanıcı")
     : code === "credit"

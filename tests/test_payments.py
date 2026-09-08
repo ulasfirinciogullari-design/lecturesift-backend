@@ -90,18 +90,18 @@ def test_paytr_checkout_and_callback_are_signed_and_idempotent(monkeypatch):
     assert captured["url"] == payments.PAYTR_TOKEN_URL
     assert captured["data"]["merchant_oid"] == reference
     assert captured["data"]["email"] == email
-    assert captured["data"]["payment_amount"] == "44900"
+    assert captured["data"]["payment_amount"] == "59900"
     assert captured["data"]["user_ip"] == "203.0.113.24"
     assert captured["data"]["test_mode"] == "1"
     assert "merchant-key" not in str(captured["data"])
     assert "merchant-salt" not in str(captured["data"])
 
-    total_amount = "46300"
+    total_amount = "61300"
     callback = {
         "merchant_oid": reference,
         "status": "success",
         "total_amount": total_amount,
-        "payment_amount": "44900",
+        "payment_amount": "59900",
         "hash": _callback_hash(reference, "success", total_amount),
     }
     first = client.post("/billing/paytr/callback", data=callback)
@@ -114,7 +114,7 @@ def test_paytr_checkout_and_callback_are_signed_and_idempotent(monkeypatch):
     ).json()["account"]
     assert account["plan"]["code"] == "plus"
     assert account["payment_orders"][0]["status"] == "paid"
-    assert account["payment_orders"][0]["provider_amount_minor"] == 46300
+    assert account["payment_orders"][0]["provider_amount_minor"] == 61300
     export_response = client.get(
         "/billing/me/export", headers={"Authorization": f"Bearer {token}"}
     )

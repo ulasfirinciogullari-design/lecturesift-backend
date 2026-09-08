@@ -300,11 +300,11 @@ def test_workspace_outputs_are_individually_optional_and_mobile_ready():
 def test_every_page_supports_persistent_light_and_dark_themes():
     for page in FRONTEND.glob("*.html"):
         content = page.read_text(encoding="utf-8")
-        expected_theme_version = "13" if page.name == "workspace.html" else "12"
+        expected_theme_version = "14"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
-        assert "/theme.js?v=2" in content, page.name
-        assert "i18n.js?v=27" in content, page.name
-        assert "page-i18n.js?v=6" in content, page.name
+        assert "/theme.js?v=3" in content, page.name
+        assert "i18n.js?v=28" in content, page.name
+        assert "page-i18n.js?v=7" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
     style = (FRONTEND / "theme.css").read_text(encoding="utf-8")
@@ -588,7 +588,7 @@ def test_payment_routes_are_distinct_localized_and_account_history_is_auditable(
         assert len(values) == 13, key
         assert all(str(value).strip() for value in values), key
 
-    assert 'src="/plans.js?v=18"' in plans_html
+    assert 'src="/plans.js?v=19"' in plans_html
     assert 'manualTransfer = {available:Boolean(transferBody?.available), bank:null};' in plans_js
     assert 'order.bank?.iban' in plans_js
     assert 'transferBody?.bank' not in plans_js
@@ -750,7 +750,7 @@ def test_admin_cost_reconciliation_controls_are_wired():
 def test_admin_cost_centre_has_theme_specific_readability_rules():
     admin = (FRONTEND / "admin.html").read_text(encoding="utf-8")
     theme = (FRONTEND / "theme.css").read_text(encoding="utf-8")
-    assert 'href="/theme.css?v=12"' in admin
+    assert 'href="/theme.css?v=14"' in admin
     assert "#adminCostsView" in theme
     assert 'html[data-theme="light"] #adminCostsView' in theme
     assert "--cost-warning-text:#754100" in theme
@@ -1066,7 +1066,7 @@ def test_banner_ads_are_opt_in_public_only_and_paid_plans_are_ad_free():
     display = (FRONTEND / "display-ads.js").read_text(encoding="utf-8")
     blueprint = (FRONTEND.parent / "render.yaml").read_text(encoding="utf-8")
 
-    assert 'displayAdsScript.src = "/display-ads.js?v=2"' in i18n
+    assert 'displayAdsScript.src = "/display-ads.js?v=3"' in i18n
     assert 'displayAdsStyle.href = "/display-ads.css?v=2"' in i18n
     assert 'LectureSiftConsent?.allows("advertising")' in display
     assert 'body.account?.plan?.entitlements?.ad_free === true' in display
@@ -1106,7 +1106,7 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=28"' in index
+    assert 'src="./app.js?v=29"' in index
     assert 'src="/rollout.js?v=6"' in index
     assert '$("plans").scrollIntoView' not in app
 
@@ -1177,7 +1177,7 @@ def test_transcript_timeline_is_rendered_with_localized_precision_status():
     assert "overflow-x: auto" in style
     assert ".transcript-timeline" in theme
     assert ".transcript-segment" in theme
-    assert ".transcript-segment time{color:#075a9e" in theme
+    assert ".transcript-segment time { color: var(--ui-green) !important; }" in theme
 
     assert '"transcript.preciseTimestamps"' in catalog
     assert '"transcript.estimatedTimestamps"' in catalog

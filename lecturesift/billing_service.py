@@ -16,6 +16,7 @@ import os
 import secrets
 import threading
 import uuid
+from dataclasses import asdict, fields
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import (
@@ -26,6 +27,7 @@ from sqlalchemy import (
     MetaData,
     String,
     Table,
+    Text,
     create_engine,
     func,
     select,
@@ -35,7 +37,7 @@ from sqlalchemy import (
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from . import config
-from .billing import PLAN_BY_CODE, REGIONAL_PRICES
+from .billing import LEGACY_PLAN_BY_CODE, PLAN_BY_CODE, REGIONAL_PRICES, Plan
 
 
 class BillingError(Exception):
@@ -237,6 +239,18 @@ PAYMENT_ORDERS = Table(
     Column("failure_message", String(240), nullable=True),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False),
+)
+
+PURCHASE_TERMS_VERSION = "2026-09-08-v2"
+PURCHASE_TERMS = Table(
+    "billing_purchase_terms",
+    METADATA,
+    # Deliberately not a foreign key: terms must survive order retention or
+    # archival so an active subscription keeps the exact purchased allowance.
+    Column("reference", String(64), primary_key=True),
+    Column("plan_json", Text, nullable=False),
+    Column("version", String(32), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
 PAYMENT_PROVIDER_SESSIONS = Table(
@@ -843,6 +857,189 @@ def _active_subscription(connection, user_id: str, now: datetime):
     ).first()
 
 
+_PLAN_TUPLE_FIELDS = {"export_formats", "summary_profiles"}
+_PLAN_INTEGER_FIELDS = {
+    "minutes",
+    "team_seats",
+    "quiz_questions",
+    "flashcards",
+    "history_days",
+    "max_files_per_job",
+    "max_media_upload_mb",
+    "max_document_upload_mb",
+    "max_minutes_per_job",
+    "max_document_pages",
+    "max_ocr_pages",
+    "try_amount_minor",
+}
+LEGACY_TERMS_VERSION = "legacy-pre-2026-09-08"
+
+
+def _plan_from_snapshot(raw: object, expected_plan_code: str) -> Plan:
+    """Decode only server-created plan fields and fail closed on corruption."""
+    if not isinstance(raw, dict):
+        raise BillingConfigurationError("Satın alma planı kaydı okunamıyor.")
+    values = {}
+    for field in fields(Plan):
+        if field.name not in raw:
+            raise BillingConfigurationError("Satın alma planı kaydı eksik.")
+        value = raw[field.name]
+        if field.name in _PLAN_TUPLE_FIELDS:
+            if not isinstance(value, (list, tuple)) or not all(isinstance(item, str) for item in value):
+                raise BillingConfigurationError("Satın alma planı kaydı geçersiz.")
+            value = tuple(value)
+        elif field.name in _PLAN_INTEGER_FIELDS:
+            if value is not None and (
+                not isinstance(value, int) or isinstance(value, bool) or value < 0
+            ):
+                raise BillingConfigurationError("Satın alma planı sınırı geçersiz.")
+        values[field.name] = value
+    if values["code"] != expected_plan_code:
+        raise BillingConfigurationError("Satın alma planı siparişle eşleşmiyor.")
+    if values["kind"] not in {"free", "one_time", "subscription", "quote"}:
+        raise BillingConfigurationError("Satın alma planı türü geçersiz.")
+    if values["priority"] not in {"standard", "priority"}:
+        raise BillingConfigurationError("Satın alma planı önceliği geçersiz.")
+    if int(values["team_seats"] or 0) < 1:
+        raise BillingConfigurationError("Satın alma planı koltuk sayısı geçersiz.")
+    return Plan(**values)
+
+
+def _purchase_terms_payload(
+    plan: Plan,
+    *,
+    interval: str,
+    amount_minor: int,
+    currency: str,
+) -> str:
+    public_plan = plan.public(currency)
+    return json.dumps(
+        {
+            "plan": asdict(plan),
+            "entitlements": public_plan["entitlements"],
+            "purchase": {
+                "plan_code": plan.code,
+                "interval": interval,
+                "amount_minor": int(amount_minor),
+                "currency": currency,
+            },
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+
+
+def _store_purchase_terms(
+    connection,
+    *,
+    reference: str,
+    plan: Plan,
+    interval: str,
+    amount_minor: int,
+    currency: str,
+    now: datetime,
+) -> None:
+    connection.execute(
+        PURCHASE_TERMS.insert().values(
+            reference=reference,
+            plan_json=_purchase_terms_payload(
+                plan,
+                interval=interval,
+                amount_minor=amount_minor,
+                currency=currency,
+            ),
+            version=PURCHASE_TERMS_VERSION,
+            created_at=now,
+        )
+    )
+
+
+def _plan_for_purchase_reference(
+    connection,
+    *,
+    reference: str,
+    plan_code: str,
+    interval: str,
+    source=None,
+) -> tuple[Plan, str]:
+    terms = connection.execute(
+        select(PURCHASE_TERMS).where(PURCHASE_TERMS.c.reference == reference)
+    ).first()
+    if not terms:
+        legacy = LEGACY_PLAN_BY_CODE.get(plan_code)
+        if not legacy:
+            raise BillingConfigurationError("Eski satın alma planı bulunamadı.")
+        return legacy, LEGACY_TERMS_VERSION
+    try:
+        payload = json.loads(terms.plan_json)
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise BillingConfigurationError("Satın alma koşulları okunamıyor.") from exc
+    if not isinstance(payload, dict) or not isinstance(payload.get("purchase"), dict):
+        raise BillingConfigurationError("Satın alma koşulları eksik.")
+    purchase = payload["purchase"]
+    amount_minor = purchase.get("amount_minor")
+    if (
+        purchase.get("plan_code") != plan_code
+        or purchase.get("interval") != interval
+        or not isinstance(amount_minor, int)
+        or isinstance(amount_minor, bool)
+        or amount_minor < 0
+        or not isinstance(purchase.get("currency"), str)
+        or len(purchase["currency"]) != 3
+        or (
+            source is not None
+            and (
+                amount_minor != int(source.amount_minor)
+                or purchase["currency"] != source.currency
+            )
+        )
+    ):
+        raise BillingConfigurationError("Satın alma koşulları siparişle eşleşmiyor.")
+    plan = _plan_from_snapshot(payload.get("plan"), plan_code)
+    return plan, str(terms.version)
+
+
+def _assert_purchase_source_binding(
+    connection,
+    *,
+    reference: str,
+    user_id: str,
+    plan_code: str,
+    interval: str,
+):
+    payment_order = connection.execute(
+        select(
+            PAYMENT_ORDERS.c.user_id,
+            PAYMENT_ORDERS.c.plan_code,
+            PAYMENT_ORDERS.c.interval,
+            PAYMENT_ORDERS.c.amount_minor,
+            PAYMENT_ORDERS.c.currency,
+        )
+        .where(PAYMENT_ORDERS.c.reference == reference)
+    ).first()
+    manual_order = connection.execute(
+        select(
+            MANUAL_ORDERS.c.user_id,
+            MANUAL_ORDERS.c.plan_code,
+            MANUAL_ORDERS.c.interval,
+            MANUAL_ORDERS.c.amount_minor,
+            MANUAL_ORDERS.c.currency,
+        )
+        .where(MANUAL_ORDERS.c.reference == reference)
+    ).first()
+    if bool(payment_order) == bool(manual_order):
+        raise BillingConfigurationError("Satın alma kaynağı benzersiz değil.")
+    source = payment_order or manual_order
+    if (
+        source.user_id != user_id
+        or source.plan_code != plan_code
+        or source.interval != interval
+    ):
+        raise BillingAuthenticationError("Satın alma kaynağı hesapla eşleşmiyor.")
+    return source
+
+
 def _public_manual_order(order) -> dict:
     return {
         "reference": order.reference,
@@ -914,7 +1111,16 @@ def account_status(user_id: str) -> dict:
         ).first()
         subscription = _active_subscription(connection, user_id, now)
         plan_code = subscription.plan_code if subscription else "free"
-        plan = PLAN_BY_CODE[plan_code]
+        if subscription:
+            plan, plan_terms_version = _plan_for_purchase_reference(
+                connection,
+                reference=subscription.source_reference,
+                plan_code=plan_code,
+                interval=subscription.interval,
+            )
+        else:
+            plan = PLAN_BY_CODE["free"]
+            plan_terms_version = PURCHASE_TERMS_VERSION
         period_start = _subscription_usage_period_start(subscription, now) if subscription else month_start
         used = connection.execute(
             select(func.coalesce(func.sum(USAGE_EVENTS.c.minutes), 0)).where(
@@ -958,9 +1164,14 @@ def account_status(user_id: str) -> dict:
     paid_credit_access = credit_minutes > 0 and paid_credit_purchases > 0
     download_enabled = bool(plan.download_enabled or paid_credit_access)
     effective_job_plan = PLAN_BY_CODE["credit"] if plan.code == "free" and paid_credit_access else plan
+    public_plan = plan.public()
+    if plan_terms_version == LEGACY_TERMS_VERSION:
+        # Current catalog display prices are an offer for a new purchase, not
+        # evidence of what this legacy subscription paid.
+        public_plan["display_price"] = None
     return {
         "user": _public_user(user, profile, preference),
-        "plan": plan.public(),
+        "plan": public_plan,
         "subscription": (
             {
                 "status": subscription.status,
@@ -968,6 +1179,7 @@ def account_status(user_id: str) -> dict:
                 "starts_at": subscription.starts_at.isoformat(),
                 "ends_at": subscription.ends_at.isoformat(),
                 "cancel_at_period_end": subscription.status == "cancel_at_end",
+                "terms_version": plan_terms_version,
             }
             if subscription
             else None
@@ -1143,18 +1355,26 @@ def _shift_month(value: datetime, months: int) -> datetime:
 
 def _subscription_usage_period_start(subscription, now: datetime) -> datetime:
     """Return the current allowance period for monthly and annual subscriptions."""
-    starts_at = subscription.starts_at
-    if subscription.interval != "annual" or now <= starts_at:
+    starts_at = (
+        subscription.starts_at.astimezone(timezone.utc)
+        if subscription.starts_at.tzinfo
+        else subscription.starts_at.replace(tzinfo=timezone.utc)
+    )
+    current = now.astimezone(timezone.utc) if now.tzinfo else now.replace(tzinfo=timezone.utc)
+    if subscription.interval != "annual" or current <= starts_at:
         return starts_at
-    elapsed_months = max(0, (now.year - starts_at.year) * 12 + now.month - starts_at.month)
+    elapsed_months = max(
+        0,
+        (current.year - starts_at.year) * 12 + current.month - starts_at.month,
+    )
     candidate = _shift_month(starts_at, elapsed_months)
-    if candidate > now:
+    if candidate > current:
         candidate = _shift_month(starts_at, elapsed_months - 1)
     return max(starts_at, candidate)
 
 
 def _effective_job_plan(status: dict):
-    plan = PLAN_BY_CODE[status["plan"]["code"]]
+    plan = _plan_from_snapshot(status["plan"], status["plan"]["code"])
     if plan.code == "free" and status.get("download_access_source") == "credit":
         return PLAN_BY_CODE["credit"]
     return plan
@@ -1254,7 +1474,15 @@ def record_usage(user_id: str, job_id: str, duration_seconds: float) -> None:
                 return
             subscription = _active_subscription(connection, user_id, now)
             plan_code = subscription.plan_code if subscription else "free"
-            plan = PLAN_BY_CODE[plan_code]
+            if subscription:
+                plan, _terms_version = _plan_for_purchase_reference(
+                    connection,
+                    reference=subscription.source_reference,
+                    plan_code=plan_code,
+                    interval=subscription.interval,
+                )
+            else:
+                plan = PLAN_BY_CODE["free"]
             period_start = (
                 _subscription_usage_period_start(subscription, now)
                 if subscription
@@ -1300,7 +1528,20 @@ def _activate_purchase(
     reference: str,
     now: datetime,
 ) -> None:
-    plan = PLAN_BY_CODE[plan_code]
+    source = _assert_purchase_source_binding(
+        connection,
+        reference=reference,
+        user_id=user_id,
+        plan_code=plan_code,
+        interval=interval,
+    )
+    plan, _terms_version = _plan_for_purchase_reference(
+        connection,
+        reference=reference,
+        plan_code=plan_code,
+        interval=interval,
+        source=source,
+    )
     if plan.kind == "one_time":
         connection.execute(
             update(USERS)
@@ -1377,6 +1618,15 @@ def create_payment_order(
                 created_at=now,
                 updated_at=now,
             )
+        )
+        _store_purchase_terms(
+            connection,
+            reference=reference,
+            plan=plan,
+            interval=interval,
+            amount_minor=int(amount_minor),
+            currency=selected_currency,
+            now=now,
         )
     return payment_order(reference)
 
@@ -1733,6 +1983,15 @@ def create_manual_order(user_id: str, plan_code: str, interval: str) -> dict:
                 created_at=now,
                 updated_at=now,
             )
+        )
+        _store_purchase_terms(
+            connection,
+            reference=reference,
+            plan=plan,
+            interval=interval,
+            amount_minor=int(amount_minor),
+            currency="TRY",
+            now=now,
         )
     return {
         "reference": reference,
