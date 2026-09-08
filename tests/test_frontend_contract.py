@@ -1106,8 +1106,8 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=29"' in index
-    assert 'src="/rollout.js?v=6"' in index
+    assert 'src="./app.js?v=30"' in index
+    assert 'src="/rollout.js?v=7"' in index
     assert '$("plans").scrollIntoView' not in app
 
 
