@@ -121,7 +121,6 @@
     if (![...corporatePages, ...legalPages].includes(currentBasePath)) return;
     const groups = [
       ["LectureSift", [["Hakkımızda", "/about"], ["İletişim", "/contact"]]],
-      ["Ürün", [["Çalışma Alanı", "/workspace.html"], ["Özellikler", "/features"], ["Planlar", "/plans"]]],
       ["Yasal belgeler", [
         ["Gizlilik ve KVKK", "/privacy"], ["Kullanım koşulları", "/terms"],
         ["Çerez ve depolama", "/cookies"], ["Teslimat, iptal ve iade", "/refund"],

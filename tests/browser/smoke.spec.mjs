@@ -76,5 +76,20 @@ test('about removes the product journey section', async ({page}) => {
   await expect(page.locator('h1')).toBeVisible();
   await expect(page.locator('article section')).toHaveCount(4);
   await expect(page.getByRole('heading', {name:'Ürün yolculuğu'})).toHaveCount(0);
+  await expect(page.locator('.legal-nav').getByText('Ürün', {exact:true})).toHaveCount(0);
   await noHorizontalOverflow(page);
+});
+
+
+test('official white payment marks remain visible in both themes', async ({page}, testInfo) => {
+  await page.goto('/en/');
+  const band = page.locator('.footer-payment-band');
+  await band.scrollIntoViewIfNeeded();
+  await expect(band).toBeVisible();
+  await expect(band).toHaveCSS('background-color', 'rgb(17, 35, 59)');
+  expect(await band.evaluate(img => img.complete && img.naturalWidth === 912)).toBe(true);
+  const box = await band.boundingBox();
+  expect(box.width).toBeGreaterThan(280);
+  await noHorizontalOverflow(page);
+  await page.screenshot({path: testInfo.outputPath('payment-marks.png')});
 });

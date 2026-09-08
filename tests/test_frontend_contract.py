@@ -198,7 +198,7 @@ def test_public_navigation_is_consistent_localized_and_session_aware():
     )
     for page in public_pages:
         content = (FRONTEND / page).read_text(encoding="utf-8")
-        assert "/site-shell.js?v=5" in content, page
+        assert "/site-shell.js?v=6" in content, page
         assert "/rollout.css?v=9" in content, page
 
     shell = (FRONTEND / "site-shell.js").read_text(encoding="utf-8")
@@ -300,7 +300,7 @@ def test_workspace_outputs_are_individually_optional_and_mobile_ready():
 def test_every_page_supports_persistent_light_and_dark_themes():
     for page in FRONTEND.glob("*.html"):
         content = page.read_text(encoding="utf-8")
-        expected_theme_version = "16"
+        expected_theme_version = "17"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
         assert "/theme.js?v=6" in content, page.name
         assert "i18n.js?v=31" in content, page.name
@@ -750,7 +750,7 @@ def test_admin_cost_reconciliation_controls_are_wired():
 def test_admin_cost_centre_has_theme_specific_readability_rules():
     admin = (FRONTEND / "admin.html").read_text(encoding="utf-8")
     theme = (FRONTEND / "theme.css").read_text(encoding="utf-8")
-    assert 'href="/theme.css?v=16"' in admin
+    assert 'href="/theme.css?v=17"' in admin
     assert "#adminCostsView" in theme
     assert 'html[data-theme="light"] #adminCostsView' in theme
     assert "--cost-warning-text:#754100" in theme
