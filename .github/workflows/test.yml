@@ -67,8 +67,14 @@ jobs:
         continue-on-error: true
         run: |
           probe_name="lecturesift-youtube-probe-$GITHUB_RUN_ID"
-          trap 'docker rm -f "$probe_name" >/dev/null 2>&1 || true' EXIT
+          pot_name="lecturesift-youtube-pot-$GITHUB_RUN_ID"
+          trap 'docker rm -f "$probe_name" "$pot_name" >/dev/null 2>&1 || true' EXIT
+          docker run -d --init --name "$pot_name" --memory 512m --cpus 1 \
+            --pids-limit 128 --read-only --tmpfs /tmp:rw,nosuid,size=64m \
+            --cap-drop ALL --security-opt no-new-privileges \
+            brainicism/bgutil-ytdlp-pot-provider:2.0.0@sha256:79b7d390e024f3308a0b8fe2041be7e4e4d6a8c30ad6052a89bc51d210c385f1
           timeout 120s docker run --rm --name "$probe_name" \
+            --network "container:$pot_name" --env YOUTUBE_POT_BASE_URL=http://127.0.0.1:4416 \
             --memory 512m --cpus 1 --pids-limit 128 --read-only \
             --tmpfs /tmp:rw,nosuid,size=64m \
             --tmpfs /var/lib/lecturesift:rw,nosuid,size=32m \

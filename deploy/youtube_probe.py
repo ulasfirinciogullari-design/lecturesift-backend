@@ -3,6 +3,8 @@
 import contextlib
 import io
 import json
+import os
+import urllib.request
 import tempfile
 import time
 from pathlib import Path
@@ -13,8 +15,21 @@ from lecturesift.errors import normalize_error
 # Seven-second public sample from the pinned yt-dlp YouTube extractor tests.
 SAMPLE_URL = "https://www.youtube.com/watch?v=x41yOUIvK2k"
 media.MAX_VIDEO_BYTES = 16 * 1024 * 1024
+pot_url = os.getenv("YOUTUBE_POT_BASE_URL", "")
+if pot_url:
+    for attempt in range(10):
+        try:
+            with urllib.request.urlopen(pot_url + "/ping", timeout=2) as ping:
+                if json.load(ping).get("version") != "2.0.0":
+                    raise ValueError("Unexpected attestation service version")
+            break
+        except Exception:
+            if attempt == 9:
+                print(json.dumps({"status": "attestation_service_unavailable", "production_verified": False, "attestation": bool(pot_url)}))
+                raise SystemExit(1)
+            time.sleep(1)
 started = time.monotonic()
-result = {"sample_id": "x41yOUIvK2k", "runner": "github_actions", "production_verified": False}
+result = {"sample_id": "x41yOUIvK2k", "runner": "github_actions", "production_verified": False, "attestation": bool(pot_url)}
 
 try:
     with tempfile.TemporaryDirectory(prefix="lecturesift-youtube-probe-") as folder:

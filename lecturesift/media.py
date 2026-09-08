@@ -1,4 +1,5 @@
 import ipaddress
+import os
 import re
 import socket
 import subprocess
@@ -156,7 +157,19 @@ def _download_ytdlp_attempt(url: str, job_dir: Path, job_type: str, include_slid
         # Solver code is a pinned build dependency, never fetched at job time.
         "remote_components": [],
     }
-    if clients:
+    pot_url = os.getenv("YOUTUBE_POT_BASE_URL", "").strip()
+    if pot_url and pot_url not in {"http://127.0.0.1:4416", "http://youtube-pot:4416"}:
+        raise RuntimeError("YouTube playback attestation service is misconfigured.")
+    if pot_url:
+        # The endpoint is operator-controlled and never accepted from a job.
+        # The plugin generates video-bound tokens through our private service;
+        # no user account cookie, remote download site or public proxy is used.
+        options["extractor_args"] = {
+            "youtube": {"player_client": clients or ["mweb"], "fetch_pot": ["always"]},
+            "youtubepot-bgutilhttp": {"base_url": [pot_url]},
+            "youtubepot-bgutilscript": {"disable": ["true"]},
+        }
+    elif clients:
         options["extractor_args"] = {"youtube": {"player_client": clients}}
     try:
         with yt_dlp.YoutubeDL(options) as downloader:

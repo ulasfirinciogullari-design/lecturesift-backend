@@ -13,6 +13,7 @@ from lecturesift.errors import LectureSiftError, normalize_error
 
 @pytest.fixture
 def downloader(monkeypatch, tmp_path):
+    monkeypatch.delenv("YOUTUBE_POT_BASE_URL", raising=False)
     state = {"options": None, "attempts": [], "error": None, "errors": [], "file": "remote.mp4", "data": b"synthetic media"}
     monkeypatch.setattr(media, "validate_remote_url", lambda url: url)
 
@@ -43,6 +44,22 @@ def downloader(monkeypatch, tmp_path):
 
     monkeypatch.setattr(media.yt_dlp, "YoutubeDL", FakeDownloader)
     return state
+
+
+def test_private_attestation_uses_mobile_web_without_account_cookies(downloader, monkeypatch, tmp_path):
+    monkeypatch.setenv("YOUTUBE_POT_BASE_URL", "http://127.0.0.1:4416")
+    media.download_remote_video("https://youtu.be/abcdefghijk", tmp_path)
+    args = downloader["options"]["extractor_args"]
+    assert args["youtube"] == {"player_client": ["mweb"], "fetch_pot": ["always"]}
+    assert args["youtubepot-bgutilhttp"]["base_url"] == ["http://127.0.0.1:4416"]
+    assert "cookiefile" not in downloader["options"]
+
+
+def test_attestation_rejects_arbitrary_remote_endpoint(downloader, monkeypatch, tmp_path):
+    monkeypatch.setenv("YOUTUBE_POT_BASE_URL", "https://untrusted.example")
+    with pytest.raises(RuntimeError, match="misconfigured"):
+        media.download_remote_video("https://youtu.be/abcdefghijk", tmp_path)
+    assert downloader["options"] is None
 
 
 @pytest.mark.parametrize("url", [
