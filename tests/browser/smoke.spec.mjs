@@ -87,7 +87,7 @@ test('official white payment marks remain visible in both themes', async ({page}
   await band.scrollIntoViewIfNeeded();
   await expect(band).toBeVisible();
   await expect(band).toHaveCSS('background-color', 'rgb(17, 35, 59)');
-  expect(await band.evaluate(img => img.complete && img.naturalWidth === 912)).toBe(true);
+  await expect.poll(() => band.evaluate(img => img.complete && img.naturalWidth === 912)).toBe(true);
   const box = await band.boundingBox();
   expect(box.width).toBeGreaterThan(280);
   await noHorizontalOverflow(page);
@@ -161,6 +161,12 @@ test('mobile offer numbers, descriptions and links stay inside separate card row
       await page.goto(locale === 'tr' ? '/' : '/ar/');
       const consent = page.locator('[data-consent="essential"]');
       if (await consent.isVisible()) await consent.click();
+      const skipLink = page.locator('.skip-link');
+      await expect(skipLink).toHaveCSS('clip-path', 'inset(50%)');
+      await skipLink.focus();
+      await expect(skipLink).toHaveCSS('clip-path', 'none');
+      await page.keyboard.press('Tab');
+      await expect(skipLink).not.toBeFocused();
       const cards = page.locator('.campaign-card');
       await expect(cards).toHaveCount(3);
       await cards.first().scrollIntoViewIfNeeded();
