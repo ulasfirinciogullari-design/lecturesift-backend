@@ -43,6 +43,53 @@ fail() {
   exit 1
 }
 
+# systemctl does not accept a bare template such as foo@.service as a unit
+# invocation.  Query the fixed instance used by the tracked OnFailure contract;
+# systemd still reports the template fragment path and any operational
+# instance-specific drop-in without starting or enabling the instance.
+systemd_query_unit() {
+  local unit="$1"
+  case "$unit" in
+    lecturesift-backup-alert@.service)
+      printf '%s\n' 'lecturesift-backup-alert@lecturesift-backup.service.service'
+      ;;
+    *@.*)
+      return 1
+      ;;
+    *)
+      printf '%s\n' "$unit"
+      ;;
+  esac
+}
+
+assert_unit_inactive() {
+  local unit="$1" instances instance remainder state
+  case "$unit" in
+    lecturesift-backup-alert@.service)
+      instances="$(systemctl list-units --all --type=service --no-legend --plain \
+        'lecturesift-backup-alert@*.service')" || \
+        fail "could not inspect loaded instances for $unit"
+      while read -r instance remainder; do
+        [[ -n "$instance" ]] || continue
+        state="$(systemctl show --property=ActiveState --value "$instance")" || \
+          fail "could not inspect $instance"
+        case "$state" in
+          inactive|failed) ;;
+          *) fail "$instance must be inactive during installation" ;;
+        esac
+      done <<<"$instances"
+      ;;
+    *@.*)
+      fail "unsupported unit template: $unit"
+      ;;
+    *)
+      if systemctl is-active --quiet "$unit"; then
+        fail "$unit must be inactive during installation"
+      fi
+      ;;
+  esac
+}
+
 for command_name in git python3 cmp systemctl systemd-analyze install stat \
   realpath flock date sync awk chmod rm mv ln; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is unavailable"
@@ -91,7 +138,7 @@ python3 "$ROOT_DIR/deploy/validate_rehearsal_admission.py" \
   fail "the production checkout is not the exact admitted rehearsal revision"
 
 for unit in "${units[@]}"; do
-  systemctl is-active --quiet "$unit" && fail "$unit must be inactive during installation"
+  assert_unit_inactive "$unit"
 done
 for unit in lecturesift.service lecturesift-ingress.service \
   lecturesift-caddy-staging.service lecturesift-backup.timer \
@@ -119,17 +166,18 @@ systemd-analyze verify "${source_paths[@]}" >/dev/null || \
   fail "the admitted unit set failed systemd verification"
 
 installed_set_is_exact() {
-  local unit destination loaded
+  local unit query_unit destination loaded
   for unit in "${units[@]}"; do
+    query_unit="$(systemd_query_unit "$unit")" || return 1
     destination="$UNIT_ROOT/$unit"
     [[ -f "$destination" && ! -L "$destination" && \
        "$(realpath -e -- "$destination")" == "$destination" && \
        "$(stat -c '%u:%g:%a:%h' -- "$destination")" == "0:0:644:1" ]] || return 1
     cmp --silent "$ROOT_DIR/deploy/$unit" "$destination" || return 1
-    loaded="$(systemctl show --property=FragmentPath --value "$unit")" || return 1
+    loaded="$(systemctl show --property=FragmentPath --value "$query_unit")" || return 1
     [[ "$loaded" == "$destination" ]] || return 1
-    [[ -z "$(systemctl show --property=DropInPaths --value "$unit")" ]] || return 1
-    [[ "$(systemctl show --property=NeedDaemonReload --value "$unit")" == "no" ]] || return 1
+    [[ -z "$(systemctl show --property=DropInPaths --value "$query_unit")" ]] || return 1
+    [[ "$(systemctl show --property=NeedDaemonReload --value "$query_unit")" == "no" ]] || return 1
   done
   systemd-analyze verify "${source_paths[@]}" >/dev/null
 }
@@ -162,7 +210,7 @@ atomic_install() {
 }
 
 restore_previous_units() {
-  local unit rollback_failed=false marker_source
+  local unit query_unit rollback_failed=false marker_source
   [[ "$restored" == "false" ]] || return 0
   restored=true
   for unit in "${previous[@]}"; do
@@ -183,7 +231,11 @@ restore_previous_units() {
     [[ ! -e "$UNIT_ROOT/$unit" && ! -L "$UNIT_ROOT/$unit" ]] || rollback_failed=true
   done
   for unit in "${units[@]}"; do
-    [[ "$(systemctl show --property=NeedDaemonReload --value "$unit" 2>/dev/null)" == \
+    query_unit="$(systemd_query_unit "$unit")" || {
+      rollback_failed=true
+      continue
+    }
+    [[ "$(systemctl show --property=NeedDaemonReload --value "$query_unit" 2>/dev/null)" == \
        "no" ]] || rollback_failed=true
   done
   if [[ "$rollback_failed" == "false" && "$transaction_armed" == "true" ]]; then
@@ -255,13 +307,14 @@ sync -f "$UNIT_ROOT"
 systemctl daemon-reload
 
 for unit in "${units[@]}"; do
+  query_unit="$(systemd_query_unit "$unit")" || fail "unsupported unit template: $unit"
   cmp --silent "$ROOT_DIR/deploy/$unit" "$UNIT_ROOT/$unit" || \
     fail "installed fragment differs from the admitted source: $unit"
-  [[ "$(systemctl show --property=FragmentPath --value "$unit")" == "$UNIT_ROOT/$unit" ]] || \
+  [[ "$(systemctl show --property=FragmentPath --value "$query_unit")" == "$UNIT_ROOT/$unit" ]] || \
     fail "systemd did not load the exact local fragment: $unit"
-  [[ -z "$(systemctl show --property=DropInPaths --value "$unit")" ]] || \
+  [[ -z "$(systemctl show --property=DropInPaths --value "$query_unit")" ]] || \
     fail "unexpected systemd drop-in for $unit"
-  [[ "$(systemctl show --property=NeedDaemonReload --value "$unit")" == "no" ]] || \
+  [[ "$(systemctl show --property=NeedDaemonReload --value "$query_unit")" == "no" ]] || \
     fail "systemd still requires a reload for $unit"
 done
 installed_paths=()

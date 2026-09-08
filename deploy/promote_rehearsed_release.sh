@@ -51,6 +51,52 @@ fail() {
   exit 1
 }
 
+# Bare systemd templates are fragment names, not valid systemctl invocations.
+# Inspect the fixed instance used by the tracked OnFailure contract so an
+# operational instance-specific drop-in cannot evade the exactness check.
+systemd_query_unit() {
+  local unit="$1"
+  case "$unit" in
+    lecturesift-backup-alert@.service)
+      printf '%s\n' 'lecturesift-backup-alert@lecturesift-backup.service.service'
+      ;;
+    *@.*)
+      return 1
+      ;;
+    *)
+      printf '%s\n' "$unit"
+      ;;
+  esac
+}
+
+assert_unit_inactive() {
+  local unit="$1" instances instance remainder state
+  case "$unit" in
+    lecturesift-backup-alert@.service)
+      instances="$(systemctl list-units --all --type=service --no-legend --plain \
+        'lecturesift-backup-alert@*.service')" || \
+        fail "could not inspect loaded instances for $unit"
+      while read -r instance remainder; do
+        [[ -n "$instance" ]] || continue
+        state="$(systemctl show --property=ActiveState --value "$instance")" || \
+          fail "could not inspect $instance"
+        case "$state" in
+          inactive|failed) ;;
+          *) fail "$instance must be inactive during promotion" ;;
+        esac
+      done <<<"$instances"
+      ;;
+    *@.*)
+      fail "unsupported unit template: $unit"
+      ;;
+    *)
+      if systemctl is-active --quiet "$unit"; then
+        fail "$unit must be inactive during promotion"
+      fi
+      ;;
+  esac
+}
+
 for command_name in git python3 docker systemctl install stat realpath flock \
   find findmnt mv chmod chown date sync rm bash cmp; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is unavailable"
@@ -80,7 +126,7 @@ flock -n 9 || fail "another release promotion is active"
   fail "an interrupted release promotion requires operator recovery"
 
 for unit in "${managed_units[@]}"; do
-  systemctl is-active --quiet "$unit" && fail "$unit must be inactive during promotion"
+  assert_unit_inactive "$unit"
 done
 for container in lecturesift-api-1 lecturesift-worker-1 lecturesift-caddy-1 \
   lecturesift-caddy-staging lecturesift-egress-proxy-1; do
@@ -268,7 +314,7 @@ rollback_promotion() {
 }
 
 promoted_code_and_units_are_exact() {
-  local unit destination
+  local unit query_unit destination
   [[ -d "$TARGET_ROOT" && ! -L "$TARGET_ROOT" && \
      "$(git -C "$TARGET_ROOT" rev-parse --verify 'HEAD^{commit}' 2>/dev/null)" == \
      "$revision" && \
@@ -278,16 +324,17 @@ promoted_code_and_units_are_exact() {
     --root "$TARGET_ROOT" --expected-revision "$revision" >/dev/null 2>&1 || return 1
   bash "$TARGET_ROOT/deploy/release.sh" verify >/dev/null 2>&1 || return 1
   for unit in "${managed_units[@]}"; do
+    query_unit="$(systemd_query_unit "$unit")" || return 1
     destination="/etc/systemd/system/$unit"
     [[ -f "$destination" && ! -L "$destination" && \
        "$(stat -c '%u:%g:%a:%h' -- "$destination" 2>/dev/null)" == \
        "0:0:644:1" ]] || return 1
     cmp --silent "$TARGET_ROOT/deploy/$unit" "$destination" || return 1
-    [[ "$(systemctl show --property=FragmentPath --value "$unit" 2>/dev/null)" == \
+    [[ "$(systemctl show --property=FragmentPath --value "$query_unit" 2>/dev/null)" == \
        "$destination" ]] || return 1
-    [[ -z "$(systemctl show --property=DropInPaths --value "$unit" 2>/dev/null)" ]] || \
+    [[ -z "$(systemctl show --property=DropInPaths --value "$query_unit" 2>/dev/null)" ]] || \
       return 1
-    [[ "$(systemctl show --property=NeedDaemonReload --value "$unit" 2>/dev/null)" == \
+    [[ "$(systemctl show --property=NeedDaemonReload --value "$query_unit" 2>/dev/null)" == \
        "no" ]] || return 1
   done
 }
