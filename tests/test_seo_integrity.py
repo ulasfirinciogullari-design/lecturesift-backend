@@ -204,13 +204,12 @@ def test_index_aliases_are_permanent_redirects_not_duplicate_200_pages() -> None
     permanent_root = {("/", "301"), ("/", "301!")}
     permanent_language = {("/:lang/", "301"), ("/:lang/", "301!")}
     assert rules.get("/index.html") in permanent_root
+    # Netlify normalizes trailing slashes before rule matching. A rule that
+    # differs only by that slash redirects its destination back to itself.
+    for source, (destination, status) in rules.items():
+        if status.rstrip("!") in {"301", "302", "303", "307", "308"}:
+            assert source.rstrip("/") != destination.rstrip("/"), (source, destination)
     for language in LANGUAGES[1:]:
-        language_rule = rules.get(f"/{language}")
-        generic_language_rule = rules.get("/:lang")
-        assert language_rule in {
-            (f"/{language}/", "301"),
-            (f"/{language}/", "301!"),
-        } or generic_language_rule in permanent_language
         index_rule = rules.get(f"/{language}/index.html")
         generic_index_rule = rules.get("/:lang/index.html")
         assert index_rule in {
