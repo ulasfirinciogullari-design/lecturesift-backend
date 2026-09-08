@@ -111,8 +111,8 @@ jobs:
             "$(command -v node)" \
             "$GITHUB_WORKSPACE/tests/browser/node_modules/@playwright/test/cli.js" \
             test --config "$GITHUB_WORKSPACE/tests/browser/playwright.config.mjs"
-      - name: Upload synthetic browser failure evidence
-        if: failure()
+      - name: Upload synthetic browser review evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: browser-smoke-failure-${{ github.run_attempt }}
