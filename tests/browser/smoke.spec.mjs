@@ -159,6 +159,8 @@ test('mobile offer numbers, descriptions and links stay inside separate card row
     await page.setViewportSize({width, height:844});
     for (const locale of ['tr', 'ar']) {
       await page.goto(locale === 'tr' ? '/' : '/ar/');
+      const consent = page.locator('[data-consent="essential"]');
+      if (await consent.isVisible()) await consent.click();
       const cards = page.locator('.campaign-card');
       await expect(cards).toHaveCount(3);
       await cards.first().scrollIntoViewIfNeeded();
