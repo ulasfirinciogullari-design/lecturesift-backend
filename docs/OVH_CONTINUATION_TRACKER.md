@@ -1,3 +1,9 @@
+## 2026-09-08 homepage artwork and assistant retention follow-through
+
+PR72 publishes original homepage study artwork after 831 passing tests and 16 browser checks, with desktop/mobile light/dark screenshots reviewed. Main commit 006ac45430c3c10f3838b25b9510712b20ca127e. PR71 localized home routing is verified live for all 13 languages.
+
+PR67 at 2fb3b5f passed 1198 tests and 28 browser checks. Its real cloud YouTube probe generated a PO token but still returned LS-URL-02 bot_challenge; no live-download success is claimed. This follow-up adds bounded assistant output-cache/guest-digest maintenance and synthetic regression checks. Its scheduler, assistant and referral activation still require the documented release contracts.
+
 # LectureSift tek devam kaydı
 
 ## Güncel durum — 8 Eylül 2026, tema yayını sonrası

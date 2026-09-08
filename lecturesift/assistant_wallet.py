@@ -51,6 +51,42 @@ BUDGET = Table(
 DAILY_CREDIT_CEILING = 100_000  # $20 model-cost ceiling at the reviewed rate.
 
 
+def prune_private_cache(*, batch_size=1000):
+    """Bounded maintenance independent of the chat switch, without creating DDL.
+
+    Keep request IDs, costs and balances for accounting/idempotency. Only expired
+    answer text and old daily guest digests are removed. Release capability is
+    still mandatory, so running this on the current release is an inert no-op.
+    """
+    if not catalog.SCHEMA_RECOVERY_RELEASE_READY:
+        return {"available": False, "responses_cleared": 0, "trial_keys_removed": 0}
+    if not isinstance(batch_size, int) or isinstance(batch_size, bool) or not 1 <= batch_size <= 1000:
+        raise ValueError("batch_size must be between 1 and 1000")
+    now = billing.utcnow()
+    with billing.ENGINE.begin() as connection:
+        if not all(inspect(connection).has_table(table.name) for table in METADATA.sorted_tables):
+            _fail("LS-ASSIST-01", 503)
+        expired = (REQUESTS.c.created_at <= now - timedelta(minutes=15)) & REQUESTS.c.response_json.is_not(None)
+        ids = connection.execute(select(REQUESTS.c.id).where(expired).order_by(
+            REQUESTS.c.created_at, REQUESTS.c.id,
+        ).limit(batch_size)).scalars().all()
+        cleared = 0
+        if ids:
+            cleared = connection.execute(update(REQUESTS).where(
+                REQUESTS.c.id.in_(ids), expired,
+            ).values(response_json=None)).rowcount
+        # Keep two complete UTC days, including counters near midnight. Global
+        # daily totals have no guest identity and remain available for accounting.
+        cutoff = "trial:" + (now.date() - timedelta(days=2)).isoformat()
+        keys = connection.execute(select(BUDGET.c.day).where(
+            BUDGET.c.day >= "trial:", BUDGET.c.day < cutoff,
+        ).order_by(BUDGET.c.day).limit(batch_size)).scalars().all()
+        removed = 0
+        if keys:
+            removed = connection.execute(delete(BUDGET).where(BUDGET.c.day.in_(keys))).rowcount
+    return {"available": True, "responses_cleared": cleared, "trial_keys_removed": removed}
+
+
 def reserve_trial(identity):
     """Three short anonymous turns per day, with the same durable spend ceiling."""
     require_available()

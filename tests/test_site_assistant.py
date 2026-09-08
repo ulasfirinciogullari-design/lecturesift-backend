@@ -68,6 +68,47 @@ def test_missing_schema_fails_closed_without_request_time_ddl(state):
     assert exc.value.code == "LS-ASSIST-01"
 
 
+def test_scheduled_pruning_clears_idle_private_data_without_altering_ledger(state, monkeypatch):
+    user_id = user()
+    key, _ = wallet.reserve(user_id, "old-answer", "old-hash", 20)
+    wallet.settle(user_id, key, input_tokens=1000, response={"answer": "private answer"})
+    wallet.reserve_trial("old-guest")
+    state["now"] += timedelta(days=3)
+    recent, _ = wallet.reserve(user_id, "recent-answer", "recent-hash", 20)
+    wallet.settle(user_id, recent, input_tokens=1000, response={"answer": "recent answer"})
+    wallet.reserve_trial("current-guest")
+    monkeypatch.setenv("ASSISTANT_ENABLED", "false")
+    result = wallet.prune_private_cache()
+    assert result == {"available": True, "responses_cleared": 1, "trial_keys_removed": 1}
+    with billing.ENGINE.connect() as connection:
+        old = connection.execute(select(wallet.REQUESTS).where(wallet.REQUESTS.c.id == key)).one()
+        assert old.response_json is None
+        assert old.charged == 1 and old.state == "complete" and old.fingerprint == "old-hash"
+        assert connection.execute(select(wallet.REQUESTS.c.response_json).where(wallet.REQUESTS.c.id == recent)).scalar_one()
+        assert connection.execute(select(wallet.GRANTS.c.remaining)).scalar_one() == 48
+        days = connection.execute(select(wallet.BUDGET.c.day)).scalars().all()
+        assert "2026-09-08" in days and "2026-09-11" in days
+        assert "trial:2026-09-08:old-guest" not in days
+        assert "trial:2026-09-11:current-guest" in days
+    assert wallet.prune_private_cache()["responses_cleared"] == 0
+
+
+def test_cache_pruning_is_bounded_and_does_not_bypass_schema_capability(state, monkeypatch):
+    user_id = user()
+    for number in range(2):
+        key, _ = wallet.reserve(user_id, str(number), str(number), 2)
+        wallet.settle(user_id, key, input_tokens=1000, response={"answer": "private"})
+    state["now"] += timedelta(minutes=16)
+    assert wallet.prune_private_cache(batch_size=1)["responses_cleared"] == 1
+    assert wallet.prune_private_cache(batch_size=1)["responses_cleared"] == 1
+    monkeypatch.setattr(catalog, "SCHEMA_RECOVERY_RELEASE_READY", False)
+    wallet.METADATA.drop_all(billing.ENGINE)
+    assert wallet.prune_private_cache()["available"] is False
+    monkeypatch.setattr(catalog, "SCHEMA_RECOVERY_RELEASE_READY", True)
+    with pytest.raises(LectureSiftError):
+        wallet.prune_private_cache()
+
+
 def test_welcome_is_once_and_requires_verified_owner(state):
     user_id = user()
     assert wallet.status(user_id)["balance"] == 50

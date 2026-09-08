@@ -1,0 +1,7 @@
+# Homepage illustration
+
+`frontend/assets/study/study-desk-v1.png` is original artwork generated with the built-in image generation tool on 2026-09-08. It decorates the example section; all actionable content remains HTML, including the source links and working quiz. The image has no language-specific text, an empty decorative alt, intrinsic dimensions, and lazy loading.
+
+Final generation prompt:
+
+Use case: stylized-concept. Asset type: original educational website illustration for LectureSift's homepage example section. Create a polished editorial 3D papercraft still life of a welcoming study desk: an open cream notebook with simple blue lines, a blue pencil, lavender headphones resting next to a small upright video lesson card with a play triangle, and three mint green study flashcards. Arrange these as one cohesive compact composition, not separate panels. Tactile matte paper and soft clay materials, subtle fine grain, elegant rounded forms, gentle daylight shadows. Color palette matches the website: cobalt blue #4357ce, pale lavender #f0eaff, mint #e6f5ee, warm peach #fff0e6; background a solid very pale blue #f2f5fc. Landscape 3:2 composition, generous safe margins with all objects fully within frame, camera slightly above desk. Sophisticated university study mood, appealing to adult students. No people, no letters or numbers, no words, no logos, no watermark, no busy scenery. Deliver a web-ready image and provide its local saved file path.

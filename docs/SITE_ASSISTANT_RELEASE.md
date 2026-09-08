@@ -51,8 +51,14 @@ Input text/images are not stored by the assistant. Output may be cached for
 Browser chat lives in memory and resets on account change, new chat or page
 close. `store:false` avoids Responses application-state storage, not all provider
 abuse-monitoring retention. Users are told inputs go to OpenAI. Export and both
-closure paths cover assistant ledgers even when disabled. Production scheduled
-pruning of idle expired output caches and daily guest digests is a release gate.
+closure paths cover assistant ledgers even when disabled. The source maintenance entry point `python -m deploy.assistant_cache_prune` clears
+idle answer caches after 15 minutes and guest digests older than two complete UTC
+days, in batches of at most 1,000 each. It retains credit balances, request IDs and
+global spend totals, and still runs if chat is later disabled. A false schema
+release capability makes it inert. A release scheduler must invoke it every minute
+and monitor errors/backlog before activation; no scheduler is installed or live.
+The interval means normal scheduled deletion can occur up to one minute after
+cache expiry, or later if maintenance fails; this requires operational monitoring.
 
 ## Release contract: closed
 
