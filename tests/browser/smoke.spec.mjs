@@ -114,6 +114,18 @@ test('rebuilt study entry opens the real workspace and key screens remain usable
   await page.locator('.source-youtube').click();
   await expect(page).toHaveURL(/workspace\.html\?source=link/);
   await expect(page.locator('#linkTab')).toHaveAttribute('aria-selected','true');
+  await expect(page.locator('#linkTab')).toHaveText('Add from YouTube');
+  await expect(page.locator('label[for=videoUrl]')).toHaveText('Analyze YouTube videos');
+  await expect(page.locator('#youtubeUrlHelp')).toContainText('YouTube links only');
+  await page.locator('#videoUrl').fill('https://youtube.com.example.org/watch?v=x41yOUIvK2k');
+  await page.locator('#analyzeButton').click();
+  await expect(page.locator('#errorCode')).toContainText('LS-URL-05');
+  await expect(page.locator('#videoUrl')).toBeFocused();
+  await expect(page.locator('#errorMessage')).toContainText('YouTube video link');
+  await page.locator('#closeError').click();
+  await noHorizontalOverflow(page);
+  await page.locator('#videoUrl').fill('');
+  await capture('youtube-source-layout');
   await page.locator('#uploadTab').click();
   await expect(page.locator('#classicDropZone')).toBeVisible();
   await noHorizontalOverflow(page);
