@@ -13,12 +13,13 @@ from lecturesift.errors import LectureSiftError, normalize_error
 
 @pytest.fixture
 def downloader(monkeypatch, tmp_path):
-    state = {"options": None, "error": None, "file": "remote.mp4", "data": b"synthetic media"}
+    state = {"options": None, "attempts": [], "error": None, "errors": [], "file": "remote.mp4", "data": b"synthetic media"}
     monkeypatch.setattr(media, "validate_remote_url", lambda url: url)
 
     class FakeDownloader:
         def __init__(self, options):
             state["options"] = options
+            state["attempts"].append(options)
 
         def __enter__(self):
             return self
@@ -29,8 +30,10 @@ def downloader(monkeypatch, tmp_path):
         def extract_info(self, url, download):
             state["url"] = url
             assert download is True
-            if state["error"]:
-                raise RuntimeError(state["error"])
+            error = state["errors"].pop(0) if state["errors"] else state["error"]
+            if error:
+                (tmp_path / "remote.mp4.part").write_bytes(b"incomplete old format")
+                raise RuntimeError(error)
             path = tmp_path / state["file"]
             path.write_bytes(state["data"])
             return {"requested_downloads": [{"filepath": str(path)}]}
@@ -158,3 +161,31 @@ def test_url_rejected_by_api_before_plan_checks_or_job_creation(monkeypatch):
         application.create_url_job(video_url="https://example.org/video.mp4", billing_user={"id": "synthetic"})
     assert caught.value.status_code == 422
     assert caught.value.detail["code"] == "LS-URL-05"
+
+
+def test_public_playback_fallback_removes_partial_format_and_can_finish(downloader, tmp_path):
+    downloader["errors"] = ["Sign in to confirm you're not a bot", None]
+    unrelated = tmp_path / "keep.txt"
+    unrelated.write_text("keep")
+    result = media.download_remote_video("https://youtu.be/abcdefghijk", tmp_path)
+    assert result.read_bytes() == downloader["data"]
+    assert len(downloader["attempts"]) == 2
+    assert "extractor_args" not in downloader["attempts"][0]
+    assert downloader["attempts"][1]["extractor_args"]["youtube"]["player_client"] == ["web_safari", "web_embedded"]
+    assert not (tmp_path / "remote.mp4.part").exists()
+    assert unrelated.read_text() == "keep"
+
+
+@pytest.mark.parametrize("error", ["HTTP Error 429", "Sign in to confirm your age", "Private video"])
+def test_rate_limit_or_account_requirement_is_not_retried(downloader, tmp_path, error):
+    downloader["error"] = error
+    with pytest.raises(RuntimeError):
+        media.download_remote_video("https://youtu.be/abcdefghijk", tmp_path)
+    assert len(downloader["attempts"]) == 1
+
+
+def test_public_playback_fallback_is_bounded(downloader, tmp_path):
+    downloader["error"] = "Sign in to confirm you're not a bot"
+    with pytest.raises(RuntimeError):
+        media.download_remote_video("https://youtu.be/abcdefghijk", tmp_path)
+    assert len(downloader["attempts"]) == 2

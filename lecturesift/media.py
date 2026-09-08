@@ -121,6 +121,26 @@ def download_remote_video(
 
 
 def _download_with_ytdlp(url: str, job_dir: Path, job_type: str, include_slides: bool) -> Path:
+    try:
+        return _download_ytdlp_attempt(url, job_dir, job_type, include_slides)
+    except RuntimeError as exc:
+        reason = str(exc.__cause__ or exc).lower()
+        if "429" in reason or not any(marker in reason for marker in (
+            "not a bot", "requested format is not available", "http error 403",
+        )):
+            raise
+        # One bounded retry with supported public playback clients. Do not retry
+        # login/age/private-video requirements or hammer a rate-limited provider.
+        # Remove only this downloader's output fragments before changing formats.
+        for partial in job_dir.glob("remote.*"):
+            if partial.is_file():
+                partial.unlink()
+        return _download_ytdlp_attempt(url, job_dir, job_type, include_slides,
+                                      clients=["web_safari", "web_embedded"])
+
+
+def _download_ytdlp_attempt(url: str, job_dir: Path, job_type: str, include_slides: bool,
+                           *, clients: list[str] | None = None) -> Path:
     output_template = str(job_dir / "remote.%(ext)s")
     options = {
         "outtmpl": output_template,
@@ -136,6 +156,8 @@ def _download_with_ytdlp(url: str, job_dir: Path, job_type: str, include_slides:
         # Solver code is a pinned build dependency, never fetched at job time.
         "remote_components": [],
     }
+    if clients:
+        options["extractor_args"] = {"youtube": {"player_client": clients}}
     try:
         with yt_dlp.YoutubeDL(options) as downloader:
             info = downloader.extract_info(url, download=True)

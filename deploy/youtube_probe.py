@@ -26,6 +26,13 @@ try:
         result.update(status="downloaded", bytes=path.stat().st_size)
 except Exception as exc:
     result.update(status="unavailable", error_code=normalize_error(exc).code)
+    cause = str(exc.__cause__ or exc).lower()
+    result["failure_kind"] = (
+        "rate_limit" if "429" in cause else
+        "bot_challenge" if "not a bot" in cause else
+        "account_required" if "sign in" in cause else
+        "http_403" if "403" in cause else "other"
+    )
 
 result["elapsed_seconds"] = round(time.monotonic() - started, 1)
 print(json.dumps(result, sort_keys=True), flush=True)

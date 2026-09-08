@@ -34,6 +34,13 @@ and direct-media URL handling were removed from this input. Empty or partial
 files are not successful downloads; the final merged file also respects the
 configured size limit.
 
+If the default clients encounter a bot challenge, unavailable format or HTTP
+403, the downloader makes one fallback attempt with yt-dlp's supported
+`web_safari` and `web_embedded` public playback clients. It removes only its own
+partial output before changing formats. HTTP 429, age/account requirements and
+private-video errors are not retried. This is a bounded compatibility fallback,
+not a guarantee that the provider accepts a server IP.
+
 ## Validation limits
 
 Regression cases use synthetic downloader results, never user videos or
@@ -57,3 +64,9 @@ printed; no video or provider diagnostics are retained. The probe is reported
 separately from deterministic tests because provider availability can change.
 It does not verify the production IP. No production deployment, account cookies,
 proxy purchase or real payment was performed as part of this change.
+
+The `7cd9e2d` remote run passed 1,165 regression tests (3 skips), 12 browser
+cases and the application image check, but the separately reported real
+YouTube probe returned `LS-URL-02`. The fallback revision is awaiting its own
+remote result. This external failure must not be hidden by the green aggregate
+workflow status.
