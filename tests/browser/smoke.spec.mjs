@@ -41,6 +41,7 @@ test('owned image creation shows its credit price and offers a safe download', a
   await dialog.locator('button[type=submit]').click();
   await expect(dialog.locator('.assistant-status')).toContainText('830');
   await expect(dialog.locator('.assistant-message img')).toBeVisible();
+  await expect(dialog.locator('a[download]')).toBeInViewport();
   await expect(dialog.locator('a[download]')).toHaveAttribute('download','lecturesift-image.jpg');
   await expect(dialog.locator('a[download]')).toHaveAttribute('href',/^data:image\/jpeg;base64,/);
   expect(requests).toHaveLength(1);

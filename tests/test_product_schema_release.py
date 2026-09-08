@@ -278,7 +278,7 @@ def test_postgres_coupon_race_failure_reuse_and_refund_block(product_state):
             return None
     orders = [order for order in race(checkout, list(range(8))) if order]
     assert len(orders) == 1
-    billing.complete_payment_order(orders[0]['reference'], succeeded=False, provider_amount_minor=None)
+    billing.complete_payment_order(orders[0]['reference'], succeeded=False, provider_amount_minor=0)
     referrals._coupon_order_changed(orders[0]['reference'])
     with billing.ENGINE.connect() as connection:
         assert connection.execute(select(referrals.COUPONS.c.status)).scalar_one() == 'ready'

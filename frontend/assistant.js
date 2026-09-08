@@ -71,7 +71,7 @@
   launch.addEventListener('click',async()=>{
     if (sessionToken !== token()) { reset(); sessionToken=token(); }
     dialog.showModal(); $('textarea').focus();
-    if (!$('.assistant-messages').children.length) addMessage(t('welcome'), 'assistant', token() ? 'workspace' : 'register');
+    if (!$('.assistant-messages').children.length) addMessage(t(token()?'welcomeowned':'welcome'), 'assistant', token() ? 'workspace' : 'register');
     try {
       const offers=await request('/assistant/catalog', null, false); available=offers.available===true;
       imageCredits=offers.image?.credits||0;
@@ -152,6 +152,7 @@
         const node=addMessage(t('generated'));
         const picture=document.createElement('img');picture.src=answer.image;picture.alt=message;picture.width=1024;picture.height=1024;node.append(picture);
         const download=document.createElement('a');download.className='assistant-action';download.href=answer.image;download.download='lecturesift-image.jpg';download.textContent=t('downloadimage');node.append(download);
+        const messages=$('.assistant-messages');messages.scrollTop=messages.scrollHeight;
         answer.answer=t('generated');
       }else addMessage(answer.answer,'assistant',answer.action);
       pending=null;

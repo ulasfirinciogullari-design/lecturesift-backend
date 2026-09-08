@@ -8,6 +8,8 @@ import io
 import json
 import os
 import shutil
+import subprocess
+import signal
 import tempfile
 import time
 from pathlib import Path
@@ -15,7 +17,7 @@ from pathlib import Path
 from lecturesift import media
 from lecturesift.errors import normalize_error
 
-diagnostics = {'provider_seen': False, 'token_generated': False, 'provider_error': False, 'provider_failure': 'none'}
+diagnostics = {'browser_started': False, 'provider_seen': False, 'token_generated': False, 'provider_error': False, 'provider_failure': 'none'}
 
 
 class Logger:
@@ -54,13 +56,41 @@ def main():
         print(json.dumps({'status': 'browser_unavailable', 'production_verified': False}))
         return 1
     original = media.yt_dlp.YoutubeDL
-    # Like Playwright on this disposable runner, Chrome runs without its own
-    # namespace sandbox while diagnosing its startup failure under Ubuntu's
-    # user-namespace restrictions. This never changes a production browser.
+    # Start a task-owned, disposable browser explicitly and wait for its local
+    # debugging endpoint. This avoids nodriver's short startup polling window.
+    # The public runner has no customer profile; like its Playwright tests, this
+    # browser uses the CI-specific no-sandbox option, never a production setting.
+    profile = tempfile.TemporaryDirectory(prefix='lecturesift-wpc-browser-')
+    process = subprocess.Popen([
+        browser, '--no-sandbox', '--disable-dev-shm-usage', '--no-first-run',
+        '--no-default-browser-check', '--disable-background-networking',
+        '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0',
+        '--user-data-dir=' + profile.name, 'about:blank',
+    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    def stop_browser():
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait(timeout=5)
+        except ProcessLookupError:
+            pass
+        profile.cleanup()
+    port_file = Path(profile.name) / 'DevToolsActivePort'
+    deadline = time.monotonic() + 20
+    while not port_file.exists() and process.poll() is None and time.monotonic() < deadline:
+        time.sleep(.25)
+    if not port_file.exists():
+        stop_browser()
+        print(json.dumps({'status': 'browser_not_ready', 'production_verified': False}))
+        return 1
+    port = int(port_file.read_text().splitlines()[0])
+    diagnostics['browser_started'] = True
     from nodriver.core.config import Config
     original_config = Config.__init__
     def browser_config(self, *args, **kwargs):
-        kwargs['sandbox'] = False
+        kwargs.update(sandbox=False, host='127.0.0.1', port=port)
         original_config(self, *args, **kwargs)
     Config.__init__ = browser_config
     def downloader(options):
@@ -89,6 +119,7 @@ def main():
     finally:
         media.yt_dlp.YoutubeDL = original
         Config.__init__ = original_config
+        stop_browser()
     result.update(elapsed_seconds=round(time.monotonic()-started,1), diagnostics=diagnostics)
     print(json.dumps(result, sort_keys=True))
     return 0 if result['status'] == 'downloaded' else 1
