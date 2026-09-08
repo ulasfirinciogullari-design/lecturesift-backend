@@ -16,6 +16,8 @@ MODULES = (
     "PIL",
     "pptx",
     "pypdfium2",
+    "yt_dlp",
+    "yt_dlp_ejs",
 )
 OCR_LANGUAGES = {
     "ara",
@@ -51,6 +53,10 @@ for binary in ("ffmpeg", "ffprobe"):
         stderr=subprocess.DEVNULL,
     )
 
+node_version = subprocess.check_output(["node", "--version"], text=True).strip()
+if not re.fullmatch(r"v\d+\.\d+\.\d+", node_version) or int(node_version[1:].split(".")[0]) < 22:
+    raise SystemExit("YouTube downloads require Node.js 22 or newer")
+
 language_output = subprocess.check_output(
     ["tesseract", "--list-langs"],
     text=True,
@@ -73,6 +79,7 @@ print(
             "ocr_languages": sorted(OCR_LANGUAGES),
             "revision": build_revision,
             "work_dir_writable": True,
+            "youtube_js_runtime": node_version,
         },
         sort_keys=True,
     )

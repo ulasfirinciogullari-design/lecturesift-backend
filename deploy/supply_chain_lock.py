@@ -42,6 +42,7 @@ MAX_MANIFEST_BYTES = 4096
 MAX_REQUIREMENTS_BYTES = 2 * 1024 * 1024
 APPLICATION_APT_PACKAGES = (
     "ffmpeg",
+    "nodejs",
     "libgl1",
     "libglib2.0-0",
     "fonts-dejavu-core",

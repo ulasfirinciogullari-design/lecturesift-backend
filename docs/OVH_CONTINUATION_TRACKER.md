@@ -120,3 +120,14 @@ bir adımla belirleniyor; düzeltmenin uzak test sonuçları bekleniyor.
 
 PR taslak, davet yeteneği kapalıdır. Önizleme üretim API'sini kullandığından
 yalnız görünüm incelemesine uygundur; gerçek ödeme kabul kanıtı değildir.
+
+`041c389` için 12 tarayıcı senaryosu geçti. Python CI'da 1.130 test geçti,
+3 test atlandı; kalan tek hata, ana sayfa testinin yeni davet çeviri kaynağını
+örnek ortama vermemesiydi. Test girdisi düzeltildi; yeni sürüm sonucu bekleniyor.
+
+Kullanıcı daha sonra `LS-URL-02` indirme hatasının çözülmesini ve bağlantı
+alanının yalnız YouTube kabul etmesini istedi. Kaynakta YouTube doğrulaması,
+13 dilde açık alan açıklaması, Node/EJS bileşenleri ve indirme regresyonları
+eklendi. Uzak CI uygulama imajını da doğrulayacak. Gerçek başarısız video
+bağlantısı verilmedi; canlı indirme çözümü doğrulandı denmiyor. Ayrıntılar:
+`docs/YOUTUBE_DOWNLOAD_SUPPORT.md`.

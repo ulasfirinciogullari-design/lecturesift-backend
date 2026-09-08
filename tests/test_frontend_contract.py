@@ -303,7 +303,7 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         expected_theme_version = "15"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
         assert "/theme.js?v=4" in content, page.name
-        assert "i18n.js?v=29" in content, page.name
+        assert "i18n.js?v=30" in content, page.name
         assert "page-i18n.js?v=7" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
@@ -1106,7 +1106,7 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=30"' in index
+    assert 'src="./app.js?v=31"' in index
     assert 'src="/rollout.js?v=6"' in index
     assert '$("plans").scrollIntoView' not in app
 

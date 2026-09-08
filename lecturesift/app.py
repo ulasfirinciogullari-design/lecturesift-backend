@@ -73,7 +73,7 @@ from .errors import LectureSiftError, normalize_error
 from .daily_social import render_daily_image, render_daily_reel, render_daily_reel_cover
 from .instagram import InstagramAPIError, InstagramClient, InstagramConfigurationError
 from .jobs import JOBS
-from .media import download_remote_video, validate_remote_url
+from .media import download_remote_video, validate_youtube_url
 from .mailer import EmailDeliveryError, email_delivery_configured, send_transactional_email
 from .pipeline import process_job
 from .provider_state import AI_PROVIDER_CIRCUIT
@@ -1678,6 +1678,10 @@ def create_url_job(
     speaker_detection: bool = Form(False),
     billing_user: dict = Depends(_billing_user),
 ) -> dict:
+    try:
+        url = validate_youtube_url(video_url)
+    except LectureSiftError as exc:
+        _raise_public(exc)
     options = _options(
         source_language,
         output_language,
@@ -1721,11 +1725,6 @@ def create_url_job(
     except BillingError as exc:
         raise HTTPException(402, detail={"code": "LS-BILL-10", "message": str(exc)}) from exc
     _require_ai_provider(options)
-    try:
-        url = validate_remote_url(video_url)
-    except LectureSiftError as exc:
-        _raise_public(exc)
-
     JOBS.cleanup_expired()
     job_id = str(uuid.uuid4())
     job_dir = _job_path(job_id)

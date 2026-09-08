@@ -57,14 +57,14 @@ def normalize_error(exc: Exception) -> LectureSiftError:
     if "blocked server-side" in low or "not a bot" in low or "sign in" in low:
         return LectureSiftError(
             "LS-URL-02",
-            "Video sağlayıcısı sunucudan indirmeyi engelledi. Videoyu cihazından yükleyebilir veya doğrudan MP4/WebM bağlantısı kullanabilirsin.",
+            "YouTube bu indirmeyi engelledi. Daha sonra yeniden dene veya video dosyasını yükle.",
             raw,
             422,
         )
     if "no downloadable video" in low or "could not be downloaded" in low:
         return LectureSiftError(
             "LS-URL-03",
-            "Bu sayfada indirilebilir bir video bulunamadı. Doğrudan video bağlantısı kullan veya dosyayı cihazından yükle.",
+            "Bu YouTube videosu indirilemedi. Bağlantıyı kontrol et veya video dosyasını yükle.",
             raw,
             422,
         )

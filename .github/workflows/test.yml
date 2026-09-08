@@ -59,6 +59,8 @@ jobs:
               grep -Fqx "URIs: https://snapshot.debian.org/archive/debian-security/20260828T000000Z" /etc/apt/sources.list.d/debian.sources
               ! grep -q "^URIs: http://" /etc/apt/sources.list.d/debian.sources
             '
+      - name: Build and verify the shared media image
+        run: docker build --pull --platform linux/amd64 --tag lecturesift-media:ci .
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
