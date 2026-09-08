@@ -231,7 +231,7 @@ async function initAccount() {
       panel?.setAttribute("aria-labelledby", button.id);
       button.addEventListener("click", () => activateAccountView(button.dataset.accountViewButton, {focus:true}));
       button.addEventListener("keydown", event => {
-        const moves = {ArrowRight:1, ArrowLeft:-1, Home:-index, End:buttons.length - 1 - index};
+        const moves = {ArrowRight:1, ArrowLeft:-1, ArrowDown:1, ArrowUp:-1, Home:-index, End:buttons.length - 1 - index};
         if (moves[event.key] === undefined) return;
         event.preventDefault();
         const target = (index + moves[event.key] + buttons.length) % buttons.length;
