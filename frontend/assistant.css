@@ -20,6 +20,7 @@
 .assistant-details { padding:0 16px 8px; font-size:12px; line-height:1.5; }
 .assistant-details summary { cursor:pointer; }
 .assistant-attachment { font-size:12px; display:flex; align-items:center; gap:6px; margin-bottom:6px; }
+.assistant-attachment[hidden] { display:none; }
 .assistant-credit-offers { padding:24px; border:1px solid var(--border,#bca88c); border-radius:20px; margin:28px 0; }
 .assistant-credit-packs { display:flex; flex-wrap:wrap; gap:16px; }
 .assistant-credit-pack { flex:1 1 180px; padding:18px; border:1px solid var(--border,#bca88c); border-radius:14px; }

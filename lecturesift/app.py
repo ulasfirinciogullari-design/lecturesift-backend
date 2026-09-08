@@ -1483,6 +1483,8 @@ async def assistant_trial(request: Request) -> dict:
             payload = TrialRequest.model_validate_json(body)
         except ValidationError:
             raise HTTPException(422, detail={"code": "LS-ASSIST-06"})
+        if not config.BILLING_SESSION_SECRET:
+            raise HTTPException(503, detail={"code": "LS-ASSIST-01"})
         # Rotating daily keyed identity; raw addresses never enter the credit ledger.
         identity = hmac.new(config.BILLING_SESSION_SECRET.encode(),
                             f"{time.strftime('%Y-%m-%d', time.gmtime())}|{_client_ip(request)}".encode(),

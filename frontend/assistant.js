@@ -17,7 +17,7 @@
   $('.assistant-attach').setAttribute('aria-label',t('attach')); $('.assistant-details summary').textContent=t('credits');
   $('.assistant-details p').textContent = t('rules') + ' ' + t('media');
   $('.assistant-attachment button').setAttribute('aria-label',t('close'));
-  let history = [], attachment = null, sessionToken = token(), busy = false, available = false, trialCount = 0;
+  let history = [], attachment = null, sessionToken = token(), busy = false, available = false, trialCount = 0, pending = null;
   const setStatus = text => { $('.assistant-status').textContent = text; };
   async function request(endpoint, data, auth = true) {
     const headers = {'Content-Type':'application/json'};
@@ -40,7 +40,7 @@
     $('.assistant-messages').append(node); node.scrollIntoView({block:'nearest'});
     return node;
   }
-  function reset() { history=[]; attachment=null; $('.assistant-attachment').hidden=true; $('.assistant-messages').replaceChildren(); $('textarea').value=''; setStatus(''); }
+  function reset() { history=[]; pending=null; attachment=null; $('.assistant-attachment').hidden=true; $('.assistant-messages').replaceChildren(); $('textarea').value=''; setStatus(''); }
   function setBusy(value) { busy=value; dialog.querySelectorAll('form button').forEach(button=>{button.disabled=value;}); $('textarea').disabled=value; }
   launch.addEventListener('click',async()=>{
     if (sessionToken !== token()) { reset(); sessionToken=token(); }
@@ -105,15 +105,20 @@
       if(!token()) {answer=await request('/assistant/trial',{message:message.slice(0,500),language:language()},false);trialCount++;}
       else {
         const lessonId=new URLSearchParams(location.search).get('job') || '';
-        answer=await request('/assistant/chat',{request_id:crypto.randomUUID(),message,language:language(),currency:localStorage.getItem('lecturesift-currency')||'USD',history:history.slice(-6),lesson_id:lessonId,...(attachment||{images:[],media_kind:'none'})});
+        const payload={message,language:language(),currency:localStorage.getItem('lecturesift-currency')||'USD',history:history.slice(-6),lesson_id:lessonId,...(attachment||{images:[],media_kind:'none'})};
+        const signature=JSON.stringify(payload);
+        if(!pending || pending.signature!==signature) pending={signature,payload:{request_id:crypto.randomUUID(),...payload}};
+        answer=await request('/assistant/chat',pending.payload);
       }
       if(sessionToken!==token()){reset();sessionToken=token();return;}
       addMessage(answer.answer,'assistant',answer.action);
+      pending=null;
       history.push({role:'user',content:message.slice(0,2000)},{role:'assistant',content:answer.answer.slice(0,2000)});
       history=history.slice(-6);$('textarea').value='';attachment=null;$('.assistant-attachment').hidden=true;
       setStatus(token()?`${answer.balance ?? ''} · ${t('credits')} (−${answer.charged_credits || 0})`:t('signup'));
     } catch(error) {
-      const text=error.status===402?t('empty'):error.status===401?t('signup'):error.message==='LS-ASSIST-01'?t('unavailable'):t('error');
+      if(error.status && error.status!==409) pending=null;
+      const text=!error.status||error.status===409?t('uncertain'):error.status===402?t('empty'):error.status===401?t('signup'):error.message==='LS-ASSIST-01'?t('unavailable'):t('error');
       addMessage(text,'assistant',error.status===402?'plans':error.status===401||!token()?'register':'none');setStatus('');
     } finally {setBusy(false);$('textarea').focus();}
   });
