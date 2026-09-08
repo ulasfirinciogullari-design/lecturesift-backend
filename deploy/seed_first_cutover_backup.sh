@@ -510,14 +510,16 @@ CURRENT_KEY_HINT="$(restic key list --json 2>>"$RESTIC_LOG" | python3 -c '
 import json,re,sys
 keys=json.load(sys.stdin)
 current=[str(item.get("id") or "") for item in keys if item.get("current") is True]
-raise SystemExit(1) if len(current) != 1 or re.fullmatch(r"[0-9a-fA-F]{8,64}", current[0]) is None else None
+if len(current) != 1 or re.fullmatch(r"[0-9a-fA-F]{8,64}", current[0]) is None:
+    raise SystemExit(1)
 print(current[0].lower())
 ')" || fail "the current Restic key hint is invalid"
 CURRENT_KEY_ID="$(restic list keys --quiet 2>>"$RESTIC_LOG" | python3 -c '
 import re,sys
 hint=sys.argv[1].lower()
 matches=[line.strip().lower() for line in sys.stdin if re.fullmatch(r"[0-9a-fA-F]{64}", line.strip()) and line.strip().lower().startswith(hint)]
-raise SystemExit(1) if len(matches) != 1 else None
+if len(matches) != 1:
+    raise SystemExit(1)
 print(matches[0])
 ' "$CURRENT_KEY_HINT")" || fail "the current Restic key identity could not be resolved"
 
