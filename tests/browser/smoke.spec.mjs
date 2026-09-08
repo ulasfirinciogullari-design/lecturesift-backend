@@ -124,6 +124,7 @@ test('rebuilt study entry opens the real workspace and key screens remain usable
   await expect(page.locator('#errorMessage')).toContainText('YouTube video link');
   await page.locator('#closeError').click();
   await noHorizontalOverflow(page);
+  await page.locator('#videoUrl').fill('');
   await capture('youtube-source-layout');
   await page.locator('#uploadTab').click();
   await expect(page.locator('#classicDropZone')).toBeVisible();
