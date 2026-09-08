@@ -7,6 +7,20 @@
   const path = value => window.LectureSiftI18n?.localizedPath?.(language(), value) || value;
   const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/assistant.css?v=1'; document.head.append(css);
   const launch = document.createElement('button'); launch.className = 'assistant-launch'; launch.textContent = t('title'); launch.type = 'button'; launch.setAttribute('aria-haspopup', 'dialog'); document.body.append(launch);
+  const positionLaunch = () => {
+    const banner=document.querySelector('.consent-banner:not([hidden])');
+    launch.style.bottom=banner ? `${Math.max(22,window.innerHeight-banner.getBoundingClientRect().top+12)}px` : '';
+  };
+  let observedBanner=null;
+  const consentResize=new ResizeObserver(positionLaunch);
+  const observeConsent = () => {
+    const banner=document.querySelector('.consent-banner');
+    if(banner && banner!==observedBanner){consentResize.disconnect();consentResize.observe(banner);observedBanner=banner;}
+    requestAnimationFrame(positionLaunch);
+  };
+  document.addEventListener('lecturesift:consent-ready',observeConsent);
+  document.addEventListener('lecturesift:consent',observeConsent);
+  window.addEventListener('resize',positionLaunch);observeConsent();
   const dialog = document.createElement('dialog'); dialog.className = 'assistant-dialog'; dialog.setAttribute('aria-labelledby', 'assistantTitle');
   dialog.innerHTML = '<div class="assistant-layout"><header class="assistant-header"><h2 id="assistantTitle"></h2><button type="button" class="assistant-close">×</button></header><div class="assistant-messages" role="log" aria-live="polite"></div><p class="assistant-status" role="status"></p><details class="assistant-details"><summary></summary><p></p></details><form class="assistant-compose"><div class="assistant-attachment" hidden><span></span><button type="button">×</button></div><textarea maxlength="3000" required></textarea><div class="assistant-toolbar"><button type="button" class="assistant-attach">＋</button><button type="button" class="assistant-clear"></button><button type="submit"></button></div><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" hidden></form></div>';
   document.body.append(dialog);

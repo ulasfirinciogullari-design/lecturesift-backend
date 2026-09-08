@@ -300,10 +300,10 @@ def test_workspace_outputs_are_individually_optional_and_mobile_ready():
 def test_every_page_supports_persistent_light_and_dark_themes():
     for page in FRONTEND.glob("*.html"):
         content = page.read_text(encoding="utf-8")
-        expected_theme_version = "15"
+        expected_theme_version = "16"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
-        assert "/theme.js?v=5" in content, page.name
-        assert "i18n.js?v=30" in content, page.name
+        assert "/theme.js?v=7" in content, page.name
+        assert "i18n.js?v=32" in content, page.name
         assert "page-i18n.js?v=7" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
@@ -588,7 +588,7 @@ def test_payment_routes_are_distinct_localized_and_account_history_is_auditable(
         assert len(values) == 13, key
         assert all(str(value).strip() for value in values), key
 
-    assert 'src="/plans.js?v=22"' in plans_html
+    assert 'src="/plans.js?v=23"' in plans_html
     assert 'manualTransfer = {available:Boolean(transferBody?.available), bank:null};' in plans_js
     assert 'order.bank?.iban' in plans_js
     assert 'transferBody?.bank' not in plans_js
@@ -750,7 +750,7 @@ def test_admin_cost_reconciliation_controls_are_wired():
 def test_admin_cost_centre_has_theme_specific_readability_rules():
     admin = (FRONTEND / "admin.html").read_text(encoding="utf-8")
     theme = (FRONTEND / "theme.css").read_text(encoding="utf-8")
-    assert 'href="/theme.css?v=15"' in admin
+    assert 'href="/theme.css?v=16"' in admin
     assert "#adminCostsView" in theme
     assert 'html[data-theme="light"] #adminCostsView' in theme
     assert "--cost-warning-text:#754100" in theme
@@ -1106,7 +1106,7 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=31"' in index
+    assert 'src="./app.js?v=32"' in index
     assert 'src="/rollout.js?v=6"' in index
     assert '$("plans").scrollIntoView' not in app
 

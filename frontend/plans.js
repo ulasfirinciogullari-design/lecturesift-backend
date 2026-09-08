@@ -100,12 +100,7 @@ function detectedCurrency() {
 }
 
 function currencyLabel(code) {
-  try {
-    const parts = new Intl.NumberFormat(navigator.language, {style: "currency", currency: code})
-      .formatToParts(0);
-    const symbol = parts.find(part => part.type === "currency")?.value || code;
-    return `${code} ${symbol}`;
-  } catch { return code; }
+  return LOCALE_DATA.currencyLabel?.(code) || code;
 }
 
 function populateCurrencies() {

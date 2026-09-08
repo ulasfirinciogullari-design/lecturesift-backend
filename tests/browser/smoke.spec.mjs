@@ -141,3 +141,12 @@ test('Arabic localized demo retains RTL keyboard navigation', async ({page}) => 
   await expect(page.locator('#demoFeedback')).toContainText('✓');
   await noHorizontalOverflow(page);
 });
+
+
+test('about removes the product journey section', async ({page}) => {
+  await page.goto('/about');
+  await expect(page.locator('h1')).toBeVisible();
+  await expect(page.locator('article section')).toHaveCount(4);
+  await expect(page.getByRole('heading', {name:'Ürün yolculuğu'})).toHaveCount(0);
+  await noHorizontalOverflow(page);
+});

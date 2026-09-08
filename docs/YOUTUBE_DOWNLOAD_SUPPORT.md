@@ -65,8 +65,23 @@ separately from deterministic tests because provider availability can change.
 It does not verify the production IP. No production deployment, account cookies,
 proxy purchase or real payment was performed as part of this change.
 
-The `7cd9e2d` remote run passed 1,165 regression tests (3 skips), 12 browser
-cases and the application image check, but the separately reported real
-YouTube probe returned `LS-URL-02`. The fallback revision is awaiting its own
-remote result. This external failure must not be hidden by the green aggregate
-workflow status.
+The `933b367` remote run passed 1,198 deterministic regression tests (3 skips),
+including isolated PostgreSQL concurrency checks, and the application image
+check. The browser run had two mobile assistant failures caused by the cookie
+banner covering its launch button; that fix is pending its next remote run.
+
+The real YouTube probe still returned `LS-URL-02` / `bot_challenge`. It now runs
+with the pinned bgutil HTTP PO-token provider (`2.0.0`) in a private container
+sharing the downloader network. Diagnostic booleans confirmed `provider_seen`
+and `token_generated`, with no `provider_error`. A generated token therefore
+has not resolved the cloud runner's challenge. No token, cookie, or raw provider
+response is logged. This external failure must not be hidden by the green
+aggregate workflow status.
+
+`YOUTUBE_POT_BASE_URL` is optional and limited to the reviewed private endpoints
+`http://127.0.0.1:4416` and `http://youtube-pot:4416`. Setting it selects the
+supported mweb client and requests fresh PO tokens; it never exposes the
+provider publicly or enables arbitrary proxy destinations. The private provider
+has only been configured in isolated CI, not production. The maintained provider
+itself warns that PO tokens cannot guarantee removal of IP/bot challenges:
+https://github.com/Brainicism/bgutil-ytdlp-pot-provider
