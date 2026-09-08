@@ -1,41 +1,55 @@
-## 2026-09-08 homepage artwork and assistant retention follow-through
+# LectureSift devam kaydı
 
-PR72 publishes original homepage study artwork after 831 passing tests and 16 browser checks, with desktop/mobile light/dark screenshots reviewed. Main commit 006ac45430c3c10f3838b25b9510712b20ca127e. PR71 localized home routing is verified live for all 13 languages.
+## Güncel durum — 8 Eylül 2026
 
-PR67 at 2fb3b5f passed 1198 tests and 28 browser checks. Its real cloud YouTube probe generated a PO token but still returned LS-URL-02 bot_challenge; no live-download success is claimed. This follow-up adds bounded assistant output-cache/guest-digest maintenance and synthetic regression checks. Its scheduler, assistant and referral activation still require the documented release contracts.
+Kullanıcı geliştirme, uzak kontroller ve hazır tema değişikliklerinin canlı
+yayınını onayladı; tekrar onay istenmiyor. Yerel kaynak sınırı nedeniyle ağır
+kontroller mevcut GitHub Actions ortamında çalıştırılıyor. Aşağıdaki arşivdeki
+eski onay bekleme ve test bekleme ifadeleri güncel durum değildir.
 
-# LectureSift tek devam kaydı
-
-## Güncel durum — 8 Eylül 2026, tema yayını sonrası
-
-Kullanıcı tekrar onay sorulmadan ilerlemeyi ve temanın canlıya alınmasını açıkça
-onayladı. Aşağıdaki eski devir metnindeki onay bekleme ifadeleri bu yetkiyi
-geçersiz kılmaz. Ağır işler mevcut GitHub Actions üzerinde çalıştırıldı;
-üretim VPS'si test çalıştırıcısı yapılmadı.
-
-- PR #68 ilk tema ve 22 para birimi simgesini yayımladı. Kullanıcı tasarımı
-  yetersiz buldu; bu görünüm son tasarım değildir.
-- PR #69 beyaz iyzico/kart logolarını iki temada koyu zeminde okunur hale
-  getirdi ve Hakkımızda yan menüsündeki Ürün grubunu kaldırdı. Canlı dosyalar
-  doğrulandı; ödeme görsellerinin baytları veya ödeme mantığı değiştirilmedi.
-- PR #70 kaynak seçimi odaklı ana sayfa, çalışma alanı yan menüsü, hesap
-  sekmeleri, plan düzeni ve mobilde önce giriş formu ile kapsamlı düzeni
-  yayımladı. Ana sürüm `08d3270`; Netlify yayını ve canlı dosya eşleşmesi
-  doğrulandı. `0378d395` üzerinde 831 test (3 atlama) ve 16 tarayıcı senaryosu
-  geçti. Türkçe/Arapça mobil ve ana sayfa/çalışma/plan/giriş görüntüleri incelendi.
-- Canlı dil ana sayfası doğrulaması, eski zorunlu son-eğik-çizgi kurallarının
-  kendine 301 döndürdüğünü yakaladı. PR #71 bu kuralları kaldırır; tüm 13 dilde
-  canlı HTTP doğrulaması tamamlanmadan dil sorunu çözülmüş sayılmaz.
-- PR #67 kişisel asistan, kredi paketleri, davet yenilemeleri, hesap/ödeme
-  düzeltmeleri ve YouTube değişikliklerini taslakta tutar. Tema onayı bu
-  şema geçişlerini veya ücretli asistan aktivasyonunu açmak anlamına gelmez.
-  Asistan ve davet şema/kurtarma yetenek bayrakları hâlâ false.
-- Asistan: resim ve üç video karesi analizi; resim/video üretimi yok.
-  Model erişimi, kredi kurtarma/migrasyon ve periyodik veri temizliği hâlâ
-  yayın koşullarıdır. Gerçek ücretli model çağrısı veya ödeme yapılmadı.
-- YouTube gerçek izole denemesi, PO token üretildiği halde LS-URL-02 / bot
-  engeli veriyor. İndirme çözüldü denmeyecek. Kullanıcı tekrar örnek URL
-  istenmesini istemiyor; özel hesap çerezi veya satın alınmış proxy yok.
+- Canlı tema: PR68–74 yayımlandı. Eğitim odaklı düzen, özgün ana sayfa görseli,
+  mobil teklif kartları, 22 para birimi simgesi, Hakkımızda menüsünden Ürün
+  grubunun kaldırılması ve resmi iyzico görselinin koyu zemini doğrulandı.
+  Ana sürüm: `cb7f7b4f5b23195cceef882cde368f41a2f2a89c`; Netlify
+  yayın zamanı `2026-09-08T23:52:47.801Z`.
+- YouTube kaynak metni: PR74, “YouTube videolarını analiz et” ve
+  “YouTube’dan ekle” ifadelerini 13 dile taşır. Yalnızca YouTube açıklaması,
+  örnek adres ve tarayıcıda YouTube dışındaki adreslerin reddi dahildir.
+  PR74 kaynak sürümü `89d21c3` üzerinde 831 test / 3 atlama ve 18 tarayıcı
+  kontrolü / 2 atlama geçti (Actions `34292374187`). Açık temadaki soluk
+  alan başlığı düzeltildi; geçersiz URL artık misafir oturumu açmaz. Canlı
+  13 dil ana sayfası ve yayınlanan JS/CSS dosyaları eşleşti. Çalışma alanı
+  çevirisi tarayıcıda uygulanır; İngilizce masaüstü/mobil yolu CI’da geçti.
+  Resmi iyzico PNG dosyası canlıda bayt düzeyinde aynı kaldı.
+- PR67: `391352c4c7e569f833064c54fabdfe29feed94bd` üzerinde Actions
+  `34291050131` başarılı: 1.221 test / 3 atlama ve 34 tarayıcı kontrolü /
+  2 atlama. Yeni YouTube metni bu sürümün üzerine uygulanıyor.
+- Şema/kurtarma: tam sekiz ürün tablosunun PostgreSQL 18 sözleşmesi,
+  mevcut veriyi koruyan tek işlemli geçiş, sürümlü yedek/geri yükleme,
+  API/worker rol ayrımı, eşzamanlı davet/kota/kupon işlemleri ve sahipli
+  veri dışa aktarımı/silme izole CI veritabanlarında geçti. Gerçek üretim
+  veritabanının geçiş ve geri yükleme kanıtı henüz yok.
+- Asistan: sahipli sohbet, misafir denemesi, paket kredileri/ek kredi satışı,
+  resim ve sınırlı video karesi analizi kaynakta hazır. Ayrı bir eylemle
+  220 kredi karşılığı görsel oluşturma, indirme, tekrar istekte çift ücret
+  almama ve kısa süreli özel önbelleğin periyodik temizliği de eklendi.
+  Mobil sonuç/indirme/kredi görünümü uzak ekran görüntüsünde incelendi.
+  Gerçek model erişimi ve gerçek üretilmiş görsel doğrulanmadı.
+- Davet: ilk abonelik ve gerçek ücretli yenilemeler, dakika veya kupon
+  seçimi, ortak aylık üst sınır, bekletme/iade ve kampanya başlangıcı
+  uygulanmış durumda. Ek dakika alımları yenileme ödülü kazandırmaz.
+- Her iki `SCHEMA_RECOVERY_RELEASE_READY` yeteneği false. Canlı Render
+  uygulamasında asistan uçları henüz yok. Bu geliştirme hesabında üretim
+  veritabanı/model kimlik bilgileri, kullanılabilir SSH kimliği veya
+  parolasız sudo bulunmuyor. Yeni kullanıcı onayı bu erişimi sağlamaz;
+  `docs/PRODUCT_ACTIVATION.md` adımları yetkili üretim oturumunda uygulanmalı.
+- Gerçek YouTube denemesi: hem bgutil hem gerçek misafir tarayıcısı (WPC)
+  PO token üretti; ikisi de aynı genel örnekte `LS-URL-02 / bot_challenge`
+  döndürdü. Tarayıcının başlamaması düzeltildi; indirme sorunu çözülmüş
+  değildir. Üretim ağı üzerinde başarılı indirme kanıtı yok.
+- Video üretimi henüz uygulanmadı. Sora/Videos API 24 Eylül 2026'da
+  kapanıyor; yeni sağlayıcıda hesap erişimi, fiyat, sahipli asenkron iş ve
+  kredi kurtarma akışı doğrulanmadan ücretli video sunulmuyor.
 
 ## Arşiv: önceki devir incelemesi
 

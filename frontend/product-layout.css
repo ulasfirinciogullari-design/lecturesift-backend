@@ -70,3 +70,6 @@ html[dir="rtl"] .workspace-page>.page-shell{margin:0 252px 60px 30px}
 @media(max-width:860px){.home-page .study-illustration{max-width:480px;margin-inline:auto}.home-page .example-intro{width:100%;margin-inline:auto}}
 
 .home-page .skip-link:not(:focus){clip-path:inset(50%);pointer-events:none}
+
+/* Keep the source heading readable in both color themes. */
+.workspace-page #linkPanel .field-label{color:var(--ui-ink)}
