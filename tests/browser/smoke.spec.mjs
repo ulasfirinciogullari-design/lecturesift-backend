@@ -151,3 +151,31 @@ test('rebuilt study entry opens the real workspace and key screens remain usable
   await noHorizontalOverflow(page);
   await capture('arabic-layout');
 });
+
+
+test('mobile offer numbers, descriptions and links stay inside separate card rows', async ({page, isMobile}, testInfo) => {
+  test.skip(!isMobile, 'Regression concerns the narrow offer-card layout');
+  for (const width of [320, 390]) {
+    await page.setViewportSize({width, height:844});
+    for (const locale of ['tr', 'ar']) {
+      await page.goto(locale === 'tr' ? '/' : '/ar/');
+      const cards = page.locator('.campaign-card');
+      await expect(cards).toHaveCount(3);
+      await cards.first().scrollIntoViewIfNeeded();
+      for (const card of await cards.all()) {
+        const bounds = await card.boundingBox();
+        let previousBottom = bounds.y;
+        for (const child of await card.locator(':scope > *').all()) {
+          const box = await child.boundingBox();
+          expect(box.x).toBeGreaterThanOrEqual(bounds.x);
+          expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width + 1);
+          expect(box.y).toBeGreaterThanOrEqual(previousBottom);
+          expect(box.y + box.height).toBeLessThanOrEqual(bounds.y + bounds.height);
+          previousBottom = box.y + box.height;
+        }
+      }
+      await noHorizontalOverflow(page);
+      if (width === 320) await page.locator('.campaign-section').screenshot({path:testInfo.outputPath('offers-'+locale+'-layout.jpg'), quality:80});
+    }
+  }
+});
