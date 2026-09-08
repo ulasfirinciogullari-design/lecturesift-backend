@@ -6,6 +6,7 @@ The shell enforces an overall timeout. Output is diagnostic booleans only.
 import contextlib
 import io
 import json
+import os
 import shutil
 import tempfile
 import time
@@ -45,11 +46,23 @@ class Logger:
 
 
 def main():
+    if os.getenv('GITHUB_ACTIONS') != 'true':
+        print(json.dumps({'status': 'ci_only', 'production_verified': False}))
+        return 1
     browser = shutil.which('google-chrome') or shutil.which('chromium')
     if not browser:
         print(json.dumps({'status': 'browser_unavailable', 'production_verified': False}))
         return 1
     original = media.yt_dlp.YoutubeDL
+    # Like Playwright on this disposable runner, Chrome runs without its own
+    # namespace sandbox while diagnosing its startup failure under Ubuntu's
+    # user-namespace restrictions. This never changes a production browser.
+    from nodriver.core.config import Config
+    original_config = Config.__init__
+    def browser_config(self, *args, **kwargs):
+        kwargs['sandbox'] = False
+        original_config(self, *args, **kwargs)
+    Config.__init__ = browser_config
     def downloader(options):
         options.update(logger=Logger(), verbose=True, no_warnings=False, retries=0, socket_timeout=15)
         args = options.setdefault('extractor_args', {})
@@ -75,6 +88,7 @@ def main():
                       failure_kind='bot_challenge' if 'not a bot' in reason else 'other')
     finally:
         media.yt_dlp.YoutubeDL = original
+        Config.__init__ = original_config
     result.update(elapsed_seconds=round(time.monotonic()-started,1), diagnostics=diagnostics)
     print(json.dumps(result, sort_keys=True))
     return 0 if result['status'] == 'downloaded' else 1

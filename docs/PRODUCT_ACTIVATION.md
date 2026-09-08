@@ -56,7 +56,8 @@ The API lifespan contains the minute-by-minute cache maintenance schedule; no
 new paid scheduler is needed. Disabled chat still prunes after schema capability
 is enabled. Image/video analysis is bounded. Image creation is now a separately switched,
 owned 220-credit action using one 1024x1024 medium-quality JPEG. It requires a
-real image provider check before setting `ASSISTANT_IMAGES_ENABLED=true`; chat
+real `python -m deploy.assistant_provider_probe --image` check before setting
+`ASSISTANT_IMAGES_ENABLED=true`; chat
 access alone does not prove image access. The current development account has
 no provider key, so the synthetic tests do not claim a generated provider image.
 See `docs/ASSISTANT_IMAGE_RELEASE.md` for cost and retention details.

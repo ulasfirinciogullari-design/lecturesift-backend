@@ -278,7 +278,7 @@ def test_postgres_coupon_race_failure_reuse_and_refund_block(product_state):
             return None
     orders = [order for order in race(checkout, list(range(8))) if order]
     assert len(orders) == 1
-    billing.complete_payment_order(orders[0]['reference'], succeeded=False)
+    billing.complete_payment_order(orders[0]['reference'], succeeded=False, provider_amount_minor=None)
     referrals._coupon_order_changed(orders[0]['reference'])
     with billing.ENGINE.connect() as connection:
         assert connection.execute(select(referrals.COUPONS.c.status)).scalar_one() == 'ready'
@@ -308,4 +308,14 @@ def test_postgres_account_erasure_removes_private_assistant_rows_with_feature_of
         for table in (assistant_wallet.GRANTS, assistant_wallet.REQUESTS):
             assert not connection.execute(select(table).where(table.c.user_id == owner)).first()
         assert connection.execute(select(assistant_wallet.GRANTS).where(assistant_wallet.GRANTS.c.user_id == peer)).first()
+    # Financial attribution remains as a blocked audit row; its public code
+    # and private assistant answers/balances are removed on actual closure.
+    exported = referrals.export_data(owner)
+    assert all(row['status'] == 'blocked' for row in exported['rewards'])
+    assert 'synthetic-private-answer' not in str(exported) and peer not in str(exported)
+    with billing.ENGINE.connect() as connection:
+        assert not connection.execute(select(referrals.CODES).where(referrals.CODES.c.user_id == owner)).first()
+    # Only the separately proof-bound rehearsal cleanup may remove both sides.
+    with billing.ENGINE.begin() as connection:
+        referrals.purge_rehearsal(connection, [owner, peer])
     assert referrals.export_data(owner) == {'rewards': [], 'coupons': []}

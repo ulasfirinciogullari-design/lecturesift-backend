@@ -31,6 +31,7 @@ WORKER_KEYS = frozenset(
         "CELERY_BROKER_URL",
         "REDIS_URL",
         "OPENAI_API_KEY",
+        "YOUTUBE_POT_BASE_URL",
         "S3_ENDPOINT_URL",
         "S3_REGION",
         "S3_BUCKET",

@@ -43,7 +43,7 @@ at most 512 pixels per side. Remote URLs, SVG, animation and oversized inputs
 are rejected. Videos up to 60 seconds / 50 MB become three sampled frames in
 the browser; the UI and prompt explicitly say visuals only, without audio.
 Full video/audio analysis uses Workspace with existing minute/job limits.
-Image/video generation is not implemented: chat can supply prompts/storyboards
+Video generation is not implemented: chat can supply prompts/storyboards
 and discuss images or lesson results. No production media processing was tested.
 
 Input text/images are not stored by the assistant. Output may be cached for

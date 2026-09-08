@@ -47,7 +47,7 @@ test('owned image creation shows its credit price and offers a safe download', a
   expect(requests[0].prompt).toBe('Synthetic water cycle diagram');
   expect(Object.keys(requests[0]).sort()).toEqual(['prompt','request_id']);
   await noHorizontalOverflow(page);
-  await dialog.screenshot({path:testInfo.outputPath('assistant-image-flow.jpg'),quality:75});
+  await dialog.screenshot({path:testInfo.outputPath('assistant-image-layout.jpg'),quality:75});
 });
 
 async function noHorizontalOverflow(page) {
