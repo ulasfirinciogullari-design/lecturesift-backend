@@ -42,10 +42,18 @@ rejection before job/plan work, solver configuration, partial files, final
 size limits and provider-block errors. The shared image is checked in remote
 CI, not built on the shared development/production VPS.
 
-The reported failure was `LS-URL-02`; no failing video URL was supplied. That
+The reported failure was `LS-URL-02`; the owner clarified that YouTube downloading
+fails generally and asked not to narrow this to a supplied example. That
 code groups provider rate limits and sign-in/bot responses. Missing runtime
 components are a confirmed source/image deficiency, not proof of the cause of
 that individual failure. A successful synthetic test or image build does not
 prove that YouTube accepts the production IP or that every video is available.
-No production deployment, account cookies, proxy purchase or real payment was
-performed as part of this change.
+CI additionally probes the seven-second public sample `x41yOUIvK2k` from the
+pinned yt-dlp extractor tests. It uses the actual application downloader and
+checks for a readable audio stream in an isolated disposable container. A
+120-second deadline, memory/CPU/process limits, small temporary filesystems and
+cleanup bound the probe. Only its result, error code, size and duration are
+printed; no video or provider diagnostics are retained. The probe is reported
+separately from deterministic tests because provider availability can change.
+It does not verify the production IP. No production deployment, account cookies,
+proxy purchase or real payment was performed as part of this change.

@@ -61,6 +61,18 @@ jobs:
             '
       - name: Build and verify the shared media image
         run: docker build --pull --platform linux/amd64 --tag lecturesift-media:ci .
+      - name: Probe external YouTube availability (reported separately)
+        # Provider/IP availability is independent of deterministic regression
+        # tests. A failed probe stays visible but does not skip those tests.
+        continue-on-error: true
+        run: |
+          probe_name="lecturesift-youtube-probe-$GITHUB_RUN_ID"
+          trap 'docker rm -f "$probe_name" >/dev/null 2>&1 || true' EXIT
+          timeout 120s docker run --rm --name "$probe_name" \
+            --memory 512m --cpus 1 --pids-limit 128 --read-only \
+            --tmpfs /tmp:rw,nosuid,size=64m \
+            --tmpfs /var/lib/lecturesift:rw,nosuid,size=32m \
+            -i lecturesift-media:ci python - < deploy/youtube_probe.py
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
