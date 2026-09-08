@@ -159,7 +159,7 @@ test('official white payment marks remain visible in both themes', async ({page}
   await band.scrollIntoViewIfNeeded();
   await expect(band).toBeVisible();
   await expect(band).toHaveCSS('background-color', 'rgb(17, 35, 59)');
-  expect(await band.evaluate(img => img.complete && img.naturalWidth === 912)).toBe(true);
+  await expect.poll(() => band.evaluate(img => img.complete && img.naturalWidth === 912)).toBe(true);
   const box = await band.boundingBox();
   expect(box.width).toBeGreaterThan(280);
   await noHorizontalOverflow(page);
@@ -222,4 +222,40 @@ test('rebuilt study entry opens the real workspace and key screens remain usable
   await expect(page.locator('html')).toHaveAttribute('dir','rtl');
   await noHorizontalOverflow(page);
   await capture('arabic-layout');
+});
+
+
+test('mobile offer numbers, descriptions and links stay inside separate card rows', async ({page, isMobile}, testInfo) => {
+  test.skip(!isMobile, 'Regression concerns the narrow offer-card layout');
+  for (const width of [320, 390]) {
+    await page.setViewportSize({width, height:844});
+    for (const locale of ['tr', 'ar']) {
+      await page.goto(locale === 'tr' ? '/' : '/ar/');
+      const consent = page.locator('[data-consent="essential"]');
+      if (await consent.isVisible()) await consent.click();
+      const skipLink = page.locator('.skip-link');
+      await expect(skipLink).toHaveCSS('clip-path', 'inset(50%)');
+      await skipLink.focus();
+      await expect(skipLink).toHaveCSS('clip-path', 'none');
+      await page.keyboard.press('Tab');
+      await expect(skipLink).not.toBeFocused();
+      const cards = page.locator('.campaign-card');
+      await expect(cards).toHaveCount(3);
+      await cards.first().scrollIntoViewIfNeeded();
+      for (const card of await cards.all()) {
+        const bounds = await card.boundingBox();
+        let previousBottom = bounds.y;
+        for (const child of await card.locator(':scope > *').all()) {
+          const box = await child.boundingBox();
+          expect(box.x).toBeGreaterThanOrEqual(bounds.x);
+          expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width + 1);
+          expect(box.y).toBeGreaterThanOrEqual(previousBottom);
+          expect(box.y + box.height).toBeLessThanOrEqual(bounds.y + bounds.height);
+          previousBottom = box.y + box.height;
+        }
+      }
+      await noHorizontalOverflow(page);
+      if (width === 320) await page.locator('.campaign-section').screenshot({path:testInfo.outputPath('offers-'+locale+'-layout.jpg'), quality:80});
+    }
+  }
 });
