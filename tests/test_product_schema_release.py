@@ -37,16 +37,20 @@ def database():
         with admin.connect() as connection:
             connection.execute(text(f'DROP DATABASE {name} WITH (FORCE)'))
             connection.execute(text(f'DROP DATABASE {restored} WITH (FORCE)'))
+            connection.execute(text(f'DROP ROLE IF EXISTS {name}_api'))
+            connection.execute(text(f'DROP ROLE IF EXISTS {name}_worker'))
         admin.dispose()
 
 
-def client(database, command, *, payload=None):
+def client(database, command, *, payload=None, extra_env=None):
     env = os.environ.copy()
     env.update(PGHOST='127.0.0.1', PGPORT='5432', PGUSER='assistant_ci', PGPASSWORD='synthetic-ci-only', PGDATABASE=database)
+    env.update(extra_env or {})
+    forwarded = [item for key in (extra_env or {}) for item in ('-e', key)]
     result = subprocess.run([
         'docker', 'run', '--rm', '--network', 'host', '-i',
         '-e', 'PGHOST', '-e', 'PGPORT', '-e', 'PGUSER', '-e', 'PGPASSWORD', '-e', 'PGDATABASE',
-        '-v', str(ROOT) + ':/probe:ro', IMAGE, *command,
+        *forwarded, '-v', str(ROOT) + ':/probe:ro', IMAGE, *command,
     ], input=payload, capture_output=True, env=env, timeout=120)
     assert result.returncode == 0, result.stderr.decode()[-1000:]
     return result.stdout
@@ -102,7 +106,7 @@ def test_upgrade_preserves_legacy_rows_and_restores_all_product_ledgers(database
         connection.execute(text("INSERT INTO assistant_daily_budget_v1 VALUES ('2026-09-08',7)"))
     live = manifest(name, recovery=True)
     dump = client(name, ['pg_dump', '--format=custom', '--no-owner', '--no-acl'])
-    client(restored, ['pg_restore', '--no-owner', '--no-acl'], payload=dump)
+    client(restored, ['pg_restore', '--dbname', restored, '--no-owner', '--no-acl'], payload=dump)
     recovered = manifest(restored, recovery=True)
     # Database name and physical size can differ; all schema and row identities
     # must agree, including cached answers, reservations and old coupons.
@@ -136,3 +140,26 @@ def test_product_shape_contract_rejects_an_altered_existing_column(database, tmp
     with pytest.raises(verifier.ContractError):
         with engine.begin() as connection:
             release.migrate(connection, before, tmp_path / 'after.txt')
+
+
+def test_runtime_roles_cannot_expose_product_ledgers_to_workers(database, tmp_path):
+    engine, name, _ = database
+    before = tmp_path / 'before.txt'
+    before.write_text(manifest(name, legacy=True))
+    with engine.begin() as connection:
+        release.migrate(connection, before, tmp_path / 'after.txt')
+    client(name, ['bash', '/probe/deploy/postgres-app-role.sh'], extra_env={
+        'POSTGRES_DB': name, 'POSTGRES_USER': 'assistant_ci',
+        'LECTURESIFT_PROVISION_PHASE': 'runtime',
+        'LECTURESIFT_APP_DB_USER': name+'_api',
+        'LECTURESIFT_APP_DB_PASSWORD': 'synthetic-api-password-longer-than-24',
+        'LECTURESIFT_WORKER_DB_USER': name+'_worker',
+        'LECTURESIFT_WORKER_DB_PASSWORD': 'synthetic-worker-password-longer-than-24',
+    })
+    with engine.connect() as connection:
+        for table in verifier.PRODUCT_TABLES:
+            for privilege in ('SELECT','INSERT','UPDATE','DELETE'):
+                assert connection.execute(text('SELECT has_table_privilege(:role,:table,:privilege)'),
+                                          dict(role=name+'_api',table='public.'+table,privilege=privilege)).scalar_one()
+            assert not connection.execute(text("SELECT has_table_privilege(:role,:table,'SELECT,INSERT,UPDATE,DELETE')"),
+                                          dict(role=name+'_worker',table='public.'+table)).scalar_one()

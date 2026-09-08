@@ -150,6 +150,10 @@ case "$metadata_manifest_version" in
     RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v2.sql"
     expected_schema_compatibility="lecturesift-schema-v2"
     ;;
+  3)
+    RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v3.sql"
+    expected_schema_compatibility="lecturesift-schema-v3"
+    ;;
   *)
     echo "The backup references an unsupported recovery manifest version." >&2
     exit 1
@@ -280,6 +284,12 @@ docker run --rm --pull=never --network none --read-only \
       /tmp/rehearsal-manifest.out
     cat /tmp/rehearsal-manifest.out
   ' >"$VALIDATION_RUN_DIR/rehearsal-manifest.out"
+if [[ "$metadata_manifest_version" == "3" ]]; then
+  python3 "$ROOT_DIR/deploy/verify_schema_transition_v4.py" current \
+    --manifest "$VALIDATION_RUN_DIR/rehearsal-manifest.out" \
+    --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" \
+    --preserved-contract "$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt" >/dev/null
+fi
 restored_database_count="$(tr -d '\r' <"$VALIDATION_RUN_DIR/rehearsal-manifest.out" | grep -c '^DATABASE|')"
 restored_database_line="$(tr -d '\r' <"$VALIDATION_RUN_DIR/rehearsal-manifest.out" | grep '^DATABASE|')"
 restored_schema_count="$(tr -d '\r' <"$VALIDATION_RUN_DIR/rehearsal-manifest.out" | grep -c '^SCHEMA|')"

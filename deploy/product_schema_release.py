@@ -131,8 +131,9 @@ def main():
     url = os.getenv('DATABASE_URL', '')
     if not url:
         parser.error('DATABASE_URL must be set in the private owner environment')
-    engine = create_engine(url)
+    engine = None
     try:
+        engine = create_engine(url)
         with engine.begin() as connection:
             count = migrate(connection, args.before, after)
         print(f'product_tables_added={count}')
@@ -141,7 +142,8 @@ def main():
         after.unlink(missing_ok=True)
         raise SystemExit('Product migration failed; transaction rolled back. No feature was activated.') from None
     finally:
-        engine.dispose()
+        if engine is not None:
+            engine.dispose()
 
 
 if __name__ == '__main__':

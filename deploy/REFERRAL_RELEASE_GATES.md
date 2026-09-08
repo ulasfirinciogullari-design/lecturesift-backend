@@ -143,8 +143,17 @@ historical `--confirm-referral-schema-v1` interface. It is not the versioned
 upgrade required above and must not be used as a shortcut to enable five tables.
 The activation review must also establish a payment baseline/start boundary:
 late reconciliation of old paid orders must not silently advertise or introduce
-retroactive renewal rewards. The preview currently classifies paid orders after
-registration attribution; a production campaign start has not been established.
+retroactive renewal rewards. Runtime now requires the permanent, timezone-aware
+`LECTURESIFT_REFERRAL_CAMPAIGN_START_AT` boundary and rejects order creation
+before that boundary or registration attribution. An absent, malformed or future
+boundary keeps the program disabled. Its real production value is not set yet.
+
+PR67 now includes v4 catalogs, recovery v3, the explicit additive product migration,
+version-routed backups/restores and configuration snapshots v3. The old migration
+entry point remains blocked. Use `docs/PRODUCT_ACTIVATION.md` for the complete
+release procedure and distinguish synthetic CI proof from actual deployment
+backup/restore evidence. Historical provider cutover/rollback controllers remain
+core-only; they deliberately refuse the expanded product schema.
 
 ## Residual cost and fraud risk
 

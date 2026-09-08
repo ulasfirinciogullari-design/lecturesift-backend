@@ -55,8 +55,10 @@ closure paths cover assistant ledgers even when disabled. The source maintenance
 idle answer caches after 15 minutes and guest digests older than two complete UTC
 days, in batches of at most 1,000 each. It retains credit balances, request IDs and
 global spend totals, and still runs if chat is later disabled. A false schema
-release capability makes it inert. A release scheduler must invoke it every minute
-and monitor errors/backlog before activation; no scheduler is installed or live.
+release capability makes it inert. The API lifespan now invokes the same bounded maintenance every minute. Multiple
+replicas may run it safely; feature disablement does not stop retention after the
+schema capability is opened. Errors and full batches emit non-secret operational
+alerts. This source schedule is not running in the current live backend yet.
 The interval means normal scheduled deletion can occur up to one minute after
 cache expiry, or later if maintenance fails; this requires operational monitoring.
 

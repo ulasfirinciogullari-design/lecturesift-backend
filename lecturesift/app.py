@@ -93,7 +93,9 @@ from .rollout_service import record_account_activity
 from .resource_limits import enforce_job_workspace
 
 
-app = FastAPI(title=f"LectureSift Backend V{APP_VERSION}")
+from .assistant_maintenance import lifespan as assistant_lifespan
+
+app = FastAPI(title=f"LectureSift Backend V{APP_VERSION}", lifespan=assistant_lifespan)
 from .costs import cost_context
 from .documents import effective_ocr_parallelism
 

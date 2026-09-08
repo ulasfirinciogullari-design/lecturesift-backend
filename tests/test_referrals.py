@@ -26,6 +26,7 @@ def state(monkeypatch):
     monkeypatch.setattr(referrals, "SCHEMA_RECOVERY_RELEASE_READY", True)
     monkeypatch.setattr(referrals, "redemption_currencies", lambda: list(referrals.REGIONAL_COUPON_CAPS_MINOR))
     monkeypatch.setenv("LECTURESIFT_REFERRALS_ENABLED", "true")
+    monkeypatch.setenv("LECTURESIFT_REFERRAL_CAMPAIGN_START_AT", "2026-09-08T00:00:00Z")
     clock = {"now": datetime(2026, 9, 8, 12, tzinfo=timezone.utc)}
     monkeypatch.setattr(billing, "utcnow", lambda: clock["now"])
     monkeypatch.setattr(rollout_service, "utcnow", lambda: clock["now"])
@@ -66,6 +67,22 @@ def reward(invitee):
 def credit(user_id):
     with billing.ENGINE.connect() as connection:
         return connection.execute(select(billing.USERS.c.credit_minutes).where(billing.USERS.c.id == user_id)).scalar_one()
+
+
+@pytest.mark.parametrize('start', ['', 'invalid', '2026-09-08T00:00:00', '2026-09-09T00:00:00Z'])
+def test_campaign_needs_an_explicit_reached_timezone_boundary(state, monkeypatch, start):
+    monkeypatch.setenv('LECTURESIFT_REFERRAL_CAMPAIGN_START_AT', start)
+    assert referrals.enabled() is False
+
+
+def test_old_pending_purchase_does_not_gain_a_retroactive_campaign_reward(state, monkeypatch):
+    inviter, invitee = pair()
+    old = billing.create_payment_order(invitee, 'test-provider', 'lite', 'monthly', 'TRY')
+    monkeypatch.setenv('LECTURESIFT_REFERRAL_CAMPAIGN_START_AT', '2026-09-08T13:00:00Z')
+    state['now'] += timedelta(hours=2)
+    billing.complete_payment_order(old['reference'], succeeded=True, provider_amount_minor=old['amount_minor'])
+    assert reward(invitee).order_reference is None
+    assert credit(inviter) == 0
 
 
 def released(state, choice):

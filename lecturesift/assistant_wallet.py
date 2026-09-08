@@ -115,8 +115,10 @@ def _fail(code: str, status: int = 409):
 def require_available():
     if not catalog.enabled():
         _fail("LS-ASSIST-01", 503)
+    from .referrals import _table_shape_matches
     with billing.ENGINE.connect() as connection:
-        if not all(inspect(connection).has_table(table.name) for table in METADATA.sorted_tables):
+        inspector = inspect(connection)
+        if not all(_table_shape_matches(inspector, table) for table in METADATA.sorted_tables):
             _fail("LS-ASSIST-01", 503)
 
 

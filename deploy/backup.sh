@@ -133,6 +133,12 @@ fi
 set +a
 set +x
 
+case "${LECTURESIFT_PRODUCT_SCHEMA_VERSION:-0}" in
+  0) ;;
+  1) RECOVERY_MANIFEST_VERSION=3; RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v3.sql" ;;
+  *) echo "Unsupported product schema version." >&2; exit 1 ;;
+esac
+
 if [[ ! -f "$RESTIC_ENV_FILE" || -z "${RESTIC_REPOSITORY:-}" ||
       -z "${RESTIC_PASSWORD:-}" ]]; then
   echo "Off-site restic configuration is mandatory for a production backup." >&2
@@ -466,6 +472,12 @@ if grep -Eq '^(TABLE_DIFF|UNVALIDATED_FK)\|' "$STAGING/rehearsal-manifest.txt" |
   echo "The backup schema/data integrity manifest failed." >&2
   exit 1
 fi
+if [[ "$RECOVERY_MANIFEST_VERSION" == "3" ]]; then
+  python3 "$ROOT_DIR/deploy/verify_schema_transition_v4.py" current \
+    --manifest "$STAGING/rehearsal-manifest.txt" \
+    --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" \
+    --preserved-contract "$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt" >/dev/null
+fi
 schema_line="$(grep '^SCHEMA|' "$STAGING/rehearsal-manifest.txt")"
 database_identity_line="$(grep '^DATABASE|' "$STAGING/rehearsal-manifest.txt")"
 database_size_line="$(grep '^DATABASE_SIZE|' "$STAGING/rehearsal-manifest.txt")"
@@ -535,7 +547,11 @@ redis_version="$(docker compose exec -T redis redis-cli --raw INFO server \
 {
   printf 'format=lecturesift-backup-v2\n'
   printf 'application_identity=lecturesift-production\n'
-  printf 'application_schema_compatibility=lecturesift-schema-v2\n'
+  if [[ "$RECOVERY_MANIFEST_VERSION" == "3" ]]; then
+    printf 'application_schema_compatibility=lecturesift-schema-v3\n'
+  else
+    printf 'application_schema_compatibility=lecturesift-schema-v2\n'
+  fi
   printf 'schema_manifest_version=%s\n' "$RECOVERY_MANIFEST_VERSION"
   printf 'schema_manifest_sha256=%s\n' "$schema_manifest_sha256"
   printf 'database_identity_sha256=%s\n' "$database_identity_sha256"

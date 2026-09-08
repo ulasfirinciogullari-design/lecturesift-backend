@@ -23,7 +23,7 @@ def _snapshot_module():
     spec.loader.exec_module(module)
     return module
 
-@pytest.mark.parametrize("version", [1, 2])
+@pytest.mark.parametrize("version", [1, 2, 3])
 def test_snapshot_verifier_preserves_exact_versioned_inventories(tmp_path, monkeypatch, version):
     import hashlib
     import json
@@ -61,7 +61,7 @@ def test_snapshot_verifier_preserves_exact_versioned_inventories(tmp_path, monke
     checksums.extend(f"{item['sha256']}  {item['archive_path']}" for item in files)
     (snapshot_root / snapshot.CHECKSUM_NAME).write_text("\n".join(checksums) + "\n", encoding="ascii")
     assert snapshot.verify_snapshot(snapshot_root, str(deploy_root), quiet=True) == len(expected)
-    manifest["format"] = f"lecturesift-configuration-snapshot-v{3 - version}"
+    manifest["format"] = f"lecturesift-configuration-snapshot-v{version % 3 + 1}"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     with pytest.raises(snapshot.SnapshotError, match="file count"):
         snapshot.verify_snapshot(snapshot_root, str(deploy_root), quiet=True)
@@ -161,11 +161,19 @@ def test_configuration_snapshot_uses_only_exact_allowlists():
         "deploy/redis_rdb_to_aof.sh",
         "deploy/redis.conf",
     )
-    assert snapshot.IDENTITY_ALLOWLIST == snapshot.LEGACY_IDENTITY_ALLOWLIST + (
+    assert snapshot.PREVIOUS_IDENTITY_ALLOWLIST == snapshot.LEGACY_IDENTITY_ALLOWLIST + (
         "deploy/rehearsal_manifest_v3.sql",
         "deploy/verify_schema_transition_v3.py",
         "deploy/schema_contract_billing_purchase_terms_v1.txt",
         "deploy/recovery_manifest_v2.sql",
+    )
+    assert snapshot.IDENTITY_ALLOWLIST == snapshot.PREVIOUS_IDENTITY_ALLOWLIST + (
+        "deploy/rehearsal_manifest_v4.sql",
+        "deploy/recovery_manifest_v3.sql",
+        "deploy/verify_schema_transition_v4.py",
+        "deploy/schema_contract_product_v1.txt",
+        "deploy/product_tables_v1.sql",
+        "deploy/product_schema_release.py",
     )
     assert all(".git" not in path and ".docker" not in path for path in snapshot.IDENTITY_ALLOWLIST)
 

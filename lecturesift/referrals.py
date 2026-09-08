@@ -116,9 +116,20 @@ class ReferralError(billing.BillingError):
         self.code = code
 
 
+def campaign_start() -> datetime | None:
+    value = os.getenv("LECTURESIFT_REFERRAL_CAMPAIGN_START_AT", "").strip()
+    try:
+        start = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return start.astimezone(timezone.utc) if start.tzinfo is not None else None
+    except ValueError:
+        return None
+
+
 def enabled() -> bool:
+    start = campaign_start()
     return (SCHEMA_RECOVERY_RELEASE_READY
-            and os.getenv("LECTURESIFT_REFERRALS_ENABLED", "").strip().lower() == "true")
+            and os.getenv("LECTURESIFT_REFERRALS_ENABLED", "").strip().lower() == "true"
+            and start is not None and start <= _utc(billing.utcnow()))
 
 
 def _utc(value: datetime) -> datetime:
@@ -388,7 +399,7 @@ def _qualify(reference: str) -> None:
             RENEWAL_REWARDS.c.order_reference == reference,
         )).first():
             return
-        if (_utc(order.created_at) < _utc(reward.created_at)
+        if (_utc(order.created_at) < max(_utc(reward.created_at), campaign_start())
                 or not _verified(connection, order.user_id)):
             return
         verified_at = connection.execute(select(billing.USER_PROFILES.c.email_verified_at).where(
