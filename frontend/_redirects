@@ -29,27 +29,17 @@
 
 /tr             /               301!
 /tr/*           /:splat         301!
-/en             /en/            301!
+# Existing locale index files handle their own trailing slash. A forced
+# /en -> /en/ rule also matches /en/ on Netlify and redirects to itself.
 /en/*           /:splat         200
-/de             /de/            301!
 /de/*           /:splat         200
-/fr             /fr/            301!
 /fr/*           /:splat         200
-/es             /es/            301!
 /es/*           /:splat         200
-/it             /it/            301!
 /it/*           /:splat         200
-/pt             /pt/            301!
 /pt/*           /:splat         200
-/ru             /ru/            301!
 /ru/*           /:splat         200
-/ar             /ar/            301!
 /ar/*           /:splat         200
-/zh             /zh/            301!
 /zh/*           /:splat         200
-/ja             /ja/            301!
 /ja/*           /:splat         200
-/ko             /ko/            301!
 /ko/*           /:splat         200
-/hi             /hi/            301!
 /hi/*           /:splat         200
