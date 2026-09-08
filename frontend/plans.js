@@ -181,7 +181,11 @@ function summaryEntitlement() {
   return pt("plans.alwaysDetailed", "Her zaman ayrıntılı ve kapsamlı");
 }
 
-function planLabel(code) { return pt(`plan.${code}`, COPY[code]?.[0] || code); }
+const at = key => window.LectureSiftAssistantCopy?.t(key) || key;
+function planLabel(code) {
+  if (/^ai_(1000|3000|10000)$/.test(code)) return `${Number(code.slice(3)).toLocaleString(PLANS_I18N.locale)} ${at('credits')}`;
+  return pt(`plan.${code}`, COPY[code]?.[0] || code);
+}
 function visibleOrder() { return ORDER.filter(code => code !== "test" || currency === "TRY"); }
 
 function renderCompare() {
@@ -216,8 +220,14 @@ function renderCompare() {
 function normalizeCatalog(remote, selected) {
   const amounts = FALLBACK_PRICES[selected] || FALLBACK_PRICES.USD;
   const remotePlans = new Map((remote?.plans || []).map(plan => [plan.code, plan]));
+  const draft = window.LectureSiftAssistantOffers;
+  const assistant = remote?.assistant || (draft ? {
+    available:false, included:draft.INCLUDED,
+    packs:Object.entries(draft.PACKS).map(([code,credits],index)=>({code,credits,currency:selected,amount_minor:(draft.PRICES[selected]||draft.PRICES.USD)[index]})),
+  } : null);
   return {
     ...(remote || {}),
+    assistant,
     selected_currency: selected,
     supported_currencies: LOCALE_DATA.currencies,
     plans: ORDER.map((code, index) => {
@@ -233,7 +243,11 @@ function normalizeCatalog(remote, selected) {
         ? remotePrice
         : (fallbackAmount == null ? null : {currency: selected, amount_minor: fallbackAmount});
       return {...plan, display_price: selectedPrice};
-    }),
+    }).concat((assistant?.packs || []).map(pack => ({
+      code:pack.code, kind:'one_time', assistant_credits:pack.credits,
+      display_price:{amount_minor:pack.amount_minor,currency:pack.currency},
+      entitlements:{assistant_credits:pack.credits,minutes:0,download_enabled:false},
+    }))),
   };
 }
 
@@ -318,6 +332,7 @@ function renderPlans() {
       <div class="plan-price">${esc(priceText)} <small>${suffix}</small></div>
       <ul class="plan-features">
         <li>${esc(minutesText)}</li>
+        ${catalog?.assistant?.available && entitlements.assistant_credits ? `<li>${Number(entitlements.assistant_credits).toLocaleString(PLANS_I18N.locale)} ${esc(at('credits'))}</li>` : ''}
         <li>${Number(limits.max_minutes_per_job || 0).toLocaleString(PLANS_I18N.locale)} ${esc(pt("plans.minutesPerJob", "dk / tek iş"))}</li>
         <li>${Number(limits.max_files_per_job || 0).toLocaleString(PLANS_I18N.locale)} ${esc(pt("plans.filesPerJobShort", "kaynak / iş"))}</li>
         <li>${entitlements.quiz_questions ?? "∞"} ${esc(pt("plans.quizShort", "quiz sorusu"))} · ${entitlements.flashcards ?? "∞"} ${esc(pt("plans.cardsShort", "bilgi kartı"))}</li>
@@ -339,9 +354,31 @@ function renderPlans() {
     button.onclick = () => buy(button.dataset.plan, button.dataset.interval);
   });
   renderCompare();
+  renderAssistantOffers();
+}
+
+function renderAssistantOffers() {
+  let section = document.getElementById('assistantCredits');
+  if (!section) {section=document.createElement('section');section.id='assistantCredits';section.className='assistant-credit-offers';$('plansGrid').after(section);}
+  const offers=catalog?.assistant;
+  if(!offers){section.hidden=true;return;}
+  section.hidden=false;section.replaceChildren();
+  const heading=document.createElement('h2');heading.textContent=at('credits');section.append(heading);
+  const rules=document.createElement('p');rules.textContent=at('rules');section.append(rules);
+  if(!offers.available){const notice=document.createElement('p');notice.textContent=at('unavailable');section.append(notice);}
+  const packs=document.createElement('div');packs.className='assistant-credit-packs';
+  for(const pack of offers.packs || []) {
+    const card=document.createElement('article');card.className='assistant-credit-pack';
+    const name=document.createElement('h3');name.textContent=planLabel(pack.code);
+    const price=document.createElement('p');price.textContent=format(pack.amount_minor,pack.currency);
+    const button=document.createElement('button');button.type='button';button.className='plan-action';button.textContent=at('buy');button.disabled=!offers.available;
+    button.addEventListener('click',()=>buy(pack.code,'one_time'));card.append(name,price,button);packs.append(card);
+  }
+  section.append(packs);
 }
 
 async function buy(planCode, interval = "monthly") {
+  if (planCode.startsWith('ai_') && !catalog?.assistant?.available) {showError(at('unavailable'));return;}
   if (!localStorage.getItem(TOKEN_KEY)) {
     location.href = `/login.html?next=${encodeURIComponent("/plans.html")}`;
     return;

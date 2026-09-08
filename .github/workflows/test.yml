@@ -19,10 +19,23 @@ jobs:
   pytest:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    services:
+      assistant-postgres:
+        image: postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+        env:
+          POSTGRES_DB: assistant_ci
+          POSTGRES_USER: assistant_ci
+          POSTGRES_PASSWORD: synthetic-ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U assistant_ci -d assistant_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       PYTHONPATH: .
       OPENAI_API_KEY: ""
       DATABASE_URL: sqlite:////tmp/lecturesift-ci.db
+      TEST_ASSISTANT_POSTGRES_URL: postgresql+psycopg://assistant_ci:synthetic-ci-only@127.0.0.1:5432/assistant_ci
       BILLING_SESSION_SECRET: ci-session-secret-with-sufficient-length
       BILLING_ADMIN_TOKEN: ci-admin-secret
       EMAIL_PROVIDER: none

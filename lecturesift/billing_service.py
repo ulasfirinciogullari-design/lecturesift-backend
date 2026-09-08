@@ -258,7 +258,7 @@ PAYMENT_ORDERS = Table(
     Column("updated_at", DateTime(timezone=True), nullable=False),
 )
 
-PURCHASE_TERMS_VERSION = "2026-09-08-v2"
+PURCHASE_TERMS_VERSION = "2026-09-08-v3"
 ADMIN_GRANT_TERMS_VERSION = "admin-grant-2026-09-08-v1"
 PURCHASE_TERMS = Table(
     "billing_purchase_terms",
@@ -891,6 +891,7 @@ def _active_subscription(connection, user_id: str, now: datetime):
 
 _PLAN_TUPLE_FIELDS = {"export_formats", "summary_profiles"}
 _PLAN_INTEGER_FIELDS = {
+    "assistant_credits",
     "minutes",
     "team_seats",
     "quiz_questions",
@@ -914,6 +915,9 @@ def _plan_from_snapshot(raw: object, expected_plan_code: str) -> Plan:
         raise BillingConfigurationError("Satın alma planı kaydı okunamıyor.")
     values = {}
     for field in fields(Plan):
+        if field.name == "assistant_credits" and field.name not in raw:
+            values[field.name] = 0  # Purchases before the assistant keep their terms.
+            continue
         if field.name not in raw:
             raise BillingConfigurationError("Satın alma planı kaydı eksik.")
         value = raw[field.name]
@@ -1058,7 +1062,7 @@ def _plan_for_purchase_reference(
         ):
             raise BillingConfigurationError("Yönetici plan kaydı abonelikle eşleşmiyor.")
         return _plan_from_snapshot(payload.get("plan"), plan_code), str(terms.version)
-    if str(terms.version) != PURCHASE_TERMS_VERSION or not isinstance(
+    if str(terms.version) not in {"2026-09-08-v2", PURCHASE_TERMS_VERSION} or not isinstance(
         payload.get("purchase"), dict
     ):
         raise BillingConfigurationError("Satın alma koşulları sürümü desteklenmiyor.")
@@ -1687,6 +1691,12 @@ def _activate_purchase(
     )
 
 
+def _require_assistant_offer(plan_code: str) -> None:
+    from . import assistant_catalog
+    if plan_code in assistant_catalog.PACKS and not assistant_catalog.enabled():
+        raise BillingConfigurationError("Asistan kredi satışı henüz kullanıma açık değil.")
+
+
 def create_payment_order(
     user_id: str,
     provider: str,
@@ -1695,6 +1705,7 @@ def create_payment_order(
     currency: str,
     coupon_code: str = "",
 ) -> dict:
+    _require_assistant_offer(plan_code)
     selected_provider = provider.strip().lower()
     selected_currency = currency.strip().upper()
     plan = PLAN_BY_CODE.get(plan_code)
@@ -2093,6 +2104,7 @@ def manual_transfer_details() -> dict:
 
 
 def create_manual_order(user_id: str, plan_code: str, interval: str, coupon_code: str = "") -> dict:
+    _require_assistant_offer(plan_code)
     if not bank_transfer_available():
         raise BillingConfigurationError("Havale ödeme bilgileri henüz etkinleştirilmemiş.")
     plan = PLAN_BY_CODE.get(plan_code)

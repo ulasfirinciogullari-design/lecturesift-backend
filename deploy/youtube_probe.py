@@ -12,6 +12,39 @@ from pathlib import Path
 from lecturesift import media
 from lecturesift.errors import normalize_error
 
+# Sanitized attestation diagnostics distinguish an installed plugin from a token
+# actually generated. Never print provider logs, tokens, cookies or signed URLs.
+attestation_diagnostics = {"provider_seen": False, "token_generated": False, "provider_error": False}
+
+
+class ProbeLogger:
+    def debug(self, message):
+        if "PO Token Providers:" in message and "bgutil:http" in message:
+            attestation_diagnostics["provider_seen"] = True
+        if "Generated POT:" in message:
+            attestation_diagnostics["token_generated"] = True
+
+    def warning(self, message):
+        if "bgutil" in message.lower():
+            attestation_diagnostics["provider_error"] = True
+
+    def error(self, message):
+        pass
+
+
+original_downloader = media.yt_dlp.YoutubeDL
+
+
+def instrumented_downloader(options):
+    options["logger"] = ProbeLogger()
+    options["verbose"] = True
+    options["no_warnings"] = False
+    options.setdefault("extractor_args", {}).setdefault("youtube", {})["pot_trace"] = ["true"]
+    return original_downloader(options)
+
+
+media.yt_dlp.YoutubeDL = instrumented_downloader
+
 # Seven-second public sample from the pinned yt-dlp YouTube extractor tests.
 SAMPLE_URL = "https://www.youtube.com/watch?v=x41yOUIvK2k"
 media.MAX_VIDEO_BYTES = 16 * 1024 * 1024
@@ -50,5 +83,6 @@ except Exception as exc:
     )
 
 result["elapsed_seconds"] = round(time.monotonic() - started, 1)
+result["attestation_diagnostics"] = attestation_diagnostics
 print(json.dumps(result, sort_keys=True), flush=True)
 raise SystemExit(0 if result["status"] == "downloaded" else 1)

@@ -302,7 +302,7 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         content = page.read_text(encoding="utf-8")
         expected_theme_version = "15"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
-        assert "/theme.js?v=4" in content, page.name
+        assert "/theme.js?v=5" in content, page.name
         assert "i18n.js?v=30" in content, page.name
         assert "page-i18n.js?v=7" in content, page.name
 
@@ -588,7 +588,7 @@ def test_payment_routes_are_distinct_localized_and_account_history_is_auditable(
         assert len(values) == 13, key
         assert all(str(value).strip() for value in values), key
 
-    assert 'src="/plans.js?v=21"' in plans_html
+    assert 'src="/plans.js?v=22"' in plans_html
     assert 'manualTransfer = {available:Boolean(transferBody?.available), bank:null};' in plans_js
     assert 'order.bank?.iban' in plans_js
     assert 'transferBody?.bank' not in plans_js

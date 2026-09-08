@@ -281,6 +281,8 @@ def export_account_data(user_id: str) -> dict[str, Any]:
     account = account_status(user_id)
     from .referrals import export_data as export_referrals
     referral_data = export_referrals(user_id)
+    from .assistant_wallet import export_data as export_assistant
+    assistant_data = export_assistant(user_id)
     with ENGINE.connect() as connection:
         subscriptions = connection.execute(
             select(SUBSCRIPTIONS)
@@ -349,6 +351,7 @@ def export_account_data(user_id: str) -> dict[str, Any]:
         "generated_at": utcnow().isoformat(),
         "account": account,
         "referrals": referral_data,
+        "assistant": assistant_data,
         "subscriptions": [
             {
                 "plan_code": row.plan_code,
@@ -455,6 +458,8 @@ def close_user_account(
 
         from .referrals import close_account as close_referrals
         close_referrals(connection, user_id)
+        from .assistant_wallet import close_account as close_assistant
+        close_assistant(connection, user_id)
         anonymized_email = f"deleted+{uuid.uuid4().hex}@users.invalid"
         salt = secrets.token_bytes(16)
         connection.execute(
@@ -1842,6 +1847,8 @@ def admin_close_user_account(
         )
         from .referrals import close_account as close_referrals
         close_referrals(connection, user_id)
+        from .assistant_wallet import close_account as close_assistant
+        close_assistant(connection, user_id)
         anonymized_email = f"deleted+{uuid.uuid4().hex}@users.invalid"
         salt = secrets.token_bytes(16)
         connection.execute(

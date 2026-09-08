@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 
 from .config import MAX_DOCUMENT_BYTES, MAX_DOCUMENT_CHARACTERS
 
@@ -36,6 +36,7 @@ class Plan:
     max_ocr_pages: int = 20
     try_amount_minor: int | None = None
     featured: bool = False
+    assistant_credits: int = 0
 
     @property
     def export_enabled(self) -> bool:
@@ -43,7 +44,7 @@ class Plan:
 
     @property
     def download_enabled(self) -> bool:
-        return self.code != "free"
+        return self.code != "free" and not self.code.startswith("ai_")
 
     @property
     def ad_free(self) -> bool:
@@ -80,6 +81,7 @@ class Plan:
             ),
             "entitlements": {
                 "minutes": self.minutes,
+                "assistant_credits": self.assistant_credits,
                 "quiz_questions": self.quiz_questions,
                 "flashcards": self.flashcards,
                 "export_formats": list(self.export_formats),
@@ -135,7 +137,15 @@ PLANS = (
     Plan("business", "quote", None, ("pdf", "docx", "txt"), "priority", 10, None, None, ALL_SUMMARY_PROFILES, 730, 24, 1024, 100, 1440, 500, 150),
 )
 
-PLAN_BY_CODE = {plan.code: plan for plan in PLANS}
+from . import assistant_catalog
+
+PLANS = tuple(replace(plan, assistant_credits=assistant_catalog.INCLUDED.get(plan.code, 0)) for plan in PLANS)
+ASSISTANT_PLANS = tuple(
+    replace(PLANS[1], code=code, minutes=0, assistant_credits=credits,
+            try_amount_minor=assistant_catalog.PRICES["TRY"][index])
+    for index, (code, credits) in enumerate(assistant_catalog.PACKS.items())
+)
+PLAN_BY_CODE = {plan.code: plan for plan in (*PLANS, *ASSISTANT_PLANS)}
 
 # Intentional regional product prices, not volatile exchange-rate conversions.
 # The connected checkout provider remains the source of truth for tax and the
@@ -173,6 +183,10 @@ REGIONAL_PRICES = {
     }
     for index, plan_code in enumerate(_PRICE_PLAN_CODES)
 }
+REGIONAL_PRICES.update({
+    code: {currency: amounts[index] for currency, amounts in assistant_catalog.PRICES.items()}
+    for index, code in enumerate(assistant_catalog.PACKS)
+})
 
 PROVIDERS = (
     {
@@ -208,6 +222,7 @@ def public_catalog(currency: str = "TRY") -> dict:
         "selected_currency": selected_currency,
         "localization": "client_translation_keys",
         "prices": "regional_display_provider_checkout",
+        "assistant": assistant_catalog.offers(selected_currency),
     }
 
 

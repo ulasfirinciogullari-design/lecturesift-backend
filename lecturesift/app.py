@@ -171,7 +171,7 @@ async def add_security_headers(request: Request, call_next):
     response.headers.setdefault("Referrer-Policy", "no-referrer")
     response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
     response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-    if request.url.path.startswith(("/billing/", "/jobs", "/admin/")):
+    if request.url.path.startswith(("/billing/", "/jobs", "/admin/", "/assistant/")):
         response.headers["Cache-Control"] = "no-store"
         response.headers["Pragma"] = "no-cache"
     return response
@@ -1417,6 +1417,79 @@ def ask_lesson_question(
         AI_PROVIDER_CIRCUIT.trip_error(normalized)
         raise HTTPException(normalized.status_code, detail=normalized.public()) from exc
     return {"ok": True, **answer}
+
+
+@app.get("/assistant/catalog")
+def assistant_catalog(currency: str = "USD") -> dict:
+    from .assistant_catalog import offers
+    return offers(currency.upper())
+
+
+@app.get("/assistant/wallet")
+def assistant_wallet_status(user: dict = Depends(_billing_user)) -> dict:
+    from .assistant_wallet import status
+    try:
+        return status(user["id"])
+    except LectureSiftError as exc:
+        raise HTTPException(exc.status_code, detail=exc.public()) from exc
+
+
+@app.post("/assistant/chat")
+async def assistant_chat(request: Request, user: dict = Depends(_billing_user)) -> dict:
+    from pydantic import ValidationError
+    from starlette.concurrency import run_in_threadpool
+    from .site_assistant import ChatRequest, chat
+    from .assistant_wallet import require_available
+    try:
+        await run_in_threadpool(require_available)
+        _rate_limit(request, "assistant-chat", user["id"], limit=30, window_seconds=3600)
+        # Check each streamed chunk, including requests without Content-Length.
+        body = bytearray()
+        async for chunk in request.stream():
+            if len(body) + len(chunk) > 4_600_000:
+                raise HTTPException(413, detail={"code": "LS-ASSIST-06", "message": "Medya çok büyük."})
+            body.extend(chunk)
+        try:
+            payload = ChatRequest.model_validate_json(body)
+        except ValidationError:
+            # Validation exceptions may echo base64 media: return a sanitized error.
+            raise HTTPException(422, detail={"code": "LS-ASSIST-06", "message": "Mesaj veya medya geçersiz."})
+        lesson = ""
+        if payload.lesson_id:
+            result = await run_in_threadpool(get_result, payload.lesson_id, user)
+            lesson = str(result.get("summary") or "")[:6000]
+        _require_ai_provider({"job_type": "study_pack"})
+        return await run_in_threadpool(chat, user["id"], payload, lesson)
+    except LectureSiftError as exc:
+        raise HTTPException(exc.status_code, detail=exc.public()) from exc
+
+
+@app.post("/assistant/trial")
+async def assistant_trial(request: Request) -> dict:
+    import hashlib
+    from pydantic import ValidationError
+    from starlette.concurrency import run_in_threadpool
+    from .site_assistant import TrialRequest, trial
+    from .assistant_wallet import require_available
+    try:
+        await run_in_threadpool(require_available)
+        _rate_limit(request, "assistant-trial", "guest", limit=3, window_seconds=86400)
+        body = bytearray()
+        async for chunk in request.stream():
+            if len(body) + len(chunk) > 4096:
+                raise HTTPException(413, detail={"code": "LS-ASSIST-06"})
+            body.extend(chunk)
+        try:
+            payload = TrialRequest.model_validate_json(body)
+        except ValidationError:
+            raise HTTPException(422, detail={"code": "LS-ASSIST-06"})
+        # Rotating daily keyed identity; raw addresses never enter the credit ledger.
+        identity = hmac.new(config.BILLING_SESSION_SECRET.encode(),
+                            f"{time.strftime('%Y-%m-%d', time.gmtime())}|{_client_ip(request)}".encode(),
+                            hashlib.sha256).hexdigest()
+        return await run_in_threadpool(trial, payload, identity)
+    except LectureSiftError as exc:
+        raise HTTPException(exc.status_code, detail=exc.public()) from exc
 
 
 @app.get("/jobs/{job_id}/slide/{filename}")

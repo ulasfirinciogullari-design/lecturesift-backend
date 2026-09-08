@@ -1,5 +1,35 @@
 # Yeni satın alma planları — 8 Eylül 2026
 
+## Asistan kredisi ilavesi — taslak
+
+Güncellenen paket fiyatlarına aylık Lite 500, Plus 1.500, Pro 4.000, Max 10.000
+asistan kredisi dahil edilir. Önceki satın almalar kendi koşullarını korur.
+Bu ilave için aynı gün revize edilen temel paket fiyatları tekrar artırılmadı;
+asistan kullanımı aşağıdaki katkı hesabından ayrıca düşülmelidir.
+
+Ek paketler: 1.000 kredi 149 TL / 3,99 USD; 3.000 kredi 349 TL / 9,99 USD;
+10.000 kredi 999 TL / 29,99 USD. Diğer 20 para biriminde sabit bölgesel
+fiyatlar ayrı katalogda tutulur. Kullanılabilir tahsilat para birimleri ödeme
+sağlayıcısına bağlıdır; dil para birimini değiştirmez. Ek krediler 365 gün,
+pakete dahil krediler ilgili aylık hak dönemi boyunca geçerlidir.
+
+8 Eylül resmî model belgesinde GPT-5.6 Luna standart fiyatı milyon giriş
+tokenı için 0,20 USD, çıkış için 1,20 USD'dir. Kredi başına 1.000 ağırlıklı
+token (çıkış ağırlığı 6) bu fiyatla en fazla yaklaşık 0,0002 USD normal model
+maliyeti oluşturur; yukarı yuvarlama ve önbellek indirimleri maliyeti azaltabilir.
+1.000 / 3.000 / 10.000 kredi tam kullanımında model maliyeti yaklaşık
+0,20 / 0,60 / 2 USD olur. Mesaj geçmişi ve görsel tokenları da tüketimdir.
+[Resmî model ve fiyat](https://developers.openai.com/api/docs/models/gpt-5.6-luna).
+
+Paketlere dahil kredilerin aylık tam model gideri 0,10 / 0,30 / 0,80 / 2 USD'dir.
+Yerel katkıdan bu tutar × gerçekleşen USD/TRY maliyet kuru çıkarılmalıdır.
+Özellikle yıllık Max stres senaryosu düşük katkı bırakabilir. Vergi, ödeme
+komisyonu, sunucu, başarısız istekler, destek, iadeler ve ücretsiz denemeler
+düşülmeden bu fark net kâr değildir. Gerçek marj ölçümü sonrası yalnız yeni
+satın almalara uygulanacak yeni sürümlü fiyat/limit güncellemesi yapılmalıdır.
+Kredi satışı ve kişisel asistan, şema/kurtarma ve sağlayıcı kontrolü tamamlanana
+kadar kapalıdır; önizleme fiyatı tahsilat veya kâr gerçekleştiğini göstermez.
+
 Durum: önizleme / yayın incelemesi. Bu belge canlı fiyatların değiştiğinin
 veya garantili kârın kanıtı değildir. Mevcut siparişlerin ve aboneliklerin
 satın alma koşulları korunmalıdır. Canlıya çıkmadan yeni satın alma kayıtlarının

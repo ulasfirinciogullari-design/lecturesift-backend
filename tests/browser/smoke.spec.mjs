@@ -1,5 +1,23 @@
 import {test, expect, JOB_ID} from './fixtures.mjs';
 
+test('assistant guide opens, remains localized and does not claim live AI availability', async ({page}) => {
+  await page.goto('/en/');
+  await page.locator('.assistant-launch').click();
+  const dialog=page.locator('.assistant-dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveAccessibleName('LectureSift Assistant');
+  await expect(dialog.locator('.assistant-status')).toContainText('not available yet');
+  await expect(dialog.locator('.assistant-message')).toContainText('only YouTube');
+  await expect(dialog.locator('a.assistant-action')).toHaveAttribute('href', /\/en\/register(?:\.html)?$/);
+  await dialog.locator('textarea').fill('<img src=x onerror=alert(1)>');
+  await dialog.locator('button[type=submit]').click();
+  await expect(dialog.locator('img')).toHaveCount(0);
+  await noHorizontalOverflow(page);
+  await page.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  await expect(page.locator('.assistant-launch')).toBeFocused();
+});
+
 async function noHorizontalOverflow(page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
 }
