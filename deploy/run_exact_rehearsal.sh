@@ -710,12 +710,12 @@ snapshot_redis() {
 
 snapshot_manifest() {
   local output="$1" canonical="$2"
-  docker cp "$root/deploy/rehearsal_manifest.sql" \
+  docker cp "$root/deploy/rehearsal_manifest_v3.sql" \
     "lecturesift-postgres-1:$main_manifest_in_container"
   docker exec lecturesift-postgres-1 psql --no-psqlrc --quiet \
     --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
     -v ON_ERROR_STOP=1 -f "$main_manifest_in_container" >"$output"
-  python3 "$root/deploy/verify_schema_transition.py" current \
+  python3 "$root/deploy/verify_schema_transition_v3.py" current \
     --manifest "$output" \
     --contract "$root/deploy/schema_contract_payment_provider_sessions_v1.txt" \
     --preserved-contract "$root/deploy/schema_contract_billing_email_verifications_v1.txt" \

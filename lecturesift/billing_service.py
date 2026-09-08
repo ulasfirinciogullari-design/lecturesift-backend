@@ -242,6 +242,7 @@ PAYMENT_ORDERS = Table(
 )
 
 PURCHASE_TERMS_VERSION = "2026-09-08-v2"
+ADMIN_GRANT_TERMS_VERSION = "admin-grant-2026-09-08-v1"
 PURCHASE_TERMS = Table(
     "billing_purchase_terms",
     METADATA,
@@ -873,6 +874,7 @@ _PLAN_INTEGER_FIELDS = {
     "try_amount_minor",
 }
 LEGACY_TERMS_VERSION = "legacy-pre-2026-09-08"
+INTERNAL_TERMS_VERSION = "internal-current"
 
 
 def _plan_from_snapshot(raw: object, expected_plan_code: str) -> Plan:
@@ -896,7 +898,7 @@ def _plan_from_snapshot(raw: object, expected_plan_code: str) -> Plan:
         values[field.name] = value
     if values["code"] != expected_plan_code:
         raise BillingConfigurationError("Satın alma planı siparişle eşleşmiyor.")
-    if values["kind"] not in {"free", "one_time", "subscription", "quote"}:
+    if values["kind"] not in {"free", "guest", "one_time", "subscription", "quote"}:
         raise BillingConfigurationError("Satın alma planı türü geçersiz.")
     if values["priority"] not in {"standard", "priority"}:
         raise BillingConfigurationError("Satın alma planı önceliği geçersiz.")
@@ -955,6 +957,39 @@ def _store_purchase_terms(
     )
 
 
+def _store_admin_grant_terms(
+    connection,
+    *,
+    reference: str,
+    plan: Plan,
+    interval: str,
+    now: datetime,
+) -> None:
+    connection.execute(
+        PURCHASE_TERMS.insert().values(
+            reference=reference,
+            plan_json=json.dumps(
+                {
+                    "plan": asdict(plan),
+                    "entitlements": plan.public()["entitlements"],
+                    "admin_grant": {
+                        "source": "admin",
+                        "plan_code": plan.code,
+                        "interval": interval,
+                        "amount_minor": 0,
+                        "currency": None,
+                    },
+                },
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            ),
+            version=ADMIN_GRANT_TERMS_VERSION,
+            created_at=now,
+        )
+    )
+
+
 def _plan_for_purchase_reference(
     connection,
     *,
@@ -967,6 +1002,8 @@ def _plan_for_purchase_reference(
         select(PURCHASE_TERMS).where(PURCHASE_TERMS.c.reference == reference)
     ).first()
     if not terms:
+        if plan_code == "guest" and plan_code in PLAN_BY_CODE:
+            return PLAN_BY_CODE[plan_code], INTERNAL_TERMS_VERSION
         legacy = LEGACY_PLAN_BY_CODE.get(plan_code)
         if not legacy:
             raise BillingConfigurationError("Eski satın alma planı bulunamadı.")
@@ -975,8 +1012,25 @@ def _plan_for_purchase_reference(
         payload = json.loads(terms.plan_json)
     except (TypeError, ValueError, json.JSONDecodeError) as exc:
         raise BillingConfigurationError("Satın alma koşulları okunamıyor.") from exc
-    if not isinstance(payload, dict) or not isinstance(payload.get("purchase"), dict):
+    if not isinstance(payload, dict):
         raise BillingConfigurationError("Satın alma koşulları eksik.")
+    if str(terms.version) == ADMIN_GRANT_TERMS_VERSION:
+        grant = payload.get("admin_grant")
+        if (
+            source is not None
+            or not isinstance(grant, dict)
+            or grant.get("source") != "admin"
+            or grant.get("plan_code") != plan_code
+            or grant.get("interval") != interval
+            or grant.get("amount_minor") != 0
+            or grant.get("currency") is not None
+        ):
+            raise BillingConfigurationError("Yönetici plan kaydı abonelikle eşleşmiyor.")
+        return _plan_from_snapshot(payload.get("plan"), plan_code), str(terms.version)
+    if str(terms.version) != PURCHASE_TERMS_VERSION or not isinstance(
+        payload.get("purchase"), dict
+    ):
+        raise BillingConfigurationError("Satın alma koşulları sürümü desteklenmiyor.")
     purchase = payload["purchase"]
     amount_minor = purchase.get("amount_minor")
     if (

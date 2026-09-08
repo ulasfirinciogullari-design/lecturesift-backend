@@ -1,0 +1,17 @@
+# LectureSift purchase-terms schema contract v1 (PostgreSQL 18)
+#
+# Additive reviewed target for immutable purchased entitlement snapshots.
+# Admitted only by the v3 cutover manifest/verifier and recovery manifest v2.
+# Historical provider-only contracts and recovery v1 remain unchanged.
+# There is deliberately no order foreign key: active subscription terms must
+# survive order retention. PostgreSQL 18 behavior validation remains required.
+SCHEMA_OBJECT|C|public.billing_purchase_terms|1|reference|character varying(64)|t|||
+SCHEMA_OBJECT|C|public.billing_purchase_terms|2|plan_json|text|t|||
+SCHEMA_OBJECT|C|public.billing_purchase_terms|3|version|character varying(32)|t|||
+SCHEMA_OBJECT|C|public.billing_purchase_terms|4|created_at|timestamp with time zone|t|||
+SCHEMA_OBJECT|I|billing_purchase_terms|billing_purchase_terms_pkey|CREATE UNIQUE INDEX billing_purchase_terms_pkey ON public.billing_purchase_terms USING btree (reference)
+SCHEMA_OBJECT|K|billing_purchase_terms|billing_purchase_terms_created_at_not_null|t|NOT NULL created_at
+SCHEMA_OBJECT|K|billing_purchase_terms|billing_purchase_terms_plan_json_not_null|t|NOT NULL plan_json
+SCHEMA_OBJECT|K|billing_purchase_terms|billing_purchase_terms_reference_not_null|t|NOT NULL reference
+SCHEMA_OBJECT|K|billing_purchase_terms|billing_purchase_terms_version_not_null|t|NOT NULL version
+SCHEMA_OBJECT|K|billing_purchase_terms|billing_purchase_terms_pkey|t|PRIMARY KEY (reference)

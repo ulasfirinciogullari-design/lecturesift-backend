@@ -21,7 +21,8 @@ import sys
 from typing import Final
 
 
-SNAPSHOT_FORMAT: Final = "lecturesift-configuration-snapshot-v1"
+LEGACY_SNAPSHOT_FORMAT: Final = "lecturesift-configuration-snapshot-v1"
+SNAPSHOT_FORMAT: Final = "lecturesift-configuration-snapshot-v2"
 APPLICATION_IDENTITY: Final = "lecturesift-production"
 MANIFEST_NAME: Final = "CONFIGURATION_MANIFEST.json"
 CHECKSUM_NAME: Final = "CONFIGURATION_SHA256SUMS"
@@ -44,7 +45,7 @@ RELEASE_IDENTITY_ALLOWLIST: Final = (
 
 # These files identify the exact deploy/recovery contract without copying an
 # arbitrary source tree, .git, Docker credentials, caches, or user content.
-IDENTITY_ALLOWLIST: Final = (
+LEGACY_IDENTITY_ALLOWLIST: Final = (
     "compose.yaml",
     "Caddyfile",
     "deploy/Caddyfile.staging",
@@ -116,6 +117,15 @@ IDENTITY_ALLOWLIST: Final = (
 )
 
 
+# Keep the v1 inventory exact so existing configuration backups remain verifiable.
+IDENTITY_ALLOWLIST: Final = LEGACY_IDENTITY_ALLOWLIST + (
+    "deploy/rehearsal_manifest_v3.sql",
+    "deploy/verify_schema_transition_v3.py",
+    "deploy/schema_contract_billing_purchase_terms_v1.txt",
+    "deploy/recovery_manifest_v2.sql",
+)
+
+
 class SnapshotError(RuntimeError):
     """A fail-closed snapshot validation error."""
 
@@ -134,7 +144,15 @@ def _source_path(kind: str, relative_name: str, deploy_root: Path) -> Path:
     return deploy_root / relative_name
 
 
-def _expected_entries(deploy_root: Path) -> list[tuple[str, str, str, str]]:
+def _expected_entries(
+    deploy_root: Path, *, snapshot_format: str = SNAPSHOT_FORMAT,
+) -> list[tuple[str, str, str, str]]:
+    if snapshot_format == SNAPSHOT_FORMAT:
+        identity_allowlist = IDENTITY_ALLOWLIST
+    elif snapshot_format == LEGACY_SNAPSHOT_FORMAT:
+        identity_allowlist = LEGACY_IDENTITY_ALLOWLIST
+    else:
+        raise SnapshotError("configuration snapshot format is unsupported")
     entries: list[tuple[str, str, str, str]] = []
     for name in ENVIRONMENT_ALLOWLIST:
         entries.append(
@@ -145,7 +163,7 @@ def _expected_entries(deploy_root: Path) -> list[tuple[str, str, str, str]]:
                 "0600",
             )
         )
-    for name in IDENTITY_ALLOWLIST:
+    for name in identity_allowlist:
         entries.append(
             (
                 "identity",
@@ -369,14 +387,14 @@ def verify_snapshot(snapshot_root: Path, deploy_root_value: str, *, quiet: bool)
     }:
         raise SnapshotError("configuration snapshot manifest fields are invalid")
     if (
-        manifest["format"] != SNAPSHOT_FORMAT
+        manifest["format"] not in (LEGACY_SNAPSHOT_FORMAT, SNAPSHOT_FORMAT)
         or manifest["application_identity"] != APPLICATION_IDENTITY
         or manifest["deploy_root"] != str(deploy_root)
         or not isinstance(manifest["created_at_utc"], str)
     ):
         raise SnapshotError("configuration snapshot identity is invalid")
 
-    expected = _expected_entries(deploy_root)
+    expected = _expected_entries(deploy_root, snapshot_format=manifest["format"])
     files = manifest.get("files")
     if not isinstance(files, list) or len(files) != len(expected):
         raise SnapshotError("configuration snapshot file count is invalid")

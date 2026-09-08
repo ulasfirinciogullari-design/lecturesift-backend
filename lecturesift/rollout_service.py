@@ -43,6 +43,7 @@ from .billing_service import (
     BillingConfigurationError,
     BillingError,
     _hash_password,
+    _store_admin_grant_terms,
     account_status,
     approve_manual_order,
     reject_manual_order,
@@ -1693,6 +1694,14 @@ def admin_set_user_subscription(
             .values(status="cancelled")
         )
         if selected_plan != "free":
+            source_reference = f"ADMIN-{uuid.uuid4().hex.upper()}"
+            _store_admin_grant_terms(
+                connection,
+                reference=source_reference,
+                plan=PLAN_BY_CODE[selected_plan],
+                interval=selected_interval,
+                now=now,
+            )
             connection.execute(
                 SUBSCRIPTIONS.insert().values(
                     id=str(uuid.uuid4()),
@@ -1702,7 +1711,7 @@ def admin_set_user_subscription(
                     status="active",
                     starts_at=now,
                     ends_at=now + timedelta(days=days),
-                    source_reference=f"ADMIN-{uuid.uuid4().hex.upper()}",
+                    source_reference=source_reference,
                     created_at=now,
                 )
             )

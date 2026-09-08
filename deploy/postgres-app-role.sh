@@ -247,9 +247,22 @@ CREATE OR REPLACE VIEW lecturesift_worker.billing_subscriptions
 WITH (security_barrier=true, security_invoker=false) AS
 SELECT ''::varchar(36) AS id,
        user_id, plan_code, interval, status, starts_at, ends_at,
-       ''::varchar(40) AS source_reference,
+       source_reference,
        timestamptz '1970-01-01 00:00:00+00' AS created_at
 FROM public.billing_subscriptions;
+
+-- A current subscription retains its purchased entitlement snapshot when the
+-- public catalog changes. Expired/unbound purchase records stay inaccessible.
+CREATE OR REPLACE VIEW lecturesift_worker.billing_purchase_terms
+WITH (security_barrier=true, security_invoker=false) AS
+SELECT terms.reference, terms.plan_json, terms.version, terms.created_at
+FROM public.billing_purchase_terms terms
+WHERE EXISTS (
+  SELECT 1 FROM public.billing_subscriptions subscription
+  WHERE subscription.source_reference = terms.reference
+    AND subscription.status IN ('active', 'cancel_at_end')
+    AND subscription.ends_at > now()
+);
 
 CREATE OR REPLACE VIEW lecturesift_worker.billing_manual_orders
 WITH (security_barrier=true, security_invoker=false) AS
@@ -331,6 +344,8 @@ SELECT format(
 \gexec
 SELECT format('GRANT UPDATE (credit_minutes) ON lecturesift_worker.billing_users TO %I', :'worker_user')
 \gexec
+SELECT format('GRANT SELECT ON lecturesift_worker.billing_purchase_terms TO %I', :'worker_user')
+\gexec
 SELECT format('GRANT SELECT, INSERT ON lecturesift_worker.billing_usage_events TO %I', :'worker_user')
 \gexec
 SELECT format('GRANT SELECT, INSERT ON lecturesift_worker.lecturesift_runtime_metrics TO %I', :'worker_user')
@@ -356,6 +371,8 @@ SELECT 'role-probe-' || substr(md5(random()::text || clock_timestamp()::text), 1
        'usage-probe-' || md5(random()::text || clock_timestamp()::text) AS usage_job,
        'runtime-probe-' || md5(random()::text || clock_timestamp()::text) AS runtime_job,
        'cost-' || substr(md5(random()::text || clock_timestamp()::text), 1, 31) AS cost_event,
+       'terms-' || substr(md5(random()::text), 1, 24) AS terms_reference,
+       'unbound-' || substr(md5(random()::text), 1, 24) AS unbound_terms_reference,
        md5(random()::text) || md5(clock_timestamp()::text) AS probe_fingerprint
 \gset
 INSERT INTO public.billing_users (
@@ -366,8 +383,24 @@ INSERT INTO public.billing_users (
 INSERT INTO public.lecturesift_guest_trials (
   fingerprint_hash, user_id, job_id, media_minutes, created_at, last_seen_at
 ) VALUES (:'probe_fingerprint', :'probe_user', NULL, NULL, now(), now());
+INSERT INTO public.billing_purchase_terms (reference, plan_json, version, created_at)
+VALUES (:'terms_reference', '{"probe":"purchase-terms"}', 'role-probe', now()),
+       (:'unbound_terms_reference', '{"probe":"unbound"}', 'role-probe', now());
+INSERT INTO public.billing_subscriptions (
+  id, user_id, plan_code, interval, status, starts_at, ends_at, source_reference, created_at
+) VALUES (
+  md5(random()::text), :'probe_user', 'free', 'monthly', 'cancel_at_end',
+  now(), now() + interval '1 hour', :'terms_reference', now()
+);
 SET LOCAL ROLE :"worker_user";
 SET LOCAL search_path TO lecturesift_worker, public;
+SELECT 1 / CASE WHEN count(*) = 1 THEN 1 ELSE 0 END
+FROM billing_subscriptions subscription
+JOIN billing_purchase_terms terms ON terms.reference = subscription.source_reference
+WHERE subscription.user_id = :'probe_user'
+  AND terms.plan_json = '{"probe":"purchase-terms"}' AND terms.version = 'role-probe';
+SELECT 1 / CASE WHEN count(*) = 0 THEN 1 ELSE 0 END
+FROM billing_purchase_terms WHERE reference = :'unbound_terms_reference';
 SELECT 1 / CASE WHEN email = '' AND password_salt = '' AND password_hash = ''
                      AND credit_minutes = 5
                 THEN 1 ELSE 0 END
@@ -455,6 +488,7 @@ SELECT (
   AND has_table_privilege(:'api_user', 'public.billing_users', 'DELETE')
   AND NOT has_table_privilege(:'worker_user', 'public.billing_users', 'SELECT')
   AND NOT has_table_privilege(:'worker_user', 'public.billing_subscriptions', 'SELECT')
+  AND NOT has_table_privilege(:'worker_user', 'public.billing_purchase_terms', 'SELECT,INSERT,UPDATE,DELETE')
   AND NOT has_table_privilege(:'worker_user', 'public.billing_payment_orders', 'SELECT')
   AND NOT has_table_privilege(:'worker_user', 'public.billing_auth_tokens', 'SELECT')
   AND NOT EXISTS (
@@ -473,6 +507,8 @@ SELECT (
   AND NOT has_table_privilege(:'worker_user', 'public.lecturesift_contact_messages', 'SELECT')
   AND NOT has_table_privilege(:'worker_user', 'public.lecturesift_cost_events', 'SELECT,INSERT,UPDATE,DELETE')
   AND has_table_privilege(:'worker_user', 'lecturesift_worker.billing_users', 'SELECT')
+  AND has_table_privilege(:'worker_user', 'lecturesift_worker.billing_purchase_terms', 'SELECT')
+  AND NOT has_table_privilege(:'worker_user', 'lecturesift_worker.billing_purchase_terms', 'INSERT,UPDATE,DELETE')
   AND has_column_privilege(:'worker_user', 'lecturesift_worker.billing_users', 'credit_minutes', 'UPDATE')
   AND has_table_privilege(:'worker_user', 'lecturesift_worker.billing_usage_events', 'SELECT')
   AND has_table_privilege(:'worker_user', 'lecturesift_worker.billing_usage_events', 'INSERT')

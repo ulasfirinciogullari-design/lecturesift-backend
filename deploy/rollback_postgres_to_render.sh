@@ -26,11 +26,12 @@ ROOT_DIR="${LECTURESIFT_ROOT:-/opt/lecturesift}"
 SOURCE_ENV_FILE="/root/.lecturesift-render-source.env"
 DB_ENV_FILE="/etc/lecturesift/postgres.env"
 RUNTIME_ENV_FILE="/etc/lecturesift/runtime.env"
-MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest.sql"
+MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest_v3.sql"
 DATABASE_INVENTORY="$ROOT_DIR/deploy/rollback_database_inventory.sql"
 SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt"
+PURCHASE_TERMS_CONTRACT="$ROOT_DIR/deploy/schema_contract_billing_purchase_terms_v1.txt"
 PRESERVED_SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt"
-SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition.py"
+SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition_v3.py"
 RENDER_WORKER_STOP_TOOL="$ROOT_DIR/deploy/render_worker_stop_evidence.py"
 INSTAGRAM_STOP_GATE="$ROOT_DIR/deploy/verify_instagram_publishers_stopped.sh"
 SOURCE_POSTGRES_TRANSPORT="$ROOT_DIR/deploy/source_postgres_transport.py"
@@ -71,7 +72,7 @@ check_private "$SOURCE_ENV_FILE" "Render environment"
 check_private "$DB_ENV_FILE" "OVH database environment"
 check_private "$RUNTIME_ENV_FILE" "OVH runtime environment"
 for path in "$MANIFEST" "$DATABASE_INVENTORY" "$SCHEMA_CONTRACT" \
-  "$PRESERVED_SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" \
+  "$PURCHASE_TERMS_CONTRACT" "$PRESERVED_SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" \
   "$RENDER_WORKER_STOP_TOOL" "$INSTAGRAM_STOP_GATE" \
   "$SOURCE_POSTGRES_TRANSPORT" \
   "$CUTOVER_EVIDENCE_TOOL"; do
@@ -234,9 +235,10 @@ manifest_integrity_valid() {
   compat_count="$(grep -c '^SCHEMA_COMPAT|' "$input" || true)"
   if [[ "$mode" == "strict" ]]; then
     [[ "$compat_count" == "0" ]] || return 1
-  elif [[ "$compat_count" -gt 1 ]] ||
+  elif [[ "$compat_count" -gt 2 ]] ||
        grep '^SCHEMA_COMPAT|' "$input" |
-         grep -Fvxq 'SCHEMA_COMPAT|legacy_missing_table|billing_payment_provider_sessions|integrity_checks_deferred_to_current_schema_migration'; then
+         grep -Fvxq -e 'SCHEMA_COMPAT|legacy_missing_table|billing_payment_provider_sessions|integrity_checks_deferred_to_current_schema_migration' \
+           -e 'SCHEMA_COMPAT|legacy_missing_table|billing_purchase_terms|integrity_checks_deferred_to_current_schema_migration'; then
     return 1
   fi
 }
@@ -366,12 +368,13 @@ render_command() {
       case "$OPERATION" in
         manifest)
           psql --no-psqlrc -v ON_ERROR_STOP=1 \
-            -f /probe/rehearsal_manifest.sql >"/backup/$OUTPUT_NAME"
+            -f /probe/rehearsal_manifest_v3.sql >"/backup/$OUTPUT_NAME"
           ;;
         legacy-manifest)
           psql --no-psqlrc -v ON_ERROR_STOP=1 \
             -v LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on \
-            -f /probe/rehearsal_manifest.sql >"/backup/$OUTPUT_NAME"
+            -v LECTURESIFT_ALLOW_LEGACY_PURCHASE_TERMS=on \
+            -f /probe/rehearsal_manifest_v3.sql >"/backup/$OUTPUT_NAME"
           ;;
         database-inventory)
           psql --no-psqlrc -v ON_ERROR_STOP=1 \

@@ -629,7 +629,7 @@ def test_first_start_is_crash_fenced_and_failure_stops_all_public_writers():
         "docker compose up -d --no-deps --wait --wait-timeout 600 egress-proxy api worker"
     ) < service.index("verify_provider_first_start.sh complete")
     assert "MANIFEST_COMPLETE" in verifier
-    assert "verify_schema_transition.py" in verifier
+    assert "verify_schema_transition_v3.py" in verifier
     assert "recover-first-start" in verifier
     assert "LECTURESIFT_PROVIDER_FIRST_START_RECOVERY_CONFIRM" in verifier
 

@@ -15,6 +15,14 @@ def _read(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
+def test_migration_purchase_terms_probe_requires_read_only_worker_access():
+    script = _read("deploy/migrate_postgres.sh")
+    assert "has_table_privilege(current_user, 'lecturesift_worker.billing_purchase_terms', 'SELECT')" in script
+    assert "NOT has_table_privilege(current_user, 'lecturesift_worker.billing_purchase_terms', 'INSERT,UPDATE,DELETE')" in script
+    assert "NOT has_table_privilege(current_user, 'public.billing_purchase_terms', 'SELECT,INSERT,UPDATE,DELETE')" in script
+    assert '"public.billing_purchase_terms",' in script
+
+
 def test_rehearsal_has_dedicated_queue_bucket_and_consumer_guards():
     script = _read("deploy/rehearsal_stack.sh")
     generator = _read("deploy/generate_rehearsal_envs.py")
@@ -60,8 +68,8 @@ def test_candidate_rehearsal_files_stream_atomically_into_allowlisted_tmpfs_path
     assert stack.count("docker cp") == 0
     assert restore.count("docker cp") == 1
     assert (
-        'docker cp "$ROOT_DIR/deploy/rehearsal_manifest.sql" \\\n'
-        "  lecturesift-postgres-1:/tmp/rehearsal_manifest.sql"
+        'docker cp "$ROOT_DIR/deploy/rehearsal_manifest_v3.sql" \\\n'
+        "  lecturesift-postgres-1:/tmp/rehearsal_manifest_v3.sql"
     ) in restore
 
     for script in (stack, restore):
@@ -305,7 +313,7 @@ def test_backup_is_quiescent_async_versioned_and_retention_scoped():
     assert "BACKUP_METADATA" in script
     assert "format=lecturesift-backup-v2" in script
     assert "application_identity=lecturesift-production" in script
-    assert "application_schema_compatibility=lecturesift-schema-v1" in script
+    assert "application_schema_compatibility=lecturesift-schema-v2" in script
     assert "schema_manifest_sha256=" in script
     assert "schema_fingerprint_sha256=" in script
     assert "database_identity_sha256=" in script
@@ -1177,9 +1185,9 @@ def test_rehearsal_hard_purge_and_schema_contract_are_fail_closed():
     assert "SELECT 1, 'SCHEMA_OBJECT|' || item" in manifest
     assert "SCHEMA_OBJECT" in rehearsal and "SCHEMA_OBJECT" in migration
     assert "SCHEMA_OBJECT" in rollback
-    assert "verify_schema_transition.py" in rehearsal
-    assert "verify_schema_transition.py" in migration
-    assert "verify_schema_transition.py" in rollback
+    assert "verify_schema_transition_v3.py" in rehearsal
+    assert "verify_schema_transition_v3.py" in migration
+    assert "verify_schema_transition_v3.py" in rollback
     assert "schema_contract_payment_provider_sessions_v1.txt" in rehearsal
     assert "schema_contract_payment_provider_sessions_v1.txt" in migration
     assert "schema_contract_payment_provider_sessions_v1.txt" in rollback

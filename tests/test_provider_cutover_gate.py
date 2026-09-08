@@ -786,7 +786,7 @@ def test_first_cutover_seed_is_exact_format_fenced_and_never_changes_runtime():
     assert 'TARGET_BEFORE_MANIFEST_SHA256="$(' in seed
     assert 'sha256sum "$RUN_DIR/target-cutover-snapshot.safe"' in seed
     assert '--migrated-manifest-sha256 "$TARGET_BEFORE_MANIFEST_SHA256"' in seed
-    assert 'CUTOVER_MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest.sql"' in seed
+    assert 'CUTOVER_MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest_v3.sql"' in seed
     assert "SCHEMA_OBJECT" in seed
     assert 'cat "$CUTOVER_MANIFEST"' in seed
     assert 'SET TRANSACTION SNAPSHOT' in seed

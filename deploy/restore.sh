@@ -142,7 +142,14 @@ metadata_database_size="$(sed -n 's/^database_size_bytes=//p' "$SOURCE/BACKUP_ME
 metadata_redis_version="$(sed -n 's/^redis_version=//p' "$SOURCE/BACKUP_METADATA")"
 metadata_compatibility="$(sed -n 's/^redis_restore_compatibility=//p' "$SOURCE/BACKUP_METADATA")"
 case "$metadata_manifest_version" in
-  1) RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v1.sql" ;;
+  1)
+    RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v1.sql"
+    expected_schema_compatibility="lecturesift-schema-v1"
+    ;;
+  2)
+    RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v2.sql"
+    expected_schema_compatibility="lecturesift-schema-v2"
+    ;;
   *)
     echo "The backup references an unsupported recovery manifest version." >&2
     exit 1
@@ -150,8 +157,7 @@ case "$metadata_manifest_version" in
 esac
 if [[ "$metadata_format" != "lecturesift-backup-v2" ||
       "$metadata_application" != "lecturesift-production" ||
-      "$metadata_schema_compatibility" != "lecturesift-schema-v1" ||
-      "$metadata_manifest_version" != "1" ||
+      "$metadata_schema_compatibility" != "$expected_schema_compatibility" ||
       ! "$metadata_manifest_sha256" =~ ^[[:xdigit:]]{64}$ ||
       ! "$metadata_database_identity_sha256" =~ ^[[:xdigit:]]{64}$ ||
       ! "$metadata_schema_sha256" =~ ^[[:xdigit:]]{64}$ ||

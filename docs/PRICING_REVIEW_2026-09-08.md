@@ -82,3 +82,21 @@ veya ön ödemeli bakiye yüklemesiyle mükerrer sayılmamalıdır.
   restore kontrolleri tamamlanmadan fiyat revizyonunu üretime çıkarma.
 - AdSense incelemesi ve gerekli CMP kurulumu tamamlanmadan reklamları açma.
   Ödüllü dakika, güvenilir sağlayıcı doğrulaması olmadan etkinleştirilmez.
+
+## Önizleme doğrulaması
+
+82c9a47 yalnız `codex/product-theme-refresh` dalına gönderildi; PR #67 taslak,
+ana dal değişmedi. Netlify önizlemesi mevcut canlı API'yi kullanır: tema
+incelenebilir, ancak yeni fiyatların canlıya geçtiği veya güvenli bir ödeme
+test ortamı olduğu varsayılmamalıdır.
+
+İlk uzak test çalışmasında 908 test geçti, 5 test başarısız oldu. Üç misafir
+hesabı uyumluluğu hatası, güncellenen kota test verisi ve yeni satın alma
+tablosunun eski şema sözleşmesiyle doğrulanması ele alındı. Yeni şema/recovery
+sözleşmeleri ayrı sürümlerdir; eski yedek sözleşmeleri değiştirilmedi. Yeni
+yönetici plan atamaları da haklarını saklar, eski yönetici atamaları korunur.
+
+Yerel hedefli testler geçse bile gerçek PostgreSQL 18 doğrulaması ve bütün
+uzak testler yeni önizleme sürümünde geçmeden üretime geçiş yapılmamalıdır.
+Canlı sağlık kontrolü, gerçek kart tahsilatının, tüm dosya türlerinin uçtan
+uca işlendiğinin veya reklam gelirinin doğrulandığı anlamına gelmez.

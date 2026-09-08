@@ -86,6 +86,26 @@ def _manifest_text(
     return "\n".join(lines) + "\n"
 
 
+def test_purchase_terms_contract_is_additive_and_not_admitted_by_historical_routing():
+    contract_path = ROOT / "deploy" / "schema_contract_billing_purchase_terms_v1.txt"
+    records = _contract_lines(contract_path)
+    assert len(records) == len(set(records)) == 10
+    columns = [record for record in records if record.startswith("SCHEMA_OBJECT|C|")]
+    assert columns == [
+        "SCHEMA_OBJECT|C|public.billing_purchase_terms|1|reference|character varying(64)|t|||",
+        "SCHEMA_OBJECT|C|public.billing_purchase_terms|2|plan_json|text|t|||",
+        "SCHEMA_OBJECT|C|public.billing_purchase_terms|3|version|character varying(32)|t|||",
+        "SCHEMA_OBJECT|C|public.billing_purchase_terms|4|created_at|timestamp with time zone|t|||",
+    ]
+    assert all("billing_purchase_terms" in record for record in records)
+    assert not any("FOREIGN KEY" in record for record in records)
+    # New release routing must not silently broaden the historical
+    # provider-only transition or reinterpret existing backup manifests.
+    assert "billing_purchase_terms" not in verifier.EXPECTED_TABLES
+    assert "billing_purchase_terms" not in "\n".join(_contract_lines())
+    assert "billing_purchase_terms" not in (ROOT / "deploy" / "recovery_manifest_v1.sql").read_text(encoding="utf-8")
+
+
 def test_manifest_generator_quiets_psql_before_configuring_record_output():
     lines = MANIFEST.read_text(encoding="utf-8").splitlines()
 
@@ -603,6 +623,14 @@ def _assert_clean_manifest(output: str, *, legacy: bool = False) -> None:
 
 
 def test_manifest_legacy_strict_current_and_schema_contract_on_postgres_18(tmp_path: Path):
+    # Exercise the current release while retaining the v2 unit fixtures above.
+    current_manifest = ROOT / "deploy" / "rehearsal_manifest_v3.sql"
+    current_verifier_path = ROOT / "deploy" / "verify_schema_transition_v3.py"
+    current_spec = importlib.util.spec_from_file_location("schema_transition_v3_behavior", current_verifier_path)
+    assert current_spec and current_spec.loader
+    current_verifier = importlib.util.module_from_spec(current_spec)
+    current_spec.loader.exec_module(current_verifier)
+    terms_contract = ROOT / "deploy" / "schema_contract_billing_purchase_terms_v1.txt"
     docker = _docker()
     container = f"lecturesift-manifest-test-{uuid.uuid4().hex[:12]}"
     database = "lecturesift_rehearsal_20260831063027"
@@ -648,7 +676,7 @@ def test_manifest_legacy_strict_current_and_schema_contract_on_postgres_18(tmp_p
         )
         assert result.returncode == 0, result.stderr
 
-    def manifest(*, legacy: bool = False) -> str:
+    def manifest(*, legacy: bool = False, legacy_terms: bool = False) -> str:
         command = [
             "psql",
             "--no-psqlrc",
@@ -660,7 +688,9 @@ def test_manifest_legacy_strict_current_and_schema_contract_on_postgres_18(tmp_p
         ]
         if legacy:
             command.extend(["--set=LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on"])
-        command.extend(["--file", "/tmp/rehearsal_manifest.sql"])
+        if legacy_terms:
+            command.extend(["--set=LECTURESIFT_ALLOW_LEGACY_PURCHASE_TERMS=on"])
+        command.extend(["--file", "/tmp/rehearsal_manifest_v3.sql"])
         result = docker_exec(*command)
         assert result.returncode == 0, result.stderr
         output = result.stdout.replace("\r\n", "\n")
@@ -700,7 +730,7 @@ def test_manifest_legacy_strict_current_and_schema_contract_on_postgres_18(tmp_p
         assert result.returncode == 0, result.stderr
 
     def verify_cli(command: str, manifest_path: Path, before: Path | None = None):
-        arguments = [sys.executable, str(VERIFIER_PATH), command]
+        arguments = [sys.executable, str(current_verifier_path), command]
         if command == "current":
             arguments.extend(["--manifest", str(manifest_path)])
         else:
@@ -783,7 +813,7 @@ def test_manifest_legacy_strict_current_and_schema_contract_on_postgres_18(tmp_p
         assert probe_identity.returncode == 0, probe_identity.stderr
         assert probe_identity.stdout.strip() == "en_US.UTF8|en_US.UTF8"
         copied = _run(
-            [docker, "cp", str(MANIFEST), f"{container}:/tmp/rehearsal_manifest.sql"]
+            [docker, "cp", str(current_manifest), f"{container}:/tmp/rehearsal_manifest_v3.sql"]
         )
         assert copied.returncode == 0, copied.stderr
 
@@ -850,11 +880,11 @@ def test_manifest_legacy_strict_current_and_schema_contract_on_postgres_18(tmp_p
         verified = verify_cli("current", current_path)
         assert verified.returncode == 0, verified.stderr
 
-        expected = set(_contract_lines())
+        expected = set(_contract_lines()) | set(_contract_lines(terms_contract))
         actual = {
             line
             for line in current.splitlines()
-            if any(line.startswith(prefix) for prefix in verifier.TARGET_PREFIXES)
+            if any(line.startswith(prefix) for prefix in current_verifier.TARGET_PREFIXES)
         }
         assert actual == expected
         preserved_expected = set(_contract_lines(PRESERVED_CONTRACT))
@@ -920,6 +950,30 @@ def test_manifest_legacy_strict_current_and_schema_contract_on_postgres_18(tmp_p
         transition = verify_cli("transition", migrated_path, legacy_path)
         assert transition.returncode == 0, transition.stderr
         assert "schema_transition=legacy_to_current" in transition.stdout
+
+        # A source predating both additive tables requires both explicit flags.
+        sql("DROP TABLE billing_purchase_terms; DROP TABLE billing_payment_provider_sessions")
+        strict_terms_missing = manifest()
+        assert "TABLE_DIFF|missing|billing_purchase_terms" in strict_terms_missing
+        provider_only = manifest(legacy=True)
+        assert "TABLE_DIFF|missing|billing_purchase_terms" in provider_only
+        both_legacy = manifest(legacy=True, legacy_terms=True)
+        assert not any(line.startswith("TABLE_DIFF|") for line in both_legacy.splitlines())
+        assert current_verifier.PURCHASE_TERMS_MARKER in both_legacy
+        both_path = tmp_path / "both-legacy.txt"
+        both_path.write_text(both_legacy, encoding="utf-8")
+        migrate()
+        both_migrated_path = tmp_path / "both-migrated.txt"
+        both_migrated_path.write_text(manifest(), encoding="utf-8")
+        result = verify_cli("transition", both_migrated_path, both_path)
+        assert result.returncode == 0, result.stderr
+        assert "TABLE|billing_purchase_terms|0|0|0" in both_migrated_path.read_text(encoding="utf-8")
+
+        sql("ALTER TABLE billing_purchase_terms ADD COLUMN unexpected text")
+        terms_extra_path = tmp_path / "terms-extra-real.txt"
+        terms_extra_path.write_text(manifest(), encoding="utf-8")
+        assert verify_cli("current", terms_extra_path).returncode != 0
+        sql("ALTER TABLE billing_purchase_terms DROP COLUMN unexpected")
 
         sql("ALTER TABLE billing_payment_provider_sessions ADD COLUMN unexpected text")
         extra_column_path = tmp_path / "extra-column-real.txt"

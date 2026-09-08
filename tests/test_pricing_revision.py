@@ -7,6 +7,7 @@ from sqlalchemy import func, select, update
 
 import lecturesift.billing as billing
 import lecturesift.billing_service as billing_service
+import lecturesift.rollout_service as rollout_service
 from lecturesift.billing import LEGACY_PLAN_BY_CODE, PLAN_BY_CODE, REGIONAL_PRICES
 
 
@@ -260,6 +261,57 @@ def test_snapshot_purchase_amount_is_bound_to_the_server_order() -> None:
             provider_amount_minor=order["amount_minor"],
         )
     assert billing_service.account_status(user_id)["plan"]["code"] == "free"
+
+
+def test_new_admin_grant_uses_current_terms_while_old_admin_grant_stays_legacy() -> None:
+    current_user = new_user()
+    current = rollout_service.admin_set_user_subscription(
+        current_user,
+        plan_code="plus",
+        interval="monthly",
+        duration_days=45,
+        actor="pricing-test-admin",
+    )
+    assert current["remaining_minutes"] == 900
+    assert current["subscription"]["terms_version"] == billing_service.ADMIN_GRANT_TERMS_VERSION
+
+    with billing_service.ENGINE.connect() as connection:
+        subscription = connection.execute(
+            select(billing_service.SUBSCRIPTIONS).where(
+                billing_service.SUBSCRIPTIONS.c.user_id == current_user,
+                billing_service.SUBSCRIPTIONS.c.status == "active",
+            )
+        ).one()
+    terms = purchase_terms(subscription.source_reference)
+    assert terms["row"].version == billing_service.ADMIN_GRANT_TERMS_VERSION
+    assert "purchase" not in terms["payload"]
+    assert terms["payload"]["admin_grant"] == {
+        "amount_minor": 0,
+        "currency": None,
+        "interval": "monthly",
+        "plan_code": "plus",
+        "source": "admin",
+    }
+
+    legacy_user = new_user()
+    now = billing_service.utcnow()
+    with billing_service.ENGINE.begin() as connection:
+        connection.execute(
+            billing_service.SUBSCRIPTIONS.insert().values(
+                id=str(uuid.uuid4()),
+                user_id=legacy_user,
+                plan_code="plus",
+                interval="monthly",
+                status="active",
+                starts_at=now,
+                ends_at=now + timedelta(days=45),
+                source_reference=f"ADMIN-OLD-{uuid.uuid4().hex[:20].upper()}",
+                created_at=now,
+            )
+        )
+    legacy = billing_service.account_status(legacy_user)
+    assert legacy["remaining_minutes"] == 1800
+    assert legacy["subscription"]["terms_version"] == billing_service.LEGACY_TERMS_VERSION
 
 
 def test_purchase_terms_reference_is_standalone_64_character_key() -> None:

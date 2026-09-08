@@ -13,7 +13,7 @@ RESTIC_ENV_FILE="${LECTURESIFT_RESTIC_ENV_FILE:-/etc/lecturesift/restic.env}"
 ROLE_ENV_GENERATOR="$ROOT_DIR/deploy/generate_role_envs.py"
 CONFIGURATION_SNAPSHOT_TOOL="$ROOT_DIR/deploy/configuration_snapshot.py"
 CONFIGURATION_SNAPSHOT_NAME="configuration-snapshot-v1"
-RECOVERY_MANIFEST_VERSION=1
+RECOVERY_MANIFEST_VERSION=2
 RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v${RECOVERY_MANIFEST_VERSION}.sql"
 ALLOWED_BACKUP_ROOT="/var/backups/lecturesift"
 REQUESTED_BACKUP_ROOT="${LECTURESIFT_BACKUP_DIR:-$ALLOWED_BACKUP_ROOT}"
@@ -535,7 +535,7 @@ redis_version="$(docker compose exec -T redis redis-cli --raw INFO server \
 {
   printf 'format=lecturesift-backup-v2\n'
   printf 'application_identity=lecturesift-production\n'
-  printf 'application_schema_compatibility=lecturesift-schema-v1\n'
+  printf 'application_schema_compatibility=lecturesift-schema-v2\n'
   printf 'schema_manifest_version=%s\n' "$RECOVERY_MANIFEST_VERSION"
   printf 'schema_manifest_sha256=%s\n' "$schema_manifest_sha256"
   printf 'database_identity_sha256=%s\n' "$database_identity_sha256"

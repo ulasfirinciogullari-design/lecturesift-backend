@@ -109,6 +109,62 @@ def _delete_in(connection: Connection, sql: str, values: list[str]) -> int:
     return int(connection.execute(statement, {"values": values}).rowcount or 0)
 
 
+def _term_references_for_users(
+    connection: Connection,
+    user_ids: list[str],
+) -> list[str]:
+    """Return only terms references exclusively bound to proven rehearsal users."""
+    references = [
+        str(value)
+        for value in connection.execute(
+            text(
+                """
+                SELECT DISTINCT binding.reference
+                FROM (
+                    SELECT source_reference AS reference, user_id
+                    FROM public.billing_subscriptions
+                    UNION ALL
+                    SELECT reference, user_id FROM public.billing_payment_orders
+                    UNION ALL
+                    SELECT reference, user_id FROM public.billing_manual_orders
+                ) AS binding
+                WHERE binding.user_id IN :user_ids
+                  AND binding.reference IS NOT NULL
+                  AND binding.reference <> ''
+                ORDER BY binding.reference
+                """
+            ).bindparams(bindparam("user_ids", expanding=True)),
+            {"user_ids": user_ids},
+        ).scalars().all()
+    ]
+    if not references:
+        return []
+    conflicting_bindings = connection.execute(
+        text(
+            """
+            SELECT count(*)
+            FROM (
+                SELECT source_reference AS reference, user_id
+                FROM public.billing_subscriptions
+                UNION ALL
+                SELECT reference, user_id FROM public.billing_payment_orders
+                UNION ALL
+                SELECT reference, user_id FROM public.billing_manual_orders
+            ) AS binding
+            WHERE binding.reference IN :references
+              AND binding.user_id NOT IN :user_ids
+            """
+        ).bindparams(
+            bindparam("references", expanding=True),
+            bindparam("user_ids", expanding=True),
+        ),
+        {"references": references, "user_ids": user_ids},
+    ).scalar_one()
+    if int(conflicting_bindings):
+        raise PurgeError("a rehearsal terms reference is also bound to another user")
+    return references
+
+
 def _direct_user_foreign_keys(connection: Connection) -> list[UserForeignKey]:
     rows = connection.execute(
         text(
@@ -192,6 +248,7 @@ def _assert_no_matches(
     foreign_keys: list[UserForeignKey],
     user_ids: list[str],
     job_ids: list[str],
+    term_references: list[str],
 ) -> None:
     preparer = connection.dialect.identifier_preparer
     for foreign_key in foreign_keys:
@@ -223,6 +280,16 @@ def _assert_no_matches(
         ).scalar_one()
         if int(remaining):
             raise PurgeError(f"rehearsal marker rows remain in {table_name}")
+    if term_references:
+        remaining_terms = connection.execute(
+            text(
+                "SELECT count(*) FROM public.billing_purchase_terms "
+                "WHERE reference IN :values"
+            ).bindparams(bindparam("values", expanding=True)),
+            {"values": term_references},
+        ).scalar_one()
+        if int(remaining_terms):
+            raise PurgeError("rehearsal purchase terms remain")
 
 
 def purge(application_result: Path, formats_result: Path) -> dict[str, object]:
@@ -267,6 +334,7 @@ def purge(application_result: Path, formats_result: Path) -> dict[str, object]:
             if set(map(str, users)) != set(user_ids):
                 raise PurgeError("E2E account identities are missing or were not anonymised")
 
+            term_references = _term_references_for_users(connection, user_ids)
             order_references = connection.execute(
                 text(
                     "SELECT reference FROM public.billing_payment_orders "
@@ -279,6 +347,11 @@ def purge(application_result: Path, formats_result: Path) -> dict[str, object]:
                 "DELETE FROM public.billing_payment_provider_sessions "
                 "WHERE order_reference IN :values",
                 [str(value) for value in order_references],
+            )
+            deleted["billing_purchase_terms"] = _delete_in(
+                connection,
+                "DELETE FROM public.billing_purchase_terms WHERE reference IN :values",
+                term_references,
             )
 
             foreign_keys = _direct_user_foreign_keys(connection)
@@ -329,7 +402,9 @@ def purge(application_result: Path, formats_result: Path) -> dict[str, object]:
             # references either rehearsal identity.  The outer manifest check
             # then proves the compatibility surface remained byte-for-byte
             # unchanged.
-            _assert_no_matches(connection, mutable_foreign_keys, user_ids, job_ids)
+            _assert_no_matches(
+                connection, mutable_foreign_keys, user_ids, job_ids, term_references
+            )
 
             # The generated registration addresses must no longer be present
             # in live identity columns. Audit rows use an unrelated anonymised

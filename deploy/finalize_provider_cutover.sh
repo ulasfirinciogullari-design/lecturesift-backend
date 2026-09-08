@@ -27,10 +27,11 @@ RENDER_WORKER_STOP_TOOL="$ROOT_DIR/deploy/render_worker_stop_evidence.py"
 SOURCE_REDIS_GUARD="$ROOT_DIR/deploy/source_redis_guard.py"
 SOURCE_POSTGRES_TRANSPORT="$ROOT_DIR/deploy/source_postgres_transport.py"
 TARGET_REDIS_MANIFEST_TOOL="$ROOT_DIR/deploy/target_redis_manifest.sh"
-TARGET_DATA_MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest.sql"
+TARGET_DATA_MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest_v3.sql"
 SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt"
+PURCHASE_TERMS_CONTRACT="$ROOT_DIR/deploy/schema_contract_billing_purchase_terms_v1.txt"
 PRESERVED_SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt"
-SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition.py"
+SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition_v3.py"
 POSTGRES_SECURITY_MANIFEST="$ROOT_DIR/deploy/postgres_security_manifest.sql"
 POSTGRES_SECURITY_VALIDATOR="$ROOT_DIR/deploy/validate_postgres_security_manifest.py"
 POSTGRES_ROLE_LOGIN_PROBE="$ROOT_DIR/deploy/postgres_role_login_probe.sh"
@@ -84,7 +85,7 @@ for path in "$CUTOVER_EVIDENCE_TOOL" "$RENDER_WORKER_STOP_TOOL" \
   "$TARGET_REDIS_MANIFEST_TOOL" "$SOURCE_REDIS_GUARD" \
   "$SOURCE_POSTGRES_TRANSPORT" \
   "$TARGET_DATA_MANIFEST" \
-  "$SCHEMA_CONTRACT" "$PRESERVED_SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" \
+  "$SCHEMA_CONTRACT" "$PURCHASE_TERMS_CONTRACT" "$PRESERVED_SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" \
   "$POSTGRES_SECURITY_MANIFEST" "$POSTGRES_SECURITY_VALIDATOR" \
   "$POSTGRES_ROLE_LOGIN_PROBE" \
   "$RELEASE_TOOL" "$ROOT_DIR/compose.yaml"; do

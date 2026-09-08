@@ -195,7 +195,7 @@ if not (
 check_private_env "$SOURCE_ENV" "Source database environment"
 check_private_env "$DB_ENV" "Target database environment"
 for path in "$SOURCE_ENV" "$DB_ENV" \
-  "$ROOT_DIR/deploy/rehearsal_manifest.sql" \
+  "$ROOT_DIR/deploy/rehearsal_manifest_v3.sql" \
   "$ROOT_DIR/deploy/provision_database_role.sh" \
   "$ROOT_DIR/deploy/release.sh" \
   "$ROOT_DIR/deploy/rehearsal_stack.sh" \
@@ -206,8 +206,9 @@ for path in "$SOURCE_ENV" "$DB_ENV" \
   "$ROOT_DIR/deploy/rehearsal_formats_e2e.py" \
   "$ROOT_DIR/deploy/rehearsal_purge_e2e.py" \
   "$SOURCE_POSTGRES_TRANSPORT" \
-  "$ROOT_DIR/deploy/verify_schema_transition.py" \
+  "$ROOT_DIR/deploy/verify_schema_transition_v3.py" \
   "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" \
+  "$ROOT_DIR/deploy/schema_contract_billing_purchase_terms_v1.txt" \
   "$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt"; do
   if [[ ! -f "$path" || -L "$path" ]]; then
     echo "Missing rehearsal input: $path" >&2
@@ -653,7 +654,7 @@ cleanup_rehearsal() {
   local original_status="$?" cleanup_failed="false"
   trap - EXIT
   set +e
-  docker exec lecturesift-postgres-1 rm -f /tmp/rehearsal_manifest.sql >/dev/null 2>&1 || true
+  docker exec lecturesift-postgres-1 rm -f /tmp/rehearsal_manifest_v3.sql >/dev/null 2>&1 || true
   rm -f -- "$run_dir/render.dump" \
     "$run_dir/rehearsal-api.env" "$run_dir/rehearsal-worker.env" \
     "$run_dir/rehearsal-api-squid.conf" \
@@ -992,7 +993,8 @@ source_pg_exec docker run --rm --user 0:0 \
     set +x
     psql --no-psqlrc --quiet -v ON_ERROR_STOP=1 \
       -v LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on \
-      -f /probe/rehearsal_manifest.sql > /backup/source-before.txt
+      -v LECTURESIFT_ALLOW_LEGACY_PURCHASE_TERMS=on \
+      -f /probe/rehearsal_manifest_v3.sql > /backup/source-before.txt
   '
 
 source_database_size="$(tr -d '\r' <"$run_dir/source-before.txt" \
@@ -1054,7 +1056,8 @@ source_pg_exec docker run --rm --user 0:0 \
     set +x
     psql --no-psqlrc --quiet -v ON_ERROR_STOP=1 \
       -v LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on \
-      -f /probe/rehearsal_manifest.sql > /backup/source-after.txt
+      -v LECTURESIFT_ALLOW_LEGACY_PURCHASE_TERMS=on \
+      -f /probe/rehearsal_manifest_v3.sql > /backup/source-after.txt
   '
 
 sha256sum "$run_dir/render.dump" > "$run_dir/render.dump.sha256"
@@ -1131,18 +1134,19 @@ SELECT format('COMMENT ON DATABASE %I IS %L', :'database_name', :'database_comme
 SQL
 rm -f -- "$run_dir/render.dump"
 
-docker cp "$ROOT_DIR/deploy/rehearsal_manifest.sql" \
-  lecturesift-postgres-1:/tmp/rehearsal_manifest.sql
+docker cp "$ROOT_DIR/deploy/rehearsal_manifest_v3.sql" \
+  lecturesift-postgres-1:/tmp/rehearsal_manifest_v3.sql
 docker compose --project-directory "$ROOT_DIR" --file "$ROOT_DIR/compose.yaml" \
   exec -T postgres psql --no-psqlrc --quiet -U "$POSTGRES_USER" -d "$rehearsal_db" \
   -v ON_ERROR_STOP=1 -v LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on \
-  -f /tmp/rehearsal_manifest.sql > "$run_dir/target.txt"
+  -v LECTURESIFT_ALLOW_LEGACY_PURCHASE_TERMS=on \
+  -f /tmp/rehearsal_manifest_v3.sql > "$run_dir/target.txt"
 
 printf '%s\n' "$rehearsal_db" > "$run_dir/database-name.txt"
 safe_pattern='^(DATABASE|SCHEMA|SCHEMA_OBJECT|TABLE|TABLE_DIFF|ANOMALY|STATUS|SCHEMA_COMPAT|UNVALIDATED_FK|MANIFEST_COMPLETE)\|'
-python3 "$ROOT_DIR/deploy/verify_schema_transition.py" legacy --manifest "$run_dir/source-before.txt" --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" --preserved-contract "$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt" > "$run_dir/source-before.schema-contract.txt"
-python3 "$ROOT_DIR/deploy/verify_schema_transition.py" legacy --manifest "$run_dir/source-after.txt" --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" --preserved-contract "$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt" > "$run_dir/source-after.schema-contract.txt"
-python3 "$ROOT_DIR/deploy/verify_schema_transition.py" legacy --manifest "$run_dir/target.txt" --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" --preserved-contract "$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt" > "$run_dir/target.schema-contract.txt"
+python3 "$ROOT_DIR/deploy/verify_schema_transition_v3.py" legacy --manifest "$run_dir/source-before.txt" --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" --preserved-contract "$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt" > "$run_dir/source-before.schema-contract.txt"
+python3 "$ROOT_DIR/deploy/verify_schema_transition_v3.py" legacy --manifest "$run_dir/source-after.txt" --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" --preserved-contract "$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt" > "$run_dir/source-after.schema-contract.txt"
+python3 "$ROOT_DIR/deploy/verify_schema_transition_v3.py" legacy --manifest "$run_dir/target.txt" --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" --preserved-contract "$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt" > "$run_dir/target.schema-contract.txt"
 grep -E "$safe_pattern" "$run_dir/source-before.txt" | sort > "$run_dir/source-before.safe"
 grep -E "$safe_pattern" "$run_dir/source-after.txt" | sort > "$run_dir/source-after.safe"
 grep -E "$safe_pattern" "$run_dir/target.txt" | sort > "$run_dir/target.safe"
@@ -1157,16 +1161,21 @@ if ! diff -u "$run_dir/source-before.safe" "$run_dir/target.safe" \
   exit 1
 fi
 legacy_compat_marker='SCHEMA_COMPAT|legacy_missing_table|billing_payment_provider_sessions|integrity_checks_deferred_to_current_schema_migration'
+legacy_terms_compat_marker='SCHEMA_COMPAT|legacy_missing_table|billing_purchase_terms|integrity_checks_deferred_to_current_schema_migration'
+legacy_purchase_terms_missing="false"
 legacy_provider_sessions_missing="false"
 for manifest_path in \
   "$run_dir/source-before.txt" "$run_dir/source-after.txt" "$run_dir/target.txt"; do
   compat_count="$(grep -c '^SCHEMA_COMPAT|' "$manifest_path" || true)"
-  if [[ "$compat_count" -gt 1 ]] || \
-     grep '^SCHEMA_COMPAT|' "$manifest_path" | grep -Fvxq "$legacy_compat_marker"; then
-    echo "The legacy schema compatibility evidence is not the one permitted migration." >&2
+  if [[ "$compat_count" -gt 2 ]] || \
+     grep '^SCHEMA_COMPAT|' "$manifest_path" | grep -Fvxq -e "$legacy_compat_marker" -e "$legacy_terms_compat_marker"; then
+    echo "The legacy schema compatibility evidence exceeds the reviewed additive migrations." >&2
     exit 1
   fi
 done
+if grep -Fxq "$legacy_terms_compat_marker" "$run_dir/target.txt"; then
+  legacy_purchase_terms_missing="true"
+fi
 if grep -Fxq "$legacy_compat_marker" "$run_dir/target.txt"; then
   legacy_provider_sessions_missing="true"
 fi
@@ -1217,7 +1226,7 @@ LECTURESIFT_PROVISION_DATABASE="$rehearsal_db" \
   "$ROOT_DIR/deploy/provision_database_role.sh"
 docker compose --project-directory "$ROOT_DIR" --file "$ROOT_DIR/compose.yaml" \
   exec -T postgres psql --no-psqlrc --quiet -U "$POSTGRES_USER" -d "$rehearsal_db" \
-  -v ON_ERROR_STOP=1 -f /tmp/rehearsal_manifest.sql > "$run_dir/target-migrated.txt"
+  -v ON_ERROR_STOP=1 -f /tmp/rehearsal_manifest_v3.sql > "$run_dir/target-migrated.txt"
 if grep -Eq '^(TABLE_DIFF|SCHEMA_COMPAT|UNVALIDATED_FK)\|' \
   "$run_dir/target-migrated.txt" || \
    awk -F'|' '$1 == "ANOMALY" && $3 != "0" { invalid=1 } END { exit(invalid ? 0 : 1) }' \
@@ -1225,7 +1234,7 @@ if grep -Eq '^(TABLE_DIFF|SCHEMA_COMPAT|UNVALIDATED_FK)\|' \
   echo "The current schema migration did not produce a strict, anomaly-free clone." >&2
   exit 1
 fi
-python3 "$ROOT_DIR/deploy/verify_schema_transition.py" current --manifest "$run_dir/target-migrated.txt" --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" --preserved-contract "$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt" > "$run_dir/schema-migrated-current.txt"
+python3 "$ROOT_DIR/deploy/verify_schema_transition_v3.py" current --manifest "$run_dir/target-migrated.txt" --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" --preserved-contract "$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt" > "$run_dir/schema-migrated-current.txt"
 grep -E '^(DATABASE|TABLE|STATUS)\|' "$run_dir/target.txt" \
   | sort > "$run_dir/target-before-migration.data"
 grep -E '^(DATABASE|TABLE|STATUS)\|' "$run_dir/target-migrated.txt" \
@@ -1243,13 +1252,23 @@ else
   cp -- "$run_dir/target-after-migration.data" \
     "$run_dir/target-after-migration.comparable"
 fi
+if [[ "$legacy_purchase_terms_missing" == "true" ]]; then
+  grep -Fxq 'TABLE|billing_purchase_terms|0|0|0' \
+    "$run_dir/target-migrated.txt" ||
+    { echo "The migrated purchase-terms table is missing or unexpectedly non-empty." >&2; exit 1; }
+  grep -Fv 'TABLE|billing_purchase_terms|' \
+    "$run_dir/target-after-migration.comparable" \
+    >"$run_dir/target-after-migration.terms-comparable"
+  mv -- "$run_dir/target-after-migration.terms-comparable" \
+    "$run_dir/target-after-migration.comparable"
+fi
 if ! diff -u "$run_dir/target-before-migration.data" \
   "$run_dir/target-after-migration.comparable" \
   > "$run_dir/schema-migration-data.diff"; then
   echo "The schema migration changed pre-existing table data." >&2
   exit 1
 fi
-python3 "$ROOT_DIR/deploy/verify_schema_transition.py" transition \
+python3 "$ROOT_DIR/deploy/verify_schema_transition_v3.py" transition \
   --before "$run_dir/target.txt" \
   --after "$run_dir/target-migrated.txt" \
   --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" \
@@ -1299,7 +1318,7 @@ docker exec --user 10001:10001 -e PYTHONPATH=/app lecturesift-api-rehearsal \
   >"$run_dir/e2e-purge.json"
 docker compose --project-directory "$ROOT_DIR" --file "$ROOT_DIR/compose.yaml" \
   exec -T postgres psql --no-psqlrc --quiet -U "$POSTGRES_USER" -d "$rehearsal_db" \
-  -v ON_ERROR_STOP=1 -f /tmp/rehearsal_manifest.sql > "$run_dir/target-after-e2e.txt"
+  -v ON_ERROR_STOP=1 -f /tmp/rehearsal_manifest_v3.sql > "$run_dir/target-after-e2e.txt"
 if grep -Eq '^(TABLE_DIFF|SCHEMA_COMPAT|UNVALIDATED_FK)\|' \
   "$run_dir/target-after-e2e.txt" || \
    awk -F'|' '$1 == "ANOMALY" && $3 != "0" { invalid=1 } END { exit(invalid ? 0 : 1) }' \
@@ -1307,7 +1326,7 @@ if grep -Eq '^(TABLE_DIFF|SCHEMA_COMPAT|UNVALIDATED_FK)\|' \
   echo "The full application rehearsal left a schema or data-integrity anomaly." >&2
   exit 1
 fi
-python3 "$ROOT_DIR/deploy/verify_schema_transition.py" current \
+python3 "$ROOT_DIR/deploy/verify_schema_transition_v3.py" current \
   --manifest "$run_dir/target-after-e2e.txt" \
   --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" \
   --preserved-contract "$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt" \
@@ -1320,7 +1339,7 @@ if ! diff -u "$run_dir/target-migrated.safe" \
   echo "The full application rehearsal did not return to its exact pre-E2E database state." >&2
   exit 1
 fi
-docker exec lecturesift-postgres-1 rm -f /tmp/rehearsal_manifest.sql
+docker exec lecturesift-postgres-1 rm -f /tmp/rehearsal_manifest_v3.sql
 cleanup_rehearsal_containers "$rehearsal_suffix"
 cleanup_rehearsal_proxy_networks "$rehearsal_suffix"
 cleanup_rehearsal_work_volumes "$rehearsal_suffix"

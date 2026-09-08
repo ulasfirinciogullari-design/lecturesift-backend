@@ -211,7 +211,7 @@ def test_exact_wrapper_attests_all_base_state_without_exposing_values() -> None:
     assert "grants_unchanged=true" in script
     assert "SCHEMA_OBJECT|SCHEMA_COMPAT" in script
     assert "TABLE_DIFF" in script
-    assert 'verify_schema_transition.py" current' in script
+    assert 'verify_schema_transition_v3.py" current' in script
     assert "schema_contract_payment_provider_sessions_v1.txt" in script
     assert "schema_contract_billing_email_verifications_v1.txt" in script
     assert 'before.manifest.canonical" "$state/after.manifest.canonical' in script
