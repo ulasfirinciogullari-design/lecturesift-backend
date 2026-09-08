@@ -72,7 +72,7 @@ test('localized home, navigation and demo quiz respond to real clicks', async ({
 
 
 test('about removes the product journey section', async ({page}) => {
-  await page.goto('/tr/about');
+  await page.goto('/about');
   await expect(page.locator('h1')).toBeVisible();
   await expect(page.locator('article section')).toHaveCount(4);
   await expect(page.getByRole('heading', {name:'Ürün yolculuğu'})).toHaveCount(0);
