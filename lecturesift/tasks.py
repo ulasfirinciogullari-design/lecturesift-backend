@@ -13,7 +13,6 @@ from .duration import media_duration_seconds
 from .documents import extract_documents
 from .errors import normalize_error
 from .jobs import JOBS
-from .media import download_remote_video
 from .pipeline_enhancements import install_pipeline_enhancements
 from .queue import celery_app
 from .rollout_service import estimate_eta_seconds, is_guest_user, record_runtime, reserve_guest_job
@@ -536,84 +535,19 @@ def process_uploaded_job(
             )
 
 
-@celery_app.task(bind=True, max_retries=6, name="lecturesift.process_url_job")
+@celery_app.task(bind=True, max_retries=0, name="lecturesift.process_url_job")
 def process_url_job(self, job_id: str, url: str, options: dict) -> dict:
+    """Drain legacy queued URL jobs without fetching a source or charging usage."""
     with JOBS.processing_lock(job_id) as acquired:
         if not acquired:
-            if int(getattr(self.request, "retries", 0)) >= self.max_retries:
-                return {"job_id": job_id, "status": "duplicate"}
-            raise self.retry(countdown=60)
-
+            return {"job_id": job_id, "status": "duplicate"}
         data = JOBS.get(job_id)
         if not data:
             return {"job_id": job_id, "status": "missing"}
-        if data.get("status") == "done" and data.get("remote_prefix"):
+        if data.get("status") == "done":
             return {"job_id": job_id, "status": "done"}
-        try:
-            resumed = _resume_publish(job_id, data)
-            if resumed:
-                return resumed
-        except Exception as exc:
-            return _retry_or_fail(
-                self,
-                job_id,
-                exc,
-                job_dir=_stored_job_dir(data),
-                data=data,
-            )
-
-        job_dir = WORK_DIR / job_id
-        try:
-            shutil.rmtree(job_dir, ignore_errors=True)
-            job_dir.mkdir(parents=True, exist_ok=True)
-            enforce_job_workspace(job_dir, reserve_full_budget=True, work_root=WORK_DIR)
-            JOBS.update(job_id, job_dir=str(job_dir), status="working", stage="url_download", worker_state="downloading")
-            video_path = download_remote_video(
-                url,
-                job_dir,
-                job_type=str(options.get("job_type") or "study_pack"),
-                include_slides=bool(options.get("include_slides", True)),
-            )
-            enforce_job_workspace(job_dir, reserve_full_budget=True, work_root=WORK_DIR)
-            duration = media_duration_seconds([video_path])
-            try:
-                _enforce_minutes(str(options.get("billing_user_id", "")), job_id, duration)
-            except BillingError as exc:
-                return _quota_error(job_id, exc, job_dir=job_dir, data=data)
-
-            media_minutes = max(0.1, duration / 60.0)
-            source_size = video_path.stat().st_size if video_path.exists() else 0
-            started = time.time()
-            JOBS.update(
-                job_id,
-                percent=8,
-                stage="parallel_analysis",
-                worker_state="processing",
-                media_minutes=round(media_minutes, 2),
-                file_size_bytes=source_size,
-            )
-            pipeline_options = _pipeline_options_with_durations(options, duration, duration)
-            process_job(job_id, video_path, pipeline_options)
-            enforce_job_workspace(job_dir, work_root=WORK_DIR)
-            finished = JOBS.get(job_id) or {}
-            if finished.get("status") != "done":
-                transient = _processing_error(finished)
-                if transient:
-                    raise transient
-                _cleanup_terminal_sources(job_dir, data=finished or data)
-                return {"job_id": job_id, "status": finished.get("status", "error")}
-
-            remote = STORAGE.publish_job(job_id, job_dir)
-            elapsed = float(finished.get("elapsed_seconds") or (time.time() - started))
-            record_runtime(job_id, media_minutes, elapsed, source_size)
-            video_path.unlink(missing_ok=True)
-            JOBS.update(job_id, worker_state="done", **remote)
-            return {"job_id": job_id, "status": "done", **remote}
-        except Exception as exc:
-            return _retry_or_fail(
-                self,
-                job_id,
-                exc,
-                job_dir=job_dir,
-                data=JOBS.get(job_id) or data,
-            )
+        JOBS.update(job_id, status="error", stage="error", worker_state="error", percent=0,
+                    error_code="LS-URL-06",
+                    error="Bağlantıyla kaynak ekleme kaldırıldı. Video, ses veya belge dosyanı yükle.")
+        _cleanup_terminal_sources(_stored_job_dir(data), data=data)
+        return {"job_id": job_id, "status": "error"}

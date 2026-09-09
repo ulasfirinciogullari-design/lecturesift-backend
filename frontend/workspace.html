@@ -88,12 +88,7 @@
           <span class="secure-note" data-i18n="secure">Güvenli işlem</span>
         </div>
 
-        <div class="source-tabs" role="tablist" aria-label="Video kaynağı">
-          <button class="source-tab active" id="uploadTab" type="button" role="tab" aria-selected="true" aria-controls="uploadPanel" data-i18n="uploadTab">Dosya yükle</button>
-          <button class="source-tab" id="linkTab" type="button" role="tab" aria-selected="false" aria-controls="linkPanel" data-i18n="linkTab">YouTube’dan ekle</button>
-        </div>
-
-        <div id="uploadPanel" class="source-panel active" role="tabpanel" aria-labelledby="uploadTab">
+        <div id="uploadPanel" class="source-panel active">
           <div id="recordingModeTabs" class="recording-mode-tabs">
             <button id="classicMode" class="active" type="button" data-i18n="classicMode">Video, ses veya belge</button>
             <button id="separateMode" type="button" data-i18n="separateMode">Ses ve görüntü ayrı</button>
@@ -132,14 +127,6 @@
           <p id="sourceLimitHelp" class="combined-limit" data-i18n="fileHelp">Tek iş yükleme sınırların aktif planından yükleniyor.</p>
         </div>
 
-        <div id="linkPanel" class="source-panel" role="tabpanel" aria-labelledby="linkTab" hidden>
-          <label class="field-label" for="videoUrl" data-i18n="urlLabel">YouTube videolarını analiz et</label>
-          <div class="url-field">
-            <span aria-hidden="true">↗</span>
-            <input id="videoUrl" type="url" inputmode="url" placeholder="https://www.youtube.com/watch?v=…" autocomplete="url" aria-describedby="youtubeUrlHelp">
-          </div>
-          <p id="youtubeUrlHelp" class="field-help" data-i18n="urlHelp">Yalnızca YouTube bağlantısı. Video, Shorts veya canlı yayın kaydı bağlantısını yapıştır.</p>
-        </div>
 
         <div class="divider"></div>
 
@@ -222,19 +209,22 @@
         </div>
 
         <div class="progress-visual">
-          <div id="progressRing" class="progress-ring" style="--progress:0deg"><span id="progressPercent">0%</span></div>
+          <div id="progressRing" class="process-status-icon" aria-hidden="true">↑</div>
           <div><strong id="currentStage" data-i18n="readyStage">Video bekleniyor</strong><p id="stageDetail" data-i18n="readyDetail">Kaynağı ekleyip ayarlarını seçtiğinde işlem adımlarını burada canlı göreceksin.</p></div>
         </div>
 
+        <div id="uploadFilesProgress" class="upload-progress-list"></div>
+        <label class="result-open-choice"><input id="autoOpenResult" type="checkbox" checked><span data-i18n="upload.autoOpen">Hazır olduğunda sonuçları otomatik aç</span></label>
+        <button id="openReadyResult" type="button" class="primary-action" data-i18n="upload.openResults" hidden>Sonuçları aç</button>
+        <details class="process-details"><summary data-i18n="upload.stageDetails">İşlem ayrıntıları</summary>
         <ol id="stageList" class="stage-list">
-          <li data-stage="url_download"><i></i><span data-i18n="stageReceive">Video alınıyor</span><b>--</b></li>
           <li data-stage="audio"><i></i><span data-i18n="stageAudio">Ses ayrıştırılıyor</span><b>--</b></li>
           <li data-stage="transcription"><i></i><span data-i18n="stageTranscript">Konuşma çözümleniyor</span><b>--</b></li>
           <li data-stage="scene_scan"><i></i><span data-i18n="stageVisual">Görsel içerik taranıyor</span><b>--</b></li>
           <li data-stage="slide_validation"><i></i><span data-i18n="stageSlides">Slaytlar doğrulanıyor</span><b>--</b></li>
           <li data-stage="study_pack"><i></i><span data-i18n="stageStudy">Ders yapılandırılıyor</span><b>--</b></li>
           <li data-stage="exports"><i></i><span data-i18n="stageExport">Çıktılar hazırlanıyor</span><b>--</b></li>
-        </ol>
+        </ol></details>
 
         <div class="promise-card">
           <span aria-hidden="true">✦</span>
@@ -314,14 +304,8 @@
       <div class="assistant-page-grid">
         <div data-assistant-root data-assistant-lazy></div>
         <aside class="assistant-side">
-          <section class="assistant-info-card">
-            <span class="usage-badge" data-assistant-copy="limited">Sınırlı kullanım içerir.</span>
-            <h2 data-assistant-copy="creditguide">Krediler nasıl çalışır?</h2>
-            <p data-assistant-copy="usage">Sohbet ve görsel oluşturma asistan kredisi kullanır. Harcanan kredi, isteğinin uzunluğuna ve türüne göre değişir.</p>
-            <p data-assistant-copy="topup">İhtiyacın olursa ek kredi alabilirsin. Ek krediler 365 gün geçerlidir; ders işleme dakikalarından ayrıdır.</p>
-            <a href="/plans.html#assistantCredits" data-assistant-copy="buy">Ek kredi al</a>
-          </section>
-          <section class="assistant-info-card assistant-invite-card"><h2 data-assistant-copy="invitetitle">Birlikte çalış, birlikte kazan.</h2><p data-assistant-copy="invitenote">Arkadaşını davet et. Uygun ücretli abonelik alışverişleri ve yenilemelerinde dakika veya indirim kuponu kazanma fırsatı yakala.</p><a href="/account.html#account-referrals" data-assistant-copy="invitelink">Davet programını incele</a></section>
+          <section id="assistantCreditShop" class="assistant-info-card assistant-shop" data-assistant-credit-shop><h2 data-assistant-copy="buy">Ek kredi al</h2></section>
+          <a class="assistant-invite-link" href="/account.html#account-referrals"><span aria-hidden="true">↗</span><span data-assistant-copy="invitelink">Davet programını incele</span></a>
         </aside>
       </div>
     </section>
@@ -341,7 +325,8 @@
 
   <script src="./locale-data.js?v=4"></script>
   <script src="./page-i18n.js?v=7"></script><script src="/i18n.js?v=36"></script><script src="/site-shell.js?v=6"></script>
-  <script src="./app.js?v=33"></script>
-  <script src="/rollout.js?v=8"></script>
+  <script src="/upload-progress.js?v=1"></script>
+  <script src="./app.js?v=34"></script>
+  <script src="/rollout.js?v=9"></script>
 <script src="/product-layout.js?v=1"></script></body>
 </html>

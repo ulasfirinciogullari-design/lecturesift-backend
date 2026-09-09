@@ -171,7 +171,6 @@ def install_durable_runtime() -> None:
     from . import pipeline
 
     local_process_job = pipeline.process_job
-    local_start_url_job = app_module.start_url_job
 
     def dispatch(job_id: str, audio_video_paths, options: dict, visual_video_paths=None) -> None:
         audio_paths = _paths(audio_video_paths)
@@ -329,39 +328,6 @@ def install_durable_runtime() -> None:
                 except OSError:
                     pass
 
-    def dispatch_url(job_id: str, url: str, job_dir: Path, options: dict) -> str:
-        if not _queue_ready():
-            if REQUIRE_DURABLE_PROCESSING:
-                _durability_unavailable(job_id)
-                return "error"
-            return local_start_url_job(job_id, url, job_dir, options)
-        try:
-            from .tasks import process_url_job
-
-            JOBS.update(
-                job_id,
-                status="queued",
-                percent=5,
-                stage="queued_worker",
-                queue_mode="celery",
-                worker_state="queued",
-            )
-            task = process_url_job.delay(job_id, url, options)
-            JOBS.update(job_id, celery_task_id=task.id)
-            return "queued"
-        except Exception as exc:
-            if REQUIRE_DURABLE_PROCESSING:
-                _durability_unavailable(job_id)
-                JOBS.update(job_id, technical_error=str(exc))
-                return "error"
-            JOBS.update(
-                job_id,
-                queue_mode="fallback",
-                worker_state="local_fallback",
-                queue_error=str(exc),
-            )
-            return local_start_url_job(job_id, url, job_dir, options)
-
     def recover_durable_jobs() -> None:
         if config.current_maintenance_mode() != "off" or not _queue_ready():
             return
@@ -394,7 +360,6 @@ def install_durable_runtime() -> None:
                 JOBS.update(job_id, recovery_error=str(exc))
 
     app_module.process_job = dispatch
-    app_module.start_url_job = dispatch_url
     app_module.app.add_event_handler(
         "startup",
         lambda: _start_durable_recovery(recover_durable_jobs),

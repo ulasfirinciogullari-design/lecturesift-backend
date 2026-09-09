@@ -73,7 +73,6 @@ from .errors import LectureSiftError, normalize_error
 from .daily_social import render_daily_image, render_daily_reel, render_daily_reel_cover
 from .instagram import InstagramAPIError, InstagramClient, InstagramConfigurationError
 from .jobs import JOBS
-from .media import download_remote_video, validate_youtube_url
 from .mailer import EmailDeliveryError, email_delivery_configured, send_transactional_email
 from .pipeline import process_job
 from .provider_state import AI_PROVIDER_CIRCUIT
@@ -303,38 +302,6 @@ def _require_job_download(data: dict, user: dict) -> None:
         )
 
 
-def start_url_job(job_id: str, url: str, job_dir: Path, options: dict) -> str:
-    """Start the local URL path; durable runtime replaces this in production."""
-    def worker() -> None:
-        started = time.time()
-        try:
-            video_path = download_remote_video(
-                url,
-                job_dir,
-                job_type=str(options.get("job_type") or "study_pack"),
-                include_slides=bool(options.get("include_slides", True)),
-            )
-            JOBS.update(job_id, percent=8, stage="parallel_analysis")
-            process_job(job_id, video_path, options)
-        except Exception as exc:
-            normalized = normalize_error(exc)
-            print(f"URL ERROR [{normalized.code}]: {normalized.technical_message}", flush=True)
-            traceback.print_exc()
-            JOBS.update(
-                job_id,
-                status="error",
-                percent=0,
-                stage="error",
-                error_code=normalized.code,
-                error=normalized.user_message,
-                technical_error=normalized.technical_message,
-                elapsed_seconds=round(time.time() - started, 1),
-            )
-
-    threading.Thread(target=worker, daemon=True).start()
-    return "working"
-
-
 class InstagramMediaRequest(BaseModel):
     media_url: HttpUrl
     caption: str = ""
@@ -515,7 +482,9 @@ def _options(
     output = output_language or "tr"
     translation_enabled = bool(translate_transcript) and not (source != "auto" and source == output)
     formats = [value for value in dict.fromkeys(output_formats.lower().replace(" ", "").split(",")) if value in {"pdf", "docx", "txt"}]
-    selected_job_type = job_type if job_type in {"study_pack", "audio_export", "download_video"} else "study_pack"
+    if job_type == "download_video":
+        raise HTTPException(410, detail={"code": "LS-URL-06", "message": "Bağlantıyla video indirme kaldırıldı. Dosyanı yükle."})
+    selected_job_type = job_type if job_type in {"study_pack", "audio_export"} else "study_pack"
     transcript_selected = selected_job_type == "study_pack" and bool(include_transcript)
     speakers_enabled = bool(speaker_detection) and transcript_selected
     # Speaker diarization always returns provider segment times, so requesting
@@ -746,7 +715,7 @@ def health() -> dict:
         "transcript_timestamps": True,
         "speaker_detection": True,
         "audio_export": True,
-        "url_video_download": True,
+        "url_video_download": False,
         "instagram_configured": all((INSTAGRAM_ACCESS_TOKEN, INSTAGRAM_ACCOUNT_ID, INSTAGRAM_APP_SECRET)),
     }
 
@@ -1758,85 +1727,10 @@ async def create_job(
     }
 
 
-@app.post("/jobs/url")
-def create_url_job(
-    video_url: str = Form(...),
-    source_language: str = Form("auto"),
-    output_language: str = Form("tr"),
-    summary_style: str = Form("standard"),
-    quiz_count: int = Form(10),
-    flashcard_count: int = Form(20),
-    translate_transcript: bool = Form(True),
-    slides_offset_seconds: float = Form(0),
-    output_formats: str = Form("pdf"),
-    job_type: str = Form("study_pack"),
-    include_summary: bool = Form(True),
-    include_transcript: bool = Form(True),
-    include_slides: bool = Form(True),
-    transcript_timestamps: bool = Form(False),
-    speaker_detection: bool = Form(False),
-    billing_user: dict = Depends(_billing_user),
-) -> dict:
-    try:
-        url = validate_youtube_url(video_url)
-    except LectureSiftError as exc:
-        _raise_public(exc)
-    options = _options(
-        source_language,
-        output_language,
-        summary_style,
-        quiz_count,
-        flashcard_count,
-        translate_transcript,
-        slides_offset_seconds,
-        output_formats,
-        job_type,
-        include_summary,
-        include_transcript,
-        include_slides,
-        transcript_timestamps,
-        speaker_detection,
-    )
-    if options["job_type"] == "study_pack" and not any(
-        (
-            options["include_summary"],
-            options["include_transcript"],
-            options["quiz_count"] > 0,
-            options["flashcard_count"] > 0,
-        )
-    ):
-        raise HTTPException(
-            400,
-            detail={
-                "code": "LS-OUTPUT-01",
-                "message": "En az bir çalışma çıktısı seç: özet ve notlar, transkript, quiz veya bilgi kartı.",
-            },
-        )
-    try:
-        entitlement = validate_job_features(
-            billing_user["id"],
-            quiz_count=options["quiz_count"],
-            flashcard_count=options["flashcard_count"],
-            output_formats=options["output_formats"],
-            summary_style=options["summary_style"],
-            job_type=options["job_type"],
-        )
-    except BillingError as exc:
-        raise HTTPException(402, detail={"code": "LS-BILL-10", "message": str(exc)}) from exc
-    _require_ai_provider(options)
-    JOBS.cleanup_expired()
-    job_id = str(uuid.uuid4())
-    job_dir = _job_path(job_id)
-    options["billing_user_id"] = billing_user["id"]
-    options["download_entitled"] = bool(entitlement.get("download_enabled"))
-    JOBS.create(
-        job_id,
-        job_dir,
-        options,
-        source_type="url",
-        source_url=url,
-        retention_seconds=max(1, int(entitlement["plan"]["history_days"])) * 24 * 60 * 60,
-    )
-    JOBS.update(job_id, status="working", percent=3, stage="url_download")
-    status = start_url_job(job_id, url, job_dir, options)
-    return {"job_id": job_id, "status": status, "version": APP_VERSION}
+@app.post("/jobs/url", include_in_schema=False)
+def create_url_job() -> dict:
+    # Retired clients fail before authentication, quota reservations or work.
+    raise HTTPException(410, detail={
+        "code": "LS-URL-06",
+        "message": "Bağlantıyla kaynak ekleme kaldırıldı. Video, ses veya belge dosyanı yükle.",
+    })

@@ -130,19 +130,6 @@ def test_single_audio_chunk_reuses_worker_duration_for_timeline(tmp_path, monkey
     assert segments[0]["end"] == 75.25
 
 
-def test_remote_download_format_matches_requested_work():
-    assert media._remote_download_format("download_video", False) == "bv*+ba/b"
-    assert media._remote_download_format("audio_export", True) == "bestaudio/best"
-    assert media._remote_download_format("study_pack", False) == "bestaudio/best"
-    assert "height<=720" in media._remote_download_format("study_pack", True)
-
-
-def test_direct_media_url_is_rejected_by_youtube_only_input(tmp_path):
-    with pytest.raises(media.LectureSiftError) as caught:
-        media.download_remote_video("https://cdn.example.com/lecture.mp4", tmp_path)
-    assert caught.value.code == "LS-URL-05"
-
-
 def test_ffmpeg_text_output_is_decoded_portably_on_windows(monkeypatch):
     captured = {}
 

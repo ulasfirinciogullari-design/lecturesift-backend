@@ -384,7 +384,7 @@ function renderAssistantOffers() {
   if(!offers){section.hidden=true;return;}
   section.hidden=false;section.replaceChildren();
   const heading=document.createElement('h2');heading.textContent=at('credits');section.append(heading);
-  for(const key of ['limited','usage','monthly','topup']) {const text=document.createElement('p');text.textContent=at(key);section.append(text);}
+  for(const key of ['usage','topupshort']) {const text=document.createElement('p');text.textContent=at(key);section.append(text);}
   const guide=document.createElement('a');guide.href=PLANS_I18N.localizedPath?.(PLANS_I18N.language,'/assistant.html') || '/assistant.html';guide.textContent=at('openpage');section.append(guide);
   if(!offers.available){const notice=document.createElement('p');notice.textContent=at('unavailable');section.append(notice);}
   const packs=document.createElement('div');packs.className='assistant-credit-packs';

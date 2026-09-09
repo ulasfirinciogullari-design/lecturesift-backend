@@ -129,7 +129,7 @@ def test_private_url_is_rejected():
     try:
         validate_remote_url("http://127.0.0.1/video.mp4")
     except Exception as error:
-        assert getattr(error, "code", None) == "LS-URL-04"
+        assert getattr(error, "code", None) == "LS-URL-06"
     else:
         raise AssertionError("private URL was accepted")
 
@@ -333,8 +333,8 @@ def test_transcript_timestamps_and_speakers_are_normalized_per_job():
     assert no_transcript["speaker_detection"] is False
 
 
-def test_both_job_creation_endpoints_expose_transcript_controls():
-    for path in ("/jobs", "/jobs/url"):
+def test_file_job_creation_exposes_transcript_controls():
+    for path in ("/jobs",):
         route = next(
             item
             for item in app.routes

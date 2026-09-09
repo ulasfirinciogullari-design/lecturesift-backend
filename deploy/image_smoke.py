@@ -16,8 +16,6 @@ MODULES = (
     "PIL",
     "pptx",
     "pypdfium2",
-    "yt_dlp",
-    "yt_dlp_ejs",
 )
 OCR_LANGUAGES = {
     "ara",
@@ -53,10 +51,6 @@ for binary in ("ffmpeg", "ffprobe"):
         stderr=subprocess.DEVNULL,
     )
 
-deno_version = subprocess.check_output(["deno", "--version"], text=True).splitlines()[0].strip()
-if re.match(r"^deno 2\.9\.5(?:\s|$)", deno_version) is None:
-    raise SystemExit("YouTube downloads require the locked Deno 2.9.5 Linux runtime")
-
 language_output = subprocess.check_output(
     ["tesseract", "--list-langs"],
     text=True,
@@ -79,7 +73,6 @@ print(
             "ocr_languages": sorted(OCR_LANGUAGES),
             "revision": build_revision,
             "work_dir_writable": True,
-            "youtube_js_runtime": deno_version,
         },
         sort_keys=True,
     )

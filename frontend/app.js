@@ -14,14 +14,12 @@ const EN = {
   eyebrow: "AI-powered lecture workspace",
   title: "Turn every lecture source into one organized study pack.",
   subtitle: "Add video, audio, PDF, Word, PowerPoint, TXT, or Markdown and turn it into one organized study pack.",
-  sourceTitle: "Add the lecture source", secure: "Secure processing", uploadTab: "Upload file", linkTab: "Add from YouTube",
-  dropTitle: "Drop a source here", dropText: "or choose from your device", fileHelp: "Your per-job upload limits are loading from your active plan.",
+  sourceTitle: "Add the lecture source", secure: "Secure processing", uploadTab: "Upload file", dropTitle: "Drop a source here", dropText: "or choose from your device", fileHelp: "Your per-job upload limits are loading from your active plan.",
   audioSourceTitle: "Audio sources", audioSourceHelp: "Add audio-bearing recordings in lecture order.",
   slidesSourceTitle: "Visual / slide sources", slidesSourceHelp: "Add slide recordings in lecture order.", addSlidesVideo: "Add slide video",
   required: "Required", optional: "Optional", syncOffset: "Slide time offset", syncOffsetHelp: "Leave at 0 if both recordings started together.",
   classicMode: "Video, audio, or document", separateMode: "Separate audio and visuals", addVideos: "Add video, audio, or documents", sortHelp: "PDF, images, Word, PowerPoint, TXT, and Markdown; automatic OCR for scanned pages",
   addAudioFiles: "Add audio videos", addVisualFiles: "Add slide videos", moveUp: "Move up", moveDown: "Move down", remove: "Remove",
-  urlLabel: "Analyze YouTube videos", urlHelp: "YouTube links only. Paste a video, Shorts, or recorded livestream link.",
   operationType: "Operation", studyPackOption: "Create a study pack", audioExportOption: "Convert video to MP3", downloadVideoOption: "Download video from URL",
   outputFormats: "Downloadable files (optional)", formatOptional: "Leave all unchecked to keep the result only in your account and on the website.",
   sameLanguageHelp: "Source and output languages match; one transcript will be created.", transcriptDisabledHelp: "Select transcript to enable translation.",
@@ -65,14 +63,12 @@ const TR = {
   eyebrow: "Yapay zekâ destekli ders çalışma alanı",
   title: "Tüm ders kaynaklarını tek düzenli çalışma paketine dönüştür.",
   subtitle: "Video, ses, PDF, Word, PowerPoint, TXT veya Markdown ekle; tek düzenli çalışma paketine dönüştür.",
-  sourceTitle: "Ders kaynağını ekle", secure: "Güvenli işlem", uploadTab: "Dosya yükle", linkTab: "YouTube’dan ekle",
-  dropTitle: "Kaynağı buraya bırak", dropText: "veya cihazından seç", fileHelp: "Tek iş yükleme sınırların aktif planından yükleniyor.",
+  sourceTitle: "Ders kaynağını ekle", secure: "Güvenli işlem", uploadTab: "Dosya yükle", dropTitle: "Kaynağı buraya bırak", dropText: "veya cihazından seç", fileHelp: "Tek iş yükleme sınırların aktif planından yükleniyor.",
   audioSourceTitle: "Ses kaynakları", audioSourceHelp: "Sesli kayıtları ders sırasına göre ekle.",
   slidesSourceTitle: "Görüntü / slayt kaynakları", slidesSourceHelp: "Slayt kayıtlarını ders sırasına göre ekle.", addSlidesVideo: "Slayt videosu ekle",
   required: "Zorunlu", optional: "İsteğe bağlı", syncOffset: "Slayt zaman farkı", syncOffsetHelp: "Aynı anda başladıysa 0 bırak.",
   classicMode: "Video, ses veya belge", separateMode: "Ses ve görüntü ayrı", addVideos: "Video, ses veya belge ekle", sortHelp: "PDF, görsel, Word, PowerPoint, TXT ve Markdown; taranmış sayfalarda otomatik OCR",
   addAudioFiles: "Ses videolarını ekle", addVisualFiles: "Slayt videolarını ekle", moveUp: "Yukarı taşı", moveDown: "Aşağı taşı", remove: "Kaldır",
-  urlLabel: "YouTube videolarını analiz et", urlHelp: "Yalnızca YouTube bağlantısı. Video, Shorts veya canlı yayın kaydı bağlantısını yapıştır.",
   operationType: "İşlem türü", studyPackOption: "Ders çalışma paketi hazırla", audioExportOption: "Videoyu MP3'e çevir", downloadVideoOption: "URL'den video indir",
   outputFormats: "İndirilecek dosyalar (isteğe bağlı)", formatOptional: "Hiçbirini seçmezsen sonuç yalnızca hesabında ve sitede gösterilir.",
   sameLanguageHelp: "Kaynak ve çıktı dili aynı; tek transkript oluşturulacak.", transcriptDisabledHelp: "Çeviriyi açmak için transkripti seç.",
@@ -152,8 +148,6 @@ const ERRORS = {
     "LS-AI-01": "LectureSift's AI provider credit or spend limit is exhausted. This is not your plan allowance; try again after the administrator renews the API balance.",
     "LS-AI-02": "The AI service is busy. Try again in a few minutes.",
     "LS-AI-03": "LectureSift could not authenticate with its AI provider. The administrator must check the server configuration.",
-    "LS-URL-02": "YouTube blocked this download. Try again later or upload the video file.",
-    "LS-URL-03": "This YouTube video could not be downloaded. Check the link or upload the video file.",
     "LS-UPLOAD-02": "The selected sources exceed the upload size allowed by your plan.",
     "LS-UPLOAD-04": "The file-processing request could not be completed. Try again, or upload a smaller copy of the document.",
     "LS-UPLOAD-05": "Video and document sources cannot be mixed in one job. Upload them separately.",
@@ -180,8 +174,6 @@ const ERRORS = {
     "LS-AI-01": "LectureSift'in yapay zekâ sağlayıcı kredisi veya harcama limiti doldu. Bu senin plan dakikan değil; yönetici API bakiyesini yeniledikten sonra yeniden dene.",
     "LS-AI-02": "Yapay zekâ hizmeti yoğun. Birkaç dakika sonra tekrar dene.",
     "LS-AI-03": "LectureSift yapay zekâ sağlayıcısında kimlik doğrulayamadı. Yönetici sunucu yapılandırmasını kontrol etmeli.",
-    "LS-URL-02": "YouTube bu indirmeyi engelledi. Daha sonra yeniden dene veya video dosyasını yükle.",
-    "LS-URL-03": "Bu YouTube videosu indirilemedi. Bağlantıyı kontrol et veya video dosyasını yükle.",
     "LS-UPLOAD-02": "Seçilen kaynaklar planının izin verdiği yükleme boyutunu aşıyor.",
     "LS-UPLOAD-04": "Dosya işleme isteği tamamlanamadı. Yeniden dene veya belgenin daha küçük bir kopyasını yükle.",
     "LS-UPLOAD-05": "Video ve belge kaynakları aynı işte karıştırılamaz. Ayrı ayrı yükle.",
@@ -206,29 +198,12 @@ const ERRORS = {
   }
 };
 
-function normalizeYouTubeUrl(value) {
-  try {
-    const url = new URL(value.trim());
-    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.port) return '';
-    let id = '';
-    if (url.hostname === 'youtu.be') id = url.pathname.slice(1);
-    else if (['youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtube-nocookie.com', 'www.youtube-nocookie.com'].includes(url.hostname)) {
-      if (url.pathname === '/watch' && !url.hostname.includes('nocookie')) {
-        const ids = url.searchParams.getAll('v');
-        if (ids.length === 1) id = ids[0];
-      } else if (/^\/(shorts|live|embed)\/[A-Za-z0-9_-]{11}$/.test(url.pathname)) id = url.pathname.split('/').pop();
-    }
-    return /^[A-Za-z0-9_-]{11}$/.test(id) ? `https://www.youtube.com/watch?v=${id}` : '';
-  } catch { return ''; }
-}
-
 const $ = (id) => document.getElementById(id);
 const uiLanguage = $("uiLanguage"), sourceLanguage = $("sourceLanguage"), outputLanguage = $("outputLanguage");
-const videoUrl = $("videoUrl");
 const DEFAULT_JOB_TYPE = "study_pack";
 const DEFAULT_SUMMARY_STYLE = "detailed";
 let currentLanguage = window.LectureSiftI18n?.language || localStorage.getItem("lecturesift-ui") || "tr";
-let sourceMode = "upload", sourceLayout = "classic", classicVideos = [], audioVideos = [], visualVideos = [];
+let sourceLayout = "classic", classicVideos = [], audioVideos = [], visualVideos = [];
 let jobId = null, timerStarted = null, timerHandle = null, pollHandle = null;
 let latestResult = null, cardIndex = 0, cardRevealed = false, quizScore = 0, quizAnswered = 0;
 let activeQuizItems = [], quizAnswers = new Map(), quizRendered = false;
@@ -552,17 +527,6 @@ populateBillingCurrencies();
 if ($("logoutButton")) $("logoutButton").onclick = () => { billingToken = ""; billingAccount = null; localStorage.removeItem("lecturesift-billing-token"); renderBillingAccount(); renderPlans(); };
 loadBilling();
 
-function setSourceMode(mode) {
-  sourceMode = mode;
-  const upload = mode === "upload";
-  $("uploadTab").classList.toggle("active", upload); $("uploadTab").setAttribute("aria-selected", upload);
-  $("linkTab").classList.toggle("active", !upload); $("linkTab").setAttribute("aria-selected", !upload);
-  $("uploadPanel").hidden = !upload; $("uploadPanel").classList.toggle("active", upload);
-  $("linkPanel").hidden = upload; $("linkPanel").classList.toggle("active", !upload);
-}
-$("uploadTab").onclick = () => { setSourceMode("upload"); updateOperationUI(); };
-$("linkTab").onclick = () => setSourceMode("link");
-
 function filesFor(role) {
   if (role === "classic") return classicVideos;
   if (role === "audio") return audioVideos;
@@ -808,10 +772,31 @@ function startTimer() {
 function resetStages() { document.querySelectorAll(".stage-list li").forEach(item => { item.className = ""; item.querySelector("b").textContent = "--"; }); }
 function setItemState(stage, state) { const item = document.querySelector(`[data-stage="${stage}"]`); if (!item) return; item.className = state; item.querySelector("b").textContent = state === "done" ? "OK" : state === "active" ? "•••" : "--"; }
 function updateProgress(percent, label, detail = "") {
-  const value = Math.max(0, Math.min(100, Math.round(percent || 0)));
-  $("progressPercent").textContent = `${value}%`; $("progressRing").style.setProperty("--progress", `${value * 3.6}deg`);
   $("currentStage").textContent = label; $("stageDetail").textContent = detail || t("processing");
 }
+function showUploadProgress(files, loaded) {
+  const values = window.LectureSiftUpload.progress(files, loaded);
+  const list = $("uploadFilesProgress");
+  if (list.children.length !== values.length) {
+    list.innerHTML = values.map(file => `<article class="upload-progress-file"><div><strong>${escapeHtml(file.name)}</strong><b>0%</b></div><progress max="100" value="0" aria-label="${escapeHtml(file.name)}"></progress><small></small></article>`).join("");
+  }
+  values.forEach((file, index) => {
+    const row = list.children[index];
+    row.querySelector('b').textContent = `${file.percent}%`;
+    row.querySelector('progress').value = file.percent;
+    row.querySelector('small').textContent = `${formatBytes(file.bytes)} / ${formatBytes(file.size)}`;
+    row.classList.toggle('complete', file.percent === 100);
+  });
+}
+try { $("autoOpenResult").checked = localStorage.getItem("lecturesift-auto-open-result") !== "false"; } catch {}
+$("autoOpenResult").addEventListener("change", () => {
+  try { localStorage.setItem("lecturesift-auto-open-result", String($("autoOpenResult").checked)); } catch {}
+});
+$("openReadyResult").onclick = () => {
+  if (!latestResult) return;
+  $("results").hidden = false;
+  $("results").scrollIntoView({behavior:"smooth", block:"start"});
+};
 function jobPhaseLabel(job, profile) {
   const labels = {
     queued: "queuedForWorker", queued_worker: "queuedForWorker", worker_download: "url_download",
@@ -827,6 +812,8 @@ function profileDetail(profile) {
 function updateJobView(job) {
   const profile = configureProgressProfile(job);
   $("processTitle").textContent = job.status === "done" ? t("done") : t("processing");
+  $("progressRing").textContent = job.status === "done" ? "✓" : "•••";
+  $("progressRing").dataset.state = job.status === "done" ? "done" : "processing";
   const ocrDetail = job.stage === "document_ocr"
     ? `OCR · ${Number(job.ocr_pages_completed || 0)}/${Number(job.ocr_pages_total || 0)} ${window.LectureSiftI18n?.exact?.("taranmış sayfa") || "taranmış sayfa"}`
     : profileDetail(profile);
@@ -902,12 +889,6 @@ function formData() {
 
 $("analyzeButton").onclick = async () => {
   $("errorBox").hidden = true;
-  const youtubeUrl = sourceMode === "link" ? normalizeYouTubeUrl(videoUrl.value) : "";
-  if (sourceMode === "link" && !youtubeUrl) {
-    showError("Yalnızca geçerli bir YouTube video bağlantısı gir.", "LS-URL-05");
-    videoUrl.focus();
-    return;
-  }
   if (![$("includeSummary"), $("includeTranscript"), $("includeQuiz"), $("includeCards")].some(input => input.checked)) {
     showError(t("outputSelectionRequired"), "LS-OUTPUT-01");
     return;
@@ -930,30 +911,26 @@ $("analyzeButton").onclick = async () => {
     return;
   }
   const uploadFiles = sourceLayout === "separate" ? [...audioVideos, ...visualVideos] : classicVideos;
-  if (sourceMode === "upload" && sourceLayout === "classic" && !classicVideos.length) { $("classicFiles").click(); return; }
-  if (sourceMode === "upload" && sourceLayout === "separate" && (!audioVideos.length || !visualVideos.length)) {
+  if (sourceLayout === "classic" && !classicVideos.length) { $("classicFiles").click(); return; }
+  if (sourceLayout === "separate" && (!audioVideos.length || !visualVideos.length)) {
     showError("Ses ve görüntü ayrı modunda her iki listeye de en az bir video ekle.", "LS-UPLOAD-03"); return;
   }
   const documentUpload = sourceLayout === "classic" && uploadFiles.length && uploadFiles.every(isDocumentFile);
   const sourceLimits = activeSourceLimits();
   const uploadLimitMb = Number(documentUpload ? sourceLimits.max_document_upload_mb : sourceLimits.max_media_upload_mb);
-  if (sourceMode === "upload" && uploadFiles.reduce((total, file) => total + file.size, 0) > uploadLimitMb * 1024 ** 2) {
+  if (uploadFiles.reduce((total, file) => total + file.size, 0) > uploadLimitMb * 1024 ** 2) {
     showError(uploadLimitMessage(documentUpload, uploadLimitMb), "LS-UPLOAD-02"); return;
   }
   $("analyzeButton").disabled = true; $("results").hidden = true; latestResult = null; jobId = null; configureProgressProfile(null, true); resetStages(); startTimer();
+  $("openReadyResult").hidden = true;
+  $("uploadFilesProgress").replaceChildren();
+  window.__lecturesiftUploadBps = 0;
+  $("processTitle").textContent = t("uploadingSource");
+  $("progressRing").textContent = "↑";
+  $("progressRing").dataset.state = "uploading";
   setItemState("source", "active");
-  updateProgress(2, sourceMode === "link" ? t("url_download") : t("uploadingSource"), profileDetail(progressProfileFor()));
+  updateProgress(2, t("uploadingSource"), profileDetail(progressProfileFor()));
   const data = formData();
-  if (sourceMode === "link") {
-    data.append("video_url", youtubeUrl);
-    try {
-      const response = await fetch(`${API}/jobs/url`, {method: "POST", body: data, headers:{Authorization:`Bearer ${billingToken}`}});
-      if (!response.ok) { const error = await responseError(response); showError(error.message, error.code); return; }
-      jobId = (await response.json()).job_id;
-      pollJob();
-    } catch (error) { showError(error.message, "LS-NETWORK-01"); }
-    return;
-  }
   if (sourceLayout === "separate") {
     audioVideos.forEach(file => data.append("audio_files", file));
     visualVideos.forEach(file => data.append("visual_files", file));
@@ -962,21 +939,32 @@ $("analyzeButton").onclick = async () => {
   }
   const request = new XMLHttpRequest(); request.open("POST", `${API}/jobs`);
   request.setRequestHeader("Authorization", `Bearer ${billingToken}`);
+  const upload = window.LectureSiftUpload.multipart(data);
+  request.setRequestHeader("Content-Type", upload.contentType);
+  showUploadProgress(upload.files, 0);
   const uploadStartedAt = performance.now();
   request.upload.onprogress = event => {
     if (!event.lengthComputable) return;
+    showUploadProgress(upload.files, event.loaded);
     const elapsedSeconds = Math.max(.25, (performance.now() - uploadStartedAt) / 1000);
     const bytesPerSecond = event.loaded / elapsedSeconds;
+    window.__lecturesiftUploadBps = bytesPerSecond;
     const remainingSeconds = bytesPerSecond > 0 ? Math.max(0, (event.total - event.loaded) / bytesPerSecond) : 0;
     const speed = `${(bytesPerSecond / 1024 ** 2).toFixed(1)} MB/s`;
-    const remaining = remainingSeconds >= 1 ? ` · ~${Math.ceil(remainingSeconds)} sn` : "";
+    const remaining = remainingSeconds >= 1 ? ` · ~${Math.ceil(remainingSeconds)} ${window.LectureSiftI18n?.t("rollout.secondShort", "sn") || "sn"}` : "";
     updateProgress(
-      Math.min(7, event.loaded / event.total * 7),
+      0,
       t("uploadingSource"),
       `${(event.loaded / 1024 ** 2).toFixed(1)} / ${(event.total / 1024 ** 2).toFixed(1)} MB · ${speed}${remaining}`,
     );
   };
-  request.upload.onload = () => updateProgress(7, t("uploadAccepted"), profileDetail(progressProfileFor()));
+  request.upload.onload = () => {
+    showUploadProgress(upload.files, upload.body.size);
+    $("processTitle").textContent = t("uploadAccepted");
+    $("progressRing").textContent = "•••";
+    $("progressRing").dataset.state = "processing";
+    updateProgress(0, t("uploadAccepted"), profileDetail(progressProfileFor()));
+  };
   request.onload = async () => {
     if (request.status < 300) {
       const created = JSON.parse(request.responseText);
@@ -997,7 +985,7 @@ $("analyzeButton").onclick = async () => {
       }
     }
   };
-  request.onerror = () => showError("", "LS-NETWORK-01"); request.send(data);
+  request.onerror = () => showError("", "LS-NETWORK-01"); request.send(upload.body);
 };
 
 async function pollJob() {
@@ -1009,18 +997,18 @@ async function pollJob() {
     if (job.status === "processing" || job.status === "done") {
       window.LectureSiftGuestTrial?.markUsed?.(jobId);
     }
-    if (job.status === "done") { clearInterval(timerHandle); await loadResult(); await refreshBillingAccount(); return; }
+    if (job.status === "done") { clearInterval(timerHandle); await loadResult({open:$("autoOpenResult").checked}); await refreshBillingAccount(); return; }
     if (job.status === "error") { showError(job.error, job.error_code); return; }
     pollHandle = setTimeout(pollJob, 1300);
   } catch (error) { pollHandle = setTimeout(pollJob, 2500); }
 }
 
-async function loadResult() {
+async function loadResult({open = true} = {}) {
   try {
     const response = await fetch(`${API}/jobs/${jobId}/result`, {cache: "no-store", headers:{Authorization:`Bearer ${billingToken}`}});
     if (!response.ok) { const error = await responseError(response); showError(error.message, error.code); return; }
     latestResult = await response.json();
-    renderResult(latestResult);
+    renderResult(latestResult, {open});
     $("analyzeButton").disabled = false;
     window.LectureSiftGuestTrial?.markUsed?.(jobId);
   } catch (error) { showError(error.message, "LS-NETWORK-01"); }
@@ -1063,7 +1051,7 @@ function setupResultTabs() {
   });
 }
 
-function renderResult(data) {
+function renderResult(data, {open = true} = {}) {
   $("resultHeading").textContent = data.title || "LectureSift";
   const utilityResult = data.job_type && data.job_type !== "study_pack";
   const options = data.options || {};
@@ -1123,7 +1111,9 @@ function renderResult(data) {
       };
   document.querySelectorAll(".result-tab").forEach(button => { button.hidden = !visiblePanes[button.dataset.pane]; });
   activateResultPane(utilityResult ? "files" : Object.keys(visiblePanes).find(name => visiblePanes[name]));
-  $("results").hidden = false; $("results").scrollIntoView({behavior: "smooth", block: "start"});
+  $("openReadyResult").hidden = false;
+  $("results").hidden = !open;
+  if (open) $("results").scrollIntoView({behavior: "smooth", block: "start"});
 }
 
 function transcriptUiText(key, fallback) {

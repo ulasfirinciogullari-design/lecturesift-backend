@@ -1,5 +1,78 @@
 import {test, expect, JOB_ID} from './fixtures.mjs';
 
+const creditOffers = (currency='TRY') => ({available:true,currency,image:{available:true,credits:220},packs:[
+  {code:'ai_1000',credits:1000,currency,amount_minor:currency==='JPY'?600:14900},
+  {code:'ai_3000',credits:3000,currency,amount_minor:currency==='JPY'?1500:34900},
+  {code:'ai_10000',credits:10000,currency,amount_minor:currency==='JPY'?4500:99900},
+]});
+
+test('assistant credit choices retain amount, currency and language through sign-in', async ({page}, testInfo) => {
+  const cors={'Access-Control-Allow-Origin':'http://127.0.0.1:4173','Access-Control-Allow-Methods':'GET,OPTIONS','Access-Control-Allow-Headers':'authorization,content-type'};
+  await page.addInitScript(()=>localStorage.setItem('lecturesift-currency','JPY'));
+  await page.route('https://api.lecturesift.com/assistant/catalog?currency=JPY',route=>route.fulfill({status:200,headers:cors,json:creditOffers('JPY')}));
+  await page.route('https://api.lecturesift.com/billing/plans?currency=JPY',route=>route.fulfill({status:200,headers:cors,json:{plans:[],assistant:creditOffers('JPY')}}));
+  await page.goto('/ar/assistant.html');
+  await page.locator('[data-consent="essential"]').click();
+  await expect(page.locator('.assistant-shop-pack')).toHaveCount(3);
+  const first=page.locator('.assistant-shop-pack').first();
+  await expect(first).toHaveAttribute('href',/\/ar\/plans(?:\.html)?\?plan=ai_1000&interval=one_time#assistantCredits/);
+  await expect(first).toContainText('¥');
+  await expect(first).not.toContainText('.00');
+  await page.locator('#assistantCreditShop').scrollIntoViewIfNeeded();
+  await noHorizontalOverflow(page);
+  await page.screenshot({path:testInfo.outputPath('assistant-credit-shop-layout.jpg'),quality:75});
+  await first.click();
+  await expect(page).toHaveURL(/\/ar\/login(?:\.html)?\?next=/);
+  expect(new URL(page.url()).searchParams.get('next')).toBe('/plans.html?plan=ai_1000&interval=one_time');
+  expect(await page.evaluate(()=>localStorage.getItem('lecturesift-currency'))).toBe('JPY');
+});
+
+test('referrals keep sharing, reward choices and coupons usable on narrow screens', async ({page}, testInfo) => {
+  const cors={'Access-Control-Allow-Origin':'http://127.0.0.1:4173','Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Allow-Headers':'authorization,content-type'};
+  const first='referral-2026-09-v2', renewal='referral-2026-09-renewal-v1';
+  const terms=percent=>({percent,max_discount_minor:percent===10?5000:2500,currency:'TRY',valid_days:90,monthly_only:true});
+  const id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const code='LSR-'+'A'.repeat(24);
+  const summary={enabled:true,referral_code:code,referral_url:'https://lecturesift.com/register.html?ref='+code,
+    reward_minutes:60,invitee_reward_minutes:30,monthly_invitation_cap:5,monthly_reserved_count:2,monthly_remaining_count:3,
+    earned_minutes:60,pending_minutes:90,hold_days:14,history_limit:50,has_more_rewards:false,has_more_coupons:false,
+    settlement:'admin_reconciliation_after_14_days',month_utc:'2026-09',coupon:terms(10),
+    renewal:{reward_minutes:30,invitee_reward_minutes:0,monthly_per_invitee_cap:1,coupon:terms(5)},
+    coupon_policies:{'referral-2026-09-v1':{TRY:terms(10)},[first]:{TRY:terms(10)},[renewal]:{TRY:terms(5)}},
+    redemption_currencies:['TRY'],rewards:[{id,policy_version:first,kind:'first_purchase',role:'inviter',status:'pending',
+      reward_choice:'minutes',inviter_minutes:60,invitee_minutes:30,coupon_currency:'TRY',coupon_currency_selected:true,
+      coupon_percent:10,coupon_max_discount_minor:5000,created_at:'2026-09-08T12:00:00Z',pending_until:'2026-09-22T12:00:00Z'}],
+    coupons:[{...terms(5),code:'LSC-'+'B'.repeat(24),status:'ready',expires_at:'2026-12-08T12:00:00Z'}]};
+  await page.addInitScript(()=>{localStorage.setItem('lecturesift-billing-token','synthetic-referral-owner');localStorage.setItem('lecturesift-currency','TRY');});
+  await page.route('https://api.lecturesift.com/billing/referrals',route=>route.fulfill({status:200,headers:cors,json:{ok:true,referrals:summary}}));
+  await page.route('https://api.lecturesift.com/jobs?limit=30',route=>route.fulfill({status:200,headers:cors,json:{jobs:[]}}));
+  await page.route('https://api.lecturesift.com/billing/me/refund-requests',route=>route.fulfill({status:200,headers:cors,json:{requests:[]}}));
+  const choices=[];
+  await page.route(`https://api.lecturesift.com/billing/referrals/rewards/${id}/choice`,async route=>{
+    if(route.request().method()==='OPTIONS'){await route.fulfill({status:204,headers:cors});return;}
+    const payload=route.request().postDataJSON();choices.push(payload);summary.rewards[0].reward_choice=payload.reward_choice;
+    await route.fulfill({status:200,headers:cors,json:{ok:true,referrals:summary}});
+  });
+  await page.goto('/en/account.html#account-referrals');
+  await page.locator('[data-consent="essential"]').click();
+  await expect(page.locator('#referralContent')).toBeVisible();
+  await expect(page.locator('#referralLink')).toHaveValue(summary.referral_url);
+  await expect(page.locator('#referralNoCode')).toBeHidden();
+  await expect(page.locator('#referralReserved')).toHaveText('2 / 5');
+  await expect(page.locator('#referralCoupons')).toContainText('5%');
+  await page.locator('[data-referral-choice="coupon"]').click();
+  await expect(page.locator('[data-referral-choice="coupon"]')).toHaveAttribute('aria-pressed','true');
+  expect(choices).toEqual([{reward_choice:'coupon',currency:'TRY'}]);
+  await page.locator('.referral-history-panel summary').click();
+  await expect(page.locator('#referralHistory')).toBeVisible();
+  await page.locator('.referral-explainer summary').click();
+  await expect(page.locator('.referral-explainer')).toContainText('14 days');
+  await page.locator('.referral-explainer summary').click();
+  await page.locator('.referral-heading').scrollIntoViewIfNeeded();
+  await noHorizontalOverflow(page);
+  await page.screenshot({path:testInfo.outputPath('referral-account-layout.jpg'),quality:75});
+});
+
 test('workspace assistant tab preserves the lesson and supports keyboard navigation', async ({page}, testInfo) => {
   await page.addInitScript(() => {
     localStorage.setItem('lecturesift-billing-token','ci-synthetic-token-not-valid-on-any-server');
@@ -62,7 +135,7 @@ test('permanent ad-free purchase explains its scope and disappears as a repeat p
 test('assistant page keeps credits visible and account actions under user control', async ({page}, testInfo) => {
   const cors={'Access-Control-Allow-Origin':'http://127.0.0.1:4173','Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Allow-Headers':'authorization,content-type'};
   await page.addInitScript(()=>localStorage.setItem('lecturesift-billing-token','synthetic-browser-token'));
-  await page.route('https://api.lecturesift.com/assistant/catalog',route=>route.fulfill({status:200,headers:cors,json:{available:true,image:{available:false}}}));
+  await page.route('https://api.lecturesift.com/assistant/catalog*',route=>route.fulfill({status:200,headers:cors,json:creditOffers()}));
   await page.route('https://api.lecturesift.com/assistant/wallet',route=>route.fulfill({status:200,headers:cors,json:{balance:1000}}));
   const requests=[];
   await page.route('https://api.lecturesift.com/assistant/chat',async route=>{
@@ -76,21 +149,22 @@ test('assistant page keeps credits visible and account actions under user contro
   await expect(chat).toBeVisible();
   await expect(page.locator('.assistant-launch')).toHaveCount(0);
   await expect(chat.locator('.assistant-balance')).toHaveText('Credits left: 1,000');
-  await expect(chat.locator('.assistant-heading p')).toHaveText('Usage limits apply.');
+  await expect(chat.locator('.assistant-limit')).toContainText('Credits are used when a reply arrives');
+  await expect(chat.locator('.assistant-details')).toHaveCount(0);
   await expect(chat.locator('textarea')).not.toBeFocused();
   await expect(chat.locator('button[type=submit]')).toBeInViewport();
   await chat.getByRole('button',{name:'Where can I see my plan?',exact:true}).click();
   await expect(chat.locator('textarea')).toHaveValue('Where can I see my plan?');
   await chat.locator('button[type=submit]').click();
   await expect(chat.locator('.assistant-balance')).toHaveText('Credits left: 998');
-  await expect(chat.locator('.assistant-status')).toContainText('2 credits');
+  await expect(chat.locator('.assistant-status')).toBeEmpty();
   await expect(page).toHaveURL(/\/en\/assistant\.html$/);
   expect(requests).toHaveLength(1);
   expect(requests[0].language).toBe('en');
   const action=chat.locator('a.assistant-action').last();
   await expect(action).toHaveText('My account');
   await expect(action).toHaveAttribute('href',/\/en\/account(?:\.html)?$/);
-  await expect(chat.locator('.assistant-credit-bar a')).toHaveAttribute('href',/\/en\/plans(?:\.html)?#assistantCredits$/);
+  await expect(chat.locator('.assistant-credit-bar a')).toHaveAttribute('href','#assistantCreditShop');
   await noHorizontalOverflow(page);
   await page.locator('.assistant-page-intro').scrollIntoViewIfNeeded();
   await expect(chat.locator('button[type=submit]')).toBeInViewport();
@@ -121,7 +195,7 @@ test('assistant page fits a narrow Arabic screen and tablet navigation', async (
   await page.locator('[data-consent="essential"]').click();
   await expect(page.locator('html')).toHaveAttribute('dir','rtl');
   await expect(page.locator('.assistant-page-chat')).toBeVisible();
-  await expect(page.locator('.assistant-heading p')).toHaveText('تخضع الخدمة لحدود استخدام.');
+  await expect(page.locator('.assistant-balance')).toHaveText('تخضع الخدمة لحدود استخدام.');
   await noHorizontalOverflow(page);
   await page.screenshot({path:testInfo.outputPath('assistant-arabic-layout.jpg'),quality:75});
   await page.setViewportSize({width:980,height:850});
@@ -138,7 +212,7 @@ test('assistant guide opens, remains localized and does not claim live AI availa
   await expect(dialog).toBeVisible();
   await expect(dialog).toHaveAccessibleName('LectureSift Assistant');
   await expect(dialog.locator('.assistant-status')).toContainText('not available yet');
-  await expect(dialog.locator('.assistant-message')).toContainText('only YouTube');
+  await expect(dialog.locator('.assistant-message')).toContainText('Create a free account');
   await expect(dialog.locator('a.assistant-action')).toHaveAttribute('href', /\/en\/register(?:\.html)?$/);
   await dialog.locator('textarea').fill('<img src=x onerror=alert(1)>');
   await dialog.locator('button[type=submit]').click();
@@ -152,7 +226,7 @@ test('assistant guide opens, remains localized and does not claim live AI availa
 test('owned image creation shows its credit price and offers a safe download', async ({page}, testInfo) => {
   const cors={'Access-Control-Allow-Origin':'http://127.0.0.1:4173','Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Allow-Headers':'authorization,content-type'};
   await page.addInitScript(()=>localStorage.setItem('lecturesift-billing-token','synthetic-browser-token'));
-  await page.route('https://api.lecturesift.com/assistant/catalog',route=>route.fulfill({status:200,headers:cors,json:{available:true,image:{available:true,credits:220}}}));
+  await page.route('https://api.lecturesift.com/assistant/catalog*',route=>route.fulfill({status:200,headers:cors,json:{available:true,image:{available:true,credits:220}}}));
   await page.route('https://api.lecturesift.com/assistant/wallet',route=>route.fulfill({status:200,headers:cors,json:{balance:1050}}));
   await page.goto('/en/');
   const syntheticImage=await page.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=1024;const ctx=canvas.getContext('2d');ctx.fillStyle='#bad3f5';ctx.fillRect(0,0,1024,1024);return canvas.toDataURL('image/jpeg');});
@@ -165,12 +239,12 @@ test('owned image creation shows its credit price and offers a safe download', a
   await page.locator('.assistant-launch').click();
   const dialog=page.locator('.assistant-dialog');
   await expect(dialog.locator('.assistant-mode')).toBeVisible();
-  await expect(dialog.locator('option[value=image]')).toContainText('220');
-  await dialog.locator('.assistant-mode').selectOption('image');
+  await expect(dialog.locator('[data-mode=image]')).toContainText('220');
+  await dialog.locator('[data-mode=image]').click();
   await expect(dialog.locator('.assistant-attach')).toBeHidden();
   await dialog.locator('textarea').fill('Synthetic water cycle diagram');
   await dialog.locator('button[type=submit]').click();
-  await expect(dialog.locator('.assistant-status')).toContainText('830');
+  await expect(dialog.locator('.assistant-balance')).toContainText('830');
   await expect(dialog.locator('.assistant-message img')).toBeVisible();
   await expect(dialog.locator('a[download]')).toBeInViewport();
   await expect(dialog.locator('a[download]')).toHaveAttribute('download','lecturesift-image.jpg');
@@ -347,22 +421,10 @@ test('rebuilt study entry opens the real workspace and key screens remain usable
   await expect.poll(() => illustration.evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true);
   await noHorizontalOverflow(page);
   await page.locator('#study-example').screenshot({path:testInfo.outputPath('study-illustration-layout.jpg'), quality:80});
-  await page.locator('.source-youtube').click();
-  await expect(page).toHaveURL(/workspace\.html\?source=link/);
-  await expect(page.locator('#linkTab')).toHaveAttribute('aria-selected','true');
-  await expect(page.locator('#linkTab')).toHaveText('Add from YouTube');
-  await expect(page.locator('label[for=videoUrl]')).toHaveText('Analyze YouTube videos');
-  await expect(page.locator('#youtubeUrlHelp')).toContainText('YouTube links only');
-  await page.locator('#videoUrl').fill('https://youtube.com.example.org/watch?v=x41yOUIvK2k');
-  await page.locator('#analyzeButton').click();
-  await expect(page.locator('#errorCode')).toContainText('LS-URL-05');
-  await expect(page.locator('#videoUrl')).toBeFocused();
-  await expect(page.locator('#errorMessage')).toContainText('YouTube video link');
-  await page.locator('#closeError').click();
-  await noHorizontalOverflow(page);
-  await page.locator('#videoUrl').fill('');
-  await capture('youtube-source-layout');
-  await page.locator('#uploadTab').click();
+  await page.locator('.source-images').click();
+  await expect(page).toHaveURL(/workspace(?:\.html)?$/);
+  await expect(page.locator('#videoUrl, #linkTab, #linkPanel')).toHaveCount(0);
+  await expect(page.locator('body')).not.toContainText('YouTube');
   await expect(page.locator('#classicDropZone')).toBeVisible();
   await noHorizontalOverflow(page);
   await capture('workspace-layout');
@@ -379,7 +441,7 @@ test('rebuilt study entry opens the real workspace and key screens remain usable
   await page.locator('#plansGrid').scrollIntoViewIfNeeded();
   await capture('plans-layout');
   await page.locator('#assistantCredits').scrollIntoViewIfNeeded();
-  await expect(page.locator('#assistantCredits')).toContainText('Usage limits apply.');
+  await expect(page.locator('#assistantCredits')).toContainText('Credits are used when a reply arrives.');
   await expect(page.locator('#assistantCredits .assistant-pack-price').first()).toContainText('₺');
   await noHorizontalOverflow(page);
   await capture('assistant-credits-layout');

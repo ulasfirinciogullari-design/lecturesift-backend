@@ -22,7 +22,6 @@ MODULES = {
     "openai": "openai",
     "opencv": "cv2",
     "numpy": "numpy",
-    "yt-dlp": "yt_dlp",
     "reportlab": "reportlab",
     "python-docx": "docx",
     "python-pptx": "pptx",

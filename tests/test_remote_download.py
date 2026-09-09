@@ -1,208 +1,59 @@
-"""Synthetic downloader regressions; no media provider or network is contacted."""
-
-import json
-import shutil
-import subprocess
+"""Retired remote-source requests cannot start work or spend a user's balance."""
+import importlib
 from pathlib import Path
 
+from fastapi.testclient import TestClient
 import pytest
 
 from lecturesift import media
-from lecturesift.errors import LectureSiftError, normalize_error
-
-
-@pytest.fixture
-def downloader(monkeypatch, tmp_path):
-    monkeypatch.delenv("YOUTUBE_POT_BASE_URL", raising=False)
-    state = {"options": None, "attempts": [], "error": None, "errors": [], "file": "remote.mp4", "data": b"synthetic media"}
-    monkeypatch.setattr(media, "validate_remote_url", lambda url: url)
-
-    class FakeDownloader:
-        def __init__(self, options):
-            state["options"] = options
-            state["attempts"].append(options)
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_args):
-            return False
-
-        def extract_info(self, url, download):
-            state["url"] = url
-            assert download is True
-            error = state["errors"].pop(0) if state["errors"] else state["error"]
-            if error:
-                (tmp_path / "remote.mp4.part").write_bytes(b"incomplete old format")
-                raise RuntimeError(error)
-            path = tmp_path / state["file"]
-            path.write_bytes(state["data"])
-            return {"requested_downloads": [{"filepath": str(path)}]}
-
-        def prepare_filename(self, _info):
-            return str(tmp_path / state["file"])
-
-    monkeypatch.setattr(media.yt_dlp, "YoutubeDL", FakeDownloader)
-    return state
-
-
-def test_private_attestation_uses_mobile_web_without_account_cookies(downloader, monkeypatch, tmp_path):
-    monkeypatch.setenv("YOUTUBE_POT_BASE_URL", "http://127.0.0.1:4416")
-    media.download_remote_video("https://youtu.be/abcdefghijk", tmp_path)
-    args = downloader["options"]["extractor_args"]
-    assert args["youtube"] == {"player_client": ["mweb"], "fetch_pot": ["always"]}
-    assert args["youtubepot-bgutilhttp"]["base_url"] == ["http://127.0.0.1:4416"]
-    assert "cookiefile" not in downloader["options"]
-
-
-def test_attestation_rejects_arbitrary_remote_endpoint(downloader, monkeypatch, tmp_path):
-    monkeypatch.setenv("YOUTUBE_POT_BASE_URL", "https://untrusted.example")
-    with pytest.raises(RuntimeError, match="misconfigured"):
-        media.download_remote_video("https://youtu.be/abcdefghijk", tmp_path)
-    assert downloader["options"] is None
 
 
 @pytest.mark.parametrize("url", [
-    "https://www.youtube.com/watch?v=abcdefghijk",
-    "https://m.youtube.com/shorts/abcdefghijk",
-    "https://youtu.be/abcdefghijk",
-    "https://www.youtube-nocookie.com/embed/abcdefghijk",
+    "https://www.youtube.com/watch?v=abcdefghijk", "https://youtu.be/abcdefghijk",
+    "https://cdn.example.com/lesson.mp4", "http://127.0.0.1/private", "not a url",
 ])
-def test_youtube_uses_extractor_and_packaged_solver_before_page_discovery(downloader, tmp_path, monkeypatch, url):
-    path = media.download_remote_video(url, tmp_path, job_type="audio_export")
-    assert path.read_bytes() == downloader["data"]
-    assert downloader["options"]["format"] == "bestaudio/best"
-    assert downloader["options"]["js_runtimes"] == {"deno": {}}
-    assert downloader["options"]["remote_components"] == []
+def test_retired_download_never_uses_network_or_creates_a_file(tmp_path, monkeypatch, url):
+    def unexpected(*args, **kwargs):
+        pytest.fail("A removed source must not start media work")
+    monkeypatch.setattr(media.subprocess, "run", unexpected)
+    with pytest.raises(media.LectureSiftError) as caught:
+        media.download_remote_video(url, tmp_path)
+    assert caught.value.code == "LS-URL-06"
+    assert caught.value.status_code == 410
+    assert not list(tmp_path.iterdir())
 
 
-def test_youtube_lookalike_is_rejected_before_downloading(downloader, tmp_path):
-    with pytest.raises(LectureSiftError) as caught:
-        media.download_remote_video("https://youtube.com.example.org/watch?v=abcdefghijk", tmp_path)
-    assert caught.value.code == "LS-URL-05"
-    assert downloader["options"] is None
-
-
-@pytest.mark.parametrize("filename,data", [("remote.mp4.part", b"partial"), ("remote.mp4", b"")])
-def test_partial_or_empty_download_is_never_returned(downloader, tmp_path, filename, data):
-    downloader.update(file=filename, data=data)
-    with pytest.raises(RuntimeError, match="No downloadable video"):
-        media.download_remote_video("https://youtu.be/abcdefghijk", tmp_path)
-
-
-def test_final_merged_size_is_checked(downloader, tmp_path, monkeypatch):
-    monkeypatch.setattr(media, "MAX_VIDEO_BYTES", 3)
-    with pytest.raises(LectureSiftError) as caught:
-        media.download_remote_video("https://youtu.be/abcdefghijk", tmp_path)
-    assert caught.value.code == "LS-UPLOAD-02"
-    assert not (tmp_path / "remote.mp4").exists()
-
-
-@pytest.mark.parametrize("error", ["HTTP Error 429", "Sign in to confirm you're not a bot"])
-def test_provider_block_remains_a_url_error_not_an_ai_quota_error(downloader, tmp_path, error):
-    downloader["error"] = error
-    with pytest.raises(RuntimeError) as caught:
-        media.download_remote_video("https://youtu.be/abcdefghijk", tmp_path)
-    assert normalize_error(caught.value).code == "LS-URL-02"
-
-
-def test_private_url_rejected_before_extractor(downloader, tmp_path, monkeypatch):
-    def reject(_url):
-        raise LectureSiftError("LS-URL-04", "Private address")
-
-    monkeypatch.setattr(media, "validate_remote_url", reject)
-    with pytest.raises(LectureSiftError, match="Private address"):
-        media.download_remote_video("https://youtu.be/abcdefghijk", tmp_path)
-    assert downloader["options"] is None
-
-
-URL_CASES = [
-    ("https://www.youtube.com/watch?v=abcdefghijk&list=ignored&si=tracking", True),
-    ("https://youtu.be/abcdefghijk?t=30", True),
-    ("http://m.youtube.com/watch?v=abcdefghijk", True),
-    ("https://music.youtube.com/watch?v=abcdefghijk", True),
-    ("https://www.youtube.com/shorts/abcdefghijk", True),
-    ("https://www.youtube.com/live/abcdefghijk", True),
-    ("https://www.youtube-nocookie.com/embed/abcdefghijk", True),
-    ("https://www.youtube.com/playlist?list=anything", False),
-    ("https://www.youtube.com/watch?v=abcdefghijk&v=ABCDEFGHIJK", False),
-    ("https://www.youtube.com/redirect?q=https://example.org", False),
-    ("https://www.youtube.com/@channel", False),
-    ("https://youtu.be/short", False),
-    ("https://youtube.com.example.org/watch?v=abcdefghijk", False),
-    ("https://youtube.com@evil.example/watch?v=abcdefghijk", False),
-    ("https://name:password@youtube.com/watch?v=abcdefghijk", False),
-    ("https://www.youtube.com:8080/watch?v=abcdefghijk", False),
-    ("ftp://youtube.com/watch?v=abcdefghijk", False),
-    ("https://example.org/video.mp4", False),
-    ("https://vimeo.com/12345", False),
-    ("http://127.0.0.1/video.mp4", False),
-    ("", False),
-]
-
-
-@pytest.mark.parametrize("url,accepted", URL_CASES)
-def test_youtube_input_contract_before_network(monkeypatch, url, accepted):
-    validated = []
-    monkeypatch.setattr(media, "validate_remote_url", lambda value: validated.append(value) or value)
-    if accepted:
-        assert media.validate_youtube_url(url) == "https://www.youtube.com/watch?v=abcdefghijk"
-        assert validated == ["https://www.youtube.com/watch?v=abcdefghijk"]
-    else:
-        with pytest.raises(LectureSiftError) as caught:
-            media.validate_youtube_url(url)
-        assert caught.value.code == "LS-URL-05"
-        assert validated == []
-
-
-@pytest.mark.skipif(shutil.which("node") is None, reason="Node is required")
-def test_browser_and_server_use_the_same_youtube_input_contract():
-    root = Path(__file__).resolve().parents[1]
-    source = (root / "frontend/app.js").read_text()
-    normalizer = source[source.index("function normalizeYouTubeUrl("):source.index("const $ =")]
-    script = normalizer + "\nconsole.log(JSON.stringify(" + json.dumps([url for url, _ in URL_CASES]) + ".map(normalizeYouTubeUrl)));"
-    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True, timeout=5)
-    assert json.loads(result.stdout) == ["https://www.youtube.com/watch?v=abcdefghijk" if accepted else "" for _, accepted in URL_CASES]
-
-
-def test_url_rejected_by_api_before_plan_checks_or_job_creation(monkeypatch):
-    import importlib
-    from fastapi import HTTPException
-
+def test_retired_api_rejects_even_a_stale_client_before_billing_or_job_creation(monkeypatch):
     application = importlib.import_module("lecturesift.app")
-    def unexpected(*_args, **_kwargs):
-        pytest.fail("Invalid URLs must be rejected before plan checks or work")
+    def unexpected(*args, **kwargs):
+        pytest.fail("A removed API must not perform billing, authentication or work")
     monkeypatch.setattr(application, "validate_job_features", unexpected)
-    monkeypatch.setattr(application, "start_url_job", unexpected)
-    with pytest.raises(HTTPException) as caught:
-        application.create_url_job(video_url="https://example.org/video.mp4", billing_user={"id": "synthetic"})
-    assert caught.value.status_code == 422
-    assert caught.value.detail["code"] == "LS-URL-05"
+    monkeypatch.setattr(application.JOBS, "create", unexpected)
+    client = TestClient(application.app)
+    for data in ({}, {"video_url": "https://youtu.be/abcdefghijk"}):
+        response = client.post("/jobs/url", data=data)
+        assert response.status_code == 410
+        assert response.json()["detail"]["code"] == "LS-URL-06"
+    assert "/jobs/url" not in application.app.openapi()["paths"]
+    assert client.get("/health").json()["url_video_download"] is False
 
 
-def test_public_playback_fallback_removes_partial_format_and_can_finish(downloader, tmp_path):
-    downloader["errors"] = ["Sign in to confirm you're not a bot", None]
-    unrelated = tmp_path / "keep.txt"
-    unrelated.write_text("keep")
-    result = media.download_remote_video("https://youtu.be/abcdefghijk", tmp_path)
-    assert result.read_bytes() == downloader["data"]
-    assert len(downloader["attempts"]) == 2
-    assert "extractor_args" not in downloader["attempts"][0]
-    assert downloader["attempts"][1]["extractor_args"]["youtube"]["player_client"] == ["web_safari", "web_embedded"]
-    assert not (tmp_path / "remote.mp4.part").exists()
-    assert unrelated.read_text() == "keep"
-
-
-@pytest.mark.parametrize("error", ["HTTP Error 429", "Sign in to confirm your age", "Private video"])
-def test_rate_limit_or_account_requirement_is_not_retried(downloader, tmp_path, error):
-    downloader["error"] = error
-    with pytest.raises(RuntimeError):
-        media.download_remote_video("https://youtu.be/abcdefghijk", tmp_path)
-    assert len(downloader["attempts"]) == 1
-
-
-def test_public_playback_fallback_is_bounded(downloader, tmp_path):
-    downloader["error"] = "Sign in to confirm you're not a bot"
-    with pytest.raises(RuntimeError):
-        media.download_remote_video("https://youtu.be/abcdefghijk", tmp_path)
-    assert len(downloader["attempts"]) == 2
+def test_queued_url_job_is_retired_but_completed_results_are_preserved(tmp_path, monkeypatch):
+    from lecturesift import tasks
+    from lecturesift.jobs import JOBS
+    options = {"billing_user_id": "synthetic-retired-owner"}
+    job_dir = tmp_path / "pending"
+    job_dir.mkdir()
+    JOBS.create("synthetic-retired-pending", job_dir, options, source_type="url")
+    monkeypatch.setattr(tasks, "process_job", lambda *args, **kwargs: pytest.fail("No pipeline work"))
+    result = tasks.process_url_job.run("synthetic-retired-pending", "https://youtu.be/abcdefghijk", options)
+    assert result["status"] == "error"
+    assert JOBS.get("synthetic-retired-pending")["error_code"] == "LS-URL-06"
+    completed = tmp_path / "completed"
+    completed.mkdir()
+    artifact = completed / "keep.pdf"
+    artifact.write_bytes(b"synthetic already completed file")
+    JOBS.create("synthetic-retired-completed", completed, options, source_type="url")
+    JOBS.update("synthetic-retired-completed", status="done")
+    assert tasks.process_url_job.run("synthetic-retired-completed", "unused", options)["status"] == "done"
+    assert artifact.exists()

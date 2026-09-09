@@ -7,6 +7,7 @@ const account = {
   user: {id: 'ci-synthetic-user', email: 'browser-smoke@example.invalid', first_name: 'Synthetic', email_verified: true},
   plan: {code: 'free'},
   remaining_minutes: 60,
+  used_minutes: 0,
   credit_minutes: 0,
 };
 const result = {
@@ -29,6 +30,8 @@ const stubs = new Map([
   ['/ads/config', {enabled: false, provider: 'off'}],
   ['/analytics/config', {enabled: false, google_ads: {enabled: false}}],
   ['/assistant/catalog', {available: false}],
+  ['/assistant/catalog?currency=TRY', {available: false}],
+  ['/assistant/catalog?currency=USD', {available: false}],
   [`/jobs/${JOB_ID}`, {job_id: JOB_ID, status: 'done', stage: 'done', percent: 100, source_type: 'document', options: {job_type: 'study_pack'}}],
   [`/jobs/${JOB_ID}/result`, result],
 ]);

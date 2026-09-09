@@ -74,24 +74,6 @@ jobs:
             '
       - name: Build and verify the shared media image
         run: docker build --pull --platform linux/amd64 --tag lecturesift-media:ci .
-      - name: Probe external YouTube availability (reported separately)
-        # Provider/IP availability is independent of deterministic regression
-        # tests. A failed probe stays visible but does not skip those tests.
-        continue-on-error: true
-        run: |
-          probe_name="lecturesift-youtube-probe-$GITHUB_RUN_ID"
-          pot_name="lecturesift-youtube-pot-$GITHUB_RUN_ID"
-          trap 'docker rm -f "$probe_name" "$pot_name" >/dev/null 2>&1 || true' EXIT
-          docker run -d --init --name "$pot_name" --memory 512m --cpus 1 \
-            --pids-limit 128 --read-only --tmpfs /tmp:rw,nosuid,size=64m \
-            --cap-drop ALL --security-opt no-new-privileges \
-            brainicism/bgutil-ytdlp-pot-provider:2.0.0@sha256:79b7d390e024f3308a0b8fe2041be7e4e4d6a8c30ad6052a89bc51d210c385f1
-          timeout 120s docker run --rm --name "$probe_name" \
-            --network "container:$pot_name" --env YOUTUBE_POT_BASE_URL=http://127.0.0.1:4416 \
-            --memory 512m --cpus 1 --pids-limit 128 --read-only \
-            --tmpfs /tmp:rw,nosuid,size=64m \
-            --tmpfs /var/lib/lecturesift:rw,nosuid,size=32m \
-            -i lecturesift-media:ci python - < deploy/youtube_probe.py
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -109,14 +91,6 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core tesseract-ocr tesseract-ocr-eng tesseract-ocr-tur
       - name: Install Python dependencies
         run: pip install --require-hashes -r requirements-dev.txt
-      - name: Probe guest-browser YouTube attestation separately
-        continue-on-error: true
-        timeout-minutes: 4
-        run: |
-          probe_venv="$RUNNER_TEMP/lecturesift-wpc-probe"
-          python -m venv --system-site-packages "$probe_venv"
-          "$probe_venv/bin/pip" install --require-hashes --no-deps --only-binary=:all: -r deploy/youtube_browser_probe_requirements.txt
-          timeout --kill-after=10s 150s xvfb-run -a "$probe_venv/bin/python" -m deploy.youtube_browser_probe
       - name: Validate Render blueprint YAML
         run: python -c "import yaml; yaml.safe_load(open('render.yaml', encoding='utf-8'))"
       - name: Run tests

@@ -1,9 +1,5 @@
 (function () {
   const initialize = () => {
-    const source = new URLSearchParams(location.search).get('source');
-    if (document.body.classList.contains('workspace-page') && source === 'link') {
-      document.getElementById('linkTab')?.click();
-    }
     const workspaceTabs = [...document.querySelectorAll('[data-workspace-tab]')];
     if (workspaceTabs.length) {
       const selectMode = (mode, {focus = false, updateUrl = false} = {}) => {

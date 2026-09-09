@@ -7,7 +7,7 @@
   const token = () => localStorage.getItem('lecturesift-billing-token') || '';
   const path = value => window.LectureSiftI18n?.localizedPath?.(language(), value) || value;
   const format = (key, count) => t(key).replace('{count}', Number(count).toLocaleString(language()));
-  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/assistant.css?v=3'; document.head.append(css);
+  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/assistant.css?v=4'; document.head.append(css);
   const spark = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 6.3L21 12l-6.3 2.7L12 21l-2.7-6.3L3 12l6.3-2.7Z"/></svg>';
   const launch = document.createElement('button'); launch.className = 'assistant-launch'; launch.innerHTML = spark; const launchLabel=document.createElement('span');launchLabel.textContent=t('nav');launch.append(launchLabel);launch.setAttribute('aria-label',t('title')); launch.type = 'button'; launch.setAttribute('aria-haspopup', 'dialog'); if(!pageRoot)document.body.append(launch);
   const positionLaunch = () => {
@@ -25,25 +25,29 @@
   document.addEventListener('lecturesift:consent',observeConsent);
   window.addEventListener('resize',positionLaunch);observeConsent();
   const dialog = document.createElement(pageRoot ? 'section' : 'dialog'); dialog.className = `assistant-surface ${pageRoot ? 'assistant-page-chat' : 'assistant-dialog'}`; dialog.setAttribute('aria-labelledby', 'assistantTitle');
-  dialog.innerHTML = '<div class="assistant-layout"><header class="assistant-header"><span class="assistant-emblem">'+spark+'</span><div class="assistant-heading"><h2 id="assistantTitle"></h2><p></p></div><a class="assistant-expand" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-8 8M10 4H4v16h16v-6"/></svg></a><button type="button" class="assistant-close">×</button></header><div class="assistant-credit-bar"><span class="assistant-balance"></span><a></a></div><div class="assistant-messages" role="log" aria-live="polite" tabindex="0"></div><div class="assistant-suggestions"></div><p class="assistant-status" role="status"></p><form class="assistant-compose"><select class="assistant-mode" hidden><option value="chat"></option><option value="image"></option></select><div class="assistant-attachment" hidden><span></span><button type="button">×</button></div><textarea maxlength="3000" required rows="2"></textarea><div class="assistant-toolbar"><button type="button" class="assistant-attach">＋</button><button type="button" class="assistant-clear"></button><button type="submit"></button></div><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" hidden><p class="assistant-limit"></p></form><details class="assistant-details"><summary></summary><p></p></details></div>';
+  dialog.innerHTML = `<div class="assistant-layout">
+    <header class="assistant-header"><span class="assistant-emblem">${spark}</span><div class="assistant-heading"><h2 id="assistantTitle"></h2></div><button type="button" class="assistant-clear"></button><a class="assistant-expand" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-8 8M10 4H4v16h16v-6"/></svg></a><button type="button" class="assistant-close">×</button></header>
+    <div class="assistant-credit-bar"><span class="assistant-balance" aria-live="polite"></span><a></a></div>
+    <div class="assistant-messages" role="log" aria-live="polite" tabindex="0"></div><div class="assistant-suggestions"></div><p class="assistant-status" role="status"></p>
+    <form class="assistant-compose"><div class="assistant-mode" role="group" hidden><button type="button" data-mode="chat" aria-pressed="true"></button><button type="button" data-mode="image" aria-pressed="false"></button></div>
+    <div class="assistant-attachment" hidden><span></span><button type="button">×</button></div><textarea maxlength="3000" required rows="2"></textarea>
+    <div class="assistant-toolbar"><button type="button" class="assistant-attach">＋ <span></span></button><button type="submit"></button></div><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" hidden><p class="assistant-limit"></p></form></div>`;
   (pageRoot || document.body).append(dialog);
   const $ = selector => dialog.querySelector(selector);
-  $('#assistantTitle').textContent = t('title'); $('.assistant-close').setAttribute('aria-label',t('close'));
-  $('.assistant-heading p').textContent=t('limited');
+  $('#assistantTitle').textContent = t(pageRoot?'chatmode':'title'); $('.assistant-close').setAttribute('aria-label',t('close'));
   $('.assistant-limit').textContent=t(token()?'usage':'trialnote');
   $('.assistant-balance').textContent=t('limited');
   $('.assistant-credit-bar a').textContent=t(token()?'buy':'signup');
-  $('.assistant-credit-bar a').href=path(token()?'/plans.html#assistantCredits':'/register.html');
+  $('.assistant-credit-bar a').href=token()&&pageRoot?'#assistantCreditShop':path(token()?'/plans.html#assistantCredits':'/register.html');
   $('.assistant-expand').href=path('/assistant.html');$('.assistant-expand').setAttribute('aria-label',t('openpage'));$('.assistant-expand').title=t('openpage');
   $('.assistant-expand').hidden=Boolean(pageRoot);$('.assistant-close').hidden=Boolean(pageRoot);
   $('textarea').placeholder = t('ask'); $('textarea').setAttribute('aria-label',t('ask'));
   $('.assistant-clear').textContent = t('clear'); $('button[type=submit]').textContent=t('send');
-  $('.assistant-attach').setAttribute('aria-label',t('attach'));$('.assistant-attach').title=t('attach'); $('.assistant-details summary').textContent=t('creditguide');
-  $('.assistant-details p').textContent = t('rules') + ' ' + t('media');
+  $('.assistant-attach').setAttribute('aria-label',t('attach'));$('.assistant-attach').title=t('attach'); $('.assistant-attach span').textContent=t('attachshort');
   $('.assistant-attachment button').setAttribute('aria-label',t('close'));
   $('.assistant-mode').setAttribute('aria-label',t('mode'));
-  $('.assistant-mode option[value=chat]').textContent=t('chatmode');
-  let imageCredits=0;
+  $('.assistant-mode [data-mode=chat]').textContent=t('chatmode');
+  let imageCredits=0, mode='chat';
   let history = [], attachment = null, sessionToken = token(), busy = false, available = false, trialCount = 0, pending = null;
   const setStatus = text => { $('.assistant-status').textContent = text; };
   const updateBalance = value => {if(Number.isFinite(value)&&value>=0)$('.assistant-balance').textContent=format('balance',value);};
@@ -73,38 +77,67 @@
     const messages=$('.assistant-messages');messages.append(node);messages.scrollTop=messages.scrollHeight;
     return node;
   }
-  function reset() { $('.assistant-mode').value='chat';updateMode();history=[]; pending=null; attachment=null; $('.assistant-attachment').hidden=true; $('.assistant-messages').replaceChildren();$('.assistant-suggestions').hidden=false; $('textarea').value=''; setStatus(''); }
+  function reset() { mode='chat';updateMode();history=[]; pending=null; attachment=null; $('.assistant-attachment').hidden=true; $('.assistant-messages').replaceChildren();$('.assistant-suggestions').hidden=false; $('textarea').value=''; setStatus(''); }
   function syncSession() {
     reset();sessionToken=token();available=false;
     $('.assistant-balance').textContent=t('limited');
     $('.assistant-limit').textContent=t(token()?'usage':'trialnote');
     $('.assistant-credit-bar a').textContent=t(token()?'buy':'signup');
-    $('.assistant-credit-bar a').href=path(token()?'/plans.html#assistantCredits':'/register.html');
+    $('.assistant-credit-bar a').href=token()&&pageRoot?'#assistantCreditShop':path(token()?'/plans.html#assistantCredits':'/register.html');
     $('.assistant-mode').hidden=true;
   }
-  function setBusy(value) { busy=value; dialog.querySelectorAll('form button,form select').forEach(button=>{button.disabled=value;}); $('textarea').disabled=value; }
+  function setBusy(value) { busy=value; dialog.querySelectorAll('form button,.assistant-clear').forEach(button=>{button.disabled=value;}); $('textarea').disabled=value; }
   function updateMode() {
-    const creating=$('.assistant-mode').value==='image';
+    const creating=mode==='image';
+    dialog.querySelectorAll('[data-mode]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.mode===mode)));
     $('.assistant-attach').hidden=creating;
     $('textarea').placeholder=t(creating?'imageprompt':'ask');
     $('textarea').setAttribute('aria-label',t(creating?'imageprompt':'ask'));
     $('textarea').maxLength=creating?1000:3000;
     if(creating){attachment=null;$('.assistant-attachment').hidden=true;}
   }
-  $('.assistant-mode').addEventListener('change',()=>{pending=null;updateMode();});
+  dialog.querySelectorAll('[data-mode]').forEach(button=>button.addEventListener('click',()=>{if(busy)return;mode=button.dataset.mode;pending=null;updateMode();$('textarea').focus();}));
+  function selectedCurrency() {
+    const locales=window.LECTURESIFT_LOCALE_DATA;
+    const saved=localStorage.getItem('lecturesift-currency');
+    if(locales?.currencies.includes(saved))return saved;
+    const region=(localStorage.getItem('lecturesift-country')||navigator.language.split('-')[1]||'').toUpperCase();
+    return locales?.currencyForCountry[region]||'USD';
+  }
+  function renderCreditShop(offers) {
+    document.querySelectorAll('[data-assistant-credit-shop]').forEach(shop=>{
+      shop.replaceChildren();
+      const heading=document.createElement('h2');heading.textContent=t('buy');shop.append(heading);
+      if(offers.available!==true){const note=document.createElement('p');note.textContent=t('unavailable');shop.append(note);return;}
+      const list=document.createElement('div');list.className='assistant-shop-packs';
+      const allowed={ai_1000:1000,ai_3000:3000,ai_10000:10000};
+      for(const pack of offers.packs||[]) {
+        if(allowed[pack.code]!==pack.credits||!Number.isInteger(pack.amount_minor)||pack.amount_minor<=0||!window.LECTURESIFT_LOCALE_DATA?.currencies.includes(pack.currency))continue;
+        const link=document.createElement('a');link.className='assistant-shop-pack';
+        link.href=path('/plans.html')+'?plan='+encodeURIComponent(pack.code)+'&interval=one_time#assistantCredits';
+        const count=document.createElement('strong');count.textContent=format('packcount',pack.credits);
+        const price=document.createElement('span');const zero=['JPY','KRW'].includes(pack.currency);
+        price.textContent=new Intl.NumberFormat(language(),{style:'currency',currency:pack.currency,maximumFractionDigits:zero?0:2}).formatToParts(pack.amount_minor/(zero?1:100)).map(part=>part.type==='currency'?(window.LECTURESIFT_LOCALE_DATA.currencySymbols[pack.currency]||part.value):part.value).join('');
+        const arrow=document.createElement('span');arrow.textContent='↗';arrow.setAttribute('aria-hidden','true');link.append(count,price,arrow);list.append(link);
+      }
+      shop.append(list);
+      const note=document.createElement('p');note.className='assistant-shop-note';note.textContent=t('topupshort');shop.append(note);
+    });
+  }
   async function openAssistant() {
     if (sessionToken !== token()) syncSession();
     const openingSession=sessionToken;
     if(!pageRoot){dialog.showModal();$('textarea').focus();}
     if (!$('.assistant-messages').children.length) addMessage(t(token()?'welcomeowned':'welcome'), 'assistant', token() ? 'workspace' : 'register');
     try {
-      const offers=await request('/assistant/catalog', null, false);
+      const offers=await request('/assistant/catalog'+(pageRoot?'?currency='+encodeURIComponent(selectedCurrency()):''), null, false);
       if(openingSession!==token()){syncSession();return;}
       available=offers.available===true;
+      renderCreditShop(offers);
       imageCredits=offers.image?.credits||0;
       $('.assistant-mode').hidden=!(available&&offers.image?.available===true&&token());
-      $('.assistant-mode option[value=image]').textContent=`${t('imagemode')} · ${imageCredits} ${t('credits')}`;
-      if($('.assistant-mode').hidden){$('.assistant-mode').value='chat';updateMode();}
+      $('.assistant-mode [data-mode=image]').textContent=`${t('imagemode')} · ${format('packcount',imageCredits)}`;
+      if($('.assistant-mode').hidden){mode='chat';updateMode();}
       if (!available) { setStatus(t('unavailable')); return; }
       if (token()) { const wallet=await request('/assistant/wallet');if(openingSession!==token()){syncSession();return;}updateBalance(wallet.balance);setStatus(''); }
       else setStatus(t('trial'));
@@ -150,7 +183,7 @@
   $('input[type=file]').addEventListener('change',async event=>{
     const file=event.target.files[0];event.target.value='';if(!file)return;
     setBusy(true);setStatus(t('waiting'));
-    try {attachment=await prepare(file);$('.assistant-attachment span').textContent=file.name;$('.assistant-attachment').hidden=false;setStatus(t('media'));}
+    try {attachment=await prepare(file);$('.assistant-attachment span').textContent=file.name;$('.assistant-attachment').hidden=false;setStatus(attachment.media_kind==='video_frames'?t('media'):'');}
     catch {attachment=null;$('.assistant-attachment').hidden=true;setStatus(t('media'));}
     finally {setBusy(false);}
   });
@@ -160,7 +193,7 @@
     const message=$('textarea').value.trim();if(!message)return;
     if(!available){addMessage(t('unavailable'),'assistant',token()?'workspace':'register');return;}
     if(!token()&&trialCount>=3){addMessage(t('signup'),'assistant','register');return;}
-    const creating=token()&&$('.assistant-mode').value==='image';
+    const creating=token()&&mode==='image';
     if(creating&&new TextEncoder().encode(message).length>1000){setStatus(t('shortprompt'));return;}
     setBusy(true);$('.assistant-suggestions').hidden=true;setStatus(t('waiting'));addMessage(message,'user');
     try {
@@ -173,7 +206,7 @@
       }
       else {
         const lessonId=new URLSearchParams(location.search).get('job') || '';
-        const payload={message,language:language(),currency:localStorage.getItem('lecturesift-currency')||'USD',history:history.slice(-6),lesson_id:lessonId,...(attachment||{images:[],media_kind:'none'})};
+        const payload={message,language:language(),currency:selectedCurrency(),history:history.slice(-6),lesson_id:lessonId,...(attachment||{images:[],media_kind:'none'})};
         const signature=JSON.stringify(payload);
         if(!pending || pending.signature!==signature) pending={signature,payload:{request_id:crypto.randomUUID(),...payload}};
         answer=await request('/assistant/chat',pending.payload);
@@ -190,7 +223,7 @@
       history.push({role:'user',content:message.slice(0,2000)},{role:'assistant',content:answer.answer.slice(0,2000)});
       history=history.slice(-6);$('textarea').value='';attachment=null;$('.assistant-attachment').hidden=true;
       updateBalance(answer.balance);
-      setStatus(token()?`${Number.isFinite(answer.balance)?format('balance',answer.balance)+' · ':''}${format('used',answer.charged_credits || 0)}`:t('signup'));
+      setStatus(token()?'':t('signup'));
     } catch(error) {
       if(error.status && error.status!==409) pending=null;
       const text=!error.status||error.status===409?t('uncertain'):error.status===402?t('empty'):error.status===401?t('signup'):error.message==='LS-ASSIST-01'?t('unavailable'):t('error');

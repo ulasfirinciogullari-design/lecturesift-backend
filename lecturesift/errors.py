@@ -54,20 +54,6 @@ def normalize_error(exc: Exception) -> LectureSiftError:
             raw,
             503,
         )
-    if "blocked server-side" in low or "not a bot" in low or "sign in" in low:
-        return LectureSiftError(
-            "LS-URL-02",
-            "YouTube bu indirmeyi engelledi. Daha sonra yeniden dene veya video dosyasını yükle.",
-            raw,
-            422,
-        )
-    if "no downloadable video" in low or "could not be downloaded" in low:
-        return LectureSiftError(
-            "LS-URL-03",
-            "Bu YouTube videosu indirilemedi. Bağlantıyı kontrol et veya video dosyasını yükle.",
-            raw,
-            422,
-        )
     if "video could not be opened" in low or "video açılamadı" in low:
         return LectureSiftError(
             "LS-VIDEO-02",
@@ -91,7 +77,7 @@ def normalize_error(exc: Exception) -> LectureSiftError:
         )
     return LectureSiftError(
         "LS-SYSTEM-01",
-        "İşlem beklenmeyen bir nedenle tamamlanamadı. Videoyu veya bağlantıyı kontrol edip yeniden deneyebilirsin.",
+        "İşlem beklenmeyen bir nedenle tamamlanamadı. Dosyanı kontrol edip yeniden deneyebilirsin.",
         raw,
         500,
     )

@@ -135,6 +135,27 @@ def test_zero_requested_flashcards_stays_empty():
     assert ai._normalize_flashcards([{"front": "Term", "back": "Definition"}], "en", 0) == []
 
 
+def test_missing_requested_flashcard_triggers_one_bounded_retry(monkeypatch):
+    calls = []
+
+    def create(**arguments):
+        calls.append(arguments)
+        count = 4 if len(calls) == 1 else 5
+        pack = {**_pack("Biology"), "flashcards": [
+            {"front": f"Question {index}?", "back": f"Source-supported answer {index}"}
+            for index in range(count)
+        ]}
+        return SimpleNamespace(choices=[SimpleNamespace(
+            finish_reason="stop", message=SimpleNamespace(content=json.dumps(pack)))])
+
+    monkeypatch.setattr(ai, "_CLIENT", SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create))))
+    monkeypatch.setattr(ai, "record_openai_response", lambda *_args: True)
+    result = ai._request_study_pack("source facts " * 250, "en", "short", 0, 5, minimum_summary_words=0)
+    assert len(result["flashcards"]) == 5
+    assert len(calls) == 2
+    assert "flashcards contained only 4" in calls[1]["messages"][1]["content"]
+
+
 def test_long_study_pack_does_not_generate_unrequested_exercises(monkeypatch):
     calls = []
 
