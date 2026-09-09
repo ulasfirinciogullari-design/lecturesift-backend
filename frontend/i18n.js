@@ -30,6 +30,7 @@
     return language === "tr" ? normalized : `/${language}${normalized === "/" ? "/" : normalized}`;
   };
   const rows = {
+    "library.folders":["Klasörler","Folders","Ordner","Dossiers","Carpetas","Cartelle","Pastas","Папки","المجلدات","文件夹","フォルダー","폴더","फ़ोल्डर"],
     "library.login":["Derslerini görmek için giriş yap.","Sign in to see your lessons.","Melde dich an, um deine Lektionen zu sehen.","Connectez-vous pour voir vos cours.","Inicia sesión para ver tus lecciones.","Accedi per vedere le tue lezioni.","Entre para ver suas aulas.","Войдите, чтобы увидеть свои занятия.","سجّل الدخول لرؤية دروسك.","登录以查看课程。","授業を見るにはログインしてください。","수업을 보려면 로그인하세요.","अपने पाठ देखने के लिए साइन इन करें।"],
     "plans.adSupported":["Reklamlı kullanım","Ad-supported use","Mit Werbung","Avec publicité","Con anuncios","Con pubblicità","Com anúncios","С рекламой","استخدام مع إعلانات","含广告","広告あり","광고 포함","विज्ञापन सहित उपयोग"],
     "homeDemo.hide":["Yanıtı gizle","Hide answer","Antwort ausblenden","Masquer la réponse","Ocultar respuesta","Nascondi risposta","Ocultar resposta","Скрыть ответ","إخفاء الإجابة","隐藏答案","答えを隠す","정답 숨기기","उत्तर छिपाएँ"],

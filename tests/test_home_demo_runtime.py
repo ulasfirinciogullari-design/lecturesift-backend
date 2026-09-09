@@ -120,7 +120,7 @@ for (const [index, language] of languages.entries()) {
   const click = target => listeners.click({target});
   const keydown = (target, key) => { let prevented = false; listeners.keydown({target, key, preventDefault() { prevented = true; }}); return prevented; };
   const nested = parent => new Element({}, '', parent);
-  assert.equal(tabs.length, 2);
+  assert.equal(tabs.length, 3);
   assert.equal(options.length, 3);
   assert.deepEqual(snapshot().answers.map(option => option.disabled), [false, false, false]);
 
@@ -133,11 +133,21 @@ for (const [index, language] of languages.entries()) {
   assert.equal(keydown(tabs[1], 'Home'), true);
   assert.equal(tabs[0].getAttribute('aria-selected'), 'true');
   assert.equal(keydown(tabs[0], 'End'), true);
-  assert.equal(tabs[1].getAttribute('aria-selected'), 'true');
-  assert.equal(keydown(tabs[1], 'ArrowRight'), true);
-  assert.equal(tabs[0].getAttribute('aria-selected'), 'true');
+  assert.equal(tabs[2].getAttribute('aria-selected'), 'true');
+  assert.equal(keydown(tabs[2], 'ArrowRight'), true);
+  assert.equal(tabs[language === 'ar' ? 1 : 0].getAttribute('aria-selected'), 'true');
+  click(tabs[0]);
   assert.equal(keydown(tabs[0], 'ArrowLeft'), true);
-  assert.equal(tabs[1].getAttribute('aria-selected'), 'true');
+  assert.equal(tabs[language === 'ar' ? 1 : 2].getAttribute('aria-selected'), 'true');
+  click(tabs[2]);
+  const reveal = document.getElementById('demoReveal');
+  click(reveal);
+  assert.equal(document.getElementById('demoCardAnswer').hidden, false);
+  assert.equal(reveal.getAttribute('aria-expanded'), 'true');
+  assert.equal(reveal.textContent, translator.keyCatalog['homeDemo.hide'][index]);
+  click(reveal);
+  assert.equal(document.getElementById('demoCardAnswer').hidden, true);
+  click(tabs[1]);
   assert.equal(keydown(options[0], 'ArrowRight'), false);
   assert.equal(keydown(tabs[0], 'Enter'), false);
 

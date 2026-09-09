@@ -1,5 +1,9 @@
 import {test, expect} from './fixtures.mjs';
 
+test.beforeEach(async ({page}) => {
+  await page.addInitScript(() => localStorage.setItem('lecturesift-currency', 'TRY'));
+});
+
 test('workspace lessons can be organized and deleted without leaving the workspace', async ({page}, testInfo) => {
   const cors = {'Access-Control-Allow-Origin':'http://127.0.0.1:4173','Access-Control-Allow-Methods':'GET,POST,PATCH,DELETE,OPTIONS','Access-Control-Allow-Headers':'authorization,content-type'};
   const state = {folders:[], jobs:[{job_id:'synthetic-library', title:'Biology revision notes', status:'done', created:1788868800, expires_at:1791460800, can_delete:true, stored_bytes:1048576, folder_id:null}]};

@@ -177,7 +177,7 @@ const end = source.indexOf(finish,start);
 if (start < 0 || end < start) throw Error('account navigation missing');
 const cases = [];
 for (const dir of ['ltr','rtl']) {
-  const views = ['overview','profile','payments','lessons','referrals','security'];
+  const views = JSON.parse(source.match(/const accountViews = (\[[^;]+\]);/)[1]);
   const element = dataset => ({dataset,attrs:{},events:{},setAttribute(key,value){this.attrs[key]=value},addEventListener(key,value){this.events[key]=value},focus(){this.focused=true},scrollIntoView(){}});
   const buttons = views.map(view => element({accountViewButton:view}));
   const panels = views.map(view => element({accountView:view}));
@@ -192,12 +192,12 @@ for (const dir of ['ltr','rtl']) {
     location:{pathname:'/account.html',search:'',hash:''},URLSearchParams,
     window:{addEventListener(){}},
   });
-  for (const [index,key] of [[3,'ArrowRight'],[5,'ArrowLeft'],[0,'ArrowLeft'],[5,'ArrowRight'],[4,'Home'],[4,'End']]) {
+  for (const [index,key] of [[views.indexOf('referrals'),'ArrowRight'],[views.length-1,'ArrowLeft'],[0,'ArrowLeft'],[views.length-1,'ArrowRight'],[3,'Home'],[3,'End']]) {
     buttons[index].events.click();
     let prevented=false;
     buttons[index].events.keydown({key,preventDefault(){prevented=true}});
     const active=buttons.findIndex(button=>button.attrs['aria-selected']==='true');
-    cases.push({dir,index,key,active,prevented,focused:buttons[active].focused,panelVisible:!panels[active].hidden});
+    cases.push({count:views.length,dir,index,key,active,prevented,focused:buttons[active].focused,panelVisible:!panels[active].hidden});
   }
 }
 console.log(JSON.stringify(cases));
@@ -208,10 +208,10 @@ console.log(JSON.stringify(cases));
         if case["key"] == "Home":
             expected = 0
         elif case["key"] == "End":
-            expected = 5
+            expected = case["count"] - 1
         else:
             step = 1 if case["key"] == "ArrowRight" else -1
-            expected = (case["index"] + step * (-1 if case["dir"] == "rtl" else 1)) % 6
+            expected = (case["index"] + step * (-1 if case["dir"] == "rtl" else 1)) % case["count"]
         assert case["active"] == expected
         assert case["prevented"] and case["focused"] and case["panelVisible"]
 

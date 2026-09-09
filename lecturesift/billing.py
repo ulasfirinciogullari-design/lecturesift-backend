@@ -107,7 +107,7 @@ class Plan:
                 "priority": self.priority,
                 "ad_free": self.ad_free,
                 "ad_mode": self.ad_mode,
-                "rewarded_minutes_eligible": not self.ad_free,
+                "rewarded_minutes_eligible": self.code not in {"lite", "plus", "pro", "max", "business", "ad_free"},
                 "download_enabled": self.download_enabled,
             },
         }
