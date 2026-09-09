@@ -23,10 +23,13 @@ def test_short_final_fragments_are_joined_without_losing_audio(tmp_path, seconds
     assert seconds - .1 <= sum(durations) <= seconds + .6
     assert not list(tmp_path.glob("*joined*"))
     assert not list(tmp_path.glob("*join.txt"))
-    # The last audible samples survive; the fix must not silently trim the tail.
+    # Decode the complete final chunk: MP3 seek tables can refer to the original
+    # segmented stream, so seeking relative to EOF does not verify its samples.
+    # Both decoded duration and final audible samples must survive the join.
     decoded = subprocess.run([
-        "ffmpeg", "-hide_banner", "-loglevel", "error", "-sseof", "-0.25", "-i", str(chunks[-1]),
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-i", str(chunks[-1]),
         "-f", "s16le", "-ac", "1", "-ar", "16000", "-",
     ], check=True, capture_output=True, timeout=10).stdout
-    assert len(decoded) >= 4000
-    assert any(decoded)
+    assert durations[-1] - .25 <= len(decoded) / 32000 <= durations[-1] + .1
+    assert len(decoded) >= 8000
+    assert any(decoded[-8000:])
