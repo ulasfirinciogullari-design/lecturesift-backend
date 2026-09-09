@@ -43,6 +43,26 @@ not a guarantee that the provider accepts a server IP.
 
 ## Validation limits
 
+The September 9 follow-up (07:26–07:40 UTC) additionally tried TV,
+TV Simply, iOS, visionOS and web music clients in isolated Render jobs,
+with and without webpage bootstrap. No method produced a verified audio
+file. Diagnostic warnings distinguished HTTP 429 on the watch page from
+HTTP 403 on player requests; a generic “no player response” must not be
+mistaken for a codec or JavaScript solver failure. IPv6 outbound connectivity
+was unavailable in that job. The obsolete `BaW_jenozKc` sample returned
+unavailable-video results and is not evidence of a bot challenge; subsequent
+checks used `x41yOUIvK2k` and `jNQXAC9IVRw` instead. Media deadlines and size
+bounds applied, third-party child processes received no application secrets,
+and temporary evidence objects were deleted after collecting their results.
+No unverified client or public download service was added to production.
+
+The latest published stable extractor remains the installed `2026.8.19`.
+Upstream's `2026.08.30.232658` nightly contained no YouTube extractor changes
+relative to that release when reviewed. Blind upgrades or repeat requests from
+the same blocked network are not evidence of a fix. Further network-dependent
+testing needs an available operator-controlled connection or download provider;
+no such account was configured or purchased during these checks.
+
 Regression cases use synthetic downloader results, never user videos or
 credentials. They cover accepted/rejected URLs, browser/server agreement,
 rejection before job/plan work, solver configuration, partial files, final

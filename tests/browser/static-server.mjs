@@ -20,7 +20,7 @@ http.createServer(async (request, response) => {
     // generated public files. Keep public-page fallbacks forbidden, so a missing
     // localized public build still fails instead of quietly returning Turkish.
     const localePath = pathname.match(/^\/(?:en|de|fr|es|it|pt|ru|ar|zh|ja|ko|hi)\/(.+)$/);
-    const privatePages = new Set(['workspace','login','register','account','admin','support','verify','reset-password','forgot-password','thanks']);
+    const privatePages = new Set(['workspace','assistant','login','register','account','admin','support','verify','reset-password','forgot-password','thanks']);
     const tail = localePath?.[1];
     const allowRewrite = tail && (privatePages.has(tail.replace(/\.html$/, '')) || /\.(?:js|css|png|svg|jpg|webp|ico|woff2)$/.test(tail));
     const rewritten = allowRewrite ? path.resolve(root, tail) : null;

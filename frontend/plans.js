@@ -113,9 +113,11 @@ function populateCurrencies() {
 
 function format(amount, code) {
   const divisor = ZERO_DECIMAL_CURRENCIES.has(code) ? 1 : 100;
-  return new Intl.NumberFormat(navigator.language, {
+  return new Intl.NumberFormat(PLANS_I18N.locale || navigator.language, {
     style: "currency", currency: code, maximumFractionDigits: divisor === 1 ? 0 : 2,
-  }).format(amount / divisor);
+  }).formatToParts(amount / divisor).map(part =>
+    part.type === "currency" ? (LOCALE_DATA.currencySymbols?.[code] || part.value) : part.value
+  ).join("");
 }
 
 function showError(message, code = "LS-BILL-20") {
@@ -359,17 +361,21 @@ function renderAssistantOffers() {
   if(!offers){section.hidden=true;return;}
   section.hidden=false;section.replaceChildren();
   const heading=document.createElement('h2');heading.textContent=at('credits');section.append(heading);
-  const rules=document.createElement('p');rules.textContent=at('rules');section.append(rules);
+  for(const key of ['limited','usage','monthly','topup']) {const text=document.createElement('p');text.textContent=at(key);section.append(text);}
+  const guide=document.createElement('a');guide.href=PLANS_I18N.localizedPath?.(PLANS_I18N.language,'/assistant.html') || '/assistant.html';guide.textContent=at('openpage');section.append(guide);
   if(!offers.available){const notice=document.createElement('p');notice.textContent=at('unavailable');section.append(notice);}
   const packs=document.createElement('div');packs.className='assistant-credit-packs';
   for(const pack of offers.packs || []) {
     const card=document.createElement('article');card.className='assistant-credit-pack';
-    const name=document.createElement('h3');name.textContent=planLabel(pack.code);
-    const price=document.createElement('p');price.textContent=format(pack.amount_minor,pack.currency);
+    const name=document.createElement('h3');name.textContent=Number(pack.credits).toLocaleString(PLANS_I18N.locale);
+    const unit=document.createElement('p');unit.textContent=at('credits');
+    const price=document.createElement('p');price.className='assistant-pack-price';price.textContent=format(pack.amount_minor,pack.currency);
     const button=document.createElement('button');button.type='button';button.className='plan-action';button.textContent=at('buy');button.disabled=!offers.available;
-    button.addEventListener('click',()=>buy(pack.code,'one_time'));card.append(name,price,button);packs.append(card);
+    button.addEventListener('click',()=>buy(pack.code,'one_time'));card.append(name,unit,price,button);packs.append(card);
   }
   section.append(packs);
+  const details=document.createElement('details');const summary=document.createElement('summary');summary.textContent=at('creditguide');const rules=document.createElement('p');rules.textContent=at('rules');details.append(summary,rules);section.append(details);
+  if(location.hash==='#assistantCredits')requestAnimationFrame(()=>section.scrollIntoView({block:'start'}));
 }
 
 async function buy(planCode, interval = "monthly") {

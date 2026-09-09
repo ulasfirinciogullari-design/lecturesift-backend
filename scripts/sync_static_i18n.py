@@ -208,7 +208,7 @@ def read_catalog(path: Path) -> dict[str, list[str]]:
 def read_central_sources(path: Path) -> set[str]:
     source = path.read_text(encoding="utf-8")
     values: set[str] = set()
-    for payload in re.findall(r'^\s*"[^"]+":\[(.*?)\],?$', source, re.MULTILINE):
+    for payload in re.findall(r'^\s*(?:"[^"]+"|[a-z]+):\s*\[(.*?)\],?$', source, re.MULTILINE):
         try:
             row = json.loads(f"[{payload}]")
         except json.JSONDecodeError:
@@ -310,6 +310,7 @@ def main() -> int:
         catalog = read_catalog(catalog_path)
     central_sources = read_central_sources(frontend / "i18n.js")
     central_sources.update(read_central_sources(frontend / "referral-i18n.js"))
+    central_sources.update(read_central_sources(frontend / "assistant-i18n.js"))
     required = collect_static_copy(frontend) | RUNTIME_COPY
     missing = sorted(required - catalog.keys() - central_sources, key=str.casefold)
     if args.limit:

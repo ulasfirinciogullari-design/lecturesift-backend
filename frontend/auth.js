@@ -325,8 +325,13 @@ function planName(code) {
 }
 
 async function initAccount() {
+  const accountSignInPath = () => {
+    const localized = route => I18N.localizedPath ? I18N.localizedPath(I18N.language, route) : route;
+    const section = /^#account-(overview|profile|payments|lessons|referrals|security)$/.test(location.hash) ? location.hash : "";
+    return `${localized("/login.html")}?next=${encodeURIComponent(localized("/account.html") + section)}`;
+  };
   let token = localStorage.getItem(TOKEN_KEY);
-  if (!token) return location.replace("/login.html?next=/account.html");
+  if (!token) return location.replace(accountSignInPath());
   let currentAccount = null;
   let referralLoadStarted = false;
   const accountViews = ["overview", "profile", "payments", "lessons", "referrals", "security"];
@@ -695,7 +700,7 @@ async function initAccount() {
     renderAccount(body.account);
   } catch {
     localStorage.removeItem(TOKEN_KEY);
-    location.replace("/login.html?next=/account.html");
+    location.replace(accountSignInPath());
   }
   void reconcilePaymentRedirect();
   $("createReferralCodeButton").addEventListener("click", async () => {
