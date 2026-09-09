@@ -1,7 +1,7 @@
 """Version 4 PostgreSQL contracts for assistant credits and recurring referrals.
 
 Historical v2 verification remains in verify_schema_transition.py. This version
-admits only the two separately reviewed additive tables, requires explicit
+admits only the two core and eight product additive tables, requires explicit
 legacy absence markers, and preserves all existing schema objects and data.
 """
 

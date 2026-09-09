@@ -11,6 +11,7 @@ import pytest
 from sqlalchemy import create_engine, select, text, update
 
 from deploy import product_schema_release as release
+from deploy import psql_product_release
 from deploy import verify_schema_transition_v4 as verifier
 from lecturesift import billing_service as billing, rollout_service, costs, referrals, assistant_wallet
 
@@ -129,6 +130,66 @@ def test_migration_rejects_stale_evidence_without_creating_tables(database, tmp_
     with pytest.raises(RuntimeError, match='Rows changed'):
         with engine.begin() as connection:
             release.migrate(connection, before, tmp_path / 'after.txt')
+    with engine.connect() as connection:
+        assert not (release.table_names(connection) & verifier.PRODUCT_TABLES)
+
+
+def managed_client(name):
+    env = os.environ.copy()
+    env.update(PGHOST='127.0.0.1', PGPORT='5432', PGUSER='assistant_ci',
+               PGPASSWORD='synthetic-ci-only', PGDATABASE=name,
+               ASSISTANT_ENABLED='false', LECTURESIFT_REFERRALS_ENABLED='false')
+    command = ['docker', 'run', '--rm', '--network', 'host', '-i',
+               '-e', 'PGHOST', '-e', 'PGPORT', '-e', 'PGUSER', '-e', 'PGPASSWORD',
+               '-e', 'PGDATABASE', IMAGE, 'psql']
+    return env, command
+
+
+def test_managed_release_adds_nine_tables_and_preserves_existing_rows(database, tmp_path):
+    engine, name, _ = database
+    with engine.begin() as connection:
+        connection.execute(text('DROP TABLE billing_purchase_terms'))
+        connection.execute(text("INSERT INTO billing_users (id,email,password_salt,password_hash,credit_minutes,created_at) VALUES ('retained','retained@example.invalid','x','y',17,now())"))
+    evidence = tmp_path / 'managed-release'
+    evidence.mkdir(mode=0o700)
+    env, command = managed_client(name)
+    assert psql_product_release.migrate(evidence, env, allow_purchase_terms=True, command=command) == 9
+    current = tmp_path / 'managed-current.txt'
+    current.write_text(manifest(name, recovery=True))
+    verifier.verify_transition(evidence / 'before-v4.txt', current, release.CONTRACT, release.PRESERVED)
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT credit_minutes FROM billing_users WHERE id='retained'")).scalar_one() == 17
+        inspector = __import__('sqlalchemy').inspect(connection)
+        for table in (billing.PURCHASE_TERMS, *referrals.METADATA.sorted_tables, *assistant_wallet.METADATA.sorted_tables):
+            assert referrals._table_shape_matches(inspector, table)
+
+
+def test_managed_release_rolls_back_every_addition_if_verification_fails(database, tmp_path, monkeypatch):
+    engine, name, _ = database
+    with engine.begin() as connection:
+        connection.execute(text('DROP TABLE billing_purchase_terms'))
+    evidence = tmp_path / 'rejected-managed-release'
+    evidence.mkdir(mode=0o700)
+    env, command = managed_client(name)
+    def reject(*_args):
+        raise verifier.ContractError('synthetic final-verification failure')
+    monkeypatch.setattr(psql_product_release.verifier, 'verify_transition', reject)
+    with pytest.raises(verifier.ContractError, match='final-verification'):
+        psql_product_release.migrate(evidence, env, allow_purchase_terms=True, command=command)
+    with engine.connect() as connection:
+        assert not (release.table_names(connection) & (verifier.PRODUCT_TABLES | {'billing_purchase_terms'}))
+    assert not (evidence / 'after-v4.txt').exists()
+
+
+def test_managed_release_requires_explicit_legacy_core_option(database, tmp_path):
+    engine, name, _ = database
+    with engine.begin() as connection:
+        connection.execute(text('DROP TABLE billing_purchase_terms'))
+    evidence = tmp_path / 'unapproved-core-release'
+    evidence.mkdir(mode=0o700)
+    env, command = managed_client(name)
+    with pytest.raises(verifier.ContractError):
+        psql_product_release.migrate(evidence, env, command=command)
     with engine.connect() as connection:
         assert not (release.table_names(connection) & verifier.PRODUCT_TABLES)
 

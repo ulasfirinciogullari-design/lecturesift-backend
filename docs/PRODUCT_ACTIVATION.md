@@ -1,9 +1,11 @@
 # Product release operations
 
-Source is being verified in PR67. Neither capability flag is opened by these
-changes. Current production API is Render; the development OS account cannot
-read its database/provider credentials and has no passwordless sudo. A health
-response is not migration, restore or provider-access evidence.
+Source is being verified in PR67. Neither capability flag is opened by the
+migration tools. Production uses Render. Private release access was verified on
+September 9, 2026: PostgreSQL 18.6, an available managed recovery window, a fresh
+logical export and successful real requests to both gpt-5.6-luna and
+gpt-image-1.5. Credentials are held outside the repository. A health response is
+not migration, restore or provider-access evidence.
 
 The release adds exactly five referral and three assistant tables. The frozen
 v4 catalog contract includes PostgreSQL 18 columns, NOT NULL constraints, unique
@@ -12,6 +14,36 @@ before manifest, locks existing tables, compares schema and row fingerprints,
 adds only absent whole tables, verifies the resulting transition, and commits
 all DDL together. An incompatible existing table or stale row rejects the run.
 Historical cutover v2/v3 and recovery v1/v2 files retain their exact meaning.
+
+## Managed Render release
+
+The current Render database has 24 core tables; purchase terms and all eight
+product tables are absent. Its real v4 legacy manifest passes all integrity
+checks. API and worker currently share the owner login. Do not apply the OVH
+host/container cutover scripts to this deployment.
+
+`python -m deploy.psql_product_release --confirm-product-schema-v1
+--add-legacy-purchase-terms --evidence-dir /private/fresh-evidence` uses a private
+owner `DATABASE_URL` and the existing psql client, with certificate verification.
+It captures both manifests while holding one transaction and bounded table
+locks, adds only the nine frozen tables, and checks every old row fingerprint
+and schema object before committing. No existing record is rewritten. The
+legacy purchase-terms addition requires its separate explicit option. A failed
+check closes the connection and rolls back all additions; a lost commit
+acknowledgement requires a fresh database inspection before retrying.
+
+For Render, retain the private service configuration snapshot and managed
+logical export before migration. Take another export after migration and verify
+the strict v4 manifest. Managed PITR remains the production recovery mechanism;
+no customer database is copied into CI. The allocated synthetic PostgreSQL 18
+CI service exercises actual dump/restore of all product ledgers, pending
+reservations, cached answers and old coupons. This proves the versioned recovery
+contract; it is not a claim that a production restore has been performed.
+
+Provision and verify distinct API and worker logins using the reviewed runtime
+grants before enabling the features. Keep the original owner credentials only
+in the private release configuration. Finally deploy the reviewed source,
+configure a permanent referral campaign boundary, and enable the runtime flags.
 
 ## Reviewable activation sequence
 
@@ -58,8 +90,9 @@ is enabled. Image/video analysis is bounded. Image creation is now a separately 
 owned 220-credit action using one 1024x1024 medium-quality JPEG. It requires a
 real `python -m deploy.assistant_provider_probe --image` check before setting
 `ASSISTANT_IMAGES_ENABLED=true`; chat
-access alone does not prove image access. The current development account has
-no provider key, so the synthetic tests do not claim a generated provider image.
+access alone does not prove image access. The real September 9 provider probe
+returned one valid 46,344-byte JPEG with reported usage; synthetic tests remain
+separate from that provider-access evidence.
 See `docs/ASSISTANT_IMAGE_RELEASE.md` for cost and retention details.
 
 Video generation remains unavailable. OpenAI has announced the Sora/Videos API
