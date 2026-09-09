@@ -17,10 +17,11 @@ Historical cutover v2/v3 and recovery v1/v2 files retain their exact meaning.
 
 ## Managed Render release
 
-The current Render database has 24 core tables; purchase terms and all eight
-product tables are absent. Its real v4 legacy manifest passes all integrity
-checks. API and worker currently share the owner login. Do not apply the OVH
-host/container cutover scripts to this deployment.
+The Render database started with 24 core tables. At 00:45 UTC on September 9,
+the reviewed release added purchase terms and all eight product tables in one
+transaction. The real before/after v4 manifests prove that every existing row
+and schema object was preserved. A managed export dated 00:46 UTC is available.
+Do not apply the OVH host/container cutover scripts to this deployment.
 
 `python -m deploy.psql_product_release --confirm-product-schema-v1
 --add-legacy-purchase-terms --evidence-dir /private/fresh-evidence` uses a private
@@ -40,10 +41,26 @@ CI service exercises actual dump/restore of all product ledgers, pending
 reservations, cached answers and old coupons. This proves the versioned recovery
 contract; it is not a claim that a production restore has been performed.
 
-Provision and verify distinct API and worker logins using the reviewed runtime
-grants before enabling the features. Keep the original owner credentials only
-in the private release configuration. Finally deploy the reviewed source,
-configure a permanent referral campaign boundary, and enable the runtime flags.
+Distinct API and worker logins now pass real read-only login/authority checks:
+the API has CRUD access to the eight product tables; the worker has none and
+sees masked account fields through the eleven reviewed compatibility views.
+Neither login owns the database, creates schema/temp objects, inherits roles,
+has administrative attributes or accesses the retained verification table.
+The managed owner cannot ALTER superuser/replication/bypass-RLS attributes, so
+their false CREATE ROLE defaults are preserved and verified instead. Passwords
+use SCRAM verifiers. External checks retain full TLS certificate verification
+with channel binding disabled for Render's TLS gateway.
+
+Deploy the reviewed source with these distinct logins, keep the original owner
+credentials only in private release configuration, configure a permanent
+referral campaign boundary, and then enable the runtime flags. Source release
+capabilities are now open; they do not enable a deployed feature on their own.
+
+CI run 34295667581 at c7491bd verified 1,224 tests and the browser checks,
+including nine-table managed migration, complete rollback on rejection, and
+actual synthetic PostgreSQL 18 dump/restore. Real provider checks separately
+returned text and one JPEG. These results do not claim a live paid checkout,
+production restore, or a successful YouTube download.
 
 ## Reviewable activation sequence
 

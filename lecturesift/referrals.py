@@ -23,9 +23,9 @@ from .referral_policy import (
 LOGGER = logging.getLogger(__name__)
 METADATA = MetaData()
 POLICY_VERSION = REGIONAL_FIRST_PURCHASE_TERMS.version
-# Release capability, NOT an environment override. Flip only in a reviewed
-# release that ships versioned schema, recovery, role and real PG18 evidence.
-SCHEMA_RECOVERY_RELEASE_READY = False
+# The September 9 release includes the verified PG18 v4 schema/recovery and
+# separate runtime-role evidence. Campaign and runtime flags remain required.
+SCHEMA_RECOVERY_RELEASE_READY = True
 ELIGIBLE_PLANS = frozenset({"lite", "plus", "pro", "max"})
 HOLD_DAYS = 14
 MONTHLY_CAP = 5

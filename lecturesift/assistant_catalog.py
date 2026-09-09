@@ -6,9 +6,9 @@ MODEL = "gpt-5.6-luna"
 IMAGE_MODEL = "gpt-image-1.5"
 IMAGE_CREDITS = 220
 VERSION = "2026-09-08-assistant-v1"
-# This capability stays closed until the three-table recovery contract and
-# provider access have been verified in the release environment.
-SCHEMA_RECOVERY_RELEASE_READY = False
+# PG18 v4 migration/recovery, runtime roles and both real provider requests
+# were verified for the September 9 release. Runtime flags remain opt-in.
+SCHEMA_RECOVERY_RELEASE_READY = True
 INCLUDED = {"free": 50, "test": 0, "credit": 0, "lite": 500, "plus": 1500, "pro": 4000, "max": 10000, "business": 0}
 PACKS = {"ai_1000": 1000, "ai_3000": 3000, "ai_10000": 10000}
 # Deliberate regional price points, not a claim about today's exchange rate.
