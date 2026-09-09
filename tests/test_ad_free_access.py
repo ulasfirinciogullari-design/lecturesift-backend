@@ -111,3 +111,14 @@ def test_preexisting_test_order_can_still_complete_without_becoming_ad_free():
     account = service.account_status(owner)
     assert account["credit_minutes"] == 1
     assert not account["permanent_ad_free"]
+
+
+def test_assistant_receives_only_the_owned_ad_free_state_and_catalog_price():
+    from lecturesift.site_assistant import _context
+    owner, other = user(), user()
+    paid(owner)
+    context = _context(owner, "TRY")
+    assert context["account"]["permanent_ad_free"] is True
+    assert context["ad_free_offer"]["price"] == {"currency": "TRY", "amount_minor": 5990}
+    assert "email" not in context["account"]
+    assert _context(other, "USD")["account"]["permanent_ad_free"] is False

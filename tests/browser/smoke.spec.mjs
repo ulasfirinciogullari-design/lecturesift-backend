@@ -4,6 +4,7 @@ test('workspace assistant tab preserves the lesson and supports keyboard navigat
   await page.addInitScript(() => {
     localStorage.setItem('lecturesift-billing-token','ci-synthetic-token-not-valid-on-any-server');
     localStorage.setItem('lecturesift-ui','en');
+    localStorage.setItem('lecturesift-currency','TRY');
   });
   await page.goto(`/workspace.html?job=${JOB_ID}`);
   await page.locator('[data-consent="essential"]').click();
@@ -23,6 +24,7 @@ test('workspace assistant tab preserves the lesson and supports keyboard navigat
   await expect(page.locator('.assistant-launch')).toHaveCount(0);
   await page.locator('.workspace-mode-tabs').scrollIntoViewIfNeeded();
   await noHorizontalOverflow(page);
+  await expect(page.locator('#workspaceAssistantPanel button[type=submit]')).toBeInViewport();
   await page.screenshot({path:testInfo.outputPath('workspace-assistant-tab-layout.jpg'),quality:75});
   await page.goto('/ar/workspace.html#assistant');
   await expect(page.locator('#workspaceAssistantPanel')).toBeVisible();

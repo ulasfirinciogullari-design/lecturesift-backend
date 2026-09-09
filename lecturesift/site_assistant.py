@@ -142,17 +142,26 @@ def _image_url(value):
 def _context(user_id, currency):
     status = account_status(user_id)
     from .jobs import JOBS
+    from .billing import AD_FREE_PLAN
     return {
         "account": {
             "plan": status["plan"]["code"], "remaining_minutes": status["remaining_minutes"],
             "subscription": status["subscription"],
             "download_enabled": status["download_enabled"],
+            "ad_free": status["plan"].get("entitlements", {}).get("ad_free", False),
+            "permanent_ad_free": status.get("permanent_ad_free", False),
         },
         "recent_lessons": [
             {"status": row.get("status"), "title": str(row.get("title") or row.get("filename") or "Lesson")[:120]}
             for row in JOBS.list_for_user(user_id, 5)
         ],
         "assistant_offers": catalog.offers(currency),
+        "ad_free_offer": {
+            "name": "Permanent ad-free account access",
+            "price": AD_FREE_PLAN.public(currency)["display_price"],
+            "payment": "one_time", "expires": False,
+            "scope": "LectureSift ads while signed in; no extra minutes or assistant credits",
+        },
         "sitemap": SITEMAP,
     }
 
