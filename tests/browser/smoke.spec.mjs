@@ -29,6 +29,7 @@ test('assistant page keeps credits visible and account actions under user contro
   expect(requests).toHaveLength(1);
   expect(requests[0].language).toBe('en');
   const action=chat.locator('a.assistant-action').last();
+  await expect(action).toHaveText('My account');
   await expect(action).toHaveAttribute('href',/\/en\/account(?:\.html)?$/);
   await expect(chat.locator('.assistant-credit-bar a')).toHaveAttribute('href',/\/en\/plans(?:\.html)?#assistantCredits$/);
   await noHorizontalOverflow(page);
@@ -320,6 +321,7 @@ test('rebuilt study entry opens the real workspace and key screens remain usable
   await capture('plans-layout');
   await page.locator('#assistantCredits').scrollIntoViewIfNeeded();
   await expect(page.locator('#assistantCredits')).toContainText('Usage limits apply.');
+  await expect(page.locator('#assistantCredits .assistant-pack-price').first()).toContainText('₺');
   await noHorizontalOverflow(page);
   await capture('assistant-credits-layout');
   await page.goto('/en/login');

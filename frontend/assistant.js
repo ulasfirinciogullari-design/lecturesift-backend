@@ -65,7 +65,7 @@
     const node = document.createElement('div'); node.className=`assistant-message ${role}`; node.textContent=text;
     if (safeActions[action]) {
       const link=document.createElement('a'); link.className='assistant-action'; link.href=path(safeActions[action]);
-      link.textContent = action === 'register' ? t('signup') : `${t('apply')} · ${window.LectureSiftI18n?.t?.('nav.'+action, action) || action}`; node.append(link);
+      link.textContent = action === 'register' ? t('signup') : t('action'+action); node.append(link);
     } else if (['light','dark'].includes(action)) {
       const button=document.createElement('button'); button.type='button'; button.className='assistant-action'; button.textContent=t('apply');
       button.addEventListener('click',()=>{ if (document.documentElement.dataset.theme !== action) document.querySelector('.theme-toggle')?.click(); button.disabled=true; }); node.append(button);

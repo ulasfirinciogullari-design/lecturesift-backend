@@ -113,9 +113,11 @@ function populateCurrencies() {
 
 function format(amount, code) {
   const divisor = ZERO_DECIMAL_CURRENCIES.has(code) ? 1 : 100;
-  return new Intl.NumberFormat(navigator.language, {
+  return new Intl.NumberFormat(PLANS_I18N.locale || navigator.language, {
     style: "currency", currency: code, maximumFractionDigits: divisor === 1 ? 0 : 2,
-  }).format(amount / divisor);
+  }).formatToParts(amount / divisor).map(part =>
+    part.type === "currency" ? (LOCALE_DATA.currencySymbols?.[code] || part.value) : part.value
+  ).join("");
 }
 
 function showError(message, code = "LS-BILL-20") {

@@ -1,6 +1,12 @@
 (function () {
   const languages = ["tr","en","de","fr","es","it","pt","ru","ar","zh","ja","ko","hi"];
   const copy = {
+    actionworkspace: ["Çalışma Alanı", "Workspace", "Arbeitsbereich", "Espace de travail", "Área de trabajo", "Area di lavoro", "Área de trabalho", "Рабочая область", "مساحة العمل", "工作区", "ワークスペース", "작업 공간", "कार्य क्षेत्र"],
+    actionaccount: ["Hesabım", "My account", "Mein Konto", "Mon compte", "Mi cuenta", "Il mio account", "Minha conta", "Мой аккаунт", "حسابي", "我的账户", "マイアカウント", "내 계정", "मेरा खाता"],
+    actionplans: ["Planlar", "Plans", "Tarife", "Forfaits", "Planes", "Piani", "Planos", "Тарифы", "الخطط", "套餐", "プラン", "요금제", "प्लान"],
+    actionfeatures: ["Özellikler", "Features", "Funktionen", "Fonctionnalités", "Funciones", "Funzionalità", "Recursos", "Возможности", "الميزات", "功能", "機能", "기능", "विशेषताएँ"],
+    actionsupport: ["Destek", "Support", "Support", "Assistance", "Soporte", "Assistenza", "Suporte", "Поддержка", "الدعم", "帮助支持", "サポート", "지원", "सहायता"],
+    actionprivacy: ["Gizlilik", "Privacy", "Datenschutz", "Confidentialité", "Privacidad", "Privacy", "Privacidade", "Конфиденциальность", "الخصوصية", "隐私", "プライバシー", "개인정보 보호", "गोपनीयता"],
     nav: ["Asistan","Assistant","Assistent","Assistant","Asistente","Assistente","Assistente","Ассистент","المساعد","助手","アシスタント","도우미","सहायक"],
     headline: ["Birlikte daha kolay öğren.","Learning is easier together.","Gemeinsam leichter lernen.","Apprendre est plus simple ensemble.","Aprender es más fácil juntos.","Imparare insieme è più facile.","Aprender juntos é mais fácil.","Учиться вместе проще.","التعلّم معًا أسهل.","一起学习，更轻松。","一緒なら、学びはもっと身近に。","함께라서 더 쉬운 학습.","साथ सीखना आसान है।"],
     intro: ["Sorularını sor, görsel paylaş ve derslerini adım adım keşfet.","Ask questions, share images and explore your lessons step by step.","Stelle Fragen, teile Bilder und entdecke deinen Lernstoff Schritt für Schritt.","Posez vos questions, partagez des images et explorez vos cours pas à pas.","Haz preguntas, comparte imágenes y explora tus lecciones paso a paso.","Fai domande, condividi immagini ed esplora le lezioni passo dopo passo.","Faça perguntas, compartilhe imagens e explore suas aulas passo a passo.","Задавайте вопросы, делитесь изображениями и разбирайте уроки шаг за шагом.","اطرح أسئلتك وشارك الصور واستكشف دروسك خطوة بخطوة.","提出问题、分享图片，一步步探索课程内容。","質問や画像を共有して、授業を一歩ずつ理解しましょう。","질문하고 이미지를 공유하며 수업을 차근차근 이해하세요.","सवाल पूछें, चित्र साझा करें और अपने पाठ चरण-दर-चरण समझें।"],
