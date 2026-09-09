@@ -3,7 +3,9 @@
 No account cookies, proxy purchase, customer data or retained browser profile.
 The shell enforces an overall timeout. Output is diagnostic booleans only.
 """
+import asyncio
 import contextlib
+import http.cookiejar
 import io
 import json
 import os
@@ -18,6 +20,49 @@ from lecturesift import media
 from lecturesift.errors import normalize_error
 
 diagnostics = {'browser_started': False, 'provider_seen': False, 'token_generated': False, 'provider_error': False, 'provider_failure': 'none'}
+
+
+async def bootstrap_guest(port):
+    """Observe the actual watch page and reuse only this empty profile's guest cookies."""
+    import nodriver
+    from nodriver import cdp
+
+    driver = await nodriver.start(host='127.0.0.1', port=port, sandbox=False)
+    page = await driver.get('about:blank', new_tab=True)
+    cookies = []
+    try:
+        # Read player availability without downloading the page's video or ads.
+        await page.send(cdp.network.enable())
+        await page.send(cdp.network.set_blocked_urls(['*://*.googlevideo.com/*']))
+        await page.get('https://www.youtube.com/watch?v=x41yOUIvK2k&hl=en')
+        for _ in range(12):
+            raw = await page.evaluate("""JSON.stringify((() => {
+                const p = window.ytInitialPlayerResponse?.playabilityStatus;
+                const status = p?.status || 'MISSING';
+                return {status: ['OK','ERROR','LOGIN_REQUIRED','UNPLAYABLE','MISSING'].includes(status) ? status : 'OTHER',
+                    bot: /not a bot/i.test(p?.reason || ''),
+                    consent: location.hostname === 'consent.youtube.com'};
+            })())""", return_by_value=True)
+            observed = json.loads(raw)
+            diagnostics.update(browser_playability=observed['status'], browser_bot_challenge=observed['bot'], browser_consent=observed['consent'])
+            if observed['status'] != 'MISSING' or observed['consent']:
+                break
+            await asyncio.sleep(1)
+        allowed = {'VISITOR_INFO1_LIVE', 'VISITOR_PRIVACY_METADATA', 'YSC', 'PREF', 'SOCS', 'CONSENT', 'GPS'}
+        for cookie in await driver.cookies.get_all():
+            if cookie.domain.lstrip('.') != 'youtube.com' or cookie.name not in allowed:
+                continue
+            cookies.append(http.cookiejar.Cookie(
+                version=0, name=cookie.name, value=cookie.value, port=None, port_specified=False,
+                domain=cookie.domain, domain_specified=True, domain_initial_dot=cookie.domain.startswith('.'),
+                path=cookie.path, path_specified=True, secure=cookie.secure,
+                expires=int(cookie.expires) if cookie.expires > 0 else None,
+                discard=cookie.expires <= 0, comment=None, comment_url=None, rest={}, rfc2109=False,
+            ))
+        diagnostics['guest_cookies_available'] = bool(cookies)
+        return cookies
+    finally:
+        await asyncio.wait_for(page.close(), timeout=3)
 
 
 class Logger:
@@ -93,6 +138,12 @@ def main():
         kwargs.update(sandbox=False, host='127.0.0.1', port=port)
         original_config(self, *args, **kwargs)
     Config.__init__ = browser_config
+    guest_cookies = []
+    try:
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            guest_cookies = asyncio.run(asyncio.wait_for(bootstrap_guest(port), timeout=30))
+    except Exception as exc:
+        diagnostics['guest_bootstrap_error'] = type(exc).__name__
     def downloader(options):
         options.update(logger=Logger(), verbose=True, no_warnings=False, retries=0, socket_timeout=15)
         args = options.setdefault('extractor_args', {})
@@ -100,7 +151,10 @@ def main():
         args['youtubepot-wpc'] = {'browser_path': [browser]}
         args['youtubepot-bgutilhttp'] = {'disable': ['true']}
         args['youtubepot-bgutilscript'] = {'disable': ['true']}
-        return original(options)
+        instance = original(options)
+        for cookie in guest_cookies:
+            instance.cookiejar.set_cookie(cookie)
+        return instance
     media.yt_dlp.YoutubeDL = downloader
     media.MAX_VIDEO_BYTES = 16 * 1024 * 1024
     started = time.monotonic()
