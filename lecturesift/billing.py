@@ -37,6 +37,7 @@ class Plan:
     try_amount_minor: int | None = None
     featured: bool = False
     assistant_credits: int = 0
+    advertising: str = "legacy"
 
     @property
     def export_enabled(self) -> bool:
@@ -48,7 +49,13 @@ class Plan:
 
     @property
     def ad_free(self) -> bool:
-        return self.code in {"lite", "plus", "pro", "max", "business", "ad_free"}
+        return self.ad_mode == "none"
+
+    @property
+    def ad_mode(self) -> str:
+        if self.advertising != "legacy":
+            return self.advertising
+        return "none" if self.code in {"lite", "plus", "pro", "max", "business", "ad_free"} else "standard"
 
     def public(self, currency: str = "TRY") -> dict:
         selected_currency = currency if currency in SUPPORTED_CURRENCIES else "TRY"
@@ -99,7 +106,8 @@ class Plan:
                 "team_seats": self.team_seats,
                 "priority": self.priority,
                 "ad_free": self.ad_free,
-                "rewarded_minutes_eligible": not self.ad_free,
+                "ad_mode": self.ad_mode,
+                "rewarded_minutes_eligible": self.code not in {"lite", "plus", "pro", "max", "business", "ad_free"},
                 "download_enabled": self.download_enabled,
             },
         }
@@ -139,7 +147,9 @@ PLANS = (
 
 from . import assistant_catalog
 
-PLANS = tuple(replace(plan, assistant_credits=assistant_catalog.INCLUDED.get(plan.code, 0)) for plan in PLANS)
+PLANS = tuple(replace(plan, assistant_credits=assistant_catalog.INCLUDED.get(plan.code, 0),
+                      advertising={"lite": "standard", "plus": "limited"}.get(plan.code, "legacy"))
+              for plan in PLANS)
 ASSISTANT_PLANS = tuple(
     replace(PLANS[1], code=code, minutes=0, assistant_credits=credits,
             try_amount_minor=assistant_catalog.PRICES["TRY"][index])

@@ -9,7 +9,7 @@
   <title>Çalışma Alanı | LectureSift</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css?v=15">
-<link rel="stylesheet" href="/rollout.css?v=9"><link rel="stylesheet" href="/theme.css?v=17"><script src="/theme.js?v=10"></script><link rel="stylesheet" href="/product-layout.css?v=4"></head>
+<link rel="stylesheet" href="/rollout.css?v=9"><link rel="stylesheet" href="/theme.css?v=17"><script src="/theme.js?v=10"></script><link rel="stylesheet" href="/product-layout.css?v=4"><link rel="stylesheet" href="/library.css?v=1"></head>
 <body class="workspace-page" data-page="workspace">
   <div class="ambient ambient-one"></div>
   <div class="ambient ambient-two"></div>
@@ -36,14 +36,15 @@
 
   <aside class="study-sidebar" aria-label="LectureSift">
     <a class="sidebar-create" href="/workspace.html?source=upload"><span aria-hidden="true">＋</span><span data-i18n="redesign.new">Yeni çalışma</span></a>
-    <nav><a class="active" data-workspace-link="study" href="#study" aria-current="page"><span aria-hidden="true">▧</span><span data-i18n="redesign.new">Yeni çalışma</span></a><a data-workspace-link="assistant" href="#assistant"><span aria-hidden="true">✦</span><span data-assistant-copy="nav">Asistan</span></a><a href="/account.html#account-lessons"><span aria-hidden="true">▤</span><span data-i18n="redesign.library">Derslerim</span></a><a href="/account.html"><span aria-hidden="true">◎</span><span data-i18n="account.eyebrow">Hesabım</span></a><a href="/plans.html"><span aria-hidden="true">◇</span><span data-i18n="plansNav">Planlar</span></a></nav>
-    <a class="sidebar-support" href="/support.html" data-i18n="redesign.support">Yardım ve destek</a>
+    <nav><a class="active" data-workspace-link="study" href="#study" aria-current="page"><span aria-hidden="true">▧</span><span data-i18n="redesign.new">Yeni çalışma</span></a><a data-workspace-link="assistant" href="#assistant"><span aria-hidden="true">✦</span><span data-assistant-copy="nav">Asistan</span></a><a data-workspace-link="library" href="#library"><span aria-hidden="true">▤</span><span data-i18n="redesign.library">Derslerim</span></a></nav>
+    <a class="sidebar-support" href="/contact.html" data-i18n="redesign.support">Yardım ve destek</a>
   </aside>
 
   <main id="app" class="page-shell">
     <div class="workspace-mode-tabs" role="tablist" aria-label="Çalışma alanı" data-i18n-aria-label="workspace.tabGroup">
       <button id="workspaceStudyTab" type="button" role="tab" aria-selected="true" aria-controls="workspaceStudyPanel" data-workspace-tab="study" data-i18n="workspace.studyTab">Ders oluştur</button>
       <button id="workspaceAssistantTab" type="button" role="tab" aria-selected="false" aria-controls="workspaceAssistantPanel" tabindex="-1" data-workspace-tab="assistant"><span aria-hidden="true">✦</span> <span data-assistant-copy="nav">Asistan</span></button>
+      <button id="workspaceLibraryTab" type="button" role="tab" aria-selected="false" aria-controls="workspaceLibraryPanel" tabindex="-1" data-workspace-tab="library" data-i18n="redesign.library">Derslerim</button>
     </div>
     <section id="workspaceStudyPanel" role="tabpanel" aria-labelledby="workspaceStudyTab">
     <section class="intro hero" aria-labelledby="pageTitle" hidden>
@@ -75,7 +76,7 @@
 
     <section class="workspace-intro" aria-labelledby="workspaceTitle">
       <div><p class="eyebrow">LectureSift çalışma alanı</p><h1 id="workspaceTitle">Kaynağını ekle, çalışma paketini oluştur.</h1><details class="workspace-source-help"><summary data-i18n="workspace.sourceGuide">Desteklenen kaynaklar ve OCR</summary><p>Video, ses, PDF, taranmış belge veya görsel, Word, PowerPoint, TXT ya da Markdown dosyanı seç. Metinsiz sayfalarda OCR otomatik çalışır.</p></details></div>
-      <div class="workspace-intro-actions"><a href="/account.html">Geçmiş işlemlerim</a><a href="/features.html">Desteklenen özellikler</a></div>
+      <div class="workspace-intro-actions"><a href="#library" data-i18n="redesign.library">Derslerim</a><a href="/features.html">Desteklenen özellikler</a></div>
     </section>
 
     <section id="workspace" class="workspace" aria-label="Ders analizi">
@@ -89,11 +90,6 @@
         </div>
 
         <div id="uploadPanel" class="source-panel active">
-          <div id="recordingModeTabs" class="recording-mode-tabs">
-            <button id="classicMode" class="active" type="button" data-i18n="classicMode">Video, ses veya belge</button>
-            <button id="separateMode" type="button" data-i18n="separateMode">Ses ve görüntü ayrı</button>
-          </div>
-
           <div id="classicSources" class="source-builder">
             <input id="classicFiles" class="file-input" type="file" multiple accept=".mp4,.mov,.mkv,.webm,.mpeg,.mpg,.m4v,.mp3,.wav,.m4a,.aac,.flac,.ogg,.oga,.opus,.wma,.aiff,.aif,.mka,.pdf,.docx,.pptx,.txt,.md,.png,.jpg,.jpeg,.webp,.tif,.tiff,video/*,audio/*,application/pdf,image/png,image/jpeg,image/webp,image/tiff,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/markdown">
             <label id="classicDropZone" class="drop-zone compact" for="classicFiles">
@@ -104,26 +100,6 @@
             <div id="classicFileList" class="source-file-list"></div>
           </div>
 
-          <div id="separateSources" class="separate-source-grid" hidden>
-            <div class="upload-source-card">
-              <div class="upload-source-head"><strong data-i18n="audioSourceTitle">Ses kaynakları</strong><span data-i18n="required">Zorunlu</span></div>
-              <p data-i18n="audioSourceHelp">Sesli videoları veya kayıtları ders sırasına göre ekle.</p>
-              <input id="audioFiles" class="file-input" type="file" multiple accept=".mp4,.mov,.mkv,.webm,.mpeg,.mpg,.m4v,.mp3,.wav,.m4a,.aac,.flac,.ogg,.oga,.opus,.wma,.aiff,.aif,.mka,video/*,audio/*">
-              <label id="audioDropZone" class="mini-drop-zone" for="audioFiles" data-i18n="addAudioFiles">Ses videolarını ekle</label>
-              <div id="audioFileList" class="source-file-list compact-list"></div>
-            </div>
-            <div class="upload-source-card optional">
-              <div class="upload-source-head"><strong data-i18n="slidesSourceTitle">Görüntü / slayt kaynakları</strong><span data-i18n="required">Zorunlu</span></div>
-              <p data-i18n="slidesSourceHelp">Slayt videolarını ders sırasına göre ekle.</p>
-              <input id="visualFiles" class="file-input" type="file" multiple accept=".mp4,.mov,.mkv,.webm,.mpeg,.mpg,.m4v,video/*">
-              <label id="visualDropZone" class="mini-drop-zone secondary" for="visualFiles" data-i18n="addVisualFiles">Slayt videolarını ekle</label>
-              <div id="visualFileList" class="source-file-list compact-list"></div>
-              <label id="syncControl" class="sync-control">
-                <span><b data-i18n="syncOffset">Slayt zaman farkı</b><small data-i18n="syncOffsetHelp">Aynı anda başladıysa 0 bırak.</small></span>
-                <span><input id="slidesOffset" type="number" min="-3600" max="3600" step="0.1" value="0"><i>sn</i></span>
-              </label>
-            </div>
-          </div>
           <p id="sourceLimitHelp" class="combined-limit" data-i18n="fileHelp">Tek iş yükleme sınırların aktif planından yükleniyor.</p>
         </div>
 
@@ -309,6 +285,14 @@
         </aside>
       </div>
     </section>
+    <section id="workspaceLibraryPanel" class="lesson-library" role="tabpanel" aria-labelledby="workspaceLibraryTab" hidden>
+      <header class="library-heading"><div><p class="eyebrow">LectureSift</p><h1 data-i18n="redesign.library">Derslerim</h1><p data-i18n="library.intro">Derslerini klasörle, sonuçlarını aç ve gereksiz dosyaları sil.</p></div><a class="study-primary" href="/workspace.html?source=upload" data-i18n="redesign.new">Yeni çalışma</a></header>
+      <div class="library-toolbar"><label class="library-search"><span class="sr-only" data-i18n="library.search">Ders ara</span><input id="librarySearch" type="search" data-i18n-placeholder="library.search" placeholder="Ders ara"></label><button id="libraryNewFolder" type="button" data-i18n="library.newFolder">Yeni klasör</button><button id="libraryRefresh" type="button" data-i18n="library.refresh">Yenile</button></div>
+      <div id="libraryNotice" class="library-notice" role="status" hidden></div>
+      <nav id="libraryFolders" class="library-folders" aria-label="Klasörler" data-i18n-aria-label="library.folders"></nav>
+      <div class="library-section-heading"><p id="libraryCount" aria-live="polite"></p><div id="libraryFolderActions" hidden><button id="libraryRename" type="button" data-i18n="library.rename">Yeniden adlandır</button><button id="libraryDeleteFolder" type="button" data-i18n="library.deleteFolder">Klasörü sil</button></div></div>
+      <div id="libraryLessons" class="library-lessons" aria-live="polite"></div>
+    </section>
   </main>
 
   <footer class="site-footer">
@@ -328,5 +312,5 @@
   <script src="/upload-progress.js?v=1"></script>
   <script src="./app.js?v=34"></script>
   <script src="/rollout.js?v=9"></script>
-<script src="/product-layout.js?v=1"></script></body>
+<script src="/product-layout.js?v=2"></script><script src="/library.js?v=1"></script></body>
 </html>

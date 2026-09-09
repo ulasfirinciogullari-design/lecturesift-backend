@@ -111,14 +111,14 @@ def test_homepage_promotes_campaigns_without_duplicating_plan_checkout():
     assert 'href="/plans.html"' in homepage
 
 
-def test_account_history_opens_results_in_the_workspace():
+def test_lesson_history_is_owned_by_workspace():
     account = (FRONTEND / "account.html").read_text(encoding="utf-8")
-    auth = (FRONTEND / "auth.js").read_text(encoding="utf-8")
-
-    assert 'href="/workspace.html" data-i18n="account.newLesson"' in account
-    assert 'I18N.localizedPath(I18N.language, "/workspace.html")' in auth
-    assert '?job=${encodeURIComponent(job.job_id)}' in auth
-    assert 'href="/?job=${encodeURIComponent(job.job_id)}"' not in auth
+    workspace = (FRONTEND / "workspace.html").read_text(encoding="utf-8")
+    library = (FRONTEND / "library.js").read_text(encoding="utf-8")
+    assert 'data-account-view="lessons"' not in account
+    assert 'id="workspaceLibraryPanel"' in workspace
+    assert '?job=${encodeURIComponent(job.job_id)}#study' in library
+    assert "request('/library')" in library
 
 
 def test_owner_only_netlify_toolbar_is_hidden_on_every_site_layout():
@@ -621,7 +621,7 @@ def test_profile_admin_automatic_payment_and_full_comparison_interfaces_are_pres
     )
     assert "/billing/me/profile" in auth and "/billing/me/change-password" in auth
     assert "/billing/me/subscription/cancel" in auth
-    assert "/jobs?limit=30" in auth and "jobHistory" in account
+    assert "/jobs?limit=30" not in auth and "jobHistory" not in account
     assert "/billing/me/export" in auth and "/billing/me/close-account" in auth
     assert 'href="/admin.html"' not in account
     assert all(value in plans for value in (
@@ -718,7 +718,7 @@ def test_admin_large_dataset_controls_and_compact_account_tabs_are_wired():
     assert all(
         f'data-account-view="{view}"' in account
         and f'data-account-view-button="{view}"' in account
-        for view in ("overview", "profile", "payments", "lessons", "security")
+        for view in ("overview", "profile", "payments", "security")
     )
     assert "activateAccountView" in auth and "lecturesift-account-view" in auth
     assert '@router.get("/billing/admin/users")' in rollout
@@ -775,7 +775,7 @@ def test_checkout_names_contact_inbox_and_mobile_plan_navigation_are_wired():
     assert "/billing/admin/contact-messages" in admin_js
     assert "adminContactDialog" in admin_html and "admin-contact-reply" in admin_js
     assert "/billing/admin/contact-messages/${encodeURIComponent(messageId)}/reply" in admin_js
-    assert 'href="/rollout.css?v=10"' in admin_html and 'src="/admin.js?v=18"' in admin_html
+    assert 'href="/rollout.css?v=10"' in admin_html and 'src="/admin.js?v=19"' in admin_html
     assert admin_js.count('class="admin-table admin-record-table"') >= 10
     assert all(label in admin_js for label in ('data-label="İş"', 'data-label="Bakiye"', 'data-label="Açıklama"'))
     assert "supportReplyForm" in support_html and "supportThread" in support_html
@@ -1061,12 +1061,12 @@ def test_optional_analytics_and_advertising_are_consent_gated():
     assert 't("terms.rewardPolicy")' in i18n
 
 
-def test_banner_ads_are_opt_in_public_only_and_paid_plans_are_ad_free():
+def test_banner_ads_are_opt_in_public_only_and_respect_ad_free_rights():
     i18n = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
     display = (FRONTEND / "display-ads.js").read_text(encoding="utf-8")
     blueprint = (FRONTEND.parent / "render.yaml").read_text(encoding="utf-8")
 
-    assert 'displayAdsScript.src = "/display-ads.js?v=3"' in i18n
+    assert 'displayAdsScript.src = "/display-ads.js?v=4"' in i18n
     assert 'displayAdsStyle.href = "/display-ads.css?v=2"' in i18n
     assert 'LectureSiftConsent?.allows("advertising")' in display
     assert 'body.account?.plan?.entitlements?.ad_free === true' in display

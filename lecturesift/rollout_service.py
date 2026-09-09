@@ -284,6 +284,8 @@ def export_account_data(user_id: str) -> dict[str, Any]:
     from .assistant_wallet import export_data as export_assistant
     assistant_data = export_assistant(user_id)
     with ENGINE.connect() as connection:
+        from .workspace_state import export_state
+        workspace_data = export_state(connection, user_id)
         subscriptions = connection.execute(
             select(SUBSCRIPTIONS)
             .where(SUBSCRIPTIONS.c.user_id == user_id)
@@ -348,6 +350,7 @@ def export_account_data(user_id: str) -> dict[str, Any]:
             .order_by(PAYMENT_CONSENTS.c.accepted_at.desc())
         ).all()
     return {
+        "workspace": workspace_data,
         "generated_at": utcnow().isoformat(),
         "account": account,
         "referrals": referral_data,
@@ -460,6 +463,8 @@ def close_user_account(
         close_referrals(connection, user_id)
         from .assistant_wallet import close_account as close_assistant
         close_assistant(connection, user_id)
+        from .workspace_state import erase_account_state
+        erase_account_state(connection, user_id)
         anonymized_email = f"deleted+{uuid.uuid4().hex}@users.invalid"
         salt = secrets.token_bytes(16)
         connection.execute(
@@ -1515,6 +1520,8 @@ def list_admin_orders_page(
         .where(*filters)
     )
     with ENGINE.connect() as connection:
+        from .workspace_state import visible_orders
+        base = visible_orders(connection, base, orders)
         total = int(connection.execute(select(func.count()).select_from(base.subquery())).scalar_one())
         rows = connection.execute(
             base.order_by(orders.c.created_at.desc())
@@ -1849,6 +1856,8 @@ def admin_close_user_account(
         close_referrals(connection, user_id)
         from .assistant_wallet import close_account as close_assistant
         close_assistant(connection, user_id)
+        from .workspace_state import erase_account_state
+        erase_account_state(connection, user_id)
         anonymized_email = f"deleted+{uuid.uuid4().hex}@users.invalid"
         salt = secrets.token_bytes(16)
         connection.execute(
@@ -2032,10 +2041,43 @@ def _verify_support_reply_token(message_id: str, token: str) -> None:
         raise BillingAuthenticationError("Destek konuşması bağlantısı geçersiz.")
 
 
+
+def _support_payments(connection, references):
+    """Admin-only payment context. No card data or provider secrets."""
+    references = {str(value) for value in references if value}
+    result = {}
+    if not references:
+        return result
+    for table in (MANUAL_ORDERS, PAYMENT_ORDERS):
+        for row in connection.execute(select(table).where(table.c.reference.in_(references))).all():
+            provider = "bank_transfer" if table is MANUAL_ORDERS else row.provider
+            iyzico = provider in IYZICO_PAYMENT_PROVIDERS
+            result[row.reference] = {
+                "provider": "iyzico" if iyzico else provider,
+                "payment_method": iyzico_payment_method_for_provider(provider) if iyzico else "bank_transfer" if provider == "bank_transfer" else "card",
+                "payment_method_confirmed": iyzico_provider_is_confirmed(provider) if iyzico else True,
+                "status": row.status,
+            }
+    return result
+
+
+def delete_contact_message(message_id, actor):
+    init_rollout_database()
+    with ENGINE.begin() as connection:
+        row = connection.execute(select(CONTACT_MESSAGES).where(CONTACT_MESSAGES.c.id == message_id).with_for_update()).first()
+        if row is None:
+            raise BillingError("İletişim mesajı bulunamadı.")
+        connection.execute(delete(CONTACT_REPLIES).where(CONTACT_REPLIES.c.contact_message_id == message_id))
+        connection.execute(delete(CONTACT_MESSAGES).where(CONTACT_MESSAGES.c.id == message_id))
+        _record_admin_account_event(connection, user_id="support", email="", action="support_deleted",
+                                    summary=f"Destek konuşması ve yanıtları silindi: {message_id}", actor=actor)
+    return {"deleted": True}
+
 def get_contact_conversation(
     message_id: str,
     *,
     public_token: str | None = None,
+    include_payment: bool = False,
 ) -> dict[str, Any]:
     init_rollout_database()
     if public_token is not None:
@@ -2051,8 +2093,9 @@ def get_contact_conversation(
             .where(CONTACT_REPLIES.c.contact_message_id == message_id)
             .order_by(CONTACT_REPLIES.c.created_at.asc())
         ).all()
+        payment = _support_payments(connection, [message.order_reference]).get(message.order_reference) if include_payment and public_token is None else None
     return {
-        "message": _public_contact_message(message),
+        "message": {**_public_contact_message(message), **({"payment": payment} if include_payment and public_token is None else {})},
         "replies": [_public_contact_reply(row) for row in replies],
     }
 
@@ -2285,7 +2328,8 @@ def list_contact_messages(status: str = "", limit: int = 100) -> list[dict[str, 
         if normalized_status:
             query = query.where(CONTACT_MESSAGES.c.status == normalized_status)
         rows = connection.execute(query).all()
-    return [_public_contact_message(row) for row in rows]
+        payments = _support_payments(connection, [row.order_reference for row in rows])
+    return [{**_public_contact_message(row), "payment": payments.get(row.order_reference)} for row in rows]
 
 
 def update_contact_message_status(message_id: str, status: str) -> dict[str, Any]:
@@ -2315,6 +2359,8 @@ def list_admin_orders(status: str = "pending") -> list[dict]:
             .join(USERS, USERS.c.id == MANUAL_ORDERS.c.user_id)
             .order_by(MANUAL_ORDERS.c.created_at.desc())
         )
+        from .workspace_state import visible_orders
+        query = visible_orders(connection, query, MANUAL_ORDERS)
         if status:
             query = query.where(MANUAL_ORDERS.c.status == status)
         rows = connection.execute(query).all()

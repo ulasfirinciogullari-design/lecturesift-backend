@@ -253,6 +253,13 @@ class JobStore:
             data = self._jobs.get(job_id)
             return self._materialize_completed(data.copy()) if data else None
 
+    def metadata(self, job_id: str) -> dict | None:
+        """Read ownership and status without downloading any lesson content."""
+        with self._lock:
+            self._refresh_locked()
+            data = self._jobs.get(job_id)
+            return data.copy() if data else None
+
     def update(self, job_id: str, **values: Any) -> None:
         with self._lock, self._distributed_write_lock():
             self._refresh_locked()
@@ -300,7 +307,7 @@ class JobStore:
         data["options"] = options
         return data
 
-    def list_for_user(self, user_id: str, limit: int = 50) -> list[dict[str, Any]]:
+    def list_for_user(self, user_id: str, limit: int | None = 50) -> list[dict[str, Any]]:
         with self._lock:
             self._refresh_locked()
             owned = [
@@ -309,7 +316,35 @@ class JobStore:
                 if data.get("options", {}).get("billing_user_id") == user_id
             ]
         owned.sort(key=lambda item: float(item.get("created", 0)), reverse=True)
-        return owned[: max(1, min(100, int(limit)))]
+        return owned if limit is None else owned[: max(1, min(100, int(limit)))]
+
+    def delete_owned(self, user_id: str, job_id: str) -> None:
+        from .billing_service import BillingError
+        with self.processing_lock(job_id) as acquired:
+            if not acquired:
+                raise BillingError("Ders hâlâ işleniyor. İşlem bittikten sonra silebilirsin.")
+            data = self.metadata(job_id)
+            if not data or data.get("options", {}).get("billing_user_id") != user_id:
+                raise BillingError("Ders bulunamadı.")
+            if data.get("status") not in {"done", "error"} or data.get("worker_state") not in {None, "done", "error", "failed", "rejected"}:
+                raise BillingError("Ders hâlâ işleniyor. İşlem bittikten sonra silebilirsin.")
+            path = WORK_DIR / job_id if data.get("remote_prefix") and STORAGE.remote else Path(data.get("job_dir", WORK_DIR / job_id))
+            if path.resolve().parent != WORK_DIR.resolve() or path.is_symlink():
+                raise BillingError("Ders dosyası konumu doğrulanamadı.")
+            try:
+                # Keep metadata on failure so a partial provider deletion can
+                # be retried. Never hold the global Redis lock across S3 calls.
+                STORAGE.delete_job(job_id)
+                if path.is_dir():
+                    shutil.rmtree(path)
+            except Exception as exc:
+                raise BillingError("Dosyalar tamamen silinemedi. Lütfen tekrar dene.") from exc
+            with self._lock, self._distributed_write_lock():
+                self._refresh_locked()
+                current = self._jobs.get(job_id)
+                if current and current.get("options", {}).get("billing_user_id") == user_id:
+                    del self._jobs[job_id]
+                    self._flush_locked()
 
     def list_for_admin(self, limit: int = 100) -> list[dict[str, Any]]:
         """Return a secret-free, newest-first operational view of all jobs."""

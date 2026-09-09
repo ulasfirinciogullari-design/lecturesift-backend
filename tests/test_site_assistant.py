@@ -362,7 +362,7 @@ def test_image_fixed_price_replay_and_provider_budget_are_distinct(image_provide
     paid(owner, 'ai_1000')
     payload = images.ImageRequest(request_id='synthetic-image-123', prompt='Water cycle illustration')
     result = images.generate(owner, payload)
-    assert result['charged_credits'] == 220 and result['balance'] == 830
+    assert result['charged_credits'] == 200 and result['balance'] == 850
     assert result['image'].startswith('data:image/jpeg;base64,')
     assert images.generate(owner, payload) == result
     assert len(captured['calls']) == 1 and len(captured['costs']) == 2
@@ -390,7 +390,7 @@ def test_failed_image_refunds_user_but_retains_unknown_platform_cost(image_provi
     assert 'private-provider-error' not in str(error.value)
     assert wallet.status(owner)['balance'] == 1050
     with billing.ENGINE.connect() as connection:
-        assert connection.execute(select(wallet.BUDGET.c.credits)).scalar_one() == 220
+        assert connection.execute(select(wallet.BUDGET.c.credits)).scalar_one() == 200
     with pytest.raises(LectureSiftError):
         images.generate(owner, payload)
     assert len(captured['calls']) == 1

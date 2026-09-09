@@ -355,6 +355,15 @@ SELECT format(
   :'worker_user'
 )
 \gexec
+-- Billing entitlement reads need this boolean grant, never the credit ledger.
+SELECT format('GRANT SELECT ON public.admin_ad_free_grants_v1 TO %I', :'worker_user')
+WHERE to_regclass('public.admin_ad_free_grants_v1') IS NOT NULL
+\gexec
+
+SELECT format('GRANT SELECT (reference) ON public.admin_order_archives_v1 TO %I', :'worker_user')
+WHERE to_regclass('public.admin_order_archives_v1') IS NOT NULL
+\gexec
+
 SELECT format('GRANT SELECT ON lecturesift_worker.lecturesift_guest_trials TO %I', :'worker_user')
 \gexec
 SELECT format(

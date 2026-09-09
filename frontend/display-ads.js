@@ -24,19 +24,21 @@
     return response.json();
   }
 
-  async function paidAccountIsAdFree() {
+  async function accountAdMode() {
     let token = "";
-    try { token = localStorage.getItem(TOKEN_KEY) || ""; } catch (_) { return true; }
-    if (!token) return false;
+    try { token = localStorage.getItem(TOKEN_KEY) || ""; } catch (_) { return "none"; }
+    if (!token) return "standard";
     try {
       const body = await json("/billing/me", {headers: {Authorization: `Bearer ${token}`}});
-      if (body.account?.plan?.entitlements?.ad_free === true) return true;
+      if (body.account?.plan?.entitlements?.ad_free === true) return "none";
       // A signed-in account may receive publisher ads only when the API
       // explicitly identifies it as non-ad-free. Unknown entitlement state is
       // treated as ad-free so transient failures cannot leak ads to paid users.
-      return body.account?.plan?.entitlements?.ad_free !== false;
+      const entitlements = body.account?.plan?.entitlements;
+      if (entitlements?.ad_free !== false) return "none";
+      return entitlements.ad_mode === "limited" ? "limited" : "standard";
     } catch (_) {
-      return true;
+      return "none";
     }
   }
 
@@ -140,7 +142,8 @@
     started = true;
     try {
       const config = await json("/ads/config");
-      if (await paidAccountIsAdFree()) return;
+      const adMode = await accountAdMode();
+      if (adMode === "none" || (adMode === "limited" && unlocalizedPath() !== "/")) return;
       const mode = publisherMode(config);
       if (!advertisingAllowed() || !mode) {
         renderHouseCampaign(config.house_campaign);

@@ -55,20 +55,29 @@
         </div>
 </div>
       <div class="example-product" data-study-demo>        <div class="visual-window">
-          <div class="visual-bar"><i></i><i></i><i></i><span>Ders paketi · Biyoloji 101</span></div>
+          <div class="visual-bar"><span>Ders paketi · Biyoloji 101</span><span class="demo-subject" data-i18n="homeDemo.topic">Hücresel enerji</span></div>
           <div class="visual-content">
             <div class="visual-menu" role="tablist" aria-label="Örnek çalışma paketi">
               <button id="demoSummaryTab" type="button" role="tab" aria-selected="true" aria-controls="demoSummary">Özet</button>
               <button id="demoQuizTab" type="button" role="tab" aria-selected="false" aria-controls="demoQuiz" tabindex="-1">Quiz</button>
+              <button id="demoCardTab" type="button" role="tab" aria-selected="false" aria-controls="demoCard" tabindex="-1" data-i18n="homeDemo.cards">Bilgi kartı</button>
             </div>
             <div class="visual-summary" id="demoSummary" role="tabpanel" aria-labelledby="demoSummaryTab">
-              <small>ANA FİKİR</small><h3>Hücre enerji üretimini nasıl düzenler?</h3><p>Konunun temel kavramları, örnekleri ve sınavda çıkabilecek bağlantıları tek bir akışta.</p><div class="demo-note-lines" aria-hidden="true"><i></i><i></i><i></i></div><div class="visual-chips"><span>20 soru</span><span>40 kart</span><span>PDF</span></div>
+              <div class="demo-concept"><svg viewBox="0 0 180 110" aria-hidden="true"><path d="M27 37C46 10 107 9 143 28c28 14 23 47-5 59-32 13-92 16-116-7-11-11-6-28 5-43Z"/><path d="M39 46c-11 21 22 43 25 19s-8-38 12-33-2 48 20 43-3-39 19-39 25 24 8 34"/></svg><div><small>ANA FİKİR</small><h3>Hücre enerji üretimini nasıl düzenler?</h3></div></div>
+              <p class="demo-insight" data-i18n="homeDemo.insight">Mitokondri, oksijenli solunumda ATP üretir. ATP, hücrenin pek çok işlevine enerji sağlar.</p>
+              <div class="demo-takeaway"><strong data-i18n="homeDemo.remember">Sınav bağlantısı</strong><p data-i18n="homeDemo.connection">Organel → mitokondri · Enerji taşıyıcısı → ATP</p></div>
+
             </div>
             <div class="visual-summary" id="demoQuiz" role="tabpanel" aria-labelledby="demoQuizTab" hidden>
               <small data-demo-copy="sample" data-i18n="homeDemo.sample">ÖRNEK SORU</small><h3 data-demo-copy="question" data-i18n="homeDemo.question">Ökaryot hücrelerde oksijenli solunumla ATP üreten organel hangisidir?</h3>
               <div class="demo-choices"><button type="button" class="demo-choice" data-demo-answer="0" data-demo-copy="a" data-i18n="homeDemo.a">Mitokondri</button><button type="button" class="demo-choice" data-demo-answer="1" data-demo-copy="b" data-i18n="homeDemo.b">Ribozom</button><button type="button" class="demo-choice" data-demo-answer="2" data-demo-copy="c" data-i18n="homeDemo.c">Hücre duvarı</button></div>
               <p id="demoFeedback" class="demo-feedback" role="status" aria-live="polite" aria-atomic="true"></p>
               <button type="button" id="demoReset" class="demo-reset" data-demo-copy="retry" data-i18n="homeDemo.retry" hidden>Tekrar dene</button>
+            </div>
+            <div class="visual-summary demo-card" id="demoCard" role="tabpanel" aria-labelledby="demoCardTab" hidden>
+              <small data-i18n="homeDemo.cards">Bilgi kartı</small><h3 data-i18n="homeDemo.question">Ökaryot hücrelerde oksijenli solunumla ATP üreten organel hangisidir?</h3>
+              <button id="demoReveal" class="demo-reveal" type="button" aria-expanded="false" aria-controls="demoCardAnswer" data-i18n="homeDemo.reveal">Yanıtı göster</button>
+              <p id="demoCardAnswer" class="demo-card-answer" hidden><strong data-i18n="homeDemo.a">Mitokondri</strong></p>
             </div>
           </div>
         </div>

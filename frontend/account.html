@@ -14,7 +14,6 @@
       <button type="button" role="tab" data-account-view-button="overview" aria-selected="true" data-i18n="account.navOverview">Genel bakış</button>
       <button type="button" role="tab" data-account-view-button="profile" aria-selected="false" tabindex="-1" data-i18n="account.navProfile">Profil ve tercihler</button>
       <button type="button" role="tab" data-account-view-button="payments" aria-selected="false" tabindex="-1" data-i18n="account.navPayments">Ödemeler</button>
-      <button type="button" role="tab" data-account-view-button="lessons" aria-selected="false" tabindex="-1" data-i18n="account.navLessons">Derslerim</button>
       <button type="button" role="tab" data-account-view-button="referrals" aria-selected="false" tabindex="-1" data-referral-i18n="nav">Davetler</button>
       <button type="button" role="tab" data-account-view-button="security" aria-selected="false" tabindex="-1" data-i18n="account.navSecurity">Güvenlik ve veriler</button>
     </nav>
@@ -35,8 +34,6 @@
       <section class="dashboard-card wide-card"><h2 data-i18n="refund.requestTitle">İade talebi</h2><p class="empty-copy" data-i18n="refund.requestHelp">Ödenmiş bir siparişi seçip nedenini yaz. Talebin incelenir; onay, paranın henüz gönderildiği anlamına gelmez.</p><form id="refundRequestForm" class="form-grid two-column"><label class="field"><span data-i18n="refund.order">Sipariş</span><select id="refundOrderSelect" required></select></label><label class="field full"><span data-i18n="refund.reason">İade nedeni</span><textarea id="refundReason" minlength="10" maxlength="500" required></textarea></label><button id="refundSubmit" class="secondary-action" type="submit" data-i18n="refund.submit">Talep oluştur</button></form><div id="refundNotice" class="notice" hidden></div><div id="refundRequestsList" class="orders-list"></div></section>
     </div></section>
 
-    <section class="account-view" data-account-view="lessons" role="tabpanel" hidden><div class="dashboard-grid">
-      <section class="dashboard-card wide-card"><div class="admin-section-head"><h2 data-i18n="account.historyTitle">Ders geçmişim</h2><a class="secondary-action link-action" href="/workspace.html" data-i18n="account.newLesson">Yeni ders işle</a></div><p class="empty-copy" data-i18n="account.historyHelp">Önceki işlemlerini, ilerleme durumunu ve hazır sonuçlarını buradan açabilirsin.</p><div id="jobHistory" class="orders-list"><p class="empty-copy" data-i18n="account.historyLoading">Ders geçmişi yükleniyor…</p></div></section>
     </div></section>
 
     <section class="account-view" data-account-view="referrals" role="tabpanel" hidden><div class="dashboard-grid">

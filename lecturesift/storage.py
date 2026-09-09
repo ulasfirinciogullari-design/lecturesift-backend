@@ -180,6 +180,7 @@ class ObjectStorage:
             "remote_result_key": result_key if result_key in uploaded else "",
             "remote_download_key": zip_keys[0] if zip_keys else "",
             "remote_file_count": len(uploaded),
+            "stored_bytes": sum(path.stat().st_size for path in paths),
         }
 
     def _download_objects(self, downloads: list[tuple[str, Path]]) -> int:
@@ -257,10 +258,12 @@ class ObjectStorage:
             for offset in range(0, len(keys), 1000):
                 batch = keys[offset:offset + 1000]
                 if batch:
-                    self._client.delete_objects(
+                    response = self._client.delete_objects(
                         Bucket=self.bucket,
                         Delete={"Objects": batch, "Quiet": True},
                     )
+                    if response.get("Errors"):
+                        raise RuntimeError("Object storage did not delete every lesson file")
                     deleted += len(batch)
         return deleted
 

@@ -1,6 +1,6 @@
 import {test, expect, JOB_ID} from './fixtures.mjs';
 
-const creditOffers = (currency='TRY') => ({available:true,currency,image:{available:true,credits:220},packs:[
+const creditOffers = (currency='TRY') => ({available:true,currency,image:{available:true,credits:200},packs:[
   {code:'ai_1000',credits:1000,currency,amount_minor:currency==='JPY'?600:14900},
   {code:'ai_3000',credits:3000,currency,amount_minor:currency==='JPY'?1500:34900},
   {code:'ai_10000',credits:10000,currency,amount_minor:currency==='JPY'?4500:99900},
@@ -226,7 +226,7 @@ test('assistant guide opens, remains localized and does not claim live AI availa
 test('owned image creation shows its credit price and offers a safe download', async ({page}, testInfo) => {
   const cors={'Access-Control-Allow-Origin':'http://127.0.0.1:4173','Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Allow-Headers':'authorization,content-type'};
   await page.addInitScript(()=>localStorage.setItem('lecturesift-billing-token','synthetic-browser-token'));
-  await page.route('https://api.lecturesift.com/assistant/catalog*',route=>route.fulfill({status:200,headers:cors,json:{available:true,image:{available:true,credits:220}}}));
+  await page.route('https://api.lecturesift.com/assistant/catalog*',route=>route.fulfill({status:200,headers:cors,json:{available:true,image:{available:true,credits:200}}}));
   await page.route('https://api.lecturesift.com/assistant/wallet',route=>route.fulfill({status:200,headers:cors,json:{balance:1050}}));
   await page.goto('/en/');
   const syntheticImage=await page.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=1024;const ctx=canvas.getContext('2d');ctx.fillStyle='#bad3f5';ctx.fillRect(0,0,1024,1024);return canvas.toDataURL('image/jpeg');});
@@ -234,17 +234,17 @@ test('owned image creation shows its credit price and offers a safe download', a
   await page.route('https://api.lecturesift.com/assistant/image',async route=>{
     if(route.request().method()==='OPTIONS'){await route.fulfill({status:204,headers:cors});return;}
     requests.push(route.request().postDataJSON());
-    await route.fulfill({status:200,headers:cors,json:{kind:'image',image:syntheticImage,balance:830,charged_credits:220,action:'none'}});
+    await route.fulfill({status:200,headers:cors,json:{kind:'image',image:syntheticImage,balance:850,charged_credits:200,action:'none'}});
   });
   await page.locator('.assistant-launch').click();
   const dialog=page.locator('.assistant-dialog');
   await expect(dialog.locator('.assistant-mode')).toBeVisible();
-  await expect(dialog.locator('[data-mode=image]')).toContainText('220');
+  await expect(dialog.locator('[data-mode=image]')).toContainText('200');
   await dialog.locator('[data-mode=image]').click();
   await expect(dialog.locator('.assistant-attach')).toBeHidden();
   await dialog.locator('textarea').fill('Synthetic water cycle diagram');
   await dialog.locator('button[type=submit]').click();
-  await expect(dialog.locator('.assistant-balance')).toContainText('830');
+  await expect(dialog.locator('.assistant-balance')).toContainText('850');
   await expect(dialog.locator('.assistant-message img')).toBeVisible();
   await expect(dialog.locator('a[download]')).toBeInViewport();
   await expect(dialog.locator('a[download]')).toHaveAttribute('download','lecturesift-image.jpg');
@@ -315,6 +315,13 @@ test('localized home, navigation and demo quiz respond to real clicks', async ({
   await expect(page.locator('[data-demo-answer="0"]')).toBeFocused();
   await page.locator('[data-demo-answer="0"]').press('Enter');
   await expect(page.locator('#demoFeedback')).toContainText('✓');
+  await page.locator('#demoCardTab').click();
+  await expect(page.locator('#demoCardAnswer')).toBeHidden();
+  await page.locator('#demoReveal').click();
+  await expect(page.locator('#demoCardAnswer')).toBeVisible();
+  await expect(page.locator('#demoReveal')).toHaveAttribute('aria-expanded', 'true');
+  await page.locator('#demoReveal').click();
+  await expect(page.locator('#demoCardAnswer')).toBeHidden();
   await noHorizontalOverflow(page);
 
   // Canonical links must resolve generated localized HTML, not source fallbacks.

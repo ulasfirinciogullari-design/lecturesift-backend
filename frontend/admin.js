@@ -71,9 +71,9 @@ function adminEscape(value) {
 
 function adminMoney(amountMinor, currency) {
   try {
-    return new Intl.NumberFormat(adminLocale(), {style:"currency", currency:currency || "TRY"}).format(Number(amountMinor || 0) / 100);
+    return new Intl.NumberFormat(adminLocale(), {style:"currency", currency:currency || "TRY"}).format(Number(amountMinor || 0) / (["JPY", "KRW"].includes(currency) ? 1 : 100));
   } catch (_) {
-    return `${(Number(amountMinor || 0) / 100).toLocaleString(adminLocale())} ${currency || "TRY"}`;
+    return `${(Number(amountMinor || 0) / (["JPY", "KRW"].includes(currency) ? 1 : 100)).toLocaleString(adminLocale())} ${currency || "TRY"}`;
   }
 }
 
@@ -125,7 +125,7 @@ async function adminPublicRequest(path) {
 }
 
 function adminStatusLabel(status) {
-  const labels = {pending:"Bekliyor", created:"Başlatıldı", paid:"Ödendi", failed:"Hatalı", token_failed:"Ödeme başlatılamadı", rejected:"Reddedildi", cancelled:"İptal", requested:"İncelenecek", approved_pending_refund:"İade bekliyor", completed:"Tamamlandı", pending_verification:"Doğrulanacak", approved:"Onaylandı", queued:"Kuyrukta", working:"Çalışıyor", done:"Tamamlandı", new:"Yeni", read:"Okundu", resolved:"Çözümlendi"};
+  const labels = {pending:"Bekliyor", created:"Başlatıldı", paid:"Tamamlandı", failed:"Hatalı", token_failed:"Ödeme başlatılamadı", rejected:"Reddedildi", cancelled:"İptal", requested:"İncelenecek", approved_pending_refund:"İade bekliyor", completed:"Tamamlandı", pending_verification:"Doğrulanacak", approved:"Onaylandı", queued:"Kuyrukta", working:"Çalışıyor", done:"Tamamlandı", new:"Yeni", read:"Okundu", resolved:"Çözümlendi"};
   return labels[status] || adminT(`order.${status}`, status || "—");
 }
 
@@ -166,12 +166,13 @@ function renderAdminOrders(orders) {
     <td data-label="Plan">${adminEscape(order.plan_code)} / ${adminEscape(order.interval)}</td><td data-label="Tutar">${adminMoney(order.amount_minor, order.currency)}</td>
     <td data-label="Durum"><span class="status-pill ${order.status === "paid" ? "paid" : ""}">${adminEscape(adminStatusLabel(order.status))}</span></td>
     <td data-label="Hata">${order.failure_message || order.failure_code ? `${adminEscape(order.failure_message || "Ödeme onaylanmadı")}${order.failure_code ? `<br><small>${adminEscape(order.failure_code)}</small>` : ""}` : "—"}</td>
-    <td data-label="İşlem">${order.provider === "bank_transfer" && order.status === "pending" ? `<span class="admin-actions"><button class="admin-action approve" data-order-decision="${adminEscape(order.reference)}" data-approve="1">${adminEscape(adminT("admin.approve", "Onayla"))}</button><button class="admin-action reject" data-order-decision="${adminEscape(order.reference)}" data-approve="0">${adminEscape(adminT("admin.reject", "Reddet"))}</button></span>${details}` : details}</td>
+    <td data-label="İşlem">${order.provider === "bank_transfer" && order.status === "pending" ? `<span class="admin-actions"><button class="admin-action approve" data-order-decision="${adminEscape(order.reference)}" data-approve="1">${adminEscape(adminT("admin.approve", "Onayla"))}</button><button class="admin-action reject" data-order-decision="${adminEscape(order.reference)}" data-approve="0">${adminEscape(adminT("admin.reject", "Reddet"))}</button></span>${details}` : details}${!["paid", "refunded", "partially_refunded"].includes(order.status) ? `<button class="admin-action reject" data-order-archive="${adminEscape(order.reference)}">Listeden kaldır</button>` : ""}</td>
   </tr>`;
   }).join("");
   admin$("adminOrders").innerHTML = `<table class="admin-table admin-record-table"><thead><tr><th>${adminT("payment.orderNumber","Sipariş no")}</th><th>${adminT("admin.customer","Müşteri")}</th><th>${adminT("admin.provider","Yöntem")}</th><th>${adminT("admin.plan","Plan")}</th><th>${adminT("payment.amount","Tutar")}</th><th>${adminT("admin.status","Durum")}</th><th>Hata / ret nedeni</th><th>${adminT("admin.action","İşlem")}</th></tr></thead><tbody>${rows || `<tr><td colspan="8">${adminT("admin.noOrders","Sipariş bulunamadı.")}</td></tr>`}</tbody></table>`;
   admin$("adminOrdersResultCount").textContent = `${Number(adminState.orderPagination.total || 0).toLocaleString(adminLocale())} kayıt`;
   renderAdminPagination("adminOrdersPagination", adminState.orderPagination, page => loadAdminOrders(page));
+  document.querySelectorAll("[data-order-archive]").forEach(button => button.addEventListener("click", () => archiveAdminOrder(button)));
   document.querySelectorAll("[data-order-decision]").forEach(button => button.addEventListener("click", () => decideOrder(button)));
 }
 
@@ -228,6 +229,57 @@ function updateAdminBulkToolbar() {
   admin$("adminSelectedCount").textContent = `${count.toLocaleString(adminLocale())} kullanıcı seçildi`;
 }
 
+async function loadAdminExtraEntitlements(userId) {
+  const target = admin$("adminExtraEntitlements");
+  if (!target || target.dataset.userId !== userId) return;
+  try {
+    const rights = await adminRequest(`/billing/admin/users/${encodeURIComponent(userId)}/entitlements`);
+    if (!target.isConnected || target.dataset.userId !== userId) return;
+    const disabled = rights.registered ? "" : "disabled";
+    target.innerHTML = `<h3>Asistan kredisi ve reklamsız kullanım</h3><div class="admin-detail-summary"><article><small>Asistan bakiyesi</small><strong>${rights.assistant_credits == null ? "Şu anda okunamıyor" : Number(rights.assistant_credits).toLocaleString(adminLocale()) + " kredi"}</strong></article><article><small>Kalıcı reklamsız kullanım</small><strong>${rights.permanent_ad_free ? "Tanımlı" : "Tanımlı değil"}</strong></article></div>
+      ${!rights.registered ? '<p>Bu haklar için kayıtlı bir kullanıcı seç.</p>' : ''}
+      <form data-assistant-credit-grant><h4>Asistan kredisi ekle</h4><div class="admin-form-grid"><label><span>Kredi sayısı</span><input name="credits" type="number" min="1" max="100000" step="1" value="1000" required ${disabled}></label><label><span>Geçerlilik (gün)</span><input name="days" type="number" min="1" max="365" step="1" value="365" required ${disabled}></label><label class="wide"><span>İşlem nedeni</span><input name="reason" minlength="4" maxlength="240" required ${disabled}></label></div><p>Asistan sohbeti ve görsel üretimi için kullanılır. Ders dakikası bakiyesini değiştirmez.</p><button class="admin-action approve" type="submit" ${disabled} ${rights.assistant_available === false ? 'disabled' : ''}>Kredi ekle</button><p class="notice" role="status" hidden></p></form>
+      <form data-ad-free-grant><h4>Kalıcı reklamsız kullanım tanımla</h4><label class="admin-check"><input name="enabled" type="checkbox" ${rights.manual_ad_free ? 'checked' : ''} ${disabled}><span>Yönetici tarafından kalıcı reklamsız kullanım</span></label><div class="admin-form-grid"><label class="wide"><span>İşlem nedeni</span><input name="reason" minlength="4" maxlength="240" required ${disabled}></label></div><p>Mevcut paketi ve dakikaları korur. Bu tanımı kaldırmak satın alınmış reklamsız hakkını kaldırmaz.</p><button class="admin-action approve" type="submit" ${disabled}>Reklamsız hakkını kaydet</button><p class="notice" role="status" hidden></p></form>`;
+    target.querySelectorAll('form').forEach(form => form.addEventListener('submit', async event => {
+      event.preventDefault();
+      const button = form.querySelector('button[type=submit]');
+      if (button.disabled) return;
+      button.disabled = true;
+      const values = new FormData(form);
+      const credit = form.hasAttribute('data-assistant-credit-grant');
+      if (credit && !form.dataset.requestId) form.dataset.requestId = crypto.randomUUID();
+      const payload = credit ? {credits:Number(values.get('credits')), days:Number(values.get('days')), reason:values.get('reason'), request_id:form.dataset.requestId}
+        : {enabled:values.get('enabled') === 'on', reason:values.get('reason')};
+      const status = form.querySelector('[role=status]');
+      try {
+        await adminRequest(`/billing/admin/users/${encodeURIComponent(userId)}/${credit ? 'assistant-credits' : 'ad-free'}`, {method:'POST', body:JSON.stringify(payload)});
+        adminNotice(credit ? 'Asistan kredisi eklendi ve işlem kaydedildi.' : 'Kalıcı reklamsız kullanım tanımı güncellendi.');
+        await loadAdminExtraEntitlements(userId);
+      } catch (error) { status.hidden = false; status.classList.add('error'); status.textContent = error.message; button.disabled = false; }
+    }));
+  } catch (error) { if (target.isConnected) target.innerHTML = `<h3>Ek haklar</h3><p class="notice error">${adminEscape(error.message)}</p>`; }
+}
+
+async function deleteAdminContact(messageId) {
+  if (!confirm('Bu destek konuşması ve tüm yanıtları kalıcı olarak silinsin mi? İşlem geri alınamaz.')) return;
+  try {
+    await adminRequest(`/billing/admin/contact-messages/${encodeURIComponent(messageId)}`, {method:'DELETE'});
+    admin$("adminContactDialog")?.close();
+    adminNotice('Destek konuşması ve yanıtları silindi.');
+    await loadAdmin({silent:true});
+  } catch (error) { adminNotice(error.message, true); }
+}
+
+async function archiveAdminOrder(button) {
+  if (!confirm('Tamamlanmamış ödeme kaydı listeden kaldırılsın mı? Başarılı ödemeler ve kazanılmış haklar korunur.')) return;
+  button.disabled = true;
+  try {
+    await adminRequest(`/billing/admin/orders/${encodeURIComponent(button.dataset.orderArchive)}`, {method:'DELETE'});
+    adminNotice('Tamamlanmamış ödeme kaydı listeden kaldırıldı.');
+    await loadAdmin({silent:true});
+  } catch (error) { adminNotice(error.message, true); button.disabled = false; }
+}
+
 function openAdminUserDialog(userId) {
   const user = adminState.users.find(item => item.id === userId);
   if (!user) return;
@@ -241,6 +293,7 @@ function openAdminUserDialog(userId) {
   admin$("adminUserDialogBody").innerHTML = `<div class="admin-detail-summary">
       <article><small>E-posta</small><strong>${adminEscape(user.email)}</strong></article><article><small>Hesap oluşturma</small><strong>${adminEscape(adminDate(user.created_at))}</strong></article><article><small>Son güncelleme</small><strong>${adminEscape(adminDate(user.updated_at))}</strong></article><article><small>Son güvenli ağ</small><strong>${adminEscape(activity?.ip_network || "Henüz kaydedilmedi")}</strong></article><article><small>Son hareket</small><strong>${adminEscape(activity?.created_at ? adminDate(activity.created_at) : "—")}</strong></article><article><small>Cihaz bilgisi</small><strong>${adminEscape(activity?.user_agent || "—")}</strong></article>
     </div><div class="admin-user-tools">
+      <section id="adminExtraEntitlements" class="admin-user-form" data-user-id="${adminEscape(user.id)}"><h3>Asistan kredisi ve reklamsız kullanım</h3><p role="status">Haklar yükleniyor…</p></section>
       <section class="admin-user-form"><h3>Yakın hesap hareketleri</h3><p>Güvenlik için tam IP tutulmaz; /24 veya /64 maskeli ağ, tek yönlü iz ve cihaz bilgisi sınırlı süre saklanır.</p><div id="adminUserActivity"><p class="empty-copy">Hareketler yükleniyor…</p></div></section>
       <form class="admin-user-form" data-user-profile-form="${adminEscape(user.id)}"><h3>Profil ve doğrulama</h3><div class="admin-form-grid"><label><span>Ad</span><input name="first_name" value="${adminEscape(user.first_name || "")}" minlength="2" maxlength="80" required></label><label><span>Soyad</span><input name="last_name" value="${adminEscape(user.last_name || "")}" minlength="2" maxlength="80" required></label><label class="wide"><span>E-posta</span><input name="email" type="email" value="${adminEscape(user.email)}" required></label><label><span>Telefon</span><input name="phone" value="${adminEscape(user.phone || "")}" maxlength="32"></label><label><span>Ülke kodu</span><input name="country_code" value="${adminEscape(user.country_code || "TR")}" minlength="2" maxlength="2" required></label><label><span>Arayüz dili</span><select name="preferred_language">${languageOptions}</select></label><label class="admin-check"><input name="email_verified" type="checkbox" ${user.email_verified ? "checked" : ""}><span>E-posta doğrulandı</span></label></div><button class="admin-action approve" type="submit">Profili kaydet</button></form>
       <form class="admin-user-form" data-user-credit-form="${adminEscape(user.id)}"><h3>Dakika bakiyesi</h3><p>Mevcut ek bakiye: ${Number(user.credit_minutes || 0).toLocaleString(adminLocale())} dk.</p><div class="admin-form-grid compact-grid"><label><span>Dakika</span><input name="minutes_delta" type="number" min="-10000" max="10000" required></label><label class="wide"><span>İşlem nedeni</span><input name="reason" minlength="4" maxlength="240" required></label></div><button class="admin-action approve" type="submit">Dakikayı uygula</button></form>
@@ -256,6 +309,7 @@ function openAdminUserDialog(userId) {
   document.querySelectorAll("[data-user-revoke]").forEach(button => button.addEventListener("click", () => revokeAdminSessions(button)));
   document.querySelectorAll("[data-user-close-form]").forEach(form => form.addEventListener("submit", event => closeAdminUser(event, form)));
   void loadAdminUserActivity(user.id);
+  void loadAdminExtraEntitlements(user.id);
 }
 
 async function loadAdminUserActivity(userId) {
@@ -281,9 +335,10 @@ function renderAdminAccountEvents(events) {
 }
 
 function renderAdminContactMessages(messages) {
-  const rows = messages.map(item => `<tr><td data-label="Gönderen"><strong>${adminEscape(item.name)}</strong><br><a href="mailto:${encodeURIComponent(item.email)}">${adminEscape(item.email)}</a><br><small title="${adminEscape(adminDate(item.created_at))}">${adminEscape(adminRelativeDate(item.updated_at || item.created_at))}</small></td><td data-label="Konu"><strong>${adminEscape(item.topic)}</strong>${item.order_reference ? `<br><small>Sipariş no: ${adminEscape(item.order_reference)}</small>` : ""}</td><td data-label="Mesaj" class="admin-message-cell">${adminEscape(item.message)}</td><td data-label="Durum"><span class="status-pill ${item.status === "resolved" ? "paid" : ""}">${adminEscape(adminStatusLabel(item.status))}</span><br><small>${Number(item.reply_count || 0)} yanıt · ${item.email_notified ? "bildirim açık" : "panel kaydı"}</small></td><td data-label="İşlem"><span class="admin-actions"><button class="admin-action approve" data-contact-open="${adminEscape(item.id)}">Konuşmayı aç</button><button class="admin-action" data-contact-status="${adminEscape(item.id)}" data-status="resolved">Çöz</button></span></td></tr>`).join("");
+  const rows = messages.map(item => `<tr><td data-label="Gönderen"><strong>${adminEscape(item.name)}</strong><br><a href="mailto:${encodeURIComponent(item.email)}">${adminEscape(item.email)}</a><br><small title="${adminEscape(adminDate(item.created_at))}">${adminEscape(adminRelativeDate(item.updated_at || item.created_at))}</small></td><td data-label="Konu"><strong>${adminEscape(item.topic)}</strong>${item.order_reference ? `<br><small>Sipariş no: ${adminEscape(item.order_reference)}</small>${item.payment ? `<br><small>${adminEscape(adminPaymentMethodLabel(item.payment))}${item.payment.payment_method_confirmed === false ? " · doğrulama bekliyor" : ""}</small>` : ""}` : ""}</td><td data-label="Mesaj" class="admin-message-cell">${adminEscape(item.message)}</td><td data-label="Durum"><span class="status-pill ${item.status === "resolved" ? "paid" : ""}">${adminEscape(adminStatusLabel(item.status))}</span><br><small>${Number(item.reply_count || 0)} yanıt · ${item.email_notified ? "bildirim açık" : "panel kaydı"}</small></td><td data-label="İşlem"><span class="admin-actions"><button class="admin-action approve" data-contact-open="${adminEscape(item.id)}">Konuşmayı aç</button><button class="admin-action" data-contact-status="${adminEscape(item.id)}" data-status="resolved">Çöz</button><button class="admin-action reject" data-contact-delete="${adminEscape(item.id)}">Sil</button></span></td></tr>`).join("");
   admin$("adminContactMessages").innerHTML = `<table class="admin-table admin-record-table"><thead><tr><th>Gönderen</th><th>Konu</th><th>Mesaj</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>${rows || '<tr><td colspan="5">Henüz iletişim mesajı yok.</td></tr>'}</tbody></table>`;
   document.querySelectorAll("[data-contact-status]").forEach(button => button.addEventListener("click", () => updateContactMessage(button)));
+  document.querySelectorAll("[data-contact-delete]").forEach(button => button.addEventListener("click", () => deleteAdminContact(button.dataset.contactDelete)));
   document.querySelectorAll("[data-contact-open]").forEach(button => button.addEventListener("click", () => openContactConversation(button.dataset.contactOpen)));
 }
 
@@ -295,12 +350,13 @@ function renderContactConversation(conversation) {
     {direction:"user", sender:message.name, body:message.message, created_at:message.created_at, delivery_status:"received"},
     ...replies,
   ].map(item => `<article class="support-bubble ${item.direction === "admin" ? "outgoing" : "incoming"}"><header><strong>${adminEscape(item.direction === "admin" ? "LectureSift Destek" : message.name || "Kullanıcı")}</strong><time>${adminEscape(adminDate(item.created_at))}</time></header><p>${adminEscape(item.body).replace(/\n/g, "<br>")}</p>${item.direction === "admin" ? `<small class="delivery-${adminEscape(item.delivery_status)}">${item.delivery_status === "sent" ? "E-posta gönderildi" : item.delivery_status === "failed" ? "Gönderilemedi · yeniden yanıtla" : "Gönderiliyor"}</small>` : ""}</article>`).join("");
-  admin$("adminContactDialogBody").innerHTML = `<section class="admin-contact-summary"><a href="mailto:${encodeURIComponent(message.email || "")}">${adminEscape(message.email || "")}</a>${message.order_reference ? `<span>Sipariş: ${adminEscape(message.order_reference)}</span>` : ""}<span class="status-pill ${message.status === "resolved" ? "paid" : ""}">${adminEscape(adminStatusLabel(message.status))}</span></section><section class="support-thread" aria-live="polite">${bubbles}</section><form class="admin-contact-reply" data-contact-reply-form="${adminEscape(message.id)}"><label class="field"><span>Yanıtın</span><textarea name="message" minlength="2" maxlength="4000" placeholder="Kullanıcıya gönderilecek yanıtı yaz…" required></textarea></label><div class="admin-actions"><button class="admin-action approve" type="submit">E-postayla gönder</button><button class="admin-action" type="button" data-contact-dialog-status="${adminEscape(message.id)}" data-status="${message.status === "resolved" ? "read" : "resolved"}">${message.status === "resolved" ? "Konuşmayı yeniden aç" : "Çözümlendi olarak işaretle"}</button></div><p class="empty-copy">Yanıt gönderilince kullanıcıya güvenli konuşma bağlantısı da iletilir. Gönderim sonucu burada kalıcı olarak görünür.</p></form>`;
+  admin$("adminContactDialogBody").innerHTML = `<section class="admin-contact-summary"><a href="mailto:${encodeURIComponent(message.email || "")}">${adminEscape(message.email || "")}</a>${message.order_reference ? `<span>Sipariş: ${adminEscape(message.order_reference)}</span>${message.payment ? `<span>${adminEscape(adminPaymentMethodLabel(message.payment))}${message.payment.payment_method_confirmed === false ? " · doğrulama bekliyor" : ""}</span>` : ""}` : ""}<span class="status-pill ${message.status === "resolved" ? "paid" : ""}">${adminEscape(adminStatusLabel(message.status))}</span></section><section class="support-thread" aria-live="polite">${bubbles}</section><form class="admin-contact-reply" data-contact-reply-form="${adminEscape(message.id)}"><label class="field"><span>Yanıtın</span><textarea name="message" minlength="2" maxlength="4000" placeholder="Kullanıcıya gönderilecek yanıtı yaz…" required></textarea></label><div class="admin-actions"><button class="admin-action approve" type="submit">E-postayla gönder</button><button class="admin-action" type="button" data-contact-dialog-status="${adminEscape(message.id)}" data-status="${message.status === "resolved" ? "read" : "resolved"}">${message.status === "resolved" ? "Konuşmayı yeniden aç" : "Çözümlendi olarak işaretle"}</button></div><button class="admin-action reject" type="button" data-contact-delete="${adminEscape(message.id)}">Konuşmayı sil</button><p class="empty-copy">Yanıt gönderilince kullanıcıya güvenli konuşma bağlantısı da iletilir. Gönderim sonucu burada kalıcı olarak görünür.</p></form>`;
   admin$("adminContactDialogBody").querySelector("[data-contact-reply-form]")?.addEventListener("submit", submitContactReply);
   admin$("adminContactDialogBody").querySelector("[data-contact-dialog-status]")?.addEventListener("click", async event => {
     await updateContactMessage(event.currentTarget, {refresh:false});
     await openContactConversation(message.id);
   });
+  admin$("adminContactDialogBody").querySelector("[data-contact-delete]")?.addEventListener("click", () => deleteAdminContact(message.id));
   const thread = admin$("adminContactDialogBody").querySelector(".support-thread");
   if (thread) thread.scrollTop = thread.scrollHeight;
 }
@@ -553,16 +609,16 @@ function renderPlanDistribution() {
 function renderAdminGrowth() {
   const ads = adminState.ads || {};
   const analytics = adminState.analytics || {};
+  const conversions = Boolean(analytics.google_ads?.enabled && analytics.google_ads?.signup_label && analytics.google_ads?.purchase_label);
   const cards = [
-    {title:"LectureSift kampanya bannerı", ready:Boolean(ads.house_campaign?.enabled), detail:ads.house_campaign?.enabled ? "Birinci taraf kampanya bannerı yayına hazır." : "İç kampanya kapalı.", key:"LECTURESIFT_SITE_BANNER_ENABLED"},
-    {title:"Google AdSense Auto ads", ready:Boolean(ads.adsense_auto_ads?.enabled), detail:ads.adsense_auto_ads?.enabled ? "Yayıncı kimliği bağlı; reklam izni veren ücretsiz ziyaretçilerde Auto ads kodu yüklenir." : "Geçerli AdSense yayıncı kimliği bekleniyor.", key:"LECTURESIFT_ADSENSE_PUBLISHER_ID"},
-    {title:"Google banner reklamı", ready:Boolean(ads.enabled), detail:ads.enabled ? "Google GPT yayın birimi etkin." : "Geçerli Google Ad Manager banner yayın birimi bekleniyor.", key:"LECTURESIFT_DISPLAY_ADS_ENABLED + LECTURESIFT_DISPLAY_AD_UNIT_PATH"},
-    {title:"Reklam karşılığı dakika", ready:Boolean(adminState.runtime?.rewarded_ads_configured), detail:adminState.runtime?.rewarded_ads_configured ? "Ödüllü reklam ve günlük dakika sınırı etkin." : "Google Ad Manager ödüllü reklam yayın birimi bekleniyor.", key:"LECTURESIFT_REWARDED_ADS_ENABLED + LECTURESIFT_REWARDED_AD_UNIT_PATH"},
-    {title:"GA4 ölçümü", ready:Boolean(analytics.enabled), detail:analytics.enabled ? `Ölçüm etkin: ${analytics.measurement_id}` : "Geçerli GA4 ölçüm kimliği bekleniyor.", key:"LECTURESIFT_ANALYTICS_ENABLED + LECTURESIFT_GA_MEASUREMENT_ID"},
-    {title:"Google Ads dönüşümleri", ready:Boolean(analytics.google_ads?.enabled), detail:analytics.google_ads?.enabled ? "Kayıt ve satın alma dönüşümleri etkin." : "Google Ads kimliği ve iki dönüşüm etiketi bekleniyor.", key:"LECTURESIFT_GOOGLE_ADS_ID + SIGNUP_LABEL + PURCHASE_LABEL"},
-    {title:"Ücretli planlarda reklamsız", ready:true, detail:"Ücretli planların ad_free hakkı uygulanıyor; reklam yalnızca uygun ücretsiz hesaplarda gösterilir.", key:"Plan hakları"},
+    {title:"AdSense · siteden reklam geliri", ready:Boolean(ads.adsense_auto_ads?.enabled), detail:ads.adsense_auto_ads?.enabled ? "Site tarafındaki reklam gösterimi açık. Gerçek gösterim ve kazanç AdSense raporundan doğrulanır." : "Site tarafındaki gösterim kapalı. Google site onayı ve gerekli izin mesajı doğrulandıktan sonra açılır.", link:"https://adsense.google.com/", label:"AdSense panelini aç"},
+    {title:"Google Ads · ziyaretçi kazanımı", ready:conversions, detail:conversions ? "Kayıt ve satın alma dönüşüm etiketleri yapılandırılmış. Kampanya harcaması ve promosyon bakiyesi Google Ads panelinden doğrulanır." : "Kayıt ve satın alma dönüşüm bağlantısı tamamlanmamış. Reklam bütçesi ve hediye bakiye henüz doğrulanmadı.", link:"https://ads.google.com/", label:"Google Ads panelini aç"},
+    {title:"Paketlere göre reklam", ready:true, detail:"Lite reklamlı; Plus’ta yalnız ana sayfada reklam gösterilebilir. Pro, Max, Business ve kalıcı reklamsız hakkı olanlar reklamsızdır. Önceki satın alımlarla kazanılmış reklamsız haklar korunur."},
+    {title:"Çalışma alanı", ready:true, detail:"Ders dosyalarında, sonuçlarda, hesap ve asistan sayfalarında reklam gösterilmez."},
+    {title:"LectureSift duyuruları", ready:Boolean(ads.house_campaign?.enabled), detail:"Sitenin kendi paket tanıtımıdır. AdSense reklam gösterimi veya reklam geliri anlamına gelmez."},
+    {title:"Ziyaretçi ölçümü", ready:Boolean(analytics.enabled), detail:analytics.enabled ? "İzin veren ziyaretçiler için GA4 ölçümü açık." : "GA4 ölçümü kapalı."},
   ];
-  admin$("adminGrowthStatus").innerHTML = cards.map(item => `<article class="${item.ready ? "ready" : "missing"}"><header><strong>${adminEscape(item.title)}</strong><span>${item.ready ? "Hazır" : "Eksik ayar"}</span></header><p>${adminEscape(item.detail)}</p><code>${adminEscape(item.key)}</code></article>`).join("");
+  admin$("adminGrowthStatus").innerHTML = cards.map(item => `<article class="${item.ready ? "ready" : "missing"}"><header><strong>${adminEscape(item.title)}</strong><span>${item.ready ? "Yapılandırılmış" : "Bağlantı bekliyor"}</span></header><p>${adminEscape(item.detail)}</p>${item.link ? `<a href="${item.link}" target="_blank" rel="noopener noreferrer">${adminEscape(item.label)} ↗</a>` : ''}</article>`).join("");
 }
 
 function userQuery(page = 1) {

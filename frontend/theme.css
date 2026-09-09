@@ -1808,3 +1808,26 @@ html:not([data-theme="light"]) .hero-primary { background: var(--ui-action) !imp
 .footer-payment-band { width: min(390px,100%); max-width: 390px; }
 .iyzico-checkout-brand { background: #11233b !important; }
 .iyzico-checkout-brand img { filter: none !important; }
+
+.plan-ad-scope{font-size:13px;line-height:1.8;color:var(--ui-muted);max-width:900px;margin:24px auto;padding-inline:16px}
+#adminExtraEntitlements{margin-block:24px;padding-block:20px;border-block:1px solid var(--ui-line)}
+#adminExtraEntitlements .admin-user-form{margin-block:16px}
+
+.home-page [data-study-demo] .visual-window{border:1px solid var(--ui-line);overflow:hidden;transform:rotate(-.6deg)}
+.home-page [data-study-demo] .visual-bar{height:auto;min-height:52px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 20px;flex-wrap:wrap}
+.home-page [data-study-demo] .demo-subject{font-size:10px;padding:4px 8px;border-radius:5px;background:var(--ui-green-wash);color:var(--ui-green)}
+.home-page [data-study-demo] .visual-menu{padding:10px 16px;gap:4px;flex-wrap:wrap}
+.home-page [data-study-demo] .visual-content{min-height:390px}
+.home-page [data-study-demo] .visual-summary{padding:26px}
+.home-page [data-study-demo] .demo-concept{display:flex;align-items:center;gap:18px}
+.home-page [data-study-demo] .demo-concept svg{width:92px;flex-shrink:0;fill:var(--ui-terracotta-wash);stroke:var(--ui-terracotta);stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
+.home-page [data-study-demo] .demo-concept svg path+path{fill:none;stroke-width:3}
+.home-page [data-study-demo] .demo-concept h3{font-size:21px;margin-block:7px 0;max-width:24ch}
+.home-page [data-study-demo] .demo-insight{font-size:14px;line-height:1.85;margin:23px 0;color:var(--ui-muted)}
+.home-page [data-study-demo] .demo-takeaway{padding:15px 17px;border-inline-start:3px solid var(--ui-green);border-radius:0 8px 8px 0;background:var(--ui-green-wash)}
+.home-page [data-study-demo] .demo-takeaway strong{font-size:11px;color:var(--ui-green)}
+.home-page [data-study-demo] .demo-takeaway p{margin:7px 0 0;font-size:12px;line-height:1.7}
+.home-page [data-study-demo] .demo-card h3{font-size:21px;line-height:1.55;margin-bottom:24px}
+.home-page [data-study-demo] .demo-reveal{min-height:42px;border:1px solid var(--ui-line-strong);border-radius:8px;padding:9px 16px;background:var(--ui-surface-raised);color:var(--ui-ink);font:600 12px var(--ui-font);cursor:pointer}
+.home-page [data-study-demo] .demo-card-answer{font-size:18px;color:var(--ui-green);padding:16px 0}
+@media(max-width:620px){.home-page [data-study-demo] .visual-window{transform:none}.home-page [data-study-demo] .visual-summary{padding:20px}.home-page [data-study-demo] .visual-menu [role=tab]{padding-inline:12px}.home-page [data-study-demo] .demo-concept{gap:12px}.home-page [data-study-demo] .demo-concept svg{width:65px}.home-page [data-study-demo] .demo-concept h3{font-size:19px}}

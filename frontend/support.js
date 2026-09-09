@@ -52,7 +52,10 @@ support$("supportReplyForm")?.addEventListener("submit", async event => {
   } finally { button.disabled = false; }
 });
 
-loadSupportConversation().catch(error => {
+if (!conversationId && !conversationToken) {
+  const i18n = window.LectureSiftI18n;
+  location.replace(i18n?.localizedPath ? i18n.localizedPath(i18n.language || 'tr', '/contact.html') : '/contact.html');
+} else loadSupportConversation().catch(error => {
   support$("supportStatus").textContent = error.message;
   support$("supportStatus").classList.add("error");
 });

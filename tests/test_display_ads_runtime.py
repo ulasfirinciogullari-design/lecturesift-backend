@@ -103,7 +103,7 @@ function adsConfig() {
   return {...common, enabled: true, provider: "google_gpt", banner_unit_path: "/123/banner"};
 }
 
-const token = ["entitlement_failure", "entitlement_unknown", "consent_revocation"].includes(scenario)
+const token = ["entitlement_failure", "entitlement_unknown", "consent_revocation", "plus", "legacy_paid"].includes(scenario)
   ? "signed-in-token"
   : "";
 
@@ -119,7 +119,7 @@ async function fetch(url) {
     }
     return {
       ok: true,
-      json: async () => ({account: {plan: {entitlements: {ad_free: false}}}}),
+      json: async () => ({account: {plan: {entitlements: {ad_free: scenario === "legacy_paid", ad_mode: scenario === "plus" ? "limited" : "standard"}}}}),
     };
   }
   throw new Error(`unexpected fetch: ${url}`);
@@ -240,3 +240,19 @@ def test_private_and_non_whitelisted_routes_never_request_ads(pathname: str) -> 
     assert result["fetchUrls"] == []
     assert result["scripts"] == []
     assert result["displayAds"] == 0
+
+
+@pytest.mark.parametrize("pathname", ["/", "/en/", "/ar/index.html"])
+def test_plus_only_allows_ads_on_homepage(pathname):
+    assert run_scenario("plus", pathname)["scripts"] == ["https://securepubads.g.doubleclick.net/tag/js/gpt.js"]
+
+
+@pytest.mark.parametrize("pathname", ["/plans", "/en/features/", "/about.html", "/workspace.html", "/assistant.html"])
+def test_plus_suppresses_ads_away_from_homepage(pathname):
+    result = run_scenario("plus", pathname)
+    assert result["scripts"] == []
+    assert result["displayAds"] == 0
+
+
+def test_legacy_paid_ad_free_right_is_preserved_on_homepage():
+    assert run_scenario("legacy_paid")["scripts"] == []

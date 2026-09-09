@@ -18,6 +18,7 @@
         });
         if (updateUrl) history.replaceState(null, '', `${location.pathname}${location.search}#${mode}`);
         if (mode === 'assistant') document.dispatchEvent(new Event('lecturesift:assistant-open'));
+        if (mode === 'library') document.dispatchEvent(new Event('lecturesift:library-open'));
       };
       workspaceTabs.forEach((tab, index) => {
         tab.addEventListener('click', () => selectMode(tab.dataset.workspaceTab, {updateUrl:true}));
@@ -30,7 +31,7 @@
           selectMode(workspaceTabs[next].dataset.workspaceTab, {focus:true, updateUrl:true});
         });
       });
-      const fromHash = () => selectMode(location.hash === '#assistant' ? 'assistant' : 'study');
+      const fromHash = () => selectMode(location.hash === '#assistant' ? 'assistant' : location.hash === '#library' ? 'library' : 'study');
       window.addEventListener('hashchange', fromHash);
       fromHash();
     }
