@@ -4,6 +4,13 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+# Feature branches are tested through their PR, not again for the same push.
+# Keep default-branch coverage after merge and discard superseded revisions.
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -12,10 +19,23 @@ jobs:
   pytest:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    services:
+      assistant-postgres:
+        image: postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+        env:
+          POSTGRES_DB: assistant_ci
+          POSTGRES_USER: assistant_ci
+          POSTGRES_PASSWORD: synthetic-ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U assistant_ci -d assistant_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       PYTHONPATH: .
       OPENAI_API_KEY: ""
       DATABASE_URL: sqlite:////tmp/lecturesift-ci.db
+      TEST_ASSISTANT_POSTGRES_URL: postgresql+psycopg://assistant_ci:synthetic-ci-only@127.0.0.1:5432/assistant_ci
       BILLING_SESSION_SECRET: ci-session-secret-with-sufficient-length
       BILLING_ADMIN_TOKEN: ci-admin-secret
       EMAIL_PROVIDER: none
@@ -29,6 +49,8 @@ jobs:
       S3_SECRET_ACCESS_KEY: ""
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Check deployment shell syntax
         run: bash deploy/check_shell_syntax.sh
       - name: Validate locked image inputs before building
@@ -50,6 +72,26 @@ jobs:
               grep -Fqx "URIs: https://snapshot.debian.org/archive/debian-security/20260828T000000Z" /etc/apt/sources.list.d/debian.sources
               ! grep -q "^URIs: http://" /etc/apt/sources.list.d/debian.sources
             '
+      - name: Build and verify the shared media image
+        run: docker build --pull --platform linux/amd64 --tag lecturesift-media:ci .
+      - name: Probe external YouTube availability (reported separately)
+        # Provider/IP availability is independent of deterministic regression
+        # tests. A failed probe stays visible but does not skip those tests.
+        continue-on-error: true
+        run: |
+          probe_name="lecturesift-youtube-probe-$GITHUB_RUN_ID"
+          pot_name="lecturesift-youtube-pot-$GITHUB_RUN_ID"
+          trap 'docker rm -f "$probe_name" "$pot_name" >/dev/null 2>&1 || true' EXIT
+          docker run -d --init --name "$pot_name" --memory 512m --cpus 1 \
+            --pids-limit 128 --read-only --tmpfs /tmp:rw,nosuid,size=64m \
+            --cap-drop ALL --security-opt no-new-privileges \
+            brainicism/bgutil-ytdlp-pot-provider:2.0.0@sha256:79b7d390e024f3308a0b8fe2041be7e4e4d6a8c30ad6052a89bc51d210c385f1
+          timeout 120s docker run --rm --name "$probe_name" \
+            --network "container:$pot_name" --env YOUTUBE_POT_BASE_URL=http://127.0.0.1:4416 \
+            --memory 512m --cpus 1 --pids-limit 128 --read-only \
+            --tmpfs /tmp:rw,nosuid,size=64m \
+            --tmpfs /var/lib/lecturesift:rw,nosuid,size=32m \
+            -i lecturesift-media:ci python - < deploy/youtube_probe.py
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -67,6 +109,14 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core tesseract-ocr tesseract-ocr-eng tesseract-ocr-tur
       - name: Install Python dependencies
         run: pip install --require-hashes -r requirements-dev.txt
+      - name: Probe guest-browser YouTube attestation separately
+        continue-on-error: true
+        timeout-minutes: 4
+        run: |
+          probe_venv="$RUNNER_TEMP/lecturesift-wpc-probe"
+          python -m venv --system-site-packages "$probe_venv"
+          "$probe_venv/bin/pip" install --require-hashes --no-deps --only-binary=:all: -r deploy/youtube_browser_probe_requirements.txt
+          timeout --kill-after=10s 150s xvfb-run -a "$probe_venv/bin/python" -m deploy.youtube_browser_probe
       - name: Validate Render blueprint YAML
         run: python -c "import yaml; yaml.safe_load(open('render.yaml', encoding='utf-8'))"
       - name: Run tests

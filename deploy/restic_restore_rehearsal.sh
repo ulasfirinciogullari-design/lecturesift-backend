@@ -305,6 +305,8 @@ python3 "$CONFIGURATION_SNAPSHOT_TOOL" verify \
   --snapshot-root "$CONFIGURATION_SNAPSHOT_DIR" \
   --deploy-root "$ROOT_DIR" --quiet || \
   fail "the restored configuration package failed its manifest verification"
+configuration_snapshot_format="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["format"])' \
+  "$CONFIGURATION_SNAPSHOT_DIR/CONFIGURATION_MANIFEST.json")"
 
 # Only the three known, relative payload names are allowed in the checksum file;
 # this prevents a crafted manifest from reading paths outside the rehearsal.
@@ -344,13 +346,23 @@ metadata_database_size="$(sed -n 's/^database_size_bytes=//p' "$BACKUP_DIR/BACKU
 metadata_redis_version="$(sed -n 's/^redis_version=//p' "$BACKUP_DIR/BACKUP_METADATA")"
 metadata_compatibility="$(sed -n 's/^redis_restore_compatibility=//p' "$BACKUP_DIR/BACKUP_METADATA")"
 case "$metadata_manifest_version" in
-  1) RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v1.sql" ;;
+  1)
+    RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v1.sql"
+    expected_schema_compatibility="lecturesift-schema-v1"
+    ;;
+  2)
+    RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v2.sql"
+    expected_schema_compatibility="lecturesift-schema-v2"
+    ;;
+  3)
+    RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v3.sql"
+    expected_schema_compatibility="lecturesift-schema-v3"
+    ;;
   *) fail "the backup references an unsupported recovery manifest version" ;;
 esac
 [[ "$metadata_format" == "lecturesift-backup-v2" && \
    "$metadata_application" == "lecturesift-production" && \
-   "$metadata_schema_compatibility" == "lecturesift-schema-v1" && \
-   "$metadata_manifest_version" == "1" && \
+   "$metadata_schema_compatibility" == "$expected_schema_compatibility" && \
    "$metadata_manifest_sha256" =~ ^[[:xdigit:]]{64}$ && \
    "$metadata_database_identity_sha256" =~ ^[[:xdigit:]]{64}$ && \
    "$metadata_schema_sha256" =~ ^[[:xdigit:]]{64}$ && \
@@ -431,6 +443,12 @@ docker run --rm --pull=never --network none --read-only \
     cat /tmp/rehearsal-manifest.out
   ' >"$RUN_DIR/rehearsal-manifest.out"
 
+if [[ "$metadata_manifest_version" == "3" ]]; then
+  python3 "$ROOT_DIR/deploy/verify_schema_transition_v4.py" current \
+    --manifest "$RUN_DIR/rehearsal-manifest.out" \
+    --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" \
+    --preserved-contract "$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt" >/dev/null
+fi
 restored_database_line="$(tr -d '\r' <"$RUN_DIR/rehearsal-manifest.out" | grep '^DATABASE|')"
 restored_schema_line="$(tr -d '\r' <"$RUN_DIR/rehearsal-manifest.out" | grep '^SCHEMA|')"
 restored_table_count="$(tr -d '\r' <"$RUN_DIR/rehearsal-manifest.out" | grep -c '^TABLE|')"
@@ -502,7 +520,7 @@ MARKER_TMP="$(mktemp -- "$EVIDENCE_ROOT/.restic-restore-$STAMP-XXXXXXXX")"
   printf 'redis_restore=verified\n'
   printf 'redis_aof_startup=verified\n'
   printf 'configuration_snapshot=verified\n'
-  printf 'configuration_snapshot_format=lecturesift-configuration-snapshot-v1\n'
+  printf 'configuration_snapshot_format=%s\n' "$configuration_snapshot_format"
   printf 'postgres_validator=postgres-18-bookworm-isolated-restore-manifest\n'
   printf 'redis_validator=redis-7.4-alpine-redis-check-rdb\n'
   printf 'restored_payload_removed=true\n'

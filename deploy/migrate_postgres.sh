@@ -26,10 +26,11 @@ ALLOWED_DB_ENV_FILE="/etc/lecturesift/postgres.env"
 DB_ENV_FILE="${LECTURESIFT_DB_ENV_FILE:-$ALLOWED_DB_ENV_FILE}"
 ALLOWED_RUNTIME_ENV_FILE="/etc/lecturesift/runtime.env"
 RUNTIME_ENV_FILE="${LECTURESIFT_ENV_FILE:-$ALLOWED_RUNTIME_ENV_FILE}"
-MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest.sql"
+MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest_v3.sql"
 SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt"
+PURCHASE_TERMS_CONTRACT="$ROOT_DIR/deploy/schema_contract_billing_purchase_terms_v1.txt"
 PRESERVED_SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt"
-SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition.py"
+SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition_v3.py"
 POSTGRES_SECURITY_MANIFEST="$ROOT_DIR/deploy/postgres_security_manifest.sql"
 POSTGRES_SECURITY_VALIDATOR="$ROOT_DIR/deploy/validate_postgres_security_manifest.py"
 POSTGRES_ROLE_LOGIN_PROBE="$ROOT_DIR/deploy/postgres_role_login_probe.sh"
@@ -73,7 +74,7 @@ check_private_file() {
 check_private_file "$SOURCE_ENV_FILE" "Render source environment"
 check_private_file "$DB_ENV_FILE" "Target database environment"
 check_private_file "$RUNTIME_ENV_FILE" "Runtime environment"
-for path in "$MANIFEST" "$SCHEMA_CONTRACT" "$PRESERVED_SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" \
+for path in "$MANIFEST" "$SCHEMA_CONTRACT" "$PURCHASE_TERMS_CONTRACT" "$PRESERVED_SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" \
   "$POSTGRES_SECURITY_MANIFEST" "$POSTGRES_SECURITY_VALIDATOR" \
   "$POSTGRES_ROLE_LOGIN_PROBE" \
   "$PROVISION_ROLE" "$CUTOVER_EVIDENCE_TOOL" "$RENDER_WORKER_STOP_TOOL" \
@@ -214,6 +215,11 @@ canonical_manifest() {
       --manifest "$source" --contract "$SCHEMA_CONTRACT" \
       --preserved-contract "$PRESERVED_SCHEMA_CONTRACT" >/dev/null ||
       fail "a strict database manifest violates the exact current schema contract"
+  else
+    python3 "$SCHEMA_VERIFIER" legacy \
+      --manifest "$source" --contract "$SCHEMA_CONTRACT" \
+      --preserved-contract "$PRESERVED_SCHEMA_CONTRACT" >/dev/null ||
+      fail "a legacy database manifest violates the reviewed schema contract"
   fi
   tr -d '\r' <"$source" |
     grep -E '^(DATABASE|SCHEMA|SCHEMA_OBJECT|TABLE|ANOMALY|STATUS|SCHEMA_COMPAT|UNVALIDATED_FK|MANIFEST_COMPLETE)\|' |
@@ -229,9 +235,10 @@ canonical_manifest() {
   compat_count="$(grep -c '^SCHEMA_COMPAT|' "$source" || true)"
   if [[ "$mode" == "strict" ]]; then
     [[ "$compat_count" == "0" ]] || fail "a strict database manifest used schema compatibility"
-  elif [[ "$compat_count" -gt 1 ]] ||
+  elif [[ "$compat_count" -gt 2 ]] ||
        grep '^SCHEMA_COMPAT|' "$source" |
-         grep -Fvxq 'SCHEMA_COMPAT|legacy_missing_table|billing_payment_provider_sessions|integrity_checks_deferred_to_current_schema_migration'; then
+         grep -Fvxq -e 'SCHEMA_COMPAT|legacy_missing_table|billing_payment_provider_sessions|integrity_checks_deferred_to_current_schema_migration' \
+           -e 'SCHEMA_COMPAT|legacy_missing_table|billing_purchase_terms|integrity_checks_deferred_to_current_schema_migration'; then
     fail "the source manifest contains an unapproved legacy schema difference"
   fi
 }
@@ -246,7 +253,8 @@ run_render_manifest() {
       set +x
       psql --no-psqlrc -v ON_ERROR_STOP=1 \
         -v LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on \
-        -f /probe/rehearsal_manifest.sql >"/backup/$OUTPUT_NAME"
+        -v LECTURESIFT_ALLOW_LEGACY_PURCHASE_TERMS=on \
+        -f /probe/rehearsal_manifest_v3.sql >"/backup/$OUTPUT_NAME"
     '
 }
 
@@ -299,7 +307,7 @@ target_manifest() {
   case "$mode" in
     strict) ;;
     legacy-provider-sessions)
-      compatibility_args=(-v LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on)
+      compatibility_args=(-v LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on -v LECTURESIFT_ALLOW_LEGACY_PURCHASE_TERMS=on)
       ;;
     *) fail "an invalid target manifest compatibility mode was requested" ;;
   esac
@@ -414,12 +422,15 @@ try:
         privileges = connection.execute(text("""
             SELECT
               has_table_privilege(current_user, 'lecturesift_worker.billing_users', 'SELECT'),
+              has_table_privilege(current_user, 'lecturesift_worker.billing_purchase_terms', 'SELECT'),
+              NOT has_table_privilege(current_user, 'lecturesift_worker.billing_purchase_terms', 'INSERT,UPDATE,DELETE'),
               has_column_privilege(current_user, 'lecturesift_worker.billing_users', 'credit_minutes', 'UPDATE'),
               has_table_privilege(current_user, 'lecturesift_worker.billing_usage_events', 'SELECT'),
               has_table_privilege(current_user, 'lecturesift_worker.billing_usage_events', 'INSERT'),
               has_table_privilege(current_user, 'lecturesift_worker.lecturesift_runtime_metrics', 'SELECT'),
               has_table_privilege(current_user, 'lecturesift_worker.lecturesift_runtime_metrics', 'INSERT'),
               NOT has_table_privilege(current_user, 'public.billing_users', 'SELECT'),
+              NOT has_table_privilege(current_user, 'public.billing_purchase_terms', 'SELECT,INSERT,UPDATE,DELETE'),
               NOT has_table_privilege(current_user, 'public.billing_auth_tokens', 'SELECT'),
               NOT has_table_privilege(current_user, 'public.lecturesift_admin_account_events', 'SELECT'),
               NOT has_table_privilege(current_user, 'public.lecturesift_contact_messages', 'SELECT')
@@ -431,6 +442,7 @@ try:
         """)).scalar_one() == 0
         for protected in (
             "public.billing_users",
+            "public.billing_purchase_terms",
             "public.billing_auth_tokens",
             "public.lecturesift_admin_account_events",
             "public.lecturesift_contact_messages",
@@ -602,10 +614,11 @@ source_pg_exec docker run --rm --user 0:0 \
     {
       printf "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;\n"
       printf "SET TRANSACTION SNAPSHOT '\''%s'\'';\n" "$SNAPSHOT_ID"
-      cat /probe/rehearsal_manifest.sql
+      cat /probe/rehearsal_manifest_v3.sql
       printf "COMMIT;\n"
     } | psql --no-psqlrc -v ON_ERROR_STOP=1 \
       -v LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on \
+      -v LECTURESIFT_ALLOW_LEGACY_PURCHASE_TERMS=on \
       > /backup/source-snapshot.txt
     pg_dump --format=custom --no-owner --no-acl \
       --snapshot "$SNAPSHOT_ID" --file=/backup/render-final.dump
@@ -654,7 +667,12 @@ cmp --silent "$RUN_DIR/source-snapshot.safe" "$RUN_DIR/target-restored-raw.safe"
   fail "the restored OVH manifest does not exactly match the stable Render snapshot"
 
 legacy_compat_marker='SCHEMA_COMPAT|legacy_missing_table|billing_payment_provider_sessions|integrity_checks_deferred_to_current_schema_migration'
+legacy_terms_compat_marker='SCHEMA_COMPAT|legacy_missing_table|billing_purchase_terms|integrity_checks_deferred_to_current_schema_migration'
+legacy_purchase_terms_missing="false"
 legacy_provider_sessions_missing="false"
+if grep -Fxq "$legacy_terms_compat_marker" "$RUN_DIR/target-restored-raw.txt"; then
+  legacy_purchase_terms_missing="true"
+fi
 if grep -Fxq "$legacy_compat_marker" "$RUN_DIR/target-restored-raw.txt"; then
   legacy_provider_sessions_missing="true"
 fi
@@ -677,6 +695,16 @@ if [[ "$legacy_provider_sessions_missing" == "true" ]]; then
     >"$RUN_DIR/target-after-migration.comparable"
 else
   cp -- "$RUN_DIR/target-after-migration.data" \
+    "$RUN_DIR/target-after-migration.comparable"
+fi
+if [[ "$legacy_purchase_terms_missing" == "true" ]]; then
+  grep -Fxq 'TABLE|billing_purchase_terms|0|0|0' \
+    "$RUN_DIR/target-migrated.txt" ||
+    fail "the migrated purchase-terms table is missing or unexpectedly non-empty"
+  grep -Fv 'TABLE|billing_purchase_terms|' \
+    "$RUN_DIR/target-after-migration.comparable" \
+    >"$RUN_DIR/target-after-migration.terms-comparable"
+  mv -- "$RUN_DIR/target-after-migration.terms-comparable" \
     "$RUN_DIR/target-after-migration.comparable"
 fi
 cmp --silent "$RUN_DIR/target-before-migration.data" \
@@ -725,6 +753,7 @@ assert_render_worker_and_queue_stopped ||
   printf 'source_manifest_sha256=%s\n' "$(sha256sum "$RUN_DIR/source-snapshot.safe" | awk '{print $1}')"
   printf 'migrated_target_manifest_sha256=%s\n' "$(sha256sum "$RUN_DIR/target-migrated.safe" | awk '{print $1}')"
   printf 'source_legacy_provider_sessions_missing=%s\n' "$legacy_provider_sessions_missing"
+  printf 'source_legacy_purchase_terms_missing=%s\n' "$legacy_purchase_terms_missing"
   printf 'source_dump_sha256=%s\n' "$(cut -d' ' -f1 "$RUN_DIR/render-final.dump.sha256")"
   printf 'target_rollback_dump_sha256=%s\n' "$(cut -d' ' -f1 "$RUN_DIR/target-before.dump.sha256")"
   printf 'pending_payments_before=0\n'

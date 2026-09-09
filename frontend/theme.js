@@ -80,6 +80,21 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", setupToggle, {once: true});
   else setupToggle();
 
+  const loadAssistant = () => {
+    const loadWidget = () => {
+      const assistant = document.createElement("script");
+      assistant.src = "/assistant.js?v=4";
+      document.body.append(assistant);
+    };
+    if (window.LectureSiftAssistantCopy) {loadWidget();return;}
+    const copy = document.createElement("script");
+    copy.src = "/assistant-i18n.js?v=3";
+    copy.onload = loadWidget;
+    document.body.append(copy);
+  };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", loadAssistant, {once:true});
+  else loadAssistant();
+
   systemTheme.addEventListener?.("change", event => {
     let hasSavedTheme = false;
     try { hasSavedTheme = Boolean(localStorage.getItem(STORAGE_KEY)); } catch {}

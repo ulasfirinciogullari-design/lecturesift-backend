@@ -12,7 +12,7 @@ from typing import Literal
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, StrictBool
 
 from . import config
 from .billing import public_catalog, public_providers
@@ -73,7 +73,7 @@ from .errors import LectureSiftError, normalize_error
 from .daily_social import render_daily_image, render_daily_reel, render_daily_reel_cover
 from .instagram import InstagramAPIError, InstagramClient, InstagramConfigurationError
 from .jobs import JOBS
-from .media import download_remote_video, validate_remote_url
+from .media import download_remote_video, validate_youtube_url
 from .mailer import EmailDeliveryError, email_delivery_configured, send_transactional_email
 from .pipeline import process_job
 from .provider_state import AI_PROVIDER_CIRCUIT
@@ -93,7 +93,9 @@ from .rollout_service import record_account_activity
 from .resource_limits import enforce_job_workspace
 
 
-app = FastAPI(title=f"LectureSift Backend V{APP_VERSION}")
+from .assistant_maintenance import lifespan as assistant_lifespan
+
+app = FastAPI(title=f"LectureSift Backend V{APP_VERSION}", lifespan=assistant_lifespan)
 from .costs import cost_context
 from .documents import effective_ocr_parallelism
 
@@ -171,7 +173,7 @@ async def add_security_headers(request: Request, call_next):
     response.headers.setdefault("Referrer-Policy", "no-referrer")
     response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
     response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-    if request.url.path.startswith(("/billing/", "/jobs", "/admin/")):
+    if request.url.path.startswith(("/billing/", "/jobs", "/admin/", "/assistant/")):
         response.headers["Cache-Control"] = "no-store"
         response.headers["Pragma"] = "no-cache"
     return response
@@ -354,6 +356,7 @@ class BillingRegisterRequest(BillingAuthRequest):
     last_name: str
     phone: str = ""
     country_code: str = "TR"
+    referral_code: str = ""
 
 
 class BillingEmailRequest(BaseModel):
@@ -381,6 +384,7 @@ class ManualOrderRequest(BaseModel):
     terms_accepted: bool = False
     early_performance_requested: bool = False
     language: str = "tr"
+    coupon_code: str = ""
 
 
 class BillingPreferencesRequest(BaseModel):
@@ -413,6 +417,21 @@ class BillingCheckoutRequest(BaseModel):
     language: str = "tr"
     terms_accepted: bool = False
     early_performance_requested: bool = False
+    coupon_code: str = ""
+
+
+class ReferralChoiceRequest(BaseModel):
+    reward_choice: Literal["minutes", "coupon"]
+    currency: str | None = Field(default=None, min_length=3, max_length=3)
+
+
+class ReferralReleaseRequest(BaseModel):
+    provider_reconciled: StrictBool = False
+    evidence_reference: str = ""
+
+
+class ReferralReconcileRequest(BaseModel):
+    order_reference: str
 
 
 class LessonQuestionRequest(BaseModel):
@@ -817,6 +836,7 @@ def billing_register(payload: BillingRegisterRequest, request: Request) -> dict:
             payload.last_name,
             payload.phone,
             payload.country_code,
+            referral_code=payload.referral_code,
         )
         record_account_activity(
             result["user"]["id"],
@@ -840,6 +860,7 @@ def billing_register(payload: BillingRegisterRequest, request: Request) -> dict:
         "verification_required": True,
         "message": "Doğrulama kodunu ve bağlantısını e-posta adresine gönderdik.",
         "user": result["user"],
+        "referral_status": result.get("referral_status", "not_provided"),
     }
 
 
@@ -938,6 +959,58 @@ def billing_me(user: dict = Depends(_billing_user)) -> dict:
     return {"ok": True, "account": account_status(user["id"])}
 
 
+def _referral_response(callback, *args, **kwargs) -> dict:
+    from .referrals import ReferralError
+    try:
+        return callback(*args, **kwargs)
+    except ReferralError as exc:
+        code = 503 if exc.code in {"LS-REF-DISABLED", "LS-REF-SCHEMA"} else 400
+        raise HTTPException(code, detail={"code": exc.code, "message": str(exc)}) from exc
+
+
+@app.get("/billing/referrals")
+def billing_referrals(user: dict = Depends(_billing_user)) -> dict:
+    from .referrals import summary
+    return {"ok": True, "referrals": _referral_response(summary, user["id"])}
+
+
+@app.post("/billing/referrals/code")
+def billing_referral_code(request: Request, user: dict = Depends(_billing_user)) -> dict:
+    from .referrals import create_code
+    _rate_limit(request, "referral-code", user["id"], limit=10, window_seconds=3600)
+    return {"ok": True, "referrals": _referral_response(create_code, user["id"])}
+
+
+@app.post("/billing/referrals/rewards/{reward_id}/choice")
+def billing_referral_choice(reward_id: str, payload: ReferralChoiceRequest,
+                            user: dict = Depends(_billing_user)) -> dict:
+    from .referrals import choose_reward
+    return {"ok": True, "referrals": _referral_response(
+        choose_reward, user["id"], reward_id, payload.reward_choice, currency=payload.currency,
+    )}
+
+
+@app.get("/billing/admin/referrals", dependencies=[Depends(_billing_admin)])
+def billing_admin_referrals() -> dict:
+    from .referrals import admin_pending
+    return {"ok": True, "rewards": _referral_response(admin_pending)}
+
+
+@app.post("/billing/admin/referrals/reconcile-order", dependencies=[Depends(_billing_admin)])
+def billing_admin_referral_reconcile(payload: ReferralReconcileRequest) -> dict:
+    from .referrals import reconcile_order
+    return {"ok": True, **_referral_response(reconcile_order, payload.order_reference)}
+
+
+@app.post("/billing/admin/referrals/{reward_id}/release", dependencies=[Depends(_billing_admin)])
+def billing_admin_referral_release(reward_id: str, payload: ReferralReleaseRequest) -> dict:
+    from .referrals import release_reward
+    return {"ok": True, "reward": _referral_response(
+        release_reward, reward_id, provider_reconciled=payload.provider_reconciled,
+        evidence_reference=payload.evidence_reference,
+    )}
+
+
 @app.patch("/billing/me/preferences")
 def billing_update_preferences(
     payload: BillingPreferencesRequest,
@@ -1017,7 +1090,8 @@ def billing_create_manual_order(
             payload.last_name or user.get("last_name", ""),
             user.get("phone") or "",
         )
-        order = create_manual_order(user["id"], payload.plan_code, payload.interval)
+        order = create_manual_order(user["id"], payload.plan_code, payload.interval,
+                                    coupon_code=payload.coupon_code)
         record_payment_consent(
             order["reference"],
             user["id"],
@@ -1062,6 +1136,7 @@ def billing_create_checkout(
             "terms_accepted": payload.terms_accepted,
             "early_performance_requested": payload.early_performance_requested,
             "user_agent": request.headers.get("user-agent", ""),
+            "coupon_code": payload.coupon_code,
         }
         if provider == "iyzico":
             checkout = create_iyzico_checkout(
@@ -1346,6 +1421,103 @@ def ask_lesson_question(
     return {"ok": True, **answer}
 
 
+@app.get("/assistant/catalog")
+def assistant_catalog(currency: str = "USD") -> dict:
+    from .assistant_catalog import offers
+    return offers(currency.upper())
+
+
+@app.get("/assistant/wallet")
+def assistant_wallet_status(user: dict = Depends(_billing_user)) -> dict:
+    from .assistant_wallet import status
+    try:
+        return status(user["id"])
+    except LectureSiftError as exc:
+        raise HTTPException(exc.status_code, detail=exc.public()) from exc
+
+
+@app.post("/assistant/chat")
+async def assistant_chat(request: Request, user: dict = Depends(_billing_user)) -> dict:
+    from pydantic import ValidationError
+    from starlette.concurrency import run_in_threadpool
+    from .site_assistant import ChatRequest, chat
+    from .assistant_wallet import require_available
+    try:
+        await run_in_threadpool(require_available)
+        _rate_limit(request, "assistant-chat", user["id"], limit=30, window_seconds=3600)
+        # Check each streamed chunk, including requests without Content-Length.
+        body = bytearray()
+        async for chunk in request.stream():
+            if len(body) + len(chunk) > 4_600_000:
+                raise HTTPException(413, detail={"code": "LS-ASSIST-06", "message": "Medya çok büyük."})
+            body.extend(chunk)
+        try:
+            payload = ChatRequest.model_validate_json(body)
+        except ValidationError:
+            # Validation exceptions may echo base64 media: return a sanitized error.
+            raise HTTPException(422, detail={"code": "LS-ASSIST-06", "message": "Mesaj veya medya geçersiz."})
+        lesson = ""
+        if payload.lesson_id:
+            result = await run_in_threadpool(get_result, payload.lesson_id, user)
+            lesson = str(result.get("summary") or "")[:6000]
+        _require_ai_provider({"job_type": "study_pack"})
+        return await run_in_threadpool(chat, user["id"], payload, lesson)
+    except LectureSiftError as exc:
+        raise HTTPException(exc.status_code, detail=exc.public()) from exc
+
+
+@app.post("/assistant/image")
+async def assistant_image(request: Request, user: dict = Depends(_billing_user)) -> dict:
+    from pydantic import ValidationError
+    from starlette.concurrency import run_in_threadpool
+    from .assistant_images import ImageRequest, generate
+    try:
+        _rate_limit(request, "assistant-image", user["id"], limit=10, window_seconds=3600)
+        body = bytearray()
+        async for chunk in request.stream():
+            if len(body) + len(chunk) > 8192:
+                raise HTTPException(413, detail={"code": "LS-ASSIST-06"})
+            body.extend(chunk)
+        try:
+            payload = ImageRequest.model_validate_json(body)
+        except ValidationError:
+            raise HTTPException(422, detail={"code": "LS-ASSIST-06"})
+        _require_ai_provider({"job_type": "study_pack"})
+        return await run_in_threadpool(generate, user["id"], payload)
+    except LectureSiftError as exc:
+        raise HTTPException(exc.status_code, detail=exc.public()) from exc
+
+
+@app.post("/assistant/trial")
+async def assistant_trial(request: Request) -> dict:
+    import hashlib
+    from pydantic import ValidationError
+    from starlette.concurrency import run_in_threadpool
+    from .site_assistant import TrialRequest, trial
+    from .assistant_wallet import require_available
+    try:
+        await run_in_threadpool(require_available)
+        _rate_limit(request, "assistant-trial", "guest", limit=3, window_seconds=86400)
+        body = bytearray()
+        async for chunk in request.stream():
+            if len(body) + len(chunk) > 4096:
+                raise HTTPException(413, detail={"code": "LS-ASSIST-06"})
+            body.extend(chunk)
+        try:
+            payload = TrialRequest.model_validate_json(body)
+        except ValidationError:
+            raise HTTPException(422, detail={"code": "LS-ASSIST-06"})
+        if not config.BILLING_SESSION_SECRET:
+            raise HTTPException(503, detail={"code": "LS-ASSIST-01"})
+        # Rotating daily keyed identity; raw addresses never enter the credit ledger.
+        identity = hmac.new(config.BILLING_SESSION_SECRET.encode(),
+                            f"{time.strftime('%Y-%m-%d', time.gmtime())}|{_client_ip(request)}".encode(),
+                            hashlib.sha256).hexdigest()
+        return await run_in_threadpool(trial, payload, identity)
+    except LectureSiftError as exc:
+        raise HTTPException(exc.status_code, detail=exc.public()) from exc
+
+
 @app.get("/jobs/{job_id}/slide/{filename}")
 def get_slide(job_id: str, filename: str, user: dict = Depends(_billing_user)) -> FileResponse:
     data = _owned_job(job_id, user)
@@ -1605,6 +1777,10 @@ def create_url_job(
     speaker_detection: bool = Form(False),
     billing_user: dict = Depends(_billing_user),
 ) -> dict:
+    try:
+        url = validate_youtube_url(video_url)
+    except LectureSiftError as exc:
+        _raise_public(exc)
     options = _options(
         source_language,
         output_language,
@@ -1648,11 +1824,6 @@ def create_url_job(
     except BillingError as exc:
         raise HTTPException(402, detail={"code": "LS-BILL-10", "message": str(exc)}) from exc
     _require_ai_provider(options)
-    try:
-        url = validate_remote_url(video_url)
-    except LectureSiftError as exc:
-        _raise_public(exc)
-
     JOBS.cleanup_expired()
     job_id = str(uuid.uuid4())
     job_dir = _job_path(job_id)

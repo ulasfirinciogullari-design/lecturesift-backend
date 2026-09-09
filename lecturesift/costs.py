@@ -87,6 +87,11 @@ _BUSINESS_TIMEZONE = ZoneInfo("Europe/Istanbul")
 OPENAI_SOURCE = "https://developers.openai.com/api/docs/models"
 OPENAI_EFFECTIVE = "2026-08-29"
 RATE_CATALOG = {
+    "gpt-5.6-luna": {
+        "input": 0.20, "cached_input": 0.02, "output": 1.20,
+        "basis": 1_000_000, "unit": "token",
+        "source": "https://developers.openai.com/api/docs/models/gpt-5.6-luna",
+    },
     "gpt-4o-mini": {
         "input": 0.15,
         "cached_input": 0.075,

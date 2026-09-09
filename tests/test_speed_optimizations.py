@@ -1,6 +1,8 @@
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 import lecturesift.ai as ai
 import lecturesift.media as media
 import lecturesift.pipeline as pipeline
@@ -135,25 +137,10 @@ def test_remote_download_format_matches_requested_work():
     assert "height<=720" in media._remote_download_format("study_pack", True)
 
 
-def test_direct_media_url_keeps_existing_download_path(tmp_path, monkeypatch):
-    expected = tmp_path / "remote.mp4"
-    calls = []
-
-    def direct(url: str, job_dir: Path) -> Path:
-        calls.append((url, job_dir))
-        return expected
-
-    monkeypatch.setattr(media, "_download_direct_media", direct)
-
-    result = media.download_remote_video(
-        "https://cdn.example.com/lecture.mp4",
-        tmp_path,
-        job_type="audio_export",
-        include_slides=False,
-    )
-
-    assert result == expected
-    assert calls == [("https://cdn.example.com/lecture.mp4", tmp_path)]
+def test_direct_media_url_is_rejected_by_youtube_only_input(tmp_path):
+    with pytest.raises(media.LectureSiftError) as caught:
+        media.download_remote_video("https://cdn.example.com/lecture.mp4", tmp_path)
+    assert caught.value.code == "LS-URL-05"
 
 
 def test_ffmpeg_text_output_is_decoded_portably_on_windows(monkeypatch):

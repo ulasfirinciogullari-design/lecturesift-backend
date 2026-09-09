@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
   <meta name="description" content="LectureSift hesap, profil, plan, kredi ve güvenlik yönetimi.">
-  <title>Hesabım | LectureSift</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="./auth.css?v=2">
-<link rel="stylesheet" href="/rollout.css?v=9"><link rel="stylesheet" href="/theme.css?v=17"><script src="/theme.js?v=8"></script><link rel="stylesheet" href="/product-layout.css?v=4"></head>
+  <title>Hesabım | LectureSift</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="./auth.css?v=4">
+<link rel="stylesheet" href="/rollout.css?v=9"><link rel="stylesheet" href="/theme.css?v=17"><script src="/theme.js?v=10"></script><link rel="stylesheet" href="/product-layout.css?v=4"></head>
 <body data-page="account">
   <header class="auth-topbar"><a class="brand" href="/"><span class="brand-mark"><i></i><i></i><i></i></span><span>Lecture<span>Sift</span></span></a><a class="back-link" href="/workspace.html" data-i18n="nav.workspace">Çalışma alanına dön</a></header>
   <main id="accountPage" class="account-layout" hidden>
@@ -15,6 +15,7 @@
       <button type="button" role="tab" data-account-view-button="profile" aria-selected="false" tabindex="-1" data-i18n="account.navProfile">Profil ve tercihler</button>
       <button type="button" role="tab" data-account-view-button="payments" aria-selected="false" tabindex="-1" data-i18n="account.navPayments">Ödemeler</button>
       <button type="button" role="tab" data-account-view-button="lessons" aria-selected="false" tabindex="-1" data-i18n="account.navLessons">Derslerim</button>
+      <button type="button" role="tab" data-account-view-button="referrals" aria-selected="false" tabindex="-1" data-referral-i18n="nav">Davetler</button>
       <button type="button" role="tab" data-account-view-button="security" aria-selected="false" tabindex="-1" data-i18n="account.navSecurity">Güvenlik ve veriler</button>
     </nav>
     <section class="account-view" data-account-view="overview" role="tabpanel"><div class="dashboard-grid">
@@ -38,6 +39,32 @@
       <section class="dashboard-card wide-card"><div class="admin-section-head"><h2 data-i18n="account.historyTitle">Ders geçmişim</h2><a class="secondary-action link-action" href="/workspace.html" data-i18n="account.newLesson">Yeni ders işle</a></div><p class="empty-copy" data-i18n="account.historyHelp">Önceki işlemlerini, ilerleme durumunu ve hazır sonuçlarını buradan açabilirsin.</p><div id="jobHistory" class="orders-list"><p class="empty-copy" data-i18n="account.historyLoading">Ders geçmişi yükleniyor…</p></div></section>
     </div></section>
 
+    <section class="account-view" data-account-view="referrals" role="tabpanel" hidden><div class="dashboard-grid">
+      <section class="dashboard-card wide-card referral-card">
+        <h2 data-referral-i18n="nav">Davetler</h2>
+        <p id="referralLoading" class="empty-copy" role="status" data-referral-i18n="loading">Davet bilgileri doğrulanıyor…</p>
+        <div id="referralUnavailable" class="notice error" hidden role="status"></div>
+        <div id="referralContent" hidden>
+          <p class="empty-copy referral-intro" data-referral-i18n="intro">İlk uygun ücretli abonelikte arkadaşın 30 dakika kazanabilir; sen 60 dakika veya %10 kupon seçebilirsin. Kuponun üst sınırı seçtiğin para biriminde gösterilir.</p>
+          <p class="empty-copy" data-referral-i18n="renewalInfo">Arkadaşının sonraki uygun ücretli abonelik alışverişi veya yenilemesinde sen 30 dakika veya %5 kupon seçebilirsin. Kuponun üst sınırı seçtiğin para biriminde gösterilir. Arkadaşına yeniden 30 dakika verilmez. Yeni bir ödeme gerekir: yıllık abonelik tek alışveriş sayılır, aylık dakika yenilenmesi ödül oluşturmaz.</p>
+          <div class="referral-rules"><p data-referral-i18n="rules">Ücretsiz kullanım, kayıt, test paketi, dakika paketi ve yönetici tarafından verilen haklar ödül oluşturmaz. İlk ve sonraki alışverişler birlikte, davet eden kişi başına UTC takvim ayında en fazla 5 ödüllü alışveriş sayılır. Davet edilen kişi başına aynı ay en fazla 1 sonraki alışveriş ödülü verilir.</p><p data-referral-i18n="hold">Ödüller en az 14 gün bekler; ödeme incelemesinden sonra yönetici onayıyla kullanılabilir olur. Kuponlar serbest bırakıldıktan sonra 90 gün geçerlidir; yalnız verildiği para biriminde aylık abonelikte kullanılabilir ve başka indirimle birleşmez.</p></div>
+          <div id="referralNoCode" class="referral-create" hidden><p data-referral-i18n="noCode">Paylaşılabilir bağlantını oluşturmak için davet kodu oluştur.</p><button id="createReferralCodeButton" class="primary-action" type="button" data-referral-i18n="create">Davet bağlantısı oluştur</button></div>
+          <div id="referralLinkWrap" class="referral-link" hidden><label for="referralLink" data-referral-i18n="linkLabel">Davet bağlantın</label><div><input id="referralLink" readonly spellcheck="false"><button id="copyReferralLinkButton" class="secondary-action" type="button" data-referral-i18n="copy">Kopyala</button></div></div>
+          <div id="referralNotice" class="notice" hidden role="status"></div>
+          <div class="referral-stats">
+            <article><span data-referral-i18n="reserved">Bu ay ayrılan ödüllü alışveriş</span><strong id="referralReserved">—</strong></article>
+            <article><span data-referral-i18n="remaining">Bu ay kalan ödüllü alışveriş hakkı</span><strong id="referralRemaining">—</strong></article>
+            <article><span data-referral-i18n="earned">Toplam serbest bırakılan davet dakikası</span><strong id="referralEarned">—</strong></article>
+            <article><span data-referral-i18n="pending">Bekleyen dakika</span><strong id="referralPending">—</strong></article>
+          </div>
+          <p id="referralHistoryNotice" class="empty-copy" hidden data-referral-i18n="historyLimited">Aşağıda yalnız son 50 davet veya kupon kaydı gösteriliyor; toplam göstergeler tüm geçmişi kapsar.</p>
+          <section class="referral-subsection"><h3 data-referral-i18n="choicesTitle">Bekleyen ödül seçimin</h3><p class="empty-copy" data-referral-i18n="choicesHelp">Yalnız davet eden kişi, ödül beklemedeyken dakika veya kupon seçimini değiştirebilir; ödül serbest bırakıldıktan sonra seçim değişmez.</p><div id="referralRewards" class="referral-list"></div></section>
+          <section class="referral-subsection"><h3 data-referral-i18n="historyTitle">Davet ödülü geçmişi</h3><div id="referralHistory" class="referral-list"></div></section>
+          <section class="referral-subsection"><h3 data-referral-i18n="couponsTitle">Hazır kuponların</h3><p class="empty-copy" data-referral-i18n="couponTerms">Kupon, verildiği para biriminde aylık Lite, Plus, Pro veya Max aboneliğinde kullanılabilir; başka indirimle birleşmez.</p><div id="referralCoupons" class="referral-list"></div></section>
+        </div>
+      </section>
+    </div></section>
+
     <section class="account-view" data-account-view="security" role="tabpanel" hidden><div class="dashboard-grid">
       <section class="dashboard-card"><h2 data-i18n="security.passwordTitle">Parola değiştir</h2><form id="passwordForm" class="form-grid"><label class="field"><span data-i18n="field.currentPassword">Mevcut parola</span><input id="currentPassword" type="password" autocomplete="current-password" required></label><label class="field"><span data-i18n="field.newPassword">Yeni parola</span><input id="newPassword" type="password" autocomplete="new-password" minlength="10" required></label><label class="field"><span data-i18n="field.confirmPassword">Yeni parolayı tekrar et</span><input id="newPasswordConfirm" type="password" autocomplete="new-password" minlength="10" required></label><button id="passwordSubmit" class="secondary-action" type="submit" data-i18n="security.changePassword">Parolayı değiştir</button></form><div id="passwordNotice" class="notice" hidden></div></section>
       <section class="dashboard-card"><h2 data-i18n="security.supportTitle">Güvenlik ve destek</h2><p class="empty-copy" data-i18n="security.help">Parolanı düzenli olarak yenile; giriş bağlantılarını ve doğrulama kodlarını kimseyle paylaşma.</p><div class="stack-actions"><a class="secondary-action link-action" href="/forgot-password.html" data-i18n="security.resetLink">Parolayı e-postayla yenile</a><a class="secondary-action link-action" href="/contact.html" data-i18n="security.contact">Destek iste</a><button id="logoutButton" class="secondary-action danger" type="button" data-i18n="auth.logout">Çıkış yap</button></div></section>
@@ -45,7 +72,7 @@
       <section class="dashboard-card wide-card data-rights-card"><h2 data-i18n="account.dataTitle">Verilerim ve hesabım</h2><p class="empty-copy" data-i18n="account.dataHelp">Hesabında tutulan verileri JSON dosyası olarak indirebilir veya hesabını kalıcı olarak kapatabilirsin.</p><button id="exportDataButton" class="secondary-action" type="button" data-i18n="account.exportData">Verilerimi indir</button><div class="danger-zone"><h3 data-i18n="account.closeTitle">Hesabı kapat</h3><p data-i18n="account.closeHelp">Bu işlem oturumlarını kapatır, profilini kimlikten arındırır ve ders dosyalarını siler. Yasal saklama zorunluluğu olan ödeme kayıtları sınırlı süre tutulabilir.</p><form id="closeAccountForm" class="form-grid two-column"><label class="field"><span data-i18n="auth.email">E-posta</span><input id="closeAccountEmail" type="email" autocomplete="email" required></label><label class="field"><span data-i18n="field.currentPassword">Mevcut parola</span><input id="closeAccountPassword" type="password" autocomplete="current-password" required></label><button id="closeAccountButton" class="secondary-action danger" type="submit" data-i18n="account.closeButton">Hesabımı kalıcı olarak kapat</button></form><div id="accountDataNotice" class="notice" hidden></div></div></section>
     </div></section>
   </main>
-  <script src="./locale-data.js?v=4"></script><script src="./page-i18n.js?v=6"></script><script src="/i18n.js?v=35"></script><script src="./auth.js?v=14"></script>
-  <script src="/rollout.js?v=7"></script>
+  <script src="./locale-data.js?v=4"></script><script src="./page-i18n.js?v=7"></script><script src="/i18n.js?v=36"></script><script src="./referral-i18n.js?v=2"></script><script src="./auth.js?v=15"></script>
+  <script src="/rollout.js?v=8"></script>
 <script src="/product-layout.js?v=1"></script></body>
 </html>

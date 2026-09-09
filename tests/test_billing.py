@@ -34,8 +34,8 @@ def test_billing_catalog_has_hybrid_plans_and_translation_keys():
     assert plans["test"]["manual_price"] is None
     assert plans["plus"]["featured"] is True
     assert plans["pro"]["name_key"] == "billing.plan.pro.name"
-    assert plans["plus"]["entitlements"]["quiz_questions"] == 30
-    assert plans["plus"]["entitlements"]["flashcards"] == 60
+    assert plans["plus"]["entitlements"]["quiz_questions"] == 20
+    assert plans["plus"]["entitlements"]["flashcards"] == 40
     assert plans["plus"]["entitlements"]["export_formats"] == ["pdf", "docx", "txt"]
     assert all(
         plan["entitlements"]["summary_profiles"] == ["detailed"]
@@ -48,10 +48,10 @@ def test_billing_catalog_has_hybrid_plans_and_translation_keys():
     assert plans["plus"]["entitlements"]["ad_free"] is True
     assert plans["plus"]["entitlements"]["rewarded_minutes_eligible"] is False
     assert plans["free"]["minutes"] == 60
-    assert plans["lite"]["minutes"] == 600
-    assert plans["plus"]["minutes"] == 1800
-    assert plans["pro"]["minutes"] == 5000
-    assert plans["max"]["minutes"] == 12000
+    assert plans["lite"]["minutes"] == 400
+    assert plans["plus"]["minutes"] == 900
+    assert plans["pro"]["minutes"] == 2000
+    assert plans["max"]["minutes"] == 4000
     assert plans["free"]["entitlements"]["limits"] == {
         "max_files_per_job": 3,
         "max_media_upload_mb": 100,
@@ -65,7 +65,7 @@ def test_billing_catalog_has_hybrid_plans_and_translation_keys():
         "max_files_per_job": 16,
         "max_media_upload_mb": 1024,
         "max_document_upload_mb": 100,
-        "max_minutes_per_job": 300,
+        "max_minutes_per_job": 240,
         "max_document_pages": 350,
         "max_ocr_pages": 100,
         "max_document_characters": 1_500_000,
@@ -83,18 +83,18 @@ def test_billing_catalog_has_hybrid_plans_and_translation_keys():
         "max": 100,
         "business": 100,
     }
-    assert plans["max"]["entitlements"]["limits"]["max_minutes_per_job"] == 900
+    assert plans["max"]["entitlements"]["limits"]["max_minutes_per_job"] == 600
 
     usd = TestClient(app).get("/billing/plans?currency=USD").json()
     usd_plans = {plan["code"]: plan for plan in usd["plans"]}
     assert usd["selected_currency"] == "USD"
     assert usd_plans["test"]["display_price"] is None
-    assert usd_plans["plus"]["display_price"] == {"currency": "USD", "amount_minor": 999}
+    assert usd_plans["plus"]["display_price"] == {"currency": "USD", "amount_minor": 1699}
 
     jpy = TestClient(app).get("/billing/plans?currency=JPY").json()
     jpy_plans = {plan["code"]: plan for plan in jpy["plans"]}
     assert jpy["selected_currency"] == "JPY"
-    assert jpy_plans["plus"]["display_price"] == {"currency": "JPY", "amount_minor": 1500}
+    assert jpy_plans["plus"]["display_price"] == {"currency": "JPY", "amount_minor": 2001}
     assert {"CAD", "AUD", "INR", "BRL", "AED", "SGD"} <= set(jpy["supported_currencies"])
 
 
@@ -448,7 +448,7 @@ def test_manual_transfer_order_and_admin_approval(monkeypatch):
     order = response.json()["order"]
     assert order["order_number"] == order["reference"]
     assert order["reference"].startswith("LS-20")
-    assert order["amount_minor"] == 44900
+    assert order["amount_minor"] == 59900
     assert order["bank"]["iban"].startswith("TR")
     assert order["bank"]["account_holder"] == "LectureSift Test"
 

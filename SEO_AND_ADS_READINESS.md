@@ -1,11 +1,19 @@
 # LectureSift search and advertising readiness
 
-## Verified account state (7 September 2026)
+## Current check (8 September 2026)
+
+- AdSense site details for `lecturesift.com` still show **Preparing** ("Hazırlanıyor"), with site ownership verified and the review request received. This is not an approval to serve ads or evidence of revenue.
+- The sites table still reports `ads.txt` not found with a **28 August** crawl date. That is a stale provider observation; it must be distinguished from checking the current public file. Do not overwrite the publisher ID or resubmit identity details merely to clear this label.
+- In the proposed release, both `ADSENSE_ENABLED` and `ADSENSE_CMP_READY` must be true, alongside consent, eligible public-page placement and an ad-eligible account. Keep inventory disabled until approval and a current consent-flow check are confirmed.
+- Rewarded-minute inventory remains disabled without real provider-verified completion. Referral rewards are a separate application feature, not a substitute for ad verification.
+- No new campaign, budget, payment-profile submission, ad unit or provider setting was created during this check.
+
+## Previous account observations (7 September 2026; not reverified today)
 
 - The `lecturesift.com` domain property is verified in Google Search Console.
 - `https://lecturesift.com/sitemap.xml` is successful. The current release contains 169 indexable language/page combinations; Search Console may take time to refresh its discovered-page total.
 - The latest Indexing report snapshot shows 171 indexed and 132 non-indexed URLs. Most exclusions are intentional `noindex`, alternate-language canonical, or redirect URLs; the duplicate-URL cluster is being consolidated by the clean-URL migration below.
-- The AdSense site is connected, `ads.txt` is authorised, and Auto ads are enabled for consented visitors on selected public pages.
+- The prior report recorded AdSense connectivity, `ads.txt` authorisation and Auto ads configuration. The current Preparing state above supersedes any inference that ads are already approved or serving.
 - One European-regulations consent message is active in AdSense Privacy & Messaging.
 - The current legal payment address has been submitted in Google Payments and is under review. Do not submit the older verified address to AdSense while this review is pending.
 - No Google Ads account exists under the connected Google account yet, so campaign and conversion identifiers are not available. No ad spend is activated by this repository.
@@ -25,15 +33,15 @@
 - Analytics and advertising code is consent-gated.
 - Google Analytics 4 loads only after analytics consent, limits automatic page views to public pages, and disables advertising signals. Token-bearing verification and password-reset pages are excluded.
 - Google Ads signup and verified-purchase conversion events are prepared separately from analytics and run only after advertising consent. Duplicate purchase conversions are suppressed per browser session.
-- AdSense Auto ads are enabled only after advertising consent, limited to selected public pages, and hidden for ad-free paid plans. Full-screen vignette ads are disabled in the AdSense site settings.
+- AdSense loading is conditional on explicit configuration and advertising consent, limited to selected public pages, and hidden for ad-free paid plans. Prior vignette settings have not been reverified in this check.
 - Rewarded ads are voluntary, rate-limited, and disabled until a real provider unit is configured.
 
 ## External setup still required
 
 1. Monitor Search Console indexing, Core Web Vitals, manual actions, and security issues while the newly submitted data is processed.
 2. Keep the GA4 measurement ID configured in Render and verify the first consented page view in Realtime after deployment.
-3. Wait for the current Google Payments address review, then submit that reviewed profile in AdSense and wait for the site review to move from preparing to ready.
-4. Maintain the active European-regulations consent message and test it before enabling ad inventory.
+3. Wait for the existing site review to move from preparing to ready. Check the payment profile for any explicit outstanding action; do not repeat the submission already completed by the user without a new provider request.
+4. Reverify the European-regulations consent message and test it before enabling ad inventory; do not rely only on the prior report.
 5. Create a Google Ads account plus signup and purchase conversion actions; place the public `AW-...` ID and both conversion labels in the matching Render variables. Verify them with Tag Assistant before spending.
 6. Create Google Ad Manager/AdSense inventory, obtain the real banner and rewarded unit paths, and configure them in Render. Never publish placeholder unit paths.
 7. Create Google Ads campaigns only after a budget, target countries, conversion definitions, and landing pages are approved. Advertising spend is never activated by a code deployment.

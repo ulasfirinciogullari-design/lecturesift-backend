@@ -73,11 +73,36 @@ RUNTIME_COPY = {
     "Medya kaynağı hazır",
 }
 
+REFUND_REQUEST_COPY = (
+    "“Ödeme, iptal veya iade” konusunu seç; hesap e-postanı ve varsa sipariş referansını yaz. "
+    "Kart numarası, parola veya doğrulama kodu gönderme."
+)
+# Reviewed safety instructions take precedence over cached machine translations
+# on every catalog write, including normalization of an existing catalog.
+SENSITIVE_TRANSLATIONS = {
+    REFUND_REQUEST_COPY: [
+        REFUND_REQUEST_COPY,
+        "Select “Payment, cancellation or refund”; enter your account email and order reference, if available. Do not send card numbers, passwords or verification codes.",
+        "Wähle „Zahlung, Stornierung oder Rückerstattung“; gib deine Konto-E-Mail-Adresse und, falls vorhanden, die Bestellreferenz an. Sende keine Kartennummern, Passwörter oder Bestätigungscodes.",
+        "Sélectionnez « Paiement, annulation ou remboursement » ; indiquez l’adresse e-mail de votre compte et, si disponible, la référence de commande. N’envoyez pas de numéros de carte, de mots de passe ni de codes de vérification.",
+        "Selecciona «Pago, cancelación o reembolso»; indica el correo electrónico de tu cuenta y la referencia del pedido, si la tienes. No envíes números de tarjeta, contraseñas ni códigos de verificación.",
+        "Seleziona «Pagamento, cancellazione o rimborso»; indica l’e-mail del tuo account e il riferimento dell’ordine, se disponibile. Non inviare numeri di carta, password o codici di verifica.",
+        "Selecione «Pagamento, cancelamento ou reembolso»; informe o e-mail da sua conta e a referência do pedido, se disponível. Não envie números de cartão, senhas ou códigos de verificação.",
+        "Выберите «Оплата, отмена или возврат»; укажите электронную почту аккаунта и номер заказа, если он есть. Не отправляйте номера карт, пароли или коды подтверждения.",
+        "اختر «الدفع أو الإلغاء أو استرداد الأموال»؛ اكتب البريد الإلكتروني لحسابك ورقم الطلب إن توفر. لا ترسل أرقام البطاقات أو كلمات المرور أو رموز التحقق.",
+        "选择“付款、取消或退款”；填写账户邮箱和订单编号（如有）。请勿发送卡号、密码或验证码。",
+        "「お支払い、キャンセル、または返金」を選び、アカウントのメールアドレスと注文番号（ある場合）を入力してください。カード番号、パスワード、認証コードは送信しないでください。",
+        "‘결제, 취소 또는 환불’을 선택하고 계정 이메일과 주문 번호가 있다면 입력하세요. 카드 번호, 비밀번호 또는 인증 코드는 보내지 마세요.",
+        "“भुगतान, रद्द करना या रिफ़ंड” चुनें; अपने खाते का ईमेल और उपलब्ध होने पर ऑर्डर संदर्भ लिखें। कार्ड नंबर, पासवर्ड या सत्यापन कोड न भेजें।",
+    ],
+}
+
 # Curated admin/accounting copy remains available when the development-time
 # translation endpoint is unavailable or rate-limited. Keep the same language
 # order as LANGUAGES and review financial terminology rather than accepting a
 # blind machine translation.
 CURATED_TRANSLATIONS = {
+    **SENSITIVE_TRANSLATIONS,
     "%0 doğrulandı": ["%0 doğrulandı", "%0 verified", "%0 bestätigt", "%0 vérifié", "%0 verificado", "%0 verificato", "%0 verificado", "%0 подтверждено", "تم التحقق من %0", "已核对 %0", "%0 確認済み", "%0 확인됨", "%0 सत्यापित"],
     "API anahtarı, kart bilgisi veya fatura içeriği yükleme. Yalnızca toplam tutarı ve fatura/ekstre referansını kaydet.": ["API anahtarı, kart bilgisi veya fatura içeriği yükleme. Yalnızca toplam tutarı ve fatura/ekstre referansını kaydet.", "Do not upload API keys, card details, or invoice content. Record only the total and invoice or statement reference.", "Keine API-Schlüssel, Kartendaten oder Rechnungsinhalte hochladen. Nur Gesamtbetrag und Rechnungs- oder Abrechnungsreferenz erfassen.", "Ne téléversez pas de clé API, de données de carte ni de contenu de facture. Enregistrez uniquement le total et la référence de facture ou de relevé.", "No subas claves API, datos de tarjeta ni contenido de facturas. Registra solo el total y la referencia de factura o extracto.", "Non caricare chiavi API, dati della carta o contenuti della fattura. Registra solo il totale e il riferimento della fattura o dell'estratto.", "Não envie chaves de API, dados de cartão ou conteúdo da fatura. Registre apenas o total e a referência da fatura ou do extrato.", "Не загружайте ключи API, данные карт или содержимое счетов. Укажите только итоговую сумму и номер счёта или выписки.", "لا ترفع مفاتيح API أو بيانات البطاقة أو محتوى الفاتورة. سجّل فقط الإجمالي ومرجع الفاتورة أو الكشف.", "请勿上传 API 密钥、银行卡信息或发票内容。仅记录总额以及发票或对账单编号。", "APIキー、カード情報、請求書の内容はアップロードしないでください。合計額と請求書または明細の参照番号のみを記録します。", "API 키, 카드 정보 또는 청구서 내용을 업로드하지 마세요. 총액과 청구서 또는 명세서 참조 번호만 기록하세요.", "API कुंजी, कार्ड विवरण या चालान की सामग्री अपलोड न करें। केवल कुल राशि और चालान या विवरण संदर्भ दर्ज करें।"],
     "Ara toplam": ["Ara toplam", "Subtotal", "Zwischensumme", "Sous-total", "Subtotal", "Subtotale", "Subtotal", "Промежуточный итог", "المجموع الفرعي", "小计", "小計", "소계", "उप-योग"],
@@ -188,7 +213,7 @@ def read_central_sources(path: Path) -> set[str]:
             row = json.loads(f"[{payload}]")
         except json.JSONDecodeError:
             continue
-        if row:
+        if len(row) == len(LANGUAGES) and all(isinstance(value, str) and value.strip() for value in row):
             values.add(normalize(str(row[0])))
     return values
 
@@ -196,7 +221,7 @@ def read_central_sources(path: Path) -> set[str]:
 def write_catalog(path: Path, catalog: dict[str, list[str]]) -> None:
     ordered = {}
     for key in sorted(catalog, key=str.casefold):
-        values = [restore_brand(str(value)) for value in catalog[key]]
+        values = [restore_brand(str(value)) for value in SENSITIVE_TRANSLATIONS.get(key, catalog[key])]
         if key.startswith("LectureSift"):
             values = [
                 value if value.count("LectureSift") >= key.count("LectureSift") else f"LectureSift — {value}"
@@ -284,6 +309,7 @@ def main() -> int:
         write_catalog(catalog_path, catalog)
         catalog = read_catalog(catalog_path)
     central_sources = read_central_sources(frontend / "i18n.js")
+    central_sources.update(read_central_sources(frontend / "referral-i18n.js"))
     required = collect_static_copy(frontend) | RUNTIME_COPY
     missing = sorted(required - catalog.keys() - central_sources, key=str.casefold)
     if args.limit:

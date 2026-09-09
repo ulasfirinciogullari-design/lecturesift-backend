@@ -54,10 +54,11 @@ def test_subscription_overflow_spends_extra_minutes(monkeypatch):
     with ENGINE.begin() as connection:
         connection.execute(update(USERS).where(USERS.c.id == user_id).values(credit_minutes=20))
 
-    record_usage(user_id, f"usage-{uuid.uuid4()}", 1795 * 60)
+    allowance = account_status(user_id)["plan"]["minutes"]
+    record_usage(user_id, f"usage-{uuid.uuid4()}", (allowance - 5) * 60)
     record_usage(user_id, f"usage-{uuid.uuid4()}", 10 * 60)
     status = account_status(user_id)
-    assert status["used_minutes"] == 1805
+    assert status["used_minutes"] == allowance + 5
     assert status["credit_minutes"] == 15
     assert status["remaining_minutes"] == 15
     with pytest.raises(BillingError, match="hesabında 15 dakika"):

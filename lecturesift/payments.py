@@ -453,6 +453,7 @@ def create_iyzico_checkout(
     early_performance_requested: bool,
     user_agent: str,
     payment_method: str = "card",
+    coupon_code: str = "",
 ) -> dict:
     if not iyzico_configured():
         raise BillingConfigurationError("iyzico canlı ödeme anahtarları henüz etkinleştirilmemiş.")
@@ -488,7 +489,7 @@ def create_iyzico_checkout(
     if not selected_ip:
         raise BillingError("Ödeme isteği için kullanıcı IP adresi alınamadı.")
     order = create_payment_order(
-        user["id"], selected_provider, plan_code, interval, selected_currency
+        user["id"], selected_provider, plan_code, interval, selected_currency, coupon_code=coupon_code
     )
     reference = order["reference"]
     record_payment_consent(
@@ -730,6 +731,7 @@ def create_paytr_checkout(
     terms_accepted: bool,
     early_performance_requested: bool,
     user_agent: str,
+    coupon_code: str = "",
 ) -> dict:
     if not paytr_configured():
         raise BillingConfigurationError("PayTR mağaza bilgileri henüz etkinleştirilmemiş.")
@@ -749,7 +751,8 @@ def create_paytr_checkout(
     if not selected_ip:
         raise BillingError("Ödeme isteği için kullanıcı IP adresi alınamadı.")
 
-    order = create_payment_order(user["id"], "paytr", plan_code, interval, selected_currency)
+    order = create_payment_order(user["id"], "paytr", plan_code, interval, selected_currency,
+                                 coupon_code=coupon_code)
     reference = order["reference"]
     record_payment_consent(
         reference,

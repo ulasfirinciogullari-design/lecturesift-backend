@@ -1,0 +1,165 @@
+# Immutable PostgreSQL 18 assistant/referral table contract v1.
+SCHEMA_OBJECT|C|public.assistant_credit_grants_v1|1|id|character varying(64)|t|||
+SCHEMA_OBJECT|C|public.assistant_credit_grants_v1|2|user_id|character varying(36)|t|||
+SCHEMA_OBJECT|C|public.assistant_credit_grants_v1|3|source_reference|character varying(64)|t|||
+SCHEMA_OBJECT|C|public.assistant_credit_grants_v1|4|kind|character varying(16)|t|||
+SCHEMA_OBJECT|C|public.assistant_credit_grants_v1|5|credits|integer|t|||
+SCHEMA_OBJECT|C|public.assistant_credit_grants_v1|6|remaining|integer|t|||
+SCHEMA_OBJECT|C|public.assistant_credit_grants_v1|7|expires_at|timestamp with time zone|t|||
+SCHEMA_OBJECT|C|public.assistant_credit_grants_v1|8|created_at|timestamp with time zone|t|||
+SCHEMA_OBJECT|C|public.assistant_credit_requests_v1|10|response_json|text|f|||
+SCHEMA_OBJECT|C|public.assistant_credit_requests_v1|11|budget_day|character varying(10)|t|||
+SCHEMA_OBJECT|C|public.assistant_credit_requests_v1|12|created_at|timestamp with time zone|t|||
+SCHEMA_OBJECT|C|public.assistant_credit_requests_v1|1|id|character varying(64)|t|||
+SCHEMA_OBJECT|C|public.assistant_credit_requests_v1|2|user_id|character varying(36)|t|||
+SCHEMA_OBJECT|C|public.assistant_credit_requests_v1|3|fingerprint|character varying(64)|t|||
+SCHEMA_OBJECT|C|public.assistant_credit_requests_v1|4|state|character varying(16)|t|||
+SCHEMA_OBJECT|C|public.assistant_credit_requests_v1|5|allocations_json|text|t|||
+SCHEMA_OBJECT|C|public.assistant_credit_requests_v1|6|reserved|integer|t|||
+SCHEMA_OBJECT|C|public.assistant_credit_requests_v1|7|charged|integer|t|||
+SCHEMA_OBJECT|C|public.assistant_credit_requests_v1|8|input_tokens|integer|t|||
+SCHEMA_OBJECT|C|public.assistant_credit_requests_v1|9|output_tokens|integer|t|||
+SCHEMA_OBJECT|C|public.assistant_daily_budget_v1|1|day|character varying(80)|t|||
+SCHEMA_OBJECT|C|public.assistant_daily_budget_v1|2|credits|integer|t|||
+SCHEMA_OBJECT|C|public.billing_referral_codes|1|user_id|character varying(36)|t|||
+SCHEMA_OBJECT|C|public.billing_referral_codes|2|code|character varying(32)|t|||
+SCHEMA_OBJECT|C|public.billing_referral_codes|3|created_at|timestamp with time zone|t|||
+SCHEMA_OBJECT|C|public.billing_referral_coupons|10|created_at|timestamp with time zone|t|||
+SCHEMA_OBJECT|C|public.billing_referral_coupons|11|expires_at|timestamp with time zone|t|||
+SCHEMA_OBJECT|C|public.billing_referral_coupons|12|used_at|timestamp with time zone|f|||
+SCHEMA_OBJECT|C|public.billing_referral_coupons|1|code|character varying(32)|t|||
+SCHEMA_OBJECT|C|public.billing_referral_coupons|2|user_id|character varying(36)|t|||
+SCHEMA_OBJECT|C|public.billing_referral_coupons|3|reward_id|character varying(36)|t|||
+SCHEMA_OBJECT|C|public.billing_referral_coupons|4|status|character varying(16)|t|||
+SCHEMA_OBJECT|C|public.billing_referral_coupons|5|percent|integer|t|||
+SCHEMA_OBJECT|C|public.billing_referral_coupons|6|max_discount_minor|integer|t|||
+SCHEMA_OBJECT|C|public.billing_referral_coupons|7|currency|character varying(3)|t|||
+SCHEMA_OBJECT|C|public.billing_referral_coupons|8|order_reference|character varying(64)|f|||
+SCHEMA_OBJECT|C|public.billing_referral_coupons|9|discount_minor|integer|f|||
+SCHEMA_OBJECT|C|public.billing_referral_renewal_rewards|10|slot_month|character varying(7)|f|||
+SCHEMA_OBJECT|C|public.billing_referral_renewal_rewards|11|inviter_minutes|integer|t|||
+SCHEMA_OBJECT|C|public.billing_referral_renewal_rewards|12|invitee_minutes|integer|t|||
+SCHEMA_OBJECT|C|public.billing_referral_renewal_rewards|13|created_at|timestamp with time zone|t|||
+SCHEMA_OBJECT|C|public.billing_referral_renewal_rewards|14|qualified_at|timestamp with time zone|t|||
+SCHEMA_OBJECT|C|public.billing_referral_renewal_rewards|15|pending_until|timestamp with time zone|t|||
+SCHEMA_OBJECT|C|public.billing_referral_renewal_rewards|16|released_at|timestamp with time zone|f|||
+SCHEMA_OBJECT|C|public.billing_referral_renewal_rewards|17|reconciliation_reference|character varying(120)|f|||
+SCHEMA_OBJECT|C|public.billing_referral_renewal_rewards|1|id|character varying(36)|t|||
+SCHEMA_OBJECT|C|public.billing_referral_renewal_rewards|2|referral_id|character varying(36)|t|||
+SCHEMA_OBJECT|C|public.billing_referral_renewal_rewards|3|invitee_user_id|character varying(36)|t|||
+SCHEMA_OBJECT|C|public.billing_referral_renewal_rewards|4|inviter_user_id|character varying(36)|t|||
+SCHEMA_OBJECT|C|public.billing_referral_renewal_rewards|5|order_reference|character varying(64)|t|||
+SCHEMA_OBJECT|C|public.billing_referral_renewal_rewards|6|status|character varying(24)|t|||
+SCHEMA_OBJECT|C|public.billing_referral_renewal_rewards|7|reward_choice|character varying(16)|f|||
+SCHEMA_OBJECT|C|public.billing_referral_renewal_rewards|8|policy_version|character varying(32)|t|||
+SCHEMA_OBJECT|C|public.billing_referral_renewal_rewards|9|reservation_month|character varying(7)|t|||
+SCHEMA_OBJECT|C|public.billing_referral_reward_preferences|1|reward_id|character varying(36)|t|||
+SCHEMA_OBJECT|C|public.billing_referral_reward_preferences|2|coupon_currency|character varying(3)|t|||
+SCHEMA_OBJECT|C|public.billing_referral_rewards|10|invitee_minutes|integer|t|||
+SCHEMA_OBJECT|C|public.billing_referral_rewards|11|created_at|timestamp with time zone|t|||
+SCHEMA_OBJECT|C|public.billing_referral_rewards|12|qualified_at|timestamp with time zone|f|||
+SCHEMA_OBJECT|C|public.billing_referral_rewards|13|pending_until|timestamp with time zone|f|||
+SCHEMA_OBJECT|C|public.billing_referral_rewards|14|released_at|timestamp with time zone|f|||
+SCHEMA_OBJECT|C|public.billing_referral_rewards|15|reconciliation_reference|character varying(120)|f|||
+SCHEMA_OBJECT|C|public.billing_referral_rewards|1|id|character varying(36)|t|||
+SCHEMA_OBJECT|C|public.billing_referral_rewards|2|invitee_user_id|character varying(36)|t|||
+SCHEMA_OBJECT|C|public.billing_referral_rewards|3|inviter_user_id|character varying(36)|t|||
+SCHEMA_OBJECT|C|public.billing_referral_rewards|4|order_reference|character varying(64)|f|||
+SCHEMA_OBJECT|C|public.billing_referral_rewards|5|status|character varying(24)|t|||
+SCHEMA_OBJECT|C|public.billing_referral_rewards|6|reward_choice|character varying(16)|f|||
+SCHEMA_OBJECT|C|public.billing_referral_rewards|7|policy_version|character varying(32)|t|||
+SCHEMA_OBJECT|C|public.billing_referral_rewards|8|reservation_month|character varying(7)|f|||
+SCHEMA_OBJECT|C|public.billing_referral_rewards|9|inviter_minutes|integer|t|||
+SCHEMA_OBJECT|I|assistant_credit_grants_v1|assistant_credit_grants_v1_pkey|CREATE UNIQUE INDEX assistant_credit_grants_v1_pkey ON public.assistant_credit_grants_v1 USING btree (id)
+SCHEMA_OBJECT|I|assistant_credit_grants_v1|ix_assistant_credit_grants_v1_user_id|CREATE INDEX ix_assistant_credit_grants_v1_user_id ON public.assistant_credit_grants_v1 USING btree (user_id)
+SCHEMA_OBJECT|I|assistant_credit_requests_v1|assistant_credit_requests_v1_pkey|CREATE UNIQUE INDEX assistant_credit_requests_v1_pkey ON public.assistant_credit_requests_v1 USING btree (id)
+SCHEMA_OBJECT|I|assistant_credit_requests_v1|ix_assistant_credit_requests_v1_user_id|CREATE INDEX ix_assistant_credit_requests_v1_user_id ON public.assistant_credit_requests_v1 USING btree (user_id)
+SCHEMA_OBJECT|I|assistant_daily_budget_v1|assistant_daily_budget_v1_pkey|CREATE UNIQUE INDEX assistant_daily_budget_v1_pkey ON public.assistant_daily_budget_v1 USING btree (day)
+SCHEMA_OBJECT|I|billing_referral_codes|billing_referral_codes_code_key|CREATE UNIQUE INDEX billing_referral_codes_code_key ON public.billing_referral_codes USING btree (code)
+SCHEMA_OBJECT|I|billing_referral_codes|billing_referral_codes_pkey|CREATE UNIQUE INDEX billing_referral_codes_pkey ON public.billing_referral_codes USING btree (user_id)
+SCHEMA_OBJECT|I|billing_referral_coupons|billing_referral_coupons_order_reference_key|CREATE UNIQUE INDEX billing_referral_coupons_order_reference_key ON public.billing_referral_coupons USING btree (order_reference)
+SCHEMA_OBJECT|I|billing_referral_coupons|billing_referral_coupons_pkey|CREATE UNIQUE INDEX billing_referral_coupons_pkey ON public.billing_referral_coupons USING btree (code)
+SCHEMA_OBJECT|I|billing_referral_coupons|billing_referral_coupons_reward_id_key|CREATE UNIQUE INDEX billing_referral_coupons_reward_id_key ON public.billing_referral_coupons USING btree (reward_id)
+SCHEMA_OBJECT|I|billing_referral_coupons|ix_billing_referral_coupons_user_id|CREATE INDEX ix_billing_referral_coupons_user_id ON public.billing_referral_coupons USING btree (user_id)
+SCHEMA_OBJECT|I|billing_referral_renewal_rewards|billing_referral_renewal_rewards_order_reference_key|CREATE UNIQUE INDEX billing_referral_renewal_rewards_order_reference_key ON public.billing_referral_renewal_rewards USING btree (order_reference)
+SCHEMA_OBJECT|I|billing_referral_renewal_rewards|billing_referral_renewal_rewards_pkey|CREATE UNIQUE INDEX billing_referral_renewal_rewards_pkey ON public.billing_referral_renewal_rewards USING btree (id)
+SCHEMA_OBJECT|I|billing_referral_renewal_rewards|ix_billing_referral_renewal_rewards_invitee_user_id|CREATE INDEX ix_billing_referral_renewal_rewards_invitee_user_id ON public.billing_referral_renewal_rewards USING btree (invitee_user_id)
+SCHEMA_OBJECT|I|billing_referral_renewal_rewards|ix_billing_referral_renewal_rewards_inviter_user_id|CREATE INDEX ix_billing_referral_renewal_rewards_inviter_user_id ON public.billing_referral_renewal_rewards USING btree (inviter_user_id)
+SCHEMA_OBJECT|I|billing_referral_renewal_rewards|ix_billing_referral_renewal_rewards_referral_id|CREATE INDEX ix_billing_referral_renewal_rewards_referral_id ON public.billing_referral_renewal_rewards USING btree (referral_id)
+SCHEMA_OBJECT|I|billing_referral_renewal_rewards|uq_referral_renewal_invitee_month|CREATE UNIQUE INDEX uq_referral_renewal_invitee_month ON public.billing_referral_renewal_rewards USING btree (invitee_user_id, slot_month)
+SCHEMA_OBJECT|I|billing_referral_reward_preferences|billing_referral_reward_preferences_pkey|CREATE UNIQUE INDEX billing_referral_reward_preferences_pkey ON public.billing_referral_reward_preferences USING btree (reward_id)
+SCHEMA_OBJECT|I|billing_referral_rewards|billing_referral_rewards_invitee_user_id_key|CREATE UNIQUE INDEX billing_referral_rewards_invitee_user_id_key ON public.billing_referral_rewards USING btree (invitee_user_id)
+SCHEMA_OBJECT|I|billing_referral_rewards|billing_referral_rewards_order_reference_key|CREATE UNIQUE INDEX billing_referral_rewards_order_reference_key ON public.billing_referral_rewards USING btree (order_reference)
+SCHEMA_OBJECT|I|billing_referral_rewards|billing_referral_rewards_pkey|CREATE UNIQUE INDEX billing_referral_rewards_pkey ON public.billing_referral_rewards USING btree (id)
+SCHEMA_OBJECT|I|billing_referral_rewards|ix_billing_referral_rewards_inviter_user_id|CREATE INDEX ix_billing_referral_rewards_inviter_user_id ON public.billing_referral_rewards USING btree (inviter_user_id)
+SCHEMA_OBJECT|K|assistant_credit_grants_v1|assistant_credit_grants_v1_created_at_not_null|t|NOT NULL created_at
+SCHEMA_OBJECT|K|assistant_credit_grants_v1|assistant_credit_grants_v1_credits_not_null|t|NOT NULL credits
+SCHEMA_OBJECT|K|assistant_credit_grants_v1|assistant_credit_grants_v1_expires_at_not_null|t|NOT NULL expires_at
+SCHEMA_OBJECT|K|assistant_credit_grants_v1|assistant_credit_grants_v1_id_not_null|t|NOT NULL id
+SCHEMA_OBJECT|K|assistant_credit_grants_v1|assistant_credit_grants_v1_kind_not_null|t|NOT NULL kind
+SCHEMA_OBJECT|K|assistant_credit_grants_v1|assistant_credit_grants_v1_pkey|t|PRIMARY KEY (id)
+SCHEMA_OBJECT|K|assistant_credit_grants_v1|assistant_credit_grants_v1_remaining_not_null|t|NOT NULL remaining
+SCHEMA_OBJECT|K|assistant_credit_grants_v1|assistant_credit_grants_v1_source_reference_not_null|t|NOT NULL source_reference
+SCHEMA_OBJECT|K|assistant_credit_grants_v1|assistant_credit_grants_v1_user_id_not_null|t|NOT NULL user_id
+SCHEMA_OBJECT|K|assistant_credit_requests_v1|assistant_credit_requests_v1_allocations_json_not_null|t|NOT NULL allocations_json
+SCHEMA_OBJECT|K|assistant_credit_requests_v1|assistant_credit_requests_v1_budget_day_not_null|t|NOT NULL budget_day
+SCHEMA_OBJECT|K|assistant_credit_requests_v1|assistant_credit_requests_v1_charged_not_null|t|NOT NULL charged
+SCHEMA_OBJECT|K|assistant_credit_requests_v1|assistant_credit_requests_v1_created_at_not_null|t|NOT NULL created_at
+SCHEMA_OBJECT|K|assistant_credit_requests_v1|assistant_credit_requests_v1_fingerprint_not_null|t|NOT NULL fingerprint
+SCHEMA_OBJECT|K|assistant_credit_requests_v1|assistant_credit_requests_v1_id_not_null|t|NOT NULL id
+SCHEMA_OBJECT|K|assistant_credit_requests_v1|assistant_credit_requests_v1_input_tokens_not_null|t|NOT NULL input_tokens
+SCHEMA_OBJECT|K|assistant_credit_requests_v1|assistant_credit_requests_v1_output_tokens_not_null|t|NOT NULL output_tokens
+SCHEMA_OBJECT|K|assistant_credit_requests_v1|assistant_credit_requests_v1_pkey|t|PRIMARY KEY (id)
+SCHEMA_OBJECT|K|assistant_credit_requests_v1|assistant_credit_requests_v1_reserved_not_null|t|NOT NULL reserved
+SCHEMA_OBJECT|K|assistant_credit_requests_v1|assistant_credit_requests_v1_state_not_null|t|NOT NULL state
+SCHEMA_OBJECT|K|assistant_credit_requests_v1|assistant_credit_requests_v1_user_id_not_null|t|NOT NULL user_id
+SCHEMA_OBJECT|K|assistant_daily_budget_v1|assistant_daily_budget_v1_credits_not_null|t|NOT NULL credits
+SCHEMA_OBJECT|K|assistant_daily_budget_v1|assistant_daily_budget_v1_day_not_null|t|NOT NULL day
+SCHEMA_OBJECT|K|assistant_daily_budget_v1|assistant_daily_budget_v1_pkey|t|PRIMARY KEY (day)
+SCHEMA_OBJECT|K|billing_referral_codes|billing_referral_codes_code_key|t|UNIQUE (code)
+SCHEMA_OBJECT|K|billing_referral_codes|billing_referral_codes_code_not_null|t|NOT NULL code
+SCHEMA_OBJECT|K|billing_referral_codes|billing_referral_codes_created_at_not_null|t|NOT NULL created_at
+SCHEMA_OBJECT|K|billing_referral_codes|billing_referral_codes_pkey|t|PRIMARY KEY (user_id)
+SCHEMA_OBJECT|K|billing_referral_codes|billing_referral_codes_user_id_not_null|t|NOT NULL user_id
+SCHEMA_OBJECT|K|billing_referral_coupons|billing_referral_coupons_code_not_null|t|NOT NULL code
+SCHEMA_OBJECT|K|billing_referral_coupons|billing_referral_coupons_created_at_not_null|t|NOT NULL created_at
+SCHEMA_OBJECT|K|billing_referral_coupons|billing_referral_coupons_currency_not_null|t|NOT NULL currency
+SCHEMA_OBJECT|K|billing_referral_coupons|billing_referral_coupons_expires_at_not_null|t|NOT NULL expires_at
+SCHEMA_OBJECT|K|billing_referral_coupons|billing_referral_coupons_max_discount_minor_not_null|t|NOT NULL max_discount_minor
+SCHEMA_OBJECT|K|billing_referral_coupons|billing_referral_coupons_order_reference_key|t|UNIQUE (order_reference)
+SCHEMA_OBJECT|K|billing_referral_coupons|billing_referral_coupons_percent_not_null|t|NOT NULL percent
+SCHEMA_OBJECT|K|billing_referral_coupons|billing_referral_coupons_pkey|t|PRIMARY KEY (code)
+SCHEMA_OBJECT|K|billing_referral_coupons|billing_referral_coupons_reward_id_key|t|UNIQUE (reward_id)
+SCHEMA_OBJECT|K|billing_referral_coupons|billing_referral_coupons_reward_id_not_null|t|NOT NULL reward_id
+SCHEMA_OBJECT|K|billing_referral_coupons|billing_referral_coupons_status_not_null|t|NOT NULL status
+SCHEMA_OBJECT|K|billing_referral_coupons|billing_referral_coupons_user_id_not_null|t|NOT NULL user_id
+SCHEMA_OBJECT|K|billing_referral_renewal_rewards|billing_referral_renewal_rewards_created_at_not_null|t|NOT NULL created_at
+SCHEMA_OBJECT|K|billing_referral_renewal_rewards|billing_referral_renewal_rewards_id_not_null|t|NOT NULL id
+SCHEMA_OBJECT|K|billing_referral_renewal_rewards|billing_referral_renewal_rewards_invitee_minutes_not_null|t|NOT NULL invitee_minutes
+SCHEMA_OBJECT|K|billing_referral_renewal_rewards|billing_referral_renewal_rewards_invitee_user_id_not_null|t|NOT NULL invitee_user_id
+SCHEMA_OBJECT|K|billing_referral_renewal_rewards|billing_referral_renewal_rewards_inviter_minutes_not_null|t|NOT NULL inviter_minutes
+SCHEMA_OBJECT|K|billing_referral_renewal_rewards|billing_referral_renewal_rewards_inviter_user_id_not_null|t|NOT NULL inviter_user_id
+SCHEMA_OBJECT|K|billing_referral_renewal_rewards|billing_referral_renewal_rewards_order_reference_key|t|UNIQUE (order_reference)
+SCHEMA_OBJECT|K|billing_referral_renewal_rewards|billing_referral_renewal_rewards_order_reference_not_null|t|NOT NULL order_reference
+SCHEMA_OBJECT|K|billing_referral_renewal_rewards|billing_referral_renewal_rewards_pending_until_not_null|t|NOT NULL pending_until
+SCHEMA_OBJECT|K|billing_referral_renewal_rewards|billing_referral_renewal_rewards_pkey|t|PRIMARY KEY (id)
+SCHEMA_OBJECT|K|billing_referral_renewal_rewards|billing_referral_renewal_rewards_policy_version_not_null|t|NOT NULL policy_version
+SCHEMA_OBJECT|K|billing_referral_renewal_rewards|billing_referral_renewal_rewards_qualified_at_not_null|t|NOT NULL qualified_at
+SCHEMA_OBJECT|K|billing_referral_renewal_rewards|billing_referral_renewal_rewards_referral_id_not_null|t|NOT NULL referral_id
+SCHEMA_OBJECT|K|billing_referral_renewal_rewards|billing_referral_renewal_rewards_reservation_month_not_null|t|NOT NULL reservation_month
+SCHEMA_OBJECT|K|billing_referral_renewal_rewards|billing_referral_renewal_rewards_status_not_null|t|NOT NULL status
+SCHEMA_OBJECT|K|billing_referral_renewal_rewards|uq_referral_renewal_invitee_month|t|UNIQUE (invitee_user_id, slot_month)
+SCHEMA_OBJECT|K|billing_referral_reward_preferences|billing_referral_reward_preferences_coupon_currency_not_null|t|NOT NULL coupon_currency
+SCHEMA_OBJECT|K|billing_referral_reward_preferences|billing_referral_reward_preferences_pkey|t|PRIMARY KEY (reward_id)
+SCHEMA_OBJECT|K|billing_referral_reward_preferences|billing_referral_reward_preferences_reward_id_not_null|t|NOT NULL reward_id
+SCHEMA_OBJECT|K|billing_referral_rewards|billing_referral_rewards_created_at_not_null|t|NOT NULL created_at
+SCHEMA_OBJECT|K|billing_referral_rewards|billing_referral_rewards_id_not_null|t|NOT NULL id
+SCHEMA_OBJECT|K|billing_referral_rewards|billing_referral_rewards_invitee_minutes_not_null|t|NOT NULL invitee_minutes
+SCHEMA_OBJECT|K|billing_referral_rewards|billing_referral_rewards_invitee_user_id_key|t|UNIQUE (invitee_user_id)
+SCHEMA_OBJECT|K|billing_referral_rewards|billing_referral_rewards_invitee_user_id_not_null|t|NOT NULL invitee_user_id
+SCHEMA_OBJECT|K|billing_referral_rewards|billing_referral_rewards_inviter_minutes_not_null|t|NOT NULL inviter_minutes
+SCHEMA_OBJECT|K|billing_referral_rewards|billing_referral_rewards_inviter_user_id_not_null|t|NOT NULL inviter_user_id
+SCHEMA_OBJECT|K|billing_referral_rewards|billing_referral_rewards_order_reference_key|t|UNIQUE (order_reference)
+SCHEMA_OBJECT|K|billing_referral_rewards|billing_referral_rewards_pkey|t|PRIMARY KEY (id)
+SCHEMA_OBJECT|K|billing_referral_rewards|billing_referral_rewards_policy_version_not_null|t|NOT NULL policy_version
+SCHEMA_OBJECT|K|billing_referral_rewards|billing_referral_rewards_status_not_null|t|NOT NULL status

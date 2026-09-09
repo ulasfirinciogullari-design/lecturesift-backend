@@ -32,12 +32,13 @@ ROLE_ENV_GENERATOR="$ROOT_DIR/deploy/generate_role_envs.py"
 CONFIGURATION_SNAPSHOT_TOOL="$ROOT_DIR/deploy/configuration_snapshot.py"
 CONFIGURATION_SNAPSHOT_NAME="configuration-snapshot-v1"
 CONFIGURATION_CHECKSUM_NAME="CONFIGURATION_SHA256SUMS"
-RECOVERY_MANIFEST_VERSION=1
+RECOVERY_MANIFEST_VERSION=2
 RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v${RECOVERY_MANIFEST_VERSION}.sql"
-CUTOVER_MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest.sql"
+CUTOVER_MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest_v3.sql"
 SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt"
+PURCHASE_TERMS_CONTRACT="$ROOT_DIR/deploy/schema_contract_billing_purchase_terms_v1.txt"
 PRESERVED_SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt"
-SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition.py"
+SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition_v3.py"
 CUTOVER_EVIDENCE_TOOL="$ROOT_DIR/deploy/provider_cutover_evidence.py"
 RENDER_WORKER_STOP_TOOL="$ROOT_DIR/deploy/render_worker_stop_evidence.py"
 SOURCE_REDIS_GUARD="$ROOT_DIR/deploy/source_redis_guard.py"
@@ -104,7 +105,7 @@ done
 
 for path in \
   "$ROLE_ENV_GENERATOR" "$CONFIGURATION_SNAPSHOT_TOOL" "$RECOVERY_MANIFEST" \
-  "$CUTOVER_MANIFEST" "$SCHEMA_CONTRACT" "$PRESERVED_SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" \
+  "$CUTOVER_MANIFEST" "$SCHEMA_CONTRACT" "$PURCHASE_TERMS_CONTRACT" "$PRESERVED_SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" \
   "$CUTOVER_EVIDENCE_TOOL" "$RENDER_WORKER_STOP_TOOL" \
   "$SOURCE_REDIS_GUARD" "$SOURCE_POSTGRES_TRANSPORT" \
   "$TARGET_REDIS_MANIFEST_TOOL" "$RELEASE_TOOL" "$ROOT_DIR/compose.yaml"; do
@@ -743,7 +744,7 @@ done
 {
   printf 'format=lecturesift-backup-v2\n'
   printf 'application_identity=lecturesift-production\n'
-  printf 'application_schema_compatibility=lecturesift-schema-v1\n'
+  printf 'application_schema_compatibility=lecturesift-schema-v2\n'
   printf 'schema_manifest_version=%s\n' "$RECOVERY_MANIFEST_VERSION"
   printf 'schema_manifest_sha256=%s\n' "$schema_manifest_sha256"
   printf 'database_identity_sha256=%s\n' "$database_identity_sha256"

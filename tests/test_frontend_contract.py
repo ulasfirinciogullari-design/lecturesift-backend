@@ -302,9 +302,9 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         content = page.read_text(encoding="utf-8")
         expected_theme_version = "17"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
-        assert "/theme.js?v=8" in content, page.name
-        assert "i18n.js?v=35" in content, page.name
-        assert "page-i18n.js?v=6" in content, page.name
+        assert "/theme.js?v=10" in content, page.name
+        assert "i18n.js?v=36" in content, page.name
+        assert "page-i18n.js?v=7" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
     style = (FRONTEND / "theme.css").read_text(encoding="utf-8")
@@ -588,11 +588,11 @@ def test_payment_routes_are_distinct_localized_and_account_history_is_auditable(
         assert len(values) == 13, key
         assert all(str(value).strip() for value in values), key
 
-    assert 'src="/plans.js?v=19"' in plans_html
+    assert 'src="/plans.js?v=23"' in plans_html
     assert 'manualTransfer = {available:Boolean(transferBody?.available), bank:null};' in plans_js
     assert 'order.bank?.iban' in plans_js
     assert 'transferBody?.bank' not in plans_js
-    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=14"', 'href="./auth.css?v=2"'))
+    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=15"', 'href="./auth.css?v=4"'))
     assert all(value in auth_js for value in ("paymentMethodLabel", "paymentMoney", "paymentDateTime", "payment-order-meta"))
     assert all(value in admin_html for value in ('value="iyzico_card"', 'value="iyzico_bank_transfer"', 'value="manual_bank_transfer"', 'value="iyzico_legacy"'))
     assert "provider:selectedProvider" in admin_js
@@ -1066,7 +1066,7 @@ def test_banner_ads_are_opt_in_public_only_and_paid_plans_are_ad_free():
     display = (FRONTEND / "display-ads.js").read_text(encoding="utf-8")
     blueprint = (FRONTEND.parent / "render.yaml").read_text(encoding="utf-8")
 
-    assert 'displayAdsScript.src = "/display-ads.js?v=2"' in i18n
+    assert 'displayAdsScript.src = "/display-ads.js?v=3"' in i18n
     assert 'displayAdsStyle.href = "/display-ads.css?v=2"' in i18n
     assert 'LectureSiftConsent?.allows("advertising")' in display
     assert 'body.account?.plan?.entitlements?.ad_free === true' in display
@@ -1106,8 +1106,8 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=30"' in index
-    assert 'src="/rollout.js?v=7"' in index
+    assert 'src="./app.js?v=33"' in index
+    assert 'src="/rollout.js?v=8"' in index
     assert '$("plans").scrollIntoView' not in app
 
 

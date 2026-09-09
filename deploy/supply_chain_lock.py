@@ -116,7 +116,7 @@ def _parse_manifest(payload: bytes) -> dict[str, str]:
         raise SupplyChainError("unsupported supply-chain manifest version")
     if not re.fullmatch(r"uv-[0-9]+(?:\.[0-9]+){2}", values["lock_generator"]):
         raise SupplyChainError("invalid lock generator identity")
-    if values["python_target"] != "cp312-manylinux_2_17_x86_64":
+    if values["python_target"] != "cp312-manylinux_2_27_x86_64":
         raise SupplyChainError("unexpected Python lock target")
     for field in (
         "application_base", "proxy_base", "caddy_image", "postgres_image", "redis_image"

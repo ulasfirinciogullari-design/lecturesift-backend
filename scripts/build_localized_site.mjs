@@ -27,6 +27,7 @@ const marker = "window.LECTURESIFT_PAGE_COPY=";
 if (!pageCopySource.includes(marker)) throw new Error("Static translation catalog is unavailable");
 const catalog = JSON.parse(pageCopySource.split(marker, 2)[1].trim().replace(/;\s*$/, ""));
 const dynamicCopySource = await readFile(path.join(SOURCE, "i18n.js"), "utf8");
+const referralCopySource = await readFile(path.join(SOURCE, "referral-i18n.js"), "utf8");
 const keyCatalog = {};
 for (const match of dynamicCopySource.matchAll(/^\s*,?["']([^"']+)["']\s*:\s*(\[[^\r\n]+\])\s*,?$/gm)) {
   try {
@@ -39,6 +40,16 @@ for (const match of dynamicCopySource.matchAll(/^\s*,?["']([^"']+)["']\s*:\s*(\[
     // A malformed catalog row must not make unrelated static pages undeployable.
     // Runtime coverage tests report the exact source row separately.
   }
+}
+
+// Referral copy has its own runtime keys; also translate its static fallback
+// text during the public-page build without mixing those keys into data-i18n.
+for (const match of referralCopySource.matchAll(/^\s*"[^"]+":(\[[^\r\n]+\]),?$/gm)) {
+  const row = JSON.parse(match[1]);
+  if (row.length !== LANGUAGES.length || row.some(value => typeof value !== "string" || !value.trim())) {
+    throw new Error("Incomplete referral translation row");
+  }
+  catalog[row[0]] = row;
 }
 
 function canonicalPublicPath(publicPath) {

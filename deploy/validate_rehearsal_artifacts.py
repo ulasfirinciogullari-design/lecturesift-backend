@@ -12,7 +12,7 @@ import re
 import stat
 import sys
 
-import verify_schema_transition as schema_verifier
+import verify_schema_transition_v3 as schema_verifier
 
 
 FORMAT = "lecturesift-exact-rehearsal-result-v3"

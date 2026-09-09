@@ -23,6 +23,58 @@ def _snapshot_module():
     spec.loader.exec_module(module)
     return module
 
+@pytest.mark.parametrize("version", [1, 2, 3])
+def test_snapshot_verifier_preserves_exact_versioned_inventories(tmp_path, monkeypatch, version):
+    import hashlib
+    import json
+
+    snapshot = _snapshot_module()
+    # Only host ownership is mocked; inventory, digests and file checks run.
+    monkeypatch.setattr(snapshot.os, "geteuid", lambda: 0, raising=False)
+    monkeypatch.setattr(snapshot, "_regular_root_private", lambda path, **_kw: path.stat())
+    deploy_root = tmp_path / "deploy"
+    # Keep the real archive paths below Windows MAX_PATH in long project roots.
+    snapshot_root = tmp_path.parent / f"snapshot-v{version}"
+    snapshot_root.mkdir()
+    snapshot_format = f"lecturesift-configuration-snapshot-v{version}"
+    expected = snapshot._expected_entries(deploy_root, snapshot_format=snapshot_format)
+    files = []
+    for kind, source, relative, required_mode in expected:
+        target = snapshot_root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"fixture")
+        files.append({
+            "kind": kind, "source_path": source, "archive_path": relative,
+            "source_mode": required_mode or "0600",
+            "sha256": hashlib.sha256(b"fixture").hexdigest(),
+        })
+    manifest = {
+        "format": snapshot_format,
+        "application_identity": snapshot.APPLICATION_IDENTITY,
+        "created_at_utc": "2026-09-08T00:00:00Z",
+        "deploy_root": str(deploy_root),
+        "files": files,
+    }
+    manifest_path = snapshot_root / snapshot.MANIFEST_NAME
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    checksums = [f"{hashlib.sha256(manifest_path.read_bytes()).hexdigest()}  {snapshot.MANIFEST_NAME}"]
+    checksums.extend(f"{item['sha256']}  {item['archive_path']}" for item in files)
+    (snapshot_root / snapshot.CHECKSUM_NAME).write_text("\n".join(checksums) + "\n", encoding="ascii")
+    assert snapshot.verify_snapshot(snapshot_root, str(deploy_root), quiet=True) == len(expected)
+    manifest["format"] = f"lecturesift-configuration-snapshot-v{version % 3 + 1}"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(snapshot.SnapshotError, match="file count"):
+        snapshot.verify_snapshot(snapshot_root, str(deploy_root), quiet=True)
+
+
+def test_snapshot_restore_captures_format_before_discarding_payload():
+    script = _read("deploy/restic_restore_rehearsal.sh")
+    capture = script.index("configuration_snapshot_format=")
+    cleanup = script.index("cleanup_restore_payload", capture)
+    evidence = script.index("printf 'configuration_snapshot_format=%s", cleanup)
+    assert capture < cleanup < evidence
+
+
 
 def test_configuration_snapshot_uses_only_exact_allowlists():
     snapshot = _snapshot_module()
@@ -39,7 +91,7 @@ def test_configuration_snapshot_uses_only_exact_allowlists():
     assert snapshot.RELEASE_IDENTITY_ALLOWLIST == (
         "/run/lecturesift/release.env",
     )
-    assert snapshot.IDENTITY_ALLOWLIST == (
+    assert snapshot.LEGACY_IDENTITY_ALLOWLIST == (
         "compose.yaml",
         "Caddyfile",
         "deploy/Caddyfile.staging",
@@ -109,6 +161,20 @@ def test_configuration_snapshot_uses_only_exact_allowlists():
         "deploy/redis_rdb_to_aof.sh",
         "deploy/redis.conf",
     )
+    assert snapshot.PREVIOUS_IDENTITY_ALLOWLIST == snapshot.LEGACY_IDENTITY_ALLOWLIST + (
+        "deploy/rehearsal_manifest_v3.sql",
+        "deploy/verify_schema_transition_v3.py",
+        "deploy/schema_contract_billing_purchase_terms_v1.txt",
+        "deploy/recovery_manifest_v2.sql",
+    )
+    assert snapshot.IDENTITY_ALLOWLIST == snapshot.PREVIOUS_IDENTITY_ALLOWLIST + (
+        "deploy/rehearsal_manifest_v4.sql",
+        "deploy/recovery_manifest_v3.sql",
+        "deploy/verify_schema_transition_v4.py",
+        "deploy/schema_contract_product_v1.txt",
+        "deploy/product_tables_v1.sql",
+        "deploy/product_schema_release.py",
+    )
     assert all(".git" not in path and ".docker" not in path for path in snapshot.IDENTITY_ALLOWLIST)
 
 
@@ -135,10 +201,11 @@ def test_configuration_snapshot_covers_the_steady_state_startup_chain_only():
         "deploy/provision_database_role.sh",
         "deploy/postgres-app-role.sh",
         "deploy/verify_provider_first_start.sh",
-        "deploy/rehearsal_manifest.sql",
+        "deploy/rehearsal_manifest_v3.sql",
         "deploy/schema_contract_payment_provider_sessions_v1.txt",
+        "deploy/schema_contract_billing_purchase_terms_v1.txt",
         "deploy/schema_contract_billing_email_verifications_v1.txt",
-        "deploy/verify_schema_transition.py",
+        "deploy/verify_schema_transition_v3.py",
         "deploy/postgres_security_manifest.sql",
         "deploy/validate_postgres_security_manifest.py",
         "deploy/postgres_role_login_probe.sh",
@@ -260,7 +327,7 @@ def test_restore_rehearsal_verifies_configuration_before_recording_success():
     evidence = script.index("configuration_snapshot=verified")
     assert verify < payload_cleanup < evidence
     assert "the restored snapshot is missing its encrypted configuration package" in script
-    assert "configuration_snapshot_format=lecturesift-configuration-snapshot-v1" in script
+    assert 'printf \'configuration_snapshot_format=%s\\n\' "$configuration_snapshot_format"' in script
     assert "live_services_touched=false" in script
 
 

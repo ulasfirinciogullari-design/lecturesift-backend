@@ -1,4 +1,55 @@
-import {test, expect} from './fixtures.mjs';
+import {test, expect, JOB_ID} from './fixtures.mjs';
+
+test('assistant guide opens, remains localized and does not claim live AI availability', async ({page}) => {
+  await page.goto('/en/');
+  await page.locator('.assistant-launch').click();
+  const dialog=page.locator('.assistant-dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveAccessibleName('LectureSift Assistant');
+  await expect(dialog.locator('.assistant-status')).toContainText('not available yet');
+  await expect(dialog.locator('.assistant-message')).toContainText('only YouTube');
+  await expect(dialog.locator('a.assistant-action')).toHaveAttribute('href', /\/en\/register(?:\.html)?$/);
+  await dialog.locator('textarea').fill('<img src=x onerror=alert(1)>');
+  await dialog.locator('button[type=submit]').click();
+  await expect(dialog.locator('img')).toHaveCount(0);
+  await noHorizontalOverflow(page);
+  await page.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  await expect(page.locator('.assistant-launch')).toBeFocused();
+});
+
+test('owned image creation shows its credit price and offers a safe download', async ({page}, testInfo) => {
+  const cors={'Access-Control-Allow-Origin':'http://127.0.0.1:4173','Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Allow-Headers':'authorization,content-type'};
+  await page.addInitScript(()=>localStorage.setItem('lecturesift-billing-token','synthetic-browser-token'));
+  await page.route('https://api.lecturesift.com/assistant/catalog',route=>route.fulfill({status:200,headers:cors,json:{available:true,image:{available:true,credits:220}}}));
+  await page.route('https://api.lecturesift.com/assistant/wallet',route=>route.fulfill({status:200,headers:cors,json:{balance:1050}}));
+  await page.goto('/en/');
+  const syntheticImage=await page.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=1024;const ctx=canvas.getContext('2d');ctx.fillStyle='#bad3f5';ctx.fillRect(0,0,1024,1024);return canvas.toDataURL('image/jpeg');});
+  const requests=[];
+  await page.route('https://api.lecturesift.com/assistant/image',async route=>{
+    if(route.request().method()==='OPTIONS'){await route.fulfill({status:204,headers:cors});return;}
+    requests.push(route.request().postDataJSON());
+    await route.fulfill({status:200,headers:cors,json:{kind:'image',image:syntheticImage,balance:830,charged_credits:220,action:'none'}});
+  });
+  await page.locator('.assistant-launch').click();
+  const dialog=page.locator('.assistant-dialog');
+  await expect(dialog.locator('.assistant-mode')).toBeVisible();
+  await expect(dialog.locator('option[value=image]')).toContainText('220');
+  await dialog.locator('.assistant-mode').selectOption('image');
+  await expect(dialog.locator('.assistant-attach')).toBeHidden();
+  await dialog.locator('textarea').fill('Synthetic water cycle diagram');
+  await dialog.locator('button[type=submit]').click();
+  await expect(dialog.locator('.assistant-status')).toContainText('830');
+  await expect(dialog.locator('.assistant-message img')).toBeVisible();
+  await expect(dialog.locator('a[download]')).toBeInViewport();
+  await expect(dialog.locator('a[download]')).toHaveAttribute('download','lecturesift-image.jpg');
+  await expect(dialog.locator('a[download]')).toHaveAttribute('href',/^data:image\/jpeg;base64,/);
+  expect(requests).toHaveLength(1);
+  expect(requests[0].prompt).toBe('Synthetic water cycle diagram');
+  expect(Object.keys(requests[0]).sort()).toEqual(['prompt','request_id']);
+  await noHorizontalOverflow(page);
+  await dialog.screenshot({path:testInfo.outputPath('assistant-image-layout.jpg'),quality:75});
+});
 
 async function noHorizontalOverflow(page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
@@ -67,6 +118,60 @@ test('localized home, navigation and demo quiz respond to real clicks', async ({
   await expect(page).toHaveURL(/\/en\/features$/);
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await expect(page.locator('h1')).toBeVisible();
+  await noHorizontalOverflow(page);
+});
+
+test('workspace restores a synthetic result and scores the real quiz once', async ({page, context, isolatedNetwork}, testInfo) => {
+  await context.addInitScript(() => {
+    localStorage.setItem('lecturesift-billing-token', 'ci-synthetic-token-not-valid-on-any-server');
+    localStorage.setItem('lecturesift-ui', 'en');
+    localStorage.setItem('lecturesift-currency', 'TRY');
+  });
+  // Exercise the real account -> requested job -> result -> quiz rendering path.
+  await page.goto(`/workspace.html?job=${JOB_ID}`);
+  await expect(page.locator('#results')).toBeVisible();
+  await expect(page.locator('#resultHeading')).toHaveText('Synthetic browser quiz');
+  expect(isolatedNetwork.apiCalls).toContain(`/jobs/${JOB_ID}/result`);
+  await themeControl(page, testInfo.project.use.colorScheme);
+  await page.locator('#resultTab-quiz').click();
+  await expect(page.locator('#pane-quiz')).toBeVisible();
+  await expect(page.locator('#pane-summary')).toBeHidden();
+  await expect(page.locator('#quizStatus')).toContainText('0/2');
+
+  const first = page.locator('.quiz-item[data-question="0"]');
+  await first.locator('[data-option="0"]').click();
+  await expect(first.locator('[data-option="0"]')).toHaveClass(/selected wrong/);
+  await expect(first.locator('[data-option="1"]')).toHaveClass(/correct/);
+  await expect(first.locator('[data-option="0"]')).toBeDisabled();
+  await expect(first.locator('[data-option="1"]')).toBeDisabled();
+  await expect(page.locator('#quiz-feedback-0')).toBeFocused();
+  await expect(page.locator('#quiz-feedback-0')).toContainText('Four is divisible by two.');
+  await expect(page.locator('#quizStatus')).toContainText('0/2 · 1/2');
+  await page.locator('.quiz-item[data-question="1"] [data-option="0"]').press('Enter');
+  await expect(page.locator('#quizStatus')).toContainText('1/2 · 2/2');
+  await page.locator('#resultTab-summary').click();
+  await page.locator('#resultTab-quiz').click();
+  await expect(page.locator('#quizStatus')).toContainText('1/2 · 2/2');
+  await expect(page.locator('#errorBox')).toBeHidden();
+  await noHorizontalOverflow(page);
+
+  await page.locator('#resultTab-exam').click();
+  await page.locator('#startExamButton').click();
+  await expect(page.locator('#resultTab-quiz')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#quizStatus')).toContainText('0/2');
+  await expect(page.locator('.quiz-option:disabled')).toHaveCount(0);
+});
+
+test('Arabic localized demo retains RTL keyboard navigation', async ({page}) => {
+  await page.goto('/ar/');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  await page.locator('#demoSummaryTab').focus();
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.locator('#demoQuizTab')).toBeFocused();
+  await expect(page.locator('#demoQuiz')).toBeVisible();
+  await page.locator('[data-demo-answer="0"]').click();
+  await expect(page.locator('#demoFeedback')).toContainText('✓');
   await noHorizontalOverflow(page);
 });
 

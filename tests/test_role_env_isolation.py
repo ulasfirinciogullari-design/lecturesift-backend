@@ -219,6 +219,29 @@ def test_compose_uses_role_files_and_never_mounts_master_runtime_env():
     assert "      - egress" in instagram
 
 
+def test_worker_purchase_terms_view_is_read_only_and_bound_to_current_subscriptions():
+    role_sql = _read("deploy/postgres-app-role.sh")
+    subscriptions = role_sql.split(
+        "CREATE OR REPLACE VIEW lecturesift_worker.billing_subscriptions", 1
+    )[1].split("CREATE OR REPLACE VIEW", 1)[0]
+    assert "source_reference," in subscriptions
+    assert "''::varchar(40) AS source_reference" not in subscriptions
+    terms = role_sql.split(
+        "CREATE OR REPLACE VIEW lecturesift_worker.billing_purchase_terms", 1
+    )[1].split("CREATE OR REPLACE VIEW", 1)[0]
+    assert "security_barrier=true, security_invoker=false" in terms
+    assert "terms.reference, terms.plan_json, terms.version, terms.created_at" in terms
+    assert "subscription.source_reference = terms.reference" in terms
+    assert "subscription.status IN ('active', 'cancel_at_end')" in terms
+    assert "subscription.ends_at > now()" in terms
+    assert "GRANT SELECT ON lecturesift_worker.billing_purchase_terms" in role_sql
+    assert "'public.billing_purchase_terms', 'SELECT,INSERT,UPDATE,DELETE'" in role_sql
+    assert "'lecturesift_worker.billing_purchase_terms', 'INSERT,UPDATE,DELETE'" in role_sql
+    assert "JOIN billing_purchase_terms terms ON terms.reference = subscription.source_reference" in role_sql
+    assert "FROM billing_purchase_terms WHERE reference = :'unbound_terms_reference'" in role_sql
+    assert role_sql.index("INSERT INTO public.billing_purchase_terms") < role_sql.index('SET LOCAL ROLE :"worker_user"')
+
+
 def test_worker_database_role_is_masked_and_narrowly_writable():
     role_sql = _read("deploy/postgres-app-role.sh")
     wrapper = _read("deploy/provision_database_role.sh")

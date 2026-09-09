@@ -130,19 +130,19 @@ const PLAN_COPY = {
   tr: {
     free: ["Ücretsiz", "LectureSift'i denemek ve kısa dersleri işlemek için.", "60 dk / ay"],
     credit: ["Dakika Paketi", "Abonelik olmadan ek işlem hakkı.", "180 dakika"],
-    lite: ["Lite", "Düzenli bireysel ders çalışması için.", "600 dk / ay"],
-    plus: ["Plus", "Yoğun ders dönemi ve çoklu kaynaklar için.", "1.800 dk / ay"],
-    pro: ["Pro", "Uzun kayıtlar ve öncelikli işleme için.", "5.000 dk / ay"],
-    max: ["Max", "En yüksek bireysel kullanım kapasitesi.", "12.000 dk / ay"],
+    lite: ["Lite", "Düzenli bireysel ders çalışması için.", "400 dk / ay"],
+    plus: ["Plus", "Yoğun ders dönemi ve çoklu kaynaklar için.", "900 dk / ay"],
+    pro: ["Pro", "Uzun kayıtlar ve öncelikli işleme için.", "2.000 dk / ay"],
+    max: ["Max", "En yüksek bireysel kullanım kapasitesi.", "4.000 dk / ay"],
     business: ["Business", "Ekipler, kurumlar ve özel kapasite için.", "10 kullanıcı"]
   },
   en: {
     free: ["Free", "Try LectureSift and process short lectures.", "60 min / month"],
     credit: ["Minute Pack", "Extra processing without a subscription.", "180 minutes"],
-    lite: ["Lite", "For regular individual study.", "600 min / month"],
-    plus: ["Plus", "For intensive study and multiple sources.", "1,800 min / month"],
-    pro: ["Pro", "For long recordings and priority processing.", "5,000 min / month"],
-    max: ["Max", "The highest individual processing capacity.", "12,000 min / month"],
+    lite: ["Lite", "For regular individual study.", "400 min / month"],
+    plus: ["Plus", "For intensive study and multiple sources.", "900 min / month"],
+    pro: ["Pro", "For long recordings and priority processing.", "2,000 min / month"],
+    max: ["Max", "The highest individual processing capacity.", "4,000 min / month"],
     business: ["Business", "For teams, institutions, and custom capacity.", "10 seats"]
   }
 };
@@ -152,8 +152,8 @@ const ERRORS = {
     "LS-AI-01": "LectureSift's AI provider credit or spend limit is exhausted. This is not your plan allowance; try again after the administrator renews the API balance.",
     "LS-AI-02": "The AI service is busy. Try again in a few minutes.",
     "LS-AI-03": "LectureSift could not authenticate with its AI provider. The administrator must check the server configuration.",
-    "LS-URL-02": "The video provider blocked server-side downloading. Upload the file or use a direct MP4/WebM link.",
-    "LS-URL-03": "No downloadable video was found on this page. Use a direct video link or upload the file.",
+    "LS-URL-02": "YouTube blocked this download. Try again later or upload the video file.",
+    "LS-URL-03": "This YouTube video could not be downloaded. Check the link or upload the video file.",
     "LS-UPLOAD-02": "The selected sources exceed the upload size allowed by your plan.",
     "LS-UPLOAD-04": "The file-processing request could not be completed. Try again, or upload a smaller copy of the document.",
     "LS-UPLOAD-05": "Video and document sources cannot be mixed in one job. Upload them separately.",
@@ -180,8 +180,8 @@ const ERRORS = {
     "LS-AI-01": "LectureSift'in yapay zekâ sağlayıcı kredisi veya harcama limiti doldu. Bu senin plan dakikan değil; yönetici API bakiyesini yeniledikten sonra yeniden dene.",
     "LS-AI-02": "Yapay zekâ hizmeti yoğun. Birkaç dakika sonra tekrar dene.",
     "LS-AI-03": "LectureSift yapay zekâ sağlayıcısında kimlik doğrulayamadı. Yönetici sunucu yapılandırmasını kontrol etmeli.",
-    "LS-URL-02": "Video sağlayıcısı sunucu üzerinden indirmeyi engelledi. Dosyayı yükle veya doğrudan MP4/WebM bağlantısı kullan.",
-    "LS-URL-03": "Bu sayfada indirilebilir video bulunamadı. Doğrudan video bağlantısı kullan veya dosyayı yükle.",
+    "LS-URL-02": "YouTube bu indirmeyi engelledi. Daha sonra yeniden dene veya video dosyasını yükle.",
+    "LS-URL-03": "Bu YouTube videosu indirilemedi. Bağlantıyı kontrol et veya video dosyasını yükle.",
     "LS-UPLOAD-02": "Seçilen kaynaklar planının izin verdiği yükleme boyutunu aşıyor.",
     "LS-UPLOAD-04": "Dosya işleme isteği tamamlanamadı. Yeniden dene veya belgenin daha küçük bir kopyasını yükle.",
     "LS-UPLOAD-05": "Video ve belge kaynakları aynı işte karıştırılamaz. Ayrı ayrı yükle.",
@@ -231,6 +231,7 @@ let currentLanguage = window.LectureSiftI18n?.language || localStorage.getItem("
 let sourceMode = "upload", sourceLayout = "classic", classicVideos = [], audioVideos = [], visualVideos = [];
 let jobId = null, timerStarted = null, timerHandle = null, pollHandle = null;
 let latestResult = null, cardIndex = 0, cardRevealed = false, quizScore = 0, quizAnswered = 0;
+let activeQuizItems = [], quizAnswers = new Map(), quizRendered = false;
 let billingToken = localStorage.getItem("lecturesift-billing-token") || "";
 let billingAccount = null, billingCatalog = null;
 let billingCurrency = localStorage.getItem("lecturesift-currency") || "";
@@ -268,6 +269,7 @@ function applyLanguage() {
   if (billingCatalog) renderPlans();
   renderBillingAccount();
   updateSourceLimitHelp();
+  if (quizRendered) renderQuiz(undefined, {reset:false});
 }
 
 uiLanguage.replaceChildren();
@@ -298,32 +300,43 @@ const PLAN_ORDER = ["free", "credit", "lite", "plus", "pro", "max", "business"];
 const PLAN_FALLBACK = {
   free: ["free", 60, 10, 20, ["pdf"], ["detailed"], "standard", false],
   credit: ["one_time", 180, 20, 40, ["pdf", "docx", "txt"], ["detailed"], "standard", false],
-  lite: ["subscription", 600, 20, 40, ["pdf", "docx", "txt"], ["detailed"], "standard", false],
-  plus: ["subscription", 1800, 30, 60, ["pdf", "docx", "txt"], ["detailed"], "standard", true],
-  pro: ["subscription", 5000, 30, 60, ["pdf", "docx", "txt"], ["detailed"], "priority", false],
-  max: ["subscription", 12000, 30, 60, ["pdf", "docx", "txt"], ["detailed"], "priority", false],
+  lite: ["subscription", 400, 10, 20, ["pdf", "docx", "txt"], ["detailed"], "standard", false],
+  plus: ["subscription", 900, 20, 40, ["pdf", "docx", "txt"], ["detailed"], "standard", true],
+  pro: ["subscription", 2000, 30, 60, ["pdf", "docx", "txt"], ["detailed"], "priority", false],
+  max: ["subscription", 4000, 30, 60, ["pdf", "docx", "txt"], ["detailed"], "priority", false],
   business: ["quote", null, null, null, ["pdf", "docx", "txt"], ["detailed"], "priority", false],
 };
 const FALLBACK_PRICES = {
-  TRY: [0,19900,27900,44900,99900,199900,null], USD: [0,499,699,999,2499,4999,null],
-  EUR: [0,499,649,949,2399,4799,null], GBP: [0,399,599,849,2099,4199,null],
-  CAD: [0,699,949,1349,3399,6799,null], AUD: [0,799,1099,1549,3799,7599,null],
-  NZD: [0,899,1199,1699,4199,8399,null], JPY: [0,750,1050,1500,3750,7500,null],
-  KRW: [0,6900,9500,13900,34900,69900,null], CNY: [0,3500,4900,6900,17500,34900,null],
-  INR: [0,39900,54900,79900,199900,399900,null], BRL: [0,2499,3499,4999,12499,24999,null],
-  MXN: [0,9900,13900,19900,49900,99900,null], CHF: [0,449,599,849,2199,4399,null],
-  SEK: [0,5299,7299,10499,25999,51999,null], NOK: [0,5499,7699,10999,27499,54999,null],
-  DKK: [0,3499,4499,6699,16999,33999,null], PLN: [0,1999,2699,3999,9999,19999,null],
-  AED: [0,1899,2599,3699,9199,18399,null], SAR: [0,1899,2599,3799,9399,18799,null],
-  SGD: [0,699,949,1349,3399,6799,null], HKD: [0,3899,5499,7799,19499,38999,null],
+  TRY: [0, 19900, 29900, 59900, 119900, 229900, null],
+  USD: [0, 499, 899, 1699, 3299, 5999, null],
+  EUR: [0, 499, 849, 1599, 3099, 5699, null],
+  GBP: [0, 399, 642, 1133, 2519, 4829, null],
+  CAD: [0, 699, 1017, 1800, 4079, 7819, null],
+  AUD: [0, 799, 1178, 2066, 4560, 8739, null],
+  NZD: [0, 899, 1285, 2267, 5040, 9659, null],
+  JPY: [0, 750, 1125, 2001, 4501, 8626, null],
+  KRW: [0, 6900, 10181, 18544, 41887, 80390, null],
+  CNY: [0, 3500, 5251, 9205, 21004, 40138, null],
+  INR: [0, 39900, 58835, 106593, 239920, 459915, null],
+  BRL: [0, 2499, 3750, 6669, 15001, 28751, null],
+  MXN: [0, 9900, 14896, 26548, 59890, 114892, null],
+  CHF: [0, 449, 642, 1133, 2639, 5059, null],
+  SEK: [0, 5299, 7822, 14006, 31204, 59803, null],
+  NOK: [0, 5499, 8251, 14673, 33004, 63253, null],
+  DKK: [0, 3499, 4822, 8937, 20402, 39101, null],
+  PLN: [0, 1999, 2892, 5335, 12001, 23000, null],
+  AED: [0, 1899, 2785, 4935, 11041, 21160, null],
+  SAR: [0, 1899, 2785, 5068, 11281, 21620, null],
+  SGD: [0, 699, 1017, 1800, 4079, 7819, null],
+  HKD: [0, 3899, 5893, 10404, 23403, 44852, null],
 };
 const PLAN_SOURCE_LIMITS = {
   free: {max_files_per_job:3, max_media_upload_mb:100, max_document_upload_mb:25, max_minutes_per_job:30, max_document_pages:50, max_ocr_pages:20},
   credit: {max_files_per_job:8, max_media_upload_mb:500, max_document_upload_mb:50, max_minutes_per_job:180, max_document_pages:150, max_ocr_pages:50},
-  lite: {max_files_per_job:12, max_media_upload_mb:750, max_document_upload_mb:75, max_minutes_per_job:180, max_document_pages:250, max_ocr_pages:75},
-  plus: {max_files_per_job:16, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:300, max_document_pages:350, max_ocr_pages:100},
-  pro: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:600, max_document_pages:500, max_ocr_pages:150},
-  max: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:900, max_document_pages:500, max_ocr_pages:150},
+  lite: {max_files_per_job:12, max_media_upload_mb:750, max_document_upload_mb:75, max_minutes_per_job:120, max_document_pages:250, max_ocr_pages:75},
+  plus: {max_files_per_job:16, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:240, max_document_pages:350, max_ocr_pages:100},
+  pro: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:360, max_document_pages:500, max_ocr_pages:150},
+  max: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:600, max_document_pages:500, max_ocr_pages:150},
   business: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:1440, max_document_pages:500, max_ocr_pages:150},
 };
 
@@ -341,7 +354,7 @@ function planCopy(code) {
   if (currentLanguage === "tr") return fallback;
   if (currentLanguage === "en") return PLAN_COPY.en[code] || fallback;
   const central = window.LectureSiftI18n;
-  const amount = {free:60, credit:180, lite:600, plus:1800, pro:5000, max:12000, business:10}[code];
+  const amount = code === "business" ? 10 : PLAN_FALLBACK[code]?.[1];
   const units = code === "business"
     ? central?.t("plans.userUnit", "kullanıcı")
     : code === "credit"
@@ -849,7 +862,7 @@ function updateJobView(job) {
 
 function showError(message, code = "LS-SYSTEM-01") {
   const known = ERRORS.tr[code];
-  const centralKey = ({"LS-URL-05":"error.url05","LS-AI-03":"error.ai03","LS-AI-04":"error.ai04","LS-AI-05":"error.ai05","LS-AI-06":"error.ai06","LS-AI-07":"error.ai07","LS-AI-08":"error.ai08"})[code];
+  const centralKey = ({"LS-URL-02":"error.url02","LS-URL-03":"error.url03","LS-URL-05":"error.url05","LS-AI-03":"error.ai03","LS-AI-04":"error.ai04","LS-AI-05":"error.ai05","LS-AI-06":"error.ai06","LS-AI-07":"error.ai07","LS-AI-08":"error.ai08"})[code];
   const translated = code === "LS-UPLOAD-02" && message
     ? message
     : centralKey
@@ -1306,18 +1319,70 @@ $("lessonQuestionForm").addEventListener("submit", async event => {
 });
 $("showTranslated").onclick = () => renderTranscript(true); $("showOriginal").onclick = () => renderTranscript(false);
 
-function renderQuiz(items) {
-  quizScore = 0; quizAnswered = 0; $("quizStatus").textContent = `${t("score")}: 0/${items.length}`;
-  $("quizContent").innerHTML = items.map((item, index) => `<div class="quiz-item" data-question="${index}"><h3>${index + 1}. ${escapeHtml(item.question)}</h3><div class="quiz-options">${(item.options || []).map((option, optionIndex) => `<button class="quiz-option" data-option="${optionIndex}">${String.fromCharCode(65 + optionIndex)}. ${escapeHtml(option)}</button>`).join("")}</div><p class="quiz-explanation">${escapeHtml(item.explanation)}</p></div>`).join("") || `<div class="empty-state">${escapeHtml(t("noContent"))}</div>`;
-  document.querySelectorAll(".quiz-option").forEach(button => button.onclick = () => {
-    const shell = button.closest(".quiz-item"); if (shell.classList.contains("answered")) return;
-    const question = items[Number(shell.dataset.question)], selected = Number(button.dataset.option), correct = Number(question.answer_index);
-    shell.classList.add("answered"); quizAnswered += 1;
-    shell.querySelectorAll(".quiz-option").forEach(option => { option.disabled = true; if (Number(option.dataset.option) === correct) option.classList.add("correct"); });
-    if (selected === correct) quizScore += 1; else button.classList.add("wrong");
-    $("quizStatus").textContent = `${t("score")}: ${quizScore}/${items.length} · ${quizAnswered}/${items.length}`; updateExamReadiness(items.length);
+function renderQuiz(items, {reset = true} = {}) {
+  if (reset) {
+    activeQuizItems = Array.isArray(items) ? [...items] : [];
+    quizAnswers = new Map();
+    quizRendered = true;
+  } else if (!quizRendered) return;
+
+  quizScore = 0; quizAnswered = 0;
+  quizAnswers.forEach((selected, questionIndex) => {
+    const question = activeQuizItems[questionIndex];
+    if (!question) return;
+    quizAnswered += 1;
+    if (selected === Number(question.answer_index)) quizScore += 1;
   });
+  const total = activeQuizItems.length;
+  $("quizStatus").textContent = quizAnswered
+    ? `${t("score")}: ${quizScore}/${total} · ${quizAnswered}/${total}`
+    : `${t("score")}: 0/${total}`;
+  $("quizContent").innerHTML = activeQuizItems.map((item, index) => {
+    const options = Array.isArray(item.options) ? item.options : [];
+    const correct = Number(item.answer_index);
+    const answered = quizAnswers.has(index);
+    const selected = quizAnswers.get(index);
+    const feedbackId = `quiz-feedback-${index}`;
+    const questionId = `quiz-question-${index}`;
+    const buttons = options.map((option, optionIndex) => {
+      const isSelected = answered && selected === optionIndex;
+      const isCorrect = answered && correct === optionIndex;
+      const classes = ["quiz-option"];
+      if (isSelected) classes.push("selected");
+      if (isCorrect) classes.push("correct");
+      if (isSelected && !isCorrect) classes.push("wrong");
+      const resultLabel = isCorrect ? t("correct") : (isSelected && answered ? t("incorrect") : "");
+      return `<button type="button" class="${classes.join(" ")}" data-option="${optionIndex}" aria-pressed="${String(isSelected)}"${answered ? ` aria-describedby="${feedbackId}" disabled` : ""}>${String.fromCharCode(65 + optionIndex)}. ${escapeHtml(option)}${resultLabel ? ` <span class="quiz-option-result">— ${escapeHtml(resultLabel)}</span>` : ""}</button>`;
+    }).join("");
+    const feedback = answered
+      ? `<p id="${feedbackId}" class="quiz-explanation" role="status" tabindex="-1"><strong>${escapeHtml(selected === correct ? t("correct") : t("incorrect"))}</strong>${item.explanation ? ` · ${escapeHtml(item.explanation)}` : ""}</p>`
+      : `<p id="${feedbackId}" class="quiz-explanation" hidden></p>`;
+    return `<div class="quiz-item${answered ? " answered" : ""}" data-question="${index}"><h3 id="${questionId}">${index + 1}. ${escapeHtml(item.question)}</h3><div class="quiz-options" role="group" aria-labelledby="${questionId}">${buttons}</div>${feedback}</div>`;
+  }).join("") || `<div class="empty-state">${escapeHtml(t("noContent"))}</div>`;
+  updateExamReadiness(total);
 }
+
+const quizContentElement = $("quizContent");
+quizContentElement.addEventListener("click", event => {
+  const button = event.target?.closest?.(".quiz-option");
+  if (!button || button.disabled || !quizContentElement.contains(button)) return;
+  const shell = button.closest(".quiz-item");
+  if (!shell || !quizContentElement.contains(shell)) return;
+  const questionIndex = Number(shell.dataset.question);
+  const selected = Number(button.dataset.option);
+  const question = activeQuizItems[questionIndex];
+  const options = Array.isArray(question?.options) ? question.options : [];
+  const correct = Number(question?.answer_index);
+  if (
+    quizAnswers.has(questionIndex)
+    || !Number.isInteger(questionIndex) || questionIndex < 0
+    || !Number.isInteger(selected) || selected < 0 || selected >= options.length
+    || !Number.isInteger(correct) || correct < 0 || correct >= options.length
+  ) return;
+  quizAnswers.set(questionIndex, selected);
+  renderQuiz(undefined, {reset:false});
+  $(`quiz-feedback-${questionIndex}`)?.focus();
+});
 
 function updateExamReadiness(total = latestResult?.quiz?.length || 0) {
   const answered = Math.min(quizAnswered, total);

@@ -74,12 +74,14 @@ forget`/`prune`, or interprets an unproved snapshot as success.
 
    The script first opens one exported read-only PostgreSQL snapshot. Before
    `pg_dump` consumes it, the script runs the same strict
-   `rehearsal_manifest.sql` and canonical line contract inside that snapshot
-   as PostgreSQL migration. That fresh, snapshot-bound SHA-256 must exactly equal
+   `rehearsal_manifest_v3.sql` inside that snapshot and verifies it with
+   `verify_schema_transition_v3.py current` and the same provider-session,
+   purchase-terms and preserved email-verification schema contracts as
+   PostgreSQL migration. That fresh, snapshot-bound SHA-256 must exactly equal
    `migrated_target_manifest_sha256` in the root-only
    `postgres-cutover.ok`; a changed target fails before any backup is taken.
    The script then exports one PostgreSQL MVCC snapshot, binds both `pg_dump`
-   and the recovery manifest to it, forces and validates a Redis 7.4 AOF/RDB
+   and `recovery_manifest_v2.sql` to it, forces and validates a Redis 7.4 AOF/RDB
    checkpoint, creates the exact `lecturesift-backup-v2` payload plus the
    existing `configuration-snapshot-v1`, uploads it with the fixed production
    host/tags, reopens the full 64-hex Restic snapshot, and deletes its

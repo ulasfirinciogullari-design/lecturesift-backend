@@ -109,8 +109,10 @@ skip the runtime gate only when a usable Bash is unavailable.
    disaster-restore validation retain their separate explicit proof paths.
 
 The outer gate retains the complete manifest and verifies both the pre- and
-post-rehearsal main database with `verify_schema_transition.py current` and the
-reviewed provider-session schema contract. `TABLE_DIFF`, `SCHEMA_COMPAT`,
+post-rehearsal main database with `verify_schema_transition_v3.py current`,
+using `rehearsal_manifest_v3.sql` and the reviewed provider-session,
+purchase-terms and preserved email-verification schema contracts.
+`TABLE_DIFF`, `SCHEMA_COMPAT`,
 `UNVALIDATED_FK`, any non-zero `ANOMALY`, a missing `SCHEMA_OBJECT`, or contract
 drift rejects admission before the canonical before/after comparison.
 

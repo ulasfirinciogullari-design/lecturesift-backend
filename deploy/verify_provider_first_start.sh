@@ -26,10 +26,11 @@ ROOT_DIR="${LECTURESIFT_ROOT:-/opt/lecturesift}"
 DB_ENV_FILE="${LECTURESIFT_DB_ENV_FILE:-/etc/lecturesift/postgres.env}"
 RELEASE_ENV_FILE="${LECTURESIFT_RELEASE_ENV_FILE:-/run/lecturesift/release.env}"
 EVIDENCE_TOOL="$ROOT_DIR/deploy/provider_cutover_evidence.py"
-DATA_MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest.sql"
+DATA_MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest_v3.sql"
 SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt"
+PURCHASE_TERMS_CONTRACT="$ROOT_DIR/deploy/schema_contract_billing_purchase_terms_v1.txt"
 PRESERVED_SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt"
-SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition.py"
+SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition_v3.py"
 SECURITY_MANIFEST="$ROOT_DIR/deploy/postgres_security_manifest.sql"
 SECURITY_VALIDATOR="$ROOT_DIR/deploy/validate_postgres_security_manifest.py"
 ROLE_LOGIN_PROBE="$ROOT_DIR/deploy/postgres_role_login_probe.sh"
@@ -59,7 +60,7 @@ check_private() {
 check_private "$DB_ENV_FILE" "Database environment"
 check_private "$RELEASE_ENV_FILE" "Release identity"
 for helper in "$EVIDENCE_TOOL" "$DATA_MANIFEST" "$SECURITY_MANIFEST" \
-  "$SCHEMA_CONTRACT" "$PRESERVED_SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" "$SECURITY_VALIDATOR" \
+  "$SCHEMA_CONTRACT" "$PURCHASE_TERMS_CONTRACT" "$PRESERVED_SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" "$SECURITY_VALIDATOR" \
   "$ROLE_LOGIN_PROBE" "$REDIS_MANIFEST_TOOL" \
   "$INSTAGRAM_STOP_GATE" \
   "$ROOT_DIR/compose.yaml"; do

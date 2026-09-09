@@ -142,7 +142,18 @@ metadata_database_size="$(sed -n 's/^database_size_bytes=//p' "$SOURCE/BACKUP_ME
 metadata_redis_version="$(sed -n 's/^redis_version=//p' "$SOURCE/BACKUP_METADATA")"
 metadata_compatibility="$(sed -n 's/^redis_restore_compatibility=//p' "$SOURCE/BACKUP_METADATA")"
 case "$metadata_manifest_version" in
-  1) RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v1.sql" ;;
+  1)
+    RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v1.sql"
+    expected_schema_compatibility="lecturesift-schema-v1"
+    ;;
+  2)
+    RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v2.sql"
+    expected_schema_compatibility="lecturesift-schema-v2"
+    ;;
+  3)
+    RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v3.sql"
+    expected_schema_compatibility="lecturesift-schema-v3"
+    ;;
   *)
     echo "The backup references an unsupported recovery manifest version." >&2
     exit 1
@@ -150,8 +161,7 @@ case "$metadata_manifest_version" in
 esac
 if [[ "$metadata_format" != "lecturesift-backup-v2" ||
       "$metadata_application" != "lecturesift-production" ||
-      "$metadata_schema_compatibility" != "lecturesift-schema-v1" ||
-      "$metadata_manifest_version" != "1" ||
+      "$metadata_schema_compatibility" != "$expected_schema_compatibility" ||
       ! "$metadata_manifest_sha256" =~ ^[[:xdigit:]]{64}$ ||
       ! "$metadata_database_identity_sha256" =~ ^[[:xdigit:]]{64}$ ||
       ! "$metadata_schema_sha256" =~ ^[[:xdigit:]]{64}$ ||
@@ -274,6 +284,12 @@ docker run --rm --pull=never --network none --read-only \
       /tmp/rehearsal-manifest.out
     cat /tmp/rehearsal-manifest.out
   ' >"$VALIDATION_RUN_DIR/rehearsal-manifest.out"
+if [[ "$metadata_manifest_version" == "3" ]]; then
+  python3 "$ROOT_DIR/deploy/verify_schema_transition_v4.py" current \
+    --manifest "$VALIDATION_RUN_DIR/rehearsal-manifest.out" \
+    --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" \
+    --preserved-contract "$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt" >/dev/null
+fi
 restored_database_count="$(tr -d '\r' <"$VALIDATION_RUN_DIR/rehearsal-manifest.out" | grep -c '^DATABASE|')"
 restored_database_line="$(tr -d '\r' <"$VALIDATION_RUN_DIR/rehearsal-manifest.out" | grep '^DATABASE|')"
 restored_schema_count="$(tr -d '\r' <"$VALIDATION_RUN_DIR/rehearsal-manifest.out" | grep -c '^SCHEMA|')"

@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="tr">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="description" content="LectureSift hesabını oluştur."><title>Hesap Oluştur | LectureSift</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="./auth.css"><link rel="stylesheet" href="/rollout.css?v=9"><link rel="stylesheet" href="/theme.css?v=17"><script src="/theme.js?v=8"></script><link rel="stylesheet" href="/product-layout.css?v=4"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="description" content="LectureSift hesabını oluştur."><title>Hesap Oluştur | LectureSift</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="./auth.css?v=4"><link rel="stylesheet" href="/rollout.css?v=9"><link rel="stylesheet" href="/theme.css?v=17"><script src="/theme.js?v=10"></script><link rel="stylesheet" href="/product-layout.css?v=4"></head>
 <body data-page="register">
   <header class="auth-topbar"><a class="brand" href="/"><span class="brand-mark"><i></i><i></i><i></i></span><span>Lecture<span>Sift</span></span></a><a class="back-link" href="/">← Ana sayfa</a></header>
   <main class="auth-shell">
@@ -19,6 +19,8 @@
         <label class="field"><span>Ad</span><input id="firstName" autocomplete="given-name" minlength="2" maxlength="80" required></label>
         <label class="field"><span>Soyad</span><input id="lastName" autocomplete="family-name" minlength="2" maxlength="80" required></label>
         <label class="field full"><span>E-posta</span><input id="email" type="email" autocomplete="email" required></label>
+        <label class="field full"><span data-referral-i18n="registerLabel">Davet kodu (isteğe bağlı)</span><input id="referralCode" autocomplete="off" minlength="28" maxlength="28" pattern="LSR-[A-Fa-f0-9]{24}" aria-describedby="referralCodeHelp referralCodeNotice"><small id="referralCodeHelp" data-referral-i18n="registerHelp">Kodu bağlantıdan aldıysan burada görünür; istersen geçerli bir kodu elle yazabilirsin. Kayıt olmak tek başına ödül vermez.</small></label>
+        <p id="referralCodeNotice" class="notice compact-notice form-note" hidden role="status"></p>
         <label class="field"><span>Telefon (isteğe bağlı)</span><input id="phone" type="tel" autocomplete="tel" placeholder="+90 5xx xxx xx xx"></label>
         <label class="field"><span>Ülke</span><select id="countryCode"><option value="TR">Türkiye</option><option value="US">United States</option><option value="GB">United Kingdom</option><option value="DE">Deutschland</option><option value="FR">France</option><option value="ES">España</option><option value="IT">Italia</option><option value="NL">Nederland</option><option value="CA">Canada</option><option value="AU">Australia</option></select></label>
         <label class="field"><span>Parola</span><input id="password" type="password" autocomplete="new-password" minlength="10" required></label>
@@ -27,12 +29,13 @@
         <label class="check-row form-note"><input id="terms" type="checkbox" required><span><a href="/terms.html" target="_blank">Kullanım koşullarını</a> kabul ediyorum. Parolamın en az 10 karakter, büyük-küçük harf ve rakam içermesi gerektiğini biliyorum.</span></label>
         <div class="form-actions"><button id="registerSubmit" class="primary-action" type="submit">Hesap oluştur</button></div>
       </form>
-      <div id="successBox" class="notice" hidden><strong>Doğrulama e-postası gönderildi.</strong><br><span id="successEmail"></span> adresindeki bağlantıyı kullanabilir veya e-postadaki altı haneli kodu girebilirsin.<a id="enterCodeLink" class="verify-inline-link" href="/verify.html">Doğrulama kodunu gir</a></div>
+      <div id="successBox" class="notice" hidden><strong>Doğrulama e-postası gönderildi.</strong><br><span id="successEmail"></span> adresindeki bağlantıyı kullanabilir veya e-postadaki altı haneli kodu girebilirsin.<a id="enterCodeLink" class="verify-inline-link" href="/verify.html">Doğrulama kodunu gir</a><p id="registerReferralStatus" hidden role="status"></p></div>
       <div id="authNotice" class="notice" hidden></div>
       <div class="inline-links"><span>Zaten hesabın var mı?</span><a href="/login.html">Giriş yap</a></div>
     </section>
   </main>
   <script src="./locale-data.js?v=4"></script>
-  <script src="./page-i18n.js?v=6"></script><script src="/i18n.js?v=35"></script>
-  <script src="./auth.js?v=5"></script>
+  <script src="./page-i18n.js?v=7"></script><script src="/i18n.js?v=36"></script>
+  <script src="./referral-i18n.js?v=2"></script>
+  <script src="./auth.js?v=15"></script>
 <script src="/product-layout.js?v=1"></script></body></html>

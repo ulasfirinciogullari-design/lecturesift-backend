@@ -7,6 +7,13 @@ const LOCALE_DATA = window.LECTURESIFT_LOCALE_DATA || {
 const ZERO_DECIMAL_CURRENCIES = new Set(["JPY", "KRW"]);
 const PLANS_I18N = window.LectureSiftI18n || {language:"tr",locale:"tr-TR",t:(key,fallback)=>fallback || key};
 const pt = (key, fallback) => PLANS_I18N.t(key, fallback);
+const REFERRAL_I18N = window.LectureSiftReferralI18n || {t:(_key, fallback)=>fallback || ""};
+const rpt = (key, fallback) => REFERRAL_I18N.t(key, fallback);
+const COUPON_PLANS = new Set(["lite", "plus", "pro", "max"]);
+const referralCouponCode = value => {
+  const normalized = String(value || "").trim().toUpperCase();
+  return /^LSC-[A-F0-9]{24}$/.test(normalized) ? normalized : "";
+};
 
 function recordPlanAnalytics(name, parameters = {}) {
   if (window.LectureSiftAnalytics?.track) return void window.LectureSiftAnalytics.track(name, parameters);
@@ -28,45 +35,45 @@ const PLAN_LIMITS = {
   free: {max_files_per_job:3, max_media_upload_mb:100, max_document_upload_mb:25, max_minutes_per_job:30, max_document_pages:50, max_ocr_pages:20, max_document_characters:1500000},
   test: {max_files_per_job:1, max_media_upload_mb:25, max_document_upload_mb:10, max_minutes_per_job:1, max_document_pages:10, max_ocr_pages:5, max_document_characters:1500000},
   credit: {max_files_per_job:8, max_media_upload_mb:500, max_document_upload_mb:50, max_minutes_per_job:180, max_document_pages:150, max_ocr_pages:50, max_document_characters:1500000},
-  lite: {max_files_per_job:12, max_media_upload_mb:750, max_document_upload_mb:75, max_minutes_per_job:180, max_document_pages:250, max_ocr_pages:75, max_document_characters:1500000},
-  plus: {max_files_per_job:16, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:300, max_document_pages:350, max_ocr_pages:100, max_document_characters:1500000},
-  pro: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:600, max_document_pages:500, max_ocr_pages:150, max_document_characters:1500000},
-  max: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:900, max_document_pages:500, max_ocr_pages:150, max_document_characters:1500000},
+  lite: {max_files_per_job:12, max_media_upload_mb:750, max_document_upload_mb:75, max_minutes_per_job:120, max_document_pages:250, max_ocr_pages:75, max_document_characters:1500000},
+  plus: {max_files_per_job:16, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:240, max_document_pages:350, max_ocr_pages:100, max_document_characters:1500000},
+  pro: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:360, max_document_pages:500, max_ocr_pages:150, max_document_characters:1500000},
+  max: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:600, max_document_pages:500, max_ocr_pages:150, max_document_characters:1500000},
   business: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:1440, max_document_pages:500, max_ocr_pages:150, max_document_characters:1500000},
 };
 const FALLBACK_META = {
-  free: {kind: "free", minutes: 60, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 60, quiz_questions: 10, flashcards: 20, export_formats: ["pdf"], summary_profiles: ALL_SUMMARIES, limits: PLAN_LIMITS.free, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: false}},
-  test: {kind: "one_time", minutes: 1, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 1, quiz_questions: 1, flashcards: 1, export_formats: ["pdf"], summary_profiles: ALL_SUMMARIES, limits: PLAN_LIMITS.test, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: true}},
-  credit: {kind: "one_time", minutes: 180, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 180, quiz_questions: 20, flashcards: 40, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, limits: PLAN_LIMITS.credit, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: true}},
-  lite: {kind: "subscription", minutes: 600, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 600, quiz_questions: 20, flashcards: 40, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, limits: PLAN_LIMITS.lite, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
-  plus: {kind: "subscription", minutes: 1800, priority: "standard", team_seats: 1, featured: true, entitlements: {minutes: 1800, quiz_questions: 30, flashcards: 60, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, limits: PLAN_LIMITS.plus, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
-  pro: {kind: "subscription", minutes: 5000, priority: "priority", team_seats: 1, featured: false, entitlements: {minutes: 5000, quiz_questions: 30, flashcards: 60, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, limits: PLAN_LIMITS.pro, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
-  max: {kind: "subscription", minutes: 12000, priority: "priority", team_seats: 1, featured: false, entitlements: {minutes: 12000, quiz_questions: 30, flashcards: 60, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, limits: PLAN_LIMITS.max, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
-  business: {kind: "quote", minutes: null, priority: "priority", team_seats: 10, featured: false, entitlements: {minutes: null, quiz_questions: null, flashcards: null, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, limits: PLAN_LIMITS.business, team_seats: 10, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
+  free: {kind: "free", minutes: 60, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 60, quiz_questions: 10, flashcards: 20, export_formats: ["pdf"], summary_profiles: ALL_SUMMARIES, history_days: 7, limits: PLAN_LIMITS.free, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: false}},
+  test: {kind: "one_time", minutes: 1, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 1, quiz_questions: 1, flashcards: 1, export_formats: ["pdf"], summary_profiles: ALL_SUMMARIES, history_days: 1, limits: PLAN_LIMITS.test, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: true}},
+  credit: {kind: "one_time", minutes: 180, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 180, quiz_questions: 20, flashcards: 40, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, history_days: 30, limits: PLAN_LIMITS.credit, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: true}},
+  lite: {kind: "subscription", minutes: 400, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 400, quiz_questions: 10, flashcards: 20, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, history_days: 30, limits: PLAN_LIMITS.lite, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
+  plus: {kind: "subscription", minutes: 900, priority: "standard", team_seats: 1, featured: true, entitlements: {minutes: 900, quiz_questions: 20, flashcards: 40, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, history_days: 90, limits: PLAN_LIMITS.plus, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
+  pro: {kind: "subscription", minutes: 2000, priority: "priority", team_seats: 1, featured: false, entitlements: {minutes: 2000, quiz_questions: 30, flashcards: 60, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, history_days: 365, limits: PLAN_LIMITS.pro, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
+  max: {kind: "subscription", minutes: 4000, priority: "priority", team_seats: 1, featured: false, entitlements: {minutes: 4000, quiz_questions: 30, flashcards: 60, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, history_days: 730, limits: PLAN_LIMITS.max, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
+  business: {kind: "quote", minutes: null, priority: "priority", team_seats: 10, featured: false, entitlements: {minutes: null, quiz_questions: null, flashcards: null, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, history_days: 730, limits: PLAN_LIMITS.business, team_seats: 10, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
 };
 const FALLBACK_PRICES = {
-  TRY: [0, 100, 19900, 27900, 44900, 99900, 199900, null],
-  USD: [0, null, 499, 699, 999, 2499, 4999, null],
-  EUR: [0, null, 499, 649, 949, 2399, 4799, null],
-  GBP: [0, null, 399, 599, 849, 2099, 4199, null],
-  CAD: [0, null, 699, 949, 1349, 3399, 6799, null],
-  AUD: [0, null, 799, 1099, 1549, 3799, 7599, null],
-  NZD: [0, null, 899, 1199, 1699, 4199, 8399, null],
-  JPY: [0, null, 750, 1050, 1500, 3750, 7500, null],
-  KRW: [0, null, 6900, 9500, 13900, 34900, 69900, null],
-  CNY: [0, null, 3500, 4900, 6900, 17500, 34900, null],
-  INR: [0, null, 39900, 54900, 79900, 199900, 399900, null],
-  BRL: [0, null, 2499, 3499, 4999, 12499, 24999, null],
-  MXN: [0, null, 9900, 13900, 19900, 49900, 99900, null],
-  CHF: [0, null, 449, 599, 849, 2199, 4399, null],
-  SEK: [0, null, 5299, 7299, 10499, 25999, 51999, null],
-  NOK: [0, null, 5499, 7699, 10999, 27499, 54999, null],
-  DKK: [0, null, 3499, 4499, 6699, 16999, 33999, null],
-  PLN: [0, null, 1999, 2699, 3999, 9999, 19999, null],
-  AED: [0, null, 1899, 2599, 3699, 9199, 18399, null],
-  SAR: [0, null, 1899, 2599, 3799, 9399, 18799, null],
-  SGD: [0, null, 699, 949, 1349, 3399, 6799, null],
-  HKD: [0, null, 3899, 5499, 7799, 19499, 38999, null],
+  TRY: [0, 100, 19900, 29900, 59900, 119900, 229900, null],
+  USD: [0, null, 499, 899, 1699, 3299, 5999, null],
+  EUR: [0, null, 499, 849, 1599, 3099, 5699, null],
+  GBP: [0, null, 399, 642, 1133, 2519, 4829, null],
+  CAD: [0, null, 699, 1017, 1800, 4079, 7819, null],
+  AUD: [0, null, 799, 1178, 2066, 4560, 8739, null],
+  NZD: [0, null, 899, 1285, 2267, 5040, 9659, null],
+  JPY: [0, null, 750, 1125, 2001, 4501, 8626, null],
+  KRW: [0, null, 6900, 10181, 18544, 41887, 80390, null],
+  CNY: [0, null, 3500, 5251, 9205, 21004, 40138, null],
+  INR: [0, null, 39900, 58835, 106593, 239920, 459915, null],
+  BRL: [0, null, 2499, 3750, 6669, 15001, 28751, null],
+  MXN: [0, null, 9900, 14896, 26548, 59890, 114892, null],
+  CHF: [0, null, 449, 642, 1133, 2639, 5059, null],
+  SEK: [0, null, 5299, 7822, 14006, 31204, 59803, null],
+  NOK: [0, null, 5499, 8251, 14673, 33004, 63253, null],
+  DKK: [0, null, 3499, 4822, 8937, 20402, 39101, null],
+  PLN: [0, null, 1999, 2892, 5335, 12001, 23000, null],
+  AED: [0, null, 1899, 2785, 4935, 11041, 21160, null],
+  SAR: [0, null, 1899, 2785, 5068, 11281, 21620, null],
+  SGD: [0, null, 699, 1017, 1800, 4079, 7819, null],
+  HKD: [0, null, 3899, 5893, 10404, 23403, 44852, null],
 };
 
 let catalog = null;
@@ -169,7 +176,11 @@ function summaryEntitlement() {
   return pt("plans.alwaysDetailed", "Her zaman ayrıntılı ve kapsamlı");
 }
 
-function planLabel(code) { return pt(`plan.${code}`, COPY[code]?.[0] || code); }
+const at = key => window.LectureSiftAssistantCopy?.t(key) || key;
+function planLabel(code) {
+  if (/^ai_(1000|3000|10000)$/.test(code)) return `${Number(code.slice(3)).toLocaleString(PLANS_I18N.locale)} ${at('credits')}`;
+  return pt(`plan.${code}`, COPY[code]?.[0] || code);
+}
 function visibleOrder() { return ORDER.filter(code => code !== "test" || currency === "TRY"); }
 
 function renderCompare() {
@@ -180,6 +191,7 @@ function renderCompare() {
     [pt("plans.billingType", "Ödeme türü"), plan => plan.kind === "subscription" ? pt("plans.subscription", "Aylık abonelik") : plan.kind === "one_time" ? pt("plans.oneTime", "Tek ödeme") : plan.kind === "free" ? pt("plan.free", "Ücretsiz") : pt("plans.quote", "Teklif")],
     [pt("plans.minutes", "İşleme dakikası"), plan => plan.entitlements?.minutes == null ? "∞" : Number(plan.entitlements.minutes).toLocaleString(PLANS_I18N.locale)],
     [pt("plans.singleJobLimit", "Tek iş süre sınırı"), plan => `${Number(plan.entitlements?.limits?.max_minutes_per_job || 0).toLocaleString(PLANS_I18N.locale)} ${pt("unit.minuteShort", "dk")}`],
+    [pt("plans.historyDays", "Sonuç geçmişi (gün)"), plan => Number(plan.entitlements?.history_days || 0).toLocaleString(PLANS_I18N.locale)],
     [pt("plans.filesPerJob", "Bir işte kaynak sayısı"), plan => Number(plan.entitlements?.limits?.max_files_per_job || 0).toLocaleString(PLANS_I18N.locale)],
     [pt("plans.mediaUploadLimit", "Bir işte toplam medya boyutu"), plan => `${Number(plan.entitlements?.limits?.max_media_upload_mb || 0).toLocaleString(PLANS_I18N.locale)} MB`],
     [pt("plans.documentUploadLimit", "Bir işte toplam belge boyutu"), plan => `${Number(plan.entitlements?.limits?.max_document_upload_mb || 0).toLocaleString(PLANS_I18N.locale)} MB`],
@@ -195,7 +207,7 @@ function renderCompare() {
     [pt("plans.multiSource", "Çoklu video ve ayrı ses/slayt"), () => yes],
     [pt("plans.languages", "Kaynak ve çıktı dilleri"), () => `13 ${pt("plans.languagesUnit", "dil")}`],
     [pt("plans.outputs", "Transkript, not ve zaman damgası"), () => all],
-    [pt("plans.adExperience", "Reklam deneyimi"), plan => plan.entitlements?.ad_free ? pt("plans.adFree", "Reklamsız kullanım") : pt("plans.rewardedOption", "İsteğe bağlı reklamla ek dakika")],
+    [pt("plans.adExperience", "Reklam deneyimi"), plan => plan.entitlements?.ad_free ? pt("plans.adFree", "Reklamsız kullanım") : pt("plans.adsMayAppear", "Reklam gösterilebilir")],
   ];
   $("compareBody").innerHTML = rows.map(([label, value]) => `<tr><td>${esc(label)}</td>${plans.map(plan => `<td>${esc(value(plan))}</td>`).join("")}</tr>`).join("");
 }
@@ -203,8 +215,14 @@ function renderCompare() {
 function normalizeCatalog(remote, selected) {
   const amounts = FALLBACK_PRICES[selected] || FALLBACK_PRICES.USD;
   const remotePlans = new Map((remote?.plans || []).map(plan => [plan.code, plan]));
+  const draft = window.LectureSiftAssistantOffers;
+  const assistant = remote?.assistant || (draft ? {
+    available:false, included:draft.INCLUDED,
+    packs:Object.entries(draft.PACKS).map(([code,credits],index)=>({code,credits,currency:selected,amount_minor:(draft.PRICES[selected]||draft.PRICES.USD)[index]})),
+  } : null);
   return {
     ...(remote || {}),
+    assistant,
     selected_currency: selected,
     supported_currencies: LOCALE_DATA.currencies,
     plans: ORDER.map((code, index) => {
@@ -220,7 +238,11 @@ function normalizeCatalog(remote, selected) {
         ? remotePrice
         : (fallbackAmount == null ? null : {currency: selected, amount_minor: fallbackAmount});
       return {...plan, display_price: selectedPrice};
-    }),
+    }).concat((assistant?.packs || []).map(pack => ({
+      code:pack.code, kind:'one_time', assistant_credits:pack.credits,
+      display_price:{amount_minor:pack.amount_minor,currency:pack.currency},
+      entitlements:{assistant_credits:pack.credits,minutes:0,download_enabled:false},
+    }))),
   };
 }
 
@@ -305,17 +327,21 @@ function renderPlans() {
       <div class="plan-price">${esc(priceText)} <small>${suffix}</small></div>
       <ul class="plan-features">
         <li>${esc(minutesText)}</li>
+        ${catalog?.assistant?.available && entitlements.assistant_credits ? `<li>${Number(entitlements.assistant_credits).toLocaleString(PLANS_I18N.locale)} ${esc(at('credits'))}</li>` : ''}
         <li>${Number(limits.max_minutes_per_job || 0).toLocaleString(PLANS_I18N.locale)} ${esc(pt("plans.minutesPerJob", "dk / tek iş"))}</li>
         <li>${Number(limits.max_files_per_job || 0).toLocaleString(PLANS_I18N.locale)} ${esc(pt("plans.filesPerJobShort", "kaynak / iş"))}</li>
+        <li>${entitlements.quiz_questions ?? "∞"} ${esc(pt("plans.quizShort", "quiz sorusu"))} · ${entitlements.flashcards ?? "∞"} ${esc(pt("plans.cardsShort", "bilgi kartı"))}</li>
+        <li>${esc(pt("plans.historyDays", "Sonuç geçmişi (gün)"))}: ${Number(entitlements.history_days || 0).toLocaleString(PLANS_I18N.locale)}</li>
+        <li>${esc(entitlements.ad_free ? pt("plans.adFree", "Reklamsız kullanım") : pt("plans.adsMayAppear", "Reklam gösterilebilir"))}</li>
+      </ul>
+      <details class="plan-details"><summary>${esc(pt("plans.allLimits", "Tüm özellik ve sınırlar"))}</summary><ul class="plan-features">
         <li>${Number(limits.max_media_upload_mb || 0).toLocaleString(PLANS_I18N.locale)} MB ${esc(pt("plans.mediaShort", "medya"))} · ${Number(limits.max_document_upload_mb || 0).toLocaleString(PLANS_I18N.locale)} MB ${esc(pt("plans.documentShort", "belge"))}</li>
         <li>${Number(limits.max_document_pages || 0).toLocaleString(PLANS_I18N.locale)} ${esc(pt("plans.pagesShort", "sayfa"))} · ${Number(limits.max_ocr_pages || 0).toLocaleString(PLANS_I18N.locale)} OCR</li>
-        <li>${entitlements.quiz_questions ?? "∞"} ${esc(pt("plans.quizShort", "quiz sorusu"))}</li>
-        <li>${entitlements.flashcards ?? "∞"} ${esc(pt("plans.cardsShort", "bilgi kartı"))}</li>
         <li>${esc(summaryEntitlement())} ${esc(pt("plans.summaryShort", "özet"))}</li>
         <li>${esc(entitlements.download_enabled === false ? pt("plans.previewOnly", "Sitede önizleme · dosya indirme yok") : (entitlements.export_formats || []).join(", ").toUpperCase())}</li>
         <li>${esc(plan.priority === "priority" ? pt("priority.priority", "Öncelikli") : pt("priority.standard", "Standart"))} ${esc(pt("plans.processingSuffix", "işleme"))}</li>
-        <li>${esc(entitlements.ad_free ? pt("plans.adFree", "Reklamsız kullanım") : pt("plans.rewardedOption", "İsteğe bağlı reklamla ek dakika"))}</li>
-      </ul>
+        <li>${esc(pt("plans.optionalLearning", "Quiz ve bilgi kartlarını istediğinde kapatabilirsin."))}</li>
+      </ul></details>
       ${actions}
     </article>`;
   }).join("");
@@ -323,9 +349,31 @@ function renderPlans() {
     button.onclick = () => buy(button.dataset.plan, button.dataset.interval);
   });
   renderCompare();
+  renderAssistantOffers();
+}
+
+function renderAssistantOffers() {
+  let section = document.getElementById('assistantCredits');
+  if (!section) {section=document.createElement('section');section.id='assistantCredits';section.className='assistant-credit-offers';$('plansGrid').after(section);}
+  const offers=catalog?.assistant;
+  if(!offers){section.hidden=true;return;}
+  section.hidden=false;section.replaceChildren();
+  const heading=document.createElement('h2');heading.textContent=at('credits');section.append(heading);
+  const rules=document.createElement('p');rules.textContent=at('rules');section.append(rules);
+  if(!offers.available){const notice=document.createElement('p');notice.textContent=at('unavailable');section.append(notice);}
+  const packs=document.createElement('div');packs.className='assistant-credit-packs';
+  for(const pack of offers.packs || []) {
+    const card=document.createElement('article');card.className='assistant-credit-pack';
+    const name=document.createElement('h3');name.textContent=planLabel(pack.code);
+    const price=document.createElement('p');price.textContent=format(pack.amount_minor,pack.currency);
+    const button=document.createElement('button');button.type='button';button.className='plan-action';button.textContent=at('buy');button.disabled=!offers.available;
+    button.addEventListener('click',()=>buy(pack.code,'one_time'));card.append(name,price,button);packs.append(card);
+  }
+  section.append(packs);
 }
 
 async function buy(planCode, interval = "monthly") {
+  if (planCode.startsWith('ai_') && !catalog?.assistant?.available) {showError(at('unavailable'));return;}
   if (!localStorage.getItem(TOKEN_KEY)) {
     location.href = `/login.html?next=${encodeURIComponent("/plans.html")}`;
     return;
@@ -358,6 +406,11 @@ async function buy(planCode, interval = "monthly") {
   $("checkoutSummaryTotal").textContent = price
     ? format(price.amount_minor * multiplier, price.currency || currency)
     : pt("plans.quote", "Teklif");
+  const couponEligible = LOCALE_DATA.currencies.includes(currency) && interval === "monthly" && COUPON_PLANS.has(planCode);
+  $("checkoutCouponRow").hidden = !couponEligible;
+  $("checkoutCoupon").disabled = !couponEligible;
+  $("checkoutCoupon").value = "";
+  $("checkoutCoupon").setCustomValidity("");
   $("checkoutPhone").value = account?.user?.phone || "";
   $("checkoutFirstName").value = account?.user?.first_name || "";
   $("checkoutLastName").value = account?.user?.last_name || "";
@@ -377,8 +430,27 @@ async function buy(planCode, interval = "monthly") {
   $("checkoutPanel").hidden = false;
 }
 
+function selectedCheckoutCoupon() {
+  const input = $("checkoutCoupon");
+  if (input.disabled || !input.value.trim()) {
+    input.setCustomValidity("");
+    return "";
+  }
+  const selected = referralCouponCode(input.value);
+  if (!selected) {
+    input.setCustomValidity(rpt("checkoutCouponInvalid", "Geçerli bir davet kuponu gir."));
+    input.reportValidity();
+    return null;
+  }
+  input.value = selected;
+  input.setCustomValidity("");
+  return selected;
+}
+
 async function startHostedCheckout(preferredMethod = "card") {
   if (!$("checkoutForm").reportValidity()) return;
+  const couponCode = selectedCheckoutCoupon();
+  if (couponCode === null) return;
   const cardButton = $("checkoutCardButton");
   const protectedButton = $("checkoutProtectedBankButton");
   const manualButton = $("checkoutBankButton");
@@ -412,6 +484,7 @@ async function startHostedCheckout(preferredMethod = "card") {
         billing_zip_code: $("checkoutZipCode").value.trim(),
         phone: $("checkoutPhone").value.trim(),
         language: PLANS_I18N.language,
+        coupon_code: couponCode,
         terms_accepted:$("checkoutTerms").checked,
         early_performance_requested:$("checkoutEarlyPerformance").checked,
       }),
@@ -450,6 +523,8 @@ function hideBankTransferGuide() {
 async function createTransfer() {
   const bankButton = $("checkoutBankButton");
   if (bankButton.disabled || !$("checkoutForm").reportValidity()) return;
+  const couponCode = selectedCheckoutCoupon();
+  if (couponCode === null) return;
   const cardButton = $("checkoutCardButton");
   const protectedButton = $("checkoutProtectedBankButton");
   bankButton.disabled = true;
@@ -467,6 +542,7 @@ async function createTransfer() {
         terms_accepted: $("checkoutTerms").checked,
         early_performance_requested: $("checkoutEarlyPerformance").checked,
         language: PLANS_I18N.language,
+        coupon_code: couponCode,
       }),
     });
     const order = body.order;
@@ -545,6 +621,7 @@ $("checkoutClose").onclick = $("checkoutCancel").onclick = () => {
   $("paytrFrame").src = "about:blank";
 };
 $("checkoutBankButton").onclick = createTransfer;
+$("checkoutCoupon").addEventListener("input", event => { event.currentTarget.setCustomValidity(""); });
 $("checkoutProtectedBankButton").onclick = showBankTransferGuide;
 $("bankTransferBack").onclick = hideBankTransferGuide;
 $("bankTransferContinue").onclick = () => startHostedCheckout("bank_transfer");
