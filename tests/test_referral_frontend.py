@@ -63,7 +63,7 @@ def test_account_referrals_are_authenticated_and_fail_closed() -> None:
     assert 'value.referral_url !== `https://lecturesift.com/register.html?ref=${code}`' in script
     assert 'value.history_limit !== 50' in script
     assert 'summary.rewards.filter(reward => reward.role === "inviter" && reward.status === "pending")' in script
-    assert "Toplam serbest bırakılan davet dakikası" in html
+    assert 'id="referralEarned"' in html
 
 
 def test_referral_promises_are_inside_the_initially_hidden_content() -> None:

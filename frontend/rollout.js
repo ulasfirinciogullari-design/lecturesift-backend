@@ -308,11 +308,6 @@
       button.onclick = async function(event) {
         // Invalid sources must reach the existing field error before any
         // guest identity request or trial-limit handling.
-        if (typeof sourceMode !== "undefined" && sourceMode === "link"
-            && typeof normalizeYouTubeUrl === "function"
-            && !normalizeYouTubeUrl($("videoUrl")?.value || "")) {
-          return original.call(this, event);
-        }
         if (typeof billingAccount !== "undefined" && billingAccount?.plan?.code === "guest" && guestTrialState?.used) {
           updateGuestTrialUi();
           showInlineMessage(

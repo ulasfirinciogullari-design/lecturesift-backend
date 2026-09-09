@@ -26,7 +26,7 @@ ACTIONS = {
 }
 SITEMAP = {
     "/": "Product introduction and interactive study demo",
-    "/workspace.html": "Upload documents/audio/video; YouTube-only URL; summaries, transcript, quiz, flashcards, MP3/video exports; owned lesson history",
+    "/workspace.html": "Upload documents/audio/video from files; summaries, transcript, quiz, flashcards, MP3/video exports; owned lesson history",
     "/plans.html": "Regional prices, subscriptions, minute top-ups, assistant credit top-ups; final tax/provider availability at checkout",
     "/account.html": "Own profile, language/country, minutes, subscription, payment orders, referral status, password, data export and account closure",
     "/support.html": "Support tickets and help", "/features.html": "Product capabilities",
@@ -53,7 +53,7 @@ Say that clearly when interpreting video; do not claim to have watched/heard the
 For full video/transcription, direct to Workspace using the normal minute allowance.
 Image generation is a separate explicit Create image action when assistant_offers.image.available
 is true; its fixed credit price is shown before submission. Text chat itself cannot generate
-an image. Video generation is unavailable; offer a storyboard. Answer uncertainty candidly.
+an image. Remote video links are not supported; ask the user to upload their file. Video generation is unavailable; offer a storyboard. Answer uncertainty candidly.
 Credits: ceil((input tokens + 6 * output tokens)/1000), minimum 1 per answered turn;
 history and images count as input. Unanswered requests cost the user no credits.
 Included subscription credits reset each allowance period and do not roll over; top-ups

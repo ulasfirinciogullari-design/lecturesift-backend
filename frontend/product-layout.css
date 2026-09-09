@@ -27,7 +27,7 @@ body{font-family:var(--ui-font);background:var(--ui-page)!important;line-height:
 .study-sources{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
 .study-source{position:relative;display:flex;flex-direction:column;align-items:flex-start;text-decoration:none;padding:20px;border:1px solid transparent;border-radius:12px;min-width:0;transition:transform .15s,border-color .15s;color:var(--ui-ink)}
 .study-source:hover{transform:translateY(-3px);border-color:var(--ui-action)}
-.source-media{background:var(--study-lilac)}.source-document{background:var(--study-mint)}.source-youtube{background:var(--study-peach)}
+.source-media{background:var(--study-lilac)}.source-document{background:var(--study-mint)}.source-images{background:var(--study-peach)}
 .source-icon{display:grid;place-items:center;width:40px;height:40px;border-radius:10px;margin-bottom:16px;background:var(--ui-surface);color:var(--ui-ink)}
 .source-icon svg{width:23px;height:23px}.study-source strong{font-size:14px;line-height:1.4}.study-source small{font-size:11px;color:var(--ui-muted);margin-top:6px;line-height:1.6}.source-go{position:absolute;inset-inline-end:17px;inset-block-start:19px;color:var(--ui-muted);font-size:19px}
 .launcher-bottom{display:flex;align-items:center;gap:24px;margin-top:24px}.study-primary{display:inline-flex;align-items:center;justify-content:center;gap:24px;min-height:48px;padding:12px 22px;background:var(--ui-action);color:var(--ui-action-ink);border-radius:9px;text-decoration:none;font-size:14px;font-weight:650}.study-primary:hover{background:var(--ui-action-hover)}.study-text-link{font-size:13px;color:var(--ui-muted);text-underline-offset:4px}
@@ -72,7 +72,6 @@ html[dir="rtl"] .workspace-page>.page-shell{margin:0 252px 60px 30px}
 .home-page .skip-link:not(:focus){clip-path:inset(50%);pointer-events:none}
 
 /* Keep the source heading readable in both color themes. */
-.workspace-page #linkPanel .field-label{color:var(--ui-ink)}
 /* Keep the assistant entry usable before desktop navigation becomes crowded. */
 @media(min-width:861px) and (max-width:1100px){:is(.topbar,.legal-topbar){position:relative;flex-direction:row!important}.public-header-tools{display:flex;width:auto;flex:1;justify-content:flex-end;gap:8px}.public-menu-toggle{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;flex:0 0 42px;border:1px solid var(--ui-line);border-radius:9px;background:var(--ui-surface);color:var(--ui-ink);cursor:pointer}.public-menu-toggle svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round}.public-header-tools>.public-nav{display:none;position:absolute;inset-inline:20px;top:100%;width:auto;padding:12px;border:1px solid var(--ui-line);border-radius:12px;background:var(--ui-surface);box-shadow:0 12px 35px #10172720;z-index:100}.public-menu-open .public-header-tools>.public-nav{display:flex;flex-wrap:wrap;gap:6px}.public-menu-open .public-nav :is(.public-nav-link,.public-account-link){justify-content:flex-start;flex:1 0 calc(33% - 12px);padding:12px;white-space:normal}}
 
