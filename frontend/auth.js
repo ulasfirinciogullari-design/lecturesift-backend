@@ -607,7 +607,9 @@ async function initAccount() {
         : t("account.renewsUntilCancelled", "Ücretli hakların dönem boyunca açık. Yenilemeyi dilediğinde durdurabilirsin.");
       $("cancelSubscriptionButton").hidden = scheduled;
     }
-    $("accountAdMode").textContent = account.plan.entitlements?.ad_free
+    $("accountAdMode").textContent = account.permanent_ad_free
+      ? t("plan.ad_free", "Kalıcı reklamsız kullanım")
+      : account.plan.entitlements?.ad_free
       ? t("plans.adFree", "Reklamsız kullanım")
       : t("plans.rewardedOption", "İsteğe bağlı reklamla ek dakika");
     $("remainingMinutes").textContent = account.remaining_minutes == null ? t("account.unlimited", "Sınırsız") : account.remaining_minutes.toLocaleString(I18N.locale);

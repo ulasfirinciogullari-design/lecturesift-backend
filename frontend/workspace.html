@@ -36,11 +36,16 @@
 
   <aside class="study-sidebar" aria-label="LectureSift">
     <a class="sidebar-create" href="/workspace.html?source=upload"><span aria-hidden="true">＋</span><span data-i18n="redesign.new">Yeni çalışma</span></a>
-    <nav><a class="active" href="/workspace.html" aria-current="page"><span aria-hidden="true">▧</span><span data-i18n="redesign.new">Yeni çalışma</span></a><a href="/account.html#account-lessons"><span aria-hidden="true">▤</span><span data-i18n="redesign.library">Derslerim</span></a><a href="/account.html"><span aria-hidden="true">◎</span><span data-i18n="account.eyebrow">Hesabım</span></a><a href="/plans.html"><span aria-hidden="true">◇</span><span data-i18n="plansNav">Planlar</span></a></nav>
+    <nav><a class="active" data-workspace-link="study" href="#study" aria-current="page"><span aria-hidden="true">▧</span><span data-i18n="redesign.new">Yeni çalışma</span></a><a data-workspace-link="assistant" href="#assistant"><span aria-hidden="true">✦</span><span data-assistant-copy="nav">Asistan</span></a><a href="/account.html#account-lessons"><span aria-hidden="true">▤</span><span data-i18n="redesign.library">Derslerim</span></a><a href="/account.html"><span aria-hidden="true">◎</span><span data-i18n="account.eyebrow">Hesabım</span></a><a href="/plans.html"><span aria-hidden="true">◇</span><span data-i18n="plansNav">Planlar</span></a></nav>
     <a class="sidebar-support" href="/support.html" data-i18n="redesign.support">Yardım ve destek</a>
   </aside>
 
   <main id="app" class="page-shell">
+    <div class="workspace-mode-tabs" role="tablist" aria-label="Çalışma alanı" data-i18n-aria-label="workspace.tabGroup">
+      <button id="workspaceStudyTab" type="button" role="tab" aria-selected="true" aria-controls="workspaceStudyPanel" data-workspace-tab="study" data-i18n="workspace.studyTab">Ders oluştur</button>
+      <button id="workspaceAssistantTab" type="button" role="tab" aria-selected="false" aria-controls="workspaceAssistantPanel" tabindex="-1" data-workspace-tab="assistant"><span aria-hidden="true">✦</span> <span data-assistant-copy="nav">Asistan</span></button>
+    </div>
+    <section id="workspaceStudyPanel" role="tabpanel" aria-labelledby="workspaceStudyTab">
     <section class="intro hero" aria-labelledby="pageTitle" hidden>
       <div class="hero-copy">
         <p class="eyebrow" data-i18n="eyebrow">Yapay zekâ destekli ders çalışma alanı</p>
@@ -301,6 +306,23 @@
         <article id="pane-cards" role="tabpanel" aria-labelledby="resultTab-cards" class="result-pane" hidden><div id="cardContent"></div></article>
         <article id="pane-ask" role="tabpanel" aria-labelledby="resultTab-ask" class="result-pane" hidden><div class="lesson-ask"><div><h3 data-i18n="ask.heading">Ders içeriğine dayalı yanıt al</h3><p data-i18n="ask.help">LectureSift yalnızca bu dersin özet, not ve transkriptini kullanır; destekleyen zaman damgalarını yanıtın altında gösterir.</p></div><form id="lessonQuestionForm"><textarea id="lessonQuestion" maxlength="500" required aria-label="Örneğin: Öğretmen bu kavramı hangi örnekle açıkladı?" data-i18n-aria-label="ask.placeholder" data-i18n-placeholder="ask.placeholder" placeholder="Örneğin: Öğretmen bu kavramı hangi örnekle açıkladı?"></textarea><button id="lessonQuestionButton" type="submit" data-i18n="ask.button">Derse sor</button></form><div id="lessonAnswer" class="lesson-answer" hidden aria-live="polite"></div></div></article>
         <article id="pane-files" role="tabpanel" aria-labelledby="resultTab-files" class="result-pane" hidden><div id="filesContent" class="files-grid"></div></article>
+      </div>
+    </section>
+    </section>
+    <section id="workspaceAssistantPanel" role="tabpanel" aria-labelledby="workspaceAssistantTab" hidden>
+      <header class="workspace-assistant-intro"><div><h1 data-assistant-copy="title">LectureSift Asistan</h1><p data-assistant-copy="intro">Sorularını sor, görsel paylaş ve derslerini adım adım keşfet.</p></div><a href="/assistant.html" data-assistant-copy="openpage">Asistan sayfasını aç</a></header>
+      <div class="assistant-page-grid">
+        <div data-assistant-root data-assistant-lazy></div>
+        <aside class="assistant-side">
+          <section class="assistant-info-card">
+            <span class="usage-badge" data-assistant-copy="limited">Sınırlı kullanım içerir.</span>
+            <h2 data-assistant-copy="creditguide">Krediler nasıl çalışır?</h2>
+            <p data-assistant-copy="usage">Sohbet ve görsel oluşturma asistan kredisi kullanır. Harcanan kredi, isteğinin uzunluğuna ve türüne göre değişir.</p>
+            <p data-assistant-copy="topup">İhtiyacın olursa ek kredi alabilirsin. Ek krediler 365 gün geçerlidir; ders işleme dakikalarından ayrıdır.</p>
+            <a href="/plans.html#assistantCredits" data-assistant-copy="buy">Ek kredi al</a>
+          </section>
+          <section class="assistant-info-card assistant-invite-card"><h2 data-assistant-copy="invitetitle">Birlikte çalış, birlikte kazan.</h2><p data-assistant-copy="invitenote">Arkadaşını davet et. Uygun ücretli abonelik alışverişleri ve yenilemelerinde dakika veya indirim kuponu kazanma fırsatı yakala.</p><a href="/account.html#account-referrals" data-assistant-copy="invitelink">Davet programını incele</a></section>
+        </aside>
       </div>
     </section>
   </main>

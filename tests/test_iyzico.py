@@ -218,7 +218,7 @@ def test_iyzico_checkout_and_callback_verify_signatures_amount_and_order(monkeyp
     assert account["payment_orders"][0]["status"] == "paid"
 
 
-def test_iyzico_one_lira_test_pack_uses_exact_live_amount(monkeypatch):
+def test_iyzico_permanent_ad_free_uses_exact_amount(monkeypatch):
     _configure(monkeypatch)
     captured = {}
 
@@ -230,11 +230,11 @@ def test_iyzico_one_lira_test_pack_uses_exact_live_amount(monkeypatch):
             return {
                 "status": "success",
                 "conversationId": captured["payload"]["conversationId"],
-                "token": "one-lira-token",
-                "paymentPageUrl": "https://api.iyzipay.com/checkoutform/one-lira-token",
+                "token": "ad-free-token",
+                "paymentPageUrl": "https://api.iyzipay.com/checkoutform/ad-free-token",
                 "signature": _response_signature([
                     captured["payload"]["conversationId"],
-                    "one-lira-token",
+                    "ad-free-token",
                 ]),
             }
 
@@ -248,7 +248,7 @@ def test_iyzico_one_lira_test_pack_uses_exact_live_amount(monkeypatch):
         "/billing/checkout",
         headers={"Authorization": f"Bearer {session}", "X-Forwarded-For": "203.0.113.42"},
         json={
-            "plan_code": "test", "interval": "one_time", "currency": "TRY",
+            "plan_code": "ad_free", "interval": "one_time", "currency": "TRY",
             "payment_method": "card",
             "billing_address": "Örnek Mahallesi No 3", "billing_city": "Hatay",
             "billing_zip_code": "31800", "phone": "+905551112233", "language": "tr",
@@ -256,10 +256,10 @@ def test_iyzico_one_lira_test_pack_uses_exact_live_amount(monkeypatch):
         },
     )
     assert response.status_code == 200, response.text
-    assert captured["payload"]["price"] == "1.00"
-    assert captured["payload"]["paidPrice"] == "1.00"
+    assert captured["payload"]["price"] == "59.90"
+    assert captured["payload"]["paidPrice"] == "59.90"
     assert captured["payload"]["currency"] == "TRY"
-    assert captured["payload"]["basketItems"][0]["name"] == "LectureSift test"
+    assert captured["payload"]["basketItems"][0]["name"] == "LectureSift - Permanent ad-free access"
 
 
 def test_iyzico_bank_transfer_checkout_fails_closed_without_activation_or_try(monkeypatch):
@@ -396,7 +396,7 @@ def test_iyzico_decline_is_recorded_instead_of_staying_created(monkeypatch):
         "/billing/checkout",
         headers={"Authorization": f"Bearer {session}", "X-Forwarded-For": "203.0.113.45"},
         json={
-            "plan_code": "test", "interval": "one_time", "currency": "TRY",
+            "plan_code": "ad_free", "interval": "one_time", "currency": "TRY",
             "payment_method": "bank_transfer",
             "billing_address": "Örnek Mahallesi No 4", "billing_city": "Hatay",
             "billing_zip_code": "31800", "phone": "+905551112233", "language": "tr",
@@ -575,7 +575,7 @@ def test_iyzico_merchant_category_failure_is_actionable_and_keeps_code(monkeypat
         "/billing/checkout",
         headers={"Authorization": f"Bearer {session}", "X-Forwarded-For": "203.0.113.47"},
         json={
-            "plan_code": "test", "interval": "one_time", "currency": "TRY",
+            "plan_code": "ad_free", "interval": "one_time", "currency": "TRY",
             "payment_method": "card",
             "billing_address": "Örnek Mahallesi No 6", "billing_city": "Hatay",
             "billing_zip_code": "31800", "phone": "+905551112233", "language": "tr",
@@ -640,7 +640,7 @@ def test_iyzico_uncorrelated_failure_cannot_terminally_fail_order(monkeypatch):
         "/billing/checkout",
         headers={"Authorization": f"Bearer {session}", "X-Forwarded-For": "203.0.113.48"},
         json={
-            "plan_code": "test", "interval": "one_time", "currency": "TRY",
+            "plan_code": "ad_free", "interval": "one_time", "currency": "TRY",
             "payment_method": "card",
             "billing_address": "Örnek Mahallesi No 7", "billing_city": "Hatay",
             "billing_zip_code": "31800", "phone": "+905551112233", "language": "tr",
@@ -700,7 +700,7 @@ def test_iyzico_browser_callback_rejects_wrong_or_legacy_unbound_token_before_re
         "/billing/checkout",
         headers={"Authorization": f"Bearer {session}", "X-Forwarded-For": "203.0.113.49"},
         json={
-            "plan_code": "test", "interval": "one_time", "currency": "TRY",
+            "plan_code": "ad_free", "interval": "one_time", "currency": "TRY",
             "payment_method": "card",
             "billing_address": "Örnek Mahallesi No 8", "billing_city": "Hatay",
             "billing_zip_code": "31800", "phone": "+905551112233", "language": "tr",
@@ -777,7 +777,7 @@ def test_iyzico_signed_webhook_rejects_wrong_bound_token_before_retrieve(monkeyp
         "/billing/checkout",
         headers={"Authorization": f"Bearer {session}", "X-Forwarded-For": "203.0.113.50"},
         json={
-            "plan_code": "test", "interval": "one_time", "currency": "TRY",
+            "plan_code": "ad_free", "interval": "one_time", "currency": "TRY",
             "payment_method": "card",
             "billing_address": "Örnek Mahallesi No 9", "billing_city": "Hatay",
             "billing_zip_code": "31800", "phone": "+905551112233", "language": "tr",
@@ -853,7 +853,7 @@ def test_iyzico_signed_webhook_adopts_legacy_token_and_terminalizes_correlated_1
         "/billing/checkout",
         headers={"Authorization": f"Bearer {session}", "X-Forwarded-For": "203.0.113.51"},
         json={
-            "plan_code": "test", "interval": "one_time", "currency": "TRY",
+            "plan_code": "ad_free", "interval": "one_time", "currency": "TRY",
             "payment_method": "card",
             "billing_address": "Örnek Mahallesi No 10", "billing_city": "Hatay",
             "billing_zip_code": "31800", "phone": "+905551112233", "language": "tr",

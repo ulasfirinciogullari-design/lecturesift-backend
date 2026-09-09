@@ -1,5 +1,62 @@
 import {test, expect, JOB_ID} from './fixtures.mjs';
 
+test('workspace assistant tab preserves the lesson and supports keyboard navigation', async ({page}, testInfo) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('lecturesift-billing-token','ci-synthetic-token-not-valid-on-any-server');
+    localStorage.setItem('lecturesift-ui','en');
+  });
+  await page.goto(`/workspace.html?job=${JOB_ID}`);
+  await page.locator('[data-consent="essential"]').click();
+  await expect(page.locator('#results')).toBeVisible();
+  await page.locator('#workspaceAssistantTab').click();
+  await expect(page.locator('#workspaceStudyPanel')).toBeHidden();
+  await expect(page.locator('#workspaceAssistantPanel .assistant-page-chat')).toBeVisible();
+  await expect(page.locator('#workspaceAssistantTab')).toHaveAttribute('aria-selected','true');
+  const draft=page.locator('#workspaceAssistantPanel textarea');
+  await draft.fill('Keep my question while I check my lesson.');
+  await page.locator('#workspaceAssistantTab').focus();
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.locator('#workspaceStudyTab')).toBeFocused();
+  await expect(page.locator('#resultHeading')).toHaveText('Synthetic browser quiz');
+  await page.keyboard.press('ArrowRight');
+  await expect(draft).toHaveValue('Keep my question while I check my lesson.');
+  await expect(page.locator('.assistant-launch')).toHaveCount(0);
+  await page.locator('.workspace-mode-tabs').scrollIntoViewIfNeeded();
+  await noHorizontalOverflow(page);
+  await page.screenshot({path:testInfo.outputPath('workspace-assistant-tab-layout.jpg'),quality:75});
+  await page.goto('/ar/workspace.html#assistant');
+  await expect(page.locator('#workspaceAssistantPanel')).toBeVisible();
+  await expect(page.locator('#workspaceAssistantTab')).toHaveAttribute('aria-selected','true');
+  await page.locator('#workspaceAssistantTab').focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#workspaceStudyTab')).toBeFocused();
+  await noHorizontalOverflow(page);
+});
+
+test('permanent ad-free purchase explains its scope and disappears as a repeat purchase', async ({page}, testInfo) => {
+  const cors={'Access-Control-Allow-Origin':'http://127.0.0.1:4173','Access-Control-Allow-Methods':'GET,OPTIONS','Access-Control-Allow-Headers':'authorization,content-type'};
+  await page.addInitScript(() => {localStorage.setItem('lecturesift-currency','TRY');});
+  await page.route('https://api.lecturesift.com/billing/plans?currency=TRY',route=>route.fulfill({status:200,headers:cors,json:{plans:[],ad_free:{code:'ad_free',kind:'one_time',display_price:{currency:'TRY',amount_minor:5990},entitlements:{minutes:0,ad_free:true}}}}));
+  await page.goto('/en/plans.html');
+  await page.locator('[data-consent="essential"]').click();
+  const offer=page.locator('#adFreeAccess');
+  await expect(offer).toContainText('Permanent ad-free access');
+  await expect(offer).toContainText('59.90');
+  await expect(offer).toContainText('No extra minutes or assistant credits');
+  await expect(page.locator('.plan-card')).not.toContainText(['Payment Test']);
+  await offer.scrollIntoViewIfNeeded();
+  await noHorizontalOverflow(page);
+  await page.screenshot({path:testInfo.outputPath('ad-free-offer-layout.jpg'),quality:75});
+  await offer.getByRole('button').click();
+  await expect(page).toHaveURL(/\/en\/login(?:\.html)?\?next=/);
+  expect(new URL(page.url()).searchParams.get('next')).toBe('/plans.html?plan=ad_free&interval=one_time');
+  await page.addInitScript(()=>localStorage.setItem('lecturesift-billing-token','synthetic-ad-free-owner'));
+  await page.route('https://api.lecturesift.com/billing/me',route=>route.fulfill({status:200,headers:cors,json:{account:{user:{email:'synthetic@example.invalid'},plan:{code:'free'},remaining_minutes:60,permanent_ad_free:true}}}));
+  await page.goto('/en/plans.html');
+  await expect(page.locator('#adFreeAccess button')).toBeDisabled();
+  await expect(page.locator('#adFreeAccess button')).toHaveText('Active on your account');
+});
+
 test('assistant page keeps credits visible and account actions under user control', async ({page}, testInfo) => {
   const cors={'Access-Control-Allow-Origin':'http://127.0.0.1:4173','Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Allow-Headers':'authorization,content-type'};
   await page.addInitScript(()=>localStorage.setItem('lecturesift-billing-token','synthetic-browser-token'));

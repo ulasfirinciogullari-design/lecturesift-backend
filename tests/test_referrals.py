@@ -263,10 +263,10 @@ def test_coupon_choice_next_purchase_server_price_and_single_use(state):
 
 
 @pytest.mark.parametrize("plan,interval,currency", [
-    ("lite", "annual", "TRY"), ("credit", "one_time", "TRY"), ("test", "one_time", "TRY"),
+    ("lite", "annual", "TRY"), ("credit", "one_time", "TRY"), ("ad_free", "one_time", "TRY"),
     ("lite", "monthly", "USD"),
 ])
-def test_coupon_rejects_annual_topup_test_and_other_currencies(state, plan, interval, currency):
+def test_coupon_rejects_annual_topup_ad_free_and_other_currencies(state, plan, interval, currency):
     inviter, _, _, _ = released(state, "coupon")
     code = referrals.summary(inviter)["coupons"][0]["code"]
     with pytest.raises(referrals.ReferralError):

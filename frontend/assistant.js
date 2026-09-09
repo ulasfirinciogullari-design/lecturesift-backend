@@ -111,7 +111,10 @@
     } catch { available=false; setStatus(t('unavailable')); }
   }
   launch.addEventListener('click',openAssistant);
-  if(pageRoot)openAssistant();
+  if(pageRoot) {
+    document.addEventListener('lecturesift:assistant-open',openAssistant);
+    if(!pageRoot.hasAttribute('data-assistant-lazy') || !pageRoot.closest('[hidden]'))openAssistant();
+  }
   else {$('.assistant-close').addEventListener('click',()=>dialog.close());dialog.addEventListener('close',()=>launch.focus());}
   $('.assistant-clear').addEventListener('click',()=>{reset();$('textarea').focus();});
   $('.assistant-attachment button').addEventListener('click',()=>{attachment=null;$('.assistant-attachment').hidden=true;});

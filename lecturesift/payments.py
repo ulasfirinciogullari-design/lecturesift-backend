@@ -540,7 +540,7 @@ def create_iyzico_checkout(
         "basketItems": [{
             "id": reference,
             "price": price,
-            "name": f"LectureSift {plan_code}"[:120],
+            "name": ("LectureSift - Permanent ad-free access" if plan_code == "ad_free" else f"LectureSift {plan_code}")[:120],
             "category1": "Digital Education",
             "itemType": "VIRTUAL",
         }],
@@ -767,7 +767,7 @@ def create_paytr_checkout(
     display_amount = f"{Decimal(order['amount_minor']) / Decimal(100):.2f}"
     basket = base64.b64encode(
         json.dumps(
-            [[f"LectureSift {plan_code}", display_amount, 1]],
+            [[("LectureSift - Permanent ad-free access" if plan_code == "ad_free" else f"LectureSift {plan_code}"), display_amount, 1]],
             ensure_ascii=False,
             separators=(",", ":"),
         ).encode("utf-8")

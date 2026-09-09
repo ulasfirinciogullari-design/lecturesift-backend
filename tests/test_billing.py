@@ -25,13 +25,11 @@ def test_billing_catalog_has_hybrid_plans_and_translation_keys():
     assert response.status_code == 200
     catalog = response.json()
     plans = {plan["code"]: plan for plan in catalog["plans"]}
-    assert {"free", "test", "credit", "lite", "plus", "pro", "max", "business"} <= plans.keys()
+    assert {"free", "credit", "lite", "plus", "pro", "max", "business"} <= plans.keys()
+    assert "test" not in plans
+    assert catalog["ad_free"]["display_price"] == {"currency": "TRY", "amount_minor": 5990}
     assert plans["free"]["export_enabled"] is False
     assert plans["credit"]["kind"] == "one_time"
-    assert plans["test"]["kind"] == "one_time"
-    assert plans["test"]["minutes"] == 1
-    assert plans["test"]["display_price"] == {"currency": "TRY", "amount_minor": 100}
-    assert plans["test"]["manual_price"] is None
     assert plans["plus"]["featured"] is True
     assert plans["pro"]["name_key"] == "billing.plan.pro.name"
     assert plans["plus"]["entitlements"]["quiz_questions"] == 20
@@ -72,9 +70,8 @@ def test_billing_catalog_has_hybrid_plans_and_translation_keys():
     }
     assert {
         code: plans[code]["entitlements"]["limits"]["max_document_upload_mb"]
-        for code in ("test", "free", "credit", "lite", "plus", "pro", "max", "business")
+        for code in ("free", "credit", "lite", "plus", "pro", "max", "business")
     } == {
-        "test": 10,
         "free": 25,
         "credit": 50,
         "lite": 75,
@@ -88,7 +85,8 @@ def test_billing_catalog_has_hybrid_plans_and_translation_keys():
     usd = TestClient(app).get("/billing/plans?currency=USD").json()
     usd_plans = {plan["code"]: plan for plan in usd["plans"]}
     assert usd["selected_currency"] == "USD"
-    assert usd_plans["test"]["display_price"] is None
+    assert "test" not in usd_plans
+    assert usd["ad_free"]["display_price"] == {"currency": "USD", "amount_minor": 149}
     assert usd_plans["plus"]["display_price"] == {"currency": "USD", "amount_minor": 1699}
 
     jpy = TestClient(app).get("/billing/plans?currency=JPY").json()

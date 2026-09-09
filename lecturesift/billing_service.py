@@ -1186,6 +1186,22 @@ def _public_payment_order(order) -> dict:
     }
 
 
+def _has_permanent_ad_free(connection, user_id: str) -> bool:
+    # The paid order is the durable entitlement. No expiry or subscription
+    # replacement; failed, cancelled and refunded purchases grant no access.
+    return any(
+        connection.execute(
+            select(orders.c.reference).where(
+                orders.c.user_id == user_id,
+                orders.c.plan_code == "ad_free",
+                orders.c.interval == "one_time",
+                orders.c.status == "paid",
+            ).limit(1)
+        ).first() is not None
+        for orders in (PAYMENT_ORDERS, MANUAL_ORDERS)
+    )
+
+
 def account_status(user_id: str) -> dict:
     init_billing_database()
     now = utcnow()
@@ -1198,6 +1214,7 @@ def account_status(user_id: str) -> dict:
         preference = connection.execute(
             select(USER_PREFERENCES).where(USER_PREFERENCES.c.user_id == user_id)
         ).first()
+        permanent_ad_free = _has_permanent_ad_free(connection, user_id)
         subscription = _active_subscription(connection, user_id, now)
         plan_code = subscription.plan_code if subscription else "free"
         if subscription:
@@ -1254,6 +1271,10 @@ def account_status(user_id: str) -> dict:
     download_enabled = bool(plan.download_enabled or paid_credit_access)
     effective_job_plan = PLAN_BY_CODE["credit"] if plan.code == "free" and paid_credit_access else plan
     public_plan = plan.public()
+    job_entitlements = effective_job_plan.public()["entitlements"]
+    if permanent_ad_free:
+        for entitlements in (public_plan["entitlements"], job_entitlements):
+            entitlements.update(ad_free=True, rewarded_minutes_eligible=False)
     if plan_terms_version == LEGACY_TERMS_VERSION:
         # Current catalog display prices are an offer for a new purchase, not
         # evidence of what this legacy subscription paid.
@@ -1278,7 +1299,8 @@ def account_status(user_id: str) -> dict:
         "remaining_minutes": remaining,
         "can_create_job": remaining is None or remaining > 0,
         "download_enabled": download_enabled,
-        "job_entitlements": effective_job_plan.public()["entitlements"],
+        "permanent_ad_free": permanent_ad_free,
+        "job_entitlements": job_entitlements,
         "download_access_source": (
             "plan" if plan.download_enabled else "credit" if paid_credit_access else None
         ),
@@ -1692,6 +1714,8 @@ def _activate_purchase(
 
 
 def _require_assistant_offer(plan_code: str) -> None:
+    if plan_code == "test":
+        raise BillingError("Test paketi satıştan kaldırıldı.")
     from . import assistant_catalog
     if plan_code in assistant_catalog.PACKS and not assistant_catalog.enabled():
         raise BillingConfigurationError("Asistan kredi satışı henüz kullanıma açık değil.")
@@ -1725,9 +1749,11 @@ def create_payment_order(
     now = utcnow()
     init_billing_database()
     with ENGINE.begin() as connection:
-        user = connection.execute(select(USERS.c.id).where(USERS.c.id == user_id)).first()
+        user = connection.execute(select(USERS.c.id).where(USERS.c.id == user_id).with_for_update()).first()
         if not user:
             raise BillingAuthenticationError("Hesap bulunamadı.")
+        if plan_code == "ad_free" and _has_permanent_ad_free(connection, user_id):
+            raise BillingError("Hesabında kalıcı reklamsız kullanım zaten etkin.")
         if coupon_code:
             from .referrals import reserve_coupon
             amount_minor = reserve_coupon(
@@ -2118,6 +2144,9 @@ def create_manual_order(user_id: str, plan_code: str, interval: str, coupon_code
     now = utcnow()
     init_billing_database()
     with ENGINE.begin() as connection:
+        _lock_billing_user(connection, user_id)
+        if plan_code == "ad_free" and _has_permanent_ad_free(connection, user_id):
+            raise BillingError("Hesabında kalıcı reklamsız kullanım zaten etkin.")
         if coupon_code:
             from .referrals import reserve_coupon
             amount_minor = reserve_coupon(
