@@ -44,11 +44,11 @@ class Plan:
 
     @property
     def download_enabled(self) -> bool:
-        return self.code != "free" and not self.code.startswith("ai_")
+        return self.code not in {"free", "ad_free"} and not self.code.startswith("ai_")
 
     @property
     def ad_free(self) -> bool:
-        return self.code in {"lite", "plus", "pro", "max", "business"}
+        return self.code in {"lite", "plus", "pro", "max", "business", "ad_free"}
 
     def public(self, currency: str = "TRY") -> dict:
         selected_currency = currency if currency in SUPPORTED_CURRENCIES else "TRY"
@@ -145,7 +145,13 @@ ASSISTANT_PLANS = tuple(
             try_amount_minor=assistant_catalog.PRICES["TRY"][index])
     for index, (code, credits) in enumerate(assistant_catalog.PACKS.items())
 )
-PLAN_BY_CODE = {plan.code: plan for plan in (*PLANS, *ASSISTANT_PLANS)}
+AD_FREE_PLAN = replace(
+    PLANS[1], code="ad_free", minutes=0, export_formats=(), quiz_questions=0,
+    flashcards=0, summary_profiles=(), history_days=0, max_files_per_job=0,
+    max_media_upload_mb=0, max_document_upload_mb=0, max_minutes_per_job=0,
+    max_document_pages=0, max_ocr_pages=0, try_amount_minor=5990,
+)
+PLAN_BY_CODE = {plan.code: plan for plan in (*PLANS, *ASSISTANT_PLANS, AD_FREE_PLAN)}
 
 # Intentional regional product prices, not volatile exchange-rate conversions.
 # The connected checkout provider remains the source of truth for tax and the
@@ -187,6 +193,13 @@ REGIONAL_PRICES.update({
     code: {currency: amounts[index] for currency, amounts in assistant_catalog.PRICES.items()}
     for index, code in enumerate(assistant_catalog.PACKS)
 })
+REGIONAL_PRICES["ad_free"] = {
+    "TRY": 5990, "USD": 149, "EUR": 149, "GBP": 119, "CAD": 199,
+    "AUD": 249, "NZD": 269, "JPY": 230, "KRW": 2100, "CNY": 1090,
+    "INR": 11900, "BRL": 749, "MXN": 2990, "CHF": 139, "SEK": 1590,
+    "NOK": 1690, "DKK": 1090, "PLN": 599, "AED": 599, "SAR": 599,
+    "SGD": 199, "HKD": 1190,
+}
 
 PROVIDERS = (
     {
@@ -216,7 +229,8 @@ PROVIDERS = (
 def public_catalog(currency: str = "TRY") -> dict:
     selected_currency = currency.upper() if currency.upper() in SUPPORTED_CURRENCIES else "TRY"
     return {
-        "plans": [plan.public(selected_currency) for plan in PLANS],
+        "plans": [plan.public(selected_currency) for plan in PLANS if plan.code != "test"],
+        "ad_free": AD_FREE_PLAN.public(selected_currency),
         "billing_intervals": ["one_time", "monthly", "annual"],
         "supported_currencies": list(SUPPORTED_CURRENCIES),
         "selected_currency": selected_currency,

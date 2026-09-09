@@ -183,7 +183,7 @@ function planLabel(code) {
   if (/^ai_(1000|3000|10000)$/.test(code)) return `${Number(code.slice(3)).toLocaleString(PLANS_I18N.locale)} ${at('credits')}`;
   return pt(`plan.${code}`, COPY[code]?.[0] || code);
 }
-function visibleOrder() { return ORDER.filter(code => code !== "test" || currency === "TRY"); }
+function visibleOrder() { return ORDER.filter(code => code !== "test"); }
 
 function renderCompare() {
   const plans = visibleOrder().map(code => catalog?.plans?.find(plan => plan.code === code)).filter(Boolean);
@@ -240,7 +240,7 @@ function normalizeCatalog(remote, selected) {
         ? remotePrice
         : (fallbackAmount == null ? null : {currency: selected, amount_minor: fallbackAmount});
       return {...plan, display_price: selectedPrice};
-    }).concat((assistant?.packs || []).map(pack => ({
+    }).filter(plan => plan.code !== "test").concat(remote?.ad_free ? [remote.ad_free] : []).concat((assistant?.packs || []).map(pack => ({
       code:pack.code, kind:'one_time', assistant_credits:pack.credits,
       display_price:{amount_minor:pack.amount_minor,currency:pack.currency},
       entitlements:{assistant_credits:pack.credits,minutes:0,download_enabled:false},
@@ -352,6 +352,29 @@ function renderPlans() {
   });
   renderCompare();
   renderAssistantOffers();
+  renderAdFreeOffer();
+}
+
+function renderAdFreeOffer() {
+  let section = document.getElementById('adFreeAccess');
+  if (!section) {section=document.createElement('section');section.id='adFreeAccess';section.className='ad-free-offer';$('plansGrid').after(section);}
+  const offer = catalog?.ad_free;
+  section.hidden = !offer?.display_price;
+  section.replaceChildren();
+  if (section.hidden) return;
+  const owned = account?.permanent_ad_free === true;
+  const heading=document.createElement('h2');heading.id='adFreeTitle';heading.textContent=planLabel('ad_free');
+  section.setAttribute('aria-labelledby',heading.id);
+  const copy=document.createElement('div');copy.className='ad-free-copy';copy.append(heading);
+  for (const key of ['plan.ad_free.description','plans.adFreeNoCredits','plans.adFreeScope']) {const line=document.createElement('p');line.textContent=pt(key);copy.append(line);}
+  const actions=document.createElement('div');actions.className='ad-free-actions';
+  const price=document.createElement('strong');price.textContent=format(offer.display_price.amount_minor,offer.display_price.currency);
+  const once=document.createElement('span');once.textContent=pt('plans.oneTime','Tek ödeme');
+  const button=document.createElement('button');button.type='button';button.className='plan-action';button.dataset.plan='ad_free';button.dataset.interval='one_time';button.disabled=owned;
+  button.textContent=pt(owned?'plans.adFreeActive':'plans.removeAds');
+  button.addEventListener('click',()=>buy('ad_free','one_time'));
+  actions.append(price,once,button);section.append(copy,actions);
+  if(location.hash==='#adFreeAccess')requestAnimationFrame(()=>section.scrollIntoView({block:'start'}));
 }
 
 function renderAssistantOffers() {
@@ -379,9 +402,12 @@ function renderAssistantOffers() {
 }
 
 async function buy(planCode, interval = "monthly") {
+  if (planCode === 'test' || (planCode === 'ad_free' && (!catalog?.ad_free || account?.permanent_ad_free))) return;
   if (planCode.startsWith('ai_') && !catalog?.assistant?.available) {showError(at('unavailable'));return;}
   if (!localStorage.getItem(TOKEN_KEY)) {
-    location.href = `/login.html?next=${encodeURIComponent("/plans.html")}`;
+    const next = `/plans.html?plan=${encodeURIComponent(planCode)}&interval=${encodeURIComponent(interval)}`;
+    const loginPath = PLANS_I18N.localizedPath?.(PLANS_I18N.language, '/login.html') || '/login.html';
+    location.href = `${loginPath}?next=${encodeURIComponent(next)}`;
     return;
   }
   const provider = cardProviderStatus();

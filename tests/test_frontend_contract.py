@@ -646,7 +646,7 @@ def test_profile_admin_automatic_payment_and_full_comparison_interfaces_are_pres
     assert "/billing/manual-transfer" not in auth
     assert "/billing/manual-transfer" not in workspace_script
     assert "/billing/manual-transfer" not in rollout_script
-    assert 'code !== "test" || currency === "TRY"' in plan_script
+    assert 'return ORDER.filter(code => code !== "test");' in plan_script
     assert "adminTokenForm" in admin and "adminOrders" in admin
     assert "ADMIN_ADMIN" in admin
     assert "adminReadiness" in admin

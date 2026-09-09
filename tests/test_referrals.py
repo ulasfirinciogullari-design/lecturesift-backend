@@ -152,8 +152,8 @@ def test_registration_only_and_code_idempotency(state):
     assert not any(getattr(route, "path", "") in {"/billing/referrals/attach", "/billing/referrals/claim"} for route in app.routes)
 
 
-@pytest.mark.parametrize("plan", ["test", "credit"])
-def test_test_and_topup_do_not_qualify_but_first_subscription_does(state, plan):
+@pytest.mark.parametrize("plan", ["ad_free", "credit"])
+def test_ad_free_and_topup_do_not_qualify_but_first_subscription_does(state, plan):
     inviter, invitee = pair()
     pay(invitee, plan, interval="one_time")
     assert reward(invitee).status == "invited"
@@ -263,10 +263,10 @@ def test_coupon_choice_next_purchase_server_price_and_single_use(state):
 
 
 @pytest.mark.parametrize("plan,interval,currency", [
-    ("lite", "annual", "TRY"), ("credit", "one_time", "TRY"), ("test", "one_time", "TRY"),
+    ("lite", "annual", "TRY"), ("credit", "one_time", "TRY"), ("ad_free", "one_time", "TRY"),
     ("lite", "monthly", "USD"),
 ])
-def test_coupon_rejects_annual_topup_test_and_other_currencies(state, plan, interval, currency):
+def test_coupon_rejects_annual_topup_ad_free_and_other_currencies(state, plan, interval, currency):
     inviter, _, _, _ = released(state, "coupon")
     code = referrals.summary(inviter)["coupons"][0]["code"]
     with pytest.raises(referrals.ReferralError):
@@ -512,7 +512,7 @@ def test_annual_quota_reset_topups_and_admin_grants_do_not_create_renewal(state)
     billing.account_status(invitee)
     referrals.reconcile_order(annual["reference"])
     pay(invitee, "credit", interval="one_time")
-    pay(invitee, "test", interval="one_time")
+    pay(invitee, "ad_free", interval="one_time")
     rollout_service.admin_set_user_subscription(
         invitee, plan_code="pro", interval="monthly", duration_days=30, actor="synthetic-admin",
     )
