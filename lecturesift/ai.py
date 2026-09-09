@@ -87,16 +87,16 @@ def transcribe(audio_path: Path, language: str, duration_seconds: float | None =
     output_tokens = usage.get("output_tokens", 0) if isinstance(usage, dict) else getattr(usage, "output_tokens", 0)
     if int(output_tokens or 0) >= 1900:
         # Never publish a transcript that may have hit the provider output cap.
-        # One bounded subdivision recovers dense speech; minute-long responses
-        # that still hit the cap fail explicitly instead of silently losing it.
+        # Halve saturated windows down to fifteen seconds. The duration floor
+        # bounds retries and never publishes a still-truncated final response.
         from .media import extract_audio_chunks
 
         duration = _transcription_cost_duration(audio_path, duration_seconds)
-        if duration <= 61:
+        if duration <= 16:
             raise LectureSiftError("LS-AI-08", "Ses dökümü eksiksiz oluşturulamadı. Lütfen yeniden dene.",
                                    "Transcription reached its output limit at the minimum chunk size.")
         with TemporaryDirectory(prefix="transcript-retry-", dir=audio_path.parent) as tmp:
-            chunks = extract_audio_chunks(audio_path, Path(tmp), segment_seconds=60)
+            chunks = extract_audio_chunks(audio_path, Path(tmp), segment_seconds=max(15, round(duration / 2)))
             if len(chunks) < 2:
                 raise LectureSiftError("LS-AI-08", "Ses dökümü eksiksiz oluşturulamadı. Lütfen yeniden dene.",
                                        "Transcription subdivision did not produce smaller chunks.")

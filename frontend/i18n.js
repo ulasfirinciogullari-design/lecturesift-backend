@@ -30,6 +30,9 @@
     return language === "tr" ? normalized : `/${language}${normalized === "/" ? "/" : normalized}`;
   };
   const rows = {
+    "upload.autoOpen":["Hazır olduğunda sonuçları otomatik aç","Open results automatically when ready","Ergebnisse automatisch öffnen, sobald sie fertig sind","Ouvrir automatiquement les résultats prêts","Abrir los resultados automáticamente cuando estén listos","Apri automaticamente i risultati quando sono pronti","Abrir os resultados automaticamente quando estiverem prontos","Автоматически открыть готовые результаты","افتح النتائج تلقائيًا عندما تكون جاهزة","结果就绪后自动打开","完了したら結果を自動で開く","완료되면 결과 자동으로 열기","तैयार होने पर नतीजे अपने आप खोलें"],
+    "upload.openResults":["Sonuçları aç","Open results","Ergebnisse öffnen","Ouvrir les résultats","Abrir resultados","Apri risultati","Abrir resultados","Открыть результаты","افتح النتائج","打开结果","結果を開く","결과 열기","नतीजे खोलें"],
+    "upload.stageDetails":["İşlem ayrıntıları","Processing details","Verarbeitungsdetails","Détails du traitement","Detalles del procesamiento","Dettagli di elaborazione","Detalhes do processamento","Подробности обработки","تفاصيل المعالجة","处理详情","処理の詳細","처리 세부 정보","प्रक्रिया का विवरण"],
     "redesign.mediaFormats":["MP4 · MP3 · WAV · MOV", "MP4 · MP3 · WAV · MOV", "MP4 · MP3 · WAV · MOV", "MP4 · MP3 · WAV · MOV", "MP4 · MP3 · WAV · MOV", "MP4 · MP3 · WAV · MOV", "MP4 · MP3 · WAV · MOV", "MP4 · MP3 · WAV · MOV", "MP4 · MP3 · WAV · MOV", "MP4 · MP3 · WAV · MOV", "MP4 · MP3 · WAV · MOV", "MP4 · MP3 · WAV · MOV", "MP4 · MP3 · WAV · MOV"],
     "redesign.documentFormats":["PDF · DOCX · PPTX · TXT", "PDF · DOCX · PPTX · TXT", "PDF · DOCX · PPTX · TXT", "PDF · DOCX · PPTX · TXT", "PDF · DOCX · PPTX · TXT", "PDF · DOCX · PPTX · TXT", "PDF · DOCX · PPTX · TXT", "PDF · DOCX · PPTX · TXT", "PDF · DOCX · PPTX · TXT", "PDF · DOCX · PPTX · TXT", "PDF · DOCX · PPTX · TXT", "PDF · DOCX · PPTX · TXT", "PDF · DOCX · PPTX · TXT"],
 

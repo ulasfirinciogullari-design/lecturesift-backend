@@ -85,7 +85,7 @@ def extract_audio_chunks(
     segment_seconds: int = 1200,
 ) -> list[Path]:
     safe_prefix = re.sub(r"[^a-zA-Z0-9_-]", "_", prefix)
-    bounded_segment_seconds = max(60, int(segment_seconds))
+    bounded_segment_seconds = max(15, int(segment_seconds))
     audio_pattern = job_dir / f"{safe_prefix}_%03d.mp3"
     run_command(
         [
@@ -100,12 +100,18 @@ def extract_audio_chunks(
             "16000",
             "-b:a",
             "32k",
+            # Each file must decode independently. A shared MP3 bit reservoir
+            # and inherited seek metadata can trim samples at chunk boundaries.
+            "-reservoir",
+            "0",
             "-f",
             "segment",
             "-segment_time",
             str(bounded_segment_seconds),
             "-reset_timestamps",
             "1",
+            "-segment_format_options",
+            "write_xing=0",
             str(audio_pattern),
         ]
     )
@@ -124,7 +130,7 @@ def extract_audio_chunks(
             # segment index. The concat reader never accepts user-authored URLs.
             manifest.write_text(f"file '{previous.name}'\nfile '{tail.name}'\n", encoding="utf-8")
             run_command(["ffmpeg", "-y", "-f", "concat", "-safe", "1", "-i", str(manifest),
-                         "-c:a", "copy", str(joined)])
+                         "-c:a", "copy", "-write_xing", "0", str(joined)])
             if not joined.is_file() or joined.stat().st_size == 0:
                 raise RuntimeError("Audio tail could not be preserved.")
             joined.replace(previous)

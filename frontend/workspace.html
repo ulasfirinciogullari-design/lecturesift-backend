@@ -209,10 +209,14 @@
         </div>
 
         <div class="progress-visual">
-          <div id="progressRing" class="progress-ring" style="--progress:0deg"><span id="progressPercent">0%</span></div>
+          <div id="progressRing" class="process-status-icon" aria-hidden="true">↑</div>
           <div><strong id="currentStage" data-i18n="readyStage">Video bekleniyor</strong><p id="stageDetail" data-i18n="readyDetail">Kaynağı ekleyip ayarlarını seçtiğinde işlem adımlarını burada canlı göreceksin.</p></div>
         </div>
 
+        <div id="uploadFilesProgress" class="upload-progress-list"></div>
+        <label class="result-open-choice"><input id="autoOpenResult" type="checkbox" checked><span data-i18n="upload.autoOpen">Hazır olduğunda sonuçları otomatik aç</span></label>
+        <button id="openReadyResult" type="button" class="primary-action" data-i18n="upload.openResults" hidden>Sonuçları aç</button>
+        <details class="process-details"><summary data-i18n="upload.stageDetails">İşlem ayrıntıları</summary>
         <ol id="stageList" class="stage-list">
           <li data-stage="audio"><i></i><span data-i18n="stageAudio">Ses ayrıştırılıyor</span><b>--</b></li>
           <li data-stage="transcription"><i></i><span data-i18n="stageTranscript">Konuşma çözümleniyor</span><b>--</b></li>
@@ -220,7 +224,7 @@
           <li data-stage="slide_validation"><i></i><span data-i18n="stageSlides">Slaytlar doğrulanıyor</span><b>--</b></li>
           <li data-stage="study_pack"><i></i><span data-i18n="stageStudy">Ders yapılandırılıyor</span><b>--</b></li>
           <li data-stage="exports"><i></i><span data-i18n="stageExport">Çıktılar hazırlanıyor</span><b>--</b></li>
-        </ol>
+        </ol></details>
 
         <div class="promise-card">
           <span aria-hidden="true">✦</span>
@@ -321,7 +325,8 @@
 
   <script src="./locale-data.js?v=4"></script>
   <script src="./page-i18n.js?v=7"></script><script src="/i18n.js?v=36"></script><script src="/site-shell.js?v=6"></script>
-  <script src="./app.js?v=33"></script>
+  <script src="/upload-progress.js?v=1"></script>
+  <script src="./app.js?v=34"></script>
   <script src="/rollout.js?v=8"></script>
 <script src="/product-layout.js?v=1"></script></body>
 </html>

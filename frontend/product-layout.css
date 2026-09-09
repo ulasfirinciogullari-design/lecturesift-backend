@@ -89,3 +89,25 @@ html[dir="rtl"] .workspace-page>.page-shell{margin:0 252px 60px 30px}
 @media(max-width:600px){.ad-free-offer{grid-template-columns:minmax(0,1fr);gap:20px;padding:22px}.ad-free-actions{align-items:flex-start}.ad-free-actions strong{font-size:28px}}
 
 @media(max-width:600px){.workspace-page .study-sidebar nav{flex-wrap:nowrap;overflow-x:auto;padding-bottom:3px}.workspace-page .study-sidebar nav a{flex:0 0 auto;white-space:nowrap}.workspace-mode-tabs button{font-size:13px;padding:10px 12px}.workspace-assistant-intro{gap:8px;margin-bottom:16px}.workspace-assistant-intro p{font-size:14px}.workspace-assistant-intro>a{font-size:12px}.workspace-page .assistant-page-chat{height:clamp(480px,calc(100dvh - 360px),650px)}}
+/* File transfer is measured separately from lesson preparation. */
+.process-panel [hidden]{display:none!important}
+.process-status-icon{display:grid;place-items:center;flex:0 0 44px;width:44px;height:44px;border-radius:14px;background:var(--ui-terracotta-wash);color:var(--ui-action);font-size:22px;font-weight:750}
+.process-status-icon[data-state=done]{color:var(--ui-green);background:var(--ui-green-wash)}
+.process-panel .progress-visual{grid-template-columns:44px minmax(0,1fr);align-items:center;gap:14px}
+.upload-progress-list{display:grid;gap:12px;margin:20px 0}
+.upload-progress-list:empty{display:none}
+.upload-progress-file{min-width:0;padding:13px;border:1px solid var(--ui-line);border-radius:13px;background:var(--ui-surface-raised)}
+.upload-progress-file>div{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.upload-progress-file strong{min-width:0;overflow-wrap:anywhere;font-size:13px;line-height:1.5}
+.upload-progress-file b{flex-shrink:0;color:var(--ui-action);font-size:13px;font-variant-numeric:tabular-nums;direction:ltr}
+.upload-progress-file progress{display:block;width:100%;height:6px;margin:10px 0 8px;border:0;border-radius:99px;overflow:hidden;appearance:none;background:var(--ui-line);color:var(--ui-action)}
+.upload-progress-file progress::-webkit-progress-bar{background:var(--ui-line);border-radius:99px}
+.upload-progress-file progress::-webkit-progress-value{background:var(--ui-action);border-radius:99px}
+.upload-progress-file progress::-moz-progress-bar{background:var(--ui-action);border-radius:99px}
+.upload-progress-file small{display:block;color:var(--ui-muted);font-size:11px;direction:ltr;text-align:start}
+.result-open-choice{display:flex;align-items:flex-start;gap:9px;margin:18px 0;font-size:12px;line-height:1.6;color:var(--ui-muted);cursor:pointer}
+.result-open-choice input{flex:0 0 17px;width:17px;height:17px;margin:2px 0 0;accent-color:var(--ui-action)}
+#openReadyResult{width:100%;margin:0 0 18px}
+.process-details{margin-top:18px;border-top:1px solid var(--ui-line);padding-top:14px}
+.process-details>summary{cursor:pointer;font-size:12px;font-weight:650;color:var(--ui-muted)}
+.process-details .stage-list{margin-top:14px}

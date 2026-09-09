@@ -772,10 +772,31 @@ function startTimer() {
 function resetStages() { document.querySelectorAll(".stage-list li").forEach(item => { item.className = ""; item.querySelector("b").textContent = "--"; }); }
 function setItemState(stage, state) { const item = document.querySelector(`[data-stage="${stage}"]`); if (!item) return; item.className = state; item.querySelector("b").textContent = state === "done" ? "OK" : state === "active" ? "•••" : "--"; }
 function updateProgress(percent, label, detail = "") {
-  const value = Math.max(0, Math.min(100, Math.round(percent || 0)));
-  $("progressPercent").textContent = `${value}%`; $("progressRing").style.setProperty("--progress", `${value * 3.6}deg`);
   $("currentStage").textContent = label; $("stageDetail").textContent = detail || t("processing");
 }
+function showUploadProgress(files, loaded) {
+  const values = window.LectureSiftUpload.progress(files, loaded);
+  const list = $("uploadFilesProgress");
+  if (list.children.length !== values.length) {
+    list.innerHTML = values.map(file => `<article class="upload-progress-file"><div><strong>${escapeHtml(file.name)}</strong><b>0%</b></div><progress max="100" value="0" aria-label="${escapeHtml(file.name)}"></progress><small></small></article>`).join("");
+  }
+  values.forEach((file, index) => {
+    const row = list.children[index];
+    row.querySelector('b').textContent = `${file.percent}%`;
+    row.querySelector('progress').value = file.percent;
+    row.querySelector('small').textContent = `${formatBytes(file.bytes)} / ${formatBytes(file.size)}`;
+    row.classList.toggle('complete', file.percent === 100);
+  });
+}
+try { $("autoOpenResult").checked = localStorage.getItem("lecturesift-auto-open-result") !== "false"; } catch {}
+$("autoOpenResult").addEventListener("change", () => {
+  try { localStorage.setItem("lecturesift-auto-open-result", String($("autoOpenResult").checked)); } catch {}
+});
+$("openReadyResult").onclick = () => {
+  if (!latestResult) return;
+  $("results").hidden = false;
+  $("results").scrollIntoView({behavior:"smooth", block:"start"});
+};
 function jobPhaseLabel(job, profile) {
   const labels = {
     queued: "queuedForWorker", queued_worker: "queuedForWorker", worker_download: "url_download",
@@ -791,6 +812,8 @@ function profileDetail(profile) {
 function updateJobView(job) {
   const profile = configureProgressProfile(job);
   $("processTitle").textContent = job.status === "done" ? t("done") : t("processing");
+  $("progressRing").textContent = job.status === "done" ? "✓" : "•••";
+  $("progressRing").dataset.state = job.status === "done" ? "done" : "processing";
   const ocrDetail = job.stage === "document_ocr"
     ? `OCR · ${Number(job.ocr_pages_completed || 0)}/${Number(job.ocr_pages_total || 0)} ${window.LectureSiftI18n?.exact?.("taranmış sayfa") || "taranmış sayfa"}`
     : profileDetail(profile);
@@ -899,6 +922,11 @@ $("analyzeButton").onclick = async () => {
     showError(uploadLimitMessage(documentUpload, uploadLimitMb), "LS-UPLOAD-02"); return;
   }
   $("analyzeButton").disabled = true; $("results").hidden = true; latestResult = null; jobId = null; configureProgressProfile(null, true); resetStages(); startTimer();
+  $("openReadyResult").hidden = true;
+  $("uploadFilesProgress").replaceChildren();
+  $("processTitle").textContent = t("uploadingSource");
+  $("progressRing").textContent = "↑";
+  $("progressRing").dataset.state = "uploading";
   setItemState("source", "active");
   updateProgress(2, t("uploadingSource"), profileDetail(progressProfileFor()));
   const data = formData();
@@ -910,21 +938,31 @@ $("analyzeButton").onclick = async () => {
   }
   const request = new XMLHttpRequest(); request.open("POST", `${API}/jobs`);
   request.setRequestHeader("Authorization", `Bearer ${billingToken}`);
+  const upload = window.LectureSiftUpload.multipart(data);
+  request.setRequestHeader("Content-Type", upload.contentType);
+  showUploadProgress(upload.files, 0);
   const uploadStartedAt = performance.now();
   request.upload.onprogress = event => {
     if (!event.lengthComputable) return;
+    showUploadProgress(upload.files, event.loaded);
     const elapsedSeconds = Math.max(.25, (performance.now() - uploadStartedAt) / 1000);
     const bytesPerSecond = event.loaded / elapsedSeconds;
     const remainingSeconds = bytesPerSecond > 0 ? Math.max(0, (event.total - event.loaded) / bytesPerSecond) : 0;
     const speed = `${(bytesPerSecond / 1024 ** 2).toFixed(1)} MB/s`;
     const remaining = remainingSeconds >= 1 ? ` · ~${Math.ceil(remainingSeconds)} sn` : "";
     updateProgress(
-      Math.min(7, event.loaded / event.total * 7),
+      0,
       t("uploadingSource"),
       `${(event.loaded / 1024 ** 2).toFixed(1)} / ${(event.total / 1024 ** 2).toFixed(1)} MB · ${speed}${remaining}`,
     );
   };
-  request.upload.onload = () => updateProgress(7, t("uploadAccepted"), profileDetail(progressProfileFor()));
+  request.upload.onload = () => {
+    showUploadProgress(upload.files, upload.body.size);
+    $("processTitle").textContent = t("uploadAccepted");
+    $("progressRing").textContent = "•••";
+    $("progressRing").dataset.state = "processing";
+    updateProgress(0, t("uploadAccepted"), profileDetail(progressProfileFor()));
+  };
   request.onload = async () => {
     if (request.status < 300) {
       const created = JSON.parse(request.responseText);
@@ -945,7 +983,7 @@ $("analyzeButton").onclick = async () => {
       }
     }
   };
-  request.onerror = () => showError("", "LS-NETWORK-01"); request.send(data);
+  request.onerror = () => showError("", "LS-NETWORK-01"); request.send(upload.body);
 };
 
 async function pollJob() {
@@ -957,18 +995,18 @@ async function pollJob() {
     if (job.status === "processing" || job.status === "done") {
       window.LectureSiftGuestTrial?.markUsed?.(jobId);
     }
-    if (job.status === "done") { clearInterval(timerHandle); await loadResult(); await refreshBillingAccount(); return; }
+    if (job.status === "done") { clearInterval(timerHandle); await loadResult({open:$("autoOpenResult").checked}); await refreshBillingAccount(); return; }
     if (job.status === "error") { showError(job.error, job.error_code); return; }
     pollHandle = setTimeout(pollJob, 1300);
   } catch (error) { pollHandle = setTimeout(pollJob, 2500); }
 }
 
-async function loadResult() {
+async function loadResult({open = true} = {}) {
   try {
     const response = await fetch(`${API}/jobs/${jobId}/result`, {cache: "no-store", headers:{Authorization:`Bearer ${billingToken}`}});
     if (!response.ok) { const error = await responseError(response); showError(error.message, error.code); return; }
     latestResult = await response.json();
-    renderResult(latestResult);
+    renderResult(latestResult, {open});
     $("analyzeButton").disabled = false;
     window.LectureSiftGuestTrial?.markUsed?.(jobId);
   } catch (error) { showError(error.message, "LS-NETWORK-01"); }
@@ -1011,7 +1049,7 @@ function setupResultTabs() {
   });
 }
 
-function renderResult(data) {
+function renderResult(data, {open = true} = {}) {
   $("resultHeading").textContent = data.title || "LectureSift";
   const utilityResult = data.job_type && data.job_type !== "study_pack";
   const options = data.options || {};
@@ -1071,7 +1109,9 @@ function renderResult(data) {
       };
   document.querySelectorAll(".result-tab").forEach(button => { button.hidden = !visiblePanes[button.dataset.pane]; });
   activateResultPane(utilityResult ? "files" : Object.keys(visiblePanes).find(name => visiblePanes[name]));
-  $("results").hidden = false; $("results").scrollIntoView({behavior: "smooth", block: "start"});
+  $("openReadyResult").hidden = false;
+  $("results").hidden = !open;
+  if (open) $("results").scrollIntoView({behavior: "smooth", block: "start"});
 }
 
 function transcriptUiText(key, fallback) {

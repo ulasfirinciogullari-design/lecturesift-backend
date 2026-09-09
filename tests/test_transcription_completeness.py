@@ -49,6 +49,6 @@ def test_output_limit_at_minimum_chunk_fails_without_unbounded_retry(tmp_path, m
     monkeypatch.setattr(ai, "_CLIENT", SimpleNamespace(audio=SimpleNamespace(transcriptions=SimpleNamespace(create=create))))
     monkeypatch.setattr(ai, "record_openai_response", lambda *_args: True)
     with pytest.raises(LectureSiftError) as error:
-        ai.transcribe(source, "en", 60)
+        ai.transcribe(source, "en", 15)
     assert error.value.code == "LS-AI-08"
     assert len(calls) == 1
