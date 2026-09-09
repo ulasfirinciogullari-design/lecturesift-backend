@@ -1,14 +1,16 @@
-# Referral preview contract (not production-enabled)
+# Referral release contract
 
-This implementation is inert in the normal release. The environment flag
-`LECTURESIFT_REFERRALS_ENABLED` defaults off, and the source-controlled
-`SCHEMA_RECOVERY_RELEASE_READY = False` capability cannot be overridden by
-environment configuration. Even an existing referral schema plus a true flag
-does not activate it. The explicit migration entry point refuses DDL while
-the capability is false. Never create these tables manually on the current
-production database: recovery manifest v2 rejects unexpected tables.
+The reviewed product release was activated on Render on September 9, 2026.
+The source-controlled `SCHEMA_RECOVERY_RELEASE_READY` capability is true and
+the API has `LECTURESIFT_REFERRALS_ENABLED=true`, the complete v4 schema,
+recovery v3 selection and a fixed campaign boundary. The environment flag
+still defaults off for other deployments. See `docs/PRODUCT_ACTIVATION.md`
+for actual migration, runtime-role, backup and separate synthetic restore
+evidence. Never use the older core-only migration or recovery v2 contracts
+against these expanded tables. No actual paid referral purchase/renewal has
+been placed as a live test.
 
-## Rules implemented in the isolated preview
+## Program rules
 
 - A verified inviter creates a random public code. Only a brand-new account
   may bind it in the registration transaction. Existing users cannot attach
@@ -146,7 +148,8 @@ late reconciliation of old paid orders must not silently advertise or introduce
 retroactive renewal rewards. Runtime now requires the permanent, timezone-aware
 `LECTURESIFT_REFERRAL_CAMPAIGN_START_AT` boundary and rejects order creation
 before that boundary or registration attribution. An absent, malformed or future
-boundary keeps the program disabled. Its real production value is not set yet.
+boundary keeps the program disabled. The real API boundary was fixed during
+the September 9 activation and must not be moved to retroactively reward orders.
 
 PR67 now includes v4 catalogs, recovery v3, the explicit additive product migration,
 version-routed backups/restores and configuration snapshots v3. The old migration
@@ -172,7 +175,7 @@ chargeback can leave already-spent bonus minutes unrecoverable. A refund
 record blocks an unused coupon at redemption, but it does not magically
 recover prior consumption. The hold and manual check reduce, not eliminate,
 this risk. Do not advertise guaranteed immediate rewards, global cost limits,
-automatic cash refunds or a fully activated production program.
+automatic cash refunds or immediate rewards without payment reconciliation.
 
 Each renewal event instead grants 30 inviter minutes or at most 25 TRY coupon
 face value, with no invitee minutes. Renewals share the same five-event monthly

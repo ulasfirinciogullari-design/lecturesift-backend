@@ -1,11 +1,13 @@
 # Product release operations
 
-Source is being verified in PR67. Neither capability flag is opened by the
-migration tools. Production uses Render. Private release access was verified on
-September 9, 2026: PostgreSQL 18.6, an available managed recovery window, a fresh
-logical export and successful real requests to both gpt-5.6-luna and
-gpt-image-1.5. Credentials are held outside the repository. A health response is
-not migration, restore or provider-access evidence.
+PR67 was merged and deployed as `2b7f3a34fba5322452ae91361d838635ddfec477`
+on September 9, 2026. Netlify published the frontend at 01:00 UTC; Render API and
+worker deployments completed at 01:02 UTC. The API activation deployment
+completed at 01:06 UTC. Chat, image creation, assistant credit sales and recurring
+referrals are now enabled on the API. Migration tools never open capability
+flags themselves. Private release credentials and evidence remain outside the
+repository. Health checks, real provider requests and database evidence are
+distinct checks; none proves an actual paid checkout.
 
 The release adds exactly five referral and three assistant tables. The frozen
 v4 catalog contract includes PostgreSQL 18 columns, NOT NULL constraints, unique
@@ -51,16 +53,28 @@ their false CREATE ROLE defaults are preserved and verified instead. Passwords
 use SCRAM verifiers. External checks retain full TLS certificate verification
 with channel binding disabled for Render's TLS gateway.
 
-Deploy the reviewed source with these distinct logins, keep the original owner
-credentials only in private release configuration, configure a permanent
-referral campaign boundary, and then enable the runtime flags. Source release
-capabilities are now open; they do not enable a deployed feature on their own.
+Both running services now use the distinct logins and
+`LECTURESIFT_PRODUCT_SCHEMA_VERSION=1`. Original owner credentials are retained
+only in private release configuration. The API has `ASSISTANT_ENABLED=true`,
+`ASSISTANT_IMAGES_ENABLED=true`, `LECTURESIFT_REFERRALS_ENABLED=true` and a
+permanent timezone-qualified referral campaign boundary. The worker's product
+flags remain false. A real isolated Render worker job verified its internal
+database login, masked search path, denied product-table access and successful
+read-only billing/rollout/cost initialization. The processing queue was empty
+before the release; the deployed worker is reachable.
 
 CI run 34295667581 at c7491bd verified 1,224 tests and the browser checks,
 including nine-table managed migration, complete rollback on rejection, and
-actual synthetic PostgreSQL 18 dump/restore. Real provider checks separately
-returned text and one JPEG. These results do not claim a live paid checkout,
-production restore, or a successful YouTube download.
+actual synthetic PostgreSQL 18 dump/restore. Final activation run 34296969142
+at 52aef40 passed 1,224 tests (3 skips) and 34 browser checks (2 skips). The
+squashed live commit has the same tree. Live assistant/theme files and the
+official iyzico artwork match the reviewed source bytes. The live catalog
+advertises chat and 220-credit image creation. A real guest request at 01:08 UTC
+returned a Turkish site-guidance answer, a registration action and zero charged
+credits. Real provider checks separately returned text and one valid JPEG.
+These results do not claim a live paid checkout, production restore or a
+successful YouTube download. See `YOUTUBE_DOWNLOAD_SUPPORT.md` for the separate
+media access evidence.
 
 ## Reviewable activation sequence
 

@@ -62,13 +62,13 @@ checks for a readable audio stream in an isolated disposable container. A
 cleanup bound the probe. Only its result, error code, size and duration are
 printed; no video or provider diagnostics are retained. The probe is reported
 separately from deterministic tests because provider availability can change.
-It does not verify the production IP. No production deployment, account cookies,
-proxy purchase or real payment was performed as part of this change.
+It does not verify the production IP. No account cookies, purchased proxy or
+real payment are used by these probes.
 
-The `933b367` remote run passed 1,198 deterministic regression tests (3 skips),
-including isolated PostgreSQL concurrency checks, and the application image
-check. The browser run had two mobile assistant failures caused by the cookie
-banner covering its launch button; that fix is pending its next remote run.
+The final product release run `34296969142` at `52aef40` passed 1,224
+deterministic regression tests (3 skips), including isolated PostgreSQL
+concurrency checks, and the application image check. Browser checks passed
+34 cases (2 skips), including the fixed mobile assistant/cookie-banner overlap.
 
 The real YouTube probe still returned `LS-URL-02` / `bot_challenge`. It now runs
 with the pinned bgutil HTTP PO-token provider (`2.0.0`) in a private container
@@ -77,6 +77,23 @@ and `token_generated`, with no `provider_error`. A generated token therefore
 has not resolved the cloud runner's challenge. No token, cookie, or raw provider
 response is logged. This external failure must not be hidden by the green
 aggregate workflow status.
+
+The separate WPC guest-browser probe also started a real browser and generated
+a token, but received the same bot challenge. On September 9, 2026, the
+application at live revision `2b7f3a3` was additionally probed from an isolated
+Render worker job. Its pinned extractor, EJS and Deno were present; the actual
+application downloader returned `LS-URL-02` / `bot_challenge` in 4.1 seconds.
+That job did not enqueue customer work, use account cookies or retain media.
+It establishes failure in the deployment's cloud environment, not the exact
+outbound IP of every worker or an assurance about other videos.
+
+A further isolated Render experiment used the official Invidious Companion
+release with its published SHA-256 checked before execution. The child process
+received no database, storage, payment or OpenAI credentials and listened only
+on loopback. Its server started, but a bounded player request timed out without
+returning playable audio. Initialization messages were not counted as successful
+downloads. Its temporary processes/files were removed; it was not added to the
+production image. This alternative has not resolved YouTube access either.
 
 `YOUTUBE_POT_BASE_URL` is optional and limited to the reviewed private endpoints
 `http://127.0.0.1:4416` and `http://youtube-pot:4416`. Setting it selects the

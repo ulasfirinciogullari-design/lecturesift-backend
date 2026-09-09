@@ -4,8 +4,11 @@ The separate `POST /assistant/image` action generates one JPEG using
 `gpt-image-1.5`, explicit medium quality and 1024x1024 size. The UI shows 220
 credits before submission, in all 13 languages. No image action is offered to
 guests. Both the assistant schema capability/runtime switch and the independent
-`ASSISTANT_IMAGES_ENABLED=true` switch are required. Production provider access
-is not yet verified.
+`ASSISTANT_IMAGES_ENABLED=true` switch are required. Real release-account access
+was verified on September 9, 2026: one valid 46,344-byte JPEG, 15 input tokens
+and 1,303 output tokens (1,056 image / 247 text). The API image switch is now
+enabled and the live catalog displays its 220-credit price. This provider check
+does not claim a real customer's wallet was charged.
 
 The 1,000 UTF-8-byte prompt limit, fixed format/quality and one image per request
 bound normal cost. OpenAI's reviewed September 8 pricing is $5/M input tokens and
@@ -34,8 +37,7 @@ contains usage records without the cached image bytes. Ordinary encrypted backup
 retention still applies; cache expiry is not immediate deletion from old backups.
 No prompt, base64 or provider error body is written to operating-cost logs.
 
-Before live activation, verify model access/organization verification in the real
-release account, one real image, measured usage, retry delivery, cache cleanup and
-refund behavior. Existing synthetic CI tests verify the contract without making
-paid image requests. Video generation needs a different durable provider after
-the announced Sora API shutdown and remains unavailable.
+Real model access and measured image usage were verified before activation.
+Synthetic CI checks separately verify retry delivery, cache cleanup and refund
+behavior without making paid image requests. Video generation needs a different
+durable provider after the announced Sora API shutdown and remains unavailable.

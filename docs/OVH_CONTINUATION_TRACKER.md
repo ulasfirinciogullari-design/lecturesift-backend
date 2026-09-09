@@ -1,6 +1,44 @@
 # LectureSift devam kaydı
 
-## Güncel durum — 8 Eylül 2026
+## Güncel durum — 9 Eylül 2026
+
+Kullanıcı gece boyunca onay beklemeden ilerlemeyi ve hazır işleri canlıya
+almayı istedi. Üretim Netlify + Render üzerinde; OVH makinesi geliştirme
+kopyasıdır. Yerel ağır test çalıştırılmadı, yeni ücretli servis alınmadı.
+
+- PR67 birleştirildi. `2b7f3a34fba5322452ae91361d838635ddfec477` sürümü
+  Netlify'da 01:00 UTC, Render API/worker üzerinde 01:02 UTC'de yayımlandı.
+  Asistan, görsel üretimi, kredi satışı ve yenileme davet ödülleri API'de
+  01:06 UTC'de açıldı. Tema, mobil düzen, 13 dil ve resmi iyzico görseli korundu.
+- Gerçek PostgreSQL 18.6 veritabanına 00:45 UTC'de tek işlemde dokuz eksik
+  tablo eklendi. Önceki bütün satır ve şema nesneleri korundu. Ayrı API ve
+  worker girişleri etkin; worker ürün tablolarına erişemiyor. Yönetilen
+  yedek ve PITR mevcut. Üretim geri yüklemesi yapılmadı; gerçek dump/restore
+  sözleşmesi sentetik PostgreSQL 18 CI ortamında doğrulandı.
+- İki kaynak yayın yeteneği açık. API'de sohbet, görsel ve davet bayrakları
+  true; worker'da false. Kalıcı kampanya sınırı API'de ayarlandı.
+  Yayın erişimi ve sırlar depo dışındaki özel yayın dizininde tutuluyor.
+- Son ürün ağacı 1.224 test / 3 atlama ve 34 tarayıcı kontrolü / 2 atlama
+  geçti (Actions 34296969142). Gerçek model isteği metin ve geçerli JPEG
+  üretti; canlı misafir asistanı Türkçe yanıt ve kayıt düğmesi döndürdü.
+  Gerçek ücretli satın alma veya davet yenilemesi test için yapılmadı.
+- YouTube çözülmedi: bgutil ve WPC token üretse de bot engeli sürdü.
+  Aynı uygulama Render'ın izole worker işinde LS-URL-02 döndürdü.
+  Invidious Companion denemesi oynatıcı isteğinde zaman aşımına uğradı;
+  üretime eklenmedi. PR75, temiz tarayıcının gerçek izleme sayfasını ve
+  yalnız o misafirin geçici çerezleriyle indirmeyi ayrıca inceliyor.
+- PR75 asistanın düz metin yanıtlarını da sadeleştirir. Bu devam kaydındaki
+  ürün yayın kanıtları PR67'ye aittir; PR75'in kesin test/yayın sonucu PR
+  ve dağıtım kaydından kontrol edilmelidir. Son kontrollü dağıtım bitince
+  iki Render servisinin önceki otomatik yayın ayarı geri açılmalıdır.
+- Video üretimi kapalı. Görsel üretimi ve yüklenen videonun sınırlı görsel
+  analizi açık; videonun sesi sohbet ekinden çözümlenmiyor.
+
+Aşağıdaki 8 Eylül kayıtları arşivdir; eski kapalı özellik veya erişim eksikliği
+ifadeleri bu güncel kaydın yerine geçmez. Ayrıntılı yayın kanıtları:
+`docs/PRODUCT_ACTIVATION.md` ve `docs/YOUTUBE_DOWNLOAD_SUPPORT.md`.
+
+## Arşiv — 8 Eylül 2026 yayın öncesi durum
 
 Kullanıcı geliştirme, uzak kontroller ve hazır tema değişikliklerinin canlı
 yayınını onayladı; tekrar onay istenmiyor. Yerel kaynak sınırı nedeniyle ağır
