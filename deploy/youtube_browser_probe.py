@@ -27,14 +27,19 @@ async def bootstrap_guest(port):
     import nodriver
     from nodriver import cdp
 
-    driver = await nodriver.start(host='127.0.0.1', port=port, sandbox=False)
+    diagnostics['guest_bootstrap_stage'] = 'connect_browser'
+    driver = await nodriver.start(config=nodriver.Config(host='127.0.0.1', port=port, sandbox=False))
+    diagnostics['guest_bootstrap_stage'] = 'open_blank_tab'
     page = await driver.get('about:blank', new_tab=True)
     cookies = []
     try:
         # Read player availability without downloading the page's video or ads.
-        await page.send(cdp.network.enable())
-        await page.send(cdp.network.set_blocked_urls(['*://*.googlevideo.com/*']))
-        await page.get('https://www.youtube.com/watch?v=x41yOUIvK2k&hl=en')
+        diagnostics['guest_bootstrap_stage'] = 'block_media'
+        await page.send(cdp.network.enable(max_total_buffer_size=1048576, max_resource_buffer_size=1048576))
+        await page.send(cdp.network.set_blocked_ur_ls(urls=['*://*.googlevideo.com/*']))
+        diagnostics['guest_bootstrap_stage'] = 'open_watch_page'
+        await page.send(cdp.page.navigate(url='https://www.youtube.com/watch?v=x41yOUIvK2k&hl=en'))
+        diagnostics['guest_bootstrap_stage'] = 'read_player_status'
         for _ in range(12):
             raw = await page.evaluate("""JSON.stringify((() => {
                 const p = window.ytInitialPlayerResponse?.playabilityStatus;
@@ -48,6 +53,7 @@ async def bootstrap_guest(port):
             if observed['status'] != 'MISSING' or observed['consent']:
                 break
             await asyncio.sleep(1)
+        diagnostics['guest_bootstrap_stage'] = 'read_guest_cookies'
         allowed = {'VISITOR_INFO1_LIVE', 'VISITOR_PRIVACY_METADATA', 'YSC', 'PREF', 'SOCS', 'CONSENT', 'GPS'}
         for cookie in await driver.cookies.get_all():
             if cookie.domain.lstrip('.') != 'youtube.com' or cookie.name not in allowed:
@@ -60,6 +66,7 @@ async def bootstrap_guest(port):
                 discard=cookie.expires <= 0, comment=None, comment_url=None, rest={}, rfc2109=False,
             ))
         diagnostics['guest_cookies_available'] = bool(cookies)
+        diagnostics['guest_bootstrap_stage'] = 'completed'
         return cookies
     finally:
         await asyncio.wait_for(page.close(), timeout=3)
