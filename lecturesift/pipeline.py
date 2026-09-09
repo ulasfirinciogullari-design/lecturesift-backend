@@ -190,7 +190,10 @@ def _transcript_timestamp(second: float) -> str:
 TRANSCRIPT_MODE_FAST = "chunk_estimate"
 TRANSCRIPT_MODE_PROVIDER = "provider_segments"
 TRANSCRIPT_MODE_SPEAKER = "speaker_segments"
-FAST_TRANSCRIPTION_CHUNK_SECONDS = 900
+# The mini transcription model has a 2,000-token output limit. Fifteen-minute
+# inputs can return successfully while silently omitting the end of speech.
+# Two-minute windows leave room for dense speech and the supported languages.
+FAST_TRANSCRIPTION_CHUNK_SECONDS = 120
 PROVIDER_TRANSCRIPTION_CHUNK_SECONDS = 3600
 
 

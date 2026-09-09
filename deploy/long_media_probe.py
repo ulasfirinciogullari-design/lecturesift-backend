@@ -37,6 +37,7 @@ def main():
     evidence = {"scope": "isolated real pipeline; synthetic repeated speech, low-resolution MP4",
                 "revision": os.environ.get("LECTURESIFT_PROBE_REVISION", "unknown"),
                 "media_module_sha256": os.environ.get("LECTURESIFT_PROBE_MEDIA_SHA256", "unchanged"),
+                "source_module_sha256": json.loads(os.environ.get("LECTURESIFT_PROBE_MODULE_SHA256", "{}")),
                 "real_provider": True, "production_data_used": False,
                 "browser_upload_tested": False, "runs": []}
     progress_path = root / "evidence.json"
@@ -72,6 +73,7 @@ def main():
         # disabled only in this probe so one diagnosis cannot duplicate spend.
         ai._CLIENT = OpenAI(api_key=os.environ["OPENAI_API_KEY"], timeout=600, max_retries=0)
         evidence["transcription_parallelism"] = config.TRANSCRIPTION_PARALLELISM
+        evidence["transcription_chunk_seconds"] = pipeline.FAST_TRANSCRIPTION_CHUNK_SECONDS
         original_transcribe = pipeline.transcribe
 
         def safe_error(exc):
@@ -185,13 +187,17 @@ def main():
                        last_segment_end=max((float(x.get("end", 0)) for x in segments), default=0),
                        beginning_topic_present="photosynth" in transcript.lower(),
                        final_topic_present="whale" in transcript.lower(),
+                       transcript_ending=transcript[-600:],
                        summary_words=len(result.get("summary", "").split()),
                        quiz_count=len(result.get("quiz", [])), flashcard_count=len(result.get("flashcards", [])),
                        slides=len(result.get("slides", [])), zip_bytes=Path(state["result_path"]).stat().st_size,
                        exported_extensions=sorted({Path(n).suffix for n in names}))
-            assert row["beginning_topic_present"] and row["final_topic_present"]
+            assert row["beginning_topic_present"], "beginning_topic_missing"
+            assert row["final_topic_present"], "final_topic_missing"
             assert row["last_segment_end"] >= seconds - 2 and row["transcript_chunks"] >= hours * 4
-            assert row["summary_words"] >= 100 and row["quiz_count"] == 5 and row["flashcard_count"] == 5
+            assert row["summary_words"] >= 100, "summary_missing"
+            assert row["quiz_count"] == 5, "quiz_count_incomplete"
+            assert row["flashcard_count"] == 5, "flashcard_count_incomplete"
             assert {".pdf", ".docx", ".txt"}.issubset(row["exported_extensions"])
             after = billing.account_status(user_id)
             row["minutes_debited"] = before["remaining_minutes"] - after["remaining_minutes"]

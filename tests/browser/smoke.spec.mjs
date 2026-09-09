@@ -57,6 +57,7 @@ test('referrals keep sharing, reward choices and coupons usable on narrow screen
   await page.locator('[data-consent="essential"]').click();
   await expect(page.locator('#referralContent')).toBeVisible();
   await expect(page.locator('#referralLink')).toHaveValue(summary.referral_url);
+  await expect(page.locator('#referralNoCode')).toBeHidden();
   await expect(page.locator('#referralReserved')).toHaveText('2 / 5');
   await expect(page.locator('#referralCoupons')).toContainText('5%');
   await page.locator('[data-referral-choice="coupon"]').click();

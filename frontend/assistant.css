@@ -131,6 +131,7 @@
 .referral-heading p{font-size:14px;line-height:1.65;color:var(--ui-muted);max-width:690px;margin:0}
 .referral-mark{display:grid;place-items:center;width:58px;height:58px;flex:0 0 58px;background:var(--study-mint);color:var(--ui-action);border-radius:18px;font-size:30px}
 .referral-share-box{padding:20px;border:1px solid var(--ui-line);background:var(--ui-surface-raised);border-radius:16px;margin:0 0 18px}
+.referral-card [hidden]{display:none!important}
 .referral-share-box .referral-link,.referral-share-box .referral-create{margin:0;padding:0;background:none;border:0}
 .referral-share-box input{min-width:0}
 .referral-share-box .referral-link label{font-weight:650;color:var(--ui-ink)}
