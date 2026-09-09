@@ -915,6 +915,9 @@ def _plan_from_snapshot(raw: object, expected_plan_code: str) -> Plan:
         raise BillingConfigurationError("Satın alma planı kaydı okunamıyor.")
     values = {}
     for field in fields(Plan):
+        if field.name == "advertising" and field.name not in raw:
+            values[field.name] = "legacy"  # Preserve purchased ad-free rights.
+            continue
         if field.name == "assistant_credits" and field.name not in raw:
             values[field.name] = 0  # Purchases before the assistant keep their terms.
             continue
@@ -939,6 +942,8 @@ def _plan_from_snapshot(raw: object, expected_plan_code: str) -> Plan:
         raise BillingConfigurationError("Satın alma planı önceliği geçersiz.")
     if int(values["team_seats"] or 0) < 1:
         raise BillingConfigurationError("Satın alma planı koltuk sayısı geçersiz.")
+    if values["advertising"] not in {"legacy", "standard", "limited", "none"}:
+        raise BillingConfigurationError("Satın alma reklam koşulu geçersiz.")
     return Plan(**values)
 
 
@@ -1189,7 +1194,8 @@ def _public_payment_order(order) -> dict:
 def _has_permanent_ad_free(connection, user_id: str) -> bool:
     # The paid order is the durable entitlement. No expiry or subscription
     # replacement; failed, cancelled and refunded purchases grant no access.
-    return any(
+    from .workspace_state import manual_ad_free
+    return manual_ad_free(connection, user_id) or any(
         connection.execute(
             select(orders.c.reference).where(
                 orders.c.user_id == user_id,
@@ -1235,18 +1241,13 @@ def account_status(user_id: str) -> dict:
                 USAGE_EVENTS.c.plan_code == plan_code,
             )
         ).scalar_one()
-        orders = connection.execute(
-            select(MANUAL_ORDERS)
-            .where(MANUAL_ORDERS.c.user_id == user_id)
-            .order_by(MANUAL_ORDERS.c.created_at.desc())
-            .limit(10)
-        ).all()
-        payment_orders = connection.execute(
-            select(PAYMENT_ORDERS)
-            .where(PAYMENT_ORDERS.c.user_id == user_id)
-            .order_by(PAYMENT_ORDERS.c.created_at.desc())
-            .limit(10)
-        ).all()
+        from .workspace_state import visible_orders
+        orders = connection.execute(visible_orders(connection,
+            select(MANUAL_ORDERS).where(MANUAL_ORDERS.c.user_id == user_id), MANUAL_ORDERS
+        ).order_by(MANUAL_ORDERS.c.created_at.desc()).limit(10)).all()
+        payment_orders = connection.execute(visible_orders(connection,
+            select(PAYMENT_ORDERS).where(PAYMENT_ORDERS.c.user_id == user_id), PAYMENT_ORDERS
+        ).order_by(PAYMENT_ORDERS.c.created_at.desc()).limit(10)).all()
         paid_credit_purchases = int(
             connection.execute(
                 select(func.count()).select_from(MANUAL_ORDERS).where(
@@ -1274,7 +1275,7 @@ def account_status(user_id: str) -> dict:
     job_entitlements = effective_job_plan.public()["entitlements"]
     if permanent_ad_free:
         for entitlements in (public_plan["entitlements"], job_entitlements):
-            entitlements.update(ad_free=True, rewarded_minutes_eligible=False)
+            entitlements.update(ad_free=True, ad_mode="none", rewarded_minutes_eligible=False)
     if plan_terms_version == LEGACY_TERMS_VERSION:
         # Current catalog display prices are an offer for a new purchase, not
         # evidence of what this legacy subscription paid.
@@ -2199,6 +2200,11 @@ def admin_billing_overview(limit: int = 100) -> dict:
     now = utcnow()
     active_user = USERS.c.email.not_like("deleted+%@users.invalid")
     with ENGINE.connect() as connection:
+        from .workspace_state import ORDER_ARCHIVES, visible_order_condition
+        from sqlalchemy import inspect
+        archive_ready = inspect(connection).has_table(ORDER_ARCHIVES.name)
+        manual_visible = visible_order_condition(MANUAL_ORDERS) if archive_ready else True
+        payment_visible = visible_order_condition(PAYMENT_ORDERS) if archive_ready else True
         user_count = int(
             connection.execute(select(func.count()).select_from(USERS).where(active_user)).scalar_one()
         )
@@ -2239,6 +2245,7 @@ def admin_billing_overview(limit: int = 100) -> dict:
         pending_count = int(
             connection.execute(
                 select(func.count()).select_from(MANUAL_ORDERS).where(
+                    manual_visible,
                     MANUAL_ORDERS.c.status == "pending"
                 )
             ).scalar_one()
@@ -2246,6 +2253,7 @@ def admin_billing_overview(limit: int = 100) -> dict:
         pending_count += int(
             connection.execute(
                 select(func.count()).select_from(PAYMENT_ORDERS).where(
+                    payment_visible,
                     PAYMENT_ORDERS.c.status.in_(("created", "pending"))
                 )
             ).scalar_one()
@@ -2264,6 +2272,7 @@ def admin_billing_overview(limit: int = 100) -> dict:
         manual_paid_count = int(
             connection.execute(
                 select(func.count()).select_from(MANUAL_ORDERS).where(
+                    manual_visible,
                     MANUAL_ORDERS.c.status == "paid"
                 )
             ).scalar_one()
@@ -2271,6 +2280,7 @@ def admin_billing_overview(limit: int = 100) -> dict:
         card_paid_count = int(
             connection.execute(
                 select(func.count()).select_from(PAYMENT_ORDERS).where(
+                    payment_visible,
                     PAYMENT_ORDERS.c.status == "paid"
                 )
             ).scalar_one()
@@ -2278,6 +2288,7 @@ def admin_billing_overview(limit: int = 100) -> dict:
         failed_order_count = int(
             connection.execute(
                 select(func.count()).select_from(PAYMENT_ORDERS).where(
+                    payment_visible,
                     PAYMENT_ORDERS.c.status.in_(("failed", "token_failed", "cancelled"))
                 )
             ).scalar_one()
@@ -2301,6 +2312,7 @@ def admin_billing_overview(limit: int = 100) -> dict:
             )
             .join(USERS, USERS.c.id == MANUAL_ORDERS.c.user_id)
             .outerjoin(USER_PROFILES, USER_PROFILES.c.user_id == USERS.c.id)
+            .where(manual_visible)
             .order_by(MANUAL_ORDERS.c.created_at.desc())
             .limit(safe_limit)
         ).all()
@@ -2313,6 +2325,7 @@ def admin_billing_overview(limit: int = 100) -> dict:
             )
             .join(USERS, USERS.c.id == PAYMENT_ORDERS.c.user_id)
             .outerjoin(USER_PROFILES, USER_PROFILES.c.user_id == USERS.c.id)
+            .where(payment_visible)
             .order_by(PAYMENT_ORDERS.c.created_at.desc())
             .limit(safe_limit)
         ).all()

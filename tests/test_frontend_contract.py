@@ -718,7 +718,7 @@ def test_admin_large_dataset_controls_and_compact_account_tabs_are_wired():
     assert all(
         f'data-account-view="{view}"' in account
         and f'data-account-view-button="{view}"' in account
-        for view in ("overview", "profile", "payments", "lessons", "security")
+        for view in ("overview", "profile", "payments", "security")
     )
     assert "activateAccountView" in auth and "lecturesift-account-view" in auth
     assert '@router.get("/billing/admin/users")' in rollout
@@ -1061,12 +1061,12 @@ def test_optional_analytics_and_advertising_are_consent_gated():
     assert 't("terms.rewardPolicy")' in i18n
 
 
-def test_banner_ads_are_opt_in_public_only_and_paid_plans_are_ad_free():
+def test_banner_ads_are_opt_in_public_only_and_respect_ad_free_rights():
     i18n = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
     display = (FRONTEND / "display-ads.js").read_text(encoding="utf-8")
     blueprint = (FRONTEND.parent / "render.yaml").read_text(encoding="utf-8")
 
-    assert 'displayAdsScript.src = "/display-ads.js?v=3"' in i18n
+    assert 'displayAdsScript.src = "/display-ads.js?v=4"' in i18n
     assert 'displayAdsStyle.href = "/display-ads.css?v=2"' in i18n
     assert 'LectureSiftConsent?.allows("advertising")' in display
     assert 'body.account?.plan?.entitlements?.ad_free === true' in display

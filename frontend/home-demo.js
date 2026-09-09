@@ -18,6 +18,14 @@
   host.addEventListener('click', event => {
     const tab = event.target.closest('[role="tab"]');
     if (tab && host.contains(tab)) { activate(tab); return; }
+    const reveal = event.target.closest('#demoReveal');
+    if (reveal) {
+      const answer = document.getElementById('demoCardAnswer');
+      answer.hidden = !answer.hidden;
+      reveal.setAttribute('aria-expanded', String(!answer.hidden));
+      reveal.textContent = text(answer.hidden ? 'reveal' : 'hide');
+      return;
+    }
     const option = event.target.closest('[data-demo-answer]');
     const feedback = document.getElementById('demoFeedback');
     const reset = document.getElementById('demoReset');

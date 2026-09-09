@@ -203,7 +203,7 @@ const uiLanguage = $("uiLanguage"), sourceLanguage = $("sourceLanguage"), output
 const DEFAULT_JOB_TYPE = "study_pack";
 const DEFAULT_SUMMARY_STYLE = "detailed";
 let currentLanguage = window.LectureSiftI18n?.language || localStorage.getItem("lecturesift-ui") || "tr";
-let sourceLayout = "classic", classicVideos = [], audioVideos = [], visualVideos = [];
+let classicVideos = [];
 let jobId = null, timerStarted = null, timerHandle = null, pollHandle = null;
 let latestResult = null, cardIndex = 0, cardRevealed = false, quizScore = 0, quizAnswered = 0;
 let activeQuizItems = [], quizAnswers = new Map(), quizRendered = false;
@@ -239,7 +239,7 @@ function applyLanguage() {
   const autoOption = [...sourceLanguage.options].find(option => option.value === "auto");
   if (autoOption) autoOption.textContent = t("auto");
   localStorage.setItem("lecturesift-ui", currentLanguage);
-  ["classic", "audio", "visual"].forEach(renderFileList);
+  renderFileList("classic");
   syncContentChoices(); updateOperationUI();
   if (billingCatalog) renderPlans();
   renderBillingAccount();
@@ -527,11 +527,7 @@ populateBillingCurrencies();
 if ($("logoutButton")) $("logoutButton").onclick = () => { billingToken = ""; billingAccount = null; localStorage.removeItem("lecturesift-billing-token"); renderBillingAccount(); renderPlans(); };
 loadBilling();
 
-function filesFor(role) {
-  if (role === "classic") return classicVideos;
-  if (role === "audio") return audioVideos;
-  return visualVideos;
-}
+function filesFor() { return classicVideos; }
 const DOCUMENT_EXTENSIONS = new Set(["pdf", "docx", "pptx", "txt", "md", "png", "jpg", "jpeg", "webp", "tif", "tiff"]);
 const VIDEO_EXTENSIONS = new Set(["mp4", "mov", "mkv", "webm", "mpeg", "mpg", "m4v"]);
 const AUDIO_EXTENSIONS = new Set(["mp3", "wav", "m4a", "aac", "flac", "ogg", "oga", "opus", "wma", "aiff", "aif", "mka"]);
@@ -560,7 +556,7 @@ function uploadLimitMessage(documentMode, limitMb) {
   return `${base} ${Number(limitMb).toLocaleString(central?.locale || navigator.language)} MB ${kind}.`;
 }
 function selectedSourceFiles(role) {
-  return role === "classic" ? classicVideos : [...audioVideos, ...visualVideos];
+  return classicVideos;
 }
 const PROGRESS_PROFILES = {
   media: [
@@ -573,7 +569,7 @@ const PROGRESS_PROFILES = {
 };
 function fileExtension(file) { return String(file?.name || "").split(".").pop().toLowerCase(); }
 function isDocumentFile(file) { return DOCUMENT_EXTENSIONS.has(fileExtension(file)); }
-function selectedDocumentJob() { return sourceLayout === "classic" && classicVideos.length > 0 && classicVideos.every(isDocumentFile); }
+function selectedDocumentJob() { return classicVideos.length > 0 && classicVideos.every(isDocumentFile); }
 function progressProfileFor(job = null) {
   const type = job?.options?.job_type || DEFAULT_JOB_TYPE;
   if (type === "audio_export" || type === "download_video") return type;
@@ -666,18 +662,6 @@ function setupPicker(inputId, zoneId, role) {
   zone.addEventListener("drop", event => addFiles(role, Array.from(event.dataTransfer.files || [])));
 }
 setupPicker("classicFiles", "classicDropZone", "classic");
-setupPicker("audioFiles", "audioDropZone", "audio");
-setupPicker("visualFiles", "visualDropZone", "visual");
-
-function setSourceLayout(layout) {
-  sourceLayout = layout;
-  const classic = layout === "classic";
-  $("classicMode").classList.toggle("active", classic); $("separateMode").classList.toggle("active", !classic);
-  $("classicSources").hidden = !classic; $("separateSources").hidden = classic;
-}
-$("classicMode").onclick = () => setSourceLayout("classic");
-$("separateMode").onclick = () => setSourceLayout("separate");
-
 const PACK_PRESETS = {
   fast: {summary:true, transcript:true, slides:false, quiz:false, cards:false, timestamps:false, speakers:false, quizCount:"5", cardCount:"10", formats:["pdf"]},
   balanced: {summary:true, transcript:true, slides:true, quiz:true, cards:true, timestamps:false, speakers:false, quizCount:"10", cardCount:"20", formats:["pdf"]},
@@ -759,7 +743,6 @@ document.querySelectorAll("[data-pack-preset]").forEach(button => button.addEven
 
 function updateOperationUI() {
   $("studySettings").hidden = false; $("formatChoices").hidden = false;
-  $("recordingModeTabs").hidden = false;
   $("analyzeButton").querySelector("span").textContent = t("analyze");
   configureProgressProfile(null, true);
 }
@@ -881,8 +864,8 @@ function formData() {
   const timestampsEnabled = $("includeTranscript").checked && $("transcriptTimestamps").checked;
   data.append("transcript_timestamps", timestampsEnabled ? "true" : "false");
   data.append("speaker_detection", timestampsEnabled && $("speakerDetection").checked ? "true" : "false");
-  data.append("slides_offset_seconds", sourceLayout === "separate" ? ($("slidesOffset").value || "0") : "0");
-  data.append("source_layout", sourceLayout); data.append("job_type", DEFAULT_JOB_TYPE);
+  data.append("slides_offset_seconds", "0");
+  data.append("source_layout", "classic"); data.append("job_type", DEFAULT_JOB_TYPE);
   data.append("output_formats", selectedFormats().join(",") || "none");
   return data;
 }
@@ -910,12 +893,9 @@ $("analyzeButton").onclick = async () => {
     showError(t("loginRequired"), "LS-BILL-01");
     return;
   }
-  const uploadFiles = sourceLayout === "separate" ? [...audioVideos, ...visualVideos] : classicVideos;
-  if (sourceLayout === "classic" && !classicVideos.length) { $("classicFiles").click(); return; }
-  if (sourceLayout === "separate" && (!audioVideos.length || !visualVideos.length)) {
-    showError("Ses ve görüntü ayrı modunda her iki listeye de en az bir video ekle.", "LS-UPLOAD-03"); return;
-  }
-  const documentUpload = sourceLayout === "classic" && uploadFiles.length && uploadFiles.every(isDocumentFile);
+  const uploadFiles = classicVideos;
+  if (!uploadFiles.length) { $("classicFiles").click(); return; }
+  const documentUpload = uploadFiles.every(isDocumentFile);
   const sourceLimits = activeSourceLimits();
   const uploadLimitMb = Number(documentUpload ? sourceLimits.max_document_upload_mb : sourceLimits.max_media_upload_mb);
   if (uploadFiles.reduce((total, file) => total + file.size, 0) > uploadLimitMb * 1024 ** 2) {
@@ -931,12 +911,7 @@ $("analyzeButton").onclick = async () => {
   setItemState("source", "active");
   updateProgress(2, t("uploadingSource"), profileDetail(progressProfileFor()));
   const data = formData();
-  if (sourceLayout === "separate") {
-    audioVideos.forEach(file => data.append("audio_files", file));
-    visualVideos.forEach(file => data.append("visual_files", file));
-  } else {
-    classicVideos.forEach(file => data.append("files", file));
-  }
+  classicVideos.forEach(file => data.append("files", file));
   const request = new XMLHttpRequest(); request.open("POST", `${API}/jobs`);
   request.setRequestHeader("Authorization", `Bearer ${billingToken}`);
   const upload = window.LectureSiftUpload.multipart(data);

@@ -20,7 +20,7 @@ from .errors import LectureSiftError
 LANGUAGES = ("tr", "en", "de", "fr", "es", "it", "pt", "ru", "ar", "zh", "ja", "ko", "hi")
 ACTIONS = {
     "workspace": "/workspace.html", "plans": "/plans.html", "account": "/account.html",
-    "support": "/support.html", "register": "/register.html",
+    "support": "/contact.html", "register": "/register.html",
     "features": "/features.html", "privacy": "/privacy.html",
     "light": "", "dark": "",
 }
@@ -29,7 +29,7 @@ SITEMAP = {
     "/workspace.html": "Upload documents/audio/video from files; summaries, transcript, quiz, flashcards, MP3/video exports; owned lesson history",
     "/plans.html": "Regional prices, subscriptions, minute top-ups, assistant credit top-ups; final tax/provider availability at checkout",
     "/account.html": "Own profile, language/country, minutes, subscription, payment orders, referral status, password, data export and account closure",
-    "/support.html": "Support tickets and help", "/features.html": "Product capabilities",
+    "/contact.html": "Contact form for technical, account and payment support", "/features.html": "Product capabilities",
     "/privacy.html": "Data processing information", "/refund.html": "Refund information",
     "/register.html": "Create and verify an account", "/login.html": "Sign in",
 }

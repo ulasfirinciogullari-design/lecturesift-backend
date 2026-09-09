@@ -1,0 +1,38 @@
+# Frozen PostgreSQL 18 workspace/admin schema v1.
+SCHEMA_OBJECT|C|public.admin_ad_free_grants_v1|1|user_id|character varying(36)|t|||
+SCHEMA_OBJECT|C|public.admin_ad_free_grants_v1|2|enabled|boolean|t|||
+SCHEMA_OBJECT|C|public.admin_ad_free_grants_v1|3|updated_at|timestamp with time zone|t|||
+SCHEMA_OBJECT|C|public.admin_order_archives_v1|1|reference|character varying(64)|t|||
+SCHEMA_OBJECT|C|public.admin_order_archives_v1|2|user_id|character varying(36)|t|||
+SCHEMA_OBJECT|C|public.admin_order_archives_v1|3|created_at|timestamp with time zone|t|||
+SCHEMA_OBJECT|C|public.workspace_folders_v1|1|id|character varying(36)|t|||
+SCHEMA_OBJECT|C|public.workspace_folders_v1|2|user_id|character varying(36)|t|||
+SCHEMA_OBJECT|C|public.workspace_folders_v1|3|name|character varying(80)|t|||
+SCHEMA_OBJECT|C|public.workspace_folders_v1|4|created_at|timestamp with time zone|t|||
+SCHEMA_OBJECT|C|public.workspace_items_v1|1|job_id|character varying(64)|t|||
+SCHEMA_OBJECT|C|public.workspace_items_v1|2|user_id|character varying(36)|t|||
+SCHEMA_OBJECT|C|public.workspace_items_v1|3|folder_id|character varying(36)|f|||
+SCHEMA_OBJECT|I|admin_ad_free_grants_v1|admin_ad_free_grants_v1_pkey|CREATE UNIQUE INDEX admin_ad_free_grants_v1_pkey ON public.admin_ad_free_grants_v1 USING btree (user_id)
+SCHEMA_OBJECT|I|admin_order_archives_v1|admin_order_archives_v1_pkey|CREATE UNIQUE INDEX admin_order_archives_v1_pkey ON public.admin_order_archives_v1 USING btree (reference)
+SCHEMA_OBJECT|I|admin_order_archives_v1|ix_admin_order_archives_v1_user_id|CREATE INDEX ix_admin_order_archives_v1_user_id ON public.admin_order_archives_v1 USING btree (user_id)
+SCHEMA_OBJECT|I|workspace_folders_v1|ix_workspace_folders_v1_user_id|CREATE INDEX ix_workspace_folders_v1_user_id ON public.workspace_folders_v1 USING btree (user_id)
+SCHEMA_OBJECT|I|workspace_folders_v1|workspace_folders_v1_pkey|CREATE UNIQUE INDEX workspace_folders_v1_pkey ON public.workspace_folders_v1 USING btree (id)
+SCHEMA_OBJECT|I|workspace_items_v1|ix_workspace_items_v1_folder_id|CREATE INDEX ix_workspace_items_v1_folder_id ON public.workspace_items_v1 USING btree (folder_id)
+SCHEMA_OBJECT|I|workspace_items_v1|ix_workspace_items_v1_user_id|CREATE INDEX ix_workspace_items_v1_user_id ON public.workspace_items_v1 USING btree (user_id)
+SCHEMA_OBJECT|I|workspace_items_v1|workspace_items_v1_pkey|CREATE UNIQUE INDEX workspace_items_v1_pkey ON public.workspace_items_v1 USING btree (job_id)
+SCHEMA_OBJECT|K|admin_ad_free_grants_v1|admin_ad_free_grants_v1_enabled_not_null|t|NOT NULL enabled
+SCHEMA_OBJECT|K|admin_ad_free_grants_v1|admin_ad_free_grants_v1_pkey|t|PRIMARY KEY (user_id)
+SCHEMA_OBJECT|K|admin_ad_free_grants_v1|admin_ad_free_grants_v1_updated_at_not_null|t|NOT NULL updated_at
+SCHEMA_OBJECT|K|admin_ad_free_grants_v1|admin_ad_free_grants_v1_user_id_not_null|t|NOT NULL user_id
+SCHEMA_OBJECT|K|admin_order_archives_v1|admin_order_archives_v1_created_at_not_null|t|NOT NULL created_at
+SCHEMA_OBJECT|K|admin_order_archives_v1|admin_order_archives_v1_pkey|t|PRIMARY KEY (reference)
+SCHEMA_OBJECT|K|admin_order_archives_v1|admin_order_archives_v1_reference_not_null|t|NOT NULL reference
+SCHEMA_OBJECT|K|admin_order_archives_v1|admin_order_archives_v1_user_id_not_null|t|NOT NULL user_id
+SCHEMA_OBJECT|K|workspace_folders_v1|workspace_folders_v1_created_at_not_null|t|NOT NULL created_at
+SCHEMA_OBJECT|K|workspace_folders_v1|workspace_folders_v1_id_not_null|t|NOT NULL id
+SCHEMA_OBJECT|K|workspace_folders_v1|workspace_folders_v1_name_not_null|t|NOT NULL name
+SCHEMA_OBJECT|K|workspace_folders_v1|workspace_folders_v1_pkey|t|PRIMARY KEY (id)
+SCHEMA_OBJECT|K|workspace_folders_v1|workspace_folders_v1_user_id_not_null|t|NOT NULL user_id
+SCHEMA_OBJECT|K|workspace_items_v1|workspace_items_v1_job_id_not_null|t|NOT NULL job_id
+SCHEMA_OBJECT|K|workspace_items_v1|workspace_items_v1_pkey|t|PRIMARY KEY (job_id)
+SCHEMA_OBJECT|K|workspace_items_v1|workspace_items_v1_user_id_not_null|t|NOT NULL user_id

@@ -24,3 +24,13 @@ Distinguish source changes, preview publication, passing CI and live activation.
 Do not treat a health response as proof of real payments, ad revenue or all
 media formats working. Do not activate referral rewards while their versioned
 schema/recovery release capability is false. Never log or commit secrets.
+
+## Authenticated browser access
+
+Before promising to inspect a signed-in provider panel, verify that this task
+has a callable browser read/control tool and can read the intended page.
+An ambient tab URL or an open preview is not proof of page access. If enabling
+Browser does not expose those tools, report that observed limitation and
+distinguish it from an unverified root cause. Do not repeatedly ask the owner
+to enable Browser or type the same mention. Never copy browser cookies or
+credentials into a separate browser to work around a missing connection.

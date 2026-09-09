@@ -358,6 +358,10 @@ case "$metadata_manifest_version" in
     RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v3.sql"
     expected_schema_compatibility="lecturesift-schema-v3"
     ;;
+  4)
+    RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v4.sql"
+    expected_schema_compatibility="lecturesift-schema-v4"
+    ;;
   *) fail "the backup references an unsupported recovery manifest version" ;;
 esac
 [[ "$metadata_format" == "lecturesift-backup-v2" && \
@@ -443,8 +447,10 @@ docker run --rm --pull=never --network none --read-only \
     cat /tmp/rehearsal-manifest.out
   ' >"$RUN_DIR/rehearsal-manifest.out"
 
-if [[ "$metadata_manifest_version" == "3" ]]; then
-  python3 "$ROOT_DIR/deploy/verify_schema_transition_v4.py" current \
+if [[ "$metadata_manifest_version" == "3" || "$metadata_manifest_version" == "4" ]]; then
+  schema_verifier=4
+  [[ "$metadata_manifest_version" != "4" ]] || schema_verifier=5
+  python3 "$ROOT_DIR/deploy/verify_schema_transition_v${schema_verifier}.py" current \
     --manifest "$RUN_DIR/rehearsal-manifest.out" \
     --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" \
     --preserved-contract "$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt" >/dev/null

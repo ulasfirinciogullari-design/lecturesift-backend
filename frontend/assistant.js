@@ -64,7 +64,7 @@
     if (!response.ok) { const error = new Error(body.detail?.code || 'LS-ASSIST-07'); error.status=response.status; throw error; }
     return body;
   }
-  const safeActions = {workspace:'/workspace.html',plans:'/plans.html',account:'/account.html',support:'/support.html',register:'/register.html',features:'/features.html',privacy:'/privacy.html'};
+  const safeActions = {workspace:'/workspace.html',plans:'/plans.html',account:'/account.html',support:'/contact.html',register:'/register.html',features:'/features.html',privacy:'/privacy.html'};
   function addMessage(text, role = 'assistant', action = 'none') {
     const node = document.createElement('div'); node.className=`assistant-message ${role}`; node.textContent=text;
     if (safeActions[action]) {

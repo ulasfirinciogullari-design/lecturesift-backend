@@ -654,3 +654,20 @@ def test_repeated_rounded_task_progress_skips_state_flush(tmp_path: Path, monkey
     store.update_task("progress-job", "audio", 12.6, "transcription")
     store.update_task("progress-job", "audio", 12.6, "transcript_ready")
     assert len(flushes) == 3
+
+
+def test_lesson_storage_partial_delete_is_reported_as_failure():
+    import pytest
+    class FakeClient:
+        def get_paginator(self, name):
+            return self
+        def paginate(self, **kwargs):
+            return [{"Contents":[{"Key":"jobs/synthetic/result.json"}]}]
+        def delete_objects(self, **kwargs):
+            return {"Errors":[{"Key":"jobs/synthetic/result.json","Code":"AccessDenied"}]}
+    storage = ObjectStorage.__new__(ObjectStorage)
+    storage.bucket = "synthetic-bucket"
+    storage.remote = True
+    storage._client = FakeClient()
+    with pytest.raises(RuntimeError, match="did not delete every"):
+        storage.delete_job("synthetic")

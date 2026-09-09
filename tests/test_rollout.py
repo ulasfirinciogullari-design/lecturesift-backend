@@ -58,7 +58,9 @@ def test_display_ads_are_disabled_by_default_and_hide_unit_details(monkeypatch):
         "provider": None,
         "banner_unit_path": None,
         "consent_required": True,
-        "paid_plans_ad_free": True,
+        "paid_plans_ad_free": False,
+        "plan_ad_modes": {"lite": "standard", "plus": "limited", "pro": "none", "max": "none", "business": "none"},
+        "limited_ad_paths": ["/"],
         "adsense_auto_ads": {
             "enabled": False,
             "publisher_id": None,

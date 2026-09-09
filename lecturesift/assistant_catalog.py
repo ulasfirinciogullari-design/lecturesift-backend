@@ -4,7 +4,7 @@ import os
 
 MODEL = "gpt-5.6-luna"
 IMAGE_MODEL = "gpt-image-1.5"
-IMAGE_CREDITS = 220
+IMAGE_CREDITS = 200
 VERSION = "2026-09-08-assistant-v1"
 # PG18 v4 migration/recovery, runtime roles and both real provider requests
 # were verified for the September 9 release. Runtime flags remain opt-in.

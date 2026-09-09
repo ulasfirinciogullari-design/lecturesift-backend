@@ -334,10 +334,11 @@ async function initAccount() {
   if (!token) return location.replace(accountSignInPath());
   let currentAccount = null;
   let referralLoadStarted = false;
-  const accountViews = ["overview", "profile", "payments", "lessons", "referrals", "security"];
+  const accountViews = ["overview", "profile", "payments", "referrals", "security"];
   const accountViewKey = "lecturesift-account-view";
 
   const activateAccountView = (requested, {focus = false, updateHash = true} = {}) => {
+    if (requested === "lessons") { location.replace("/workspace.html#library"); return; }
     const view = accountViews.includes(requested) ? requested : "overview";
     document.querySelectorAll("[data-account-view]").forEach(panel => {
       const selected = panel.dataset.accountView === view;
@@ -451,17 +452,6 @@ async function initAccount() {
     $("refundSubmit").disabled = !paidOrders.length;
   };
 
-  const renderJobHistory = jobs => {
-    const workspacePath = I18N.localizedPath ? I18N.localizedPath(I18N.language, "/workspace.html") : "/workspace.html";
-    $("jobHistory").innerHTML = jobs.length ? jobs.map(job => {
-      const created = new Intl.DateTimeFormat(I18N.locale, {dateStyle:"medium", timeStyle:"short"}).format(new Date(Number(job.created || 0) * 1000));
-      const label = job.title || (job.options?.job_type === "audio_export" ? t("history.audioExport", "MP3 dönüşümü") : job.options?.job_type === "download_video" ? t("history.videoDownload", "Video indirme") : t("history.studyPack", "Ders çalışma paketi"));
-      const status = job.status === "done" ? t("history.ready", "Hazır") : job.status === "error" ? t("history.failed", "Tamamlanamadı") : t("history.processing", "İşleniyor");
-      const action = job.status === "error" ? "" : `<a class="secondary-action link-action" href="${adminSafe(workspacePath)}?job=${encodeURIComponent(job.job_id)}">${t("history.open", "Aç")}</a>`;
-      return `<div class="order-row history-row"><span><strong>${adminSafe(label)}</strong><br><small>${adminSafe(created)} · ${adminSafe(status)}</small></span>${action}</div>`;
-    }).join("") : `<p class="empty-copy">${t("account.noHistory", "Henüz işlenmiş bir dersin yok.")}</p>`;
-  };
-
   const adminSafe = value => String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[char]);
 
   const referralDate = value => new Intl.DateTimeFormat(I18N.locale, {dateStyle:"medium"}).format(new Date(value));
@@ -566,15 +556,6 @@ async function initAccount() {
     }
   };
 
-  const loadJobHistory = async () => {
-    try {
-      const body = await request("/jobs?limit=30", {}, token);
-      renderJobHistory(body.jobs || []);
-    } catch (error) {
-      $("jobHistory").innerHTML = `<p class="empty-copy">${adminSafe(error.message)}</p>`;
-    }
-  };
-
   const renderRefundRequests = requests => {
     $("refundRequestsList").innerHTML = requests.length ? requests.map(item => `
       <div class="order-row"><span><strong>${adminSafe(item.order_reference)}</strong><br><small>${adminSafe(new Intl.DateTimeFormat(I18N.locale, {dateStyle:"medium"}).format(new Date(item.created_at)))}</small></span><strong>${adminSafe(t(`refund.status.${item.status}`, item.status))}</strong></div>
@@ -611,7 +592,9 @@ async function initAccount() {
       ? t("plan.ad_free", "Kalıcı reklamsız kullanım")
       : account.plan.entitlements?.ad_free
       ? t("plans.adFree", "Reklamsız kullanım")
-      : t("plans.rewardedOption", "İsteğe bağlı reklamla ek dakika");
+      : account.plan.entitlements?.ad_mode === "limited"
+      ? t("plans.limitedAds", "Sınırlı reklam")
+      : t("plans.adSupported", "Reklamlı kullanım");
     $("remainingMinutes").textContent = account.remaining_minutes == null ? t("account.unlimited", "Sınırsız") : account.remaining_minutes.toLocaleString(I18N.locale);
     $("creditMinutes").textContent = `${(account.credit_minutes || 0).toLocaleString(I18N.locale)} ${t("unit.minuteShort", "dk")}`;
     $("usedMinutes").textContent = t("account.usedMinutes", "{count} dk kullanıldı").replace("{count}", account.used_minutes.toLocaleString(I18N.locale));
@@ -639,7 +622,6 @@ async function initAccount() {
     }
     renderOrders(account);
     $("accountPage").hidden = false;
-    void loadJobHistory();
     void loadRefundRequests();
     if (!referralLoadStarted) {
       referralLoadStarted = true;

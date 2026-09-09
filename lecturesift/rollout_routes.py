@@ -10,7 +10,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import config
 from .billing_service import BillingAuthenticationError, BillingConfigurationError, BillingError, authenticate_session
@@ -186,6 +186,26 @@ class AdminActualCostRequest(BaseModel):
     source_reference: str
 
 
+
+class FolderRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+
+
+class LessonFolderRequest(BaseModel):
+    folder_id: str | None = Field(default=None, max_length=36)
+
+
+class AssistantCreditGrantRequest(BaseModel):
+    credits: int = Field(strict=True, ge=1, le=100_000)
+    days: int = Field(strict=True, ge=1, le=365)
+    request_id: str = Field(max_length=36)
+    reason: str = Field(min_length=4, max_length=240)
+
+
+class AdFreeGrantRequest(BaseModel):
+    enabled: bool = Field(strict=True)
+    reason: str = Field(min_length=4, max_length=240)
+
 def _user(authorization: str | None = Header(None)) -> dict:
     scheme, _, token = (authorization or "").partition(" ")
     if scheme.casefold() != "bearer" or not token:
@@ -231,6 +251,68 @@ def _display_ads_provider() -> str | None:
         return "google_adsense_auto"
     return None
 
+
+
+def _workspace_call(function, *args):
+    from . import workspace_state
+    try:
+        return getattr(workspace_state, function)(*args)
+    except (BillingError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-LIBRARY-01")
+
+
+@router.get("/library")
+def library_list(user: dict = Depends(_user)) -> dict:
+    return {"ok": True, **_workspace_call("library", user["id"])}
+
+
+@router.post("/library/folders")
+def library_folder_create(payload: FolderRequest, user: dict = Depends(_user)) -> dict:
+    return {"ok": True, "folder": _workspace_call("save_folder", user["id"], payload.name)}
+
+
+@router.patch("/library/folders/{folder_id}")
+def library_folder_rename(folder_id: str, payload: FolderRequest, user: dict = Depends(_user)) -> dict:
+    return {"ok": True, "folder": _workspace_call("save_folder", user["id"], payload.name, folder_id)}
+
+
+@router.delete("/library/folders/{folder_id}")
+def library_folder_delete(folder_id: str, user: dict = Depends(_user)) -> dict:
+    _workspace_call("remove_folder", user["id"], folder_id)
+    return {"ok": True}
+
+
+@router.patch("/library/lessons/{job_id}")
+def library_lesson_move(job_id: str, payload: LessonFolderRequest, user: dict = Depends(_user)) -> dict:
+    _workspace_call("move_lesson", user["id"], job_id, payload.folder_id)
+    return {"ok": True}
+
+
+@router.delete("/library/lessons/{job_id}")
+def library_lesson_delete(job_id: str, user: dict = Depends(_user)) -> dict:
+    _workspace_call("delete_lesson", user["id"], job_id)
+    return {"ok": True}
+
+
+@router.get("/billing/admin/users/{user_id}/entitlements")
+def admin_extra_entitlements(user_id: str, admin: dict = Depends(_admin)) -> dict:
+    return {"ok": True, **_workspace_call("admin_entitlements", user_id)}
+
+
+@router.post("/billing/admin/users/{user_id}/assistant-credits")
+def admin_assistant_credits(user_id: str, payload: AssistantCreditGrantRequest, admin: dict = Depends(_admin)) -> dict:
+    return {"ok": True, **_workspace_call("grant_credits", user_id, payload.credits, payload.days,
+                                           payload.request_id, payload.reason, admin["actor"])}
+
+
+@router.post("/billing/admin/users/{user_id}/ad-free")
+def admin_ad_free_grant(user_id: str, payload: AdFreeGrantRequest, admin: dict = Depends(_admin)) -> dict:
+    return {"ok": True, **_workspace_call("set_ad_free", user_id, payload.enabled, payload.reason, admin["actor"])}
+
+
+@router.delete("/billing/admin/orders/{reference}")
+def admin_archive_unpaid_order(reference: str, admin: dict = Depends(_admin)) -> dict:
+    return {"ok": True, **_workspace_call("archive_unpaid_order", reference, admin["actor"])}
 
 @router.get("/rollout/health")
 def rollout_health(readiness: bool = False) -> dict:
@@ -317,7 +399,9 @@ def ads_config() -> dict:
         "provider": provider,
         "banner_unit_path": config.DISPLAY_AD_UNIT_PATH if provider == "google_gpt" else None,
         "consent_required": True,
-        "paid_plans_ad_free": True,
+        "paid_plans_ad_free": False,
+        "plan_ad_modes": {"lite": "standard", "plus": "limited", "pro": "none", "max": "none", "business": "none"},
+        "limited_ad_paths": ["/"],
         "adsense_auto_ads": {
             "enabled": adsense_enabled,
             "publisher_id": config.ADSENSE_PUBLISHER_ID if adsense_enabled else None,
@@ -336,6 +420,22 @@ def ads_config() -> dict:
             "url": config.SITE_BANNER_URL if config.SITE_BANNER_URL.startswith("/") else "/plans.html",
         },
     }
+
+
+@router.get("/billing/admin/advertising-readiness")
+def advertising_readiness(admin: dict = Depends(_admin)) -> dict:
+    return {"ok": True, "adsense": {
+        "enabled": _display_ads_provider() == "google_adsense_auto",
+        "publisher_configured": bool(re.fullmatch(r"ca-pub-[0-9]+", config.ADSENSE_PUBLISHER_ID)),
+        "site_approval_confirmed": config.ADSENSE_ENABLED,
+        "consent_setup_confirmed": config.ADSENSE_CMP_READY,
+        "google_account_connected": False,
+    }, "google_ads": {
+        "id_configured": bool(re.fullmatch(r"AW-[0-9]+", config.GOOGLE_ADS_ID)),
+        "signup_configured": bool(config.GOOGLE_ADS_SIGNUP_LABEL),
+        "purchase_configured": bool(config.GOOGLE_ADS_PURCHASE_LABEL),
+        "google_account_connected": False,
+    }}
 
 
 @router.get("/analytics/config")
@@ -863,10 +963,19 @@ def admin_contact_conversation(
 ) -> dict:
     del admin
     try:
-        conversation = get_contact_conversation(message_id)
+        conversation = get_contact_conversation(message_id, include_payment=True)
     except BillingError as exc:
         _billing_failure(exc, "LS-CONTACT-06")
     return {"ok": True, **conversation}
+
+
+@router.delete("/billing/admin/contact-messages/{message_id}")
+def admin_contact_delete(message_id: str, admin: dict = Depends(_admin)) -> dict:
+    from .rollout_service import delete_contact_message
+    try:
+        return {"ok": True, **delete_contact_message(message_id, admin["actor"])}
+    except (BillingError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-ADMIN-SUPPORT")
 
 
 @router.post("/billing/admin/contact-messages/{message_id}/reply")
