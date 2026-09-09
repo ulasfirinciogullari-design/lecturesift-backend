@@ -3,11 +3,11 @@
 
   const API_BASE = "https://api.lecturesift.com";
   const PUBLIC_PATHS = new Set([
-    "/", "/index.html", "/features.html", "/plans.html", "/about.html",
-    "/contact.html", "/privacy.html", "/terms.html", "/cookies.html", "/refund.html",
-    "/distance-sales.html",
+    "/", "/features", "/plans", "/about", "/contact", "/privacy",
+    "/terms", "/cookies", "/refund", "/distance-sales",
+    "/document-summary", "/lecture-video-summary", "/quiz-flashcards",
   ]);
-  const EVENT_PATHS = new Set([...PUBLIC_PATHS, "/register.html", "/account.html"]);
+  const EVENT_PATHS = new Set([...PUBLIC_PATHS, "/register", "/account"]);
   const configuredIds = new Set();
   let remoteConfig = null;
   let configPromise = null;
@@ -17,7 +17,15 @@
     const languages = new Set(["tr", "en", "de", "fr", "es", "it", "pt", "ru", "ar", "zh", "ja", "ko", "hi"]);
     const parts = location.pathname.split("/").filter(Boolean);
     if (languages.has(parts[0])) parts.shift();
-    return `/${parts.join("/")}` || "/";
+    const path = `/${parts.join("/")}`.replace(/\.html$/, "");
+    return path === "/index" ? "/" : path;
+  }
+
+  function pageContext() {
+    // Public landing-page campaign parameters remain available for attribution.
+    // Account and registration events must not send their query or fragment.
+    if (PUBLIC_PATHS.has(unlocalizedPath())) return {};
+    return {page_location: `${location.origin}${location.pathname}`};
   }
 
   function choices() {
@@ -91,6 +99,7 @@
       configuredIds.add(gaId);
       window[`ga-disable-${gaId}`] = false;
       window.gtag("config", gaId, {
+        ...pageContext(),
         send_page_view: PUBLIC_PATHS.has(unlocalizedPath()),
         allow_google_signals: false,
         allow_ad_personalization_signals: false,
@@ -99,7 +108,7 @@
     }
     if (adsReady && !configuredIds.has(adsId)) {
       configuredIds.add(adsId);
-      window.gtag("config", adsId, {allow_ad_personalization_signals: consent.advertising});
+      window.gtag("config", adsId, {...pageContext(), allow_ad_personalization_signals: consent.advertising});
     }
   }
 
@@ -115,7 +124,7 @@
     const config = await getConfig();
     configureDestinations(config);
     if (!config?.enabled || typeof window.gtag !== "function") return false;
-    window.gtag("event", String(eventName), {...parameters, send_to: config.measurement_id});
+    window.gtag("event", String(eventName), {...parameters, ...pageContext(), send_to: config.measurement_id});
     return true;
   }
 
@@ -126,7 +135,7 @@
     const ads = config?.google_ads;
     const label = kind === "purchase" ? ads?.purchase_label : kind === "signup" ? ads?.signup_label : null;
     if (!ads?.enabled || !label || typeof window.gtag !== "function") return false;
-    window.gtag("event", "conversion", {...parameters, send_to: `${ads.id}/${label}`});
+    window.gtag("event", "conversion", {...parameters, ...pageContext(), send_to: `${ads.id}/${label}`});
     return true;
   }
 

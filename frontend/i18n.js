@@ -783,7 +783,7 @@
   consentScript.defer = true;
   document.head.append(consentScript);
   const analyticsScript = document.createElement("script");
-  analyticsScript.src = "/analytics.js?v=2";
+  analyticsScript.src = "/analytics.js?v=3";
   analyticsScript.defer = true;
   document.head.append(analyticsScript);
   const rewardedAdsScript = document.createElement("script");
