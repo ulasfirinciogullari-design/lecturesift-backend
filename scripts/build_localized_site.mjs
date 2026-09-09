@@ -28,6 +28,7 @@ if (!pageCopySource.includes(marker)) throw new Error("Static translation catalo
 const catalog = JSON.parse(pageCopySource.split(marker, 2)[1].trim().replace(/;\s*$/, ""));
 const dynamicCopySource = await readFile(path.join(SOURCE, "i18n.js"), "utf8");
 const referralCopySource = await readFile(path.join(SOURCE, "referral-i18n.js"), "utf8");
+const assistantCopySource = await readFile(path.join(SOURCE, "assistant-i18n.js"), "utf8");
 const keyCatalog = {};
 for (const match of dynamicCopySource.matchAll(/^\s*,?["']([^"']+)["']\s*:\s*(\[[^\r\n]+\])\s*,?$/gm)) {
   try {
@@ -48,6 +49,15 @@ for (const match of referralCopySource.matchAll(/^\s*"[^"]+":(\[[^\r\n]+\]),?$/g
   const row = JSON.parse(match[1]);
   if (row.length !== LANGUAGES.length || row.some(value => typeof value !== "string" || !value.trim())) {
     throw new Error("Incomplete referral translation row");
+  }
+  catalog[row[0]] = row;
+}
+
+// Assistant and invitation cards are visible before the chat script loads.
+for (const match of assistantCopySource.matchAll(/^\s+[a-z]+: (\[[^\r\n]+\]),?$/gm)) {
+  const row = JSON.parse(match[1]);
+  if (row.length !== LANGUAGES.length || row.some(value => typeof value !== "string" || !value.trim())) {
+    throw new Error("Incomplete assistant translation row");
   }
   catalog[row[0]] = row;
 }

@@ -1,12 +1,15 @@
 (function () {
-  if (document.querySelector('.assistant-launch') || /\/admin(?:\.html)?$/.test(location.pathname)) return;
+  if (document.querySelector('.assistant-surface') || /\/admin(?:\.html)?$/.test(location.pathname)) return;
+  const pageRoot = document.querySelector('[data-assistant-root]');
   const API = 'https://api.lecturesift.com';
   const t = key => window.LectureSiftAssistantCopy.t(key);
   const language = () => window.LectureSiftI18n?.language || document.documentElement.lang || 'tr';
   const token = () => localStorage.getItem('lecturesift-billing-token') || '';
   const path = value => window.LectureSiftI18n?.localizedPath?.(language(), value) || value;
-  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/assistant.css?v=2'; document.head.append(css);
-  const launch = document.createElement('button'); launch.className = 'assistant-launch'; launch.textContent = t('title'); launch.type = 'button'; launch.setAttribute('aria-haspopup', 'dialog'); document.body.append(launch);
+  const format = (key, count) => t(key).replace('{count}', Number(count).toLocaleString(language()));
+  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/assistant.css?v=3'; document.head.append(css);
+  const spark = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 6.3L21 12l-6.3 2.7L12 21l-2.7-6.3L3 12l6.3-2.7Z"/></svg>';
+  const launch = document.createElement('button'); launch.className = 'assistant-launch'; launch.innerHTML = spark; const launchLabel=document.createElement('span');launchLabel.textContent=t('nav');launch.append(launchLabel);launch.setAttribute('aria-label',t('title')); launch.type = 'button'; launch.setAttribute('aria-haspopup', 'dialog'); if(!pageRoot)document.body.append(launch);
   const positionLaunch = () => {
     const banner=document.querySelector('.consent-banner:not([hidden])');
     launch.style.bottom=banner ? `${Math.max(22,window.innerHeight-banner.getBoundingClientRect().top+12)}px` : '';
@@ -21,14 +24,21 @@
   document.addEventListener('lecturesift:consent-ready',observeConsent);
   document.addEventListener('lecturesift:consent',observeConsent);
   window.addEventListener('resize',positionLaunch);observeConsent();
-  const dialog = document.createElement('dialog'); dialog.className = 'assistant-dialog'; dialog.setAttribute('aria-labelledby', 'assistantTitle');
-  dialog.innerHTML = '<div class="assistant-layout"><header class="assistant-header"><h2 id="assistantTitle"></h2><button type="button" class="assistant-close">×</button></header><div class="assistant-messages" role="log" aria-live="polite"></div><p class="assistant-status" role="status"></p><details class="assistant-details"><summary></summary><p></p></details><form class="assistant-compose"><select class="assistant-mode" hidden><option value="chat"></option><option value="image"></option></select><div class="assistant-attachment" hidden><span></span><button type="button">×</button></div><textarea maxlength="3000" required></textarea><div class="assistant-toolbar"><button type="button" class="assistant-attach">＋</button><button type="button" class="assistant-clear"></button><button type="submit"></button></div><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" hidden></form></div>';
-  document.body.append(dialog);
+  const dialog = document.createElement(pageRoot ? 'section' : 'dialog'); dialog.className = `assistant-surface ${pageRoot ? 'assistant-page-chat' : 'assistant-dialog'}`; dialog.setAttribute('aria-labelledby', 'assistantTitle');
+  dialog.innerHTML = '<div class="assistant-layout"><header class="assistant-header"><span class="assistant-emblem">'+spark+'</span><div class="assistant-heading"><h2 id="assistantTitle"></h2><p></p></div><a class="assistant-expand" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-8 8M10 4H4v16h16v-6"/></svg></a><button type="button" class="assistant-close">×</button></header><div class="assistant-credit-bar"><span class="assistant-balance"></span><a></a></div><div class="assistant-messages" role="log" aria-live="polite" tabindex="0"></div><div class="assistant-suggestions"></div><p class="assistant-status" role="status"></p><form class="assistant-compose"><select class="assistant-mode" hidden><option value="chat"></option><option value="image"></option></select><div class="assistant-attachment" hidden><span></span><button type="button">×</button></div><textarea maxlength="3000" required rows="2"></textarea><div class="assistant-toolbar"><button type="button" class="assistant-attach">＋</button><button type="button" class="assistant-clear"></button><button type="submit"></button></div><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" hidden><p class="assistant-limit"></p></form><details class="assistant-details"><summary></summary><p></p></details></div>';
+  (pageRoot || document.body).append(dialog);
   const $ = selector => dialog.querySelector(selector);
   $('#assistantTitle').textContent = t('title'); $('.assistant-close').setAttribute('aria-label',t('close'));
+  $('.assistant-heading p').textContent=t('limited');
+  $('.assistant-limit').textContent=t(token()?'usage':'trialnote');
+  $('.assistant-balance').textContent=t('limited');
+  $('.assistant-credit-bar a').textContent=t(token()?'buy':'signup');
+  $('.assistant-credit-bar a').href=path(token()?'/plans.html#assistantCredits':'/register.html');
+  $('.assistant-expand').href=path('/assistant.html');$('.assistant-expand').setAttribute('aria-label',t('openpage'));$('.assistant-expand').title=t('openpage');
+  $('.assistant-expand').hidden=Boolean(pageRoot);$('.assistant-close').hidden=Boolean(pageRoot);
   $('textarea').placeholder = t('ask'); $('textarea').setAttribute('aria-label',t('ask'));
   $('.assistant-clear').textContent = t('clear'); $('button[type=submit]').textContent=t('send');
-  $('.assistant-attach').setAttribute('aria-label',t('attach')); $('.assistant-details summary').textContent=t('credits');
+  $('.assistant-attach').setAttribute('aria-label',t('attach'));$('.assistant-attach').title=t('attach'); $('.assistant-details summary').textContent=t('creditguide');
   $('.assistant-details p').textContent = t('rules') + ' ' + t('media');
   $('.assistant-attachment button').setAttribute('aria-label',t('close'));
   $('.assistant-mode').setAttribute('aria-label',t('mode'));
@@ -36,6 +46,12 @@
   let imageCredits=0;
   let history = [], attachment = null, sessionToken = token(), busy = false, available = false, trialCount = 0, pending = null;
   const setStatus = text => { $('.assistant-status').textContent = text; };
+  const updateBalance = value => {if(Number.isFinite(value)&&value>=0)$('.assistant-balance').textContent=format('balance',value);};
+  for(const key of ['suggeststudy','suggestaccount','suggestinvite']) {
+    const button=document.createElement('button');button.type='button';button.textContent=t(key);
+    button.addEventListener('click',()=>{if(busy)return;$('textarea').value=t(key);$('textarea').focus();});
+    $('.assistant-suggestions').append(button);
+  }
   async function request(endpoint, data, auth = true) {
     const headers = {'Content-Type':'application/json'};
     if (auth && token()) headers.Authorization = `Bearer ${token()}`;
@@ -54,10 +70,18 @@
       const button=document.createElement('button'); button.type='button'; button.className='assistant-action'; button.textContent=t('apply');
       button.addEventListener('click',()=>{ if (document.documentElement.dataset.theme !== action) document.querySelector('.theme-toggle')?.click(); button.disabled=true; }); node.append(button);
     }
-    $('.assistant-messages').append(node); node.scrollIntoView({block:'nearest'});
+    const messages=$('.assistant-messages');messages.append(node);messages.scrollTop=messages.scrollHeight;
     return node;
   }
-  function reset() { $('.assistant-mode').value='chat';updateMode();history=[]; pending=null; attachment=null; $('.assistant-attachment').hidden=true; $('.assistant-messages').replaceChildren(); $('textarea').value=''; setStatus(''); }
+  function reset() { $('.assistant-mode').value='chat';updateMode();history=[]; pending=null; attachment=null; $('.assistant-attachment').hidden=true; $('.assistant-messages').replaceChildren();$('.assistant-suggestions').hidden=false; $('textarea').value=''; setStatus(''); }
+  function syncSession() {
+    reset();sessionToken=token();available=false;
+    $('.assistant-balance').textContent=t('limited');
+    $('.assistant-limit').textContent=t(token()?'usage':'trialnote');
+    $('.assistant-credit-bar a').textContent=t(token()?'buy':'signup');
+    $('.assistant-credit-bar a').href=path(token()?'/plans.html#assistantCredits':'/register.html');
+    $('.assistant-mode').hidden=true;
+  }
   function setBusy(value) { busy=value; dialog.querySelectorAll('form button,form select').forEach(button=>{button.disabled=value;}); $('textarea').disabled=value; }
   function updateMode() {
     const creating=$('.assistant-mode').value==='image';
@@ -68,23 +92,27 @@
     if(creating){attachment=null;$('.assistant-attachment').hidden=true;}
   }
   $('.assistant-mode').addEventListener('change',()=>{pending=null;updateMode();});
-  launch.addEventListener('click',async()=>{
-    if (sessionToken !== token()) { reset(); sessionToken=token(); }
-    dialog.showModal(); $('textarea').focus();
+  async function openAssistant() {
+    if (sessionToken !== token()) syncSession();
+    const openingSession=sessionToken;
+    if(!pageRoot){dialog.showModal();$('textarea').focus();}
     if (!$('.assistant-messages').children.length) addMessage(t(token()?'welcomeowned':'welcome'), 'assistant', token() ? 'workspace' : 'register');
     try {
-      const offers=await request('/assistant/catalog', null, false); available=offers.available===true;
+      const offers=await request('/assistant/catalog', null, false);
+      if(openingSession!==token()){syncSession();return;}
+      available=offers.available===true;
       imageCredits=offers.image?.credits||0;
       $('.assistant-mode').hidden=!(available&&offers.image?.available===true&&token());
       $('.assistant-mode option[value=image]').textContent=`${t('imagemode')} · ${imageCredits} ${t('credits')}`;
       if($('.assistant-mode').hidden){$('.assistant-mode').value='chat';updateMode();}
       if (!available) { setStatus(t('unavailable')); return; }
-      if (token()) { const wallet=await request('/assistant/wallet'); setStatus(`${wallet.balance} · ${t('credits')}`); }
+      if (token()) { const wallet=await request('/assistant/wallet');if(openingSession!==token()){syncSession();return;}updateBalance(wallet.balance);setStatus(''); }
       else setStatus(t('trial'));
     } catch { available=false; setStatus(t('unavailable')); }
-  });
-  $('.assistant-close').addEventListener('click',()=>dialog.close());
-  dialog.addEventListener('close',()=>launch.focus());
+  }
+  launch.addEventListener('click',openAssistant);
+  if(pageRoot)openAssistant();
+  else {$('.assistant-close').addEventListener('click',()=>dialog.close());dialog.addEventListener('close',()=>launch.focus());}
   $('.assistant-clear').addEventListener('click',()=>{reset();$('textarea').focus();});
   $('.assistant-attachment button').addEventListener('click',()=>{attachment=null;$('.assistant-attachment').hidden=true;});
   $('.assistant-attach').addEventListener('click',()=>{
@@ -125,13 +153,13 @@
   });
   $('form').addEventListener('submit',async event=>{
     event.preventDefault();if(busy)return;
-    if(sessionToken!==token()){reset();sessionToken=token();setStatus(t('signup'));return;}
+    if(sessionToken!==token()){syncSession();setStatus(t('signup'));return;}
     const message=$('textarea').value.trim();if(!message)return;
     if(!available){addMessage(t('unavailable'),'assistant',token()?'workspace':'register');return;}
     if(!token()&&trialCount>=3){addMessage(t('signup'),'assistant','register');return;}
     const creating=token()&&$('.assistant-mode').value==='image';
     if(creating&&new TextEncoder().encode(message).length>1000){setStatus(t('shortprompt'));return;}
-    setBusy(true);setStatus(t('waiting'));addMessage(message,'user');
+    setBusy(true);$('.assistant-suggestions').hidden=true;setStatus(t('waiting'));addMessage(message,'user');
     try {
       let answer;
       if(!token()) {answer=await request('/assistant/trial',{message:message.slice(0,500),language:language()},false);trialCount++;}
@@ -147,7 +175,7 @@
         if(!pending || pending.signature!==signature) pending={signature,payload:{request_id:crypto.randomUUID(),...payload}};
         answer=await request('/assistant/chat',pending.payload);
       }
-      if(sessionToken!==token()){reset();sessionToken=token();return;}
+      if(sessionToken!==token()){syncSession();return;}
       if(answer.kind==='image'&&/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(answer.image||'')&&answer.image.length<=1500100){
         const node=addMessage(t('generated'));
         const picture=document.createElement('img');picture.src=answer.image;picture.alt=message;picture.width=1024;picture.height=1024;node.append(picture);
@@ -158,7 +186,8 @@
       pending=null;
       history.push({role:'user',content:message.slice(0,2000)},{role:'assistant',content:answer.answer.slice(0,2000)});
       history=history.slice(-6);$('textarea').value='';attachment=null;$('.assistant-attachment').hidden=true;
-      setStatus(token()?`${answer.balance ?? ''} · ${t('credits')} (−${answer.charged_credits || 0})`:t('signup'));
+      updateBalance(answer.balance);
+      setStatus(token()?`${Number.isFinite(answer.balance)?format('balance',answer.balance)+' · ':''}${format('used',answer.charged_credits || 0)}`:t('signup'));
     } catch(error) {
       if(error.status && error.status!==409) pending=null;
       const text=!error.status||error.status===409?t('uncertain'):error.status===402?t('empty'):error.status===401?t('signup'):error.message==='LS-ASSIST-01'?t('unavailable'):t('error');

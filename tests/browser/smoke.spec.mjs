@@ -1,5 +1,72 @@
 import {test, expect, JOB_ID} from './fixtures.mjs';
 
+test('assistant page keeps credits visible and account actions under user control', async ({page}, testInfo) => {
+  const cors={'Access-Control-Allow-Origin':'http://127.0.0.1:4173','Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Allow-Headers':'authorization,content-type'};
+  await page.addInitScript(()=>localStorage.setItem('lecturesift-billing-token','synthetic-browser-token'));
+  await page.route('https://api.lecturesift.com/assistant/catalog',route=>route.fulfill({status:200,headers:cors,json:{available:true,image:{available:false}}}));
+  await page.route('https://api.lecturesift.com/assistant/wallet',route=>route.fulfill({status:200,headers:cors,json:{balance:1000}}));
+  const requests=[];
+  await page.route('https://api.lecturesift.com/assistant/chat',async route=>{
+    if(route.request().method()==='OPTIONS'){await route.fulfill({status:204,headers:cors});return;}
+    requests.push(route.request().postDataJSON());
+    await route.fulfill({status:200,headers:cors,json:{answer:'Your account shows your plan and usage.',action:'account',balance:998,charged_credits:2}});
+  });
+  await page.goto('/en/assistant.html');
+  const chat=page.locator('.assistant-page-chat');
+  await expect(chat).toBeVisible();
+  await expect(page.locator('.assistant-launch')).toHaveCount(0);
+  await expect(chat.locator('.assistant-balance')).toHaveText('Credits left: 1,000');
+  await expect(chat.locator('.assistant-heading p')).toHaveText('Usage limits apply.');
+  await expect(chat.locator('textarea')).not.toBeFocused();
+  await chat.getByRole('button',{name:'Where can I see my plan?',exact:true}).click();
+  await expect(chat.locator('textarea')).toHaveValue('Where can I see my plan?');
+  await chat.locator('button[type=submit]').click();
+  await expect(chat.locator('.assistant-balance')).toHaveText('Credits left: 998');
+  await expect(chat.locator('.assistant-status')).toContainText('2 credits');
+  await expect(page).toHaveURL(/\/en\/assistant\.html$/);
+  expect(requests).toHaveLength(1);
+  expect(requests[0].language).toBe('en');
+  const action=chat.locator('a.assistant-action').last();
+  await expect(action).toHaveAttribute('href',/\/en\/account(?:\.html)?$/);
+  await expect(chat.locator('.assistant-credit-bar a')).toHaveAttribute('href',/\/en\/plans(?:\.html)?#assistantCredits$/);
+  await noHorizontalOverflow(page);
+  await page.locator('.assistant-page-intro').scrollIntoViewIfNeeded();
+  await page.screenshot({path:testInfo.outputPath('assistant-page-layout.jpg'),quality:75});
+  await page.evaluate(()=>localStorage.removeItem('lecturesift-billing-token'));
+  await chat.locator('textarea').fill('Changed session');
+  await chat.locator('button[type=submit]').click();
+  await expect(chat.locator('.assistant-balance')).not.toContainText('998');
+  await expect(chat.locator('.assistant-message')).toHaveCount(0);
+  expect(requests).toHaveLength(1);
+});
+
+test('invitation discovery keeps the requested account section through sign-in', async ({page}) => {
+  await page.goto('/en/');
+  const invite=page.locator('.referral-promo');
+  await expect(invite).toContainText('Signing up alone earns no reward.');
+  await invite.getByRole('link',{name:'Explore invitations'}).click();
+  await expect(page).toHaveURL(/\/en\/login\.html\?next=/);
+  const next=new URL(page.url()).searchParams.get('next');
+  expect(next).toBe('/en/account.html#account-referrals');
+  await noHorizontalOverflow(page);
+});
+
+test('assistant page fits a narrow Arabic screen and tablet navigation', async ({page},testInfo) => {
+  test.skip(testInfo.project.name!=='mobile-light','One bounded extra layout review');
+  await page.setViewportSize({width:320,height:740});
+  await page.goto('/ar/assistant.html');
+  await expect(page.locator('html')).toHaveAttribute('dir','rtl');
+  await expect(page.locator('.assistant-page-chat')).toBeVisible();
+  await expect(page.locator('.assistant-heading p')).toHaveText('تخضع الخدمة لحدود استخدام.');
+  await noHorizontalOverflow(page);
+  await page.screenshot({path:testInfo.outputPath('assistant-arabic-layout.jpg'),quality:75});
+  await page.setViewportSize({width:980,height:850});
+  await page.goto('/de/assistant.html');
+  await page.locator('.public-menu-toggle').click();
+  await expect(page.locator('.public-nav-link[aria-current="page"]')).toHaveText('Assistent');
+  await noHorizontalOverflow(page);
+});
+
 test('assistant guide opens, remains localized and does not claim live AI availability', async ({page}) => {
   await page.goto('/en/');
   await page.locator('.assistant-launch').click();

@@ -3,6 +3,7 @@
   const TOKEN_KEY = "lecturesift-billing-token";
   const CODES = ["tr", "en", "de", "fr", "es", "it", "pt", "ru", "ar", "zh", "ja", "ko", "hi"];
   const COPY = {
+    assistant: ["Asistan","Assistant","Assistent","Assistant","Asistente","Assistente","Assistente","Ассистент","المساعد","助手","アシスタント","도우미","सहायक"],
     menu: ["Ana menü", "Main menu", "Hauptmenü", "Menu principal", "Menú principal", "Menu principale", "Menu principal", "Главное меню", "القائمة الرئيسية", "主菜单", "メインメニュー", "기본 메뉴", "मुख्य मेन्यू"],
     home: ["Ana sayfa", "Home", "Startseite", "Accueil", "Inicio", "Home", "Início", "Главная", "الرئيسية", "首页", "ホーム", "홈", "होम"],
     workspace: ["Çalışma Alanı", "Workspace", "Arbeitsbereich", "Espace de travail", "Área de trabajo", "Area di lavoro", "Área de trabalho", "Рабочая область", "مساحة العمل", "工作区", "ワークスペース", "작업 공간", "कार्य क्षेत्र"],
@@ -47,6 +48,7 @@
     ["home", "/"],
     ["workspace", "/workspace.html"],
     ["features", "/features"],
+    ["assistant", "/assistant.html"],
     ["plans", "/plans"],
     ["about", "/about"],
   ];
@@ -55,7 +57,7 @@
     anchor.className = "public-nav-link";
     anchor.href = pathFor(path);
     anchor.textContent = label(key);
-    if (currentBasePath === path) {
+    if (currentBasePath === path.replace(/\.html$/i, "")) {
       anchor.classList.add("active");
       anchor.setAttribute("aria-current", "page");
     }
@@ -102,7 +104,7 @@
   nav.addEventListener("click", event => {
     if (event.target.closest("a")) setMenuOpen(false);
   });
-  window.matchMedia("(min-width: 861px)").addEventListener?.("change", () => setMenuOpen(false));
+  window.matchMedia("(min-width: 1101px)").addEventListener?.("change", () => setMenuOpen(false));
   tools.append(menuButton);
   tools.append(nav);
   header.append(tools);
