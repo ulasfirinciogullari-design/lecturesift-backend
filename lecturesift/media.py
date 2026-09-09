@@ -5,6 +5,7 @@ from pathlib import Path
 
 
 from .errors import LectureSiftError
+from .duration import file_duration_seconds
 
 
 def run_command(command: list[str]) -> subprocess.CompletedProcess:
@@ -111,6 +112,27 @@ def extract_audio_chunks(
     chunks = [path for path in sorted(job_dir.glob(f"{safe_prefix}_*.mp3")) if path.stat().st_size > 0]
     if not chunks:
         raise RuntimeError("Audio extraction failed.")
+    # MP3 encoder padding can create a 72 ms fragment at an exact segment
+    # boundary. Providers reject that as an invalid audio file. Preserve the
+    # tail by joining it to its predecessor instead of dropping real speech.
+    if len(chunks) > 1 and file_duration_seconds(chunks[-1]) < 1.0:
+        previous, tail = chunks[-2:]
+        manifest = job_dir / f"{safe_prefix}_join.txt"
+        joined = job_dir / f"{safe_prefix}_joined.mp3"
+        try:
+            # Both basenames come only from the sanitized prefix and numeric
+            # segment index. The concat reader never accepts user-authored URLs.
+            manifest.write_text(f"file '{previous.name}'\nfile '{tail.name}'\n", encoding="utf-8")
+            run_command(["ffmpeg", "-y", "-f", "concat", "-safe", "1", "-i", str(manifest),
+                         "-c:a", "copy", str(joined)])
+            if not joined.is_file() or joined.stat().st_size == 0:
+                raise RuntimeError("Audio tail could not be preserved.")
+            joined.replace(previous)
+            tail.unlink()
+            chunks.pop()
+        finally:
+            manifest.unlink(missing_ok=True)
+            joined.unlink(missing_ok=True)
     return chunks
 
 

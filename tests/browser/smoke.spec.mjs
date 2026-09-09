@@ -194,7 +194,7 @@ test('assistant page fits a narrow Arabic screen and tablet navigation', async (
   await page.locator('[data-consent="essential"]').click();
   await expect(page.locator('html')).toHaveAttribute('dir','rtl');
   await expect(page.locator('.assistant-page-chat')).toBeVisible();
-  await expect(page.locator('.assistant-heading p')).toHaveText('تخضع الخدمة لحدود استخدام.');
+  await expect(page.locator('.assistant-balance')).toHaveText('تخضع الخدمة لحدود استخدام.');
   await noHorizontalOverflow(page);
   await page.screenshot({path:testInfo.outputPath('assistant-arabic-layout.jpg'),quality:75});
   await page.setViewportSize({width:980,height:850});
@@ -440,7 +440,7 @@ test('rebuilt study entry opens the real workspace and key screens remain usable
   await page.locator('#plansGrid').scrollIntoViewIfNeeded();
   await capture('plans-layout');
   await page.locator('#assistantCredits').scrollIntoViewIfNeeded();
-  await expect(page.locator('#assistantCredits')).toContainText('Usage limits apply.');
+  await expect(page.locator('#assistantCredits')).toContainText('Credits are used when a reply arrives.');
   await expect(page.locator('#assistantCredits .assistant-pack-price').first()).toContainText('₺');
   await noHorizontalOverflow(page);
   await capture('assistant-credits-layout');

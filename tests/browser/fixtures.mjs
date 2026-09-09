@@ -7,6 +7,7 @@ const account = {
   user: {id: 'ci-synthetic-user', email: 'browser-smoke@example.invalid', first_name: 'Synthetic', email_verified: true},
   plan: {code: 'free'},
   remaining_minutes: 60,
+  used_minutes: 0,
   credit_minutes: 0,
 };
 const result = {

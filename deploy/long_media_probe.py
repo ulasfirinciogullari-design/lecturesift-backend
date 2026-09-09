@@ -2,8 +2,9 @@
 
 Calls the real transcription, study and export pipeline. Never run this inside
 a production worker or with a production database, queue or storage account.
-The caller supplies a temporary directory, a synthetic SQLite database and a
-bounded OpenAI key. Repeated synthetic speech tests duration and chunk handling;
+The caller supplies a temporary directory, a synthetic SQLite database and an
+OpenAI key. Runtime and retries are bounded; provider calls incur usage costs.
+Repeated synthetic speech tests duration and chunk handling;
 it does not establish quality for arbitrary real lectures or large HD uploads.
 """
 from __future__ import annotations
@@ -35,6 +36,7 @@ def main():
     started = time.monotonic()
     evidence = {"scope": "isolated real pipeline; synthetic repeated speech, low-resolution MP4",
                 "revision": os.environ.get("LECTURESIFT_PROBE_REVISION", "unknown"),
+                "media_module_sha256": os.environ.get("LECTURESIFT_PROBE_MEDIA_SHA256", "unchanged"),
                 "real_provider": True, "production_data_used": False,
                 "browser_upload_tested": False, "runs": []}
     progress_path = root / "evidence.json"

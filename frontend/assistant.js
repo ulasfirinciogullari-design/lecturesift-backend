@@ -136,7 +136,7 @@
       renderCreditShop(offers);
       imageCredits=offers.image?.credits||0;
       $('.assistant-mode').hidden=!(available&&offers.image?.available===true&&token());
-      $('.assistant-mode [data-mode=image]').textContent=`${t('imagemode')} · ${imageCredits} ${t('credits')}`;
+      $('.assistant-mode [data-mode=image]').textContent=`${t('imagemode')} · ${format('packcount',imageCredits)}`;
       if($('.assistant-mode').hidden){mode='chat';updateMode();}
       if (!available) { setStatus(t('unavailable')); return; }
       if (token()) { const wallet=await request('/assistant/wallet');if(openingSession!==token()){syncSession();return;}updateBalance(wallet.balance);setStatus(''); }
