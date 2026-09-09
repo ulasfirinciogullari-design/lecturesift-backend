@@ -349,8 +349,8 @@
     }
     if (typeof renderResult === "function") {
       const originalResult = renderResult;
-      renderResult = function(data) {
-        originalResult(data);
+      renderResult = function(data, options) {
+        originalResult(data, options);
         if ($("downloadAll")) {
           $("downloadAll").onclick = event => {
             event.preventDefault();

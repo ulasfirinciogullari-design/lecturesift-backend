@@ -5,6 +5,7 @@ for (const automatic of [false, true]) {
     await page.addInitScript(() => {
       localStorage.setItem('lecturesift-billing-token','synthetic-upload-owner');
       localStorage.setItem('lecturesift-ui','en');
+      localStorage.setItem('lecturesift-currency','TRY');
       const open = XMLHttpRequest.prototype.open, send = XMLHttpRequest.prototype.send, header = XMLHttpRequest.prototype.setRequestHeader;
       XMLHttpRequest.prototype.open = function(method, url, ...rest) {
         this.syntheticUpload = method === 'POST' && url === 'https://api.lecturesift.com/jobs';

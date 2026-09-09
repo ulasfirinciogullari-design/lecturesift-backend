@@ -924,6 +924,7 @@ $("analyzeButton").onclick = async () => {
   $("analyzeButton").disabled = true; $("results").hidden = true; latestResult = null; jobId = null; configureProgressProfile(null, true); resetStages(); startTimer();
   $("openReadyResult").hidden = true;
   $("uploadFilesProgress").replaceChildren();
+  window.__lecturesiftUploadBps = 0;
   $("processTitle").textContent = t("uploadingSource");
   $("progressRing").textContent = "↑";
   $("progressRing").dataset.state = "uploading";
@@ -947,9 +948,10 @@ $("analyzeButton").onclick = async () => {
     showUploadProgress(upload.files, event.loaded);
     const elapsedSeconds = Math.max(.25, (performance.now() - uploadStartedAt) / 1000);
     const bytesPerSecond = event.loaded / elapsedSeconds;
+    window.__lecturesiftUploadBps = bytesPerSecond;
     const remainingSeconds = bytesPerSecond > 0 ? Math.max(0, (event.total - event.loaded) / bytesPerSecond) : 0;
     const speed = `${(bytesPerSecond / 1024 ** 2).toFixed(1)} MB/s`;
-    const remaining = remainingSeconds >= 1 ? ` · ~${Math.ceil(remainingSeconds)} sn` : "";
+    const remaining = remainingSeconds >= 1 ? ` · ~${Math.ceil(remainingSeconds)} ${window.LectureSiftI18n?.t("rollout.secondShort", "sn") || "sn"}` : "";
     updateProgress(
       0,
       t("uploadingSource"),
