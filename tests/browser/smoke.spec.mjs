@@ -12,12 +12,14 @@ test('assistant page keeps credits visible and account actions under user contro
     await route.fulfill({status:200,headers:cors,json:{answer:'Your account shows your plan and usage.',action:'account',balance:998,charged_credits:2}});
   });
   await page.goto('/en/assistant.html');
+  await page.locator('[data-consent="essential"]').click();
   const chat=page.locator('.assistant-page-chat');
   await expect(chat).toBeVisible();
   await expect(page.locator('.assistant-launch')).toHaveCount(0);
   await expect(chat.locator('.assistant-balance')).toHaveText('Credits left: 1,000');
   await expect(chat.locator('.assistant-heading p')).toHaveText('Usage limits apply.');
   await expect(chat.locator('textarea')).not.toBeFocused();
+  await expect(chat.locator('button[type=submit]')).toBeInViewport();
   await chat.getByRole('button',{name:'Where can I see my plan?',exact:true}).click();
   await expect(chat.locator('textarea')).toHaveValue('Where can I see my plan?');
   await chat.locator('button[type=submit]').click();
@@ -31,6 +33,7 @@ test('assistant page keeps credits visible and account actions under user contro
   await expect(chat.locator('.assistant-credit-bar a')).toHaveAttribute('href',/\/en\/plans(?:\.html)?#assistantCredits$/);
   await noHorizontalOverflow(page);
   await page.locator('.assistant-page-intro').scrollIntoViewIfNeeded();
+  await expect(chat.locator('button[type=submit]')).toBeInViewport();
   await page.screenshot({path:testInfo.outputPath('assistant-page-layout.jpg'),quality:75});
   await page.evaluate(()=>localStorage.removeItem('lecturesift-billing-token'));
   await chat.locator('textarea').fill('Changed session');
@@ -55,6 +58,7 @@ test('assistant page fits a narrow Arabic screen and tablet navigation', async (
   test.skip(testInfo.project.name!=='mobile-light','One bounded extra layout review');
   await page.setViewportSize({width:320,height:740});
   await page.goto('/ar/assistant.html');
+  await page.locator('[data-consent="essential"]').click();
   await expect(page.locator('html')).toHaveAttribute('dir','rtl');
   await expect(page.locator('.assistant-page-chat')).toBeVisible();
   await expect(page.locator('.assistant-heading p')).toHaveText('تخضع الخدمة لحدود استخدام.');
@@ -314,6 +318,10 @@ test('rebuilt study entry opens the real workspace and key screens remain usable
   await noHorizontalOverflow(page);
   await page.locator('#plansGrid').scrollIntoViewIfNeeded();
   await capture('plans-layout');
+  await page.locator('#assistantCredits').scrollIntoViewIfNeeded();
+  await expect(page.locator('#assistantCredits')).toContainText('Usage limits apply.');
+  await noHorizontalOverflow(page);
+  await capture('assistant-credits-layout');
   await page.goto('/en/login');
   await expect(page.locator('input[type="email"]')).toBeVisible();
   await noHorizontalOverflow(page);

@@ -32,7 +32,7 @@ const translationEnd = builderSource.indexOf('\nfunction deferNonCriticalScripts
 assert.ok(translationStart >= 0 && translationEnd > translationStart);
 const translator = vm.runInNewContext(
   builderSource.slice(translationStart, translationEnd) + ';({keyCatalog, translateDocument})',
-  {LANGUAGES:languages, dynamicCopySource:i18nSource, referralCopySource:read('frontend/referral-i18n.js'), catalog:{}},
+  {LANGUAGES:languages, dynamicCopySource:i18nSource, referralCopySource:read('frontend/referral-i18n.js'), assistantCopySource:read('frontend/assistant-i18n.js'), catalog:{}},
 );
 for (const key of keys) {
   const values = translator.keyCatalog[`homeDemo.${key}`];

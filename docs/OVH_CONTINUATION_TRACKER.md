@@ -25,12 +25,21 @@ kopyasıdır. Yerel ağır test çalıştırılmadı, yeni ücretli servis alın
 - YouTube çözülmedi: bgutil ve WPC token üretse de bot engeli sürdü.
   Aynı uygulama Render'ın izole worker işinde LS-URL-02 döndürdü.
   Invidious Companion denemesi oynatıcı isteğinde zaman aşımına uğradı;
-  üretime eklenmedi. PR75, temiz tarayıcının gerçek izleme sayfasını ve
-  yalnız o misafirin geçici çerezleriyle indirmeyi ayrıca inceliyor.
-- PR75 asistanın düz metin yanıtlarını da sadeleştirir. Bu devam kaydındaki
-  ürün yayın kanıtları PR67'ye aittir; PR75'in kesin test/yayın sonucu PR
-  ve dağıtım kaydından kontrol edilmelidir. Son kontrollü dağıtım bitince
-  iki Render servisinin önceki otomatik yayın ayarı geri açılmalıdır.
+  üretime eklenmedi. PR75'in temiz tarayıcı denemesinde gerçek izleme
+  sayfası da LOGIN_REQUIRED / bot engeli döndürdü; geçici misafir çerezleri
+  ve üretilen token ile gerçek indirme doğrulanamadı.
+- PR75 birleştirildi: `1654e0fa093b12dc42dac52b11436ffb7f9515df`.
+  Actions `34299906973`: 1.224 test / 3 atlama, 34 tarayıcı kontrolü /
+  2 atlama başarılı. Netlify 01:44, Render API/worker 07:19 UTC'de
+  yayımlandı. Canlı misafir isteği 07:20 UTC'de düz Türkçe yanıt üretti.
+  İki Render servisinin önceki otomatik yayın ayarı 07:21 UTC'de geri
+  açıldı ve doğrulandı; bekleyen bir otomatik yayın ayarı işlemi yok.
+- 07:26–07:40 UTC'deki izole Render denemelerinde TV, TV Simply, iOS,
+  visionOS ve web music yolları da okunabilir ses dosyası üretmedi.
+  Son tanılama, web sayfasında HTTP 429 ve oynatıcı API'sinde HTTP 403
+  yanıtlarını ayırdı. Bu ortamda IPv6 çıkışı yok. Kullanılabilir özel
+  proxy / indirme API hesabı bilgisi soruldu; yeni servis satın alınmadı.
+  Deneme kanıtları özel yayın dizininde; geçici bulut nesneleri silindi.
 - Video üretimi kapalı. Görsel üretimi ve yüklenen videonun sınırlı görsel
   analizi açık; videonun sesi sohbet ekinden çözümlenmiyor.
 
