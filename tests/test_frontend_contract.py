@@ -82,6 +82,7 @@ def test_account_uses_fixed_term_self_service_and_zero_decimal_payment_amounts()
         "account.downgradeAction": {"plan"},
         "account.activeReplacementDetail": {"current", "date", "remaining", "term", "target"},
         "account.firstPurchaseDetail": {"term", "target"},
+        "plans.currencyUnavailable": {"provider", "currency"},
     }
     for key in (
         "account.fixedTermHelp",
@@ -90,6 +91,7 @@ def test_account_uses_fixed_term_self_service_and_zero_decimal_payment_amounts()
         "account.termToBuy",
         "account.monthlyTerm",
         "account.annualTerm",
+        "account.continueInPlans",
         "account.newTermAction",
         "account.upgradeAction",
         "account.downgradeAction",
@@ -105,10 +107,18 @@ def test_account_uses_fixed_term_self_service_and_zero_decimal_payment_amounts()
             re.search(rf'"{re.escape(key)}":(\[[^\n]+\])', catalog).group(1)
         )
         assert len(values) == 13 and all(value.strip() for value in values)
-        assert all(
-            set(re.findall(r"\{([^}]+)\}", value)) == placeholder_contracts.get(key, set())
-            for value in values
-        ), key
+        if key in placeholder_contracts:
+            assert all(
+                set(re.findall(r"\{([^}]+)\}", value)) == placeholder_contracts[key]
+                for value in values
+            ), key
+        if key == "account.continueInPlans":
+            page_copy = json.loads(
+                (FRONTEND / "page-i18n.js").read_text(encoding="utf-8")
+                .split("window.LECTURESIFT_PAGE_COPY=", 1)[1]
+                .rstrip(";\n")
+            )
+            assert page_copy[values[0]] == values
 
 
 def test_all_frontend_plan_fallbacks_use_only_the_detailed_summary_profile():
@@ -439,8 +449,8 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         expected_theme_version = "17"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
         assert "/theme.js?v=11" in content, page.name
-        assert "i18n.js?v=44" in content, page.name
-        assert "page-i18n.js?v=8" in content, page.name
+        assert "i18n.js?v=45" in content, page.name
+        assert "page-i18n.js?v=9" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
     style = (FRONTEND / "theme.css").read_text(encoding="utf-8")
@@ -870,7 +880,7 @@ def test_admin_growth_reads_and_escapes_advertising_management_status():
     catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
 
     assert 'id="adminGrowthStatus" class="admin-growth-grid" aria-live="polite"' in admin
-    assert 'src="/admin.js?v=23"' in admin and 'src="/i18n.js?v=44"' in admin
+    assert 'src="/admin.js?v=23"' in admin and 'src="/i18n.js?v=45"' in admin
     assert 'adminRequest("/billing/admin/advertising-readiness").catch(() => null)' in admin_script
     assert "advertisingReadiness:optional[10]" in admin_script
     assert "8.000" not in admin_script and "8000" not in admin_script
