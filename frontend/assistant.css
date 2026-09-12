@@ -25,7 +25,24 @@
 [dir=rtl] .assistant-message{margin-inline:0 18px;border-radius:16px 4px 16px 16px}
 [dir=rtl] .assistant-message.user{margin-inline:35px 0;border-radius:4px 16px 16px}
 .assistant-message .assistant-action{display:block;margin-top:10px;width:fit-content;white-space:normal;font-weight:600;font-size:12px}
+.assistant-message-charge{display:block;margin-top:9px;color:var(--muted);font-size:11px;font-weight:700}
 .assistant-message img{display:block;width:100%;height:auto;border-radius:10px;margin-top:10px}
+.assistant-account-summary,.assistant-confirmation{margin-top:12px;padding:13px;border:1px solid var(--ui-line);border-radius:12px;background:var(--ui-surface);white-space:normal}
+.assistant-account-summary h3,.assistant-confirmation h3{margin:0 0 10px;font-size:13px;line-height:1.4}
+.assistant-account-summary dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0}
+.assistant-account-summary dl div{min-width:0;padding:9px;border-radius:9px;background:var(--ui-surface-raised)}
+.assistant-account-summary dt,.assistant-account-summary dd{margin:0;overflow-wrap:anywhere}
+.assistant-account-summary dt{font-size:10px;color:var(--ui-muted)}
+.assistant-account-summary dd{margin-top:3px;font-size:12px;font-weight:650}
+.assistant-account-summary h4{margin:13px 0 7px;font-size:11px}
+.assistant-account-summary ul{display:grid;gap:5px;margin:0;padding:0;list-style:none}
+.assistant-account-summary li{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:11px}
+.assistant-account-summary li span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.assistant-account-summary li small{flex:0 0 auto;color:var(--ui-muted)}
+.assistant-account-summary>p,.assistant-confirmation p{margin:0;color:var(--ui-muted);font-size:11px;line-height:1.55}
+.assistant-confirmation-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+.assistant-message .assistant-confirmation-actions .assistant-action{display:inline-flex;margin:0}
+.assistant-confirmation-actions .assistant-confirm{background:var(--ui-action);border-color:transparent;color:var(--ui-action-ink)}
 .assistant-suggestions{display:flex;flex-wrap:wrap;gap:6px;padding:0 18px 12px;flex-shrink:0}
 .assistant-suggestions button{min-height:34px;padding:7px 10px;font-size:11px;line-height:1.4;text-align:start;border-radius:20px;color:var(--ui-muted)}
 .assistant-status{margin:0;padding:0 18px;font-size:12px;line-height:1.5;color:var(--ui-muted);flex-shrink:0;overflow-wrap:anywhere}

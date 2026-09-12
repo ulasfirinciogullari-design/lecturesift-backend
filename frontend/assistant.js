@@ -64,18 +64,101 @@
     if (!response.ok) { const error = new Error(body.detail?.code || 'LS-ASSIST-07'); error.status=response.status; throw error; }
     return body;
   }
-  const safeActions = {workspace:'/workspace.html',plans:'/plans.html',account:'/account.html',support:'/contact.html',register:'/register.html',features:'/features.html',privacy:'/privacy.html'};
-  function addMessage(text, role = 'assistant', action = 'none') {
+  const siteT = (key, fallback) => window.LectureSiftI18n?.t?.(key, fallback) || fallback;
+  const languageActions = new Set(['tr','en','de','fr','es','it','pt','ru','ar','zh','ja','ko','hi'].map(code=>`language_${code}`));
+  const lessonStatuses = new Set(['queued','working','done','error']);
+  const safeActions = {workspace:'/workspace.html',plans:'/plans.html',account:'/account.html',support:'/contact.html',referrals:'/account.html',register:'/register.html'};
+  const safeInteger = value => Number.isSafeInteger(value)&&value>=0;
+  function accountSummary(value) {
+    if(!value || typeof value!=='object' || Array.isArray(value))return null;
+    if(!/^[a-z0-9_]{1,32}$/.test(value.plan_code||'') || !(value.remaining_minutes===null||safeInteger(value.remaining_minutes)) || !safeInteger(value.used_minutes) || !safeInteger(value.credit_minutes) || !safeInteger(value.assistant_credits))return null;
+    let subscription=null;
+    if(value.subscription!==null){
+      const item=value.subscription;
+      if(!item || !['active','cancel_at_end'].includes(item.status) || !['monthly','annual'].includes(item.interval) || typeof item.cancel_at_period_end!=='boolean' || !Number.isFinite(Date.parse(item.ends_at)))return null;
+      subscription={status:item.status,interval:item.interval,ends_at:item.ends_at,cancel_at_period_end:item.cancel_at_period_end};
+    }
+    if(!Array.isArray(value.recent_lessons)||value.recent_lessons.length>5)return null;
+    const lessons=[];
+    for(const item of value.recent_lessons){
+      const title=String(item?.title||'');const status=String(item?.status||'');
+      if(!title || title.length>120 || !lessonStatuses.has(status))return null;
+      lessons.push({title,status});
+    }
+    return {plan_code:value.plan_code,remaining_minutes:value.remaining_minutes,used_minutes:value.used_minutes,credit_minutes:value.credit_minutes,assistant_credits:value.assistant_credits,subscription,recent_lessons:lessons};
+  }
+  function appendAccountSummary(node, value) {
+    const summary=accountSummary(value);if(!summary)return;
+    const card=document.createElement('section');card.className='assistant-account-summary';
+    const heading=document.createElement('h3');heading.textContent=t('summarytitle');card.append(heading);
+    const list=document.createElement('dl');
+    const row=(label,value)=>{const wrapper=document.createElement('div');const term=document.createElement('dt');const detail=document.createElement('dd');term.textContent=label;detail.textContent=value;wrapper.append(term,detail);list.append(wrapper);};
+    row(siteT('account.planTitle','Plan'),siteT(`plan.${summary.plan_code}`,summary.plan_code));
+    row(siteT('account.remaining','Kalan dakika'),summary.remaining_minutes===null?siteT('account.unlimited','Sınırsız'):summary.remaining_minutes.toLocaleString(language()));
+    row(t('credits'),summary.assistant_credits.toLocaleString(language()));
+    row(t('summarysubscription'),summary.subscription?new Intl.DateTimeFormat(language(),{dateStyle:'medium'}).format(new Date(summary.subscription.ends_at)):t('summarynone'));
+    card.append(list);
+    const recent=document.createElement('h4');recent.textContent=t('summaryrecent');card.append(recent);
+    if(summary.recent_lessons.length){
+      const lessons=document.createElement('ul');
+      for(const item of summary.recent_lessons){const lesson=document.createElement('li');const title=document.createElement('span');const status=document.createElement('small');title.textContent=item.title;status.textContent=t(`status${item.status}`);lesson.append(title,status);lessons.append(lesson);}
+      card.append(lessons);
+    }else{const empty=document.createElement('p');empty.textContent=siteT('account.noHistory','Henüz işlenmiş bir dersin yok.');card.append(empty);}
+    node.append(card);
+  }
+  function preferenceTarget(action) {
+    if(action==='light'||action==='dark')return siteT(`theme.${action}`,action);
+    if(!languageActions.has(action))return '';
+    const code=action.slice('language_'.length);
+    return window.LectureSiftI18n?.languages?.[code]||'';
+  }
+  function applyPreference(action) {
+    if(action==='light'||action==='dark'){
+      if(document.documentElement.dataset.theme!==action)document.querySelector('.theme-toggle')?.click();
+      return document.documentElement.dataset.theme===action;
+    }
+    if(!languageActions.has(action))return false;
+    const code=action.slice('language_'.length);
+    const next=window.LectureSiftI18n?.localizedPath?.(code);
+    if(!next || !next.startsWith('/'))return false;
+    localStorage.setItem('lecturesift-ui',code);
+    location.assign(`${next}${location.search}${location.hash}`);
+    return true;
+  }
+  function appendPreferenceConfirmation(node, action) {
+    const target=preferenceTarget(action);if(!target)return;
+    const card=document.createElement('section');card.className='assistant-confirmation';
+    const heading=document.createElement('h3');heading.textContent=t('confirmtitle');
+    const detail=document.createElement('p');detail.textContent=t('confirmsetting').replace('{value}',target);
+    const controls=document.createElement('div');controls.className='assistant-confirmation-actions';
+    const apply=document.createElement('button');apply.type='button';apply.className='assistant-action assistant-confirm';apply.textContent=t('apply');
+    const cancel=document.createElement('button');cancel.type='button';cancel.className='assistant-action assistant-cancel';cancel.textContent=t('cancel');
+    apply.addEventListener('click',()=>{if(sessionToken!==token()){syncSession();return;}if(applyPreference(action)){apply.disabled=true;cancel.disabled=true;}});
+    cancel.addEventListener('click',()=>card.remove());controls.append(apply,cancel);card.append(heading,detail,controls);node.append(card);
+  }
+  function latestLesson(value) {
+    if(!value || typeof value!=='object' || Array.isArray(value))return null;
+    const jobId=String(value.job_id||''),title=String(value.title||''),status=String(value.status||'');
+    if(!/^[a-zA-Z0-9_-]{1,64}$/.test(jobId)||!title||title.length>120||!lessonStatuses.has(status))return null;
+    return {jobId,title,status};
+  }
+  function addMessage(text, role = 'assistant', action = 'none', details = {}) {
     const node = document.createElement('div'); node.className=`assistant-message ${role}`; node.textContent=text;
+    if(action==='account')appendAccountSummary(node,details.account_summary);
     if (safeActions[action]) {
       const link=document.createElement('a'); link.className='assistant-action'; link.href=path(safeActions[action]);
+      if(action==='referrals')link.href=`${path('/account.html')}#account-referrals`;
       link.textContent = action === 'register' ? t('signup') : t('action'+action); node.append(link);
-    } else if (['light','dark'].includes(action)) {
-      const button=document.createElement('button'); button.type='button'; button.className='assistant-action'; button.textContent=t('apply');
-      button.addEventListener('click',()=>{ if (document.documentElement.dataset.theme !== action) document.querySelector('.theme-toggle')?.click(); button.disabled=true; }); node.append(button);
-    }
+    } else if(action==='latest_lesson'){
+      const lesson=latestLesson(details.latest_lesson);
+      if(lesson){const link=document.createElement('a');link.className='assistant-action';link.href=`${path('/workspace.html')}?job=${encodeURIComponent(lesson.jobId)}`;link.textContent=t('actionlatest');node.append(link);}
+    } else if(['light','dark'].includes(action)||languageActions.has(action))appendPreferenceConfirmation(node,action);
     const messages=$('.assistant-messages');messages.append(node);messages.scrollTop=messages.scrollHeight;
     return node;
+  }
+  function appendCharge(node, value) {
+    if(!node || !Number.isSafeInteger(value) || value<1)return;
+    const charge=document.createElement('small');charge.className='assistant-message-charge';charge.textContent=format('used',value);node.append(charge);
   }
   function reset() { mode='chat';updateMode();history=[]; pending=null; attachment=null; $('.assistant-attachment').hidden=true; $('.assistant-messages').replaceChildren();$('.assistant-suggestions').hidden=false; $('textarea').value=''; setStatus(''); }
   function syncSession() {
@@ -212,13 +295,15 @@
         answer=await request('/assistant/chat',pending.payload);
       }
       if(sessionToken!==token()){syncSession();return;}
+      let replyNode;
       if(answer.kind==='image'&&/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(answer.image||'')&&answer.image.length<=1500100){
-        const node=addMessage(t('generated'));
+        const node=addMessage(t('generated'));replyNode=node;
         const picture=document.createElement('img');picture.src=answer.image;picture.alt=message;picture.width=1024;picture.height=1024;node.append(picture);
         const download=document.createElement('a');download.className='assistant-action';download.href=answer.image;download.download='lecturesift-image.jpg';download.textContent=t('downloadimage');node.append(download);
         const messages=$('.assistant-messages');messages.scrollTop=messages.scrollHeight;
         answer.answer=t('generated');
-      }else addMessage(answer.answer,'assistant',answer.action);
+      }else replyNode=addMessage(answer.answer,'assistant',answer.action,answer);
+      if(token())appendCharge(replyNode,answer.charged_credits);
       pending=null;
       history.push({role:'user',content:message.slice(0,2000)},{role:'assistant',content:answer.answer.slice(0,2000)});
       history=history.slice(-6);$('textarea').value='';attachment=null;$('.assistant-attachment').hidden=true;

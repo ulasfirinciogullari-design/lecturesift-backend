@@ -8,9 +8,20 @@ for the exact release and the checks that remain unverified live.
 
 The assistant uses the existing verified billing session. Server-authored context
 contains the site map, only that user's plan/minutes and recent lesson titles,
-and optionally an owned completed lesson summary. Allowlisted navigation/theme
-proposals require a click. Purchases, cancellation, refunds and closure use the
-existing account/checkout screens. Model output cannot execute arbitrary APIs.
+and optionally an owned completed lesson summary.
+
+The safe account-control source contract, pending CI and release, adds an
+identity-free, read-only account card and fixed links to Workspace, Plans,
+Account, Support and Invitations. A latest-lesson link is selected from the
+authenticated user's jobs by the server; model-provided paths and identifiers
+are ignored.
+
+Theme and the 13 supported interface languages use a two-step contract: the
+model may propose one fixed action, then the client shows localized Apply and
+Cancel controls. No preference changes before Apply. Purchases, subscription
+changes, refunds, profile/security edits, credentials, data deletion and admin
+operations remain in their existing account, checkout and support flows. Model
+output cannot execute arbitrary APIs.
 
 Guests receive at most three short AI replies daily, instructed to use 3–5
 sentences and invite signup. Daily keyed address digests and a durable global
@@ -39,7 +50,8 @@ verified separately; automated checks use a synthetic provider without paid API 
 
 Credits = ceil((input tokens + 6 × output tokens)/1,000), minimum one per answer.
 History and image input count. A conservative amount is reserved first; actual
-usage settles it. Owner-row locks serialize replicas. Request IDs bind owner and
+usage settles it, and each signed-in response bubble shows its own charge.
+Owner-row locks serialize replicas. Request IDs bind owner and
 payload, preventing double calls/charges. Failed answers restore customer credit;
 unknown provider cost remains in the platform ceiling. Lost reservations expire
 after two minutes. The daily ceiling is 100,000 weighted credits ($20 at the
