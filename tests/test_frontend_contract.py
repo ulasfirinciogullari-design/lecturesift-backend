@@ -407,7 +407,7 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         expected_theme_version = "17"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
         assert "/theme.js?v=11" in content, page.name
-        assert "i18n.js?v=42" in content, page.name
+        assert "i18n.js?v=43" in content, page.name
         assert "page-i18n.js?v=8" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
@@ -832,15 +832,16 @@ def test_admin_large_dataset_controls_and_compact_account_tabs_are_wired():
     assert '@router.post("/billing/admin/users/bulk-action")' in rollout
 
 
-def test_admin_growth_reads_and_escapes_adsense_management_status():
+def test_admin_growth_reads_and_escapes_advertising_management_status():
     admin = (FRONTEND / "admin.html").read_text(encoding="utf-8")
     admin_script = (FRONTEND / "admin.js").read_text(encoding="utf-8")
     catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
 
     assert 'id="adminGrowthStatus" class="admin-growth-grid" aria-live="polite"' in admin
-    assert 'src="/admin.js?v=22"' in admin and 'src="/i18n.js?v=42"' in admin
+    assert 'src="/admin.js?v=23"' in admin and 'src="/i18n.js?v=43"' in admin
     assert 'adminRequest("/billing/admin/advertising-readiness").catch(() => null)' in admin_script
     assert "advertisingReadiness:optional[10]" in admin_script
+    assert "8.000" not in admin_script and "8000" not in admin_script
     assert all(
         value in admin_script
         for value in (
@@ -852,6 +853,17 @@ def test_admin_growth_reads_and_escapes_adsense_management_status():
             "ad_serving_disabled",
             "ad_personalization_restricted",
             "adminAdSenseErrorLabel",
+            "adminGoogleAdsErrorLabel",
+            "adminGoogleAdsIncentiveCard",
+            "currency_totals",
+            "required_min_spend_micros",
+            "current_spend_towards_fulfillment_micros",
+            "reward_amount_micros",
+            "granted_amount_micros",
+            "reward_balance_remaining_micros",
+            "last_7_days",
+            "this_month",
+            "googleAdsManagement?.campaigns",
             "adminEscape(item.status",
             "adminEscape(item.detail)",
         )
@@ -868,6 +880,25 @@ def test_admin_growth_reads_and_escapes_adsense_management_status():
         "admin.adsensePolicyIssues",
         "admin.adsenseScopeMismatch",
         "admin.adsenseProviderUnavailable",
+        "admin.googleAdsConnection",
+        "admin.googleAdsAccount",
+        "admin.googleAdsCurrency",
+        "admin.googleAdsTimeZone",
+        "admin.googleAdsPerformance",
+        "admin.googleAdsToday",
+        "admin.googleAdsLast7Days",
+        "admin.googleAdsMonthToDate",
+        "admin.googleAdsImpressions",
+        "admin.googleAdsClicks",
+        "admin.googleAdsConversions",
+        "admin.googleAdsCampaigns",
+        "admin.googleAdsIncentive",
+        "admin.googleAdsRequiredSpend",
+        "admin.googleAdsSpendProgress",
+        "admin.googleAdsCreditAmount",
+        "admin.googleAdsEarnedCredit",
+        "admin.googleAdsRemainingCredit",
+        "admin.googleAdsIncentiveUnsupportedDetail",
     ):
         payload = re.search(rf'^\s*"{re.escape(key)}":\[(.*?)\],?$', catalog, re.MULTILINE)
         assert payload, key
@@ -876,6 +907,27 @@ def test_admin_growth_reads_and_escapes_adsense_management_status():
         'scope_mismatch:adminT("admin.adsenseScopeMismatch"'
         in admin_script
     )
+    assert (
+        'scope_mismatch:adminT("admin.googleAdsScopeMismatch"'
+        in admin_script
+    )
+    for key in (
+        "admin.growthNav",
+        "admin.growthNavHint",
+        "admin.growthEyebrow",
+        "admin.growthTitle",
+        "admin.growthIntro",
+        "admin.growthInfrastructureEyebrow",
+        "admin.growthInfrastructureTitle",
+        "admin.growthInfrastructureNote",
+    ):
+        assert f'data-i18n="{key}"' in admin
+    used_growth_keys = set(re.findall(r'adminT\("(admin\.googleAds[^\"]+)"', admin_script))
+    used_growth_keys.update(re.findall(r'data-i18n="(admin\.growth[^\"]+)"', admin))
+    for key in used_growth_keys:
+        payload = re.search(rf'^\s*"{re.escape(key)}":\[(.*?)\],?$', catalog, re.MULTILINE)
+        assert payload, key
+        assert len(json.loads(f"[{payload.group(1)}]")) == 13
 
 
 def test_admin_cost_reconciliation_controls_are_wired():
@@ -927,7 +979,7 @@ def test_checkout_names_contact_inbox_and_mobile_plan_navigation_are_wired():
     assert "/billing/admin/contact-messages" in admin_js
     assert "adminContactDialog" in admin_html and "admin-contact-reply" in admin_js
     assert "/billing/admin/contact-messages/${encodeURIComponent(messageId)}/reply" in admin_js
-    assert 'href="/rollout.css?v=10"' in admin_html and 'src="/admin.js?v=22"' in admin_html
+    assert 'href="/rollout.css?v=10"' in admin_html and 'src="/admin.js?v=23"' in admin_html
     assert admin_js.count('class="admin-table admin-record-table"') >= 10
     assert all(label in admin_js for label in ('data-label="İş"', 'data-label="Bakiye"', 'data-label="Açıklama"'))
     assert "supportReplyForm" in support_html and "supportThread" in support_html

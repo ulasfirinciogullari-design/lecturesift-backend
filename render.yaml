@@ -234,6 +234,16 @@ services:
         sync: false
       - key: LECTURESIFT_GOOGLE_ADS_PURCHASE_LABEL
         sync: false
+      - key: LECTURESIFT_GOOGLE_ADS_API_ENABLED
+        sync: false
+      - key: LECTURESIFT_GOOGLE_ADS_API_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: LECTURESIFT_GOOGLE_ADS_API_CUSTOMER_ID
+        sync: false
+      - key: LECTURESIFT_GOOGLE_ADS_API_CACHE_SECONDS
+        value: "300"
+      - key: LECTURESIFT_GOOGLE_ADS_API_TIMEOUT_SECONDS
+        value: "10"
       - key: CELERY_BROKER_URL
         fromService:
           type: keyvalue

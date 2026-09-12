@@ -115,6 +115,13 @@ advertising signals disabled.
   and the matching signup or purchase label. The browser still waits for
   advertising consent. Configuring an identifier does not create a campaign,
   authorize spend or prove that Google received an event.
+- The optional Google Ads API v25 status reader is independently controlled by
+  `LECTURESIFT_GOOGLE_ADS_API_ENABLED`. It uses a service account added directly
+  to the target Ads account with Read-only access and returns only reduced
+  account, performance, campaign-count and applied-incentive summaries to the
+  authenticated admin endpoint. Its fixed queries cannot mutate campaigns or
+  apply promotions. Setup and recovery are documented in
+  `docs/GOOGLE_ADS_READONLY_API.md`.
 
 Before changing either AdSense attestation to `true`, record the current site
 status from the owning AdSense account, verify the published certified CMP and
