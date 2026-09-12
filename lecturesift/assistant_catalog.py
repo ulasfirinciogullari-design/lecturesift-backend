@@ -4,6 +4,7 @@ import os
 
 MODEL = "gpt-5.6-luna"
 IMAGE_MODEL = "gpt-image-1.5"
+IMAGE_PRICED_MODEL = "gpt-image-1.5"
 IMAGE_CREDITS = 200
 VERSION = "2026-09-08-assistant-v1"
 # PG18 v4 migration/recovery, runtime roles and both real provider requests
@@ -33,7 +34,11 @@ def enabled() -> bool:
 
 
 def images_enabled() -> bool:
-    return enabled() and os.getenv("ASSISTANT_IMAGES_ENABLED", "").lower() == "true"
+    return (
+        enabled()
+        and IMAGE_MODEL == IMAGE_PRICED_MODEL
+        and os.getenv("ASSISTANT_IMAGES_ENABLED", "").lower() == "true"
+    )
 
 
 def offers(currency: str) -> dict:

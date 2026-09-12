@@ -338,7 +338,13 @@ def image_provider(state, monkeypatch):
     monkeypatch.setattr(assistant_images.config, 'OPENAI_API_KEY', 'synthetic-not-a-real-key')
     content = io.BytesIO()
     Image.new('RGB', (1024, 1024), 'blue').save(content, 'JPEG')
-    captured = {'calls': [], 'costs': [], 'failure': False}
+    captured = {
+        'calls': [], 'costs': [], 'failure': False,
+        'usage': SimpleNamespace(
+            input_tokens=15, output_tokens=1303,
+            output_tokens_details=SimpleNamespace(image_tokens=1056, text_tokens=247),
+        ),
+    }
     class Client:
         def __init__(self, **kwargs):
             assert kwargs['max_retries'] == 0 and kwargs['timeout'] < 120
@@ -350,7 +356,7 @@ def image_provider(state, monkeypatch):
             if captured['failure']:
                 raise RuntimeError('private-provider-error')
             return SimpleNamespace(data=[SimpleNamespace(b64_json=base64.b64encode(content.getvalue()).decode())],
-                                   usage=SimpleNamespace(input_tokens=200, output_tokens=1056))
+                                   usage=captured['usage'])
     monkeypatch.setattr(assistant_images, 'OpenAI', Client)
     monkeypatch.setattr(assistant_images, 'record_cost', lambda **values: captured['costs'].append(values))
     return assistant_images, captured
@@ -365,17 +371,50 @@ def test_image_fixed_price_replay_and_provider_budget_are_distinct(image_provide
     assert result['charged_credits'] == 200 and result['balance'] == 850
     assert result['image'].startswith('data:image/jpeg;base64,')
     assert images.generate(owner, payload) == result
-    assert len(captured['calls']) == 1 and len(captured['costs']) == 2
+    assert len(captured['calls']) == 1 and len(captured['costs']) == 3
     call = captured['calls'][0]
     assert call['model'] == 'gpt-image-1.5' and call['n'] == 1
     assert call['quality'] == 'medium' and call['size'] == '1024x1024'
+    assert [item['metadata']['operation'] for item in captured['costs']] == [
+        'text_input', 'image_output', 'text_output',
+    ]
+    assert [(item['quantity'], item['price_usd']) for item in captured['costs']] == [
+        (15, 5), (1056, 32), (247, 10),
+    ]
     assert 'Water cycle' not in str(captured['costs'])
     with billing.ENGINE.connect() as connection:
-        assert connection.execute(select(wallet.BUDGET.c.credits)).scalar_one() == 174
+        assert connection.execute(select(wallet.BUDGET.c.credits)).scalar_one() == 182
     other = user()
     with pytest.raises(LectureSiftError) as error:
         images.generate(other, payload)
     assert error.value.status_code == 402 and len(captured['calls']) == 1
+
+
+@pytest.mark.parametrize('details', [
+    None,
+    SimpleNamespace(image_tokens=1056, text_tokens=246),
+    {'image_tokens': True, 'text_tokens': 1302},
+])
+def test_image_usage_without_a_safe_output_split_keeps_conservative_budget(image_provider, details):
+    images, captured = image_provider
+    owner = user()
+    paid(owner, 'ai_1000')
+    captured['usage'] = SimpleNamespace(
+        input_tokens=15, output_tokens=1303, output_tokens_details=details,
+    )
+    result = images.generate(
+        owner, images.ImageRequest(request_id='synthetic-image-fallback', prompt='Water cycle'),
+    )
+    assert result['charged_credits'] == 200 and result['balance'] == 850
+    assert len(captured['costs']) == 2
+    fallback = captured['costs'][1]
+    assert fallback['unit'] == 'image' and fallback['quantity'] == 1
+    assert fallback['price_usd'] == 0.034
+    assert fallback['estimation'] == 'published_fallback'
+    assert fallback['metadata'] == {'operation': 'medium_square_output', 'fallback': True}
+    with billing.ENGINE.connect() as connection:
+        budget = connection.execute(select(wallet.BUDGET.c.credits)).scalar_one()
+    assert budget == 200 and budget < wallet.DAILY_CREDIT_CEILING
 
 
 def test_failed_image_refunds_user_but_retains_unknown_platform_cost(image_provider):
@@ -403,6 +442,11 @@ def test_image_switch_and_utf8_limit_prevent_any_charge(image_provider, monkeypa
     with pytest.raises(LectureSiftError) as error:
         images.generate(owner, images.ImageRequest(request_id='synthetic-too-large', prompt='图' * 400))
     assert error.value.status_code == 422
+    monkeypatch.setattr(catalog, 'IMAGE_MODEL', 'gpt-image-2')
+    assert catalog.offers('TRY')['image']['available'] is False
+    with pytest.raises(LectureSiftError) as error:
+        images.generate(owner, images.ImageRequest(request_id='synthetic-unpriced', prompt='Diagram'))
+    assert error.value.status_code == 503
     monkeypatch.setenv('ASSISTANT_IMAGES_ENABLED', 'false')
     assert catalog.offers('TRY')['image']['available'] is False
     with pytest.raises(LectureSiftError) as error:
