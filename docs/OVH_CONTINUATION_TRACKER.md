@@ -78,7 +78,7 @@ eski onay bekleme ve test bekleme ifadeleri güncel durum değildir.
   veritabanının geçiş ve geri yükleme kanıtı henüz yok.
 - Asistan: sahipli sohbet, misafir denemesi, paket kredileri/ek kredi satışı,
   resim ve sınırlı video karesi analizi kaynakta hazır. Ayrı bir eylemle
-  220 kredi karşılığı görsel oluşturma, indirme, tekrar istekte çift ücret
+  200 kredi karşılığı görsel oluşturma, indirme, tekrar istekte çift ücret
   almama ve kısa süreli özel önbelleğin periyodik temizliği de eklendi.
   Mobil sonuç/indirme/kredi görünümü uzak ekran görüntüsünde incelendi.
   Gerçek model erişimi ve gerçek üretilmiş görsel doğrulanmadı.

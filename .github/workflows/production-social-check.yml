@@ -13,6 +13,78 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Check out source configuration
+        uses: actions/checkout@v4
+
+      - name: Validate source-controlled Instagram publishing state
+        id: instagram_publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          from pathlib import Path
+          import re
+
+          lines = Path("render.yaml").read_text(encoding="utf-8").splitlines()
+          service_starts = [
+              index
+              for index, line in enumerate(lines)
+              if re.fullmatch(r"  - type:\s*\S+\s*", line)
+          ]
+          matching_services = []
+          for position, start in enumerate(service_starts):
+              end = service_starts[position + 1] if position + 1 < len(service_starts) else len(lines)
+              block = lines[start:end]
+              names = [
+                  line.strip().split(":", 1)[1].strip().strip("\"'")
+                  for line in block
+                  if re.fullmatch(r"\s+name:\s*[^#]+\s*", line)
+              ]
+              if names == ["lecturesift-instagram-daily"]:
+                  matching_services.append(block)
+
+          if len(matching_services) != 1:
+              raise SystemExit(
+                  "render.yaml must define exactly one lecturesift-instagram-daily service"
+              )
+
+          block = matching_services[0]
+          key_lines = [
+              index
+              for index, line in enumerate(block)
+              if re.fullmatch(
+                  r"\s+- key:\s*INSTAGRAM_DAILY_AUTOMATION_ENABLED\s*",
+                  line,
+              )
+          ]
+          if len(key_lines) != 1:
+              raise SystemExit(
+                  "lecturesift-instagram-daily must define exactly one "
+                  "INSTAGRAM_DAILY_AUTOMATION_ENABLED value"
+              )
+
+          value_index = key_lines[0] + 1
+          if value_index >= len(block):
+              raise SystemExit("INSTAGRAM_DAILY_AUTOMATION_ENABLED has no literal value")
+          value_line = block[value_index].strip()
+          if not value_line.startswith("value:"):
+              raise SystemExit("INSTAGRAM_DAILY_AUTOMATION_ENABLED must use a literal value")
+          literal = value_line.split(":", 1)[1].strip()
+          values = {
+              "true": "true",
+              '"true"': "true",
+              "'true'": "true",
+              "false": "false",
+              '"false"': "false",
+              "'false'": "false",
+          }
+          if literal not in values:
+              raise SystemExit(
+                  "INSTAGRAM_DAILY_AUTOMATION_ENABLED must be literal true or false"
+              )
+          print(f"enabled={values[literal]}")
+          PY
+
       - name: Wait for Render deployment and API health
         shell: bash
         run: |
@@ -42,6 +114,7 @@ jobs:
           done
 
       - name: Verify Instagram connection and completed launch grid
+        if: ${{ steps.instagram_publishing.outputs.enabled == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -68,6 +141,7 @@ jobs:
           done
 
       - name: Read deployment-time Instagram repair status
+        if: ${{ steps.instagram_publishing.outputs.enabled == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -92,6 +166,7 @@ jobs:
           done
 
       - name: Verify today's bilingual Reel after publishing window
+        if: ${{ steps.instagram_publishing.outputs.enabled == 'true' }}
         shell: bash
         run: |
           set -euo pipefail

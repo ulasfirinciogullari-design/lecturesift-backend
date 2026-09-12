@@ -5,11 +5,14 @@ const adminLocale = () => window.LectureSiftI18n?.locale || "tr-TR";
 const adminMinuteShort = () => adminT("unit.minuteShort", "dk");
 const ADMIN_SESSION_TOKEN_KEY = "lecturesift-admin-session-token";
 const ADMIN_VIEW_KEY = "lecturesift-admin-view";
-const ADMIN_VIEWS = ["overview", "users", "finance", "support", "jobs", "costs", "system", "growth", "audit"];
+const ADMIN_REFERRAL_CONFIRMATION_TTL_MS = 5 * 60 * 1000;
+const ADMIN_REFERRAL_EVIDENCE_RE = /^[A-Za-z0-9][A-Za-z0-9 ._:/-]{7,119}$/;
+const ADMIN_VIEWS = ["overview", "users", "finance", "referrals", "support", "jobs", "costs", "system", "growth", "audit"];
 let adminAccessToken = sessionStorage.getItem(ADMIN_SESSION_TOKEN_KEY) || "";
 let adminLoading = false;
-let adminState = {overview:{counts:{}}, users:[], userPagination:{page:1,total:0,total_pages:1}, orders:[], orderPagination:{page:1,total:0,total_pages:1}, rewards:[], refunds:[], credits:[], accountEvents:[], contacts:[], jobs:[], costs:null, billing:null, runtime:null, ads:null, analytics:null};
+let adminState = {overview:{counts:{}}, users:[], userPagination:{page:1,total:0,total_pages:1}, orders:[], orderPagination:{page:1,total:0,total_pages:1}, rewards:[], referrals:[], referralsError:"", referralsHasMore:false, referralsLimit:100, refunds:[], credits:[], accountEvents:[], contacts:[], jobs:[], costs:null, billing:null, runtime:null, ads:null, analytics:null};
 let selectedAdminUsers = new Set();
+const adminReferralDrafts = new Map();
 let adminUserSearchTimer = null;
 let adminOrderSearchTimer = null;
 
@@ -22,6 +25,7 @@ function adminViewFromHash() {
 
 function activateAdminView(requestedView, {focus = false, updateHash = true} = {}) {
   const view = ADMIN_VIEWS.includes(requestedView) ? requestedView : "overview";
+  if (view !== "referrals") resetAdminReferralConfirmations();
   document.querySelectorAll("[data-admin-view]").forEach(panel => {
     const selected = panel.dataset.adminView === view;
     panel.hidden = !selected;
@@ -180,6 +184,142 @@ function renderAdminRewards(rewards) {
   const rows = rewards.map(reward => `<tr><td data-label="Kullanıcı"><strong>@${adminEscape(reward.handle)}</strong><br><small>${adminEscape(reward.email || "")}</small></td><td data-label="Dakika">+${Number(reward.minutes || 0).toLocaleString(adminLocale())} ${adminEscape(adminMinuteShort())}</td><td data-label="Durum">${adminEscape(adminStatusLabel(reward.status))}</td><td data-label="İşlem"><span class="admin-actions"><button class="admin-action approve" data-reward-decision="${adminEscape(reward.id)}" data-approve="1">Onayla</button><button class="admin-action reject" data-reward-decision="${adminEscape(reward.id)}" data-approve="0">Reddet</button></span></td></tr>`).join("");
   admin$("adminRewards").innerHTML = `<table class="admin-table admin-record-table"><thead><tr><th>Kullanıcı adı</th><th>Dakika</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>${rows || '<tr><td colspan="4">Bekleyen bonus talebi yok.</td></tr>'}</tbody></table>`;
   document.querySelectorAll("[data-reward-decision]").forEach(button => button.addEventListener("click", () => decideReward(button)));
+}
+
+function adminReferralOrder(reward) {
+  const orders = [...(adminState.overview.orders || []), ...(adminState.orders || [])];
+  return orders.find(order => order.reference === reward.order_reference) || null;
+}
+
+function adminReferralDue(reward) {
+  return reward.hold_complete === true;
+}
+
+function adminReferralBenefit(reward) {
+  if (reward.reward_choice === "minutes") {
+    return `${Number(reward.inviter_minutes || 0).toLocaleString(adminLocale())} ${adminMinuteShort()}`;
+  }
+  if (reward.reward_choice === "coupon") {
+    return `%${Number(reward.coupon_percent || 0).toLocaleString(adminLocale())} kupon · en çok ${adminMoney(reward.coupon_max_discount_minor, reward.coupon_currency)}`;
+  }
+  return "Kullanıcı seçimi bekleniyor";
+}
+
+function adminReferralEvidenceValid(input) {
+  input.setCustomValidity("");
+  const valid = input.checkValidity() && ADMIN_REFERRAL_EVIDENCE_RE.test(input.value.trim());
+  input.setCustomValidity(valid ? "" : "En az 8 karakterlik, gizli veri içermeyen geçerli bir kanıt referansı yaz.");
+  return valid;
+}
+
+function syncAdminReferralReleaseForm(form) {
+  const evidence = form.elements.evidence_reference;
+  const provider = form.elements.provider_reconciled;
+  const button = form.querySelector("[data-referral-release-button]");
+  let confirmedAt = Number(form.dataset.providerConfirmedAt || 0);
+  if (!provider.checked) {
+    delete form.dataset.providerConfirmedAt;
+    confirmedAt = 0;
+  } else if (!confirmedAt) {
+    confirmedAt = Date.now();
+    form.dataset.providerConfirmedAt = String(confirmedAt);
+    setTimeout(() => {
+      if (form.isConnected && Number(form.dataset.providerConfirmedAt || 0) === confirmedAt) {
+        resetAdminReferralConfirmation(form);
+      }
+    }, ADMIN_REFERRAL_CONFIRMATION_TTL_MS);
+  }
+  const confirmationAge = Date.now() - confirmedAt;
+  const confirmationFresh = provider.checked && confirmationAge >= 0 && confirmationAge <= ADMIN_REFERRAL_CONFIRMATION_TTL_MS;
+  adminReferralDrafts.set(form.dataset.referralReleaseForm, {evidence:evidence.value});
+  button.disabled = form.dataset.releaseReady !== "true" || !confirmationFresh || !adminReferralEvidenceValid(evidence);
+}
+
+function resetAdminReferralConfirmation(form) {
+  const provider = form.elements.provider_reconciled;
+  if (!provider) return;
+  provider.checked = false;
+  delete form.dataset.providerConfirmedAt;
+  syncAdminReferralReleaseForm(form);
+}
+
+function adminReferralConfirmationFresh(form) {
+  const confirmedAt = Number(form.dataset.providerConfirmedAt || 0);
+  const confirmationAge = Date.now() - confirmedAt;
+  return form.elements.provider_reconciled.checked
+    && confirmedAt > 0
+    && confirmationAge >= 0
+    && confirmationAge <= ADMIN_REFERRAL_CONFIRMATION_TTL_MS;
+}
+
+function resetAdminReferralConfirmations() {
+  document.querySelectorAll("[data-referral-release-form]").forEach(resetAdminReferralConfirmation);
+}
+
+function renderAdminReferrals(rewards, error = "", hasMore = false, limit = 100) {
+  const target = admin$("adminReferralRewards");
+  if (!target) return;
+  if (error) {
+    admin$("adminReferralBadge").textContent = "Doğrulanamadı";
+    target.innerHTML = `<p class="notice error">Davet ödülü kuyruğu okunamadı: ${adminEscape(error)}</p>`;
+    return;
+  }
+  const orderedRewards = [...rewards].sort((left, right) => {
+    const leftReady = left.actionable === true;
+    const rightReady = right.actionable === true;
+    if (leftReady !== rightReady) return leftReady ? -1 : 1;
+    return adminDateObject(left.pending_until) - adminDateObject(right.pending_until);
+  });
+  const ids = new Set(orderedRewards.map(reward => String(reward.id)));
+  for (const id of adminReferralDrafts.keys()) if (!ids.has(id)) adminReferralDrafts.delete(id);
+  const dueCount = orderedRewards.filter(adminReferralDue).length;
+  const capped = hasMore === true;
+  const queueLimit = Math.max(1, Number(limit) || 100);
+  admin$("adminReferralBadge").textContent = `${orderedRewards.length.toLocaleString(adminLocale())}${capped ? "+" : ""} · ${dueCount.toLocaleString(adminLocale())} vadesi doldu`;
+  const rows = orderedRewards.map((reward, index) => {
+    const order = adminReferralOrder(reward);
+    const due = adminReferralDue(reward);
+    const selected = ["minutes", "coupon"].includes(reward.reward_choice);
+    const draft = adminReferralDrafts.get(String(reward.id)) || {evidence:""};
+    const deadline = adminDateObject(reward.pending_until);
+    const deadlineValid = !Number.isNaN(deadline.getTime());
+    const kind = reward.kind === "renewal" ? "Abonelik yenilemesi" : "İlk abonelik alışverişi";
+    const payment = order
+      ? `<span class="status-pill ${order.status === "paid" ? "paid" : ""}">${adminEscape(adminStatusLabel(order.status))}</span><br><small>${adminEscape(adminPaymentMethodLabel(order))} · ${adminEscape(adminMoney(order.amount_minor, order.currency))}</small>`
+      : '<span class="status-pill">Son 250 siparişte bulunamadı</span><br><small>Tam kayıt için Ödemelerde aç.</small>';
+    const ready = reward.actionable === true;
+    const evidenceHelp = `adminReferralEvidenceHelp${index}`;
+    return `<tr>
+      <td data-label="Ödül"><strong>${adminEscape(kind)}</strong><br><small>${adminEscape(reward.policy_version || "—")}</small></td>
+      <td data-label="Sipariş"><strong>${adminEscape(reward.order_reference || "—")}</strong><br><button type="button" class="admin-action" data-referral-open-order="${adminEscape(reward.order_reference || "")}">Ödemelerde aç</button></td>
+      <td data-label="Ödeme durumu">${payment}</td>
+      <td data-label="Vade"><span class="status-pill ${due ? "paid" : ""}">${due ? "Vadesi doldu" : "Bekleme süresinde"}</span><br><small title="${adminEscape(deadlineValid ? adminDate(reward.pending_until) : "Vade doğrulanamadı")}">${adminEscape(deadlineValid ? `${adminDate(reward.pending_until)} · ${adminRelativeDate(reward.pending_until)}` : "Vade doğrulanamadı")}</small></td>
+      <td data-label="Ödül seçimi">${adminEscape(adminReferralBenefit(reward))}${reward.kind === "first_purchase" && Number(reward.invitee_minutes || 0) > 0 ? `<br><small>Davet edilen: ${Number(reward.invitee_minutes).toLocaleString(adminLocale())} ${adminEscape(adminMinuteShort())}</small>` : ""}</td>
+      <td data-label="Mutabakat ve kanıt">
+        <form class="admin-user-form" data-referral-release-form="${adminEscape(reward.id)}" data-release-ready="${String(ready)}">
+          <div class="admin-form-grid">
+            <label class="wide"><span>Kanıt referansı</span><input name="evidence_reference" autocomplete="off" minlength="8" maxlength="120" pattern="[A-Za-z0-9][A-Za-z0-9 ._:\\/\\-]{7,119}" value="${adminEscape(draft.evidence)}" aria-describedby="${evidenceHelp}" placeholder="Sağlayıcı işlem / ekstre ref." ${ready ? "" : "disabled"} required></label>
+            <label class="admin-check wide"><input name="provider_reconciled" type="checkbox" ${ready ? "" : "disabled"} required><span>Ödemeyi, tutarı ve açık iade/ters ibraz olmadığını sağlayıcıda doğruladım.</span></label>
+          </div>
+          <p id="${evidenceHelp}">Gizli anahtar, kart bilgisi veya kişisel veri yazma.${!due ? " Vade dolmadan işlem açılamaz." : !selected ? " Kullanıcının dakika veya kupon seçmesi gerekiyor." : ""}</p>
+          <button class="admin-action approve" type="submit" data-referral-release-button disabled>Ödülü serbest bırak</button>
+          <p class="notice" role="status" hidden></p>
+        </form>
+      </td>
+    </tr>`;
+  }).join("");
+  const limitNotice = capped ? `<p class="notice error">Serbest bırakılabilir ödüller öncelikli gösteriliyor; kuyruk ${queueLimit.toLocaleString(adminLocale())} kayıtla sınırlı ve daha fazla bekleyen ödül var. Bu görünümü tam liste sayma.</p>` : "";
+  target.innerHTML = `${limitNotice}<table class="admin-table admin-record-table"><thead><tr><th>Ödül</th><th>Sipariş</th><th>Ödeme durumu</th><th>Vade</th><th>Ödül seçimi</th><th>Mutabakat ve kanıt</th></tr></thead><tbody>${rows || '<tr><td colspan="6">Bekleyen davet ödülü yok.</td></tr>'}</tbody></table>`;
+  target.querySelectorAll("[data-referral-release-form]").forEach(form => {
+    form.addEventListener("input", () => syncAdminReferralReleaseForm(form));
+    form.addEventListener("change", () => syncAdminReferralReleaseForm(form));
+    form.addEventListener("submit", event => releaseAdminReferral(event, form));
+    form.addEventListener("focusout", () => setTimeout(() => {
+      if (form.isConnected && !form.contains(document.activeElement)) resetAdminReferralConfirmation(form);
+    }, 0));
+    syncAdminReferralReleaseForm(form);
+  });
+  target.querySelectorAll("[data-referral-open-order]").forEach(button => button.addEventListener("click", () => openAdminReferralOrder(button)));
 }
 
 function renderAdminRefunds(refunds) {
@@ -552,11 +692,15 @@ function renderAdminAlerts(checks) {
   const newMessages = adminState.contacts.filter(item => item.status === "new").length;
   const openRefunds = adminState.refunds.filter(item => ["requested", "approved_pending_refund"].includes(item.status)).length;
   const failedJobs = adminState.jobs.filter(item => item.status === "failed").length;
+  const dueReferrals = adminState.referrals.filter(adminReferralDue).length;
   const alerts = [];
   if (critical.length) alerts.push({level:"critical", title:`${critical.length} kritik altyapı işi`, detail:critical.map(item => item.label).join(" · ")});
   if (Number(adminState.overview.counts?.pending_orders || 0)) alerts.push({level:"attention", title:`${adminState.overview.counts.pending_orders} ödeme bekliyor`, detail:"Havale dekontlarını veya yarım kalan kart işlemlerini incele."});
   if (newMessages) alerts.push({level:"attention", title:`${newMessages} yeni destek mesajı`, detail:"Yanıt bekleyen mesajları destek bölümünden aç."});
   if (openRefunds) alerts.push({level:"attention", title:`${openRefunds} açık iade talebi`, detail:"Sağlayıcı üzerinden para gönderildikten sonra tamamlandı olarak işaretle."});
+  if (adminState.referralsError) alerts.push({level:"critical", title:"Davet ödülü kuyruğu okunamadı", detail:"Mutabakat ve ödüller bölümündeki hatayı incele; boş listeyi tamamlanmış sayma."});
+  else if (dueReferrals) alerts.push({level:"attention", title:`${dueReferrals} davet ödülünün vadesi doldu`, detail:"Sağlayıcı mutabakatından sonra Davetler bölümünden serbest bırak."});
+  if (!adminState.referralsError && adminState.referralsHasMore) alerts.push({level:"critical", title:"Davet kuyruğunda daha fazla kayıt var", detail:`Serbest bırakılabilir ödüller önce gösteriliyor; API bu görünümü ${adminState.referralsLimit} kayıtla sınırlıyor.`});
   if (failedJobs) alerts.push({level:"critical", title:`${failedJobs} hatalı işleme işi`, detail:"Hata kodunu işleme işleri tablosundan incele."});
   if (!alerts.length) alerts.push({level:"ok", title:"Acil operasyon uyarısı yok", detail:"Kritik servisler ve bekleyen işlemler normal görünüyor."});
   admin$("adminAlerts").innerHTML = alerts.map(item => `<article class="${item.level}"><strong>${adminEscape(item.title)}</strong><span>${adminEscape(item.detail)}</span></article>`).join("");
@@ -707,6 +851,23 @@ async function loadAdmin({silent = false} = {}) {
       adminPublicRequest("/billing/health"), adminPublicRequest("/rollout/health"),
       adminPublicRequest("/ads/config"), adminPublicRequest("/analytics/config"),
       adminRequest(`/billing/admin/costs?days=${encodeURIComponent(admin$("adminCostDays")?.value || 30)}&limit=250`).catch(() => null),
+      adminRequest("/billing/admin/referrals")
+        .then(body => {
+          const limit = body.limit;
+          const metadataValid = Array.isArray(body.rewards)
+            && typeof body.has_more === "boolean"
+            && typeof limit === "number" && Number.isInteger(limit) && limit >= 1 && limit <= 100
+            && body.rewards.length <= limit
+            && body.rewards.every(reward => {
+              if (!reward || typeof reward.actionable !== "boolean" || typeof reward.hold_complete !== "boolean") return false;
+              const expectedActionable = reward.hold_complete === true && ["minutes", "coupon"].includes(reward.reward_choice);
+              return reward.actionable === expectedActionable;
+            });
+          return metadataValid
+            ? {rewards:body.rewards, hasMore:body.has_more, limit, error:""}
+            : {rewards:[], hasMore:false, limit:100, error:"Davet kuyruğunun güvenlik metadata'sı eksik veya geçersiz."};
+        })
+        .catch(error => ({rewards:[], hasMore:false, limit:100, error:error.message})),
     ]);
     adminState = {
       ...adminState,
@@ -722,6 +883,10 @@ async function loadAdmin({silent = false} = {}) {
       ads:optional[8],
       analytics:optional[9],
       costs:optional[10],
+      referrals:optional[11].rewards,
+      referralsError:optional[11].error,
+      referralsHasMore:optional[11].hasMore,
+      referralsLimit:optional[11].limit,
     };
     await Promise.all([
       loadAdminUsers(adminState.userPagination.page || 1),
@@ -729,6 +894,7 @@ async function loadAdmin({silent = false} = {}) {
     ]);
     renderMetrics();
     renderAdminRewards(adminState.rewards.filter(item => item.status === "pending_verification"));
+    renderAdminReferrals(adminState.referrals, adminState.referralsError, adminState.referralsHasMore, adminState.referralsLimit);
     renderAdminRefunds(adminState.refunds);
     renderAdminCreditEvents(adminState.credits);
     renderAdminAccountEvents(adminState.accountEvents);
@@ -744,6 +910,121 @@ async function loadAdmin({silent = false} = {}) {
   } finally {
     adminLoading = false;
     admin$("adminRefresh").disabled = false;
+  }
+}
+
+async function openAdminReferralOrder(button) {
+  const reference = button.dataset.referralOpenOrder || "";
+  if (!reference) return;
+  admin$("adminOrderSearch").value = reference;
+  admin$("adminOrderStatus").value = "all";
+  admin$("adminOrderProvider").value = "all";
+  button.disabled = true;
+  try {
+    await loadAdminOrders(1);
+    activateAdminView("finance", {focus:true});
+  } catch (error) {
+    adminNotice(error.message, true);
+  } finally {
+    if (button.isConnected) button.disabled = false;
+  }
+}
+
+async function reconcileAdminReferralOrder(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const input = form.elements.order_reference;
+  const status = admin$("adminReferralReconcileStatus");
+  if (!form.reportValidity()) return;
+  const reference = input.value.trim();
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  status.hidden = true;
+  status.classList.remove("error");
+  try {
+    await adminRequest("/billing/admin/referrals/reconcile-order", {
+      method:"POST",
+      body:JSON.stringify({order_reference:reference}),
+    });
+    const message = `${reference} için iç davet kaydı yeniden işlendi. Sağlayıcı mutabakatı yapılmadı ve ödül serbest bırakılmadı.`;
+    status.textContent = message;
+    status.hidden = false;
+    adminNotice(message);
+    try {
+      await loadAdmin({silent:true});
+    } catch (error) {
+      adminNotice(`${message} Kuyruk yenilenemedi: ${error.message}`, true);
+    }
+  } catch (error) {
+    status.textContent = error.message;
+    status.classList.add("error");
+    status.hidden = false;
+    adminNotice(error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function releaseAdminReferral(event, form) {
+  event.preventDefault();
+  const evidence = form.elements.evidence_reference;
+  const provider = form.elements.provider_reconciled;
+  if (form.dataset.releaseReady !== "true") return;
+  if (!adminReferralEvidenceValid(evidence)) {
+    evidence.reportValidity();
+    return;
+  }
+  if (!adminReferralConfirmationFresh(form)) {
+    resetAdminReferralConfirmation(form);
+    adminNotice("Sağlayıcı doğrulamasını yeniden işaretle.", true);
+    return;
+  }
+  const rewardId = form.dataset.referralReleaseForm;
+  if (!window.confirm("Sağlayıcı mutabakatı tamamlandıysa bu ödülü kalıcı olarak serbest bırak. Bu işlem dakika ekleyebilir veya kupon oluşturabilir. Devam edilsin mi?")) {
+    resetAdminReferralConfirmation(form);
+    return;
+  }
+  if (!adminReferralConfirmationFresh(form)) {
+    resetAdminReferralConfirmation(form);
+    adminNotice("Sağlayıcı doğrulamasının süresi doldu. Güncel durumu yeniden doğrula.", true);
+    return;
+  }
+  const button = form.querySelector("[data-referral-release-button]");
+  const status = form.querySelector('[role="status"]');
+  let completed = false;
+  button.disabled = true;
+  status.hidden = true;
+  status.classList.remove("error");
+  try {
+    const body = await adminRequest(`/billing/admin/referrals/${encodeURIComponent(rewardId)}/release`, {
+      method:"POST",
+      body:JSON.stringify({provider_reconciled:true, evidence_reference:evidence.value.trim()}),
+    });
+    adminReferralDrafts.delete(rewardId);
+    const released = body.reward?.status === "released";
+    const message = released
+      ? "Davet ödülü serbest bırakıldı ve seçilen hak hesaba işlendi."
+      : "Ödül, ödeme veya hesap güvenlik kontrolü nedeniyle engellendi; kullanıcıya hak verilmedi.";
+    completed = true;
+    evidence.disabled = true;
+    provider.checked = false;
+    provider.disabled = true;
+    status.textContent = message;
+    status.classList.toggle("error", !released);
+    status.hidden = false;
+    adminNotice(message, !released);
+    try {
+      await loadAdmin({silent:true});
+    } catch (error) {
+      adminNotice(`${message} Kuyruk yenilenemedi: ${error.message}`, true);
+    }
+  } catch (error) {
+    status.textContent = error.message;
+    status.classList.add("error");
+    status.hidden = false;
+    adminNotice(error.message, true);
+  } finally {
+    if (!completed && form.isConnected) syncAdminReferralReleaseForm(form);
   }
 }
 
@@ -929,6 +1210,10 @@ admin$("adminTokenForm").addEventListener("submit", async event => {
   catch (error) { sessionStorage.removeItem(ADMIN_SESSION_TOKEN_KEY); adminAccessToken = ""; adminNotice(error.message, true); }
 });
 admin$("adminRefresh").addEventListener("click", () => loadAdmin().catch(error => adminNotice(error.message, true)));
+admin$("adminReferralReconcileForm")?.addEventListener("submit", reconcileAdminReferralOrder);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") resetAdminReferralConfirmations();
+});
 ["adminMessageSearch","adminMessageStatus","adminJobStatus","adminTimelineFilter"].forEach(id => admin$(id)?.addEventListener(id.includes("Search") ? "input" : "change", applyAdminFilters));
 admin$("adminCostDays")?.addEventListener("change", () => loadAdminCosts().catch(error => adminNotice(error.message, true)));
 admin$("adminActualCostForm")?.addEventListener("submit", saveAdminActualCost);
@@ -947,5 +1232,8 @@ syncAdminBulkFields();
 admin$("adminExportOrders").addEventListener("click", () => downloadAdminCsv("lecturesift-siparisler.csv", adminState.orders.map(item => ({siparis_no:item.order_number || item.reference, olusturma_zamani:item.created_at, son_guncelleme:item.updated_at, musteri:item.user?.name || "", eposta:item.user?.email || "", odeme_yontemi:adminPaymentMethodLabel(item), saglayici:item.provider, plan:item.plan_code, donem:item.interval, tutar_minor:item.amount_minor, para_birimi:item.currency, durum:item.status, guvenli_ag:item.user?.last_activity?.ip_network || ""}))));
 admin$("adminExportMessages").addEventListener("click", () => downloadAdminCsv("lecturesift-mesajlar.csv", adminState.contacts.map(item => ({tarih:item.created_at, ad_soyad:item.name, eposta:item.email, konu:item.topic, siparis_no:item.order_reference || "", durum:item.status, mesaj:item.message}))));
 admin$("adminExportUsers").addEventListener("click", () => downloadAdminCsv("lecturesift-kullanicilar.csv", adminState.users.map(item => ({kayit_tarihi:item.created_at, son_guncelleme:item.updated_at, ad_soyad:item.name, eposta:item.email, telefon:item.phone || "", ulke:item.country_code || "", eposta_dogrulandi:item.email_verified ? "evet" : "hayir", plan:item.plan_code || "free", kredi_dakika:item.credit_minutes, son_guvenli_ag:item.last_activity?.ip_network || ""}))));
-setInterval(() => { if (adminAccessToken && admin$("adminAutoRefresh").checked && document.visibilityState === "visible") loadAdmin({silent:true}).catch(() => {}); }, 60000);
+setInterval(() => {
+  const editingReferral = document.activeElement?.closest("[data-referral-release-form], #adminReferralReconcileForm");
+  if (adminAccessToken && admin$("adminAutoRefresh").checked && document.visibilityState === "visible" && !editingReferral) loadAdmin({silent:true}).catch(() => {});
+}, 60000);
 if (adminAccessToken) loadAdmin().catch(() => { sessionStorage.removeItem(ADMIN_SESSION_TOKEN_KEY); adminAccessToken = ""; admin$("adminLogin").hidden = false; });

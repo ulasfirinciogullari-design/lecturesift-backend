@@ -190,7 +190,7 @@ def archive_unpaid_order(reference, actor):
 
 
 def library(user_id):
-    from .jobs import JOBS
+    from .jobs import JOBS, is_job_deletable
     with billing.ENGINE.begin() as connection:
         require_schema(connection)
         owner(connection, user_id)
@@ -202,7 +202,7 @@ def library(user_id):
                   "status": row.get("status"), "stage": row.get("stage"), "folder_id": placements.get(row["job_id"]),
                   "stored_bytes": row.get("stored_bytes"), "job_type": row.get("options", {}).get("job_type", "study_pack"),
                   "expires_at": float(row.get("updated", row.get("created", 0))) + max(60, int(row.get("retention_seconds", 86400))),
-                  "can_delete": row.get("status") in {"done", "error"} and row.get("worker_state") in {None, "done", "error", "failed", "rejected"}}
+                  "can_delete": is_job_deletable(row)}
                  for row in jobs]
     return {"folders": [{"id": row.id, "name": row.name} for row in folders], "jobs": safe_jobs,
             "stored_bytes": sum(int(row["stored_bytes"] or 0) for row in safe_jobs),

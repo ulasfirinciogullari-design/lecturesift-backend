@@ -1,13 +1,13 @@
 # Assistant image creation
 
 The separate `POST /assistant/image` action generates one JPEG using
-`gpt-image-1.5`, explicit medium quality and 1024x1024 size. The UI shows 220
+`gpt-image-1.5`, explicit medium quality and 1024x1024 size. The UI shows 200
 credits before submission, in all 13 languages. No image action is offered to
 guests. Both the assistant schema capability/runtime switch and the independent
 `ASSISTANT_IMAGES_ENABLED=true` switch are required. Real release-account access
 was verified on September 9, 2026: one valid 46,344-byte JPEG, 15 input tokens
 and 1,303 output tokens (1,056 image / 247 text). The API image switch is now
-enabled and the live catalog displays its 220-credit price. This provider check
+enabled and the live catalog displays its 200-credit price. This provider check
 does not claim a real customer's wallet was charged.
 
 The 1,000 UTF-8-byte prompt limit, fixed format/quality and one image per request
@@ -15,11 +15,11 @@ bound normal cost. OpenAI's reviewed September 8 pricing is $5/M input tokens an
 $32/M image output tokens; medium square image output is approximately $0.034,
 plus prompt input. Source: [model pricing](https://developers.openai.com/api/docs/models/gpt-image-1.5)
 and [Image API](https://developers.openai.com/api/reference/python/resources/images/methods/generate).
-At the USD 10,000-credit pack price, 220 credits represent about $0.66 of pack
+At the USD 10,000-credit pack price, 200 credits represent about $0.60 of pack
 revenue. This is gross revenue, not profit after tax, payment, hosting, included
 credits and refunds. Regional prices are deliberate offers, not FX quotes.
 
-The shared wallet reserves 220 credits before any provider request. Actual image
+The shared wallet reserves 200 credits before any provider request. Actual image
 usage is recorded separately at the image rates; the shared daily spend ceiling
 uses those costs, not chat token weights. Drift beyond the reservation closes
 that day's budget. Unknown failures retain their conservative platform budget

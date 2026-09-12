@@ -140,6 +140,14 @@ def test_enabled_rendering_separates_choices_history_and_both_coupon_values():
     assert "First subscription purchase" in history and "Later purchase / renewal" in history
     assert history.count("<article ") == 3 and 'data-referral-choice=' not in history
     assert "Pending" in history and "60 minutes" in history and "Coupon: 5%" in history
+    expected_currency_labels = {
+        "TRY": "₺", "USD": "$", "EUR": "€", "GBP": "£", "CAD": "$", "AUD": "$",
+        "NZD": "$", "JPY": "¥", "KRW": "₩", "CNY": "¥", "INR": "₹", "BRL": "R$",
+        "MXN": "$", "CHF": "Fr.", "SEK": "kr", "NOK": "kr", "DKK": "kr", "PLN": "zł",
+        "AED": "د.إ", "SAR": "ر.س", "SGD": "$", "HKD": "$",
+    }
+    for code, symbol in expected_currency_labels.items():
+        assert f"{code} \u2068{symbol}\u2069" in choices
     assert "Coupon: 10%" in coupons and "50.00" in coupons
     assert "€1.41" in coupons and "Coupon: 5%" in coupons and "¥94" in coupons
     assert nodes["referralEarned"]["textContent"] == "0 minutes"

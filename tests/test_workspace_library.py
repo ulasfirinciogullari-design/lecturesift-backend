@@ -111,6 +111,56 @@ def test_lesson_delete_waits_for_worker_and_keeps_retryable_metadata_on_storage_
     assert not path.exists() and store.metadata('lesson') is None
 
 
+def test_terminal_queue_failures_and_completed_fallbacks_are_deletable(state):
+    uid = account()
+    store = state[0]
+    cases = (
+        ('unavailable', 'error', 'unavailable'),
+        ('fallback-done', 'done', 'local_fallback'),
+        ('fallback-error', 'error', 'local_fallback'),
+    )
+    for job_id, status, worker_state in cases:
+        path = lesson(state, uid, job_id=job_id)
+        store.update(job_id, status=status, worker_state=worker_state)
+        item = next(row for row in workspace.library(uid)['jobs'] if row['job_id'] == job_id)
+        assert jobs.is_job_deletable(store.metadata(job_id)) is True
+        assert item['can_delete'] is True
+        workspace.delete_lesson(uid, job_id)
+        assert not path.exists() and store.metadata(job_id) is None
+
+
+def test_active_and_retryable_jobs_remain_locked_and_terminal_states_are_not_recovered(state):
+    uid = account()
+    store = state[0]
+    cases = (
+        ('fallback-active', 'working', 'local_fallback'),
+        ('queued', 'queued', 'queued'),
+        ('publishing', 'done', 'publishing'),
+        ('retrying', 'error', 'retrying'),
+        ('invalid-unavailable', 'done', 'unavailable'),
+    )
+    paths = {}
+    for job_id, status, worker_state in cases:
+        paths[job_id] = lesson(state, uid, job_id=job_id)
+        store.update(job_id, status=status, worker_state=worker_state)
+        item = next(row for row in workspace.library(uid)['jobs'] if row['job_id'] == job_id)
+        assert jobs.is_job_deletable(store.metadata(job_id)) is False
+        assert item['can_delete'] is False
+        with pytest.raises(billing.BillingError):
+            workspace.delete_lesson(uid, job_id)
+        assert paths[job_id].exists() and store.metadata(job_id) is not None
+
+    terminal_unavailable = lesson(state, uid, job_id='terminal-unavailable')
+    store.update('terminal-unavailable', status='error', worker_state='unavailable')
+    terminal_fallback = lesson(state, uid, job_id='terminal-fallback')
+    store.update('terminal-fallback', status='done', worker_state='local_fallback')
+    assert {row['job_id'] for row in store.recoverable()} == {
+        'fallback-active',
+        'queued',
+    }
+    assert terminal_unavailable.exists() and terminal_fallback.exists()
+
+
 def test_credit_grant_replay_spending_and_expiry_preserve_minutes(state, monkeypatch):
     uid = account()
     before = billing.account_status(uid)['remaining_minutes']

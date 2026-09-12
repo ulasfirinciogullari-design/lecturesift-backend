@@ -775,7 +775,7 @@ def test_checkout_names_contact_inbox_and_mobile_plan_navigation_are_wired():
     assert "/billing/admin/contact-messages" in admin_js
     assert "adminContactDialog" in admin_html and "admin-contact-reply" in admin_js
     assert "/billing/admin/contact-messages/${encodeURIComponent(messageId)}/reply" in admin_js
-    assert 'href="/rollout.css?v=10"' in admin_html and 'src="/admin.js?v=19"' in admin_html
+    assert 'href="/rollout.css?v=10"' in admin_html and 'src="/admin.js?v=20"' in admin_html
     assert admin_js.count('class="admin-table admin-record-table"') >= 10
     assert all(label in admin_js for label in ('data-label="İş"', 'data-label="Bakiye"', 'data-label="Açıklama"'))
     assert "supportReplyForm" in support_html and "supportThread" in support_html
@@ -796,6 +796,51 @@ def test_checkout_names_contact_inbox_and_mobile_plan_navigation_are_wired():
             "@media(max-width:620px)",
         )
     )
+
+
+def test_admin_referral_release_requires_due_reward_provider_confirmation_and_safe_evidence():
+    admin_html = (FRONTEND / "admin.html").read_text(encoding="utf-8")
+    admin_js = (FRONTEND / "admin.js").read_text(encoding="utf-8")
+
+    assert all(
+        value in admin_html
+        for value in (
+            'data-admin-view-button="referrals"',
+            'id="adminReferralsView"',
+            'id="adminReferralReconcileForm"',
+            'id="adminReferralRewards"',
+            'id="adminReferralBadge" class="admin-count-badge" aria-live="polite"',
+            'name="order_reference" autocomplete="off"',
+        )
+    )
+    assert 'id="adminReferralRewards" class="admin-table-wrap" aria-live=' not in admin_html
+    assert 'adminRequest("/billing/admin/referrals")' in admin_js
+    assert 'adminRequest("/billing/admin/referrals/reconcile-order"' in admin_js
+    assert '/billing/admin/referrals/${encodeURIComponent(rewardId)}/release' in admin_js
+    assert 'form.dataset.releaseReady !== "true"' in admin_js
+    assert "ADMIN_REFERRAL_EVIDENCE_RE.test(input.value.trim())" in admin_js
+    assert "!adminReferralEvidenceValid(evidence)" in admin_js
+    assert 'provider_reconciled:true, evidence_reference:evidence.value.trim()' in admin_js
+    assert "provider.checked = false" in admin_js
+    assert "if (!completed && form.isConnected)" in admin_js
+    assert 'document.addEventListener("visibilitychange"' in admin_js
+    assert "resetAdminReferralConfirmation(form);\n    return;" in admin_js
+    assert "ADMIN_REFERRAL_CONFIRMATION_TTL_MS = 5 * 60 * 1000" in admin_js
+    assert admin_js.count("!adminReferralConfirmationFresh(form)") >= 2
+    assert 'name="evidence_reference" autocomplete="off" minlength="8" maxlength="120"' in admin_js
+    assert 'name="provider_reconciled" type="checkbox"' in admin_js
+    assert '${ready ? "" : "disabled"} required' in admin_js
+    assert "providerReconciled" not in admin_js
+    assert r'pattern="[A-Za-z0-9\-]{1,64}"' in admin_html
+    assert r'pattern="[A-Za-z0-9][A-Za-z0-9 ._:\\/\\-]{7,119}"' in admin_js
+    assert "Gizli anahtar, kart bilgisi veya kişisel veri yazma." in admin_js
+    assert 'typeof body.has_more === "boolean"' in admin_js
+    assert 'typeof limit === "number"' in admin_js
+    assert 'typeof reward.actionable !== "boolean"' in admin_js
+    assert 'typeof reward.hold_complete !== "boolean"' in admin_js
+    assert "reward.actionable === expectedActionable" in admin_js
+    assert 'const ready = reward.actionable === true' in admin_js
+    assert "Serbest bırakılabilir ödüller öncelikli gösteriliyor" in admin_js
 
 
 def test_secure_card_checkout_is_prepared_without_collecting_card_details():
