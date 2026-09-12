@@ -52,24 +52,52 @@ def test_account_uses_fixed_term_self_service_and_zero_decimal_payment_amounts()
     assert "`${formatted} · ${currency}`" in auth
     assert "Number(order.amount_minor || 0) / minorUnitDivisor(purchaseCurrency)" in auth
     assert "Number(price.amount_minor * multiplier) / minorUnitDivisor(analyticsCurrency)" in plan_script
-    assert "managePlanLink" in account and "account.fixedTermHelp" in account
+    assert all(value in account for value in ("fixedTermPlanForm", "managePlanSelect", "managePlanInterval", "managePlanContinue", "account.fixedTermHelp"))
     assert 'localized("/plans.html")' in auth
-    assert "?plan=${encodeURIComponent(account.plan.code)}&interval=${interval}" in auth
+    assert 'new URLSearchParams({plan:targetCode, interval})' in auth
+    assert 'managedPlanCodes.includes(planSelect.value)' in auth
+    assert 'managedIntervals.includes(intervalSelect.value)' in auth
+    assert 'const planRanks = ["free", ...managedPlanCodes]' in auth
+    assert 'const accountPlanState = `${account.plan.code}:${subscription?.interval || "none"}`' in auth
+    assert 'planSelect.dataset.accountState !== accountPlanState' in auth
+    assert 'safeCopyFields.has(key)' in auth and 'SAFE_COPY_FIELDS.has(key)' in plan_script
+    assert 'summary.textContent = fillCopy' in auth
+    assert 'relationship === "upgrade"' in auth and 'relationship === "downgrade"' in auth
     assert "/billing/me/subscription/cancel" not in auth
     assert "cancelSubscriptionButton" not in account
     assert "checkoutFixedTermNotice" in plans
     assert 'pt("plans.subscription", "Sabit süreli paket")' in plan_script
     assert "Aylık abonelik" not in plan_script
-    assert "account?.subscription" not in plan_script
+    assert "account?.subscription" in plan_script and "canShowCurrentTerm" in plan_script
     assert "payment.fixedTermReplacement" not in plan_script
     assert "payment.fixedTermReplacement" not in catalog
     assert "o anda aktif ücretli dönem varsa" in plan_script
     assert "mevcut dönemin paket hakkı aktarılmaz" in plan_script
+    assert 'pt("account.activeReplacementDetail"' in plan_script
+    assert "Math.trunc(includedMinutes - usedMinutes)" in plan_script
     assert 'pt("plans.currencyUnavailable"' in plan_script
+    placeholder_contracts = {
+        "account.newTermAction": {"plan", "term"},
+        "account.upgradeAction": {"plan"},
+        "account.downgradeAction": {"plan"},
+        "account.activeReplacementDetail": {"current", "date", "remaining", "term", "target"},
+        "account.firstPurchaseDetail": {"term", "target"},
+    }
     for key in (
         "account.fixedTermHelp",
         "account.manageFixedTerm",
+        "account.packageToBuy",
+        "account.termToBuy",
+        "account.monthlyTerm",
+        "account.annualTerm",
+        "account.newTermAction",
+        "account.upgradeAction",
+        "account.downgradeAction",
+        "account.activeReplacementDetail",
+        "account.firstPurchaseDetail",
         "plans.subscription",
+        "plans.newMonthlyTerm",
+        "plans.newAnnualTerm",
         "plans.currencyUnavailable",
         "payment.fixedTermCheckout",
     ):
@@ -77,6 +105,10 @@ def test_account_uses_fixed_term_self_service_and_zero_decimal_payment_amounts()
             re.search(rf'"{re.escape(key)}":(\[[^\n]+\])', catalog).group(1)
         )
         assert len(values) == 13 and all(value.strip() for value in values)
+        assert all(
+            set(re.findall(r"\{([^}]+)\}", value)) == placeholder_contracts.get(key, set())
+            for value in values
+        ), key
 
 
 def test_all_frontend_plan_fallbacks_use_only_the_detailed_summary_profile():
@@ -407,7 +439,7 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         expected_theme_version = "17"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
         assert "/theme.js?v=11" in content, page.name
-        assert "i18n.js?v=43" in content, page.name
+        assert "i18n.js?v=44" in content, page.name
         assert "page-i18n.js?v=8" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
@@ -693,11 +725,11 @@ def test_payment_routes_are_distinct_localized_and_account_history_is_auditable(
         assert len(values) == 13, key
         assert all(str(value).strip() for value in values), key
 
-    assert 'src="/plans.js?v=25"' in plans_html
+    assert 'src="/plans.js?v=26"' in plans_html
     assert 'manualTransfer = {available:Boolean(transferBody?.available), bank:null};' in plans_js
     assert 'order.bank?.iban' in plans_js
     assert 'transferBody?.bank' not in plans_js
-    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=16"', 'href="./auth.css?v=4"'))
+    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=17"', 'href="./auth.css?v=4"'))
     assert all(value in auth_js for value in ("paymentMethodLabel", "paymentMoney", "paymentDateTime", "payment-order-meta"))
     assert all(value in admin_html for value in ('value="iyzico_card"', 'value="iyzico_bank_transfer"', 'value="manual_bank_transfer"', 'value="iyzico_legacy"'))
     assert "provider:selectedProvider" in admin_js
@@ -726,7 +758,7 @@ def test_profile_admin_automatic_payment_and_full_comparison_interfaces_are_pres
     )
     assert "/billing/me/profile" in auth and "/billing/me/change-password" in auth
     assert "/billing/me/subscription/cancel" not in auth
-    assert "managePlanLink" in account and "account.fixedTermHelp" in auth
+    assert "fixedTermPlanForm" in account and "account.activeReplacementDetail" in auth
     assert "/jobs?limit=30" not in auth and "jobHistory" not in account
     assert "/billing/me/export" in auth and "/billing/me/close-account" in auth
     assert 'href="/admin.html"' not in account
@@ -838,7 +870,7 @@ def test_admin_growth_reads_and_escapes_advertising_management_status():
     catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
 
     assert 'id="adminGrowthStatus" class="admin-growth-grid" aria-live="polite"' in admin
-    assert 'src="/admin.js?v=23"' in admin and 'src="/i18n.js?v=43"' in admin
+    assert 'src="/admin.js?v=23"' in admin and 'src="/i18n.js?v=44"' in admin
     assert 'adminRequest("/billing/admin/advertising-readiness").catch(() => null)' in admin_script
     assert "advertisingReadiness:optional[10]" in admin_script
     assert "8.000" not in admin_script and "8000" not in admin_script

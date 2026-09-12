@@ -26,7 +26,6 @@ from .billing_service import (
     approve_manual_order,
     authenticate_session,
     billing_database_health,
-    cancel_active_subscription,
     change_account_password,
     commerce_identity,
     create_password_reset_token,
@@ -1029,18 +1028,14 @@ def billing_change_password(
 
 
 @app.post("/billing/me/subscription/cancel")
-def billing_cancel_subscription(user: dict = Depends(_billing_user)) -> dict:
-    try:
-        account = cancel_active_subscription(user["id"])
-    except BillingAuthenticationError as exc:
-        raise HTTPException(401, detail={"code": "LS-BILL-06", "message": str(exc)}) from exc
-    except BillingError as exc:
-        raise HTTPException(400, detail={"code": "LS-BILL-28", "message": str(exc)}) from exc
-    return {
-        "ok": True,
-        "message": "Yenileme durduruldu. Ücretli hakların mevcut dönemin sonuna kadar devam edecek.",
-        "account": account,
-    }
+def billing_cancel_subscription(_user: dict = Depends(_billing_user)) -> dict:
+    raise HTTPException(
+        409,
+        detail={
+            "code": "LS-BILL-28",
+            "message": "Bu sabit süreli paket otomatik yenilenmez; durdurulacak tekrarlayan ödeme yoktur.",
+        },
+    )
 
 
 @app.post("/billing/manual-transfer/orders")

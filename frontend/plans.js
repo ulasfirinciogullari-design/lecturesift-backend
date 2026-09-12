@@ -8,6 +8,11 @@ const ZERO_DECIMAL_CURRENCIES = new Set(["JPY", "KRW"]);
 const minorUnitDivisor = currency => ZERO_DECIMAL_CURRENCIES.has(String(currency || "").toUpperCase()) ? 1 : 100;
 const PLANS_I18N = window.LectureSiftI18n || {language:"tr",locale:"tr-TR",t:(key,fallback)=>fallback || key};
 const pt = (key, fallback) => PLANS_I18N.t(key, fallback);
+const SAFE_COPY_FIELDS = new Set(["current", "date", "remaining", "term", "target"]);
+const fillCopy = (template, values) => Object.entries(values).filter(([key]) => SAFE_COPY_FIELDS.has(key)).reduce(
+  (copy, [key, value]) => copy.split(`{${key}}`).join(String(value)),
+  String(template || ""),
+);
 const REFERRAL_I18N = window.LectureSiftReferralI18n || {t:(_key, fallback)=>fallback || ""};
 const rpt = (key, fallback) => REFERRAL_I18N.t(key, fallback);
 const COUPON_PLANS = new Set(["lite", "plus", "pro", "max"]);
@@ -320,8 +325,10 @@ function renderPlans() {
     const minutesText = minutes == null
       ? `${entitlements.team_seats || plan.team_seats || 10} ${pt("plans.userUnit", "kullanıcı")}`
       : `${Number(minutes).toLocaleString(PLANS_I18N.locale)} ${plan.kind === "subscription" || plan.kind === "free" ? pt("plans.minutesPerMonth", "dk / ay") : pt("plans.minuteUnit", "dakika")}`;
+    const monthlyAction = current ? pt("plans.newMonthlyTerm", "Yeni aylık dönem") : pt("rollout.chooseMonthly", "Aylık seç");
+    const annualAction = current ? pt("plans.newAnnualTerm", "Yeni yıllık dönem") : pt("rollout.annual", "Yıllık");
     const actions = plan.kind === "subscription"
-      ? `<div class="plan-card-actions"><button class="plan-action" data-plan="${esc(code)}" data-interval="monthly" ${current ? "disabled" : ""}>${esc(pt("rollout.chooseMonthly", "Aylık seç"))}</button><button class="plan-action" data-plan="${esc(code)}" data-interval="annual" ${current ? "disabled" : ""}>${esc(pt("rollout.annual", "Yıllık"))} · ${esc(price ? format(price.amount_minor * 10, price.currency || currency) : "")}</button></div>`
+      ? `<div class="plan-card-actions"><button class="plan-action" data-plan="${esc(code)}" data-interval="monthly">${esc(monthlyAction)}</button><button class="plan-action" data-plan="${esc(code)}" data-interval="annual">${esc(annualAction)} · ${esc(price ? format(price.amount_minor * 10, price.currency || currency) : "")}</button></div>`
       : `<button class="plan-action" data-plan="${esc(code)}" data-interval="${plan.kind === "one_time" ? "one_time" : "monthly"}" ${current || code === "free" || code === "business" ? "disabled" : ""}>${esc(current ? pt("plans.current", "Mevcut plan") : (code === "business" ? pt("plans.contact", "Bize ulaş") : pt("plans.select", "Planı seç")))}</button>`;
     return `<article class="plan-card ${plan.featured ? "featured" : ""}">
       ${plan.featured ? `<span class="plan-badge">${esc(pt("plans.popular", "Popüler"))}</span>` : ""}
@@ -448,7 +455,25 @@ async function buy(planCode, interval = "monthly") {
   const fixedTermNotice = $("checkoutFixedTermNotice");
   fixedTermNotice.hidden = plan?.kind !== "subscription";
   if (!fixedTermNotice.hidden) {
-    fixedTermNotice.textContent = pt("payment.fixedTermCheckout", "Bu, yeni bir sabit dönem için tek seferlik ödemedir. Onaylandığında hemen başlar; o anda aktif ücretli dönem varsa onun yerine geçer. Kullanılmamış süre ve mevcut dönemin paket hakkı aktarılmaz. Otomatik yenilenmez.");
+    const currentEnd = new Date(account?.subscription?.ends_at);
+    const includedMinutes = Number(account?.plan?.minutes);
+    const usedMinutes = Number(account?.used_minutes);
+    const canShowCurrentTerm = account?.subscription
+      && Number.isFinite(currentEnd.getTime())
+      && Number.isFinite(includedMinutes)
+      && Number.isFinite(usedMinutes);
+    fixedTermNotice.textContent = canShowCurrentTerm
+      ? fillCopy(
+        pt("account.activeReplacementDetail", "Mevcut {current} dönemin {date} tarihine kadar açık ve bu dönemin {remaining} dakika paket hakkı kaldı. Ödeme onaylandığında {target} için yeni {term} hemen başlar. Kullanılmayan süre ve mevcut dönem paket hakkı taşınmaz. Otomatik yenileme yoktur."),
+        {
+          current:planLabel(account.plan.code),
+          date:new Intl.DateTimeFormat(PLANS_I18N.locale, {dateStyle:"long"}).format(currentEnd),
+          remaining:Math.max(0, Math.trunc(includedMinutes - usedMinutes)).toLocaleString(PLANS_I18N.locale),
+          term:interval === "annual" ? pt("account.annualTerm", "yıllık dönem") : pt("account.monthlyTerm", "aylık dönem"),
+          target:planLabel(planCode),
+        },
+      )
+      : pt("payment.fixedTermCheckout", "Bu, yeni bir sabit dönem için tek seferlik ödemedir. Onaylandığında hemen başlar; o anda aktif ücretli dönem varsa onun yerine geçer. Kullanılmamış süre ve mevcut dönemin paket hakkı aktarılmaz. Otomatik yenilenmez.");
   }
   const couponEligible = LOCALE_DATA.currencies.includes(currency) && interval === "monthly" && COUPON_PLANS.has(planCode);
   $("checkoutCouponRow").hidden = !couponEligible;

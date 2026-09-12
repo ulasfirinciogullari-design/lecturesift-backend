@@ -10,7 +10,7 @@ The assistant uses the existing verified billing session. Server-authored contex
 contains the site map, only that user's plan/minutes and recent lesson titles,
 and optionally an owned completed lesson summary.
 
-The safe account-control source contract, pending CI and release, adds an
+The safe account-control contract passed CI and was released in PR #84. It adds an
 identity-free, read-only account card and fixed links to Workspace, Plans,
 Account, Support and Invitations. A latest-lesson link is selected from the
 authenticated user's jobs by the server; model-provided paths and identifiers
