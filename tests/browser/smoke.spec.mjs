@@ -51,7 +51,7 @@ test('account shows zero-decimal payments and fixed-term package self-service', 
   await expect(page.locator('#managePlanSelect')).toHaveValue('plus');
   await expect(page.locator('#managePlanInterval')).toHaveValue('monthly');
   await expect(page.locator('#managePlanSummary')).toContainText('850 package minutes left');
-  await expect(page.locator('#managePlanSummary')).toContainText('does not carry over');
+  await expect(page.locator('#managePlanSummary')).toContainText('do not carry over');
   await expect(page.locator('#managePlanContinue')).toHaveText('Buy a new monthly term for Plus');
   await page.locator('#managePlanSelect').selectOption('pro');
   await expect(page.locator('#managePlanContinue')).toHaveText('Upgrade to Pro');
