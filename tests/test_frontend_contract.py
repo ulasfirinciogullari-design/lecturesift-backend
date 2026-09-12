@@ -315,7 +315,7 @@ def test_public_source_copy_matches_the_single_file_picker_contract():
     )
     assert not any(claim in public_copy for claim in stale_claims)
     assert 'data-i18n="legal.termsUpdated">Son güncelleme: 12 Eylül 2026<' in terms
-    assert 'data-i18n="legal.privacyUpdated">Son güncelleme: 12 Eylül 2026 · Sürüm 2.2<' in privacy
+    assert 'data-i18n="legal.privacyUpdated">Son güncelleme: 12 Eylül 2026 · Sürüm 2.3<' in privacy
     assert 'data-i18n="legal.distanceSalesVersion">Sürüm: MSS-2026-09-12-v2<' in distance_sales
     assert 'data-i18n="legal.distanceSalesHistory">Bu çerçeve metin ilk olarak 28 Ağustos 2026 tarihinde yayımlanmış, 12 Eylül 2026 tarihinde güncellenmiştir.' in distance_sales
     assert 'data.append("source_layout", "classic")' in script
@@ -405,7 +405,7 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         expected_theme_version = "17"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
         assert "/theme.js?v=10" in content, page.name
-        assert "i18n.js?v=38" in content, page.name
+        assert "i18n.js?v=39" in content, page.name
         assert "page-i18n.js?v=7" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
@@ -879,7 +879,7 @@ def test_checkout_names_contact_inbox_and_mobile_plan_navigation_are_wired():
     assert "/billing/admin/contact-messages" in admin_js
     assert "adminContactDialog" in admin_html and "admin-contact-reply" in admin_js
     assert "/billing/admin/contact-messages/${encodeURIComponent(messageId)}/reply" in admin_js
-    assert 'href="/rollout.css?v=10"' in admin_html and 'src="/admin.js?v=20"' in admin_html
+    assert 'href="/rollout.css?v=10"' in admin_html and 'src="/admin.js?v=21"' in admin_html
     assert admin_js.count('class="admin-table admin-record-table"') >= 10
     assert all(label in admin_js for label in ('data-label="İş"', 'data-label="Bakiye"', 'data-label="Açıklama"'))
     assert "supportReplyForm" in support_html and "supportThread" in support_html
@@ -1213,6 +1213,8 @@ def test_optional_analytics_and_advertising_are_consent_gated():
 def test_banner_ads_are_opt_in_public_only_and_respect_ad_free_rights():
     i18n = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
     display = (FRONTEND / "display-ads.js").read_text(encoding="utf-8")
+    cookies = (FRONTEND / "cookies.html").read_text(encoding="utf-8")
+    admin = (FRONTEND / "admin.js").read_text(encoding="utf-8")
     blueprint = (FRONTEND.parent / "render.yaml").read_text(encoding="utf-8")
 
     assert 'displayAdsScript.src = "/display-ads.js?v=5"' in i18n
@@ -1232,6 +1234,65 @@ def test_banner_ads_are_opt_in_public_only_and_respect_ad_free_rights():
     assert 'value: "false"' in blueprint.split("LECTURESIFT_DISPLAY_ADS_ENABLED", 1)[1][:80]
     assert (FRONTEND / "display-ads.css").is_file()
     assert (FRONTEND.parent / "SEO_AND_ADS_READINESS.md").is_file()
+
+    for key in (
+        "cookies.adPolicy",
+        "privacy.adsDisclosure",
+        "privacy.bannerDisclosure",
+        "terms.rewardPolicy",
+    ):
+        match = re.search(rf'"{re.escape(key)}":(\[[^\n]+\])', i18n)
+        assert match, key
+        localized = json.loads(match.group(1))
+        assert len(localized) == 13
+        assert all(
+            all(plan in text for plan in ("Free", "Lite", "Plus", "Pro", "Max", "Business"))
+            for text in localized
+        ), key
+
+    stale_claims = (
+        "ücretli planlar reklamsızdır",
+        "paid plans are ad-free",
+        "ücretli planlarda reklam gösterilmez",
+        "paid plans show no ads",
+    )
+    assert all(claim not in i18n.casefold() for claim in stale_claims)
+    assert "For a rewarded ad, Google Publisher Tag loads only" in i18n
+    assert "The rewarded-ad provider loads only" in i18n
+    assert "Sürüm 2.3" in cookies and "Business" in cookies
+    assert "Ücretli planlar her durumda reklamsız" not in admin
+    assert "Free/Lite seçili sayfalar" in admin
+
+
+def test_adsense_and_measurement_deployment_settings_are_staged_safely():
+    blueprint = (FRONTEND.parent / "render.yaml").read_text(encoding="utf-8")
+    example = (FRONTEND.parent / "deploy" / "env.example").read_text(encoding="utf-8")
+
+    for key in (
+        "LECTURESIFT_DISPLAY_ADS_ENABLED",
+        "LECTURESIFT_ANALYTICS_ENABLED",
+    ):
+        marker = f"- key: {key}\n"
+        assert blueprint.count(marker) == 1
+        assert 'value: "false"' in blueprint.split(marker, 1)[1][:80]
+        assert f"{key}=false" in example
+
+    for key in (
+        "LECTURESIFT_ADSENSE_ENABLED",
+        "LECTURESIFT_ADSENSE_CMP_READY",
+        "LECTURESIFT_GA_MEASUREMENT_ID",
+        "LECTURESIFT_GOOGLE_ADS_ID",
+        "LECTURESIFT_GOOGLE_ADS_SIGNUP_LABEL",
+        "LECTURESIFT_GOOGLE_ADS_PURCHASE_LABEL",
+    ):
+        marker = f"- key: {key}\n"
+        assert blueprint.count(marker) == 1
+        assert "sync: false" in blueprint.split(marker, 1)[1][:80]
+        assert f"{key}=" in example
+
+    assert "LECTURESIFT_ADSENSE_ENABLED=false" in example
+    assert "LECTURESIFT_ADSENSE_CMP_READY=false" in example
+    assert "LECTURESIFT_ADSENSE_PUBLISHER_ID=ca-pub-7608481350058806" in example
 
 
 def test_free_results_show_a_localized_download_paywall():

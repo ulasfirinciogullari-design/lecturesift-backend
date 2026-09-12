@@ -550,7 +550,7 @@ function adminReadinessChecks(billing, runtime) {
     {label:"Veritabanı kurtarma", ready:Boolean(runtime?.recovery?.database_managed_backup_confirmed), severity:"planned", detail:"Yönetilen yedek doğrulaması", action:"Yedek saklama ve geri alma adımlarını belgele"},
     {label:"Dosya saklama kuralı", ready:Boolean(runtime?.recovery?.object_retention_confirmed), severity:"planned", detail:"Özel depodaki çıktıların yaşam döngüsü", action:"Özel depo açıldıktan sonra saklama kuralını doğrula"},
     {label:"Geri yükleme tatbikatı", ready:Boolean(runtime?.recovery?.restore_drill_confirmed), severity:"planned", detail:"Gerçek kurtarma testi ve kayıt tarihi", action:"Altyapı tamamlanınca kontrollü test yap"},
-    {label:"Ücretsiz planda banner reklam", ready:Boolean(runtime?.display_ads_configured), severity:"optional", detail:"Ücretli planlar her durumda reklamsız", action:"AdSense yayıncı kimliğini veya Ad Manager birimini kontrol et"},
+    {label:"Planlara göre herkese açık sayfa reklamları", ready:Boolean(runtime?.display_ads_configured), severity:"optional", detail:"Free/Lite seçili sayfalar · Plus yalnız ana sayfa · Pro/Max/Business ve reklamsız haklar kapalı", action:"AdSense onayı, sertifikalı CMP ve yayıncı ayarlarını kontrol et"},
     {label:"GA4 ölçümü", ready:Boolean(runtime?.analytics_configured), severity:"recommended", detail:"İzin veren ziyaretçiler için toplu site ölçümü", action:"GA4 ölçüm kimliğini Render’da doğrula"},
     {label:"Google Ads dönüşümleri", ready:Boolean(runtime?.google_ads_conversion_configured), severity:"optional", detail:"Kayıt ve doğrulanmış satın alma dönüşümleri", action:"Google Ads hesabı ve dönüşüm etiketleri hazır olunca Render’a ekle"},
   ];

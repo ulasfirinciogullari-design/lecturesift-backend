@@ -2,16 +2,19 @@
 
 ## Current check (12 September 2026)
 
-- GitHub `main` and both Render services are on merge `a24c161d`, but Netlify production is still serving `83fcdcd`. Production deploy `6aa1beb80a99dc0008a30257` for `a24c161d` failed before publication even though the identical source tree produced a successful deploy preview and GitHub CI passed. The public Netlify API does not expose the build error without authenticated log access. The next main-branch release must be treated as a deployment retry and verified by commit-specific public asset hashes and the live CSP header before PR80 is called fully live.
-- Netlify reported no platform incident for 9 September. That does not identify a project-level failure; inspect the authenticated deploy log if the next production attempt also fails.
+- Merge `288bc838` (PR #86) was verified on GitHub `main`, both Render services and Netlify production. This records that release only; a later source change, passing CI or healthy endpoint is not evidence that its corresponding revision has reached every production service.
 
 - The current task cannot read the owner's signed-in AdSense tab. Its URL is visible in ambient UI, but the available tools include no browser read/control capability. The previous panel observations below are historical, not today's approval status. Re-enabling Browser has not exposed the missing tools; do not repeatedly request the same action or copy browser cookies.
-- AdSense and Google Ads conversion identifiers are not active in the inspected application configuration. The claimed Google Ads promotional balance has not been verified; advertising spend and AdSense publisher income are separate products.
+- Live GA4 measurement is enabled with `G-4L2CBDSZ48`, while advertising signals remain disabled. Google Ads conversion ID and signup/purchase labels are absent, so the application cannot currently report those conversions. Event arrival in Google Analytics has not been verified in Realtime.
+- AdSense/display-ad activation flags are off in production, `/ads/config` reports no active provider or Auto ads, and the production HTML does not load the AdSense script. The public [`ads.txt`](https://lecturesift.com/ads.txt) is reachable and contains exactly `google.com, pub-7608481350058806, DIRECT, f08c47fec0942fa0`; this authorizes the seller record but does not prove site approval, CMP readiness or ad serving.
 - The application now distinguishes new Lite public-page advertising, new Plus home-page-only advertising and ad-free entitlements. Earlier paid-plan snapshots keep their original advertising terms; Pro, Max, legacy ad-free plans and permanent ad-free purchases/overrides suppress publisher inventory. The workspace and private pages remain outside publisher placements.
+- The cookie, privacy, terms and admin-readiness copy uses that same plan model in all 13 languages; it no longer describes every paid plan as ad-free.
 - Measurement recognizes clean and legacy public URLs in all 13 languages, including the three course guides. Account and registration conversion events do not include their query or fragment in the configured page URL. Consent and provider configuration are still required. Synthetic CI checks do not prove events arrived in Google.
 - The host policy includes the documented core Google Ads script, image, connection and frame endpoints and the Turkish regional beacon. Before a campaign launch, check the actual target-country beacon domains in Tag Assistant; Google country domains must be named individually in CSP. No campaign is launched by this change. [Google tag CSP guidance](https://developers.google.com/tag-platform/security/guides/csp)
-- **AdSense activation has a separate CSP prerequisite.** Google supports a strict CSP with a fresh per-response nonce; the site's current static host allowlist is not that implementation. Do not enable AdSense merely by extending the host list, use a fixed nonce, or claim the current static policy is fully AdSense compatible. A response-level nonce integration and a remote consent/ad integration check are required before activation. [AdSense CSP integration](https://support.google.com/adsense/answer/16283098?hl=en-GB)
-- The custom site privacy dialog is not evidence of a Google-certified European consent message. Reverify the published provider message and the real consent flow before setting `ADSENSE_CMP_READY`.
+- **AdSense activation has a separate CSP prerequisite.** Deploy previews stage a fresh per-response nonce in report-only mode for the 52 public ad-eligible localized routes. This change also stages the same report-only transformation on production `/about` only; it does not replace the enforced static CSP or enable ads. The verified base release `288bc838` has no nonce/report-only header. The protected preview's actual HTML/header nonce pairing and Google integration have not been inspected through an authenticated browser, so both preview staging and the one-route production canary require response, browser and violation-log evidence before expansion. Do not enable AdSense merely by extending the host list, using a fixed nonce, or treating a successful build as an integration check. [AdSense CSP integration](https://support.google.com/adsense/answer/16283098?hl=en-GB), [Netlify nonce plugin](https://github.com/netlify/plugin-csp-nonce)
+- The custom site privacy dialog is not evidence of a Google-certified consent platform. Before setting `LECTURESIFT_ADSENSE_CMP_READY=true`, verify the live Google-certified CMP message and its current IAB TCF behavior for the EEA, United Kingdom and Switzerland. Site approval, CMP publication and consent-string/event behavior are separate checks.
+- Rewarded-minute claims are not yet provider-attested on the server. The browser waits for the Google reward event, but the claim endpoint validates only the application-issued session token, user, expiry and limits; a direct API caller could therefore claim without proving ad completion. Keep rewarded inventory disabled until the server verifies provider completion, or until a deliberately accepted and documented limited-fraud model replaces that requirement. Rate limits and later reversals do not prove that an ad was watched.
+- The verified base release `288bc838` sends `Referrer-Policy: no-referrer`, which prevents the cross-origin referrer Google requires to serve its publisher messages. This change uses `strict-origin-when-cross-origin`: Google lists it as supported, and cross-origin requests receive only the origin rather than the page path or query. This header correction is necessary but does not itself prove that a CMP message works. [Google publisher-message tagging](https://support.google.com/admanager/answer/10114216?hl=en)
 
 ### Read-only account connection alternative
 
@@ -19,11 +22,19 @@ AdSense Management API v2 can read site approval state, Auto ads state, alerts, 
 
 Google Ads API separately requires OAuth and an approved developer token from the manager account's API Center. Read-only account access would allow checking existing campaigns and reporting; it does not grant authorization to start spending. [Google Ads authentication](https://developers.google.com/google-ads/api/rest/auth)
 
-## Historical panel check (8 September 2026; not reverified on 9 September)
+### Connected-mailbox evidence (12 September 2026)
+
+- The available Gmail connection is for `ulasweb3@gmail.com`, not the owner-mentioned `ulasfirinciogullari@gmail.com`. These findings therefore cover only the connected mailbox and do not establish what the other mailbox received.
+- Google Ads mail says the existing account is paused until advertiser-verification tasks are completed. It also records rejection of two “Youtube Promotion” campaigns under the Financial Services Verification policy. No campaign should be relaunched until the account owner completes Google's requested identity/business steps and resolves the policy classification in Google Ads.
+- Google states that a paused account can be unpaused only after advertiser verification. Its Türkiye policy also provides a verification route for non-financial advertisers whose campaigns reach audiences associated with financial-service searches; LectureSift should describe itself there as an education software service and must not claim a financial licence. [Advertiser-verification timing](https://support.google.com/adspolicy/answer/15588490?hl=en), [Türkiye financial-services verification](https://support.google.com/adspolicy/answer/15332527?co=GENIE.CountryCode%3DTR&hl=en)
+- LectureSift's Turkish use of “kredi” for application usage credits may have contributed to an automated financial-services classification. This is an inference from the site wording and rejection category, not a reason supplied by Google.
+- No AdSense message or message confirming an `8,000 TL` promotional balance was found in the connected mailbox. The promotion remains unverified; advertising spend and AdSense publisher income are separate products.
+
+## Historical panel check (8 September 2026; not reverified since)
 
 - AdSense site details for `lecturesift.com` still show **Preparing** ("Hazırlanıyor"), with site ownership verified and the review request received. This is not an approval to serve ads or evidence of revenue.
-- The sites table still reports `ads.txt` not found with a **28 August** crawl date. That is a stale provider observation; it must be distinguished from checking the current public file. Do not overwrite the publisher ID or resubmit identity details merely to clear this label.
-- In the proposed release, both `ADSENSE_ENABLED` and `ADSENSE_CMP_READY` must be true, alongside consent, eligible public-page placement and an ad-eligible account. Keep inventory disabled until approval and a current consent-flow check are confirmed.
+- The sites table still reports `ads.txt` not found with a **28 August** crawl date. That is a stale provider observation: the current public file was rechecked on 12 September and returns the exact publisher line recorded above. Do not overwrite the publisher ID or resubmit identity details merely to clear this label.
+- In this release, both `LECTURESIFT_ADSENSE_ENABLED` and `LECTURESIFT_ADSENSE_CMP_READY` must be true, alongside consent, eligible public-page placement and an ad-eligible account. Keep inventory disabled until approval and a current consent-flow check are confirmed.
 - Rewarded-minute inventory remains disabled without real provider-verified completion. Referral rewards are a separate application feature, not a substitute for ad verification.
 - No new campaign, budget, payment-profile submission, ad unit or provider setting was created during this check.
 
@@ -35,7 +46,7 @@ Google Ads API separately requires OAuth and an approved developer token from th
 - The prior report recorded AdSense connectivity, `ads.txt` authorisation and Auto ads configuration. The current Preparing state above supersedes any inference that ads are already approved or serving.
 - One European-regulations consent message is active in AdSense Privacy & Messaging.
 - The current legal payment address has been submitted in Google Payments and is under review. Do not submit the older verified address to AdSense while this review is pending.
-- No Google Ads account exists under the connected Google account yet, so campaign and conversion identifiers are not available. No ad spend is activated by this repository.
+- A later connected-mailbox check confirms an existing Google Ads account, currently paused for advertiser verification, and two rejected campaigns. Google Ads conversion identifiers are still absent from the application, and no ad spend is activated by this repository.
 - The Google Ad Manager signup currently reports `uncheckedAdsenseAccount`. Banner and rewarded inventory must remain disabled until Google finishes the AdSense account/application review.
 - The live worker, private object storage, managed database backup, object-retention confirmation, and restore drill all report ready.
 
@@ -53,16 +64,64 @@ Google Ads API separately requires OAuth and an approved developer token from th
 - Google Analytics 4 loads only after analytics consent, limits automatic page views to public pages, and disables advertising signals. Token-bearing verification and password-reset pages are excluded.
 - Google Ads signup and verified-purchase conversion events are prepared separately from analytics and run only after advertising consent. Duplicate purchase conversions are suppressed per browser session.
 - AdSense loading is conditional on explicit configuration and advertising consent, limited to selected public pages, and hidden for ad-free entitlements. Prior vignette settings have not been reverified in this check.
-- Rewarded ads are voluntary, rate-limited, and disabled until a real provider unit is configured.
+- Rewarded ads are voluntary, rate-limited, and disabled until a real provider unit, certified-CMP readiness and server-verifiable provider completion are all configured.
+
+## Deployment configuration is staged, not activated
+
+The Render blueprint now declares every application setting needed to configure
+AdSense, GA4 and Google Ads conversions without another source-code change. The
+two AdSense attestations and all measurement IDs/labels are declared as
+operator-supplied values. Their application defaults remain `false` or empty.
+Production currently leaves both AdSense attestations off, so it does not load
+Google publisher ads, and its Google Ads ID/labels are absent, so it does not
+report those conversions. The blueprint's GA4 default remains off, but the live
+operator configuration overrides it: GA4 is enabled with `G-4L2CBDSZ48` and
+advertising signals disabled.
+
+- AdSense Auto ads requires a valid `LECTURESIFT_ADSENSE_PUBLISHER_ID`, plus
+  both `LECTURESIFT_ADSENSE_ENABLED=true` and
+  `LECTURESIFT_ADSENSE_CMP_READY=true`. The first Boolean records a current
+  provider-side site approval check. The second records a live certified-CMP
+  and TCF integration check. Neither value is inferred from the public
+  publisher ID, `ads.txt`, an old panel observation or the site's own consent
+  dialog.
+- Keep `LECTURESIFT_DISPLAY_ADS_ENABLED=false` when using AdSense Auto ads. A
+  valid enabled GPT banner path takes precedence over Auto ads and is a separate
+  inventory mode. This change requires
+  `LECTURESIFT_ADSENSE_CMP_READY=true` for either Google Publisher Tag mode and
+  for rewarded GPT inventory; the attestation no longer protects only AdSense.
+- The production nonce canary is limited to `/about`, remains report-only and
+  leaves all publisher-ad enable flags false. After deployment, verify that two
+  responses carry different nonces, each HTML response and its report-only
+  policy use the same nonce, the existing enforced CSP remains present, and the
+  Netlify violation endpoint receives no unexplained application-script errors.
+  Do not broaden the route list or switch to enforcement from source checks
+  alone.
+- GA4 requires `LECTURESIFT_ANALYTICS_ENABLED=true` and a valid
+  `LECTURESIFT_GA_MEASUREMENT_ID`. The browser still waits for analytics
+  consent, and advertising signals remain disabled.
+- Google Ads conversion delivery requires a valid `LECTURESIFT_GOOGLE_ADS_ID`
+  and the matching signup or purchase label. The browser still waits for
+  advertising consent. Configuring an identifier does not create a campaign,
+  authorize spend or prove that Google received an event.
+
+Before changing either AdSense attestation to `true`, record the current site
+status from the owning AdSense account, verify the published certified CMP and
+TCF flow in the target regions, and complete the nonce-based CSP integration
+check on a protected preview and the production `/about` report-only canary.
+After any activation, verify the public config,
+eligible and ineligible routes, ad-free entitlements, consent grant/revocation,
+and actual provider requests. Roll back by restoring the relevant enable flag
+to `false`; identifiers may remain staged privately.
 
 ## External setup still required
 
 1. Monitor Search Console indexing, Core Web Vitals, manual actions, and security issues while the newly submitted data is processed.
-2. Keep the GA4 measurement ID configured in Render and verify the first consented page view in Realtime after deployment.
+2. Keep the live GA4 measurement ID configured in Render and verify a consented page view in Realtime; live configuration proves the tag is enabled, not that Google received an event.
 3. Wait for the existing site review to move from preparing to ready. Check the payment profile for any explicit outstanding action; do not repeat the submission already completed by the user without a new provider request.
 4. Reverify the European-regulations consent message and test it before enabling ad inventory; do not rely only on the prior report.
-5. Inspect the owner's existing Google Ads account before considering any new account or conversion actions. Use the verified public `AW-...` ID and signup/purchase conversion labels in the matching Render variables. Verify them with Tag Assistant before spending; do not assume a promotional credit can be spent without an additional payment.
-6. Create Google Ad Manager/AdSense inventory, obtain the real banner and rewarded unit paths, and configure them in Render. Never publish placeholder unit paths.
+5. Complete the existing Google Ads account's advertiser-verification tasks and resolve the Financial Services Verification rejection before relaunching either campaign. If Google continues to require the Türkiye financial-services form, use its non-financial-advertiser route and describe the actual education-software business accurately. Then use the verified public `AW-...` ID and signup/purchase conversion labels in the matching Render variables and verify them with Tag Assistant before spending. Do not assume an unverified promotional balance is available or can be spent without an additional payment.
+6. Create Google Ad Manager/AdSense inventory, obtain the real banner and rewarded unit paths, add server-verifiable rewarded completion, and configure them in Render. Never publish placeholder unit paths or enable rewarded claims based only on a browser event.
 7. Create Google Ads campaigns only after a budget, target countries, conversion definitions, and landing pages are approved. Advertising spend is never activated by a code deployment.
 8. Publish useful course-specific landing pages and original guides, earn reputable links, and review search performance monthly. No implementation can guarantee a first-place Google ranking.
 
@@ -71,5 +130,7 @@ Google Ads API separately requires OAuth and an approved developer token from th
 - Validate structured data with Google Rich Results Test.
 - Confirm each localized page has the intended title, description, canonical, and language alternate.
 - Confirm advertising requests are absent before advertising consent and for all ad-free entitlements; Plus is limited to the home page and the workspace remains ad-free.
+- Confirm the production `/about` canary has a per-response nonce and report-only policy while `/`, localized `/about` routes and private pages remain outside the production edge-function scope.
 - Confirm an empty ad response leaves no blank banner.
+- Confirm a direct rewarded-claim request cannot earn minutes without provider-attested completion.
 - Confirm legal/operator identity and privacy disclosures are complete before payments or ads are enabled.

@@ -295,9 +295,10 @@ REWARDED_AD_DAILY_LIMIT_MINUTES = max(
 )
 DISPLAY_ADS_ENABLED = os.getenv("LECTURESIFT_DISPLAY_ADS_ENABLED", "false").lower() == "true"
 DISPLAY_AD_UNIT_PATH = os.getenv("LECTURESIFT_DISPLAY_AD_UNIT_PATH", "").strip()
-# Deployment operators may activate AdSense only after Google approves the site
-# and the site's required consent/CMP setup has been verified. These manual
-# confirmations are not inferred from a publisher ID or checked against Google.
+# Deployment operators may activate Google publisher inventory only after the
+# site's required consent/CMP setup has been verified. AdSense also requires
+# Google site approval. These manual confirmations are not inferred from a
+# publisher ID or checked against Google.
 ADSENSE_ENABLED = os.getenv("LECTURESIFT_ADSENSE_ENABLED", "false").lower() == "true"
 ADSENSE_CMP_READY = os.getenv("LECTURESIFT_ADSENSE_CMP_READY", "false").lower() == "true"
 ADSENSE_PUBLISHER_ID = os.getenv(

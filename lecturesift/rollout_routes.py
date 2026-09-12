@@ -241,7 +241,11 @@ def _public_support_conversation(conversation: dict) -> dict:
 
 
 def _display_ads_provider() -> str | None:
-    if config.DISPLAY_ADS_ENABLED and config.DISPLAY_AD_UNIT_PATH.startswith("/"):
+    if (
+        config.ADSENSE_CMP_READY
+        and config.DISPLAY_ADS_ENABLED
+        and config.DISPLAY_AD_UNIT_PATH.startswith("/")
+    ):
         return "google_gpt"
     if (
         config.ADSENSE_ENABLED
