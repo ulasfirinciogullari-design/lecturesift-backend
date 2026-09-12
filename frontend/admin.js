@@ -87,9 +87,9 @@ function adminMicros(amountMicros, currency) {
   const currencyCode = String(currency || "").toUpperCase();
   if (!Number.isSafeInteger(numericAmount) || numericAmount < 0 || !/^[A-Z]{3}$/.test(currencyCode)) return "—";
   try {
-    return new Intl.NumberFormat(adminLocale(), {style:"currency", currency:currencyCode}).format(numericAmount / 1000000);
+    return new Intl.NumberFormat(adminLocale(), {style:"currency", currency:currencyCode, maximumFractionDigits:6}).format(numericAmount / 1000000);
   } catch (_) {
-    return `${(numericAmount / 1000000).toLocaleString(adminLocale())} ${currencyCode}`;
+    return `${(numericAmount / 1000000).toLocaleString(adminLocale(), {maximumFractionDigits:6})} ${currencyCode}`;
   }
 }
 

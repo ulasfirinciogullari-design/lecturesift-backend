@@ -88,7 +88,7 @@ test('admin growth shows read-only advertising summaries and escapes provider va
         checked_at:'2026-09-12T18:26:00Z', cached:false,
         account:{status:'ENABLED', currency_code:'TRY', time_zone:unsafeTimeZone},
         periods:{
-          today:{cost_micros:125000000, impressions:1400, clicks:75, conversions:4.5},
+          today:{cost_micros:4999, impressions:1400, clicks:75, conversions:4.5},
           last_7_days:{cost_micros:900000000, impressions:11000, clicks:530, conversions:24},
           this_month:{cost_micros:1700000000, impressions:22000, clicks:910, conversions:41},
         },
@@ -123,6 +123,7 @@ test('admin growth shows read-only advertising summaries and escapes provider va
   await expect(growth).toContainText('Google Ads hesabıEtkin');
   await expect(growth).toContainText(unsafeTimeZone);
   await expect(growth).toContainText('Son 7 gün');
+  await expect(growth).toContainText(/₺0,004999/);
   await expect(growth).toContainText('Gösterim: 11.000');
   await expect(growth).toContainText('Dönüşüm: 24');
   await expect(growth).toContainText('Kampanya: 5');
