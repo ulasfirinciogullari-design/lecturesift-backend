@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from . import config
+from .adsense_management import adsense_management_readiness
 from .billing_service import BillingAuthenticationError, BillingConfigurationError, BillingError, authenticate_session
 from .costs import cost_overview, delete_actual_cost, save_actual_cost
 from .jobs import JOBS
@@ -441,18 +442,26 @@ def ads_config() -> dict:
 
 @router.get("/billing/admin/advertising-readiness")
 def advertising_readiness(admin: dict = Depends(_admin)) -> dict:
-    return {"ok": True, "adsense": {
-        "enabled": _display_ads_provider() == "google_adsense_auto",
-        "publisher_configured": bool(re.fullmatch(r"ca-pub-[0-9]+", config.ADSENSE_PUBLISHER_ID)),
-        "site_approval_confirmed": config.ADSENSE_ENABLED,
-        "consent_setup_confirmed": config.ADSENSE_CMP_READY,
-        "google_account_connected": False,
-    }, "google_ads": {
-        "id_configured": bool(re.fullmatch(r"AW-[0-9]+", config.GOOGLE_ADS_ID)),
-        "signup_configured": bool(config.GOOGLE_ADS_SIGNUP_LABEL),
-        "purchase_configured": bool(config.GOOGLE_ADS_PURCHASE_LABEL),
-        "google_account_connected": False,
-    }}
+    management_api = adsense_management_readiness()
+    return {
+        "ok": True,
+        "adsense": {
+            "enabled": _display_ads_provider() == "google_adsense_auto",
+            "publisher_configured": bool(
+                re.fullmatch(r"ca-pub-[0-9]+", config.ADSENSE_PUBLISHER_ID)
+            ),
+            "site_approval_confirmed": config.ADSENSE_ENABLED,
+            "consent_setup_confirmed": config.ADSENSE_CMP_READY,
+            "google_account_connected": management_api["connected"],
+            "management_api": management_api,
+        },
+        "google_ads": {
+            "id_configured": bool(re.fullmatch(r"AW-[0-9]+", config.GOOGLE_ADS_ID)),
+            "signup_configured": bool(config.GOOGLE_ADS_SIGNUP_LABEL),
+            "purchase_configured": bool(config.GOOGLE_ADS_PURCHASE_LABEL),
+            "google_account_connected": False,
+        },
+    }
 
 
 @router.get("/analytics/config")
