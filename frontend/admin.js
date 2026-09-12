@@ -81,6 +81,26 @@ function adminMoney(amountMinor, currency) {
   }
 }
 
+function adminMicros(amountMicros, currency) {
+  if (amountMicros === null || amountMicros === undefined || amountMicros === "" || typeof amountMicros === "boolean") return "—";
+  const numericAmount = Number(amountMicros);
+  const currencyCode = String(currency || "").toUpperCase();
+  if (!Number.isSafeInteger(numericAmount) || numericAmount < 0 || !/^[A-Z]{3}$/.test(currencyCode)) return "—";
+  try {
+    return new Intl.NumberFormat(adminLocale(), {style:"currency", currency:currencyCode}).format(numericAmount / 1000000);
+  } catch (_) {
+    return `${(numericAmount / 1000000).toLocaleString(adminLocale())} ${currencyCode}`;
+  }
+}
+
+function adminMetric(value) {
+  if (value === null || value === undefined || value === "" || typeof value === "boolean") return "—";
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) && numericValue >= 0 && numericValue <= Number.MAX_SAFE_INTEGER
+    ? numericValue.toLocaleString(adminLocale(), {maximumFractionDigits:2})
+    : "—";
+}
+
 function adminUsd(value, maximumFractionDigits = 4) {
   return new Intl.NumberFormat(adminLocale(), {style:"currency", currency:"USD", minimumFractionDigits:2, maximumFractionDigits}).format(Number(value || 0));
 }
@@ -784,6 +804,96 @@ function adminAdSenseErrorLabel(value) {
   return labels[String(value || "")] || adminT("admin.adsenseProviderUnavailable", "Google sağlayıcısı şu anda yanıt vermiyor.");
 }
 
+function adminGoogleAdsAccountStatusLabel(value) {
+  const labels = {
+    ENABLED:adminT("admin.googleAdsStatusEnabled", "Etkin"),
+    SUSPENDED:adminT("admin.googleAdsStatusSuspended", "Askıya alınmış"),
+    CANCELED:adminT("admin.googleAdsStatusCanceled", "İptal edilmiş"),
+    CLOSED:adminT("admin.googleAdsStatusCanceled", "İptal edilmiş"),
+  };
+  return labels[String(value || "").toUpperCase()] || adminT("admin.adsenseStateUnknown", "Bilinmiyor");
+}
+
+function adminGoogleAdsErrorLabel(value) {
+  const labels = {
+    configuration_invalid:adminT("admin.adsenseConfigurationInvalid", "Bağlantı ayarları geçersiz."),
+    authentication_failed:adminT("admin.adsenseAuthorizationExpired", "Google bağlantısının yetkisi yenilenmeli."),
+    permission_denied:adminT("admin.adsensePermissionDenied", "Bağlı Google hesabının erişim izni yok."),
+    scope_mismatch:adminT("admin.googleAdsScopeMismatch", "Google Ads yetkilendirme kapsamı doğrulanamadı. Bağlantı ayarlarını yenile."),
+    rate_limited:adminT("admin.adsenseProviderUnavailable", "Google sağlayıcısı şu anda yanıt vermiyor."),
+    provider_unavailable:adminT("admin.adsenseProviderUnavailable", "Google sağlayıcısı şu anda yanıt vermiyor."),
+    invalid_response:adminT("admin.adsenseInvalidResponse", "Google yanıtı doğrulanamadı."),
+    account_not_found:adminT("admin.googleAdsCustomerNotFound", "Bağlı Google hesabında reklam hesabı bulunamadı."),
+  };
+  return labels[String(value || "")] || adminT("admin.adsenseProviderUnavailable", "Google sağlayıcısı şu anda yanıt vermiyor.");
+}
+
+function adminGoogleAdsPeriodDetail(label, period, currency) {
+  if (!period || typeof period !== "object") return `${label}: ${adminT("admin.adsenseUnavailable", "Geçici olarak okunamadı")}`;
+  return `${label}: ${adminGoogleAdsMoneyLabel(period.cost_micros, currency)} · ${adminT("admin.googleAdsImpressions", "Gösterim")}: ${adminMetric(period.impressions)} · ${adminT("admin.googleAdsClicks", "Tıklama")}: ${adminMetric(period.clicks)} · ${adminT("admin.googleAdsConversions", "Dönüşüm")}: ${adminMetric(period.conversions)}`;
+}
+
+function adminGoogleAdsMoneyLabel(amountMicros, currency) {
+  const formatted = adminMicros(amountMicros, currency);
+  return formatted === "—" ? adminT("admin.adsenseUnavailable", "Geçici olarak okunamadı") : formatted;
+}
+
+function adminGoogleAdsIncentiveCard(incentive) {
+  if (!incentive || typeof incentive !== "object") return null;
+  const availability = String(incentive.status || "").toLowerCase();
+  if (availability === "not_configured") return null;
+  const count = Number(incentive.count);
+  const countKnown = incentive.count !== null && incentive.count !== undefined && incentive.count !== "" && Number.isSafeInteger(count) && count >= 0;
+  const availabilityLabels = {
+    available:countKnown ? `${adminT("admin.googleAdsIncentiveShort", "Promosyon")}: ${count.toLocaleString(adminLocale())}` : adminT("admin.googleAdsIncentiveAvailable", "Veri kullanılabilir"),
+    empty:adminT("admin.googleAdsIncentiveEmpty", "Kayıt bulunamadı"),
+    unavailable:adminT("admin.googleAdsIncentiveUnavailable", "Doğrulanamadı"),
+    unsupported:adminT("admin.googleAdsIncentiveUnsupported", "API tarafından sunulmuyor"),
+  };
+  const status = availabilityLabels[availability] || adminT("admin.googleAdsIncentiveUnavailable", "Doğrulanamadı");
+  if (availability !== "available") {
+    const allowlistRequired = String(incentive.error_code || "").toLowerCase() === "not_allowlisted_or_unsupported";
+    const detail = allowlistRequired
+      ? adminT("admin.googleAdsIncentiveAllowlistedDetail", "Bu promosyon raporu hesap için desteklenmiyor veya erişim listesiyle sınırlı. Tutar ve koşulları Google Ads panelinden doğrula.")
+      : availability === "unsupported"
+        ? adminT("admin.googleAdsIncentiveUnsupportedDetail", "Google Ads API promosyon koşulunu veya bakiyesini bu hesap için paylaşmıyor. Panelden doğrula.")
+        : availability === "empty"
+          ? adminT("admin.googleAdsIncentiveEmptyDetail", "API bu hesap için etkin veya geçmiş bir promosyon kaydı döndürmedi.")
+          : adminT("admin.googleAdsIncentiveUnavailableDetail", "Promosyon verisi geçici olarak alınamadı. Tutar veya bakiye doğrulanmış sayılmaz.");
+    return {title:adminT("admin.googleAdsIncentive", "Google Ads promosyonu"), ready:false, status, detail, link:"https://ads.google.com/", label:adminT("admin.googleAdsOpen", "Google Ads panelini aç")};
+  }
+  const totals = Array.isArray(incentive.currency_totals) ? incentive.currency_totals : [];
+  const parts = totals.map(amounts => {
+    const incentiveCurrency = String(amounts?.currency_code || "").toUpperCase();
+    return `${incentiveCurrency || "—"} · ${adminT("admin.googleAdsRequiredSpend", "Gerekli harcama")}: ${adminGoogleAdsMoneyLabel(amounts?.required_min_spend_micros, incentiveCurrency)} · ${adminT("admin.googleAdsSpendProgress", "Harcama ilerlemesi")}: ${adminGoogleAdsMoneyLabel(amounts?.current_spend_towards_fulfillment_micros, incentiveCurrency)} · ${adminT("admin.googleAdsCreditAmount", "Promosyon tutarı")}: ${adminGoogleAdsMoneyLabel(amounts?.reward_amount_micros, incentiveCurrency)} · ${adminT("admin.googleAdsEarnedCredit", "Kazanılmış tutar")}: ${adminGoogleAdsMoneyLabel(amounts?.granted_amount_micros, incentiveCurrency)} · ${adminT("admin.googleAdsRemainingCredit", "Kalan promosyon")}: ${adminGoogleAdsMoneyLabel(amounts?.reward_balance_remaining_micros, incentiveCurrency)}`;
+  });
+  const stateLabels = {
+    redeemed:adminT("admin.googleAdsIncentiveRedeemed", "Kullanıldı"),
+    fulfilled:adminT("admin.googleAdsIncentiveFulfilled", "Koşul tamamlandı"),
+    reward_granted:adminT("admin.googleAdsIncentiveGranted", "Ödül tanımlandı"),
+    reward_exhausted:adminT("admin.googleAdsIncentiveExhausted", "Ödül tükendi"),
+    reward_expired:adminT("admin.googleAdsIncentiveExpired", "Ödülün süresi doldu"),
+    expired:adminT("admin.googleAdsIncentiveExpired", "Ödülün süresi doldu"),
+    invalidated:adminT("admin.googleAdsIncentiveInvalidated", "Geçersiz kılındı"),
+    other:adminT("admin.googleAdsIncentiveOther", "Diğer"),
+  };
+  const stateCounts = incentive.states && typeof incentive.states === "object"
+    ? Object.entries(stateLabels)
+        .map(([key, label]) => [label, Number(incentive.states[key])])
+        .filter(([, value]) => Number.isSafeInteger(value) && value > 0)
+        .map(([label, value]) => `${label}: ${value.toLocaleString(adminLocale())}`)
+    : [];
+  if (stateCounts.length) parts.unshift(`${adminT("admin.googleAdsIncentiveStates", "Durumlar")}: ${stateCounts.join(", ")}`);
+  return {
+    title:adminT("admin.googleAdsIncentive", "Google Ads promosyonu"),
+    ready:true,
+    status,
+    detail:parts.join(" · ") || adminT("admin.googleAdsIncentiveUnavailableDetail", "Promosyon verisi geçici olarak alınamadı. Tutar veya bakiye doğrulanmış sayılmaz."),
+    link:"https://ads.google.com/",
+    label:adminT("admin.googleAdsOpen", "Google Ads panelini aç"),
+  };
+}
+
 function renderAdminGrowth() {
   const ads = adminState.ads || {};
   const analytics = adminState.analytics || {};
@@ -833,7 +943,53 @@ function renderAdminGrowth() {
   const policyDetail = policy
     ? `${adminT("admin.adsenseServingDisabled", "Yayın kapalı")}: ${Number(policy.ad_serving_disabled || 0).toLocaleString(adminLocale())} · ${adminT("admin.adsenseServingRestricted", "Yayın kısıtlı")}: ${Number(policy.ad_serving_restricted || 0).toLocaleString(adminLocale())} · ${adminT("admin.adsensePersonalizationRestricted", "Kişiselleştirme kısıtlı")}: ${Number(policy.ad_personalization_restricted || 0).toLocaleString(adminLocale())} · ${adminT("admin.adsenseWarned", "Uyarılan")}: ${Number(policy.warned || 0).toLocaleString(adminLocale())}`
     : adminT("admin.adsensePolicyUnavailable", "Politika bilgisi alınamadı.");
+  const googleAds = readiness?.google_ads || {};
+  const googleAdsManagement = googleAds.management_api;
+  const googleAdsConnectionStatus = googleAdsManagement?.status;
+  const googleAdsConnected = googleAdsConnectionStatus === "connected" && googleAdsManagement?.connected === true;
+  const googleAdsNotConfigured = googleAdsConnectionStatus === "not_configured";
+  const googleAdsConnectionLabel = googleAdsConnected
+    ? adminT("admin.adsenseConnected", "Bağlı")
+    : googleAdsNotConfigured
+      ? adminT("admin.adsenseNotConnected", "Bağlı değil")
+      : adminT("admin.adsenseUnavailable", "Geçici olarak okunamadı");
+  const googleAdsCheckedAt = googleAdsManagement?.checked_at
+    ? adminDate(googleAdsManagement.checked_at)
+    : adminT("admin.adsenseNeverChecked", "Henüz başarılı kontrol yok");
+  const googleAdsCacheNote = googleAdsManagement?.cached === true ? ` · ${adminT("admin.adsenseCached", "önbellek")}` : "";
+  const googleAdsConnectionDetail = googleAdsConnected
+    ? `${adminT("admin.adsenseLastCheck", "Son kontrol")}: ${googleAdsCheckedAt}${googleAdsCacheNote}`
+    : googleAdsNotConfigured
+      ? `${adminT("admin.googleAdsConnectHelp", "Salt okunur Google Ads bağlantısı henüz yapılandırılmadı.")} ${adminT("admin.adsenseLastCheck", "Son kontrol")}: ${googleAdsCheckedAt}`
+      : `${adminGoogleAdsErrorLabel(googleAdsManagement?.error_code)} ${adminT("admin.adsenseLastCheck", "Son kontrol")}: ${googleAdsCheckedAt}`;
+  const googleAdsAccount = googleAdsConnected && googleAdsManagement?.account && typeof googleAdsManagement.account === "object" ? googleAdsManagement.account : null;
+  const googleAdsCurrency = String(googleAdsAccount?.currency_code || "").toUpperCase();
+  const googleAdsAccountStatus = googleAdsAccount ? adminGoogleAdsAccountStatusLabel(googleAdsAccount.status || googleAdsAccount.state) : adminT("admin.adsenseUnavailable", "Geçici olarak okunamadı");
+  const googleAdsAccountDetail = googleAdsAccount
+    ? `${adminT("admin.googleAdsCurrency", "Para birimi")}: ${googleAdsCurrency || "—"} · ${adminT("admin.googleAdsTimeZone", "Saat dilimi")}: ${String(googleAdsAccount.time_zone || "—")}`
+    : adminT("admin.googleAdsAccountUnavailable", "Reklam hesabı bilgisi alınamadı.");
+  const googleAdsPeriods = googleAdsConnected && googleAdsManagement?.periods && typeof googleAdsManagement.periods === "object" ? googleAdsManagement.periods : {};
+  const googleAdsLast7Days = googleAdsPeriods.last_7_days;
+  const googleAdsPerformanceStatus = googleAdsLast7Days
+    ? `${adminT("admin.googleAdsLast7Days", "Son 7 gün")}: ${adminGoogleAdsMoneyLabel(googleAdsLast7Days.cost_micros, googleAdsCurrency)}`
+    : adminT("admin.adsenseUnavailable", "Geçici olarak okunamadı");
+  const googleAdsPerformanceDetail = googleAdsConnected
+    ? [
+        adminGoogleAdsPeriodDetail(adminT("admin.googleAdsToday", "Bugün"), googleAdsPeriods.today, googleAdsCurrency),
+        adminGoogleAdsPeriodDetail(adminT("admin.googleAdsLast7Days", "Son 7 gün"), googleAdsLast7Days, googleAdsCurrency),
+        adminGoogleAdsPeriodDetail(adminT("admin.googleAdsMonthToDate", "Ay başından beri"), googleAdsPeriods.this_month, googleAdsCurrency),
+      ].join(" · ")
+    : adminT("admin.googleAdsPerformanceUnavailable", "Brüt harcama ve performans verisi alınamadı.");
+  const googleAdsCampaigns = googleAdsConnected && googleAdsManagement?.campaigns;
+  const googleAdsCampaignTotal = adminMetric(googleAdsCampaigns?.total);
+  const googleAdsCampaignStatus = googleAdsCampaigns
+    ? `${adminT("admin.googleAdsCampaignShort", "Kampanya")}: ${googleAdsCampaignTotal}`
+    : adminT("admin.adsenseUnavailable", "Geçici olarak okunamadı");
+  const googleAdsCampaignDetail = googleAdsCampaigns
+    ? `${adminT("admin.googleAdsCampaignEnabled", "Etkin")}: ${adminMetric(googleAdsCampaigns.enabled)} · ${adminT("admin.googleAdsCampaignPaused", "Duraklatılmış")}: ${adminMetric(googleAdsCampaigns.paused)} · ${adminT("admin.googleAdsCampaignRemoved", "Kaldırılmış")}: ${adminMetric(googleAdsCampaigns.removed)} · ${adminT("admin.googleAdsCampaignOther", "Diğer")}: ${adminMetric(googleAdsCampaigns.other)}`
+    : adminT("admin.googleAdsCampaignsUnavailable", "Kampanya sayıları alınamadı.");
   const conversions = Boolean(analytics.google_ads?.enabled && analytics.google_ads?.signup_label && analytics.google_ads?.purchase_label);
+  const googleAdsIncentiveCard = adminGoogleAdsIncentiveCard(googleAdsManagement?.incentive || googleAds.incentive);
   const cards = [
     {title:adminT("admin.adsenseConnection", "AdSense bağlantısı"), ready:connected, status:connectionLabel, detail:connectionDetail, link:"https://adsense.google.com/", label:adminT("admin.adsenseOpen", "AdSense panelini aç")},
     {title:adminT("admin.adsenseAccountState", "AdSense hesap durumu"), ready:Boolean(account && pendingTasksKnown && String(account.state || "").toUpperCase() === "READY" && pendingTasks === 0), status:accountState, detail:accountDetail},
@@ -842,13 +998,18 @@ function renderAdminGrowth() {
     {title:adminT("admin.adsenseAlerts", "AdSense uyarıları"), ready:Boolean(alerts && alertTotal === 0), status:alerts ? `${alertTotal.toLocaleString(adminLocale())} ${adminT("admin.adsenseWarningShort", "uyarı")}` : adminT("admin.adsenseUnavailable", "Geçici olarak okunamadı"), detail:alertDetail},
     {title:adminT("admin.adsensePolicyIssues", "Politika sorunları"), ready:Boolean(policy && policyTotal === 0), status:policy ? `${policyTotal.toLocaleString(adminLocale())} ${adminT("admin.adsenseFinding", "bulgu")}` : adminT("admin.adsenseUnavailable", "Geçici olarak okunamadı"), detail:policyDetail},
     {title:adminT("admin.adsenseServing", "Site reklam yayını"), ready:Boolean(ads.adsense_auto_ads?.enabled), detail:ads.adsense_auto_ads?.enabled ? adminT("admin.adsenseServingOn", "Site tarafındaki reklam gösterimi açık. Gerçek gösterim ve kazanç AdSense raporundan doğrulanır.") : adminT("admin.adsenseServingOff", "Site tarafındaki gösterim kapalı. Google site onayı ve gerekli izin mesajı doğrulandıktan sonra açılır.")},
-    {title:adminT("admin.googleAdsAcquisition", "Google Ads · ziyaretçi kazanımı"), ready:conversions, detail:conversions ? adminT("admin.googleAdsConnected", "Kayıt ve satın alma dönüşüm etiketleri yapılandırılmış. Kampanya harcaması ve promosyon bakiyesi Google Ads panelinden doğrulanır.") : adminT("admin.googleAdsMissing", "Kayıt ve satın alma dönüşüm bağlantısı tamamlanmamış. Reklam bütçesi ve hediye bakiye henüz doğrulanmadı."), link:"https://ads.google.com/", label:adminT("admin.googleAdsOpen", "Google Ads panelini aç")},
+    {title:adminT("admin.googleAdsConnection", "Google Ads bağlantısı"), ready:googleAdsConnected, status:googleAdsConnectionLabel, detail:googleAdsConnectionDetail, link:"https://ads.google.com/", label:adminT("admin.googleAdsOpen", "Google Ads panelini aç")},
+    {title:adminT("admin.googleAdsAccount", "Google Ads hesabı"), ready:Boolean(googleAdsAccount && String(googleAdsAccount.status || googleAdsAccount.state || "").toUpperCase() === "ENABLED"), status:googleAdsAccountStatus, detail:googleAdsAccountDetail},
+    {title:adminT("admin.googleAdsPerformance", "Brüt harcama ve performans"), ready:Boolean(googleAdsConnected && googleAdsLast7Days), status:googleAdsPerformanceStatus, detail:googleAdsPerformanceDetail},
+    {title:adminT("admin.googleAdsCampaigns", "Google Ads kampanyaları"), ready:Boolean(googleAdsConnected && googleAdsCampaigns), status:googleAdsCampaignStatus, detail:googleAdsCampaignDetail},
+    ...(googleAdsIncentiveCard ? [googleAdsIncentiveCard] : []),
+    {title:adminT("admin.googleAdsAcquisition", "Google Ads dönüşüm ölçümü"), ready:conversions, detail:conversions ? adminT("admin.googleAdsConnected", "Kayıt ve doğrulanmış satın alma dönüşüm etiketleri yapılandırılmış.") : adminT("admin.googleAdsMissing", "Kayıt ve doğrulanmış satın alma dönüşüm bağlantısı tamamlanmamış."), link:"https://ads.google.com/", label:adminT("admin.googleAdsOpen", "Google Ads panelini aç")},
     {title:adminT("admin.adsByPlan", "Paketlere göre reklam"), ready:true, detail:adminT("admin.adsByPlanDetail", "Lite reklamlı; Plus’ta yalnız ana sayfada reklam gösterilebilir. Pro, Max, Business ve kalıcı reklamsız hakkı olanlar reklamsızdır. Önceki satın alımlarla kazanılmış reklamsız haklar korunur.")},
     {title:adminT("nav.workspace", "Çalışma alanı"), ready:true, detail:adminT("admin.workspaceAdFree", "Ders dosyalarında, sonuçlarda, hesap ve asistan sayfalarında reklam gösterilmez.")},
     {title:adminT("admin.houseCampaign", "LectureSift duyuruları"), ready:Boolean(ads.house_campaign?.enabled), detail:adminT("admin.houseCampaignDetail", "Sitenin kendi paket tanıtımıdır. AdSense reklam gösterimi veya reklam geliri anlamına gelmez.")},
     {title:adminT("admin.visitorMeasurement", "Ziyaretçi ölçümü"), ready:Boolean(analytics.enabled), detail:analytics.enabled ? adminT("admin.ga4On", "İzin veren ziyaretçiler için GA4 ölçümü açık.") : adminT("admin.ga4Off", "GA4 ölçümü kapalı.")},
   ];
-  admin$("adminGrowthStatus").innerHTML = cards.map(item => `<article class="${item.ready ? "ready" : "missing"}"><header><strong>${adminEscape(item.title)}</strong><span>${adminEscape(item.status || (item.ready ? adminT("admin.adsenseConfigured", "Yapılandırılmış") : adminT("admin.adsenseWaiting", "Bağlantı bekliyor")))}</span></header><p>${adminEscape(item.detail)}</p>${item.link ? `<a href="${item.link}" target="_blank" rel="noopener noreferrer">${adminEscape(item.label)} ↗</a>` : ''}</article>`).join("");
+  admin$("adminGrowthStatus").innerHTML = cards.map(item => `<article class="${item.ready ? "ready" : "missing"}"><header><strong>${adminEscape(item.title)}</strong><span>${adminEscape(item.status || (item.ready ? adminT("admin.adsenseConfigured", "Yapılandırılmış") : adminT("admin.adsenseWaiting", "Bağlantı bekliyor")))}</span></header><p>${adminEscape(item.detail)}</p>${item.link ? `<a href="${adminEscape(item.link)}" target="_blank" rel="noopener noreferrer">${adminEscape(item.label)} ↗</a>` : ''}</article>`).join("");
 }
 
 function userQuery(page = 1) {
