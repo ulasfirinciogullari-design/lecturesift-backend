@@ -989,7 +989,9 @@ function renderAdminGrowth() {
     ? `${adminT("admin.googleAdsCampaignEnabled", "Etkin")}: ${adminMetric(googleAdsCampaigns.enabled)} · ${adminT("admin.googleAdsCampaignPaused", "Duraklatılmış")}: ${adminMetric(googleAdsCampaigns.paused)} · ${adminT("admin.googleAdsCampaignRemoved", "Kaldırılmış")}: ${adminMetric(googleAdsCampaigns.removed)} · ${adminT("admin.googleAdsCampaignOther", "Diğer")}: ${adminMetric(googleAdsCampaigns.other)}`
     : adminT("admin.googleAdsCampaignsUnavailable", "Kampanya sayıları alınamadı.");
   const conversions = Boolean(analytics.google_ads?.enabled && analytics.google_ads?.signup_label && analytics.google_ads?.purchase_label);
-  const googleAdsIncentiveCard = adminGoogleAdsIncentiveCard(googleAdsManagement?.incentive || googleAds.incentive);
+  const googleAdsIncentiveCard = googleAdsConnected
+    ? adminGoogleAdsIncentiveCard(googleAdsManagement?.incentive)
+    : null;
   const cards = [
     {title:adminT("admin.adsenseConnection", "AdSense bağlantısı"), ready:connected, status:connectionLabel, detail:connectionDetail, link:"https://adsense.google.com/", label:adminT("admin.adsenseOpen", "AdSense panelini aç")},
     {title:adminT("admin.adsenseAccountState", "AdSense hesap durumu"), ready:Boolean(account && pendingTasksKnown && String(account.state || "").toUpperCase() === "READY" && pendingTasks === 0), status:accountState, detail:accountDetail},

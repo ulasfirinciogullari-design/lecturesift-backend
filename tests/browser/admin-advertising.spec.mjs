@@ -211,3 +211,31 @@ test('admin growth treats an advertising readiness request failure as unavailabl
   await expect(growth).not.toContainText('8.000');
   expect(unexpected).toEqual([]);
 });
+
+test('admin growth never trusts a promotion outside a verified Google Ads connection', async ({page}) => {
+  const unexpected = await openGrowthView(page, {
+    ok:true,
+    adsense:{management_api:{status:'not_configured', connected:false}},
+    google_ads:{
+      management_api:{
+        enabled:true, configured:true, connected:false, status:'unavailable',
+        checked_at:null, cached:false, account:null, periods:null, campaigns:null,
+        error_code:'provider_unavailable',
+      },
+      incentive:{
+        status:'available', count:1, states:{reward_granted:1},
+        currency_totals:[{
+          currency_code:'TRY', reward_amount_micros:8000000000,
+          granted_amount_micros:8000000000, reward_balance_remaining_micros:8000000000,
+        }],
+        error_code:null,
+      },
+    },
+  });
+
+  const growth = page.locator('#adminGrowthStatus');
+  await expect(growth).toContainText('Google Ads bağlantısıGeçici olarak okunamadı');
+  await expect(growth).not.toContainText('Google Ads promosyonu');
+  await expect(growth).not.toContainText('8.000');
+  expect(unexpected).toEqual([]);
+});
