@@ -243,6 +243,7 @@ test('assistant applies fixed preferences only after confirmation and ignores re
   await chat.locator('textarea').fill('Use German');
   await chat.locator('button[type=submit]').click();
   confirmation=chat.locator('.assistant-confirmation').last();
+  await expect(confirmation).toContainText('Deutsch');
   await confirmation.getByRole('button',{name:'Apply'}).click();
   await expect(page).toHaveURL(/\/de\/assistant(?:\.html)?$/);
   expect(await page.evaluate(()=>localStorage.getItem('lecturesift-ui'))).toBe('de');
