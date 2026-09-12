@@ -1,6 +1,10 @@
 # LectureSift V4.1
 
-LectureSift turns ordered lecture recordings—or separate ordered audio and slide recordings—into a study workspace: transcript, optional translation, structured notes, summary, verified presentation slides, quiz, flashcards, and selectable PDF/Word/TXT files. It can also merge video audio into one MP3 or prepare a downloadable video from a supported URL.
+LectureSift turns ordered uploaded lecture videos, audio recordings, documents,
+and supported images into a study workspace: transcript, optional translation,
+structured notes, summary, verified presentation slides, quiz, flashcards, and
+selectable PDF/Word/TXT files. Local video sources can also produce an MP3
+audio export.
 
 ## Current architecture
 
@@ -9,7 +13,7 @@ LectureSift turns ordered lecture recordings—or separate ordered audio and sli
 - `lecturesift/pipeline.py`: parallel audio and visual processing
 - `lecturesift/slides.py`: timestamp-only, low-memory slide detection
 - `lecturesift/ai.py`: transcription, translation, and study-pack generation
-- `lecturesift/exports.py`: PDF, Word, TXT, MP3/video, and ZIP exports
+- `lecturesift/exports.py`: PDF, Word, TXT, MP3, and ZIP exports
 
 Production services:
 
@@ -66,15 +70,19 @@ pytest -q
 node --check frontend/app.js
 ```
 
-The automated suite covers human-readable API errors, SSRF/private-URL rejection, PDF-only default packaging, selectable Word/TXT outputs, ordered multi-source routing, separate audio/visual routing, MP3 merging, slide-vs-scene classification, WebM timestamp accuracy, and genuine-slide preservation.
+The automated suite covers human-readable API errors, SSRF/private-URL rejection, PDF-only default packaging, selectable Word/TXT outputs, ordered multi-source routing, legacy separate audio/visual compatibility, MP3 merging, slide-vs-scene classification, WebM timestamp accuracy, and genuine-slide preservation.
 
 ## Main API routes
 
-- `POST /jobs`: upload ordered `files`, or ordered `audio_files` plus `visual_files`
-- `POST /jobs/url`: submit a supported video/page URL for study-pack creation, MP3 conversion, or video download
+- `POST /jobs`: upload ordered sources in `files`. The paired `audio_files` plus
+  `visual_files` transport remains temporarily available only for compatibility
+  with released clients; the website no longer offers separate audio/visual
+  choices. Ambiguous mixtures fail with `LS-UPLOAD-06` instead of discarding a
+  supplied source list.
+- `POST /jobs/url`: retired-client tombstone; excluded from OpenAPI and always returns HTTP 410 with `LS-URL-06`
 - `GET /jobs/{job_id}`: live progress
 - `GET /jobs/{job_id}/result`: structured result
-- `GET /jobs/{job_id}/artifact/{filename}`: individual PDF/Word/TXT/MP3/video output
+- `GET /jobs/{job_id}/artifact/{filename}`: individual PDF/Word/TXT/MP3 output
 - `GET /jobs/{job_id}/download`: complete ZIP package
 - `GET /health`: deployment health, engine version, and exact 40-hex build revision (`unknown` when unverified)
 - `GET /instagram/health`: verify the configured Instagram account connection
@@ -106,4 +114,3 @@ Instagram credentials are read only from `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_AC
 token, so they remain disabled by default. Never place any of these values in source control.
 
 Transient job files are stored under `/tmp/lecturesift` and expire automatically.
-

@@ -504,6 +504,60 @@ def test_second_upload_rejects_unsupported_video_format():
     assert response.json()["detail"]["code"] == "LS-UPLOAD-01"
 
 
+def test_upload_contract_rejects_unknown_layout_and_ambiguous_field_mixtures():
+    client = TestClient(app)
+    headers = billing_headers(client)
+
+    invalid_layout = client.post(
+        "/jobs",
+        files={"files": ("lesson.mp3", b"audio", "audio/mpeg")},
+        data={"source_layout": "side-by-side"},
+        headers=headers,
+    )
+    assert invalid_layout.status_code == 400
+    assert invalid_layout.json()["detail"]["code"] == "LS-UPLOAD-06"
+
+    ambiguous_requests = (
+        [
+            ("files", ("lesson.mp3", b"audio", "audio/mpeg")),
+            ("audio_files", ("legacy.mp3", b"legacy-audio", "audio/mpeg")),
+        ],
+        [
+            ("files", ("lesson.mp3", b"audio", "audio/mpeg")),
+            ("visual_files", ("legacy.webm", b"legacy-video", "video/webm")),
+        ],
+        [
+            ("file", ("lesson.mp3", b"audio", "audio/mpeg")),
+            ("audio_files", ("legacy.mp3", b"legacy-audio", "audio/mpeg")),
+        ],
+        [
+            ("slides_file", ("slides.webm", b"slides", "video/webm")),
+            ("visual_files", ("legacy.webm", b"legacy-video", "video/webm")),
+        ],
+    )
+    for multipart_files in ambiguous_requests:
+        response = client.post("/jobs", files=multipart_files, headers=headers)
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "LS-UPLOAD-06"
+
+    modern_separate = client.post(
+        "/jobs",
+        files={"files": ("lesson.mp3", b"audio", "audio/mpeg")},
+        data={"source_layout": "separate"},
+        headers=headers,
+    )
+    assert modern_separate.status_code == 400
+    assert modern_separate.json()["detail"]["code"] == "LS-UPLOAD-06"
+
+    unpaired_legacy_audio = client.post(
+        "/jobs",
+        files={"audio_files": ("legacy.mp3", b"legacy-audio", "audio/mpeg")},
+        headers=headers,
+    )
+    assert unpaired_legacy_audio.status_code == 400
+    assert unpaired_legacy_audio.json()["detail"]["code"] == "LS-UPLOAD-06"
+
+
 def test_dual_source_upload_endpoint_saves_both_roles(tmp_path: Path, monkeypatch):
     captured: dict = {}
 
@@ -540,6 +594,38 @@ def test_dual_source_upload_endpoint_saves_both_roles(tmp_path: Path, monkeypatc
     assert captured["args"][2]["slides_offset_seconds"] == 1.5
     assert audio_paths[0].read_bytes() == b"audio-source"
     assert visual_paths[0].read_bytes() == b"visual-source"
+    shutil.rmtree(Path(job["job_dir"]), ignore_errors=True)
+
+
+def test_deprecated_paired_upload_fields_remain_compatible(tmp_path: Path, monkeypatch):
+    captured: dict = {}
+
+    class DeferredThread:
+        def __init__(self, target, args, daemon):
+            captured["args"] = args
+
+        def start(self):
+            captured["started"] = True
+
+    monkeypatch.setattr("lecturesift.app.WORK_DIR", tmp_path)
+    monkeypatch.setattr("lecturesift.app.threading.Thread", DeferredThread)
+    client = TestClient(app)
+    response = client.post(
+        "/jobs",
+        files=[
+            ("audio_files", ("speaker.mp3", b"legacy-audio", "audio/mpeg")),
+            ("visual_files", ("slides.webm", b"legacy-video", "video/webm")),
+        ],
+        data={"source_layout": "separate"},
+        headers=billing_headers(client),
+    )
+
+    assert response.status_code == 200
+    job = JOBS.get(response.json()["job_id"])
+    assert captured["started"] is True
+    assert job["source_type"] == "upload_separate"
+    assert captured["args"][1][0].read_bytes() == b"legacy-audio"
+    assert captured["args"][3][0].read_bytes() == b"legacy-video"
     shutil.rmtree(Path(job["job_dir"]), ignore_errors=True)
 
 

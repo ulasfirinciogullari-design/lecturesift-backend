@@ -25,13 +25,12 @@ A second real-video gate used the 4:28 University of Manchester “Flipped Class
 - Five summary profiles
 - Interactive quiz and flashcards in the browser
 - Selectable PDF, Word, and TXT downloads; the default ZIP contains only PDFs
-- Human-readable errors with small support codes such as `LS-URL-02`
+- Human-readable errors with small support codes such as `LS-UPLOAD-01`
 - Live processing timeline
 - Ordered multi-video lectures, with drag-and-drop reordering in the interface
-- Separate ordered audio and visual/slide source lists, including a global synchronization offset
+- One ordered upload list for video, audio, documents and supported images
 - Video-to-MP3 conversion, combining ordered videos into one audio file
-- URL-to-video download utility using direct-media discovery and provider extraction
-- Direct video and supported education-page URLs, with honest warnings about provider restrictions
+- Retired URL imports with an HTTP 410 compatibility tombstone for old clients
 - Turkish and English product copy, with core labels for eleven additional languages
 
 ## Acceptance gates

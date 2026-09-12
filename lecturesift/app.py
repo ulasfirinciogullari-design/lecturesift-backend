@@ -540,7 +540,7 @@ def _validate_document_job_type(options: dict, *, document_mode: bool) -> None:
         raise LectureSiftError(
             "LS-OUTPUT-02",
             "Belge kaynakları yalnızca ders çalışma paketi olarak işlenebilir; "
-            "MP3'e çevirme ve video indirme yalnızca ses/video kaynaklarında kullanılabilir.",
+            "MP3'e çevirme yalnızca ses/video kaynaklarında kullanılabilir.",
             status_code=400,
         )
 
@@ -1565,6 +1565,59 @@ async def create_job(
     speaker_detection: bool = Form(False),
     billing_user: dict = Depends(_billing_user),
 ) -> dict:
+    # The browser uses only ordered `files`. The paired fields remain as a
+    # deprecated transport contract for released clients that uploaded a
+    # separate recording and slide stream. Reject ambiguous mixtures instead
+    # of silently ignoring one caller-supplied source list.
+    requested_layout = source_layout.strip().lower()
+    if requested_layout not in {"classic", "separate"}:
+        _raise_public(
+            LectureSiftError(
+                "LS-UPLOAD-06",
+                "Kaynak düzeni geçersiz. Güncel istemciler ders kaynaklarını tek dosya listesinde göndermelidir.",
+                status_code=400,
+            )
+        )
+    if files and (file or slides_file or audio_files or visual_files):
+        _raise_public(
+            LectureSiftError(
+                "LS-UPLOAD-06",
+                "Tek kaynak listesi eski ses/görüntü alanlarıyla birlikte kullanılamaz.",
+                status_code=400,
+            )
+        )
+    if file and audio_files:
+        _raise_public(
+            LectureSiftError(
+                "LS-UPLOAD-06",
+                "Ses kaynağını hem eski tek dosya hem de çoklu ses alanında gönderme.",
+                status_code=400,
+            )
+        )
+    if slides_file and visual_files:
+        _raise_public(
+            LectureSiftError(
+                "LS-UPLOAD-06",
+                "Görüntü kaynağını hem eski tek dosya hem de çoklu görüntü alanında gönderme.",
+                status_code=400,
+            )
+        )
+    if requested_layout == "separate" and files:
+        _raise_public(
+            LectureSiftError(
+                "LS-UPLOAD-06",
+                "Ayrı kaynak düzeni yalnızca eski eşlenmiş ses ve görüntü alanlarını kabul eder.",
+                status_code=400,
+            )
+        )
+    if audio_files and not (visual_files or slides_file or requested_layout == "separate"):
+        _raise_public(
+            LectureSiftError(
+                "LS-UPLOAD-06",
+                "Eski çoklu ses alanı yalnızca eşlenmiş ayrı kaynak düzeninde kullanılabilir.",
+                status_code=400,
+            )
+        )
     options = _options(
         source_language,
         output_language,
@@ -1609,7 +1662,7 @@ async def create_job(
         raise HTTPException(402, detail={"code": "LS-BILL-10", "message": str(exc)}) from exc
     plan_limits = entitlement["job_plan"]["entitlements"]["limits"]
     max_plan_files = int(plan_limits["max_files_per_job"])
-    layout = "separate" if source_layout == "separate" or slides_file or visual_files else "classic"
+    layout = "separate" if requested_layout == "separate" or slides_file or visual_files else "classic"
     document_mode = False
     if layout == "separate":
         audio_uploads = list(audio_files or ([] if file is None else [file]))
@@ -1647,7 +1700,7 @@ async def create_job(
         _raise_public(exc)
 
     # Refuse a known provider billing/authentication outage before reading the
-    # request body into local or remote storage. Local-only MP3/video export and
+    # request body into local or remote storage. Local-only MP3 export and
     # transcript-only OCR remain available during the outage.
     _require_ai_provider(options, document_mode=document_mode)
 

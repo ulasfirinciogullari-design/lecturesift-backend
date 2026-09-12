@@ -5,6 +5,14 @@ the product. The supported source flow is file upload for video, audio and
 documents. The workspace must not show a URL field or describe YouTube links as
 supported.
 
+The current website sends every ordered upload through the single multipart
+`files` list. The older paired `audio_files` / `visual_files` and
+`source_layout=separate` request shape is deprecated but remains server-side for
+released-client compatibility; it is not a second website choice. Ambiguous
+mixtures of current and legacy fields return `LS-UPLOAD-06` instead of silently
+ignoring a supplied list. Removing the legacy shape requires client-usage
+evidence and a separately versioned API change.
+
 `POST /jobs/url` remains only as a compatibility tombstone for stale clients.
 It is excluded from OpenAPI and returns HTTP 410 with `LS-URL-06` before
 authentication, billing, quota reservation, job creation or network access.

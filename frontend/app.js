@@ -15,12 +15,8 @@ const EN = {
   title: "Turn every lecture source into one organized study pack.",
   subtitle: "Add video, audio, PDF, Word, PowerPoint, TXT, or Markdown and turn it into one organized study pack.",
   sourceTitle: "Add the lecture source", secure: "Secure processing", uploadTab: "Upload file", dropTitle: "Drop a source here", dropText: "or choose from your device", fileHelp: "Your per-job upload limits are loading from your active plan.",
-  audioSourceTitle: "Audio sources", audioSourceHelp: "Add audio-bearing recordings in lecture order.",
-  slidesSourceTitle: "Visual / slide sources", slidesSourceHelp: "Add slide recordings in lecture order.", addSlidesVideo: "Add slide video",
-  required: "Required", optional: "Optional", syncOffset: "Slide time offset", syncOffsetHelp: "Leave at 0 if both recordings started together.",
-  classicMode: "Video, audio, or document", separateMode: "Separate audio and visuals", addVideos: "Add video, audio, or documents", sortHelp: "PDF, images, Word, PowerPoint, TXT, and Markdown; automatic OCR for scanned pages",
-  addAudioFiles: "Add audio videos", addVisualFiles: "Add slide videos", moveUp: "Move up", moveDown: "Move down", remove: "Remove",
-  operationType: "Operation", studyPackOption: "Create a study pack", audioExportOption: "Convert video to MP3", downloadVideoOption: "Download video from URL",
+  addVideos: "Add video, audio, or documents", sortHelp: "PDF, images, Word, PowerPoint, TXT, and Markdown; automatic OCR for scanned pages",
+  moveUp: "Move up", moveDown: "Move down", remove: "Remove",
   outputFormats: "Downloadable files (optional)", formatOptional: "Leave all unchecked to keep the result only in your account and on the website.",
   sameLanguageHelp: "Source and output languages match; one transcript will be created.", transcriptDisabledHelp: "Select transcript to enable translation.",
   settingsTitle: "Configure the study pack", sourceLanguage: "Source language", outputLanguage: "Output language", summaryStyle: "Summary profile",
@@ -38,7 +34,6 @@ const EN = {
   detailMedia: "Audio, transcript, visuals, study content, and exports advance in visible stages.",
   detailDocument: "Native text and scanned pages are processed with OCR before the study pack is prepared.",
   detailMp3: "The source is uploaded, its audio is converted, and the MP3 download is packaged.",
-  detailDownload: "The video is downloaded from its source and prepared as a protected file.",
   uploadingSource: "Uploading the source", uploadAccepted: "Upload complete; preparing the processing job", queuedForWorker: "Waiting in the processing queue", publishingResult: "Securing the result files",
   promiseTitle: "Your source, your preferred result", promiseText: "Select only the summary, transcript, slides, quiz, flashcards, and files you need.",
   resultEyebrow: "Study pack ready", downloadAll: "Download complete pack", tabSummary: "Summary", tabNotes: "Smart notes", tabTranscript: "Transcript",
@@ -47,8 +42,8 @@ const EN = {
   auto: "Auto detect", noSlides: "No genuine presentation slides were detected in this video.", noContent: "No content was generated for this section.",
   correct: "Correct", incorrect: "Incorrect", score: "Score", reveal: "Reveal answer", previous: "Previous", next: "Next", know: "I know this", repeat: "Repeat",
   download: "Download", processing: "Lecture analysis in progress", done: "Your study pack is ready", parallel_analysis: "Audio and visuals are being analyzed together",
-  url_download: "Downloading the video", study_pack: "Creating smart notes and questions", exports: "Preparing selected output files",
-  errorFallback: "The request could not be completed. Check the video or link and try again.", outputSelectionRequired: "Select at least one study output: summary and notes, transcript, quiz, or flashcards.",
+  study_pack: "Creating smart notes and questions", exports: "Preparing selected output files",
+  errorFallback: "The request could not be completed. Check the uploaded source and try again.", outputSelectionRequired: "Select at least one study output: summary and notes, transcript, quiz, or flashcards.",
   plansNav: "Plans", login: "Sign in", register: "Create account", logout: "Sign out",
   plansEyebrow: "Transparent usage plans", plansTitle: "Process what you need and upgrade anytime.",
   plansSubtitle: "The three payment methods are separate: iyzico card and iyzico Protected Bank Transfer are verified automatically; a manual transfer to the personal IBAN activates after admin review.",
@@ -64,12 +59,8 @@ const TR = {
   title: "Tüm ders kaynaklarını tek düzenli çalışma paketine dönüştür.",
   subtitle: "Video, ses, PDF, Word, PowerPoint, TXT veya Markdown ekle; tek düzenli çalışma paketine dönüştür.",
   sourceTitle: "Ders kaynağını ekle", secure: "Güvenli işlem", uploadTab: "Dosya yükle", dropTitle: "Kaynağı buraya bırak", dropText: "veya cihazından seç", fileHelp: "Tek iş yükleme sınırların aktif planından yükleniyor.",
-  audioSourceTitle: "Ses kaynakları", audioSourceHelp: "Sesli kayıtları ders sırasına göre ekle.",
-  slidesSourceTitle: "Görüntü / slayt kaynakları", slidesSourceHelp: "Slayt kayıtlarını ders sırasına göre ekle.", addSlidesVideo: "Slayt videosu ekle",
-  required: "Zorunlu", optional: "İsteğe bağlı", syncOffset: "Slayt zaman farkı", syncOffsetHelp: "Aynı anda başladıysa 0 bırak.",
-  classicMode: "Video, ses veya belge", separateMode: "Ses ve görüntü ayrı", addVideos: "Video, ses veya belge ekle", sortHelp: "PDF, görsel, Word, PowerPoint, TXT ve Markdown; taranmış sayfalarda otomatik OCR",
-  addAudioFiles: "Ses videolarını ekle", addVisualFiles: "Slayt videolarını ekle", moveUp: "Yukarı taşı", moveDown: "Aşağı taşı", remove: "Kaldır",
-  operationType: "İşlem türü", studyPackOption: "Ders çalışma paketi hazırla", audioExportOption: "Videoyu MP3'e çevir", downloadVideoOption: "URL'den video indir",
+  addVideos: "Video, ses veya belge ekle", sortHelp: "PDF, görsel, Word, PowerPoint, TXT ve Markdown; taranmış sayfalarda otomatik OCR",
+  moveUp: "Yukarı taşı", moveDown: "Aşağı taşı", remove: "Kaldır",
   outputFormats: "İndirilecek dosyalar (isteğe bağlı)", formatOptional: "Hiçbirini seçmezsen sonuç yalnızca hesabında ve sitede gösterilir.",
   sameLanguageHelp: "Kaynak ve çıktı dili aynı; tek transkript oluşturulacak.", transcriptDisabledHelp: "Çeviriyi açmak için transkripti seç.",
   settingsTitle: "Çalışma paketini ayarla", sourceLanguage: "Kaynak dili", outputLanguage: "Çıktı dili", summaryStyle: "Özet profili",
@@ -87,7 +78,6 @@ const TR = {
   detailMedia: "Ses, transkript, görseller, ders içeriği ve çıktılar ayrı adımlarda ilerler.",
   detailDocument: "Seçilebilir metin ve taranmış sayfalar OCR ile işlenir; ardından çalışma paketi hazırlanır.",
   detailMp3: "Kaynak yüklenir, sesi dönüştürülür ve MP3 indirmesi paketlenir.",
-  detailDownload: "Video kaynağından indirilir ve korumalı dosya olarak hazırlanır.",
   uploadingSource: "Kaynak yükleniyor", uploadAccepted: "Yükleme tamamlandı; işlem işi hazırlanıyor", queuedForWorker: "İşlem sırasında bekliyor", publishingResult: "Sonuç dosyaları güvenceye alınıyor",
   promiseTitle: "Kaynağın, istediğin sonuç", promiseText: "Yalnızca ihtiyacın olan özet, transkript, slayt, quiz, bilgi kartı ve dosyaları seç.",
   resultEyebrow: "Ders paketi hazır", downloadAll: "Tüm paketi indir", tabSummary: "Özet", tabNotes: "Akıllı notlar", tabTranscript: "Transkript",
@@ -96,8 +86,8 @@ const TR = {
   auto: "Otomatik algıla", noSlides: "Bu videoda gerçek bir sunum slaytı tespit edilmedi.", noContent: "Bu bölüm için içerik üretilemedi.",
   correct: "Doğru", incorrect: "Yanlış", score: "Skor", reveal: "Cevabı göster", previous: "Önceki", next: "Sonraki", know: "Biliyorum", repeat: "Tekrar et",
   download: "İndir", processing: "Ders analizi sürüyor", done: "Çalışma paketin hazır", parallel_analysis: "Ses ve görüntü birlikte analiz ediliyor",
-  url_download: "Video bağlantıdan alınıyor", study_pack: "Akıllı notlar ve sorular hazırlanıyor", exports: "Seçilen çıktı dosyaları hazırlanıyor",
-  errorFallback: "İşlem tamamlanamadı. Videoyu veya bağlantıyı kontrol edip yeniden deneyebilirsin.", outputSelectionRequired: "En az bir çalışma çıktısı seç: özet ve notlar, transkript, quiz veya bilgi kartı.",
+  study_pack: "Akıllı notlar ve sorular hazırlanıyor", exports: "Seçilen çıktı dosyaları hazırlanıyor",
+  errorFallback: "İşlem tamamlanamadı. Yüklediğin kaynağı kontrol edip yeniden deneyebilirsin.", outputSelectionRequired: "En az bir çalışma çıktısı seç: özet ve notlar, transkript, quiz veya bilgi kartı.",
   plansNav: "Planlar", login: "Giriş", register: "Hesap oluştur", logout: "Çıkış",
   plansEyebrow: "Şeffaf kullanım planları", plansTitle: "İhtiyacın kadar işle, istediğin zaman yükselt.",
   plansSubtitle: "Üç ödeme yöntemi ayrıdır: iyzico kart ve iyzico Korumalı Havale/EFT otomatik doğrulanır; kişisel IBAN’a manuel Havale/EFT ise yönetim kontrolünden sonra etkinleşir.",
@@ -106,20 +96,6 @@ const TR = {
   orderReference: "Sipariş referansı", amount: "Tutar", accountHolder: "Hesap sahibi", sendReceipt: "Dekontu e-postayla gönder",
   currentPlan: "Mevcut plan", choosePlan: "Planı seç", popular: "Popüler", perMonth: "/ ay", oneTime: "tek ödeme",
   pendingApproval: "Kontrol bekliyor", loginRequired: "Plan seçmeden önce giriş yap.", accountReady: "Hesabın hazır."
-};
-
-const LEGACY = {
-  de: ["Vorlesungsvideo oder Link", "Datei hochladen", "Video-Link verwenden", "Video analysieren", "Videosprache", "Ausgabesprache", "Zusammenfassungsprofil", "Quizfragen", "Lernkarten", "Zusammenfassung", "Notizen", "Transkript", "Folien", "Alle Dateien herunterladen"],
-  fr: ["Vidéo de cours ou lien", "Téléverser un fichier", "Utiliser un lien", "Analyser le cours", "Langue source", "Langue de sortie", "Profil du résumé", "Questions", "Cartes mémoire", "Résumé", "Notes", "Transcription", "Diapositives", "Télécharger tous les fichiers"],
-  es: ["Video de clase o enlace", "Subir archivo", "Usar enlace", "Analizar la clase", "Idioma de origen", "Idioma de salida", "Perfil del resumen", "Preguntas", "Tarjetas", "Resumen", "Apuntes", "Transcripción", "Diapositivas", "Descargar todos los archivos"],
-  it: ["Video lezione o link", "Carica file", "Usa un link", "Analizza lezione", "Lingua sorgente", "Lingua output", "Profilo riassunto", "Quiz", "Flashcard", "Riassunto", "Appunti", "Trascrizione", "Slide", "Scarica tutti i file"],
-  pt: ["Vídeo da aula ou link", "Enviar arquivo", "Usar link", "Analisar aula", "Idioma de origem", "Idioma de saída", "Perfil do resumo", "Perguntas", "Flashcards", "Resumo", "Notas", "Transcrição", "Slides", "Baixar todos os arquivos"],
-  ru: ["Видео лекции или ссылка", "Загрузить файл", "Использовать ссылку", "Анализировать лекцию", "Язык видео", "Язык результата", "Профиль конспекта", "Вопросы", "Карточки", "Конспект", "Заметки", "Транскрипт", "Слайды", "Скачать все файлы"],
-  ar: ["فيديو المحاضرة أو الرابط", "رفع ملف", "استخدام رابط", "تحليل المحاضرة", "لغة الفيديو", "لغة الإخراج", "نمط الملخص", "أسئلة", "بطاقات", "الملخص", "الملاحظات", "النص", "الشرائح", "تنزيل كل الملفات"],
-  zh: ["课程视频或链接", "上传文件", "使用链接", "分析课程", "视频语言", "输出语言", "摘要模式", "测验题", "闪卡", "摘要", "笔记", "文字稿", "幻灯片", "下载全部文件"],
-  ja: ["講義動画またはリンク", "ファイルをアップロード", "リンクを使用", "講義を分析", "動画の言語", "出力言語", "要約プロファイル", "クイズ", "カード", "要約", "ノート", "文字起こし", "スライド", "全ファイルをダウンロード"],
-  ko: ["강의 영상 또는 링크", "파일 업로드", "링크 사용", "강의 분석", "영상 언어", "출력 언어", "요약 프로필", "퀴즈", "플래시카드", "요약", "노트", "전사", "슬라이드", "전체 파일 다운로드"],
-  hi: ["लेक्चर वीडियो या लिंक", "फ़ाइल अपलोड करें", "लिंक का उपयोग करें", "लेक्चर का विश्लेषण", "वीडियो भाषा", "आउटपुट भाषा", "सारांश प्रोफ़ाइल", "क्विज़", "फ्लैशकार्ड", "सारांश", "नोट्स", "ट्रांसक्रिप्ट", "स्लाइड", "सभी फ़ाइलें डाउनलोड करें"]
 };
 
 const PLAN_COPY = {
@@ -565,14 +541,13 @@ const PROGRESS_PROFILES = {
   ],
   document: [["source", "stageSource"], ["document_preflight", "stageDocument"], ["document_extraction", "stageDocument"], ["study_pack", "stageStudy"], ["exports", "stageExport"]],
   audio_export: [["source", "stageSource"], ["audio_extract", "stageMp3"], ["exports", "stagePackage"]],
-  download_video: [["source", "stageSource"], ["worker_download", "url_download"], ["exports", "stagePackage"]],
 };
 function fileExtension(file) { return String(file?.name || "").split(".").pop().toLowerCase(); }
 function isDocumentFile(file) { return DOCUMENT_EXTENSIONS.has(fileExtension(file)); }
 function selectedDocumentJob() { return classicVideos.length > 0 && classicVideos.every(isDocumentFile); }
 function progressProfileFor(job = null) {
   const type = job?.options?.job_type || DEFAULT_JOB_TYPE;
-  if (type === "audio_export" || type === "download_video") return type;
+  if (type === "audio_export") return type;
   const documentJob = String(job?.source_type || "").startsWith("document") || job?.source_layout === "documents" || (!job && selectedDocumentJob());
   return documentJob ? "document" : "media";
 }
@@ -782,7 +757,7 @@ $("openReadyResult").onclick = () => {
 };
 function jobPhaseLabel(job, profile) {
   const labels = {
-    queued: "queuedForWorker", queued_worker: "queuedForWorker", worker_download: "url_download",
+    queued: "queuedForWorker", queued_worker: "queuedForWorker",
     worker_publish: "publishingResult", document_preflight: "stageDocument", document_extraction: "stageDocument", document_ocr: "stageDocument", audio_extract: "stageMp3",
     transcription: "stageTranscript", transcript_translation: "stageTranscript", parallel_analysis: profile === "document" ? "stageDocument" : "processing",
     study_pack: "study_pack", exports: "exports", done: "done",
@@ -790,7 +765,7 @@ function jobPhaseLabel(job, profile) {
   return t(labels[job.stage] || job.stage || "processing");
 }
 function profileDetail(profile) {
-  return t({media:"detailMedia", document:"detailDocument", audio_export:"detailMp3", download_video:"detailDownload"}[profile]);
+  return t({media:"detailMedia", document:"detailDocument", audio_export:"detailMp3"}[profile]);
 }
 function updateJobView(job) {
   const profile = configureProgressProfile(job);
@@ -813,9 +788,6 @@ function updateJobView(job) {
     if (job.status === "done") { setItemState("audio_extract", "done"); setItemState("exports", "done"); }
     else if (job.stage === "exports") { setItemState("audio_extract", "done"); setItemState("exports", "active"); }
     else if (job.percent >= 35) setItemState("audio_extract", "active");
-  } else if (profile === "download_video") {
-    if (["worker_publish", "exports", "done"].includes(job.stage) || job.status === "done") { setItemState("worker_download", "done"); setItemState("exports", job.status === "done" ? "done" : "active"); }
-    else setItemState("worker_download", "active");
   } else {
   const audio = job.tasks?.audio?.percent || 0, visual = job.tasks?.visual?.percent || 0;
   if (audio >= 100) { setItemState("audio", "done"); setItemState("transcription", "done"); }
@@ -832,7 +804,7 @@ function updateJobView(job) {
 
 function showError(message, code = "LS-SYSTEM-01") {
   const known = ERRORS.tr[code];
-  const centralKey = ({"LS-URL-02":"error.url02","LS-URL-03":"error.url03","LS-URL-05":"error.url05","LS-AI-03":"error.ai03","LS-AI-04":"error.ai04","LS-AI-05":"error.ai05","LS-AI-06":"error.ai06","LS-AI-07":"error.ai07","LS-AI-08":"error.ai08"})[code];
+  const centralKey = ({"LS-URL-02":"error.url02","LS-URL-03":"error.url03","LS-URL-05":"error.url05","LS-URL-06":"error.url05","LS-AI-03":"error.ai03","LS-AI-04":"error.ai04","LS-AI-05":"error.ai05","LS-AI-06":"error.ai06","LS-AI-07":"error.ai07","LS-AI-08":"error.ai08"})[code];
   const translated = code === "LS-UPLOAD-02" && message
     ? message
     : centralKey

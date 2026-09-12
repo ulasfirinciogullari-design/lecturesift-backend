@@ -207,7 +207,6 @@ function renderCompare() {
     [pt("plans.exports", "Dosya biçimleri"), plan => plan.entitlements?.download_enabled === false ? pt("plans.previewOnly", "Sitede önizleme · dosya indirme yok") : (plan.entitlements?.export_formats || []).join(", ").toUpperCase()],
     [pt("plans.priority", "İşlem önceliği"), plan => plan.priority === "priority" ? priority : standard],
     [pt("plans.teamSeats", "Ekip kullanıcıları"), plan => plan.entitlements?.team_seats || plan.team_seats || 1],
-    [pt("plans.multiSource", "Çoklu video ve ayrı ses/slayt"), () => yes],
     [pt("plans.languages", "Kaynak ve çıktı dilleri"), () => `13 ${pt("plans.languagesUnit", "dil")}`],
     [pt("plans.outputs", "Transkript, not ve zaman damgası"), () => all],
     [pt("plans.adExperience", "Reklam deneyimi"), plan => plan.entitlements?.ad_free ? pt("plans.adFree", "Reklamsız kullanım") : plan.entitlements?.ad_mode === "limited" ? pt("plans.limitedAds") : pt("plans.adsMayAppear", "Reklam gösterilebilir")],
