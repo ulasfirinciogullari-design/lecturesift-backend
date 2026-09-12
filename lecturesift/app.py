@@ -960,9 +960,9 @@ def billing_referral_choice(reward_id: str, payload: ReferralChoiceRequest,
 
 
 @app.get("/billing/admin/referrals", dependencies=[Depends(_billing_admin)])
-def billing_admin_referrals() -> dict:
+def billing_admin_referrals(limit: int = 100) -> dict:
     from .referrals import admin_pending
-    return {"ok": True, "rewards": _referral_response(admin_pending)}
+    return {"ok": True, **_referral_response(admin_pending, limit)}
 
 
 @app.post("/billing/admin/referrals/reconcile-order", dependencies=[Depends(_billing_admin)])

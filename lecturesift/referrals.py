@@ -12,7 +12,10 @@ import re
 import secrets
 import uuid
 
-from sqlalchemy import Column, DateTime, Integer, MetaData, String, Table, UniqueConstraint, case, func, inspect, or_, select, update
+from sqlalchemy import (
+    Column, DateTime, Integer, MetaData, String, Table, UniqueConstraint,
+    and_, case, func, inspect, or_, select, update,
+)
 
 from . import billing_service as billing
 from .referral_policy import (
@@ -727,18 +730,49 @@ def summary(user_id: str) -> dict:
     return result
 
 
-def admin_pending() -> list[dict]:
+def admin_pending(limit: int = 100) -> dict:
+    """Return a bounded queue, keeping releasable rewards ahead of passive holds."""
+    safe_limit = max(1, min(int(limit), 100))
+    now = _utc(billing.utcnow())
+    far_future = datetime.max.replace(tzinfo=timezone.utc)
+
+    def hold_complete(row) -> bool:
+        return bool(row.pending_until and _utc(row.pending_until) <= now)
+
+    def is_actionable(row) -> bool:
+        return hold_complete(row) and row.reward_choice in {"minutes", "coupon"}
+
+    def queue_key(row):
+        deadline = _utc(row.pending_until) if row.pending_until else far_future
+        qualified = _utc(row.qualified_at) if row.qualified_at else far_future
+        return (0 if is_actionable(row) else 1, deadline, qualified, row.id)
+
     with billing.ENGINE.connect() as connection:
         _require(connection)
         rows = []
         for table in (REWARDS, RENEWAL_REWARDS):
+            actionable_first = case((and_(
+                table.c.pending_until.is_not(None),
+                table.c.pending_until <= now,
+                table.c.reward_choice.in_(("minutes", "coupon")),
+            ), 0), else_=1)
             rows.extend(connection.execute(select(table).where(table.c.status == "pending")
-                        .order_by(table.c.qualified_at, table.c.id).limit(100)).all())
-        rows.sort(key=lambda row: (_utc(row.qualified_at), row.id))
-        preferences = _preference_map(connection, [row.id for row in rows[:100]])
-    return [{"id": row.id, "order_reference": row.order_reference, "reward_choice": row.reward_choice,
-             "pending_until": _utc(row.pending_until).isoformat(),
-             **_public_reward_terms(row, preferences.get(row.id))} for row in rows[:100]]
+                        .order_by(actionable_first, table.c.pending_until, table.c.qualified_at, table.c.id)
+                        .limit(safe_limit + 1)).all())
+        rows.sort(key=queue_key)
+        visible = rows[:safe_limit]
+        preferences = _preference_map(connection, [row.id for row in visible])
+    return {
+        "rewards": [
+            {"id": row.id, "order_reference": row.order_reference, "reward_choice": row.reward_choice,
+             "pending_until": _utc(row.pending_until).isoformat() if row.pending_until else None,
+             "hold_complete": hold_complete(row), "actionable": is_actionable(row),
+             **_public_reward_terms(row, preferences.get(row.id))}
+            for row in visible
+        ],
+        "has_more": len(rows) > safe_limit,
+        "limit": safe_limit,
+    }
 
 
 def reconcile_order(reference: str) -> dict:

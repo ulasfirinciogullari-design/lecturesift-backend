@@ -456,6 +456,7 @@ async function initAccount() {
 
   const referralDate = value => new Intl.DateTimeFormat(I18N.locale, {dateStyle:"medium"}).format(new Date(value));
   let currentReferralSummary = null;
+  const referralCurrencyLabel = code => LOCALE_DATA.currencyLabel?.(code) || code;
   const referralCouponValue = (percent, maxMinor, currency) => rf("couponValue", {
     percent:new Intl.NumberFormat(I18N.locale, {style:"percent"}).format(percent / 100),
     amount:new Intl.NumberFormat(I18N.locale, {style:"currency", currency}).format(maxMinor / (["JPY", "KRW"].includes(currency) ? 1 : 100)),
@@ -509,7 +510,7 @@ async function initAccount() {
       const currency = selectedCurrency(reward);
       const terms = summary.coupon_policies[reward.policy_version][currency];
       const couponAvailable = summary.redemption_currencies.includes(currency);
-      const options = Object.keys(summary.coupon_policies[reward.policy_version]).map(code => `<option value="${adminSafe(code)}"${code === currency ? " selected" : ""}>${adminSafe(code)}</option>`).join("");
+      const options = Object.keys(summary.coupon_policies[reward.policy_version]).map(code => `<option value="${adminSafe(code)}"${code === currency ? " selected" : ""}>${adminSafe(referralCurrencyLabel(code))}</option>`).join("");
       return `<article class="referral-reward" data-referral-reward="${adminSafe(reward.id)}"><div class="referral-reward-copy"><strong>${adminSafe(rewardKind(reward))}</strong><small>${adminSafe(pendingDate)}</small><small data-coupon-preview>${adminSafe(referralCouponValue(terms.percent, terms.max_discount_minor, currency))}</small><small data-coupon-unavailable${couponAvailable ? " hidden" : ""}>${adminSafe(rt("couponUnavailable", "Bu para biriminde kupon kullanımı şu anda desteklenmiyor. Dakika seçebilir veya desteklenen bir para birimi seçebilirsin."))}</small></div><div class="referral-choice-actions"><label class="field"><span>${adminSafe(rt("couponCurrency", "Kupon para birimi"))}</span><select data-referral-currency>${options}</select></label><button class="secondary-action${reward.reward_choice === "minutes" ? " selected" : ""}" type="button" data-referral-choice="minutes" aria-pressed="${String(reward.reward_choice === "minutes")}">${adminSafe(rf("minutesChoiceDynamic", {minutes:reward.inviter_minutes}, "{minutes} dakika seç"))}</button><button class="secondary-action${reward.reward_choice === "coupon" ? " selected" : ""}" type="button" data-referral-choice="coupon" aria-pressed="${String(reward.reward_choice === "coupon")}"${couponAvailable ? "" : " disabled"}>${adminSafe(rf("couponChoiceDynamic", {percent:reward.coupon_percent}, "%{percent} kupon seç"))}</button></div></article>`;
     }).join("") : `<p class="empty-copy">${adminSafe(rt("noChoices", "Şu anda seçim bekleyen davet ödülün yok."))}</p>`;
 

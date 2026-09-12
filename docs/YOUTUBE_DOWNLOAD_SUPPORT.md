@@ -1,124 +1,31 @@
-# YouTube URL input
+# Retired YouTube URL input
 
-The owner requested that the URL field accept YouTube only. The browser,
-`POST /jobs/url`, and background downloader now accept one YouTube video.
-Watch, short sharing, Shorts, live recording and embed links are normalized to
-an HTTPS watch URL. Playlist-only, channel, redirect, non-YouTube, credentialed
-and nonstandard-port URLs are rejected before creating a job. Existing file
-upload inputs continue to accept their supported file types.
+YouTube and all other URL-based source imports were deliberately removed from
+the product. The supported source flow is file upload for video, audio and
+documents. The workspace must not show a URL field or describe YouTube links as
+supported.
 
-The label, help text and URL errors have 13-language entries. URL errors no
-longer suggest direct MP4/WebM links, which this input intentionally rejects.
+`POST /jobs/url` remains only as a compatibility tombstone for stale clients.
+It is excluded from OpenAPI and returns HTTP 410 with `LS-URL-06` before
+authentication, billing, quota reservation, job creation or network access.
+The retired downloader entry point fails with the same code. Already completed
+historical results remain available, while queued legacy URL jobs terminate
+without starting media work.
 
-## Downloader requirements
+The former yt-dlp, Deno/EJS, playback-client and proof-of-origin-token
+experiments are historical investigation, not a supported capability. Repeated
+isolated checks still encountered provider bot challenges from cloud networks;
+none established a dependable production download path. Do not restore those
+components, add account cookies, proxies or third-party download services, or
+reactivate the hidden endpoint based on the old implementation.
 
-The prior image installed the base yt-dlp Python package without its EJS
-component or a JavaScript runtime. Full YouTube support requires both:
-https://github.com/yt-dlp/yt-dlp/wiki/EJS
+`tests/test_remote_download.py` protects the retirement contract: YouTube,
+direct-media and arbitrary URLs cannot use the network, create files, reserve a
+balance or enqueue work. Future changes must preserve completed historical
+artifacts.
 
-This revision installs the pinned Deno `2.9.5` Linux x86_64 wheel and explicitly
-selects it in yt-dlp. The extractor is pinned to `2026.8.19` and EJS to its
-required `0.8.0` version. Both additions have no Python dependencies. Their
-artifact hashes were read from PyPI release metadata and appended to the
-existing lock without upgrading other packages. Only the prebuilt Linux wheel
-is allowed for Deno; no source build can fetch an unpinned runtime. The lock
-platform floor is manylinux 2.27 (supported by the existing Debian image).
-
-The input and lock fingerprints were updated. EJS scripts are installed at
-build time; runtime component downloads are disabled. The image capability
-check executes Deno and imports both Python components. CI builds the
-application image to run that check.
-
-YouTube goes directly through its maintained extractor. Generic page scraping
-and direct-media URL handling were removed from this input. Empty or partial
-files are not successful downloads; the final merged file also respects the
-configured size limit.
-
-If the default clients encounter a bot challenge, unavailable format or HTTP
-403, the downloader makes one fallback attempt with yt-dlp's supported
-`web_safari` and `web_embedded` public playback clients. It removes only its own
-partial output before changing formats. HTTP 429, age/account requirements and
-private-video errors are not retried. This is a bounded compatibility fallback,
-not a guarantee that the provider accepts a server IP.
-
-## Validation limits
-
-The September 9 follow-up (07:26–07:40 UTC) additionally tried TV,
-TV Simply, iOS, visionOS and web music clients in isolated Render jobs,
-with and without webpage bootstrap. No method produced a verified audio
-file. Diagnostic warnings distinguished HTTP 429 on the watch page from
-HTTP 403 on player requests; a generic “no player response” must not be
-mistaken for a codec or JavaScript solver failure. IPv6 outbound connectivity
-was unavailable in that job. The obsolete `BaW_jenozKc` sample returned
-unavailable-video results and is not evidence of a bot challenge; subsequent
-checks used `x41yOUIvK2k` and `jNQXAC9IVRw` instead. Media deadlines and size
-bounds applied, third-party child processes received no application secrets,
-and temporary evidence objects were deleted after collecting their results.
-No unverified client or public download service was added to production.
-
-The latest published stable extractor remains the installed `2026.8.19`.
-Upstream's `2026.08.30.232658` nightly contained no YouTube extractor changes
-relative to that release when reviewed. Blind upgrades or repeat requests from
-the same blocked network are not evidence of a fix. Further network-dependent
-testing needs an available operator-controlled connection or download provider;
-no such account was configured or purchased during these checks.
-
-Regression cases use synthetic downloader results, never user videos or
-credentials. They cover accepted/rejected URLs, browser/server agreement,
-rejection before job/plan work, solver configuration, partial files, final
-size limits and provider-block errors. The shared image is checked in remote
-CI, not built on the shared development/production VPS.
-
-The reported failure was `LS-URL-02`; the owner clarified that YouTube downloading
-fails generally and asked not to narrow this to a supplied example. That
-code groups provider rate limits and sign-in/bot responses. Missing runtime
-components are a confirmed source/image deficiency, not proof of the cause of
-that individual failure. A successful synthetic test or image build does not
-prove that YouTube accepts the production IP or that every video is available.
-CI additionally probes the seven-second public sample `x41yOUIvK2k` from the
-pinned yt-dlp extractor tests. It uses the actual application downloader and
-checks for a readable audio stream in an isolated disposable container. A
-120-second deadline, memory/CPU/process limits, small temporary filesystems and
-cleanup bound the probe. Only its result, error code, size and duration are
-printed; no video or provider diagnostics are retained. The probe is reported
-separately from deterministic tests because provider availability can change.
-It does not verify the production IP. No account cookies, purchased proxy or
-real payment are used by these probes.
-
-The final product release run `34296969142` at `52aef40` passed 1,224
-deterministic regression tests (3 skips), including isolated PostgreSQL
-concurrency checks, and the application image check. Browser checks passed
-34 cases (2 skips), including the fixed mobile assistant/cookie-banner overlap.
-
-The real YouTube probe still returned `LS-URL-02` / `bot_challenge`. It now runs
-with the pinned bgutil HTTP PO-token provider (`2.0.0`) in a private container
-sharing the downloader network. Diagnostic booleans confirmed `provider_seen`
-and `token_generated`, with no `provider_error`. A generated token therefore
-has not resolved the cloud runner's challenge. No token, cookie, or raw provider
-response is logged. This external failure must not be hidden by the green
-aggregate workflow status.
-
-The separate WPC guest-browser probe also started a real browser and generated
-a token, but received the same bot challenge. On September 9, 2026, the
-application at live revision `2b7f3a3` was additionally probed from an isolated
-Render worker job. Its pinned extractor, EJS and Deno were present; the actual
-application downloader returned `LS-URL-02` / `bot_challenge` in 4.1 seconds.
-That job did not enqueue customer work, use account cookies or retain media.
-It establishes failure in the deployment's cloud environment, not the exact
-outbound IP of every worker or an assurance about other videos.
-
-A further isolated Render experiment used the official Invidious Companion
-release with its published SHA-256 checked before execution. The child process
-received no database, storage, payment or OpenAI credentials and listened only
-on loopback. Its server started, but a bounded player request timed out without
-returning playable audio. Initialization messages were not counted as successful
-downloads. Its temporary processes/files were removed; it was not added to the
-production image. This alternative has not resolved YouTube access either.
-
-`YOUTUBE_POT_BASE_URL` is optional and limited to the reviewed private endpoints
-`http://127.0.0.1:4416` and `http://youtube-pot:4416`. Setting it selects the
-supported mweb client and requests fresh PO tokens; it never exposes the
-provider publicly or enables arbitrary proxy destinations. The private provider
-has only been configured in isolated CI, not production. The maintained provider
-itself warns that PO tokens cannot guarantee removal of IP/bot challenges:
-https://github.com/Brainicism/bgutil-ytdlp-pot-provider
+Re-enabling URL imports requires a new explicit product decision and a separate
+release design with a lawful, provider-supported integration, bounded cost and
+resource behavior, credential isolation, recovery behavior and remote
+integration evidence. Until those conditions exist, YouTube support must remain
+disabled.

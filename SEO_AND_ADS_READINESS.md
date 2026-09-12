@@ -1,6 +1,9 @@
 # LectureSift search and advertising readiness
 
-## Current check (9 September 2026)
+## Current check (12 September 2026)
+
+- GitHub `main` and both Render services are on merge `a24c161d`, but Netlify production is still serving `83fcdcd`. Production deploy `6aa1beb80a99dc0008a30257` for `a24c161d` failed before publication even though the identical source tree produced a successful deploy preview and GitHub CI passed. The public Netlify API does not expose the build error without authenticated log access. The next main-branch release must be treated as a deployment retry and verified by commit-specific public asset hashes and the live CSP header before PR80 is called fully live.
+- Netlify reported no platform incident for 9 September. That does not identify a project-level failure; inspect the authenticated deploy log if the next production attempt also fails.
 
 - The current task cannot read the owner's signed-in AdSense tab. Its URL is visible in ambient UI, but the available tools include no browser read/control capability. The previous panel observations below are historical, not today's approval status. Re-enabling Browser has not exposed the missing tools; do not repeatedly request the same action or copy browser cookies.
 - AdSense and Google Ads conversion identifiers are not active in the inspected application configuration. The claimed Google Ads promotional balance has not been verified; advertising spend and AdSense publisher income are separate products.

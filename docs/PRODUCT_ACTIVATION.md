@@ -69,7 +69,7 @@ actual synthetic PostgreSQL 18 dump/restore. Final activation run 34296969142
 at 52aef40 passed 1,224 tests (3 skips) and 34 browser checks (2 skips). The
 squashed live commit has the same tree. Live assistant/theme files and the
 official iyzico artwork match the reviewed source bytes. The live catalog
-advertises chat and 220-credit image creation. A real guest request at 01:08 UTC
+advertises chat and 200-credit image creation. A real guest request at 01:08 UTC
 returned a Turkish site-guidance answer, a registration action and zero charged
 credits. Real provider checks separately returned text and one valid JPEG.
 These results do not claim a live paid checkout, production restore or a
@@ -118,7 +118,7 @@ media access evidence.
 The API lifespan contains the minute-by-minute cache maintenance schedule; no
 new paid scheduler is needed. Disabled chat still prunes after schema capability
 is enabled. Image/video analysis is bounded. Image creation is now a separately switched,
-owned 220-credit action using one 1024x1024 medium-quality JPEG. It requires a
+owned 200-credit action using one 1024x1024 medium-quality JPEG. It requires a
 real `python -m deploy.assistant_provider_probe --image` check before setting
 `ASSISTANT_IMAGES_ENABLED=true`; chat
 access alone does not prove image access. The real September 9 provider probe

@@ -165,10 +165,25 @@ def test_role_files_cannot_override_baked_or_expected_revision():
 def test_github_social_checks_wait_for_exact_github_sha_first():
     workflow = _read(".github/workflows/production-social-check.yml")
 
+    checkout = workflow.index("uses: actions/checkout@v4")
+    publishing_gate = workflow.index(
+        "Validate source-controlled Instagram publishing state"
+    )
     revision_gate = workflow.index('expected_revision="${GITHUB_SHA,,}"')
     comparison = workflow.index('if [ "$revision" = "$expected_revision" ]')
     instagram = workflow.index("Verify Instagram connection and completed launch grid")
-    assert revision_gate < comparison < instagram
+    assert checkout < publishing_gate < revision_gate < comparison < instagram
+    assert "matching_services" in workflow
+    assert 'names == ["lecturesift-instagram-daily"]' in workflow
+    assert "len(matching_services) != 1" in workflow
+    assert "len(key_lines) != 1" in workflow
+    assert "if literal not in values" in workflow
+    assert "INSTAGRAM_DAILY_AUTOMATION_ENABLED must be literal true or false" in workflow
+    social_condition = (
+        "if: ${{ steps.instagram_publishing.outputs.enabled == 'true' }}"
+    )
+    assert workflow.count(social_condition) == 3
+    assert workflow.index(social_condition) > comparison
     assert "Production API did not serve GITHUB_SHA in time" in workflow
     assert "social checks are blocked" in workflow
 

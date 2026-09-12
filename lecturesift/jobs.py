@@ -13,6 +13,18 @@ from .config import JOB_TTL_SECONDS, REDIS_URL, WORK_DIR
 from .storage import STORAGE
 
 
+_DELETABLE_WORKER_STATES_BY_STATUS = {
+    "done": frozenset({None, "done", "error", "failed", "rejected", "local_fallback"}),
+    "error": frozenset({None, "done", "error", "failed", "rejected", "unavailable", "local_fallback"}),
+}
+
+
+def is_job_deletable(data: dict[str, Any]) -> bool:
+    """Return whether persisted lifecycle state permits a locked deletion."""
+    allowed_worker_states = _DELETABLE_WORKER_STATES_BY_STATUS.get(data.get("status"), ())
+    return data.get("worker_state") in allowed_worker_states
+
+
 class JobStore:
     TASK_WEIGHTS = {"visual": 38.0, "audio": 32.0}
     REDIS_KEY = "lecturesift:jobs:v2"
@@ -326,7 +338,7 @@ class JobStore:
             data = self.metadata(job_id)
             if not data or data.get("options", {}).get("billing_user_id") != user_id:
                 raise BillingError("Ders bulunamadı.")
-            if data.get("status") not in {"done", "error"} or data.get("worker_state") not in {None, "done", "error", "failed", "rejected"}:
+            if not is_job_deletable(data):
                 raise BillingError("Ders hâlâ işleniyor. İşlem bittikten sonra silebilirsin.")
             path = WORK_DIR / job_id if data.get("remote_prefix") and STORAGE.remote else Path(data.get("job_dir", WORK_DIR / job_id))
             if path.resolve().parent != WORK_DIR.resolve() or path.is_symlink():

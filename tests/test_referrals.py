@@ -434,7 +434,9 @@ def test_renewal_minutes_reward_only_inviter_and_release_is_idempotent(state):
     assert renewal.referral_id == first_id
     assert (renewal.inviter_minutes, renewal.invitee_minutes) == (30, 0)
     referrals.choose_reward(inviter, renewal.id, "minutes")
-    pending = {row["id"]: row for row in referrals.admin_pending()}
+    queue = referrals.admin_pending()
+    pending = {row["id"]: row for row in queue["rewards"]}
+    assert queue["has_more"] is False and queue["limit"] == 100
     assert pending[renewal.id]["kind"] == "renewal"
     assert pending[renewal.id]["coupon_percent"] == 5
     assert pending[renewal.id]["coupon_max_discount_minor"] == 2500
@@ -450,6 +452,66 @@ def test_renewal_minutes_reward_only_inviter_and_release_is_idempotent(state):
     assert summary["renewal"]["monthly_per_invitee_cap"] == 1
     assert {row["kind"] for row in summary["rewards"]} == {"first_purchase", "renewal"}
     assert referrals.summary(invitee)["earned_minutes"] == 30
+
+
+def test_admin_pending_prioritizes_actionable_rewards_and_reports_more(state, monkeypatch):
+    terms = referrals.REGIONAL_FIRST_PURCHASE_TERMS
+    waiting = []
+    for index in range(101):
+        qualified_at = state["now"] - timedelta(days=30) + timedelta(minutes=index)
+        waiting.append({
+            "id": str(uuid.uuid4()),
+            "invitee_user_id": f"queue-invitee-{index:03d}",
+            "inviter_user_id": "queue-inviter",
+            "order_reference": f"LS-QUEUE-{index:03d}",
+            "status": "pending",
+            "reward_choice": None,
+            "policy_version": terms.version,
+            "reservation_month": "2026-09",
+            "inviter_minutes": terms.inviter_minutes,
+            "invitee_minutes": terms.invitee_minutes,
+            "created_at": qualified_at,
+            "qualified_at": qualified_at,
+            "pending_until": state["now"] - timedelta(days=1),
+        })
+    actionable_id = str(uuid.uuid4())
+    waiting.append({
+        "id": actionable_id,
+        "invitee_user_id": "queue-actionable-invitee",
+        "inviter_user_id": "queue-inviter",
+        "order_reference": "LS-QUEUE-ACTIONABLE",
+        "status": "pending",
+        "reward_choice": "minutes",
+        "policy_version": terms.version,
+        "reservation_month": "2026-09",
+        "inviter_minutes": terms.inviter_minutes,
+        "invitee_minutes": terms.invitee_minutes,
+        "created_at": state["now"],
+        "qualified_at": state["now"],
+        "pending_until": state["now"] - timedelta(minutes=1),
+    })
+    with billing.ENGINE.begin() as connection:
+        connection.execute(referrals.REWARDS.insert(), waiting)
+
+    queue = referrals.admin_pending()
+    assert queue["has_more"] is True and queue["limit"] == 100
+    assert len(queue["rewards"]) == 100
+    assert queue["rewards"][0]["id"] == actionable_id
+    assert queue["rewards"][0]["hold_complete"] is True
+    assert queue["rewards"][0]["actionable"] is True
+    assert queue["rewards"][1]["actionable"] is False
+
+    monkeypatch.setattr(billing.config, "ADMIN_ADMIN", "private-admin-test")
+    response = TestClient(app).get(
+        "/billing/admin/referrals?limit=25",
+        headers={"Authorization": "Bearer private-admin-test"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["has_more"] is True and payload["limit"] == 25
+    assert len(payload["rewards"]) == 25
+    assert payload["rewards"][0]["id"] == actionable_id
+    assert payload["rewards"][0]["actionable"] is True
 
 
 def test_renewal_and_first_coupons_keep_their_distinct_terms(state):
