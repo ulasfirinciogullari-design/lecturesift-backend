@@ -36,6 +36,47 @@ def test_plan_page_preserves_learning_entitlements_and_zero_decimal_prices():
     assert "accountAdMode" in (FRONTEND / "account.html").read_text(encoding="utf-8")
 
 
+def test_account_uses_fixed_term_self_service_and_zero_decimal_payment_amounts():
+    account = (FRONTEND / "account.html").read_text(encoding="utf-8")
+    auth = (FRONTEND / "auth.js").read_text(encoding="utf-8")
+    plans = (FRONTEND / "plans.html").read_text(encoding="utf-8")
+    plan_script = (FRONTEND / "plans.js").read_text(encoding="utf-8")
+    catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+
+    assert 'const ZERO_DECIMAL_CURRENCIES = new Set(["JPY", "KRW"]);' in auth
+    assert "const minorUnitDivisor" in auth and "const minorUnitDivisor" in plan_script
+    assert "const divisor = minorUnitDivisor(currency);" in auth
+    assert "amountMinor / divisor" in auth
+    assert "`${formatted} · ${currency}`" in auth
+    assert "Number(order.amount_minor || 0) / minorUnitDivisor(purchaseCurrency)" in auth
+    assert "Number(price.amount_minor * multiplier) / minorUnitDivisor(analyticsCurrency)" in plan_script
+    assert "managePlanLink" in account and "account.fixedTermHelp" in account
+    assert 'localized("/plans.html")' in auth
+    assert "?plan=${encodeURIComponent(account.plan.code)}&interval=${interval}" in auth
+    assert "/billing/me/subscription/cancel" not in auth
+    assert "cancelSubscriptionButton" not in account
+    assert "checkoutFixedTermNotice" in plans
+    assert 'pt("plans.subscription", "Sabit süreli paket")' in plan_script
+    assert "Aylık abonelik" not in plan_script
+    assert "account?.subscription" not in plan_script
+    assert "payment.fixedTermReplacement" not in plan_script
+    assert "payment.fixedTermReplacement" not in catalog
+    assert "o anda aktif ücretli dönem varsa" in plan_script
+    assert "mevcut dönemin paket hakkı aktarılmaz" in plan_script
+    assert 'pt("plans.currencyUnavailable"' in plan_script
+    for key in (
+        "account.fixedTermHelp",
+        "account.manageFixedTerm",
+        "plans.subscription",
+        "plans.currencyUnavailable",
+        "payment.fixedTermCheckout",
+    ):
+        values = json.loads(
+            re.search(rf'"{re.escape(key)}":(\[[^\n]+\])', catalog).group(1)
+        )
+        assert len(values) == 13 and all(value.strip() for value in values)
+
+
 def test_all_frontend_plan_fallbacks_use_only_the_detailed_summary_profile():
     plans = (FRONTEND / "plans.js").read_text(encoding="utf-8")
     workspace = (FRONTEND / "app.js").read_text(encoding="utf-8")
@@ -303,7 +344,7 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         expected_theme_version = "17"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
         assert "/theme.js?v=10" in content, page.name
-        assert "i18n.js?v=36" in content, page.name
+        assert "i18n.js?v=37" in content, page.name
         assert "page-i18n.js?v=7" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
@@ -588,11 +629,11 @@ def test_payment_routes_are_distinct_localized_and_account_history_is_auditable(
         assert len(values) == 13, key
         assert all(str(value).strip() for value in values), key
 
-    assert 'src="/plans.js?v=23"' in plans_html
+    assert 'src="/plans.js?v=24"' in plans_html
     assert 'manualTransfer = {available:Boolean(transferBody?.available), bank:null};' in plans_js
     assert 'order.bank?.iban' in plans_js
     assert 'transferBody?.bank' not in plans_js
-    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=15"', 'href="./auth.css?v=4"'))
+    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=16"', 'href="./auth.css?v=4"'))
     assert all(value in auth_js for value in ("paymentMethodLabel", "paymentMoney", "paymentDateTime", "payment-order-meta"))
     assert all(value in admin_html for value in ('value="iyzico_card"', 'value="iyzico_bank_transfer"', 'value="manual_bank_transfer"', 'value="iyzico_legacy"'))
     assert "provider:selectedProvider" in admin_js
@@ -620,7 +661,8 @@ def test_profile_admin_automatic_payment_and_full_comparison_interfaces_are_pres
         )
     )
     assert "/billing/me/profile" in auth and "/billing/me/change-password" in auth
-    assert "/billing/me/subscription/cancel" in auth
+    assert "/billing/me/subscription/cancel" not in auth
+    assert "managePlanLink" in account and "account.fixedTermHelp" in auth
     assert "/jobs?limit=30" not in auth and "jobHistory" not in account
     assert "/billing/me/export" in auth and "/billing/me/close-account" in auth
     assert 'href="/admin.html"' not in account

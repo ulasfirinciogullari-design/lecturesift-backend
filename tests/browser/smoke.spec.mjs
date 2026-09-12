@@ -27,6 +27,58 @@ test('assistant credit choices retain amount, currency and language through sign
   expect(await page.evaluate(()=>localStorage.getItem('lecturesift-currency'))).toBe('JPY');
 });
 
+test('account shows zero-decimal payments and fixed-term package self-service', async ({page}) => {
+  const cors={'Access-Control-Allow-Origin':'http://127.0.0.1:4173','Access-Control-Allow-Methods':'GET,OPTIONS','Access-Control-Allow-Headers':'authorization,content-type'};
+  const account={
+    user:{email:'billing-owner@example.invalid',first_name:'Billing',last_name:'Owner',country_code:'JP',phone:null,preferred_language:'en'},
+    plan:{code:'plus',minutes:900,entitlements:{ad_free:false,ad_mode:'limited'}},
+    subscription:{status:'active',interval:'monthly',starts_at:'2026-09-01T00:00:00Z',ends_at:'2026-10-01T00:00:00Z',cancel_at_period_end:false},
+    remaining_minutes:850,used_minutes:50,credit_minutes:0,permanent_ad_free:false,is_admin:false,
+    manual_orders:[{reference:'jpy-order',order_number:'LS-JPY',provider:'manual',payment_method:'bank_transfer',payment_method_confirmed:true,plan_code:'plus',amount_minor:2001,currency:'JPY',status:'paid',created_at:'2026-09-10T10:00:00Z'}],
+    payment_orders:[{reference:'krw-order',order_number:'LS-KRW',provider:'manual',payment_method:'bank_transfer',payment_method_confirmed:true,plan_code:'plus',amount_minor:18544,currency:'KRW',status:'paid',created_at:'2026-09-11T10:00:00Z'}],
+  };
+  await page.addInitScript(()=>{localStorage.setItem('lecturesift-billing-token','synthetic-fixed-term-owner');localStorage.setItem('lecturesift-currency','TRY');});
+  await page.route('https://api.lecturesift.com/billing/me',route=>route.fulfill({status:200,headers:cors,json:{account}}));
+  await page.route('https://api.lecturesift.com/billing/me/refund-requests',route=>route.fulfill({status:200,headers:cors,json:{requests:[]}}));
+  await page.route('https://api.lecturesift.com/billing/referrals',route=>route.fulfill({status:200,headers:cors,json:{ok:true,referrals:{enabled:false}}}));
+  await page.route('https://api.lecturesift.com/billing/plans?currency=TRY',route=>route.fulfill({status:200,headers:cors,json:{plans:[],selected_currency:'TRY'}}));
+  await page.route('https://api.lecturesift.com/billing/plans?currency=JPY',route=>route.fulfill({status:200,headers:cors,json:{plans:[],selected_currency:'JPY'}}));
+  await page.route('https://api.lecturesift.com/billing/providers',route=>route.fulfill({status:200,headers:cors,json:{providers:[{code:'iyzico',configured:true,status:'active',currencies:['TRY','USD','EUR','GBP','NOK','CHF'],capabilities:['cards','foreign_cards','one_time','monthly','annual','3ds','signed_webhook'],checkout:'hosted_redirect',recurring:false,webhook_signature:{required:true,version:'v3'}}],commerce_identity:{configured:true}}}));
+  await page.route('https://api.lecturesift.com/billing/manual-transfer',route=>route.fulfill({status:200,headers:cors,json:{available:false}}));
+  await page.goto('/en/account.html');
+  await page.locator('[data-consent="essential"]').click();
+  await expect(page.locator('#subscriptionState')).toContainText('Go to Plans to buy a new fixed-term package');
+  await expect(page.locator('#managePlanLink')).toHaveAttribute('href','/en/plans?plan=plus&interval=monthly');
+  await expect(page.locator('#cancelSubscriptionButton')).toHaveCount(0);
+  await page.locator('[data-account-view-button="payments"]').click();
+  await expect(page.locator('#ordersList')).toContainText('2,001');
+  await expect(page.locator('#ordersList')).toContainText('18,544');
+  await expect(page.locator('#ordersList')).toContainText('JPY');
+  await expect(page.locator('#ordersList')).toContainText('KRW');
+  await expect(page.locator('.payment-order-row').filter({hasText:'LS-JPY'}).locator('dd').nth(1)).toHaveText('¥2,001 · JPY');
+  await expect(page.locator('.payment-order-row').filter({hasText:'LS-KRW'}).locator('dd').nth(1)).toHaveText('₩18,544 · KRW');
+  await expect(page.locator('#ordersList')).not.toContainText('20.01');
+  await expect(page.locator('#ordersList')).not.toContainText('185.44');
+  await noHorizontalOverflow(page);
+  await page.locator('[data-account-view-button="overview"]').click();
+  await page.locator('#managePlanLink').click();
+  await expect(page).toHaveURL(/\/en\/plans(?:\.html)?$/);
+  await expect(page.locator('#checkoutPanel')).toBeVisible();
+  await expect(page.locator('#checkoutPlanCode')).toHaveValue('plus');
+  await expect(page.locator('#checkoutInterval')).toHaveValue('monthly');
+  await expect(page.locator('#checkoutFixedTermNotice')).toBeVisible();
+  await expect(page.locator('#checkoutFixedTermNotice')).toContainText('one-time payment for a new fixed term');
+  await expect(page.locator('#checkoutFixedTermNotice')).toContainText('if an active paid term exists then it replaces it');
+  await expect(page.locator('#checkoutFixedTermNotice')).toContainText('current-period plan allowance do not carry forward');
+  await expect(page.locator('#checkoutFixedTermNotice')).toContainText('does not renew automatically');
+  await page.locator('#checkoutClose').click();
+  await page.locator('#billingCurrency').selectOption('JPY');
+  await expect(page.locator('#plansGrid')).toContainText('¥');
+  await page.locator('.plan-action[data-plan="lite"][data-interval="monthly"]').click();
+  await expect(page.locator('#errorBox')).toBeVisible();
+  await expect(page.locator('#errorMessage')).toHaveText('iyzico is active, but card checkout does not support JPY. Choose a currency supported by the provider to pay.');
+});
+
 test('referrals keep sharing, reward choices and coupons usable on narrow screens', async ({page}, testInfo) => {
   const cors={'Access-Control-Allow-Origin':'http://127.0.0.1:4173','Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Allow-Headers':'authorization,content-type'};
   const first='referral-2026-09-v2', renewal='referral-2026-09-renewal-v1';

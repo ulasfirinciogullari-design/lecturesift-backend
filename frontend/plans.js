@@ -5,6 +5,7 @@ const LOCALE_DATA = window.LECTURESIFT_LOCALE_DATA || {
   countries: [], currencies: ["TRY", "USD", "EUR", "GBP"], currencyForCountry: {},
 };
 const ZERO_DECIMAL_CURRENCIES = new Set(["JPY", "KRW"]);
+const minorUnitDivisor = currency => ZERO_DECIMAL_CURRENCIES.has(String(currency || "").toUpperCase()) ? 1 : 100;
 const PLANS_I18N = window.LectureSiftI18n || {language:"tr",locale:"tr-TR",t:(key,fallback)=>fallback || key};
 const pt = (key, fallback) => PLANS_I18N.t(key, fallback);
 const REFERRAL_I18N = window.LectureSiftReferralI18n || {t:(_key, fallback)=>fallback || ""};
@@ -112,7 +113,7 @@ function populateCurrencies() {
 }
 
 function format(amount, code) {
-  const divisor = ZERO_DECIMAL_CURRENCIES.has(code) ? 1 : 100;
+  const divisor = minorUnitDivisor(code);
   return new Intl.NumberFormat(PLANS_I18N.locale || navigator.language, {
     style: "currency", currency: code, maximumFractionDigits: divisor === 1 ? 0 : 2,
   }).formatToParts(amount / divisor).map(part =>
@@ -190,7 +191,7 @@ function renderCompare() {
   $("compareHead").innerHTML = `<tr><th>${esc(pt("plans.right", "Hak"))}</th>${plans.map(plan => `<th>${esc(planLabel(plan.code))}</th>`).join("")}</tr>`;
   const yes = pt("common.yes", "Evet"), all = pt("common.all", "Tümü"), standard = pt("priority.standard", "Standart"), priority = pt("priority.priority", "Öncelikli");
   const rows = [
-    [pt("plans.billingType", "Ödeme türü"), plan => plan.kind === "subscription" ? pt("plans.subscription", "Aylık abonelik") : plan.kind === "one_time" ? pt("plans.oneTime", "Tek ödeme") : plan.kind === "free" ? pt("plan.free", "Ücretsiz") : pt("plans.quote", "Teklif")],
+    [pt("plans.billingType", "Ödeme türü"), plan => plan.kind === "subscription" ? pt("plans.subscription", "Sabit süreli paket") : plan.kind === "one_time" ? pt("plans.oneTime", "Tek ödeme") : plan.kind === "free" ? pt("plan.free", "Ücretsiz") : pt("plans.quote", "Teklif")],
     [pt("plans.minutes", "İşleme dakikası"), plan => plan.entitlements?.minutes == null ? "∞" : Number(plan.entitlements.minutes).toLocaleString(PLANS_I18N.locale)],
     [pt("plans.singleJobLimit", "Tek iş süre sınırı"), plan => `${Number(plan.entitlements?.limits?.max_minutes_per_job || 0).toLocaleString(PLANS_I18N.locale)} ${pt("unit.minuteShort", "dk")}`],
     [pt("plans.historyDays", "Sonuç geçmişi (gün)"), plan => Number(plan.entitlements?.history_days || 0).toLocaleString(PLANS_I18N.locale)],
@@ -415,7 +416,13 @@ async function buy(planCode, interval = "monthly") {
   const protectedAvailable = Boolean(automaticBankTransferStatus().configured && currency === "TRY");
   const manualAvailable = Boolean(manualTransfer.available && currency === "TRY");
   if (!cardAvailable && !protectedAvailable && !manualAvailable) {
-    showError(pt("plans.globalPending", "Global kart ve yerel ödeme yöntemleri ödeme sağlayıcısı etkinleştiğinde açılacak. Şimdilik havale için TRY seçebilirsin."));
+    if (provider.configured && !provider.currencies?.includes(currency)) {
+      const providerName = provider.code === "paytr" ? "PayTR" : "iyzico";
+      showError(pt("plans.currencyUnavailable", "{provider} etkin, ancak {currency} ile kartlı ödeme desteklenmiyor. Ödeme için sağlayıcının desteklediği bir para birimi seç.")
+        .replace("{provider}", providerName).replace("{currency}", currency));
+    } else {
+      showError(pt("plans.globalPending", "Global kart ve yerel ödeme yöntemleri ödeme sağlayıcısı etkinleştiğinde açılacak. Şimdilik havale için TRY seçebilirsin."));
+    }
     return;
   }
   $("checkoutPlanCode").value = planCode;
@@ -424,9 +431,10 @@ async function buy(planCode, interval = "monthly") {
   const plan = catalog?.plans?.find(item => item.code === planCode);
   const price = plan?.display_price || plan?.manual_price;
   const multiplier = interval === "annual" ? 10 : 1;
+  const analyticsCurrency = String(price?.currency || currency).toUpperCase();
   recordPlanAnalytics("begin_checkout", {
-    currency: price?.currency || currency,
-    value: price ? Number(price.amount_minor * multiplier) / 100 : 0,
+    currency: analyticsCurrency,
+    value: price ? Number(price.amount_minor * multiplier) / minorUnitDivisor(analyticsCurrency) : 0,
     items: [{item_id: planCode, item_name: planLabel(planCode), quantity: 1}],
   });
   $("checkoutSummaryPlan").textContent = planLabel(planCode);
@@ -438,6 +446,11 @@ async function buy(planCode, interval = "monthly") {
   $("checkoutSummaryTotal").textContent = price
     ? format(price.amount_minor * multiplier, price.currency || currency)
     : pt("plans.quote", "Teklif");
+  const fixedTermNotice = $("checkoutFixedTermNotice");
+  fixedTermNotice.hidden = plan?.kind !== "subscription";
+  if (!fixedTermNotice.hidden) {
+    fixedTermNotice.textContent = pt("payment.fixedTermCheckout", "Bu, yeni bir sabit dönem için tek seferlik ödemedir. Onaylandığında hemen başlar; o anda aktif ücretli dönem varsa onun yerine geçer. Kullanılmamış süre ve mevcut dönemin paket hakkı aktarılmaz. Otomatik yenilenmez.");
+  }
   const couponEligible = LOCALE_DATA.currencies.includes(currency) && interval === "monthly" && COUPON_PLANS.has(planCode);
   $("checkoutCouponRow").hidden = !couponEligible;
   $("checkoutCoupon").disabled = !couponEligible;
