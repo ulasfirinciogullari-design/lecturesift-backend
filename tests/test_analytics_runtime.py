@@ -25,7 +25,8 @@ async function run(pathname) {
     document: {
       readyState: 'complete',
       createElement: () => ({}),
-      head: {append: element => scripts.push(element.src)},
+      querySelector: selector => selector === 'script[nonce]' ? {nonce: 'preview-nonce'} : null,
+      head: {append: element => scripts.push(element)},
       addEventListener: (name, callback) => listeners.set(name, callback),
     },
     LectureSiftConsent: {get: () => consent},
@@ -52,7 +53,8 @@ async function run(pathname) {
     await context.LectureSiftAnalytics.track('after_revoke');
     await context.LectureSiftAnalytics.trackConversion('signup');
   }
-  return {pathname, scripts, requests, event, conversion, beforeRevoke,
+  return {pathname, scripts: scripts.map(element => element.src),
+    scriptNonces: scripts.map(element => element.nonce || ''), requests, event, conversion, beforeRevoke,
     calls: (context.dataLayer || []).map(args => Array.from(args))};
 }
 (async () => {
@@ -86,6 +88,11 @@ def test_all_localized_clean_and_legacy_public_routes_measure_once():
         assert configurations(row)["G-SYNTHETIC"]["send_page_view"] is True
         assert len([call for call in row["calls"] if call[0] == "config"]) == 2
         assert row["event"] is True and row["conversion"] is True
+
+
+def test_google_tag_copies_the_static_preview_nonce():
+    row, = observe(["/plans"])
+    assert row["scriptNonces"] == ["preview-nonce"]
 
 
 def test_private_token_pages_and_workspace_never_start_measurement():

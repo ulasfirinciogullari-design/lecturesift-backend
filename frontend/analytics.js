@@ -9,6 +9,7 @@
   ]);
   const EVENT_PATHS = new Set([...PUBLIC_PATHS, "/register", "/account"]);
   const configuredIds = new Set();
+  const pageNonce = document.querySelector("script[nonce]")?.nonce || "";
   let remoteConfig = null;
   let configPromise = null;
   let tagLoaded = false;
@@ -68,6 +69,7 @@
     script.async = true;
     script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(id)}`;
     script.referrerPolicy = "strict-origin-when-cross-origin";
+    if (pageNonce) script.nonce = pageNonce;
     document.head.append(script);
   }
 

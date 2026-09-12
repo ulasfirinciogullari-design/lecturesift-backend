@@ -1,0 +1,8 @@
+{
+  "name": "lecturesift-netlify-build",
+  "version": "1.0.0",
+  "private": true,
+  "devDependencies": {
+    "@netlify/plugin-csp-nonce": "1.6.2"
+  }
+}

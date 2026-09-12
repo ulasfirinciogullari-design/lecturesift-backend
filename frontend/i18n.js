@@ -783,7 +783,7 @@
   consentScript.defer = true;
   document.head.append(consentScript);
   const analyticsScript = document.createElement("script");
-  analyticsScript.src = "/analytics.js?v=3";
+  analyticsScript.src = "/analytics.js?v=4";
   analyticsScript.defer = true;
   document.head.append(analyticsScript);
   const rewardedAdsScript = document.createElement("script");
@@ -795,7 +795,7 @@
   displayAdsStyle.href = "/display-ads.css?v=2";
   document.head.append(displayAdsStyle);
   const displayAdsScript = document.createElement("script");
-  displayAdsScript.src = "/display-ads.js?v=4";
+  displayAdsScript.src = "/display-ads.js?v=5";
   displayAdsScript.defer = true;
   document.head.append(displayAdsScript);
   if (location.hostname.endsWith(".netlify.app")) {

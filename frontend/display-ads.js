@@ -5,6 +5,7 @@
   const GPT_SRC = "https://securepubads.g.doubleclick.net/tag/js/gpt.js";
   const PUBLIC_AD_PATHS = new Set(["/", "/features", "/plans", "/about"]);
   const TOKEN_KEY = "lecturesift-billing-token";
+  const pageNonce = document.querySelector("script[nonce]")?.nonce || "";
   let started = false;
   let activeDisplaySlot = null;
   let adsenseAutoAdsLoaded = false;
@@ -119,6 +120,7 @@
       script.async = true;
       script.src = GPT_SRC;
       script.referrerPolicy = "strict-origin-when-cross-origin";
+      if (pageNonce) script.nonce = pageNonce;
       script.onload = resolve;
       script.onerror = () => reject(new Error("display-ad-provider-unavailable"));
       document.head.append(script);
@@ -133,6 +135,7 @@
     script.crossOrigin = "anonymous";
     script.dataset.lecturesiftAdsense = "true";
     script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(publisherId)}`;
+    if (pageNonce) script.nonce = pageNonce;
     document.head.append(script);
     adsenseAutoAdsLoaded = true;
   }
@@ -158,6 +161,7 @@
       if (!advertisingAllowed()) { container.remove(); return; }
       window.googletag.cmd.push(() => {
         if (!advertisingAllowed()) { container.remove(); return; }
+        window.googletag.setConfig({safeFrame: {forceSafeFrame: true}});
         const pubads = window.googletag.pubads();
         pubads.addEventListener("slotRenderEnded", event => {
           if (event.slot?.getSlotElementId?.() === slot.id && event.isEmpty) container.remove();
