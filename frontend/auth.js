@@ -3,6 +3,8 @@ const TOKEN_KEY = "lecturesift-billing-token";
 const LOCALE_DATA = window.LECTURESIFT_LOCALE_DATA || {countries: [], currencies: [], currencyForCountry: {}};
 const I18N = window.LectureSiftI18n || {language:"tr", locale:"tr-TR", languages:{tr:"Türkçe"}, t:(key, fallback)=>fallback || key};
 const REFERRAL_I18N = window.LectureSiftReferralI18n || {t:(_key, fallback)=>fallback || "", format:(_key, _values, fallback)=>fallback || ""};
+const ZERO_DECIMAL_CURRENCIES = new Set(["JPY", "KRW"]);
+const minorUnitDivisor = currency => ZERO_DECIMAL_CURRENCIES.has(String(currency || "").toUpperCase()) ? 1 : 100;
 const page = document.body.dataset.page || "login";
 const $ = id => document.getElementById(id);
 const t = (key, fallback) => I18N.t(key, fallback);
@@ -325,8 +327,8 @@ function planName(code) {
 }
 
 async function initAccount() {
+  const localized = route => I18N.localizedPath ? I18N.localizedPath(I18N.language, route) : route;
   const accountSignInPath = () => {
-    const localized = route => I18N.localizedPath ? I18N.localizedPath(I18N.language, route) : route;
     const section = /^#account-(overview|profile|payments|lessons|referrals|security)$/.test(location.hash) ? location.hash : "";
     return `${localized("/login.html")}?next=${encodeURIComponent(localized("/account.html") + section)}`;
   };
@@ -406,10 +408,18 @@ async function initAccount() {
   const paymentMoney = order => {
     const amountMinor = Number(order.amount_minor);
     if (!Number.isFinite(amountMinor)) return "—";
+    const currency = String(order.currency || "TRY").toUpperCase();
+    const divisor = minorUnitDivisor(currency);
     try {
-      return new Intl.NumberFormat(I18N.locale, {style:"currency", currency:String(order.currency || "TRY").toUpperCase()}).format(amountMinor / 100);
+      const formatted = new Intl.NumberFormat(I18N.locale, {
+        style:"currency", currency, maximumFractionDigits:divisor === 1 ? 0 : 2,
+      }).formatToParts(amountMinor / divisor).map(part =>
+        part.type === "currency" ? (LOCALE_DATA.currencySymbols?.[currency] || part.value) : part.value
+      ).join("");
+      return `${formatted} · ${currency}`;
     } catch (_) {
-      return `${(amountMinor / 100).toLocaleString(I18N.locale)} ${String(order.currency || "TRY").toUpperCase()}`;
+      const symbol = LOCALE_DATA.currencySymbols?.[currency] || "";
+      return `${symbol}${(amountMinor / divisor).toLocaleString(I18N.locale)} · ${currency}`;
     }
   };
 
@@ -583,11 +593,9 @@ async function initAccount() {
     $("subscriptionActions").hidden = !subscription;
     if (subscription) {
       $("subscriptionEnds").textContent = new Intl.DateTimeFormat(I18N.locale, {dateStyle:"long"}).format(new Date(subscription.ends_at));
-      const scheduled = Boolean(subscription.cancel_at_period_end);
-      $("subscriptionState").textContent = scheduled
-        ? t("account.cancellationScheduled", "Yenileme durduruldu; ücretli hakların dönem sonuna kadar açık.")
-        : t("account.renewsUntilCancelled", "Ücretli hakların dönem boyunca açık. Yenilemeyi dilediğinde durdurabilirsin.");
-      $("cancelSubscriptionButton").hidden = scheduled;
+      $("subscriptionState").textContent = t("account.fixedTermHelp", "Yeni bir sabit süreli paket satın almak veya paketini değiştirmek için Planlar’a git. Satın alma otomatik yenilenmez; mevcut döneme ve haklarına etkisi ödeme öncesinde gösterilir.");
+      const interval = subscription.interval === "annual" ? "annual" : "monthly";
+      $("managePlanLink").href = `${localized("/plans.html")}?plan=${encodeURIComponent(account.plan.code)}&interval=${interval}`;
     }
     $("accountAdMode").textContent = account.permanent_ad_free
       ? t("plan.ad_free", "Kalıcı reklamsız kullanım")
@@ -658,10 +666,11 @@ async function initAccount() {
           showFormNotice("paymentResultNotice", t("payment.confirmed", "Ödeme doğrulandı; plan veya kredilerin hesabına eklendi."));
           const conversionKey = `lecturesift-purchase-${reference}`;
           if (!sessionStorage.getItem(conversionKey)) {
+            const purchaseCurrency = String(order.currency || "TRY").toUpperCase();
             const purchase = {
               transaction_id: reference,
-              value: Number(order.amount_minor || 0) / 100,
-              currency: order.currency || "TRY",
+              value: Number(order.amount_minor || 0) / minorUnitDivisor(purchaseCurrency),
+              currency: purchaseCurrency,
               items: [{item_id: order.plan_code, item_name: planName(order.plan_code), quantity: 1}],
             };
             sessionStorage.setItem(conversionKey, "1");
@@ -784,19 +793,6 @@ async function initAccount() {
       token = body.token; localStorage.setItem(TOKEN_KEY, token); renderAccount(body.account); $("passwordForm").reset(); showFormNotice("passwordNotice", body.message);
     } catch (error) { showFormNotice("passwordNotice", error.message, true); }
     finally { setBusy(button, false, t("security.changePassword", "Parolayı değiştir")); }
-  });
-  $("cancelSubscriptionButton").addEventListener("click", async () => {
-    if (!confirm(t("account.cancelConfirm", "Abonelik yenilemesini durdurmak istediğine emin misin? Mevcut dönem hakların korunacak."))) return;
-    const button = $("cancelSubscriptionButton");
-    setBusy(button, true, t("state.saving", "Kaydediliyor…"));
-    try {
-      const body = await request("/billing/me/subscription/cancel", {method:"POST"}, token);
-      renderAccount(body.account);
-      showFormNotice("subscriptionNotice", body.message);
-    } catch (error) {
-      showFormNotice("subscriptionNotice", error.message, true);
-      setBusy(button, false, t("account.cancelSubscription", "Abonelik yenilemesini durdur"));
-    }
   });
   $("refundRequestForm").addEventListener("submit", async event => {
     event.preventDefault();
