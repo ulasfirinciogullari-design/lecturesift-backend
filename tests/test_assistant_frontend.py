@@ -16,6 +16,15 @@ def test_assistant_catalog_covers_all_thirteen_languages():
         assert all(value.strip() for value in values)
 
 
+def test_assistant_referral_copy_uses_processing_time_in_japanese():
+    text = (ROOT / "frontend/assistant-i18n.js").read_text()
+    match = re.search(r"^\s+invitenote: (\[.*\]),$", text, re.MULTILINE)
+    assert match
+    values = json.loads(match.group(1))
+    assert values[10] == "友達を招待しましょう。対象となる有料サブスクリプションの購入・更新で、処理時間（分）または割引クーポンを獲得できます。"
+    assert "分数" not in values[10]
+
+
 def test_assistant_uses_literal_text_and_allowlisted_local_actions():
     source = (ROOT / "frontend/assistant.js").read_text()
     assert "node.textContent=text" in source

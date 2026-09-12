@@ -22,6 +22,13 @@ WARNINGS = {
     "hi": "कार्ड नंबर, पासवर्ड या सत्यापन कोड न भेजें।",
 }
 
+REVIEWED_JAPANESE_PROCESSING_TIME = {
+    "Bu sözleşme, LectureSift üzerinden satın alınan abonelik ve tek kullanımlık dakika paketlerinin uzaktan satış koşullarını düzenler. Sipariş ekranında gösterilen plan, dönem, toplam tutar ve kullanıcı bilgileri bu sözleşmenin ayrılmaz parçasıdır.": "本契約は、LectureSiftを通じて購入されるサブスクリプションおよび一回払いの処理時間パックに関する通信販売条件を定めます。注文画面に表示されるプラン、期間、合計金額、ユーザー情報は、本契約の不可分の一部を構成します。",
+    "Dakika, iş ve gelir karşılığı": "処理時間・ジョブ・売上の比較",
+    "Ek dakika satın al": "追加の処理時間を購入",
+    "İç kampanyayı, banner reklamları, reklam karşılığı dakikayı ve Google dönüşümlerini tek yerden izle.": "自社キャンペーン、バナー広告、広告視聴で付与される処理時間（分）、Googleコンバージョンを一か所で確認します。",
+}
+
 
 @pytest.mark.parametrize("language,warning", WARNINGS.items())
 def test_refund_translation_prohibits_sending_sensitive_details(language, warning):
@@ -57,3 +64,19 @@ def test_catalog_regeneration_repairs_cached_reversed_safety_copy(tmp_path):
         translations.SENSITIVE_TRANSLATIONS[translations.REFUND_REQUEST_COPY]
     )
     assert regenerated["Unaffected copy"] == unrelated_row
+
+
+def test_reviewed_japanese_processing_time_copy_survives_catalog_regeneration(tmp_path):
+    catalog = translations.read_catalog(FRONTEND / "page-i18n.js")
+    ja = translations.LANGUAGES.index("ja")
+    for source, expected in REVIEWED_JAPANESE_PROCESSING_TIME.items():
+        assert catalog[source][ja] == expected
+        assert translations.CURATED_TRANSLATIONS[source][ja] == expected
+        assert "分数" not in expected
+
+    catalog_path = tmp_path / "page-i18n.js"
+    stale = {source: [source] * len(translations.LANGUAGES) for source in REVIEWED_JAPANESE_PROCESSING_TIME}
+    translations.write_catalog(catalog_path, stale)
+    regenerated = translations.read_catalog(catalog_path)
+    for source, expected in REVIEWED_JAPANESE_PROCESSING_TIME.items():
+        assert regenerated[source][ja] == expected
