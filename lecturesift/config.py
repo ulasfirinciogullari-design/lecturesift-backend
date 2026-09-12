@@ -293,6 +293,28 @@ REWARDED_AD_DAILY_LIMIT_MINUTES = max(
     REWARDED_AD_MINUTES_PER_VIEW,
     int(os.getenv("LECTURESIFT_REWARDED_AD_DAILY_LIMIT_MINUTES", "3")),
 )
+# Google Publisher Tag exposes rewarded completion as a browser event on the
+# web; Google does not provide the signed server-side callback available to
+# native apps. Operators must explicitly accept that limited assurance and set
+# a finite global loss budget before this feature can become configured.
+REWARDED_AD_CLIENT_EVENT_RISK_ACCEPTED = (
+    os.getenv("LECTURESIFT_REWARDED_AD_CLIENT_EVENT_RISK_ACCEPTED", "false").lower() == "true"
+)
+REWARDED_AD_GLOBAL_DAILY_LIMIT_MINUTES = max(
+    0, int(os.getenv("LECTURESIFT_REWARDED_AD_GLOBAL_DAILY_LIMIT_MINUTES", "0"))
+)
+REWARDED_AD_SESSION_TTL_SECONDS = max(
+    60, min(300, int(os.getenv("LECTURESIFT_REWARDED_AD_SESSION_TTL_SECONDS", "120")))
+)
+REWARDED_AD_MIN_ACCOUNT_AGE_HOURS = max(
+    0, int(os.getenv("LECTURESIFT_REWARDED_AD_MIN_ACCOUNT_AGE_HOURS", "24"))
+)
+REWARDED_AD_COOLDOWN_SECONDS = max(
+    0, int(os.getenv("LECTURESIFT_REWARDED_AD_COOLDOWN_SECONDS", "300"))
+)
+REWARDED_AD_DAILY_ATTEMPT_LIMIT = max(
+    1, min(50, int(os.getenv("LECTURESIFT_REWARDED_AD_DAILY_ATTEMPT_LIMIT", "6")))
+)
 DISPLAY_ADS_ENABLED = os.getenv("LECTURESIFT_DISPLAY_ADS_ENABLED", "false").lower() == "true"
 DISPLAY_AD_UNIT_PATH = os.getenv("LECTURESIFT_DISPLAY_AD_UNIT_PATH", "").strip()
 # Deployment operators may activate Google publisher inventory only after the

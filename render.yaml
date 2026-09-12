@@ -182,6 +182,18 @@ services:
         value: "1"
       - key: LECTURESIFT_REWARDED_AD_DAILY_LIMIT_MINUTES
         value: "3"
+      - key: LECTURESIFT_REWARDED_AD_CLIENT_EVENT_RISK_ACCEPTED
+        value: "false"
+      - key: LECTURESIFT_REWARDED_AD_GLOBAL_DAILY_LIMIT_MINUTES
+        value: "0"
+      - key: LECTURESIFT_REWARDED_AD_SESSION_TTL_SECONDS
+        value: "120"
+      - key: LECTURESIFT_REWARDED_AD_MIN_ACCOUNT_AGE_HOURS
+        value: "24"
+      - key: LECTURESIFT_REWARDED_AD_COOLDOWN_SECONDS
+        value: "300"
+      - key: LECTURESIFT_REWARDED_AD_DAILY_ATTEMPT_LIMIT
+        value: "6"
       - key: LECTURESIFT_DISPLAY_ADS_ENABLED
         value: "false"
       - key: LECTURESIFT_DISPLAY_AD_UNIT_PATH

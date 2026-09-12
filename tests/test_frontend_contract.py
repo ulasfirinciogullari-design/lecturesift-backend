@@ -32,6 +32,8 @@ def test_plan_page_preserves_learning_entitlements_and_zero_decimal_prices():
     assert "flashcards: 60" in script
     assert "summary_profiles: ALL_SUMMARIES" in script
     assert "rewarded_minutes_eligible" in script
+    assert re.search(r'lite: .*rewarded_minutes_eligible: false', script)
+    assert re.search(r'plus: .*rewarded_minutes_eligible: false', script)
     assert 'pt("plans.adExperience", "Reklam deneyimi")' in script
     assert "accountAdMode" in (FRONTEND / "account.html").read_text(encoding="utf-8")
 
@@ -405,7 +407,7 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         expected_theme_version = "17"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
         assert "/theme.js?v=11" in content, page.name
-        assert "i18n.js?v=39" in content, page.name
+        assert "i18n.js?v=41" in content, page.name
         assert "page-i18n.js?v=8" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
@@ -691,7 +693,7 @@ def test_payment_routes_are_distinct_localized_and_account_history_is_auditable(
         assert len(values) == 13, key
         assert all(str(value).strip() for value in values), key
 
-    assert 'src="/plans.js?v=24"' in plans_html
+    assert 'src="/plans.js?v=25"' in plans_html
     assert 'manualTransfer = {available:Boolean(transferBody?.available), bank:null};' in plans_js
     assert 'order.bank?.iban' in plans_js
     assert 'transferBody?.bank' not in plans_js
@@ -1201,8 +1203,30 @@ def test_optional_analytics_and_advertising_are_consent_gated():
     assert "securepubads.g.doubleclick.net/tag/js/gpt.js" in rewarded
     assert 'OutOfPageFormat.REWARDED' in rewarded
     assert 'event.makeRewardedVisible()' in rewarded
+    assert 'visible !== true' in rewarded
+    assert "onPresented" in rewarded
+    assert "onGranted" in rewarded
+    assert "onAbandoned" in rewarded
+    assert "Math.min(115_000, requestedTimeout)" in rewarded
     assert "/billing/rewarded-ads/session" in rollout
+    assert "/billing/rewarded-ads/event" in rollout
+    assert 'rewardEvent("presented")' in rollout
+    assert 'rewardEvent("granted")' in rollout
+    assert 'rewardEvent("abandoned")' in rollout
+    assert "issued.session.expires_in_seconds" in rollout
+    assert "issued.session.expires_at" in rollout
+    assert "claimDeadlineAt" in rollout and "new AbortController()" in rollout
+    assert "Math.min(4_500, remaining)" in rollout
     assert "/billing/rewarded-ads/claim" in rollout
+    assert "const claimReward" in rollout and "body = await claimReward();" in rollout
+    assert 'replace("{minutes}", rewarded.minutes_per_view)' in rollout
+    assert 'rewarded?.unavailable_reason === "email_verification_required"' in rollout
+    assert 'rt("ads.limitReached"' in rollout
+    assert 'rt("ads.tryLater"' in rollout
+    assert "CLOSE_GRANT_GRACE_MS" in rewarded
+    assert rollout.index('rewardEvent("presented")') < rollout.index('rewardEvent("granted")')
+    assert rollout.index('rewardEvent("granted")') < rollout.index('/billing/rewarded-ads/claim')
+    assert 'rewardedAdsScript.src = "/rewarded-ads.js?v=3"' in i18n
     assert "cookies.adPolicy" in cookies
     assert 'basePath === "/privacy.html"' in i18n
     assert 'basePath === "/terms.html"' in i18n
@@ -1271,6 +1295,7 @@ def test_adsense_and_measurement_deployment_settings_are_staged_safely():
     for key in (
         "LECTURESIFT_DISPLAY_ADS_ENABLED",
         "LECTURESIFT_ANALYTICS_ENABLED",
+        "LECTURESIFT_REWARDED_AD_CLIENT_EVENT_RISK_ACCEPTED",
     ):
         marker = f"- key: {key}\n"
         assert blueprint.count(marker) == 1
@@ -1292,6 +1317,16 @@ def test_adsense_and_measurement_deployment_settings_are_staged_safely():
 
     assert "LECTURESIFT_ADSENSE_ENABLED=false" in example
     assert "LECTURESIFT_ADSENSE_CMP_READY=false" in example
+    assert "LECTURESIFT_REWARDED_AD_GLOBAL_DAILY_LIMIT_MINUTES=0" in example
+    for key in (
+        "LECTURESIFT_REWARDED_AD_GLOBAL_DAILY_LIMIT_MINUTES",
+        "LECTURESIFT_REWARDED_AD_SESSION_TTL_SECONDS",
+        "LECTURESIFT_REWARDED_AD_MIN_ACCOUNT_AGE_HOURS",
+        "LECTURESIFT_REWARDED_AD_COOLDOWN_SECONDS",
+        "LECTURESIFT_REWARDED_AD_DAILY_ATTEMPT_LIMIT",
+    ):
+        assert blueprint.count(f"- key: {key}\n") == 1
+        assert f"{key}=" in example
     assert "LECTURESIFT_ADSENSE_PUBLISHER_ID=ca-pub-7608481350058806" in example
 
 
@@ -1317,7 +1352,7 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
     assert 'src="./app.js?v=35"' in index
-    assert 'src="/rollout.js?v=9"' in index
+    assert 'src="/rollout.js?v=11"' in index
     assert '$("plans").scrollIntoView' not in app
 
 

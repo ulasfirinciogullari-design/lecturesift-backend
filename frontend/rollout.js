@@ -386,8 +386,20 @@
               .replace("{earned}", rewarded.earned_today)
               .replace("{limit}", rewarded.daily_limit_minutes)
           : "";
-        const rewardedCard = rewarded?.configured && !rewarded.plan_ad_free && !rewarded.guest ? `
-          <section class="dashboard-card rollout-card"><h2>${esc(rt("ads.title", "Reklamla dakika kazan"))}</h2><p>${esc(rt("ads.help", "İstersen kısa bir ödüllü reklam izle. Atlayabilir ve LectureSift'i normal biçimde kullanmaya devam edebilirsin."))}</p><p id="rewardedAdsToday" class="rollout-muted">${esc(rewardedToday)}</p><button id="rewardedAdsButton" class="rollout-action" type="button" ${rewarded.enabled ? "" : "disabled"}>${esc(rt("ads.cta", "Reklamı izle ve dakika kazan"))}</button><div id="rewardedAdsStatus" class="rollout-status" hidden></div></section>` : "";
+        const rewardedCta = rewarded
+          ? rt("ads.cta", "Reklamı izle, {minutes} dakika kazan")
+              .replace("{minutes}", rewarded.minutes_per_view)
+          : "";
+        const rewardLimitReasons = ["attempt_limit", "global_attempt_limit", "daily_limit", "global_limit"];
+        const rewardedUnavailable = rewarded?.enabled
+          ? ""
+          : rewarded?.unavailable_reason === "email_verification_required"
+            ? rt("auth.verifyEmailTitle", "Ödül için e-posta adresini doğrula")
+            : rewardLimitReasons.includes(rewarded?.unavailable_reason)
+              ? rt("ads.limitReached", "Bugünkü reklam ödülü sınırına ulaşıldı.")
+              : rt("ads.tryLater", "Bu ödül şu anda kullanılamıyor. Biraz sonra yeniden deneyebilirsin.");
+        const rewardedCard = rewarded?.configured && rewarded.rewarded_minutes_eligible && !rewarded.plan_ad_free && !rewarded.guest ? `
+          <section class="dashboard-card rollout-card"><h2>${esc(rt("ads.title", "Reklamla dakika kazan"))}</h2><p>${esc(rt("ads.help", "İstersen kısa bir ödüllü reklam izle. Atlayabilir ve LectureSift'i normal biçimde kullanmaya devam edebilirsin."))}</p><p id="rewardedAdsToday" class="rollout-muted">${esc(rewardedToday)}</p><button id="rewardedAdsButton" class="rollout-action" type="button" ${rewarded.enabled ? "" : "disabled"}>${esc(rewardedCta)}</button><div id="rewardedAdsStatus" class="rollout-status" ${rewarded.enabled ? "hidden" : ""}>${esc(rewardedUnavailable)}</div></section>` : "";
         grid.insertAdjacentHTML("beforeend", `
           <section id="rolloutEmailCard" class="dashboard-card rollout-card"><h2>${esc(rt("rollout.changeEmail", "E-posta adresini değiştir"))}</h2><form id="rolloutEmailForm" class="rollout-form"><label>${esc(rt("rollout.newEmail", "Yeni e-posta"))}<input id="rolloutNewEmail" type="email" autocomplete="email"></label><button type="submit">${esc(rt("rollout.sendVerification", "Doğrulama kodu gönder"))}</button></form><form id="rolloutEmailVerifyForm" class="rollout-form" hidden><label>${esc(rt("rollout.sixDigitCode", "6 haneli kod"))}<input id="rolloutEmailCode" class="code-input" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6"></label><button type="submit">${esc(rt("rollout.finishEmailChange", "E-posta değişikliğini tamamla"))}</button></form><div id="rolloutEmailStatus" class="rollout-status" hidden></div></section>
           <section class="dashboard-card rollout-card"><h2>${esc(rt("rollout.instagramBonus", "Instagram takip bonusu"))}</h2><p>${esc(rt("rollout.instagramHelp", "LectureSift Instagram hesabını takip et, kullanıcı adını gönder. Takip doğrulandıktan sonra hesabına bir kez 30 dakika eklenir."))}</p><form id="rolloutInstagramForm" class="rollout-form"><label>${esc(rt("rollout.instagramHandle", "Instagram kullanıcı adı"))}<input id="rolloutInstagramHandle" placeholder="@kullanici"></label><button type="submit" ${rollout.instagram_reward ? "disabled" : ""}>${esc(rollout.instagram_reward ? rt("rollout.requestCreated", "Talep oluşturuldu") : rt("rollout.requestMinutes", "+30 dakika talep et"))}</button></form><div id="rolloutInstagramStatus" class="rollout-status" ${rollout.instagram_reward ? "" : "hidden"}>${esc(rollout.instagram_reward ? `${rt("admin.status", "Durum")}: ${rt(`order.${rollout.instagram_reward.status}`, rollout.instagram_reward.status)}` : "")}</div></section>
@@ -427,10 +439,61 @@
           button.disabled = true;
           status.textContent = rt("ads.loading", "Reklam hazırlanıyor…");
           try {
+            if (typeof window.LectureSiftRewardedAds?.show !== "function") {
+              throw new Error("rewarded-ad-provider-unavailable");
+            }
             const issued = await api("/billing/rewarded-ads/session", {method:"POST"}, token);
-            const completed = await window.LectureSiftRewardedAds?.show(issued.session.ad_unit_path);
+            const rawTtl = Number(issued.session.expires_in_seconds);
+            const expiresInSeconds = Number.isFinite(rawTtl) ? Math.max(60, rawTtl) : 120;
+            const relativeDeadline = Date.now() + Math.max(15_000, (expiresInSeconds - 5) * 1000);
+            const absoluteExpiry = Date.parse(issued.session.expires_at || "");
+            const claimDeadlineAt = Number.isFinite(absoluteExpiry)
+              ? Math.min(relativeDeadline, absoluteExpiry - 5_000)
+              : relativeDeadline;
+            const remainingSessionMs = claimDeadlineAt - Date.now();
+            if (remainingSessionMs < 25_000) throw new Error("rewarded-ad-timeout");
+            const showTimeoutMs = Math.min(115_000, remainingSessionMs - 10_000);
+            const rewardEvent = eventName => api("/billing/rewarded-ads/event", {
+              method: "POST",
+              body: JSON.stringify({
+                session_id: issued.session.session_id,
+                claim_token: issued.session.claim_token,
+                event: eventName,
+              }),
+            }, token);
+            const completed = await window.LectureSiftRewardedAds.show(issued.session.ad_unit_path, {
+              onPresented: () => rewardEvent("presented"),
+              onGranted: () => rewardEvent("granted"),
+              onAbandoned: () => rewardEvent("abandoned"),
+              timeoutMs: showTimeoutMs,
+            });
             if (!completed) throw new Error(rt("ads.unavailable", "Şu anda uygun reklam bulunamadı. Daha sonra yeniden deneyebilirsin."));
-            const body = await api("/billing/rewarded-ads/claim", {method:"POST", body:JSON.stringify({session_id:issued.session.session_id, claim_token:issued.session.claim_token})}, token);
+            const claimPayload = JSON.stringify({session_id:issued.session.session_id, claim_token:issued.session.claim_token});
+            const claimReward = async () => {
+              const remaining = claimDeadlineAt - Date.now();
+              if (remaining <= 0) throw new Error("rewarded-ad-timeout");
+              const controller = new AbortController();
+              const timeout = setTimeout(() => controller.abort(), Math.max(1, Math.min(4_500, remaining)));
+              try {
+                return await api("/billing/rewarded-ads/claim", {
+                  method: "POST",
+                  body: claimPayload,
+                  signal: controller.signal,
+                }, token);
+              } catch (error) {
+                if (controller.signal.aborted) throw new Error("rewarded-ad-timeout");
+                throw error;
+              } finally {
+                clearTimeout(timeout);
+              }
+            };
+            let body;
+            try {
+              body = await claimReward();
+            } catch (error) {
+              if (error?.code || Date.now() >= claimDeadlineAt) throw error;
+              body = await claimReward();
+            }
             status.textContent = rt("ads.rewarded", "{minutes} dakika hesabına eklendi.").replace("{minutes}", body.minutes_added);
             if ($("creditMinutes")) $("creditMinutes").textContent = body.account.credit_minutes;
             if ($("remainingMinutes")) $("remainingMinutes").textContent = body.account.remaining_minutes ?? "∞";
