@@ -2,7 +2,7 @@
 
 ## Current check (12 September 2026)
 
-- Merge `288bc838` (PR #86) was verified on GitHub `main`, both Render services and Netlify production. This records that release only; a later source change, passing CI or healthy endpoint is not evidence that its corresponding revision has reached every production service.
+- Merge `07d560ea` (PR #88) was verified on GitHub `main`, both Render services and Netlify production. This records that release only; a later source change, passing CI or healthy endpoint is not evidence that its corresponding revision has reached every production service.
 
 - The current task cannot read the owner's signed-in AdSense tab. Its URL is visible in ambient UI, but the available tools include no browser read/control capability. The previous panel observations below are historical, not today's approval status. Re-enabling Browser has not exposed the missing tools; do not repeatedly request the same action or copy browser cookies.
 - Live GA4 measurement is enabled with `G-4L2CBDSZ48`, while advertising signals remain disabled. Google Ads conversion ID and signup/purchase labels are absent, so the application cannot currently report those conversions. Event arrival in Google Analytics has not been verified in Realtime.
@@ -11,10 +11,10 @@
 - The cookie, privacy, terms and admin-readiness copy uses that same plan model in all 13 languages; it no longer describes every paid plan as ad-free.
 - Measurement recognizes clean and legacy public URLs in all 13 languages, including the three course guides. Account and registration conversion events do not include their query or fragment in the configured page URL. Consent and provider configuration are still required. Synthetic CI checks do not prove events arrived in Google.
 - The host policy includes the documented core Google Ads script, image, connection and frame endpoints and the Turkish regional beacon. Before a campaign launch, check the actual target-country beacon domains in Tag Assistant; Google country domains must be named individually in CSP. No campaign is launched by this change. [Google tag CSP guidance](https://developers.google.com/tag-platform/security/guides/csp)
-- **AdSense activation has a separate CSP prerequisite.** Deploy previews stage a fresh per-response nonce in report-only mode for the 52 public ad-eligible localized routes. This change also stages the same report-only transformation on production `/about` only; it does not replace the enforced static CSP or enable ads. The verified base release `288bc838` has no nonce/report-only header. The protected preview's actual HTML/header nonce pairing and Google integration have not been inspected through an authenticated browser, so both preview staging and the one-route production canary require response, browser and violation-log evidence before expansion. Do not enable AdSense merely by extending the host list, using a fixed nonce, or treating a successful build as an integration check. [AdSense CSP integration](https://support.google.com/adsense/answer/16283098?hl=en-GB), [Netlify nonce plugin](https://github.com/netlify/plugin-csp-nonce)
+- **AdSense activation has a separate CSP prerequisite.** Deploy previews stage a fresh per-response nonce in report-only mode for the 52 public ad-eligible localized routes. Production applies the same report-only transformation only to `/about`; it does not replace the enforced static CSP or enable ads. On the verified base release, two production `/about` responses had distinct nonces and each response's HTML/header nonce matched, while `/`, `/en/about` and `/account` had no report-only/debug nonce header. The protected preview and actual Google integration still have not been inspected through an authenticated browser, and violation-log evidence remains required before expansion. Do not enable AdSense merely by extending the host list, using a fixed nonce, or treating a successful build as an integration check. [AdSense CSP integration](https://support.google.com/adsense/answer/16283098?hl=en-GB), [Netlify nonce plugin](https://github.com/netlify/plugin-csp-nonce)
 - The custom site privacy dialog is not evidence of a Google-certified consent platform. Before setting `LECTURESIFT_ADSENSE_CMP_READY=true`, verify the live Google-certified CMP message and its current IAB TCF behavior for the EEA, United Kingdom and Switzerland. Site approval, CMP publication and consent-string/event behavior are separate checks.
-- Rewarded-minute claims are not yet provider-attested on the server. The browser waits for the Google reward event, but the claim endpoint validates only the application-issued session token, user, expiry and limits; a direct API caller could therefore claim without proving ad completion. Keep rewarded inventory disabled until the server verifies provider completion, or until a deliberately accepted and documented limited-fraud model replaces that requirement. Rate limits and later reversals do not prove that an ad was watched.
-- The verified base release `288bc838` sends `Referrer-Policy: no-referrer`, which prevents the cross-origin referrer Google requires to serve its publisher messages. This change uses `strict-origin-when-cross-origin`: Google lists it as supported, and cross-origin requests receive only the origin rather than the page path or query. This header correction is necessary but does not itself prove that a CMP message works. [Google publisher-message tagging](https://support.google.com/admanager/answer/10114216?hl=en)
+- Google Publisher Tag does not provide signed server-side verification for web rewarded ads; Google documents SSV for mobile apps only. The web flow therefore uses an explicitly named `client_event_limited` mode: the server requires ordered `presented → granted → redeemed` transitions, but a modified client can still imitate them. Activation additionally requires an operator risk-acceptance flag, a positive global daily reward budget, a verified account, one open session, expiry, cooldown and daily user attempt/reward caps. The defaults require a 24-hour-old account, use a two-minute session and apply a five-minute cooldown; operators can tune those three values. These controls bound exposure; they do not prove that a person watched an ad. Keep the feature disabled when per-view cryptographic proof is required. [Google rewarded ads for web](https://support.google.com/admanager/answer/9116812?hl=en), [Google Publisher Tag events](https://developers.google.com/publisher-tag/reference)
+- The verified base release sends `Referrer-Policy: strict-origin-when-cross-origin`, which Google lists as supported for publisher messages; cross-origin requests receive only the origin rather than the page path or query. This header is necessary but does not itself prove that a CMP message works. [Google publisher-message tagging](https://support.google.com/admanager/answer/10114216?hl=en)
 
 ### Read-only account connection alternative
 
@@ -35,7 +35,7 @@ Google Ads API separately requires OAuth and an approved developer token from th
 - AdSense site details for `lecturesift.com` still show **Preparing** ("Hazırlanıyor"), with site ownership verified and the review request received. This is not an approval to serve ads or evidence of revenue.
 - The sites table still reports `ads.txt` not found with a **28 August** crawl date. That is a stale provider observation: the current public file was rechecked on 12 September and returns the exact publisher line recorded above. Do not overwrite the publisher ID or resubmit identity details merely to clear this label.
 - In this release, both `LECTURESIFT_ADSENSE_ENABLED` and `LECTURESIFT_ADSENSE_CMP_READY` must be true, alongside consent, eligible public-page placement and an ad-eligible account. Keep inventory disabled until approval and a current consent-flow check are confirmed.
-- Rewarded-minute inventory remains disabled without real provider-verified completion. Referral rewards are a separate application feature, not a substitute for ad verification.
+- Rewarded-minute inventory remains disabled. Web GPT has no provider-signed per-view completion callback, and this release keeps both the explicit client-event risk acceptance and global reward budget closed. Referral rewards are a separate application feature.
 - No new campaign, budget, payment-profile submission, ad unit or provider setting was created during this check.
 
 ## Previous account observations (7 September 2026; not reverified today)
@@ -64,7 +64,7 @@ Google Ads API separately requires OAuth and an approved developer token from th
 - Google Analytics 4 loads only after analytics consent, limits automatic page views to public pages, and disables advertising signals. Token-bearing verification and password-reset pages are excluded.
 - Google Ads signup and verified-purchase conversion events are prepared separately from analytics and run only after advertising consent. Duplicate purchase conversions are suppressed per browser session.
 - AdSense loading is conditional on explicit configuration and advertising consent, limited to selected public pages, and hidden for ad-free entitlements. Prior vignette settings have not been reverified in this check.
-- Rewarded ads are voluntary, rate-limited, and disabled until a real provider unit, certified-CMP readiness and server-verifiable provider completion are all configured.
+- Rewarded ads are voluntary and default off. The prepared web flow requires a real provider unit, certified-CMP readiness, explicit acceptance of client-event assurance, a positive global reward budget, verified and aged accounts, ordered events, single-open-session enforcement, expiry, cooldown and daily caps.
 
 ## Deployment configuration is staged, not activated
 
@@ -90,6 +90,17 @@ advertising signals disabled.
   inventory mode. This change requires
   `LECTURESIFT_ADSENSE_CMP_READY=true` for either Google Publisher Tag mode and
   for rewarded GPT inventory; the attestation no longer protects only AdSense.
+- Rewarded GPT remains unavailable unless
+  `LECTURESIFT_REWARDED_AD_CLIENT_EVENT_RISK_ACCEPTED=true` and
+  `LECTURESIFT_REWARDED_AD_GLOBAL_DAILY_LIMIT_MINUTES` is at least one reward.
+  Defaults are `false` and `0`. This is a deliberate operator acknowledgement
+  of Google's web limitation, not a provider attestation. Active sessions
+  reserve budget before the ad is shown, and issuance/redemption serialize the
+  global budget with one PostgreSQL transaction lock order. The browser accepts
+  Google's documented close-before-grant ordering for only a bounded grace
+  period, and a lost successful claim response can be retried idempotently.
+  A global attempt ceiling derived from that minute budget also bounds daily
+  ledger growth; status reads stay read-only and ignore expired reservations.
 - The production nonce canary is limited to `/about`, remains report-only and
   leaves all publisher-ad enable flags false. After deployment, verify that two
   responses carry different nonces, each HTML response and its report-only
@@ -121,7 +132,7 @@ to `false`; identifiers may remain staged privately.
 3. Wait for the existing site review to move from preparing to ready. Check the payment profile for any explicit outstanding action; do not repeat the submission already completed by the user without a new provider request.
 4. Reverify the European-regulations consent message and test it before enabling ad inventory; do not rely only on the prior report.
 5. Complete the existing Google Ads account's advertiser-verification tasks and resolve the Financial Services Verification rejection before relaunching either campaign. If Google continues to require the Türkiye financial-services form, use its non-financial-advertiser route and describe the actual education-software business accurately. Then use the verified public `AW-...` ID and signup/purchase conversion labels in the matching Render variables and verify them with Tag Assistant before spending. Do not assume an unverified promotional balance is available or can be spent without an additional payment.
-6. Create Google Ad Manager/AdSense inventory, obtain the real banner and rewarded unit paths, add server-verifiable rewarded completion, and configure them in Render. Never publish placeholder unit paths or enable rewarded claims based only on a browser event.
+6. Create Google Ad Manager/AdSense inventory and obtain the real banner and rewarded unit paths. For web rewards, choose explicitly between keeping the feature off or accepting the documented `client_event_limited` model with a small global budget; Google does not offer web SSV. Use a native mobile-app integration if signed per-view verification is mandatory. Never publish placeholder unit paths.
 7. Create Google Ads campaigns only after a budget, target countries, conversion definitions, and landing pages are approved. Advertising spend is never activated by a code deployment.
 8. Publish useful course-specific landing pages and original guides, earn reputable links, and review search performance monthly. No implementation can guarantee a first-place Google ranking.
 
@@ -132,5 +143,5 @@ to `false`; identifiers may remain staged privately.
 - Confirm advertising requests are absent before advertising consent and for all ad-free entitlements; Plus is limited to the home page and the workspace remains ad-free.
 - Confirm the production `/about` canary has a per-response nonce and report-only policy while `/`, localized `/about` routes and private pages remain outside the production edge-function scope.
 - Confirm an empty ad response leaves no blank banner.
-- Confirm a direct rewarded-claim request cannot earn minutes without provider-attested completion.
+- Confirm a direct `issued → claim` request fails, ordered browser-event transitions are required, close-without-grant cannot redeem, duplicate/racing claims remain single-use, and user/global budgets stop further redemption. Record that these checks limit abuse but cannot turn a browser event into provider-signed proof.
 - Confirm legal/operator identity and privacy disclosures are complete before payments or ads are enabled.

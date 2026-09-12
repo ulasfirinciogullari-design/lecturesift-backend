@@ -53,6 +53,7 @@ from .rollout_service import (
     request_email_change,
     reply_to_contact_message,
     issue_rewarded_ad_session,
+    record_rewarded_ad_event,
     redeem_rewarded_ad_session,
     rewarded_ads_for_user,
     update_profile,
@@ -94,8 +95,20 @@ class InstagramRewardRequest(BaseModel):
 
 
 class RewardedAdClaimRequest(BaseModel):
-    session_id: str
-    claim_token: str
+    session_id: str = Field(
+        min_length=36,
+        max_length=36,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    )
+    claim_token: str = Field(
+        min_length=32,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9_-]+$",
+    )
+
+
+class RewardedAdEventRequest(RewardedAdClaimRequest):
+    event: str = Field(pattern=r"^(presented|granted|abandoned)$")
 
 
 class DecisionRequest(BaseModel):
@@ -710,10 +723,35 @@ def billing_rewarded_ad_session(user: dict = Depends(_user)) -> dict:
     return {"ok": True, "session": session}
 
 
+@router.post("/billing/rewarded-ads/event")
+def billing_rewarded_ad_event(payload: RewardedAdEventRequest, user: dict = Depends(_user)) -> dict:
+    try:
+        RATE_LIMITER.check("rewarded-ad-event", user["id"], limit=30, window_seconds=24 * 60 * 60)
+        result = record_rewarded_ad_event(
+            user["id"], payload.session_id, payload.claim_token, payload.event
+        )
+    except RateLimitExceeded as exc:
+        raise HTTPException(
+            429,
+            detail={"code": "LS-ADS-03", "message": str(exc)},
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
+    except (BillingError, BillingAuthenticationError, BillingConfigurationError) as exc:
+        _billing_failure(exc, "LS-ADS-02")
+    return {"ok": True, **result}
+
+
 @router.post("/billing/rewarded-ads/claim")
 def billing_rewarded_ad_claim(payload: RewardedAdClaimRequest, user: dict = Depends(_user)) -> dict:
     try:
+        RATE_LIMITER.check("rewarded-ad-claim", user["id"], limit=30, window_seconds=24 * 60 * 60)
         result = redeem_rewarded_ad_session(user["id"], payload.session_id, payload.claim_token)
+    except RateLimitExceeded as exc:
+        raise HTTPException(
+            429,
+            detail={"code": "LS-ADS-03", "message": str(exc)},
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
     except (BillingError, BillingAuthenticationError, BillingConfigurationError) as exc:
         _billing_failure(exc, "LS-ADS-02")
     return {"ok": True, "message": f"{result['minutes_added']} dakika hesabına eklendi.", **result}

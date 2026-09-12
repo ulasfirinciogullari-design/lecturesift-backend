@@ -12,6 +12,7 @@ import hmac
 import html
 import ipaddress
 import math
+import re
 import secrets
 import statistics
 import uuid
@@ -42,7 +43,10 @@ from .billing_service import (
     BillingAuthenticationError,
     BillingConfigurationError,
     BillingError,
+    _active_subscription,
     _hash_password,
+    _has_permanent_ad_free,
+    _plan_for_purchase_reference,
     _store_admin_grant_terms,
     account_status,
     approve_manual_order,
@@ -495,7 +499,17 @@ def close_user_account(
         connection.execute(delete(AUTH_TOKENS).where(AUTH_TOKENS.c.user_id == user_id))
         connection.execute(delete(EMAIL_CHANGE_REQUESTS).where(EMAIL_CHANGE_REQUESTS.c.user_id == user_id))
         connection.execute(delete(INSTAGRAM_REWARDS).where(INSTAGRAM_REWARDS.c.user_id == user_id))
-        connection.execute(delete(REWARDED_AD_CLAIMS).where(REWARDED_AD_CLAIMS.c.user_id == user_id))
+        connection.execute(
+            update(REWARDED_AD_CLAIMS)
+            .where(
+                REWARDED_AD_CLAIMS.c.user_id == user_id,
+                REWARDED_AD_CLAIMS.c.status.in_(_REWARDED_AD_ACTIVE_STATUSES),
+            )
+            .values(status="abandoned")
+        )
+        # Keep the bounded reward ledger linked only to the anonymised user
+        # below. Open sessions become terminal in the same transaction so a
+        # request authenticated just before closure cannot add credit later.
         connection.execute(delete(GUEST_TRIALS).where(GUEST_TRIALS.c.user_id == user_id))
         connection.execute(
             update(SUBSCRIPTIONS)
@@ -870,77 +884,346 @@ def instagram_reward_for_user(user_id: str) -> dict | None:
     return dict(row._mapping) if row else None
 
 
-def rewarded_ads_for_user(user_id: str) -> dict[str, Any]:
-    """Return a provider-neutral, privacy-safe rewarded-ad allowance."""
-    init_rollout_database()
-    account = account_status(user_id)
-    plan = account.get("plan") or {}
-    entitlements = plan.get("entitlements") or {}
-    plan_ad_free = bool(entitlements.get("ad_free"))
-    configured = bool(
+_REWARDED_AD_ACTIVE_STATUSES = ("issued", "presented", "granted")
+_REWARDED_AD_GLOBAL_LOCK_ID = 549_533_714_676  # Stable PostgreSQL transaction lock key.
+
+
+def _valid_rewarded_ad_unit_path(value: str) -> bool:
+    return bool(
+        value
+        and len(value) <= 256
+        and re.fullmatch(r"/[0-9]+(?:/[A-Za-z0-9][A-Za-z0-9._-]{0,79})+", value)
+    )
+
+
+def _rewarded_ads_configured() -> bool:
+    return bool(
         config.ADSENSE_CMP_READY
         and config.REWARDED_ADS_ENABLED
-        and config.REWARDED_AD_UNIT_PATH
+        and _valid_rewarded_ad_unit_path(config.REWARDED_AD_UNIT_PATH)
+        and config.REWARDED_AD_CLIENT_EVENT_RISK_ACCEPTED
+        and config.REWARDED_AD_GLOBAL_DAILY_LIMIT_MINUTES
+        >= config.REWARDED_AD_MINUTES_PER_VIEW
     )
-    now = utcnow()
-    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    with ENGINE.begin() as connection:
-        connection.execute(
-            delete(REWARDED_AD_CLAIMS).where(
-                REWARDED_AD_CLAIMS.c.user_id == user_id,
-                (
-                    (REWARDED_AD_CLAIMS.c.status == "issued")
-                    & (REWARDED_AD_CLAIMS.c.expires_at < now)
-                )
-                | (
-                    (REWARDED_AD_CLAIMS.c.status == "redeemed")
-                    & (REWARDED_AD_CLAIMS.c.redeemed_at < now - timedelta(days=90))
-                ),
-            )
+
+
+def _rewarded_global_attempt_limit() -> int:
+    reward_slots = math.ceil(
+        config.REWARDED_AD_GLOBAL_DAILY_LIMIT_MINUTES
+        / config.REWARDED_AD_MINUTES_PER_VIEW
+    )
+    return max(1, reward_slots * 3)
+
+
+def _rewarded_plan_eligibility(connection, user_id: str, now: datetime) -> tuple[bool, bool]:
+    """Read ad eligibility inside the caller's user-locked transaction."""
+    subscription = _active_subscription(connection, user_id, now)
+    if subscription:
+        plan, _terms_version = _plan_for_purchase_reference(
+            connection,
+            reference=subscription.source_reference,
+            plan_code=subscription.plan_code,
+            interval=subscription.interval,
         )
-        earned = connection.execute(
+    else:
+        plan = PLAN_BY_CODE["free"]
+    entitlements = plan.public()["entitlements"]
+    plan_ad_free = bool(entitlements.get("ad_free")) or _has_permanent_ad_free(
+        connection, user_id
+    )
+    return plan_ad_free, bool(
+        entitlements.get("rewarded_minutes_eligible") and not plan_ad_free
+    )
+
+
+def _lock_rewarded_global_budget(connection) -> None:
+    if connection.dialect.name == "postgresql":
+        connection.execute(select(func.pg_advisory_xact_lock(_REWARDED_AD_GLOBAL_LOCK_ID)))
+
+
+def _expire_and_clean_rewarded_claims(connection, now: datetime) -> None:
+    # Retention cleanup is deliberately lazy: it runs in the same serialized
+    # transaction as the next successful session issuance.
+    connection.execute(
+        update(REWARDED_AD_CLAIMS)
+        .where(
+            REWARDED_AD_CLAIMS.c.status.in_(_REWARDED_AD_ACTIVE_STATUSES),
+            REWARDED_AD_CLAIMS.c.expires_at <= now,
+        )
+        .values(status="expired")
+    )
+    retention_start = now - timedelta(days=90)
+    connection.execute(
+        delete(REWARDED_AD_CLAIMS).where(
+            REWARDED_AD_CLAIMS.c.created_at < retention_start,
+        )
+    )
+
+
+def _rewarded_ad_metrics(
+    connection,
+    user_id: str,
+    now: datetime,
+    *,
+    include_global: bool = True,
+) -> dict[str, Any]:
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    user = connection.execute(
+        select(USERS.c.email, USERS.c.created_at).where(USERS.c.id == user_id)
+    ).first()
+    if not user:
+        raise BillingAuthenticationError("Hesap bulunamadı.")
+    profile = connection.execute(
+        select(USER_PROFILES.c.email_verified_at).where(USER_PROFILES.c.user_id == user_id)
+    ).first()
+    guest = connection.execute(
+        select(GUEST_TRIALS.c.user_id).where(GUEST_TRIALS.c.user_id == user_id)
+    ).first() is not None
+    earned_today = int(
+        connection.execute(
             select(func.coalesce(func.sum(REWARDED_AD_CLAIMS.c.minutes), 0)).where(
                 REWARDED_AD_CLAIMS.c.user_id == user_id,
                 REWARDED_AD_CLAIMS.c.status == "redeemed",
                 REWARDED_AD_CLAIMS.c.redeemed_at >= day_start,
             )
         ).scalar_one()
-    earned_today = int(earned or 0)
-    remaining_today = max(0, config.REWARDED_AD_DAILY_LIMIT_MINUTES - earned_today)
-    guest = is_guest_user(user_id)
+        or 0
+    )
+    global_earned_today = 0
+    global_reserved = 0
+    if include_global:
+        global_earned_today = int(
+            connection.execute(
+                select(func.coalesce(func.sum(REWARDED_AD_CLAIMS.c.minutes), 0)).where(
+                    REWARDED_AD_CLAIMS.c.status == "redeemed",
+                    REWARDED_AD_CLAIMS.c.redeemed_at >= day_start,
+                )
+            ).scalar_one()
+            or 0
+        )
+        global_reserved = int(
+            connection.execute(
+                select(func.coalesce(func.sum(REWARDED_AD_CLAIMS.c.minutes), 0)).where(
+                    REWARDED_AD_CLAIMS.c.status.in_(_REWARDED_AD_ACTIVE_STATUSES),
+                    REWARDED_AD_CLAIMS.c.expires_at > now,
+                )
+            ).scalar_one()
+            or 0
+        )
+    attempts_today = int(
+        connection.execute(
+            select(func.count()).select_from(REWARDED_AD_CLAIMS).where(
+                REWARDED_AD_CLAIMS.c.user_id == user_id,
+                REWARDED_AD_CLAIMS.c.created_at >= day_start,
+            )
+        ).scalar_one()
+        or 0
+    )
+    global_attempts_today = 0
+    if include_global:
+        global_attempts_today = int(
+            connection.execute(
+                select(func.count()).select_from(REWARDED_AD_CLAIMS).where(
+                    REWARDED_AD_CLAIMS.c.created_at >= day_start,
+                )
+            ).scalar_one()
+            or 0
+        )
+    active_session = connection.execute(
+        select(REWARDED_AD_CLAIMS.c.id).where(
+            REWARDED_AD_CLAIMS.c.user_id == user_id,
+            REWARDED_AD_CLAIMS.c.status.in_(_REWARDED_AD_ACTIVE_STATUSES),
+            REWARDED_AD_CLAIMS.c.expires_at > now,
+        ).limit(1)
+    ).first() is not None
+    last_redeemed_at = connection.execute(
+        select(func.max(REWARDED_AD_CLAIMS.c.redeemed_at)).where(
+            REWARDED_AD_CLAIMS.c.user_id == user_id,
+            REWARDED_AD_CLAIMS.c.status == "redeemed",
+        )
+    ).scalar_one()
+    cooldown_until = (
+        _as_utc(last_redeemed_at) + timedelta(seconds=config.REWARDED_AD_COOLDOWN_SECONDS)
+        if last_redeemed_at
+        else None
+    )
+    cooldown_remaining = max(
+        0,
+        math.ceil((cooldown_until - now).total_seconds()) if cooldown_until else 0,
+    )
+    eligible_at = _as_utc(user.created_at) + timedelta(
+        hours=config.REWARDED_AD_MIN_ACCOUNT_AGE_HOURS
+    )
+    email_verified = bool(
+        profile
+        and profile.email_verified_at
+        and not user.email.endswith("@users.invalid")
+    )
+    return {
+        "guest": guest,
+        "email_verified": email_verified,
+        "account_age_eligible": now >= eligible_at,
+        "eligible_at": eligible_at,
+        "earned_today": earned_today,
+        "remaining_today": max(
+            0, config.REWARDED_AD_DAILY_LIMIT_MINUTES - earned_today
+        ),
+        "global_earned_today": global_earned_today,
+        "global_reserved": global_reserved,
+        "global_remaining_today": max(
+            0,
+            config.REWARDED_AD_GLOBAL_DAILY_LIMIT_MINUTES
+            - global_earned_today
+            - global_reserved,
+        ),
+        "attempts_today": attempts_today,
+        "attempts_remaining_today": max(
+            0, config.REWARDED_AD_DAILY_ATTEMPT_LIMIT - attempts_today
+        ),
+        "global_attempts_remaining_today": max(
+            0, _rewarded_global_attempt_limit() - global_attempts_today
+        ),
+        "active_session": active_session,
+        "cooldown_remaining_seconds": cooldown_remaining,
+    }
+
+
+def _rewarded_ad_unavailable_reason(
+    *,
+    configured: bool,
+    plan_ad_free: bool,
+    rewarded_minutes_eligible: bool,
+    metrics: dict[str, Any],
+) -> str | None:
+    if not configured:
+        return "not_configured"
+    if metrics["guest"]:
+        return "guest"
+    if plan_ad_free:
+        return "plan_ad_free"
+    if not rewarded_minutes_eligible:
+        return "plan_ineligible"
+    if not metrics["email_verified"]:
+        return "email_verification_required"
+    if not metrics["account_age_eligible"]:
+        return "account_too_new"
+    if metrics["active_session"]:
+        return "session_open"
+    if metrics["cooldown_remaining_seconds"]:
+        return "cooldown"
+    if not metrics["attempts_remaining_today"]:
+        return "attempt_limit"
+    if not metrics["global_attempts_remaining_today"]:
+        return "global_attempt_limit"
+    if metrics["remaining_today"] < config.REWARDED_AD_MINUTES_PER_VIEW:
+        return "daily_limit"
+    if metrics["global_remaining_today"] < config.REWARDED_AD_MINUTES_PER_VIEW:
+        return "global_limit"
+    return None
+
+
+def rewarded_ads_for_user(user_id: str) -> dict[str, Any]:
+    """Return the bounded client-event rewarded-ad allowance."""
+    configured = _rewarded_ads_configured()
+    init_rollout_database()
+    now = utcnow()
+    with ENGINE.connect() as connection:
+        plan_ad_free, rewarded_minutes_eligible = _rewarded_plan_eligibility(
+            connection, user_id, now
+        )
+        metrics = _rewarded_ad_metrics(
+            connection,
+            user_id,
+            now,
+            include_global=configured,
+        )
+    unavailable_reason = _rewarded_ad_unavailable_reason(
+        configured=configured,
+        plan_ad_free=plan_ad_free,
+        rewarded_minutes_eligible=rewarded_minutes_eligible,
+        metrics=metrics,
+    )
     return {
         "configured": configured,
-        "enabled": bool(
-            configured
-            and not guest
-            and not plan_ad_free
-            and remaining_today >= config.REWARDED_AD_MINUTES_PER_VIEW
-        ),
+        "enabled": unavailable_reason is None,
         "provider": "google_gpt" if configured else None,
+        "verification_mode": "client_event_limited" if configured else None,
         "ad_unit_path": config.REWARDED_AD_UNIT_PATH if configured else None,
         "minutes_per_view": config.REWARDED_AD_MINUTES_PER_VIEW,
         "daily_limit_minutes": config.REWARDED_AD_DAILY_LIMIT_MINUTES,
-        "earned_today": earned_today,
-        "remaining_today": remaining_today,
+        "earned_today": metrics["earned_today"],
+        "remaining_today": metrics["remaining_today"],
+        "attempts_remaining_today": metrics["attempts_remaining_today"],
+        "cooldown_remaining_seconds": metrics["cooldown_remaining_seconds"],
+        "eligible_at": (
+            metrics["eligible_at"].isoformat()
+            if not metrics["account_age_eligible"]
+            else None
+        ),
+        "unavailable_reason": unavailable_reason,
         "plan_ad_free": plan_ad_free,
-        "guest": guest,
+        "rewarded_minutes_eligible": rewarded_minutes_eligible,
+        "guest": metrics["guest"],
     }
+
+
+def _raise_rewarded_ad_unavailable(reason: str | None) -> None:
+    messages = {
+        "guest": "Dakika kazanmak için ücretsiz hesabını oluştur.",
+        "plan_ad_free": "Mevcut planın reklamsız kullanım içeriyor.",
+        "plan_ineligible": "Mevcut paketin reklamla ek dakika seçeneğini içermiyor.",
+        "email_verification_required": "Ödüllü reklam için e-posta adresini doğrula.",
+        "account_too_new": (
+            "Yeni hesaplarda ödüllü reklam "
+            f"{config.REWARDED_AD_MIN_ACCOUNT_AGE_HOURS} saat sonra kullanılabilir."
+        ),
+        "session_open": "Önce açık reklam oturumunu tamamla.",
+        "cooldown": "Yeni bir reklam açmadan önce kısa bir süre bekle.",
+        "attempt_limit": "Bugünkü reklam deneme sınırına ulaştın.",
+        "global_attempt_limit": "Bugünkü toplam reklam deneme bütçesi doldu.",
+        "daily_limit": "Bugünkü reklamla dakika kazanma sınırına ulaştın.",
+        "global_limit": "Bugünkü reklam ödülü bütçesi doldu.",
+    }
+    if reason == "not_configured":
+        raise BillingConfigurationError("Ödüllü reklam özelliği henüz etkinleştirilmemiş.")
+    raise BillingError(messages.get(reason, "Ödüllü reklam şu anda kullanılamıyor."))
 
 
 def issue_rewarded_ad_session(user_id: str) -> dict[str, Any]:
     state = rewarded_ads_for_user(user_id)
-    if not state["configured"]:
-        raise BillingConfigurationError("Ödüllü reklam özelliği henüz etkinleştirilmemiş.")
-    if state["guest"]:
-        raise BillingError("Dakika kazanmak için ücretsiz hesabını oluştur.")
-    if state["plan_ad_free"]:
-        raise BillingError("Mevcut planın reklamsız kullanım içeriyor.")
     if not state["enabled"]:
-        raise BillingError("Bugünkü reklamla dakika kazanma sınırına ulaştın.")
-    now = utcnow()
+        _raise_rewarded_ad_unavailable(state["unavailable_reason"])
     token = secrets.token_urlsafe(32)
     session_id = str(uuid.uuid4())
+    expires_at: datetime
     with ENGINE.begin() as connection:
+        user = connection.execute(
+            select(USERS.c.id).where(USERS.c.id == user_id).with_for_update()
+        ).first()
+        if not user:
+            raise BillingAuthenticationError("Hesap bulunamadı.")
+        if connection.dialect.name == "sqlite":
+            connection.execute(
+                update(USERS)
+                .where(USERS.c.id == user_id)
+                .values(credit_minutes=USERS.c.credit_minutes)
+            )
+        _lock_rewarded_global_budget(connection)
+        now = utcnow()
+        _expire_and_clean_rewarded_claims(connection, now)
+        plan_ad_free, rewarded_minutes_eligible = _rewarded_plan_eligibility(
+            connection, user_id, now
+        )
+        metrics = _rewarded_ad_metrics(connection, user_id, now)
+        reason = _rewarded_ad_unavailable_reason(
+            configured=_rewarded_ads_configured(),
+            plan_ad_free=plan_ad_free,
+            rewarded_minutes_eligible=rewarded_minutes_eligible,
+            metrics=metrics,
+        )
+        if reason:
+            _raise_rewarded_ad_unavailable(reason)
+        expires_at = now + timedelta(seconds=config.REWARDED_AD_SESSION_TTL_SECONDS)
         connection.execute(
             REWARDED_AD_CLAIMS.insert().values(
                 id=session_id,
@@ -948,7 +1231,7 @@ def issue_rewarded_ad_session(user_id: str) -> dict[str, Any]:
                 token_hash=_hash(token),
                 status="issued",
                 minutes=config.REWARDED_AD_MINUTES_PER_VIEW,
-                expires_at=now + timedelta(minutes=10),
+                expires_at=expires_at,
                 created_at=now,
                 redeemed_at=None,
             )
@@ -956,65 +1239,207 @@ def issue_rewarded_ad_session(user_id: str) -> dict[str, Any]:
     return {
         "session_id": session_id,
         "claim_token": token,
-        "expires_in_seconds": 10 * 60,
+        "expires_in_seconds": config.REWARDED_AD_SESSION_TTL_SECONDS,
+        "expires_at": expires_at.isoformat(),
         "ad_unit_path": state["ad_unit_path"],
         "minutes": config.REWARDED_AD_MINUTES_PER_VIEW,
     }
 
 
+def record_rewarded_ad_event(
+    user_id: str, session_id: str, claim_token: str, event: str
+) -> dict[str, str]:
+    """Record ordered browser events; this limits fraud but is not provider SSV."""
+    normalized_event = (event or "").strip().lower()
+    if normalized_event not in {"presented", "granted", "abandoned"}:
+        raise BillingError("Geçersiz reklam olayı.")
+    if not _rewarded_ads_configured():
+        raise BillingConfigurationError("Ödüllü reklam özelliği henüz etkinleştirilmemiş.")
+    init_rollout_database()
+    expired = False
+    result_status = ""
+    with ENGINE.begin() as connection:
+        claim = connection.execute(
+            select(REWARDED_AD_CLAIMS)
+            .where(
+                REWARDED_AD_CLAIMS.c.id == session_id,
+                REWARDED_AD_CLAIMS.c.user_id == user_id,
+            )
+            .with_for_update()
+        ).first()
+        if not claim:
+            raise BillingError("Bu reklam ödülü geçersiz veya daha önce kullanılmış.")
+        if not claim_token or not secrets.compare_digest(_hash(claim_token), claim.token_hash):
+            raise BillingAuthenticationError("Reklam ödülü doğrulanamadı.")
+        now = utcnow()
+        current = claim.status
+        if current == "redeemed":
+            result_status = current
+        elif _as_utc(claim.expires_at) <= now:
+            if claim.status in _REWARDED_AD_ACTIVE_STATUSES:
+                connection.execute(
+                    update(REWARDED_AD_CLAIMS)
+                    .where(REWARDED_AD_CLAIMS.c.id == session_id)
+                    .values(status="expired")
+                )
+            expired = True
+        else:
+            next_status = ""
+            if normalized_event == "presented":
+                if current == "issued":
+                    next_status = "presented"
+                elif current in {"presented", "granted"}:
+                    result_status = current
+                else:
+                    raise BillingError("Bu reklam oturumu artık kullanılamıyor.")
+            elif normalized_event == "granted":
+                if current == "presented":
+                    next_status = "granted"
+                elif current == "granted":
+                    result_status = current
+                else:
+                    raise BillingError("Reklam gösterilmeden ödül verilemez.")
+            else:
+                if current == "granted":
+                    result_status = current
+                elif current == "abandoned":
+                    result_status = current
+                elif current in {"issued", "presented"}:
+                    next_status = "abandoned"
+                else:
+                    raise BillingError("Bu reklam oturumu artık kullanılamıyor.")
+
+            if next_status:
+                changed = connection.execute(
+                    update(REWARDED_AD_CLAIMS)
+                    .where(
+                        REWARDED_AD_CLAIMS.c.id == session_id,
+                        REWARDED_AD_CLAIMS.c.status == current,
+                    )
+                    .values(status=next_status)
+                )
+                if changed.rowcount != 1:
+                    raise BillingError("Reklam oturumu güncellenemedi; yeniden dene.")
+                result_status = next_status
+    if expired:
+        raise BillingError("Reklam ödülü oturumunun süresi doldu.")
+    return {"status": result_status}
+
+
 def redeem_rewarded_ad_session(user_id: str, session_id: str, claim_token: str) -> dict[str, Any]:
     init_rollout_database()
-    now = utcnow()
-    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    expired = False
+    already_redeemed = False
+    minutes_added = 0
     with ENGINE.begin() as connection:
         user = connection.execute(
             select(USERS.c.id).where(USERS.c.id == user_id).with_for_update()
         ).first()
         if not user:
             raise BillingAuthenticationError("Hesap bulunamadı.")
-        claim = connection.execute(
-            select(REWARDED_AD_CLAIMS).where(
-                REWARDED_AD_CLAIMS.c.id == session_id,
-                REWARDED_AD_CLAIMS.c.user_id == user_id,
-            )
-        ).first()
-        if not claim or claim.status != "issued":
-            raise BillingError("Bu reklam ödülü geçersiz veya daha önce kullanılmış.")
-        if _as_utc(claim.expires_at) <= now:
+        if connection.dialect.name == "sqlite":
+            # Acquire SQLite's write lock before reading the shared total so
+            # parallel users cannot both observe the same remaining budget.
             connection.execute(
-                update(REWARDED_AD_CLAIMS)
-                .where(REWARDED_AD_CLAIMS.c.id == session_id)
-                .values(status="expired")
+                update(USERS)
+                .where(USERS.c.id == user_id)
+                .values(credit_minutes=USERS.c.credit_minutes)
             )
-            raise BillingError("Reklam ödülü oturumunun süresi doldu.")
-        if not claim_token or not secrets.compare_digest(_hash(claim_token), claim.token_hash):
-            raise BillingAuthenticationError("Reklam ödülü doğrulanamadı.")
-        earned = int(connection.execute(
-            select(func.coalesce(func.sum(REWARDED_AD_CLAIMS.c.minutes), 0)).where(
-                REWARDED_AD_CLAIMS.c.user_id == user_id,
-                REWARDED_AD_CLAIMS.c.status == "redeemed",
-                REWARDED_AD_CLAIMS.c.redeemed_at >= day_start,
-            )
-        ).scalar_one() or 0)
-        if earned + int(claim.minutes) > config.REWARDED_AD_DAILY_LIMIT_MINUTES:
-            raise BillingError("Bugünkü reklamla dakika kazanma sınırına ulaştın.")
-        changed = connection.execute(
-            update(REWARDED_AD_CLAIMS)
+        # Every path that needs both locks follows user -> global -> claim.
+        # Keeping one order avoids issue/redeem deadlocks at the TTL boundary.
+        _lock_rewarded_global_budget(connection)
+        claim = connection.execute(
+            select(REWARDED_AD_CLAIMS)
             .where(
                 REWARDED_AD_CLAIMS.c.id == session_id,
-                REWARDED_AD_CLAIMS.c.status == "issued",
+                REWARDED_AD_CLAIMS.c.user_id == user_id,
             )
-            .values(status="redeemed", redeemed_at=now)
-        )
-        if changed.rowcount != 1:
-            raise BillingError("Bu reklam ödülü daha önce kullanılmış.")
-        connection.execute(
-            update(USERS)
-            .where(USERS.c.id == user_id)
-            .values(credit_minutes=USERS.c.credit_minutes + int(claim.minutes))
-        )
+            .with_for_update()
+        ).first()
+        if not claim:
+            raise BillingError("Bu reklam ödülü geçersiz veya daha önce kullanılmış.")
+        if not claim_token or not secrets.compare_digest(_hash(claim_token), claim.token_hash):
+            raise BillingAuthenticationError("Reklam ödülü doğrulanamadı.")
+        minutes_added = int(claim.minutes)
+        if claim.status == "redeemed":
+            already_redeemed = True
+        else:
+            if claim.status not in _REWARDED_AD_ACTIVE_STATUSES:
+                raise BillingError("Reklam ödülü henüz verilmedi veya daha önce kullanıldı.")
+            now = utcnow()
+            if _as_utc(claim.expires_at) <= now:
+                connection.execute(
+                    update(REWARDED_AD_CLAIMS)
+                    .where(
+                        REWARDED_AD_CLAIMS.c.id == session_id,
+                        REWARDED_AD_CLAIMS.c.status == claim.status,
+                    )
+                    .values(status="expired")
+                )
+                expired = True
+            else:
+                if not _rewarded_ads_configured():
+                    raise BillingConfigurationError(
+                        "Ödüllü reklam özelliği henüz etkinleştirilmemiş."
+                    )
+                if claim.status != "granted":
+                    raise BillingError("Reklam ödülü henüz verilmedi veya daha önce kullanıldı.")
+                plan_ad_free, rewarded_minutes_eligible = _rewarded_plan_eligibility(
+                    connection,
+                    user_id,
+                    now,
+                )
+                if plan_ad_free or not rewarded_minutes_eligible:
+                    raise BillingError(
+                        "Mevcut paketin reklamla ek dakika seçeneğini içermiyor."
+                    )
+                day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                earned = int(
+                    connection.execute(
+                        select(func.coalesce(func.sum(REWARDED_AD_CLAIMS.c.minutes), 0)).where(
+                            REWARDED_AD_CLAIMS.c.user_id == user_id,
+                            REWARDED_AD_CLAIMS.c.status == "redeemed",
+                            REWARDED_AD_CLAIMS.c.redeemed_at >= day_start,
+                        )
+                    ).scalar_one()
+                    or 0
+                )
+                if earned + minutes_added > config.REWARDED_AD_DAILY_LIMIT_MINUTES:
+                    raise BillingError("Bugünkü reklamla dakika kazanma sınırına ulaştın.")
+                global_earned = int(
+                    connection.execute(
+                        select(func.coalesce(func.sum(REWARDED_AD_CLAIMS.c.minutes), 0)).where(
+                            REWARDED_AD_CLAIMS.c.status == "redeemed",
+                            REWARDED_AD_CLAIMS.c.redeemed_at >= day_start,
+                        )
+                    ).scalar_one()
+                    or 0
+                )
+                if (
+                    global_earned + minutes_added
+                    > config.REWARDED_AD_GLOBAL_DAILY_LIMIT_MINUTES
+                ):
+                    raise BillingError("Bugünkü reklam ödülü bütçesi doldu.")
+                changed = connection.execute(
+                    update(REWARDED_AD_CLAIMS)
+                    .where(
+                        REWARDED_AD_CLAIMS.c.id == session_id,
+                        REWARDED_AD_CLAIMS.c.status == "granted",
+                    )
+                    .values(status="redeemed", redeemed_at=now)
+                )
+                if changed.rowcount != 1:
+                    raise BillingError("Bu reklam ödülü daha önce kullanılmış.")
+                connection.execute(
+                    update(USERS)
+                    .where(USERS.c.id == user_id)
+                    .values(credit_minutes=USERS.c.credit_minutes + minutes_added)
+                )
+    if expired:
+        raise BillingError("Reklam ödülü oturumunun süresi doldu.")
     return {
-        "minutes_added": int(claim.minutes),
+        "minutes_added": minutes_added,
+        "already_redeemed": already_redeemed,
         "rewarded_ads": rewarded_ads_for_user(user_id),
         "account": account_status(user_id),
     }
@@ -1893,10 +2318,19 @@ def admin_close_user_account(
             AUTH_TOKENS,
             EMAIL_CHANGE_REQUESTS,
             INSTAGRAM_REWARDS,
-            REWARDED_AD_CLAIMS,
             GUEST_TRIALS,
         ):
             connection.execute(delete(table).where(table.c.user_id == user_id))
+        connection.execute(
+            update(REWARDED_AD_CLAIMS)
+            .where(
+                REWARDED_AD_CLAIMS.c.user_id == user_id,
+                REWARDED_AD_CLAIMS.c.status.in_(_REWARDED_AD_ACTIVE_STATUSES),
+            )
+            .values(status="abandoned")
+        )
+        # Keep the bounded reward ledger linked only to the anonymised user.
+        # Open sessions are terminal before the account closure commits.
         connection.execute(
             update(SUBSCRIPTIONS)
             .where(

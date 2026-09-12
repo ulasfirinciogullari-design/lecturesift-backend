@@ -221,7 +221,7 @@ def test_checkout_passes_coupon_to_server_without_client_side_discount_math() ->
     script = _read("plans.js")
     assert 'id="checkoutCouponRow" hidden' in html
     assert 'pattern="LSC-[A-Fa-f0-9]{24}"' in html
-    assert html.index("referral-i18n.js?v=3") < html.index("plans.js?v=24")
+    assert html.index("referral-i18n.js?v=3") < html.index("plans.js?v=25")
     assert 'const COUPON_PLANS = new Set(["lite", "plus", "pro", "max"]);' in script
     assert 'LOCALE_DATA.currencies.includes(currency) && interval === "monthly" && COUPON_PLANS.has(planCode)' in script
     assert script.count("coupon_code: couponCode") == 2

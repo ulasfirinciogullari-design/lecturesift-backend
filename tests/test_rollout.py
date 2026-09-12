@@ -1,15 +1,20 @@
 import json
+import os
 import re
 import uuid
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from threading import Barrier
 from urllib.parse import parse_qs, urlparse
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete
+from sqlalchemy import create_engine, delete, func, select, update
 
 import lecturesift.jobs as jobs_module
+import lecturesift.billing_service as billing_service
 import lecturesift.rollout_routes as rollout_routes
 import lecturesift.rollout_service as rollout_service
 import lecturesift.exports as exports_module
@@ -42,6 +47,22 @@ def new_account() -> tuple[str, str]:
 
 def auth(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def isolated_reward_database(tmp_path, monkeypatch):
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'rewarded-ads.db'}",
+        connect_args={"check_same_thread": False},
+    )
+    billing_service.METADATA.create_all(engine)
+    monkeypatch.setattr(billing_service, "ENGINE", engine)
+    monkeypatch.setattr(rollout_service, "ENGINE", engine)
+    monkeypatch.setattr(billing_service, "_INITIALIZED", True)
+    try:
+        yield engine
+    finally:
+        engine.dispose()
 
 
 def test_display_ads_are_disabled_by_default_and_hide_unit_details(monkeypatch):
@@ -664,12 +685,20 @@ def test_admin_can_manage_profile_subscription_sessions_and_close_account(monkey
     assert all(changed_email not in item["summary"] for item in closed_events)
 
 
-def test_rewarded_ad_sessions_are_opt_in_capped_and_single_use(monkeypatch):
-    _, token = new_account()
+def test_rewarded_ad_sessions_are_opt_in_capped_and_single_use(
+    monkeypatch, isolated_reward_database
+):
+    email, token = new_account()
     monkeypatch.setattr(config, "REWARDED_ADS_ENABLED", True)
     monkeypatch.setattr(config, "REWARDED_AD_UNIT_PATH", "/1234567/lecturesift_rewarded")
     monkeypatch.setattr(config, "REWARDED_AD_MINUTES_PER_VIEW", 3)
     monkeypatch.setattr(config, "REWARDED_AD_DAILY_LIMIT_MINUTES", 6)
+    monkeypatch.setattr(config, "REWARDED_AD_GLOBAL_DAILY_LIMIT_MINUTES", 6)
+    monkeypatch.setattr(config, "REWARDED_AD_SESSION_TTL_SECONDS", 120)
+    monkeypatch.setattr(config, "REWARDED_AD_MIN_ACCOUNT_AGE_HOURS", 24)
+    monkeypatch.setattr(config, "REWARDED_AD_COOLDOWN_SECONDS", 0)
+    monkeypatch.setattr(config, "REWARDED_AD_DAILY_ATTEMPT_LIMIT", 6)
+    monkeypatch.setattr(config, "REWARDED_AD_CLIENT_EVENT_RISK_ACCEPTED", False)
 
     monkeypatch.setattr(config, "ADSENSE_CMP_READY", False)
     cmp_blocked = client.get("/billing/rewarded-ads", headers=auth(token))
@@ -680,32 +709,123 @@ def test_rewarded_ad_sessions_are_opt_in_capped_and_single_use(monkeypatch):
     assert cmp_blocked.json()["rewarded_ads"]["ad_unit_path"] is None
 
     monkeypatch.setattr(config, "ADSENSE_CMP_READY", True)
+    risk_blocked = client.get("/billing/rewarded-ads", headers=auth(token)).json()["rewarded_ads"]
+    assert risk_blocked["configured"] is False
+    assert risk_blocked["verification_mode"] is None
+
+    monkeypatch.setattr(config, "REWARDED_AD_CLIENT_EVENT_RISK_ACCEPTED", True)
+    monkeypatch.setattr(config, "REWARDED_AD_GLOBAL_DAILY_LIMIT_MINUTES", 0)
+    budget_blocked = client.get("/billing/rewarded-ads", headers=auth(token)).json()["rewarded_ads"]
+    assert budget_blocked["configured"] is False
+
+    monkeypatch.setattr(config, "REWARDED_AD_GLOBAL_DAILY_LIMIT_MINUTES", 6)
+    monkeypatch.setattr(config, "REWARDED_AD_UNIT_PATH", "https://example.com/not-a-unit")
+    invalid_unit = client.get("/billing/rewarded-ads", headers=auth(token)).json()["rewarded_ads"]
+    assert invalid_unit["configured"] is False
+    assert invalid_unit["ad_unit_path"] is None
+    monkeypatch.setattr(config, "REWARDED_AD_UNIT_PATH", "/1234567/lecturesift_rewarded")
+    too_new = client.get("/billing/rewarded-ads", headers=auth(token)).json()["rewarded_ads"]
+    assert too_new["configured"] is True
+    assert too_new["enabled"] is False
+    assert too_new["unavailable_reason"] == "account_too_new"
+
+    monkeypatch.setattr(config, "REWARDED_AD_MIN_ACCOUNT_AGE_HOURS", 0)
 
     state = client.get("/billing/rewarded-ads", headers=auth(token))
     assert state.status_code == 200
     assert state.json()["rewarded_ads"]["enabled"] is True
+    assert state.json()["rewarded_ads"]["verification_mode"] == "client_event_limited"
 
     issued = client.post("/billing/rewarded-ads/session", headers=auth(token)).json()["session"]
     claim_payload = {
         "session_id": issued["session_id"],
         "claim_token": issued["claim_token"],
     }
-    claimed = client.post("/billing/rewarded-ads/claim", headers=auth(token), json=claim_payload)
+    assert issued["expires_in_seconds"] == 120
+    assert datetime.fromisoformat(issued["expires_at"]) > datetime.now(timezone.utc)
+    assert client.post("/billing/rewarded-ads/session", headers=auth(token)).status_code == 400
+
+    _, reserve_token = new_account()
+    reserved = client.post(
+        "/billing/rewarded-ads/session", headers=auth(reserve_token)
+    ).json()["session"]
+    _, other_token = new_account()
+    globally_reserved = client.get(
+        "/billing/rewarded-ads", headers=auth(other_token)
+    ).json()["rewarded_ads"]
+    assert globally_reserved["enabled"] is False
+    assert globally_reserved["unavailable_reason"] == "global_limit"
+    released = client.post(
+        "/billing/rewarded-ads/event",
+        headers=auth(reserve_token),
+        json={
+            "session_id": reserved["session_id"],
+            "claim_token": reserved["claim_token"],
+            "event": "abandoned",
+        },
+    )
+    assert released.status_code == 200
+    assert client.get(
+        "/billing/rewarded-ads", headers=auth(other_token)
+    ).json()["rewarded_ads"]["enabled"] is True
+
+    assert client.post(
+        "/billing/rewarded-ads/claim", headers=auth(token), json=claim_payload
+    ).status_code == 400
+    assert client.post(
+        "/billing/rewarded-ads/event",
+        headers=auth(token),
+        json={**claim_payload, "event": "granted"},
+    ).status_code == 400
+    presented = client.post(
+        "/billing/rewarded-ads/event",
+        headers=auth(token),
+        json={**claim_payload, "event": "presented"},
+    )
+    assert presented.status_code == 200
+    assert presented.json()["status"] == "presented"
+    granted = client.post(
+        "/billing/rewarded-ads/event",
+        headers=auth(token),
+        json={**claim_payload, "event": "granted"},
+    )
+    assert granted.status_code == 200
+    assert granted.json()["status"] == "granted"
+    claimed = client.post(
+        "/billing/rewarded-ads/claim", headers=auth(token), json=claim_payload
+    )
     assert claimed.status_code == 200
     assert claimed.json()["minutes_added"] == 3
+    assert claimed.json()["already_redeemed"] is False
     duplicate = client.post("/billing/rewarded-ads/claim", headers=auth(token), json=claim_payload)
-    assert duplicate.status_code == 400
+    assert duplicate.status_code == 200
+    assert duplicate.json()["already_redeemed"] is True
+    assert duplicate.json()["account"]["credit_minutes"] == claimed.json()["account"]["credit_minutes"]
 
     second = client.post("/billing/rewarded-ads/session", headers=auth(token)).json()["session"]
+    second_payload = {"session_id": second["session_id"], "claim_token": second["claim_token"]}
+    for event_name in ("presented", "granted"):
+        event = client.post(
+            "/billing/rewarded-ads/event",
+            headers=auth(token),
+            json={**second_payload, "event": event_name},
+        )
+        assert event.status_code == 200
     claimed_again = client.post(
         "/billing/rewarded-ads/claim",
         headers=auth(token),
-        json={"session_id": second["session_id"], "claim_token": second["claim_token"]},
+        json=second_payload,
     )
     assert claimed_again.status_code == 200
     assert claimed_again.json()["rewarded_ads"]["earned_today"] == 6
     assert claimed_again.json()["rewarded_ads"]["enabled"] is False
     assert client.post("/billing/rewarded-ads/session", headers=auth(token)).status_code == 400
+
+    global_blocked = client.get(
+        "/billing/rewarded-ads", headers=auth(other_token)
+    ).json()["rewarded_ads"]
+    assert global_blocked["enabled"] is False
+    assert global_blocked["unavailable_reason"] == "global_limit"
 
     account = client.get("/billing/me", headers=auth(token)).json()["account"]
     assert account["credit_minutes"] >= 6
@@ -714,6 +834,526 @@ def test_rewarded_ad_sessions_are_opt_in_capped_and_single_use(monkeypatch):
     serialized = json.dumps(exported)
     assert "claim_token" not in serialized
     assert "token_hash" not in serialized
+
+    oversized = client.post(
+        "/billing/rewarded-ads/claim",
+        headers=auth(token),
+        json={"session_id": "x" * 500, "claim_token": "y" * 500},
+    )
+    assert oversized.status_code == 422
+
+    closed = client.post(
+        "/billing/me/close-account",
+        headers=auth(token),
+        json={
+            "current_password": "Strong-test-password1",
+            "email_confirmation": email,
+        },
+    )
+    assert closed.status_code == 200
+    still_globally_blocked = client.get(
+        "/billing/rewarded-ads", headers=auth(other_token)
+    ).json()["rewarded_ads"]
+    assert still_globally_blocked["unavailable_reason"] == "global_limit"
+
+
+def test_rewarded_ad_close_without_grant_cannot_redeem(
+    monkeypatch, isolated_reward_database
+):
+    email, token = new_account()
+    monkeypatch.setattr(config, "REWARDED_ADS_ENABLED", True)
+    monkeypatch.setattr(config, "REWARDED_AD_UNIT_PATH", "/1234567/lecturesift_rewarded")
+    monkeypatch.setattr(config, "REWARDED_AD_MINUTES_PER_VIEW", 1)
+    monkeypatch.setattr(config, "REWARDED_AD_DAILY_LIMIT_MINUTES", 3)
+    monkeypatch.setattr(config, "REWARDED_AD_GLOBAL_DAILY_LIMIT_MINUTES", 60)
+    monkeypatch.setattr(config, "REWARDED_AD_SESSION_TTL_SECONDS", 120)
+    monkeypatch.setattr(config, "REWARDED_AD_MIN_ACCOUNT_AGE_HOURS", 0)
+    monkeypatch.setattr(config, "REWARDED_AD_COOLDOWN_SECONDS", 0)
+    monkeypatch.setattr(config, "REWARDED_AD_DAILY_ATTEMPT_LIMIT", 1)
+    monkeypatch.setattr(config, "REWARDED_AD_CLIENT_EVENT_RISK_ACCEPTED", True)
+    monkeypatch.setattr(config, "ADSENSE_CMP_READY", True)
+
+    issued = client.post("/billing/rewarded-ads/session", headers=auth(token)).json()["session"]
+    payload = {"session_id": issued["session_id"], "claim_token": issued["claim_token"]}
+    assert client.post(
+        "/billing/rewarded-ads/event",
+        headers=auth(token),
+        json={**payload, "event": "presented"},
+    ).status_code == 200
+    abandoned = client.post(
+        "/billing/rewarded-ads/event",
+        headers=auth(token),
+        json={**payload, "event": "abandoned"},
+    )
+    assert abandoned.status_code == 200
+    assert abandoned.json()["status"] == "abandoned"
+    assert client.post(
+        "/billing/rewarded-ads/event",
+        headers=auth(token),
+        json={**payload, "event": "granted"},
+    ).status_code == 400
+    assert client.post(
+        "/billing/rewarded-ads/claim", headers=auth(token), json=payload
+    ).status_code == 400
+    state = client.get("/billing/rewarded-ads", headers=auth(token)).json()["rewarded_ads"]
+    assert state["enabled"] is False
+    assert state["unavailable_reason"] == "attempt_limit"
+    assert client.post(
+        "/billing/me/close-account",
+        headers=auth(token),
+        json={
+            "current_password": "Strong-test-password1",
+            "email_confirmation": email,
+        },
+    ).status_code == 200
+    with billing_service.ENGINE.connect() as connection:
+        retained_status = connection.execute(
+            select(rollout_service.REWARDED_AD_CLAIMS.c.status).where(
+                rollout_service.REWARDED_AD_CLAIMS.c.id == issued["session_id"]
+            )
+        ).scalar_one()
+    assert retained_status == "abandoned"
+
+    granted_email, granted_token = new_account()
+    granted_user_id = billing_service.authenticate_session(granted_token)["id"]
+    granted_session = client.post(
+        "/billing/rewarded-ads/session", headers=auth(granted_token)
+    ).json()["session"]
+    granted_payload = {
+        "session_id": granted_session["session_id"],
+        "claim_token": granted_session["claim_token"],
+    }
+    for event_name in ("presented", "granted"):
+        assert client.post(
+            "/billing/rewarded-ads/event",
+            headers=auth(granted_token),
+            json={**granted_payload, "event": event_name},
+        ).status_code == 200
+    assert client.post(
+        "/billing/me/close-account",
+        headers=auth(granted_token),
+        json={
+            "current_password": "Strong-test-password1",
+            "email_confirmation": granted_email,
+        },
+    ).status_code == 200
+    with pytest.raises(
+        billing_service.BillingError,
+        match="Reklam ödülü henüz verilmedi veya daha önce kullanıldı",
+    ):
+        rollout_service.redeem_rewarded_ad_session(
+            granted_user_id,
+            granted_session["session_id"],
+            granted_session["claim_token"],
+        )
+    with billing_service.ENGINE.connect() as connection:
+        closed_row = connection.execute(
+            select(
+                rollout_service.REWARDED_AD_CLAIMS.c.status,
+                billing_service.USERS.c.credit_minutes,
+            )
+            .select_from(
+                rollout_service.REWARDED_AD_CLAIMS.join(
+                    billing_service.USERS,
+                    rollout_service.REWARDED_AD_CLAIMS.c.user_id
+                    == billing_service.USERS.c.id,
+                )
+            )
+            .where(
+                rollout_service.REWARDED_AD_CLAIMS.c.id
+                == granted_session["session_id"]
+            )
+        ).one()
+    assert closed_row.status == "abandoned"
+    assert closed_row.credit_minutes == 0
+
+
+def test_rewarded_ad_rechecks_plan_before_adding_minutes(
+    monkeypatch, isolated_reward_database
+):
+    _, token = new_account()
+    monkeypatch.setattr(config, "REWARDED_ADS_ENABLED", True)
+    monkeypatch.setattr(config, "REWARDED_AD_UNIT_PATH", "/1234567/lecturesift_rewarded")
+    monkeypatch.setattr(config, "REWARDED_AD_MINUTES_PER_VIEW", 1)
+    monkeypatch.setattr(config, "REWARDED_AD_DAILY_LIMIT_MINUTES", 3)
+    monkeypatch.setattr(config, "REWARDED_AD_GLOBAL_DAILY_LIMIT_MINUTES", 60)
+    monkeypatch.setattr(config, "REWARDED_AD_SESSION_TTL_SECONDS", 120)
+    monkeypatch.setattr(config, "REWARDED_AD_MIN_ACCOUNT_AGE_HOURS", 0)
+    monkeypatch.setattr(config, "REWARDED_AD_COOLDOWN_SECONDS", 0)
+    monkeypatch.setattr(config, "REWARDED_AD_DAILY_ATTEMPT_LIMIT", 6)
+    monkeypatch.setattr(config, "REWARDED_AD_CLIENT_EVENT_RISK_ACCEPTED", True)
+    monkeypatch.setattr(config, "ADSENSE_CMP_READY", True)
+
+    user_id = billing_service.authenticate_session(token)["id"]
+    balance_before = billing_service.account_status(user_id)["credit_minutes"]
+    issued = client.post("/billing/rewarded-ads/session", headers=auth(token)).json()["session"]
+    payload = {"session_id": issued["session_id"], "claim_token": issued["claim_token"]}
+    for event_name in ("presented", "granted"):
+        assert client.post(
+            "/billing/rewarded-ads/event",
+            headers=auth(token),
+            json={**payload, "event": event_name},
+        ).status_code == 200
+
+    rollout_service.admin_set_user_subscription(
+        user_id,
+        plan_code="plus",
+        interval="monthly",
+        duration_days=30,
+        actor="rewarded-plan-transition-test",
+    )
+    denied = client.post(
+        "/billing/rewarded-ads/claim",
+        headers=auth(token),
+        json=payload,
+    )
+    assert denied.status_code == 400
+    assert "paketin" in denied.json()["detail"]["message"]
+    assert billing_service.account_status(user_id)["credit_minutes"] == balance_before
+
+
+def test_rewarded_ad_expiry_is_committed_before_the_error_response(
+    monkeypatch, isolated_reward_database
+):
+    event_token = new_account()[1]
+    claim_token = new_account()[1]
+    stale_token = new_account()[1]
+    monkeypatch.setattr(config, "REWARDED_ADS_ENABLED", True)
+    monkeypatch.setattr(config, "REWARDED_AD_UNIT_PATH", "/1234567/lecturesift_rewarded")
+    monkeypatch.setattr(config, "REWARDED_AD_MINUTES_PER_VIEW", 1)
+    monkeypatch.setattr(config, "REWARDED_AD_DAILY_LIMIT_MINUTES", 3)
+    monkeypatch.setattr(config, "REWARDED_AD_GLOBAL_DAILY_LIMIT_MINUTES", 1_000_000)
+    monkeypatch.setattr(config, "REWARDED_AD_SESSION_TTL_SECONDS", 120)
+    monkeypatch.setattr(config, "REWARDED_AD_MIN_ACCOUNT_AGE_HOURS", 0)
+    monkeypatch.setattr(config, "REWARDED_AD_COOLDOWN_SECONDS", 0)
+    monkeypatch.setattr(config, "REWARDED_AD_DAILY_ATTEMPT_LIMIT", 6)
+    monkeypatch.setattr(config, "REWARDED_AD_CLIENT_EVENT_RISK_ACCEPTED", True)
+    monkeypatch.setattr(config, "ADSENSE_CMP_READY", True)
+
+    expired_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+    event_session = client.post(
+        "/billing/rewarded-ads/session", headers=auth(event_token)
+    ).json()["session"]
+    with billing_service.ENGINE.begin() as connection:
+        connection.execute(
+            update(rollout_service.REWARDED_AD_CLAIMS)
+            .where(rollout_service.REWARDED_AD_CLAIMS.c.id == event_session["session_id"])
+            .values(expires_at=expired_at)
+        )
+    event_response = client.post(
+        "/billing/rewarded-ads/event",
+        headers=auth(event_token),
+        json={
+            "session_id": event_session["session_id"],
+            "claim_token": event_session["claim_token"],
+            "event": "presented",
+        },
+    )
+    assert event_response.status_code == 400
+
+    claim_session = client.post(
+        "/billing/rewarded-ads/session", headers=auth(claim_token)
+    ).json()["session"]
+    claim_payload = {
+        "session_id": claim_session["session_id"],
+        "claim_token": claim_session["claim_token"],
+    }
+    for event_name in ("presented", "granted"):
+        assert client.post(
+            "/billing/rewarded-ads/event",
+            headers=auth(claim_token),
+            json={**claim_payload, "event": event_name},
+        ).status_code == 200
+    with billing_service.ENGINE.begin() as connection:
+        connection.execute(
+            update(rollout_service.REWARDED_AD_CLAIMS)
+            .where(rollout_service.REWARDED_AD_CLAIMS.c.id == claim_session["session_id"])
+            .values(expires_at=expired_at)
+        )
+    assert client.post(
+        "/billing/rewarded-ads/claim", headers=auth(claim_token), json=claim_payload
+    ).status_code == 400
+
+    stale_session = client.post(
+        "/billing/rewarded-ads/session", headers=auth(stale_token)
+    ).json()["session"]
+    with billing_service.ENGINE.begin() as connection:
+        connection.execute(
+            update(rollout_service.REWARDED_AD_CLAIMS)
+            .where(rollout_service.REWARDED_AD_CLAIMS.c.id == stale_session["session_id"])
+            .values(expires_at=expired_at)
+        )
+    stale_state = client.get(
+        "/billing/rewarded-ads", headers=auth(stale_token)
+    ).json()["rewarded_ads"]
+    assert stale_state["enabled"] is True
+    assert stale_state["unavailable_reason"] is None
+    replacement = client.post(
+        "/billing/rewarded-ads/session", headers=auth(stale_token)
+    )
+    assert replacement.status_code == 200
+    replacement_session = replacement.json()["session"]
+    assert client.post(
+        "/billing/rewarded-ads/event",
+        headers=auth(stale_token),
+        json={
+            "session_id": replacement_session["session_id"],
+            "claim_token": replacement_session["claim_token"],
+            "event": "abandoned",
+        },
+    ).status_code == 200
+
+    with billing_service.ENGINE.connect() as connection:
+        statuses = dict(
+            connection.execute(
+                select(
+                    rollout_service.REWARDED_AD_CLAIMS.c.id,
+                    rollout_service.REWARDED_AD_CLAIMS.c.status,
+                ).where(
+                    rollout_service.REWARDED_AD_CLAIMS.c.id.in_(
+                        (
+                            event_session["session_id"],
+                            claim_session["session_id"],
+                            stale_session["session_id"],
+                        )
+                    )
+                )
+            ).all()
+        )
+    assert statuses == {
+        event_session["session_id"]: "expired",
+        claim_session["session_id"]: "expired",
+        stale_session["session_id"]: "expired",
+    }
+
+
+def test_rewarded_ad_global_budget_serializes_parallel_claims(
+    monkeypatch, isolated_reward_database
+):
+    first = new_account()[1]
+    second = new_account()[1]
+    monkeypatch.setattr(config, "REWARDED_ADS_ENABLED", True)
+    monkeypatch.setattr(config, "REWARDED_AD_UNIT_PATH", "/1234567/lecturesift_rewarded")
+    monkeypatch.setattr(config, "REWARDED_AD_MINUTES_PER_VIEW", 1)
+    monkeypatch.setattr(config, "REWARDED_AD_DAILY_LIMIT_MINUTES", 3)
+    monkeypatch.setattr(config, "REWARDED_AD_SESSION_TTL_SECONDS", 120)
+    monkeypatch.setattr(config, "REWARDED_AD_MIN_ACCOUNT_AGE_HOURS", 0)
+    monkeypatch.setattr(config, "REWARDED_AD_COOLDOWN_SECONDS", 0)
+    monkeypatch.setattr(config, "REWARDED_AD_DAILY_ATTEMPT_LIMIT", 6)
+    monkeypatch.setattr(config, "REWARDED_AD_CLIENT_EVENT_RISK_ACCEPTED", True)
+    monkeypatch.setattr(config, "ADSENSE_CMP_READY", True)
+
+    day_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    with billing_service.ENGINE.connect() as connection:
+        baseline = int(
+            connection.execute(
+                select(func.coalesce(func.sum(rollout_service.REWARDED_AD_CLAIMS.c.minutes), 0)).where(
+                    rollout_service.REWARDED_AD_CLAIMS.c.status == "redeemed",
+                    rollout_service.REWARDED_AD_CLAIMS.c.redeemed_at >= day_start,
+                )
+            ).scalar_one()
+            or 0
+        )
+    monkeypatch.setattr(config, "REWARDED_AD_GLOBAL_DAILY_LIMIT_MINUTES", baseline + 2)
+
+    same_user = new_account()[1]
+    issue_barrier = Barrier(2)
+
+    def issue_same_user(_index):
+        issue_barrier.wait(timeout=5)
+        return TestClient(app).post(
+            "/billing/rewarded-ads/session", headers=auth(same_user)
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        issue_responses = list(executor.map(issue_same_user, range(2)))
+    assert sorted(response.status_code for response in issue_responses) == [200, 400]
+    issued_once = next(response for response in issue_responses if response.status_code == 200)
+    issued_once_session = issued_once.json()["session"]
+    assert client.post(
+        "/billing/rewarded-ads/event",
+        headers=auth(same_user),
+        json={
+            "session_id": issued_once_session["session_id"],
+            "claim_token": issued_once_session["claim_token"],
+            "event": "abandoned",
+        },
+    ).status_code == 200
+
+    sessions = []
+    for token in (first, second):
+        session = client.post("/billing/rewarded-ads/session", headers=auth(token)).json()["session"]
+        payload = {"session_id": session["session_id"], "claim_token": session["claim_token"]}
+        for event_name in ("presented", "granted"):
+            response = client.post(
+                "/billing/rewarded-ads/event",
+                headers=auth(token),
+                json={**payload, "event": event_name},
+            )
+            assert response.status_code == 200
+        sessions.append((token, payload))
+
+    monkeypatch.setattr(config, "REWARDED_AD_GLOBAL_DAILY_LIMIT_MINUTES", baseline + 1)
+    barrier = Barrier(2)
+
+    def claim(item):
+        token, payload = item
+        barrier.wait(timeout=5)
+        return TestClient(app).post(
+            "/billing/rewarded-ads/claim", headers=auth(token), json=payload
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        responses = list(executor.map(claim, sessions))
+    assert sorted(response.status_code for response in responses) == [200, 400]
+
+    monkeypatch.setattr(config, "REWARDED_AD_GLOBAL_DAILY_LIMIT_MINUTES", baseline + 2)
+    failed_index = next(index for index, response in enumerate(responses) if response.status_code == 400)
+    failed_token, failed_payload = sessions[failed_index]
+    assert client.post(
+        "/billing/rewarded-ads/claim",
+        headers=auth(failed_token),
+        json=failed_payload,
+    ).status_code == 200
+
+    duplicate_token = new_account()[1]
+    monkeypatch.setattr(config, "REWARDED_AD_GLOBAL_DAILY_LIMIT_MINUTES", baseline + 3)
+    duplicate_session = client.post(
+        "/billing/rewarded-ads/session", headers=auth(duplicate_token)
+    ).json()["session"]
+    duplicate_payload = {
+        "session_id": duplicate_session["session_id"],
+        "claim_token": duplicate_session["claim_token"],
+    }
+    for event_name in ("presented", "granted"):
+        assert client.post(
+            "/billing/rewarded-ads/event",
+            headers=auth(duplicate_token),
+            json={**duplicate_payload, "event": event_name},
+        ).status_code == 200
+    balance_before = client.get(
+        "/billing/me", headers=auth(duplicate_token)
+    ).json()["account"]["credit_minutes"]
+    duplicate_barrier = Barrier(2)
+
+    def claim_same_session(_index):
+        duplicate_barrier.wait(timeout=5)
+        return TestClient(app).post(
+            "/billing/rewarded-ads/claim",
+            headers=auth(duplicate_token),
+            json=duplicate_payload,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        duplicate_responses = list(executor.map(claim_same_session, range(2)))
+    assert [response.status_code for response in duplicate_responses] == [200, 200]
+    assert sorted(response.json()["already_redeemed"] for response in duplicate_responses) == [False, True]
+    balance_after = client.get(
+        "/billing/me", headers=auth(duplicate_token)
+    ).json()["account"]["credit_minutes"]
+    assert balance_after == balance_before + 1
+
+
+def test_postgres_rewarded_ad_global_budget_serializes_parallel_claims(monkeypatch):
+    database_url = os.getenv("TEST_ASSISTANT_POSTGRES_URL")
+    if not database_url:
+        pytest.skip("Only the isolated GitHub Actions PostgreSQL service runs this test")
+    assert database_url == (
+        "postgresql+psycopg://assistant_ci:synthetic-ci-only@127.0.0.1:5432/assistant_ci"
+    )
+    admin_engine = create_engine(database_url, isolation_level="AUTOCOMMIT")
+    database_name = f"rewarded_ci_{uuid.uuid4().hex[:12]}"
+    engine = None
+    database_created = False
+    try:
+        with admin_engine.connect() as connection:
+            connection.exec_driver_sql(
+                f'CREATE DATABASE "{database_name}" TEMPLATE template0'
+            )
+        database_created = True
+        engine = create_engine(database_url.rsplit("/", 1)[0] + f"/{database_name}")
+        assert engine.dialect.name == "postgresql"
+        billing_service.METADATA.create_all(engine)
+        monkeypatch.setattr(billing_service, "ENGINE", engine)
+        monkeypatch.setattr(rollout_service, "ENGINE", engine)
+        monkeypatch.setattr(billing_service, "_INITIALIZED", True)
+        monkeypatch.setattr(config, "REWARDED_ADS_ENABLED", True)
+        monkeypatch.setattr(
+            config, "REWARDED_AD_UNIT_PATH", "/1234567/lecturesift_rewarded"
+        )
+        monkeypatch.setattr(config, "REWARDED_AD_MINUTES_PER_VIEW", 1)
+        monkeypatch.setattr(config, "REWARDED_AD_DAILY_LIMIT_MINUTES", 3)
+        monkeypatch.setattr(config, "REWARDED_AD_SESSION_TTL_SECONDS", 120)
+        monkeypatch.setattr(config, "REWARDED_AD_MIN_ACCOUNT_AGE_HOURS", 0)
+        monkeypatch.setattr(config, "REWARDED_AD_COOLDOWN_SECONDS", 0)
+        monkeypatch.setattr(config, "REWARDED_AD_DAILY_ATTEMPT_LIMIT", 6)
+        monkeypatch.setattr(config, "REWARDED_AD_CLIENT_EVENT_RISK_ACCEPTED", True)
+        monkeypatch.setattr(config, "ADSENSE_CMP_READY", True)
+
+        tokens = (new_account()[1], new_account()[1])
+        day_start = datetime.now(timezone.utc).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        with engine.connect() as connection:
+            baseline = int(
+                connection.execute(
+                    select(
+                        func.coalesce(
+                            func.sum(rollout_service.REWARDED_AD_CLAIMS.c.minutes), 0
+                        )
+                    ).where(
+                        rollout_service.REWARDED_AD_CLAIMS.c.status == "redeemed",
+                        rollout_service.REWARDED_AD_CLAIMS.c.redeemed_at >= day_start,
+                    )
+                ).scalar_one()
+                or 0
+            )
+        monkeypatch.setattr(
+            config, "REWARDED_AD_GLOBAL_DAILY_LIMIT_MINUTES", baseline + 2
+        )
+        sessions = []
+        for token in tokens:
+            user_id = billing_service.authenticate_session(token)["id"]
+            session = rollout_service.issue_rewarded_ad_session(user_id)
+            for event_name in ("presented", "granted"):
+                rollout_service.record_rewarded_ad_event(
+                    user_id,
+                    session["session_id"],
+                    session["claim_token"],
+                    event_name,
+                )
+            sessions.append((user_id, session))
+
+        monkeypatch.setattr(
+            config, "REWARDED_AD_GLOBAL_DAILY_LIMIT_MINUTES", baseline + 1
+        )
+        barrier = Barrier(2)
+
+        def claim_postgres(item):
+            user_id, session = item
+            barrier.wait(timeout=5)
+            try:
+                rollout_service.redeem_rewarded_ad_session(
+                    user_id, session["session_id"], session["claim_token"]
+                )
+                return {"status": "redeemed", "message": ""}
+            except billing_service.BillingError as exc:
+                return {"status": "blocked", "message": str(exc)}
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            outcomes = list(executor.map(claim_postgres, sessions))
+        assert sorted(item["status"] for item in outcomes) == ["blocked", "redeemed"]
+        blocked = next(item for item in outcomes if item["status"] == "blocked")
+        assert blocked["message"] == "Bugünkü reklam ödülü bütçesi doldu."
+    finally:
+        if engine is not None:
+            engine.dispose()
+        if database_created:
+            with admin_engine.connect() as connection:
+                connection.exec_driver_sql(
+                    f'DROP DATABASE "{database_name}" WITH (FORCE)'
+                )
+        admin_engine.dispose()
 
 
 def test_admin_paginated_users_orders_activity_and_bulk_actions(monkeypatch):
