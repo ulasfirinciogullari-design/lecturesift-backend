@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from . import config
 from .adsense_management import adsense_management_readiness
+from .google_ads_management import google_ads_management_readiness
 from .billing_service import BillingAuthenticationError, BillingConfigurationError, BillingError, authenticate_session
 from .costs import cost_overview, delete_actual_cost, save_actual_cost
 from .jobs import JOBS
@@ -442,7 +443,8 @@ def ads_config() -> dict:
 
 @router.get("/billing/admin/advertising-readiness")
 def advertising_readiness(admin: dict = Depends(_admin)) -> dict:
-    management_api = adsense_management_readiness()
+    adsense_management = adsense_management_readiness()
+    google_ads_management = google_ads_management_readiness()
     return {
         "ok": True,
         "adsense": {
@@ -452,14 +454,15 @@ def advertising_readiness(admin: dict = Depends(_admin)) -> dict:
             ),
             "site_approval_confirmed": config.ADSENSE_ENABLED,
             "consent_setup_confirmed": config.ADSENSE_CMP_READY,
-            "google_account_connected": management_api["connected"],
-            "management_api": management_api,
+            "google_account_connected": adsense_management["connected"],
+            "management_api": adsense_management,
         },
         "google_ads": {
             "id_configured": bool(re.fullmatch(r"AW-[0-9]+", config.GOOGLE_ADS_ID)),
             "signup_configured": bool(config.GOOGLE_ADS_SIGNUP_LABEL),
             "purchase_configured": bool(config.GOOGLE_ADS_PURCHASE_LABEL),
-            "google_account_connected": False,
+            "google_account_connected": google_ads_management["connected"],
+            "management_api": google_ads_management,
         },
     }
 

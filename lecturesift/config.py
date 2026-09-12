@@ -370,6 +370,24 @@ GA_MEASUREMENT_ID = os.getenv("LECTURESIFT_GA_MEASUREMENT_ID", "").strip().upper
 GOOGLE_ADS_ID = os.getenv("LECTURESIFT_GOOGLE_ADS_ID", "").strip().upper()
 GOOGLE_ADS_SIGNUP_LABEL = os.getenv("LECTURESIFT_GOOGLE_ADS_SIGNUP_LABEL", "").strip()
 GOOGLE_ADS_PURCHASE_LABEL = os.getenv("LECTURESIFT_GOOGLE_ADS_PURCHASE_LABEL", "").strip()
+# This connection reads account reporting only. Google Ads API v25 access is
+# tied to the service account's Cloud project; the client deliberately sends no
+# retired developer-token header and exposes no configurable provider origin.
+GOOGLE_ADS_API_ENABLED = (
+    os.getenv("LECTURESIFT_GOOGLE_ADS_API_ENABLED", "false").lower() == "true"
+)
+GOOGLE_ADS_API_SERVICE_ACCOUNT_JSON = os.getenv(
+    "LECTURESIFT_GOOGLE_ADS_API_SERVICE_ACCOUNT_JSON", ""
+).strip()
+GOOGLE_ADS_API_CUSTOMER_ID = os.getenv(
+    "LECTURESIFT_GOOGLE_ADS_API_CUSTOMER_ID", ""
+).strip()
+GOOGLE_ADS_API_CACHE_SECONDS = max(
+    60, min(3600, int(os.getenv("LECTURESIFT_GOOGLE_ADS_API_CACHE_SECONDS", "300")))
+)
+GOOGLE_ADS_API_TIMEOUT_SECONDS = max(
+    3, min(30, int(os.getenv("LECTURESIFT_GOOGLE_ADS_API_TIMEOUT_SECONDS", "10")))
+)
 
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "")
 REDIS_URL = os.getenv("REDIS_URL", CELERY_BROKER_URL)

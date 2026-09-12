@@ -222,6 +222,99 @@ if [[ "$adsense_api_enabled" == "true" ]]; then
   fi
 fi
 
+google_ads_api_enabled="${LECTURESIFT_GOOGLE_ADS_API_ENABLED:-false}"
+if [[ "$google_ads_api_enabled" != "true" && "$google_ads_api_enabled" != "false" ]]; then
+  echo "LECTURESIFT_GOOGLE_ADS_API_ENABLED must be exactly true or false." >&2
+  exit 1
+fi
+google_ads_cache_seconds="${LECTURESIFT_GOOGLE_ADS_API_CACHE_SECONDS:-300}"
+google_ads_timeout_seconds="${LECTURESIFT_GOOGLE_ADS_API_TIMEOUT_SECONDS:-10}"
+if [[ ! "$google_ads_cache_seconds" =~ ^(0|[1-9][0-9]{0,3})$ ]] ||
+   ((google_ads_cache_seconds < 60 || google_ads_cache_seconds > 3600)); then
+  echo "LECTURESIFT_GOOGLE_ADS_API_CACHE_SECONDS must be between 60 and 3600." >&2
+  exit 1
+fi
+if [[ ! "$google_ads_timeout_seconds" =~ ^(0|[1-9][0-9]?)$ ]] ||
+   ((google_ads_timeout_seconds < 3 || google_ads_timeout_seconds > 30)); then
+  echo "LECTURESIFT_GOOGLE_ADS_API_TIMEOUT_SECONDS must be between 3 and 30." >&2
+  exit 1
+fi
+if [[ "$google_ads_api_enabled" == "true" ]]; then
+  google_ads_api_required=(
+    LECTURESIFT_GOOGLE_ADS_API_SERVICE_ACCOUNT_JSON
+    LECTURESIFT_GOOGLE_ADS_API_CUSTOMER_ID
+  )
+  google_ads_api_missing=()
+  for name in "${google_ads_api_required[@]}"; do
+    if [[ -z "${!name:-}" ]]; then
+      google_ads_api_missing+=("$name")
+    fi
+  done
+  if ((${#google_ads_api_missing[@]})); then
+    printf 'Missing enabled Google Ads read-only API values: %s\n' \
+      "${google_ads_api_missing[*]}" >&2
+    exit 1
+  fi
+  if [[ ! "$LECTURESIFT_GOOGLE_ADS_API_CUSTOMER_ID" =~ ^[0-9]{10}$ ]]; then
+    echo "Google Ads customer ID must contain exactly 10 digits without hyphens." >&2
+    exit 1
+  fi
+  if ! python3 - <<'PY'
+import base64
+import binascii
+import json
+import os
+import re
+
+raw = os.environ.get("LECTURESIFT_GOOGLE_ADS_API_SERVICE_ACCOUNT_JSON", "").strip()
+try:
+    def unique_object(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                raise ValueError
+            value[key] = item
+        return value
+
+    if not raw or len(raw) > 65536:
+        raise ValueError
+    payload = raw.encode("utf-8") if raw.startswith("{") else base64.b64decode(raw, validate=True)
+    if not payload or len(payload) > 32768 or b"\0" in payload:
+        raise ValueError
+    value = json.loads(payload.decode("utf-8"), object_pairs_hook=unique_object)
+    if not isinstance(value, dict):
+        raise ValueError
+    project = value.get("project_id")
+    email = value.get("client_email")
+    key = value.get("private_key")
+    valid = (
+        isinstance(value, dict)
+        and value.get("type") == "service_account"
+        and value.get("token_uri") == "https://oauth2.googleapis.com/token"
+        and isinstance(project, str)
+        and re.fullmatch(r"[a-z][a-z0-9.-]{4,61}[a-z0-9]", project)
+        and isinstance(email, str)
+        and email == f"{email.partition('@')[0]}@{project}.iam.gserviceaccount.com"
+        and re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,62}", email.partition("@")[0])
+        and isinstance(value.get("client_id"), str)
+        and re.fullmatch(r"[0-9]{10,40}", value["client_id"])
+        and isinstance(value.get("private_key_id"), str)
+        and re.fullmatch(r"[A-Fa-f0-9]{16,128}", value["private_key_id"])
+        and isinstance(key, str)
+        and 256 <= len(key) <= 16384
+        and key.startswith("-----BEGIN PRIVATE KEY-----\n")
+        and key.endswith("-----END PRIVATE KEY-----\n")
+    )
+except (ValueError, TypeError, UnicodeError, json.JSONDecodeError, binascii.Error):
+    valid = False
+raise SystemExit(0 if valid else 1)
+PY
+  then
+    echo "Google Ads service-account JSON is invalid." >&2
+    exit 1
+  fi
+fi
+
 if [[ "$DATABASE_URL" != postgresql* || \
       "$LECTURESIFT_WORKER_DATABASE_URL" != postgresql* ]]; then
   echo "API and worker database URLs must use PostgreSQL in production." >&2
