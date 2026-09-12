@@ -42,6 +42,7 @@ test('admin referral releases require live reconciliation and refresh the queue'
     ['/rollout/health', {}],
     ['/ads/config', {}],
     ['/analytics/config', {}],
+    ['/billing/admin/advertising-readiness', {adsense:{management_api:{status:'not_configured', connected:false}}}],
     ['/billing/admin/costs?days=30&limit=250', {}],
     ['/billing/admin/users?search=&verification=all&plan=all&sort=created_desc&page=1&page_size=50', {users:[], pagination:emptyPage}],
     ['/billing/admin/orders?search=&status=all&provider=all&page=1&page_size=50', {orders:[], pagination:emptyPage}],
@@ -164,7 +165,7 @@ for (const [caseName, referralPayload] of [
       '/billing/admin/overview', '/admin/instagram-rewards', '/billing/admin/refund-requests',
       '/billing/admin/credit-events', '/billing/admin/contact-messages', '/billing/admin/jobs',
       '/billing/admin/account-events', '/billing/health', '/rollout/health', '/ads/config',
-      '/analytics/config', '/billing/admin/costs', '/billing/admin/referrals',
+      '/analytics/config', '/billing/admin/advertising-readiness', '/billing/admin/costs', '/billing/admin/referrals',
       '/billing/admin/users', '/billing/admin/orders',
     ]);
     const unexpected = [];

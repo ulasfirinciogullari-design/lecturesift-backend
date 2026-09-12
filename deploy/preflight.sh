@@ -187,6 +187,41 @@ if [[ "${INSTAGRAM_DAILY_AUTOMATION_ENABLED:-false}" == "true" ]]; then
   fi
 fi
 
+adsense_api_enabled="${LECTURESIFT_ADSENSE_API_ENABLED:-false}"
+if [[ "$adsense_api_enabled" != "true" && "$adsense_api_enabled" != "false" ]]; then
+  echo "LECTURESIFT_ADSENSE_API_ENABLED must be exactly true or false." >&2
+  exit 1
+fi
+if [[ "$adsense_api_enabled" == "true" ]]; then
+  adsense_api_required=(
+    LECTURESIFT_ADSENSE_API_CLIENT_ID
+    LECTURESIFT_ADSENSE_API_CLIENT_SECRET
+    LECTURESIFT_ADSENSE_API_REFRESH_TOKEN
+    LECTURESIFT_ADSENSE_API_ACCOUNT_NAME
+    LECTURESIFT_ADSENSE_API_SITE_DOMAIN
+  )
+  adsense_api_missing=()
+  for name in "${adsense_api_required[@]}"; do
+    if [[ -z "${!name:-}" ]]; then
+      adsense_api_missing+=("$name")
+    fi
+  done
+  if ((${#adsense_api_missing[@]})); then
+    printf 'Missing enabled AdSense read-only API values: %s\n' \
+      "${adsense_api_missing[*]}" >&2
+    exit 1
+  fi
+  if [[ ! "$LECTURESIFT_ADSENSE_API_CLIENT_ID" =~ ^[A-Za-z0-9._-]+[.]apps[.]googleusercontent[.]com$ ||
+        ! "$LECTURESIFT_ADSENSE_API_ACCOUNT_NAME" =~ ^accounts/pub-[0-9]+$ ||
+        ! "$LECTURESIFT_ADSENSE_API_SITE_DOMAIN" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?[.][a-z]{2,63}$ ||
+        "$LECTURESIFT_ADSENSE_API_SITE_DOMAIN" == *..* ||
+        "$LECTURESIFT_ADSENSE_API_SITE_DOMAIN" == *.-* ||
+        "$LECTURESIFT_ADSENSE_API_SITE_DOMAIN" == *-.* ]]; then
+    echo "AdSense read-only API identifiers are invalid." >&2
+    exit 1
+  fi
+fi
+
 if [[ "$DATABASE_URL" != postgresql* || \
       "$LECTURESIFT_WORKER_DATABASE_URL" != postgresql* ]]; then
   echo "API and worker database URLs must use PostgreSQL in production." >&2

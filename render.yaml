@@ -204,6 +204,22 @@ services:
         sync: false
       - key: LECTURESIFT_ADSENSE_PUBLISHER_ID
         value: ca-pub-7608481350058806
+      - key: LECTURESIFT_ADSENSE_API_ENABLED
+        sync: false
+      - key: LECTURESIFT_ADSENSE_API_CLIENT_ID
+        sync: false
+      - key: LECTURESIFT_ADSENSE_API_CLIENT_SECRET
+        sync: false
+      - key: LECTURESIFT_ADSENSE_API_REFRESH_TOKEN
+        sync: false
+      - key: LECTURESIFT_ADSENSE_API_ACCOUNT_NAME
+        value: accounts/pub-7608481350058806
+      - key: LECTURESIFT_ADSENSE_API_SITE_DOMAIN
+        value: lecturesift.com
+      - key: LECTURESIFT_ADSENSE_API_CACHE_SECONDS
+        value: "300"
+      - key: LECTURESIFT_ADSENSE_API_TIMEOUT_SECONDS
+        value: "10"
       - key: LECTURESIFT_SITE_BANNER_ENABLED
         value: "true"
       - key: LECTURESIFT_ACCOUNT_ACTIVITY_RETENTION_DAYS

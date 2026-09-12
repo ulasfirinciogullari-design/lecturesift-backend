@@ -326,6 +326,32 @@ ADSENSE_CMP_READY = os.getenv("LECTURESIFT_ADSENSE_CMP_READY", "false").lower() 
 ADSENSE_PUBLISHER_ID = os.getenv(
     "LECTURESIFT_ADSENSE_PUBLISHER_ID", "ca-pub-7608481350058806"
 ).strip()
+# The Management API connection is independent from ad serving. It stays
+# disabled until a narrowly scoped OAuth grant has been installed in the API
+# role. OAuth endpoints and the adsense.readonly scope are fixed in the client
+# implementation rather than being configurable through the environment.
+ADSENSE_API_ENABLED = (
+    os.getenv("LECTURESIFT_ADSENSE_API_ENABLED", "false").lower() == "true"
+)
+ADSENSE_API_CLIENT_ID = os.getenv("LECTURESIFT_ADSENSE_API_CLIENT_ID", "").strip()
+ADSENSE_API_CLIENT_SECRET = os.getenv(
+    "LECTURESIFT_ADSENSE_API_CLIENT_SECRET", ""
+).strip()
+ADSENSE_API_REFRESH_TOKEN = os.getenv(
+    "LECTURESIFT_ADSENSE_API_REFRESH_TOKEN", ""
+).strip()
+ADSENSE_API_ACCOUNT_NAME = os.getenv(
+    "LECTURESIFT_ADSENSE_API_ACCOUNT_NAME", "accounts/pub-7608481350058806"
+).strip()
+ADSENSE_API_SITE_DOMAIN = os.getenv(
+    "LECTURESIFT_ADSENSE_API_SITE_DOMAIN", "lecturesift.com"
+).strip().lower()
+ADSENSE_API_CACHE_SECONDS = max(
+    60, min(3600, int(os.getenv("LECTURESIFT_ADSENSE_API_CACHE_SECONDS", "300")))
+)
+ADSENSE_API_TIMEOUT_SECONDS = max(
+    3, min(30, int(os.getenv("LECTURESIFT_ADSENSE_API_TIMEOUT_SECONDS", "10")))
+)
 SITE_BANNER_ENABLED = os.getenv("LECTURESIFT_SITE_BANNER_ENABLED", "true").lower() == "true"
 SITE_BANNER_TITLE = os.getenv(
     "LECTURESIFT_SITE_BANNER_TITLE", "Derslerini daha hızlı çalış"

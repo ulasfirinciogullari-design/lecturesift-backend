@@ -31,6 +31,7 @@ def main():
     assert not any(os.environ.get(k) for k in (
         "REDIS_URL", "CELERY_BROKER_URL", "S3_ENDPOINT_URL", "S3_ACCESS_KEY_ID",
         "S3_SECRET_ACCESS_KEY", "IYZICO_API_KEY", "PAYTR_MERCHANT_KEY", "RESEND_API_KEY",
+        "LECTURESIFT_ADSENSE_API_CLIENT_SECRET", "LECTURESIFT_ADSENSE_API_REFRESH_TOKEN",
     ))
     signal.alarm(2700)
     started = time.monotonic()
