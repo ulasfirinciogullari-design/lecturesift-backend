@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
+from pydantic import ValidationError
 from sqlalchemy import create_engine, select, update
 from sqlalchemy.pool import StaticPool
 
@@ -286,8 +287,86 @@ def test_chat_uses_owned_context_actual_tokens_and_safe_action_schema(state, mon
     assert answer["path"] == "/account.html"
     assert captured["store"] is False and "tools" not in captured
     assert captured["text"]["format"]["strict"] is True
+    assert set(captured["text"]["format"]["schema"]["properties"]["action"]["enum"]) == {"none", *assistant.ACTIONS}
     assert user_id in captured["input"][0]["content"][0]["text"]
+    assert answer["account_summary"]["plan_code"] == "free"
+    assert answer["account_summary"]["remaining_minutes"] == 60
+    assert answer["account_summary"]["assistant_credits"] == 48
+    assert "user" not in answer["account_summary"] and "payment_orders" not in answer["account_summary"]
     assert assistant.chat(user_id, payload)["balance"] == 48
+
+
+def test_post_settlement_metadata_failure_still_delivers_and_replays_once(state, monkeypatch):
+    user_id = user()
+    calls = {"provider": 0}
+    monkeypatch.setattr(assistant.config, "OPENAI_API_KEY", "synthetic-not-a-real-key")
+    monkeypatch.setattr(assistant, "record_openai_response", lambda *args: True)
+    monkeypatch.setattr(assistant, "_context", lambda uid, currency: {"owner": uid})
+    monkeypatch.setattr(assistant, "_account_summary", lambda uid: (_ for _ in ()).throw(RuntimeError("temporary metadata failure")))
+
+    class Client:
+        def __init__(self, **kwargs):
+            self.responses = self
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def create(self, **kwargs):
+            calls["provider"] += 1
+            return SimpleNamespace(
+                status="completed",
+                output_text=json.dumps({"answer": "Open your account.", "action": "account"}),
+                usage=SimpleNamespace(input_tokens=1000, output_tokens=100),
+            )
+
+    monkeypatch.setattr(assistant, "OpenAI", Client)
+    payload = assistant.ChatRequest(request_id="metadata-failure-1", message="My account?", language="en")
+    first = assistant.chat(user_id, payload)
+    second = assistant.chat(user_id, payload)
+
+    assert first["answer"] == second["answer"] == "Open your account."
+    assert first["path"] == second["path"] == "/account.html"
+    assert "account_summary" not in first and "account_summary" not in second
+    assert first["charged_credits"] == second["charged_credits"] == 2
+    assert first["balance"] == second["balance"] == 48
+    assert calls["provider"] == 1
+    assert wallet.status(user_id)["balance"] == 48
+
+
+def test_assistant_action_contract_has_exact_preferences_and_rejects_model_targets():
+    language_actions = {action.removeprefix("language_") for action in assistant.ACTIONS if action.startswith("language_")}
+    assert language_actions == set(assistant.LANGUAGES)
+    assert {"workspace", "plans", "account", "support", "referrals", "latest_lesson", "light", "dark"} <= set(assistant.ACTIONS)
+    assert not {"checkout", "cancel_subscription", "refund", "profile", "password", "delete"} & set(assistant.ACTIONS)
+    with pytest.raises(ValidationError):
+        assistant.Answer.model_validate({"answer": "Open this", "action": "https://attacker.invalid"})
+    with pytest.raises(ValidationError):
+        assistant.Answer.model_validate({"answer": "Open it", "action": "latest_lesson", "job_id": "foreign-job"})
+    with pytest.raises(ValidationError):
+        assistant.Answer.model_validate({"answer": "Change it", "action": "language_xx"})
+
+
+def test_server_replaces_model_targets_with_owned_latest_lesson(state, monkeypatch):
+    from lecturesift.jobs import JOBS
+
+    user_id = user()
+    rows = [{"job_id": "owned-latest-1", "title": "Owned lesson", "status": "done"}]
+    monkeypatch.setattr(JOBS, "list_for_user", lambda owner, limit=50: rows[:limit] if owner == user_id else [])
+
+    result = assistant._decorate_action(user_id, {
+        "answer": "Open your lesson.", "action": "latest_lesson",
+        "path": "https://attacker.invalid", "latest_lesson": {"job_id": "foreign-job"},
+    })
+    assert result["path"] == "/workspace.html?job=owned-latest-1"
+    assert result["latest_lesson"] == {"job_id": "owned-latest-1", "title": "Owned lesson", "status": "done"}
+
+    rows[0]["job_id"] = "../../foreign"
+    fallback = assistant._decorate_action(user_id, {"answer": "Open it.", "action": "latest_lesson"})
+    assert fallback["action"] == "workspace" and fallback["path"] == "/workspace.html"
+    assert "latest_lesson" not in fallback
+
+    stale = assistant._decorate_action(user_id, {
+        "answer": "Old cached action.", "action": "https://attacker.invalid", "path": "https://attacker.invalid",
+    })
+    assert stale["action"] == "none" and stale["path"] == ""
 
 
 def test_chat_auth_and_disabled_gate_do_not_call_model(state, monkeypatch):

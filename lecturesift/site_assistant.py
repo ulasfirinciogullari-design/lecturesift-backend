@@ -6,6 +6,7 @@ import base64
 import hashlib
 import io
 import json
+import re
 
 from openai import OpenAI
 from PIL import Image, ImageOps
@@ -20,9 +21,9 @@ from .errors import LectureSiftError
 LANGUAGES = ("tr", "en", "de", "fr", "es", "it", "pt", "ru", "ar", "zh", "ja", "ko", "hi")
 ACTIONS = {
     "workspace": "/workspace.html", "plans": "/plans.html", "account": "/account.html",
-    "support": "/contact.html", "register": "/register.html",
-    "features": "/features.html", "privacy": "/privacy.html",
-    "light": "", "dark": "",
+    "support": "/contact.html", "referrals": "/account.html#account-referrals",
+    "latest_lesson": "", "light": "", "dark": "",
+    **{f"language_{language}": "" for language in LANGUAGES},
 }
 SITEMAP = {
     "/": "Product introduction and interactive study demo",
@@ -45,9 +46,16 @@ one suggested action from the allowed enum. Refer to pages by their translated n
 the site renders the navigation button separately.
 Actions are proposals: a user must click the site's own button. Never say you changed
 an account, bought/cancelled a plan, issued a refund or navigated before that happens.
-For sensitive account changes guide to Account; for payment guide to Plans. Never ask for
-passwords, card numbers, one-time codes, session cookies or API keys. Do not output URLs
-outside the supplied map. Do not promise referral rewards: availability is shown in Account.
+Use account for a read-only plan, minutes, credit and recent-lessons summary; use referrals
+for the invitation section. Use latest_lesson only when the user explicitly asks to open
+their newest lesson. Its identifier and route are selected by the server, never by you.
+Use light, dark or exactly one language_CODE action only when the user explicitly asks to
+change that reversible interface preference. The site shows a fixed confirmation card and
+does nothing until the user clicks Apply. You cannot edit profile or security details,
+purchase or cancel a plan, request a refund, delete data, create rewards or perform admin
+work. Guide those requests to Account, Plans, Support or Workspace as appropriate. Never
+ask for passwords, card numbers, one-time codes, session cookies or API keys. Do not output
+URLs or identifiers. Do not promise referral rewards: availability is shown in Account.
 Uploaded video attachments here contain three sampled visual frames, WITHOUT AUDIO.
 Say that clearly when interpreting video; do not claim to have watched/heard the whole clip.
 For full video/transcription, direct to Workspace using the normal minute allowance.
@@ -82,7 +90,12 @@ class ChatRequest(BaseModel):
 class Answer(BaseModel):
     model_config = ConfigDict(extra="forbid")
     answer: str = Field(min_length=1, max_length=5000)
-    action: Literal["none", "workspace", "plans", "account", "support", "register", "features", "privacy", "light", "dark"]
+    action: Literal[
+        "none", "workspace", "plans", "account", "support", "referrals", "latest_lesson",
+        "light", "dark", "language_tr", "language_en", "language_de", "language_fr",
+        "language_es", "language_it", "language_pt", "language_ru", "language_ar",
+        "language_zh", "language_ja", "language_ko", "language_hi",
+    ]
 
 
 class TrialRequest(BaseModel):
@@ -141,7 +154,6 @@ def _image_url(value):
 
 def _context(user_id, currency):
     status = account_status(user_id)
-    from .jobs import JOBS
     from .billing import AD_FREE_PLAN
     return {
         "account": {
@@ -151,10 +163,7 @@ def _context(user_id, currency):
             "ad_free": status["plan"].get("entitlements", {}).get("ad_free", False),
             "permanent_ad_free": status.get("permanent_ad_free", False),
         },
-        "recent_lessons": [
-            {"status": row.get("status"), "title": str(row.get("title") or row.get("filename") or "Lesson")[:120]}
-            for row in JOBS.list_for_user(user_id, 5)
-        ],
+        "recent_lessons": _recent_lessons(user_id),
         "assistant_offers": catalog.offers(currency),
         "ad_free_offer": {
             "name": "Permanent ad-free account access",
@@ -164,6 +173,94 @@ def _context(user_id, currency):
         },
         "sitemap": SITEMAP,
     }
+
+
+def _recent_lessons(user_id: str) -> list[dict]:
+    from .jobs import JOBS
+    return [
+        {
+            "title": str(row.get("title") or row.get("filename") or "Lesson")[:120],
+            "status": str(row.get("status") or "queued"),
+        }
+        for row in JOBS.list_for_user(user_id, 5)
+    ]
+
+
+def _account_summary(user_id: str) -> dict:
+    """Return an identity-free, read-only snapshot authored by the server."""
+    status = account_status(user_id)
+    subscription = status.get("subscription")
+    return {
+        "plan_code": str(status["plan"]["code"]),
+        "remaining_minutes": status.get("remaining_minutes"),
+        "used_minutes": int(status.get("used_minutes") or 0),
+        "credit_minutes": int(status.get("credit_minutes") or 0),
+        "assistant_credits": int(wallet.status(user_id)["balance"]),
+        "subscription": (
+            {
+                "status": str(subscription.get("status") or ""),
+                "interval": str(subscription.get("interval") or ""),
+                "ends_at": str(subscription.get("ends_at") or ""),
+                "cancel_at_period_end": bool(subscription.get("cancel_at_period_end")),
+            }
+            if subscription
+            else None
+        ),
+        "recent_lessons": _recent_lessons(user_id),
+    }
+
+
+def _latest_lesson(user_id: str) -> dict | None:
+    """Select the newest owned lesson without exposing identifiers to the model."""
+    from .jobs import JOBS
+    rows = JOBS.list_for_user(user_id, 1)
+    if not rows:
+        return None
+    row = rows[0]
+    job_id = str(row.get("job_id") or "")
+    if not re.fullmatch(r"[a-zA-Z0-9_-]{1,64}", job_id):
+        return None
+    return {
+        "job_id": job_id,
+        "title": str(row.get("title") or row.get("filename") or "Lesson")[:120],
+        "status": str(row.get("status") or "queued"),
+    }
+
+
+def _decorate_action(user_id: str, result: dict) -> dict:
+    """Attach best-effort server data without failing an already charged reply."""
+    result = dict(result)
+    result.pop("account_summary", None)
+    result.pop("latest_lesson", None)
+    result.pop("balance", None)
+    action = result.get("action")
+    if not isinstance(action, str) or (action != "none" and action not in ACTIONS):
+        action = "none"
+        result["action"] = action
+    result["path"] = ACTIONS.get(action, "")
+    if action == "account":
+        try:
+            result["account_summary"] = _account_summary(user_id)
+        except Exception:
+            # The model reply has already been settled. Optional account data
+            # must never turn successful delivery into a chargeable retry.
+            pass
+    elif action == "latest_lesson":
+        try:
+            latest = _latest_lesson(user_id)
+        except Exception:
+            latest = None
+        if latest:
+            result["latest_lesson"] = latest
+            result["path"] = f'/workspace.html?job={latest["job_id"]}'
+        else:
+            result["action"] = "workspace"
+            result["path"] = ACTIONS["workspace"]
+    try:
+        result["balance"] = int(wallet.status(user_id)["balance"])
+    except Exception:
+        pass
+    return result
 
 
 def chat(user_id, payload: ChatRequest, lesson_context=""):
@@ -191,8 +288,7 @@ def chat(user_id, payload: ChatRequest, lesson_context=""):
     fingerprint = hashlib.sha256(payload.model_dump_json().encode()).hexdigest()
     key, replay = wallet.reserve(user_id, payload.request_id, fingerprint, reserve)
     if replay is not None:
-        replay["balance"] = wallet.status(user_id)["balance"]
-        return replay
+        return _decorate_action(user_id, replay)
     response = None
     try:
         with OpenAI(api_key=config.OPENAI_API_KEY, timeout=45, max_retries=0) as client:
@@ -222,5 +318,4 @@ def chat(user_id, payload: ChatRequest, lesson_context=""):
         raise LectureSiftError("LS-ASSIST-07", "Yanıt tamamlanamadı; kredi düşülmedi.", status_code=503) from exc
     result = wallet.settle(user_id, key, input_tokens=response.usage.input_tokens,
                            output_tokens=response.usage.output_tokens, response=result)
-    result["balance"] = wallet.status(user_id)["balance"]
-    return result
+    return _decorate_action(user_id, result)

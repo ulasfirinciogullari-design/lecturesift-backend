@@ -141,7 +141,10 @@ test('assistant page keeps credits visible and account actions under user contro
   await page.route('https://api.lecturesift.com/assistant/chat',async route=>{
     if(route.request().method()==='OPTIONS'){await route.fulfill({status:204,headers:cors});return;}
     requests.push(route.request().postDataJSON());
-    await route.fulfill({status:200,headers:cors,json:{answer:'Your account shows your plan and usage.',action:'account',balance:998,charged_credits:2}});
+    await route.fulfill({status:200,headers:cors,json:{
+      answer:'Here is your current account summary.',action:'account',balance:998,charged_credits:2,
+      account_summary:{plan_code:'plus',remaining_minutes:712,used_minutes:188,credit_minutes:0,assistant_credits:998,subscription:{status:'active',interval:'monthly',ends_at:'2026-10-08T12:00:00+00:00',cancel_at_period_end:false},recent_lessons:[{title:'Cell biology',status:'done'}]},
+    }});
   });
   await page.goto('/en/assistant.html');
   await page.locator('[data-consent="essential"]').click();
@@ -161,6 +164,12 @@ test('assistant page keeps credits visible and account actions under user contro
   await expect(page).toHaveURL(/\/en\/assistant\.html$/);
   expect(requests).toHaveLength(1);
   expect(requests[0].language).toBe('en');
+  const summary=chat.locator('.assistant-account-summary');
+  await expect(summary).toContainText('Current account summary');
+  await expect(summary).toContainText('Plus');
+  await expect(summary).toContainText('712');
+  await expect(summary).toContainText('Cell biology');
+  await expect(chat.locator('.assistant-message-charge')).toHaveText('This reply: 2 credits');
   const action=chat.locator('a.assistant-action').last();
   await expect(action).toHaveText('My account');
   await expect(action).toHaveAttribute('href',/\/en\/account(?:\.html)?$/);
@@ -175,6 +184,69 @@ test('assistant page keeps credits visible and account actions under user contro
   await expect(chat.locator('.assistant-balance')).not.toContainText('998');
   await expect(chat.locator('.assistant-message')).toHaveCount(0);
   expect(requests).toHaveLength(1);
+});
+
+test('assistant applies fixed preferences only after confirmation and ignores response paths', async ({page}) => {
+  const cors={'Access-Control-Allow-Origin':'http://127.0.0.1:4173','Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Allow-Headers':'authorization,content-type'};
+  await page.addInitScript(()=>{
+    localStorage.setItem('lecturesift-billing-token','synthetic-browser-token');
+    localStorage.setItem('lecturesift-theme','light');
+  });
+  await page.route('https://api.lecturesift.com/assistant/catalog*',route=>route.fulfill({status:200,headers:cors,json:creditOffers()}));
+  await page.route('https://api.lecturesift.com/assistant/wallet',route=>route.fulfill({status:200,headers:cors,json:{balance:1000}}));
+  await page.route('https://api.lecturesift.com/assistant/chat',async route=>{
+    if(route.request().method()==='OPTIONS'){await route.fulfill({status:204,headers:cors});return;}
+    const payload=route.request().postDataJSON();
+    const latest=payload.message.includes('latest');
+    const dark=payload.message.includes('dark');
+    await route.fulfill({status:200,headers:cors,json:latest
+      ? {answer:'Your latest lesson is ready.',action:'latest_lesson',path:'https://attacker.invalid/escape',latest_lesson:{job_id:'owned-latest-1',title:'Owned lesson',status:'done'},balance:998,charged_credits:2}
+      : dark
+        ? {answer:'I can propose dark mode.',action:'dark',path:'https://attacker.invalid/escape',balance:996,charged_credits:2}
+        : {answer:'I can propose German for this interface.',action:'language_de',path:'https://attacker.invalid/escape',latest_lesson:{job_id:'foreign-job',title:'Foreign',status:'done'},balance:994,charged_credits:2}});
+  });
+  await page.goto('/en/assistant.html');
+  await page.locator('[data-consent="essential"]').click();
+  const chat=page.locator('.assistant-page-chat');
+
+  await chat.locator('textarea').fill('Open my latest lesson');
+  await chat.locator('button[type=submit]').click();
+  const latest=chat.locator('a.assistant-action').last();
+  await expect(latest).toHaveText('Open latest lesson');
+  await expect(latest).toHaveAttribute('href',/\/en\/workspace(?:\.html)?\?job=owned-latest-1$/);
+  await expect(latest).not.toHaveAttribute('href',/attacker/);
+
+  await chat.locator('textarea').fill('Use dark theme');
+  await chat.locator('button[type=submit]').click();
+  let confirmation=chat.locator('.assistant-confirmation').last();
+  await expect(confirmation).toContainText('Dark');
+  await expect(page.locator('html')).toHaveAttribute('data-theme','light');
+  await confirmation.getByRole('button',{name:'Cancel'}).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme','light');
+
+  await chat.locator('textarea').fill('Use dark theme');
+  await chat.locator('button[type=submit]').click();
+  confirmation=chat.locator('.assistant-confirmation').last();
+  await confirmation.getByRole('button',{name:'Apply'}).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
+  expect(await page.evaluate(()=>localStorage.getItem('lecturesift-theme'))).toBe('dark');
+
+  await chat.locator('textarea').fill('Use German');
+  await chat.locator('button[type=submit]').click();
+  confirmation=chat.locator('.assistant-confirmation').last();
+  await expect(confirmation).toContainText('Deutsch');
+  expect(await page.evaluate(()=>localStorage.getItem('lecturesift-ui'))).not.toBe('de');
+  await confirmation.getByRole('button',{name:'Cancel'}).click();
+  await expect(page).toHaveURL(/\/en\/assistant(?:\.html)?$/);
+  expect(await page.evaluate(()=>localStorage.getItem('lecturesift-ui'))).not.toBe('de');
+
+  await chat.locator('textarea').fill('Use German');
+  await chat.locator('button[type=submit]').click();
+  confirmation=chat.locator('.assistant-confirmation').last();
+  await expect(confirmation).toContainText('Deutsch');
+  await confirmation.getByRole('button',{name:'Apply'}).click();
+  await expect(page).toHaveURL(/\/de\/assistant(?:\.html)?$/);
+  expect(await page.evaluate(()=>localStorage.getItem('lecturesift-ui'))).toBe('de');
 });
 
 test('invitation discovery keeps the requested account section through sign-in', async ({page}) => {
