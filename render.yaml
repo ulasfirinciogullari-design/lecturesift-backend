@@ -186,6 +186,10 @@ services:
         value: "false"
       - key: LECTURESIFT_DISPLAY_AD_UNIT_PATH
         sync: false
+      - key: LECTURESIFT_ADSENSE_ENABLED
+        sync: false
+      - key: LECTURESIFT_ADSENSE_CMP_READY
+        sync: false
       - key: LECTURESIFT_ADSENSE_PUBLISHER_ID
         value: ca-pub-7608481350058806
       - key: LECTURESIFT_SITE_BANNER_ENABLED

@@ -877,7 +877,11 @@ def rewarded_ads_for_user(user_id: str) -> dict[str, Any]:
     plan = account.get("plan") or {}
     entitlements = plan.get("entitlements") or {}
     plan_ad_free = bool(entitlements.get("ad_free"))
-    configured = bool(config.REWARDED_ADS_ENABLED and config.REWARDED_AD_UNIT_PATH)
+    configured = bool(
+        config.ADSENSE_CMP_READY
+        and config.REWARDED_ADS_ENABLED
+        and config.REWARDED_AD_UNIT_PATH
+    )
     now = utcnow()
     day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     with ENGINE.begin() as connection:

@@ -75,6 +75,12 @@ def test_display_ads_are_disabled_by_default_and_hide_unit_details(monkeypatch):
     }
 
     monkeypatch.setattr(config, "DISPLAY_ADS_ENABLED", True)
+    cmp_blocked = client.get("/ads/config").json()
+    assert cmp_blocked["enabled"] is False
+    assert cmp_blocked["provider"] is None
+    assert cmp_blocked["banner_unit_path"] is None
+
+    monkeypatch.setattr(config, "ADSENSE_CMP_READY", True)
     enabled = client.get("/ads/config").json()
     assert enabled["enabled"] is True
     assert enabled["provider"] == "google_gpt"
@@ -664,6 +670,16 @@ def test_rewarded_ad_sessions_are_opt_in_capped_and_single_use(monkeypatch):
     monkeypatch.setattr(config, "REWARDED_AD_UNIT_PATH", "/1234567/lecturesift_rewarded")
     monkeypatch.setattr(config, "REWARDED_AD_MINUTES_PER_VIEW", 3)
     monkeypatch.setattr(config, "REWARDED_AD_DAILY_LIMIT_MINUTES", 6)
+
+    monkeypatch.setattr(config, "ADSENSE_CMP_READY", False)
+    cmp_blocked = client.get("/billing/rewarded-ads", headers=auth(token))
+    assert cmp_blocked.status_code == 200
+    assert cmp_blocked.json()["rewarded_ads"]["configured"] is False
+    assert cmp_blocked.json()["rewarded_ads"]["enabled"] is False
+    assert cmp_blocked.json()["rewarded_ads"]["provider"] is None
+    assert cmp_blocked.json()["rewarded_ads"]["ad_unit_path"] is None
+
+    monkeypatch.setattr(config, "ADSENSE_CMP_READY", True)
 
     state = client.get("/billing/rewarded-ads", headers=auth(token))
     assert state.status_code == 200

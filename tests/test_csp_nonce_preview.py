@@ -16,20 +16,23 @@ def expected_preview_paths() -> set[str]:
     return paths
 
 
-def test_nonce_plugin_is_pinned_and_limited_to_deploy_previews() -> None:
+def test_nonce_plugin_is_report_only_for_preview_and_one_production_canary() -> None:
     source = (ROOT / "netlify.toml").read_text(encoding="utf-8")
     config = tomllib.loads(source)
 
-    assert source.count('package = "@netlify/plugin-csp-nonce"') == 1
+    assert source.count('package = "@netlify/plugin-csp-nonce"') == 2
     assert "plugins" not in config
     contexts = config["context"]
-    plugins = contexts["deploy-preview"]["plugins"]
-    assert len(plugins) == 1
-    assert plugins[0]["package"] == "@netlify/plugin-csp-nonce"
-    assert set(plugins[0]["inputs"]) == {"reportOnly", "path"}
-    assert plugins[0]["inputs"]["reportOnly"] is True
+    preview_plugins = contexts["deploy-preview"]["plugins"]
+    production_plugins = contexts["production"]["plugins"]
+    assert len(preview_plugins) == len(production_plugins) == 1
+    for plugins in (preview_plugins, production_plugins):
+        assert plugins[0]["package"] == "@netlify/plugin-csp-nonce"
+        assert set(plugins[0]["inputs"]) == {"reportOnly", "path"}
+        assert plugins[0]["inputs"]["reportOnly"] is True
+    assert production_plugins[0]["inputs"]["path"] == ["/about"]
     for name, context in contexts.items():
-        if name != "deploy-preview":
+        if name not in {"deploy-preview", "production"}:
             assert all(
                 plugin.get("package") != "@netlify/plugin-csp-nonce"
                 for plugin in context.get("plugins", [])
@@ -45,6 +48,13 @@ def test_preview_nonce_paths_are_an_exact_public_page_allowlist() -> None:
     assert all("*" not in path and not path.endswith(".html") for path in paths)
     private_roots = ("account", "admin", "assistant", "login", "register", "support", "workspace")
     assert all(not any(segment in path.split("/") for segment in private_roots) for path in paths)
+
+
+def test_frontend_referrer_policy_allows_cmp_without_leaking_paths() -> None:
+    config = tomllib.loads((ROOT / "netlify.toml").read_text(encoding="utf-8"))
+    headers = next(entry for entry in config["headers"] if entry["for"] == "/*")
+
+    assert headers["values"]["Referrer-Policy"] == "strict-origin-when-cross-origin"
 
 
 def test_nonce_plugin_dependency_and_lock_are_exact() -> None:
