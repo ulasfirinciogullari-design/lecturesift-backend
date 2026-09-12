@@ -138,7 +138,7 @@ test('admin growth shows read-only advertising summaries and escapes provider va
   expect(unexpected).toEqual([]);
 });
 
-test('admin growth keeps both provider failures and unverified credit explicit', async ({page}) => {
+test('admin growth keeps provider failures explicit without presenting credit', async ({page}) => {
   const unexpected = await openGrowthView(page, {
     ok:true,
     adsense:{
@@ -169,7 +169,7 @@ test('admin growth keeps both provider failures and unverified credit explicit',
   await expect(growth).toContainText('Google Ads bağlantısıGeçici olarak okunamadı');
   await expect(growth).toContainText('Brüt harcama ve performans verisi alınamadı.');
   await expect(growth).toContainText('Kampanya sayıları alınamadı.');
-  await expect(growth).toContainText('Promosyon verisi geçici olarak alınamadı.');
+  await expect(growth).not.toContainText('Google Ads promosyonu');
   await expect(growth).not.toContainText('8.000');
   expect(unexpected).toEqual([]);
 });
