@@ -27,7 +27,7 @@ ACTIONS = {
 }
 SITEMAP = {
     "/": "Product introduction and interactive study demo",
-    "/workspace.html": "Upload documents/audio/video from files; summaries, transcript, quiz, flashcards, MP3/video exports; owned lesson history",
+    "/workspace.html": "Upload documents/audio/video from files; summaries, transcript, quiz, flashcards, PDF/DOCX/TXT/MP3 exports; owned lesson history",
     "/plans.html": "Regional prices, subscriptions, minute top-ups, assistant credit top-ups; final tax/provider availability at checkout",
     "/account.html": "Own profile, language/country, minutes, subscription, payment orders, referral status, password, data export and account closure",
     "/contact.html": "Contact form for technical, account and payment support", "/features.html": "Product capabilities",

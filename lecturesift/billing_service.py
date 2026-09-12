@@ -1560,7 +1560,7 @@ def validate_job_features(
 ) -> dict:
     status = require_job_entitlement(user_id)
     if job_type in {"audio_export", "download_video"} and not status["download_enabled"]:
-        raise BillingError("MP3 ve video indirme araçları dakika paketi veya ücretli plan gerektirir.")
+        raise BillingError("MP3 ve dosya indirme araçları dakika paketi veya ücretli plan gerektirir.")
     plan = _effective_job_plan(status)
     if plan.quiz_questions is not None and quiz_count > plan.quiz_questions:
         raise BillingError(f"Planın en fazla {plan.quiz_questions} quiz sorusuna izin veriyor.")

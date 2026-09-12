@@ -275,10 +275,71 @@ def test_processing_center_uses_operation_specific_progress_profiles():
     assert 'document: [["source", "stageSource"], ["document_preflight", "stageDocument"], ["document_extraction", "stageDocument"]' in script
     assert 'document_ocr: "stageDocument"' in script
     assert 'audio_export: [["source", "stageSource"], ["audio_extract", "stageMp3"]' in script
-    assert 'download_video: [["source", "stageSource"], ["worker_download", "url_download"]' in script
+    assert "download_video" not in script
+    assert "worker_download" not in script
+    assert "url_download" not in script
     assert "function configureProgressProfile" in script
     assert "function profileDetail" in script
     assert "uploadingSource" in script
+
+
+def test_public_source_copy_matches_the_single_file_picker_contract():
+    workspace = (FRONTEND / "workspace.html").read_text(encoding="utf-8")
+    features = (FRONTEND / "features.html").read_text(encoding="utf-8")
+    video_guide = (FRONTEND / "lecture-video-summary.html").read_text(encoding="utf-8")
+    plans = (FRONTEND / "plans.js").read_text(encoding="utf-8")
+    terms = (FRONTEND / "terms.html").read_text(encoding="utf-8")
+    privacy = (FRONTEND / "privacy.html").read_text(encoding="utf-8")
+    distance_sales = (FRONTEND / "distance-sales.html").read_text(encoding="utf-8")
+    script = (FRONTEND / "app.js").read_text(encoding="utf-8")
+    translations = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    assistant = (FRONTEND.parent / "lecturesift" / "site_assistant.py").read_text(encoding="utf-8")
+    readme = (FRONTEND.parent / "README.md").read_text(encoding="utf-8")
+
+    stale_claims = (
+        "Videoyu yükle veya bağlantıyı yapıştır",
+        "desteklenen bağlantılar",
+        "ses kaydıyla slayt videosunu ayrı kaynaklar olarak eşleştirebilirsin",
+        "kullanıcının sağladığı eğitim videosu, ses, bağlantı",
+        "Yüklediğin veya bağlantısını verdiğin içerikleri",
+        "dosya yükleme, bağlantı ekleme, ödeme",
+        "Ayrı ses ve slayt kaydı",
+        "Ayrı kaynak modunda",
+        "kullanıcının yüklediği veya bağlantısını sağladığı ders videosu",
+        "plans.multiSource",
+        "MP3/video exports",
+        "video study exports",
+    )
+    public_copy = "\n".join(
+        (workspace, features, video_guide, plans, terms, privacy, distance_sales, translations, assistant, readme)
+    )
+    assert not any(claim in public_copy for claim in stale_claims)
+    assert 'data-i18n="legal.termsUpdated">Son güncelleme: 12 Eylül 2026<' in terms
+    assert 'data-i18n="legal.privacyUpdated">Son güncelleme: 12 Eylül 2026 · Sürüm 2.2<' in privacy
+    assert 'data-i18n="legal.distanceSalesVersion">Sürüm: MSS-2026-09-12-v2<' in distance_sales
+    assert 'data-i18n="legal.distanceSalesHistory">Bu çerçeve metin ilk olarak 28 Ağustos 2026 tarihinde yayımlanmış, 12 Eylül 2026 tarihinde güncellenmiştir.' in distance_sales
+    assert 'data.append("source_layout", "classic")' in script
+    assert 'data.append("files", file)' in script
+    assert 'data.append("audio_files"' not in script
+    assert 'data.append("visual_files"' not in script
+    assert "const LEGACY" not in script
+    for key in (
+        "source.unifiedIntro",
+        "source.supportedFiles",
+        "source.termsService",
+        "source.termsRights",
+        "source.privacyContent",
+        "source.privacyCollection",
+        "source.distanceSalesScope",
+        "legal.distanceSalesVersion",
+        "legal.distanceSalesHistory",
+        "legal.termsUpdated",
+        "legal.privacyUpdated",
+        "workspace.errorFallback",
+    ):
+        payload = re.search(rf'^\s*"{re.escape(key)}":\[(.*?)\],?$', translations, re.MULTILINE)
+        assert payload, key
+        assert len(json.loads(f"[{payload.group(1)}]")) == 13, key
 
 
 def test_workspace_uses_active_plan_upload_limits_without_stale_hard_caps():
@@ -344,7 +405,7 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         expected_theme_version = "17"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
         assert "/theme.js?v=10" in content, page.name
-        assert "i18n.js?v=37" in content, page.name
+        assert "i18n.js?v=38" in content, page.name
         assert "page-i18n.js?v=7" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
@@ -468,9 +529,10 @@ def test_static_page_copy_covers_every_language_without_empty_entries():
         "Planın, dakikaların ve ödemelerin bu hesaba bağlanır.",
         "Dakika, quiz, bilgi kartı, özet ve dosya haklarını açıkça karşılaştır. Ülke ve para birimine göre yerelleştirilmiş fiyatı seç.",
         "Planların bölgesel liste fiyatını seçtiğin para biriminde göstermek.",
-        "Video bağlantıdan alınıyor",
+        "Bağlantıyla kaynak ekleme kaldırıldı. Video, ses veya belge dosyanı yükle.",
     )
     assert set(corrected_sources) <= central_rows.keys()
+    assert '"LS-URL-06":"error.url05"' in (FRONTEND / "app.js").read_text(encoding="utf-8")
     bad_fragments = ("&#", "[ترجمة", "actas", "atas", "회의록", "MOSTRAR")
     bad_exact = {"Ripet", "Повторыть", "재교부"}
     assert not any(fragment in value for source in corrected_sources for value in central_rows[source] for fragment in bad_fragments)
@@ -529,7 +591,7 @@ def test_every_dynamic_workspace_copy_resolves_to_thirteen_languages_without_tur
     page_script = (FRONTEND / "page-i18n.js").read_text(encoding="utf-8")
 
     tr_block = re.search(
-        r"const TR = \{(.*?)\n\};\n\nconst LEGACY",
+        r"const TR = \{(.*?)\n\};\n\nconst PLAN_COPY",
         workspace_script,
         re.DOTALL,
     )
@@ -541,7 +603,7 @@ def test_every_dynamic_workspace_copy_resolves_to_thirteen_languages_without_tur
             tr_block.group(1),
         )
     }
-    assert len(tr_copy) >= 140
+    assert len(tr_copy) >= 120
 
     central_rows = {
         key: json.loads(f"[{payload}]")
@@ -568,14 +630,14 @@ def test_every_dynamic_workspace_copy_resolves_to_thirteen_languages_without_tur
         assert all(str(value).strip() for value in translations), key
 
     centralized_workspace_keys = (
-        "subtitle", "dropTitle", "fileHelp", "classicMode", "addVideos", "sortHelp",
+        "subtitle", "dropTitle", "fileHelp", "addVideos", "sortHelp",
         "outputFormats", "formatOptional", "sourceLanguage", "contentSelection",
         "contentSelectionHelp", "presetLabel", "presetBalanced", "presetTranscript",
         "includeSummary", "includeSummaryHelp", "includeSlides", "includeSlidesHelp",
         "uploadAccepted", "promiseTitle", "promiseText", "outputSelectionRequired",
         "plansSubtitle",
     )
-    assert len(centralized_workspace_keys) == 23
+    assert len(centralized_workspace_keys) == 22
     for key in centralized_workspace_keys:
         assert key in central_rows, key
         assert central_rows[key][0] == tr_copy[key], key
@@ -915,7 +977,7 @@ def test_distance_sales_contract_covers_digital_service_checkout_requirements():
     contract = (FRONTEND / "distance-sales.html").read_text(encoding="utf-8")
     operator = (FRONTEND / "legal-operator.js").read_text(encoding="utf-8")
     assert "Mesafeli Satış Sözleşmesi" in contract
-    assert "MSS-2026-08-28-v1" in contract
+    assert "MSS-2026-09-12-v2" in contract
     for topic in (
         "Taraflar",
         "Ön bilgilendirme",
@@ -1193,7 +1255,7 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=34"' in index
+    assert 'src="./app.js?v=35"' in index
     assert 'src="/rollout.js?v=9"' in index
     assert '$("plans").scrollIntoView' not in app
 

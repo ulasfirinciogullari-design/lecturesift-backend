@@ -50,10 +50,10 @@ _POSTS = (
         "The goal is not to study less seriously. It’s to waste less time on repetitive work.\n\nLectureSift helps organize lecture content so your attention can stay on understanding, recalling and practicing.\n\n#LectureSiftLaunch05 #LectureSift #StudySmarter #Productivity #EdTech #AIForStudents #Learning",
     ),
     (
-        "Use any source",
-        "Upload video, combine sources, or start from a link.",
+        "Bring your sources together",
+        "Upload video, audio, documents, or images in one place.",
         "FLEXIBLE INPUT",
-        "Your study material does not always arrive in one perfect file.\n\nLectureSift is being built for flexible inputs: lecture videos, multiple sources, separate audio/visual material and supported video links — all feeding the same study workflow.\n\n#LectureSiftLaunch06 #LectureSift #StudyTools #EdTech #LectureNotes #AIForStudents #StudentTech",
+        "Your study material does not always arrive in one perfect file.\n\nLectureSift brings uploaded lecture videos, audio recordings, documents and supported images into one ordered source list — all feeding the same study workflow.\n\n#LectureSiftLaunch06 #LectureSift #StudyTools #EdTech #LectureNotes #AIForStudents #StudentTech",
     ),
     (
         "From lecture to study pack",
