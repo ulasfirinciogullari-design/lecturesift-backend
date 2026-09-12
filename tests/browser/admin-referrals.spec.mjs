@@ -89,6 +89,7 @@ test('admin referral releases require live reconciliation and refresh the queue'
   });
 
   await page.goto('/admin.html#admin-referrals');
+  await page.locator('[data-consent="essential"]').click();
   await page.locator('#adminToken').fill('synthetic-admin-token');
   await page.locator('#adminLoginButton').click();
   await expect(page.locator('#adminPanel')).toBeVisible();
@@ -196,6 +197,7 @@ for (const [caseName, referralPayload] of [
     });
 
     await page.goto('/admin.html#admin-referrals');
+    await page.locator('[data-consent="essential"]').click();
     await page.locator('#adminToken').fill('synthetic-admin-token');
     await page.locator('#adminLoginButton').click();
     await expect(page.locator('#adminPanel')).toBeVisible();

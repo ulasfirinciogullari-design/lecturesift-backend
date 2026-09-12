@@ -836,8 +836,8 @@ def test_admin_referral_release_requires_due_reward_provider_confirmation_and_sa
     assert "Gizli anahtar, kart bilgisi veya kişisel veri yazma." in admin_js
     assert 'typeof body.has_more === "boolean"' in admin_js
     assert 'typeof limit === "number"' in admin_js
-    assert 'typeof reward.actionable === "boolean"' in admin_js
-    assert 'typeof reward.hold_complete === "boolean"' in admin_js
+    assert 'typeof reward.actionable !== "boolean"' in admin_js
+    assert 'typeof reward.hold_complete !== "boolean"' in admin_js
     assert "reward.actionable === expectedActionable" in admin_js
     assert 'const ready = reward.actionable === true' in admin_js
     assert "Serbest bırakılabilir ödüller öncelikli gösteriliyor" in admin_js
