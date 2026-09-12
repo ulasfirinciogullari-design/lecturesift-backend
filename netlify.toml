@@ -2,6 +2,65 @@
   command = "node scripts/build_localized_site.mjs"
   publish = "dist"
 
+[[context.deploy-preview.plugins]]
+  package = "@netlify/plugin-csp-nonce"
+  [context.deploy-preview.plugins.inputs]
+    reportOnly = true
+    path = [
+      "/",
+      "/features",
+      "/plans",
+      "/about",
+      "/en/",
+      "/en/features",
+      "/en/plans",
+      "/en/about",
+      "/de/",
+      "/de/features",
+      "/de/plans",
+      "/de/about",
+      "/fr/",
+      "/fr/features",
+      "/fr/plans",
+      "/fr/about",
+      "/es/",
+      "/es/features",
+      "/es/plans",
+      "/es/about",
+      "/it/",
+      "/it/features",
+      "/it/plans",
+      "/it/about",
+      "/pt/",
+      "/pt/features",
+      "/pt/plans",
+      "/pt/about",
+      "/ru/",
+      "/ru/features",
+      "/ru/plans",
+      "/ru/about",
+      "/ar/",
+      "/ar/features",
+      "/ar/plans",
+      "/ar/about",
+      "/zh/",
+      "/zh/features",
+      "/zh/plans",
+      "/zh/about",
+      "/ja/",
+      "/ja/features",
+      "/ja/plans",
+      "/ja/about",
+      "/ko/",
+      "/ko/features",
+      "/ko/plans",
+      "/ko/about",
+      "/hi/",
+      "/hi/features",
+      "/hi/plans",
+      "/hi/about",
+    ]
+
 [[headers]]
   for = "/*"
   [headers.values]

@@ -19,8 +19,11 @@ const source = fs.readFileSync(process.argv[2], "utf8");
 const pathname = process.argv[3] || "/";
 let consentAllowed = true;
 let reloads = 0;
+let gptCommandsExecuted = 0;
 const fetchUrls = [];
 const listeners = new Map();
+const gptConfigs = [];
+const gptOrder = [];
 
 class Element {
   constructor(tagName) {
@@ -70,6 +73,7 @@ const document = {
   body,
   createElement: tagName => new Element(tagName),
   querySelector(selector) {
+    if (selector === 'script[nonce]') return {nonce: "preview-nonce"};
     if (selector === "footer") return footer;
     if (selector === ".display-ad") {
       return descendants(body).find(node => node.className.split(/\s+/).includes("display-ad")) || null;
@@ -147,11 +151,40 @@ if (["consent_revocation", "adsense_revocation"].includes(scenario)) {
 }
 
 setTimeout(() => {
+  const googletag = context.googletag;
+  if (!Array.isArray(googletag?.cmd) || googletag.cmd.length === 0) return;
+  const pubads = {
+    addEventListener() {},
+    enableSingleRequest() {},
+  };
+  const adSlot = {addService: () => adSlot};
+  googletag.setConfig = value => {
+    gptConfigs.push(value);
+    gptOrder.push("set-config");
+  };
+  googletag.pubads = () => pubads;
+  googletag.defineSlot = () => {
+    gptOrder.push("define-slot");
+    return adSlot;
+  };
+  googletag.enableServices = () => {};
+  googletag.display = () => {};
+  for (const callback of [...googletag.cmd]) {
+    gptCommandsExecuted += 1;
+    callback();
+  }
+}, 25);
+
+setTimeout(() => {
   const nodes = [...descendants(head), ...descendants(body)];
   console.log(JSON.stringify({
     scripts: descendants(head).filter(node => node.tagName === "SCRIPT").map(node => node.src),
+    scriptNonces: descendants(head).filter(node => node.tagName === "SCRIPT").map(node => node.nonce || ""),
     displayAds: nodes.filter(node => node.className.split(/\s+/).includes("display-ad")).length,
     queuedGptCommands: context.googletag?.cmd?.length || 0,
+    gptCommandsExecuted,
+    gptConfigs,
+    gptOrder,
     reloads,
     fetchUrls,
   }));
@@ -203,6 +236,7 @@ def test_explicit_adsense_provider_loads_only_auto_ads() -> None:
     assert result["scripts"] == [
         "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7608481350058806"
     ]
+    assert result["scriptNonces"] == ["preview-nonce"]
     assert result["displayAds"] == 0
     assert result["queuedGptCommands"] == 0
 
@@ -221,6 +255,14 @@ def test_public_canonical_routes_and_html_aliases_allow_publisher_ads(pathname: 
     result = run_scenario("gpt_enabled", pathname)
     assert result["scripts"] == ["https://securepubads.g.doubleclick.net/tag/js/gpt.js"]
     assert result["queuedGptCommands"] == 1
+
+
+def test_gpt_copies_the_preview_nonce_and_forces_safeframe_before_slot_definition() -> None:
+    result = run_scenario("gpt_enabled")
+    assert result["scriptNonces"] == ["preview-nonce"]
+    assert result["gptCommandsExecuted"] == 1
+    assert result["gptConfigs"] == [{"safeFrame": {"forceSafeFrame": True}}]
+    assert result["gptOrder"] == ["set-config", "define-slot"]
 
 
 @pytest.mark.parametrize(
