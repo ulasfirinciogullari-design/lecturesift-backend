@@ -1493,7 +1493,7 @@ def test_banner_ads_are_opt_in_public_only_and_respect_ad_free_rights():
     assert all(claim not in i18n.casefold() for claim in stale_claims)
     assert "For a rewarded ad, Google Publisher Tag loads only" in i18n
     assert "The rewarded-ad provider loads only" in i18n
-    assert "Sürüm 2.3" in cookies and "Business" in cookies
+    assert "Sürüm 2.4" in cookies and "Business" in cookies
     assert "Ücretli planlar her durumda reklamsız" not in admin
     assert "Free/Lite seçili sayfalar" in admin
 
