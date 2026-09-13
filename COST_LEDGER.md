@@ -1,5 +1,11 @@
 # LectureSift doğrulanmış maliyet defteri
 
+> **Tarihsel fatura anlık görüntüsü (29 Ağustos 2026).** Aşağıdaki bakiye,
+> tahakkuk ve “kalan iş” ifadeleri o tarihe aittir; güncel fatura veya canlı
+> reklam/ödeme durumu değildir. 9 Eylül medya maliyet örneği ve daha yeni
+> belirsizlikler için özel `OPERATING_COSTS_2026-09-09.md`, canlı sürüm ve
+> entegrasyon durumu için kanonik özel `DEVIR.md` kaydı kullanılmalıdır.
+
 Bu belge, sağlayıcı panellerindeki fatura ve kullanım kayıtlarının salt okunur
 denetimidir. Kart numarası, API anahtarı, parola, fatura adresi veya başka bir
 gizli bilgi içermez.

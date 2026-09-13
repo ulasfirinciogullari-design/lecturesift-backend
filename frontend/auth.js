@@ -328,6 +328,14 @@ function planName(code) {
 
 async function initAccount() {
   const localized = route => I18N.localizedPath ? I18N.localizedPath(I18N.language, route) : route;
+  const managedPlanCodes = ["lite", "plus", "pro", "max"];
+  const planRanks = ["free", ...managedPlanCodes];
+  const managedIntervals = ["monthly", "annual"];
+  const safeCopyFields = new Set(["plan", "term", "current", "date", "remaining", "target"]);
+  const fillCopy = (template, values) => Object.entries(values).filter(([key]) => safeCopyFields.has(key)).reduce(
+    (copy, [key, value]) => copy.split(`{${key}}`).join(String(value)),
+    String(template || ""),
+  );
   const accountSignInPath = () => {
     const section = /^#account-(overview|profile|payments|lessons|referrals|security)$/.test(location.hash) ? location.hash : "";
     return `${localized("/login.html")}?next=${encodeURIComponent(localized("/account.html") + section)}`;
@@ -590,13 +598,90 @@ async function initAccount() {
     $("accountPlan").textContent = planName(account.plan.code);
     const subscription = account.subscription;
     $("subscriptionEndsRow").hidden = !subscription;
-    $("subscriptionActions").hidden = !subscription;
+    $("subscriptionActions").hidden = false;
     if (subscription) {
-      $("subscriptionEnds").textContent = new Intl.DateTimeFormat(I18N.locale, {dateStyle:"long"}).format(new Date(subscription.ends_at));
-      $("subscriptionState").textContent = t("account.fixedTermHelp", "Yeni bir sabit süreli paket satın almak veya paketini değiştirmek için Planlar’a git. Satın alma otomatik yenilenmez; mevcut döneme ve haklarına etkisi ödeme öncesinde gösterilir.");
-      const interval = subscription.interval === "annual" ? "annual" : "monthly";
-      $("managePlanLink").href = `${localized("/plans.html")}?plan=${encodeURIComponent(account.plan.code)}&interval=${interval}`;
+      const end = new Date(subscription.ends_at);
+      $("subscriptionEnds").textContent = Number.isFinite(end.getTime())
+        ? new Intl.DateTimeFormat(I18N.locale, {dateStyle:"long"}).format(end)
+        : "—";
     }
+    const planSelect = $("managePlanSelect");
+    const intervalSelect = $("managePlanInterval");
+    const summary = $("managePlanSummary");
+    const continueButton = $("managePlanContinue");
+    const form = $("fixedTermPlanForm");
+    const accountPlanState = `${account.plan.code}:${subscription?.interval || "none"}`;
+    if (planSelect.dataset.accountState !== accountPlanState) {
+      planSelect.value = managedPlanCodes.includes(account.plan.code) ? account.plan.code : "lite";
+      intervalSelect.value = subscription?.interval === "annual" ? "annual" : "monthly";
+      planSelect.dataset.accountState = accountPlanState;
+    }
+    const updatePlanManagement = () => {
+      const targetCode = managedPlanCodes.includes(planSelect.value) ? planSelect.value : "";
+      const interval = managedIntervals.includes(intervalSelect.value) ? intervalSelect.value : "";
+      if (!targetCode || !interval) {
+        continueButton.disabled = true;
+        continueButton.textContent = t("error.request", "İstek tamamlanamadı.");
+        summary.textContent = t("error.request", "İstek tamamlanamadı.");
+        return;
+      }
+      continueButton.disabled = false;
+      const targetPlan = planName(targetCode);
+      const term = interval === "annual"
+        ? t("account.annualTerm", "yıllık dönem")
+        : t("account.monthlyTerm", "aylık dönem");
+      const currentIndex = planRanks.indexOf(account.plan.code);
+      const targetIndex = planRanks.indexOf(targetCode);
+      const relationship = subscription && currentIndex === targetIndex
+        ? "newTerm"
+        : currentIndex >= 0 && targetIndex > currentIndex
+        ? "upgrade"
+        : currentIndex >= 0 && targetIndex < currentIndex
+        ? "downgrade"
+        : "newTerm";
+      const actionKey = relationship === "upgrade"
+        ? "account.upgradeAction"
+        : relationship === "downgrade"
+        ? "account.downgradeAction"
+        : "account.newTermAction";
+      const actionFallback = relationship === "upgrade"
+        ? "{plan} planına yükselt"
+        : relationship === "downgrade"
+        ? "{plan} planına düşür"
+        : "{plan} için yeni {term} satın al";
+      continueButton.textContent = fillCopy(t(actionKey, actionFallback), {plan:targetPlan, term});
+      if (!subscription) {
+        summary.textContent = fillCopy(
+          t("account.firstPurchaseDetail", "{target} için {term} ödeme onayında hemen başlar ve otomatik yenilenmez."),
+          {term, target:targetPlan},
+        );
+        return;
+      }
+      const end = new Date(subscription.ends_at);
+      const includedMinutes = Number(account.plan.minutes);
+      const usedMinutes = Number(account.used_minutes);
+      if (!Number.isFinite(end.getTime()) || !Number.isFinite(includedMinutes) || !Number.isFinite(usedMinutes)) {
+        summary.textContent = t("payment.fixedTermCheckout", "Bu, yeni bir sabit dönem için tek seferlik ödemedir. Onaylandığında hemen başlar; o anda aktif ücretli dönem varsa onun yerine geçer. Kullanılmamış süre ve mevcut dönemin paket hakkı aktarılmaz. Otomatik yenilenmez.");
+        return;
+      }
+      const endLabel = new Intl.DateTimeFormat(I18N.locale, {dateStyle:"long"}).format(end);
+      const remainingPackageMinutes = Math.max(0, Math.trunc(includedMinutes - usedMinutes));
+      summary.textContent = fillCopy(
+        t("account.activeReplacementDetail", "Mevcut {current} dönemin {date} tarihine kadar açık ve bu dönemin {remaining} dakika paket hakkı kaldı. Ödeme onaylandığında {target} için yeni {term} hemen başlar. Kullanılmayan süre ve mevcut dönem paket hakkı taşınmaz. Otomatik yenileme yoktur."),
+        {current:planName(account.plan.code), date:endLabel, remaining:remainingPackageMinutes.toLocaleString(I18N.locale), term, target:targetPlan},
+      );
+    };
+    planSelect.onchange = updatePlanManagement;
+    intervalSelect.onchange = updatePlanManagement;
+    form.onsubmit = event => {
+      event.preventDefault();
+      const targetCode = managedPlanCodes.includes(planSelect.value) ? planSelect.value : "";
+      const interval = managedIntervals.includes(intervalSelect.value) ? intervalSelect.value : "";
+      if (!targetCode || !interval) return updatePlanManagement();
+      const query = new URLSearchParams({plan:targetCode, interval});
+      location.href = `${localized("/plans.html")}?${query.toString()}`;
+    };
+    updatePlanManagement();
     $("accountAdMode").textContent = account.permanent_ad_free
       ? t("plan.ad_free", "Kalıcı reklamsız kullanım")
       : account.plan.entitlements?.ad_free

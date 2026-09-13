@@ -1,6 +1,12 @@
 # LectureSift devam kaydı
 
-## Güncel durum — 9 Eylül 2026
+## 9 Eylül 2026 durum kaydı
+
+Bu belge 9 Eylül geçiş anının tarihsel kaydıdır. Güncel üretim Netlify + Render
+üzerindedir; bu OVH çalışma kopyası canlı üretim değildir. Son doğrulanmış canlı
+sürüm ve sonraki yayın kararları için özel kanonik `DEVIR.md` kaydı esas alınır;
+bu dosyadaki eski “güncel”, “sonraki” veya onay bekleme ifadeleri geri dönük
+kanıt olarak okunmalıdır.
 
 Kullanıcı gece boyunca onay beklemeden ilerlemeyi ve hazır işleri canlıya
 almayı istedi. Üretim Netlify + Render üzerinde; OVH makinesi geliştirme

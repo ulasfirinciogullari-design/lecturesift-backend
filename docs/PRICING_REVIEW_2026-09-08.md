@@ -1,6 +1,13 @@
 # Yeni satın alma planları — 8 Eylül 2026
 
-## Asistan kredisi ilavesi — taslak
+> **Tarihsel fiyat incelemesi.** Bu belge 8 Eylül karar anındaki varsayımları
+> korur; güncel canlı ürün sözleşmesi değildir. 9 Eylül'de asistan, kredi
+> paketleri ve davet programı etkinleştirildi. Güncel reklam modeli Lite için
+> seçili genel sayfalarda reklam, Plus için yalnız ana sayfada sınırlı reklam,
+> Pro/Max/Business ve kalıcı reklamsız hak için reklamsız kullanımdır. Canlı
+> katalog ve kanonik yayın kaydı eski metinlerle çeliştiğinde esas alınmalıdır.
+
+## Asistan kredisi ilavesi — 8 Eylül inceleme taslağı
 
 Güncellenen paket fiyatlarına aylık Lite 500, Plus 1.500, Pro 4.000, Max 10.000
 asistan kredisi dahil edilir. Önceki satın almalar kendi koşullarını korur.
@@ -27,11 +34,12 @@ Yerel katkıdan bu tutar × gerçekleşen USD/TRY maliyet kuru çıkarılmalıd�
 komisyonu, sunucu, başarısız istekler, destek, iadeler ve ücretsiz denemeler
 düşülmeden bu fark net kâr değildir. Gerçek marj ölçümü sonrası yalnız yeni
 satın almalara uygulanacak yeni sürümlü fiyat/limit güncellemesi yapılmalıdır.
-Kredi satışı ve kişisel asistan, şema/kurtarma ve sağlayıcı kontrolü tamamlanana
-kadar kapalıdır; önizleme fiyatı tahsilat veya kâr gerçekleştiğini göstermez.
+Kredi satışı ve kişisel asistan 9 Eylül'de şema/kurtarma ve sağlayıcı kontrolü
+sonrasında etkinleştirildi. Bu tarihsel önizleme fiyatı yine de gerçek tahsilat
+veya garantili kâr kanıtı değildir.
 
-Durum: önizleme / yayın incelemesi. Bu belge canlı fiyatların değiştiğinin
-veya garantili kârın kanıtı değildir. Mevcut siparişlerin ve aboneliklerin
+Durum: tarihsel önizleme / yayın incelemesi. Bu belge tek başına güncel canlı
+fiyatların veya garantili kârın kanıtı değildir. Mevcut siparişlerin ve aboneliklerin
 satın alma koşulları korunmalıdır. Canlıya çıkmadan yeni satın alma kayıtlarının
 worker yetkileri ve veritabanı yedekleme/geri yükleme sözleşmeleri doğrulanmalıdır.
 
@@ -44,8 +52,10 @@ worker yetkileri ve veritabanı yedekleme/geri yükleme sözleşmeleri doğrulan
 | Pro | 1.199 | 2.000 | 360 | 24 | 30 / 60 | 365 | Öncelikli |
 | Max | 2.299 | 4.000 | 600 | 24 | 30 / 60 | 730 | Öncelikli |
 
-Hepsinde ayrıntılı özet, isteğe bağlı quiz/kart, PDF/Word/TXT ve reklamsız
-kullanım var. Quiz/kart sayıları iş başına üst sınırdır, zorunlu çıktı değildir.
+Hepsinde ayrıntılı özet, isteğe bağlı quiz/kart ve PDF/Word/TXT vardır. Güncel
+reklam modeli yukarıdaki tarihsel-not kutusunda açıklanır; bu eski tablodaki
+"hepsi reklamsız" varsayımı artık geçerli değildir. Quiz/kart sayıları iş
+başına üst sınırdır, zorunlu çıktı değildir.
 Öncelik kuyruk sırasını etkiler; sabit teslim süresi garantisi değildir.
 Ücretsiz ve tek seferlik kredi koşulları değişmez. 180 dakika kredi 199 TL'dir.
 Mevcut eski kullanıcıların hakları yeni limitlerle geriye dönük azaltılmaz.

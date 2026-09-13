@@ -509,23 +509,29 @@ def test_manual_transfer_order_and_admin_approval(monkeypatch):
     assert overview.json()["revenue_by_currency"]["TRY"] >= order["amount_minor"]
     assert any(item["order_number"] == order["order_number"] for item in overview.json()["orders"])
 
+    account_before_cancel = client.get(
+        "/billing/me", headers={"Authorization": f"Bearer {token}"}
+    ).json()["account"]
     cancelled = client.post(
         "/billing/me/subscription/cancel",
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert cancelled.status_code == 200
-    cancelled_account = cancelled.json()["account"]
-    assert cancelled_account["plan"]["code"] == "plus"
-    assert cancelled_account["subscription"]["status"] == "cancel_at_end"
-    assert cancelled_account["subscription"]["cancel_at_period_end"] is True
-    assert cancelled_account["remaining_minutes"] > 0
+    assert cancelled.status_code == 409
+    assert cancelled.json()["detail"]["code"] == "LS-BILL-28"
+    assert "otomatik yenilenmez" in cancelled.json()["detail"]["message"]
+    account_after_cancel = client.get(
+        "/billing/me", headers={"Authorization": f"Bearer {token}"}
+    ).json()["account"]
+    assert account_after_cancel["plan"]["code"] == "plus"
+    assert account_after_cancel["subscription"] == account_before_cancel["subscription"]
+    assert account_after_cancel["remaining_minutes"] == account_before_cancel["remaining_minutes"]
 
     repeated_cancel = client.post(
         "/billing/me/subscription/cancel",
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert repeated_cancel.status_code == 200
-    assert repeated_cancel.json()["account"]["plan"]["code"] == "plus"
+    assert repeated_cancel.status_code == 409
+    assert repeated_cancel.json()["detail"]["code"] == "LS-BILL-28"
 
 
 def test_payment_orders_fail_closed_without_identity_or_explicit_consent(monkeypatch):

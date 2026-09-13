@@ -1,5 +1,12 @@
 # LectureSift — Master Project Brief
 
+> **Historical foundation brief.** This file preserves the original V4/V4.1
+> acceptance baseline. Accounts, billing, 13-language UI, “ask this lesson”,
+> exam preparation, assistant credits, referrals and production analytics were
+> implemented in later releases. Use the current live catalog and the private
+> canonical release handoff for operational status; the “Next phases” list
+> below is not the current backlog.
+
 ## Product promise
 
 One lecture video becomes a complete, usable study pack: accurate transcript, optional translation, structured notes, summary, genuine slides, quiz, flashcards, and exportable files.
@@ -42,7 +49,7 @@ A second real-video gate used the 4:28 University of Manchester “Flipped Class
 5. Every completed study job provides web results, selected PDF/Word/TXT files, and a ZIP; default ZIPs contain PDFs only.
 6. Errors are understandable without exposing stack traces or infrastructure jargon.
 
-## Next phases
+## Historical next phases
 
 1. Calibrate V4 on the real no-slide sample and a genuine slide-heavy lecture.
 2. Add transcript timestamps and link notes/slides to the lecture timeline.
@@ -52,4 +59,6 @@ A second real-video gate used the 4:28 University of Manchester “Flipped Class
 
 ## Deployment rule
 
-`main` is the live Netlify/Render deployment. Changes must pass the automated suite and a focused local acceptance test before publishing.
+`main` is the live Netlify/Render deployment. Changes must pass GitHub Actions
+and the release-specific remote acceptance evidence required by `AGENTS.md`.
+The owner workstation must not run heavy local test or browser matrices.

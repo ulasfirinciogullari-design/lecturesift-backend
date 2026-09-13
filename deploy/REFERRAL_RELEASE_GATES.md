@@ -30,9 +30,9 @@ been placed as a live test.
 - On the first purchase the inviter chooses 60 bonus minutes OR a 10% coupon
   capped at 50 TRY; the invitee receives 30 minutes once. On subsequent eligible
   purchases the inviter chooses 30 minutes OR a 5% coupon capped at 25 TRY;
-  no repeat invitee bonus is granted. These renewal amounts are a pre-release
-  implementation draft, not activated commercial terms. Choice is editable
-  only while pending, never after release. Coupons are noncash, account-bound,
+  no repeat invitee bonus is granted. These renewal amounts are the active,
+  versioned campaign terms introduced by the September 9 product release.
+  Choice is editable only while pending, never after release. Coupons are noncash, account-bound,
   single-use and valid for 90 days after release. New rewards support a chosen
   coupon currency; redemption requires that exact currency and a monthly
   subscription. Annual billing, test/free/top-ups and stacked coupons do not
@@ -88,7 +88,7 @@ Summary history contains only the latest 50 rewards and coupons, with
 all qualifying history. `earned_minutes` is lifetime referral credits added,
 not the account's currently spendable balance; pending minutes are not usable.
 
-## Exact schema and activation work remaining
+## Exact active schema
 
 Separate metadata in `lecturesift/referrals.py` declares:
 
@@ -127,23 +127,23 @@ The exact column types/nullability are in that module. No foreign keys enter
 the core billing metadata; registration, close, secret-free export and
 proof-bound rehearsal purge have explicit hooks.
 
-Before activation, a separate reviewed release MUST:
+The completed September 9 activation release performed these required steps:
 
-1. Add immutable cutover schema/verifier v4 and recovery v3 inventories and
+1. Added immutable cutover schema/verifier v4 and recovery v3 inventories and
    contracts for these exact five tables, preserving all historical versions.
-2. Route backup/restore/rehearsal/rollback and configuration snapshots by the
-   new versions; add API grants, keep worker access absent, and validate roles.
-3. Prove actual PostgreSQL 18 DDL, concurrent shared cap/per-invitee month/
+2. Routed backup/restore/rehearsal/rollback and configuration snapshots by the
+   new versions; added API grants, kept worker access absent, and validated roles.
+3. Proved PostgreSQL 18 DDL, concurrent shared cap/per-invitee month/
    coupon/release behavior, migration conservation of v1 rows and coupons,
-   backup restoration, close/export and E2E cleanup. `create_all` alone is
-   not evidence of an upgrade or preservation of existing data.
-4. Flip the source capability only in that reviewed release; explicitly
-   migrate with owner authority before opting in through the runtime flag.
+   close/export and E2E cleanup, plus separate synthetic restoration evidence.
+   `create_all` alone is not evidence of an upgrade or preservation of existing data.
+4. Flipped the source capability in that reviewed release, explicitly migrated
+   with owner authority, and opted in through the API runtime flag.
 
 The current guarded `deploy/migrate_referrals.py` entry point still has its
 historical `--confirm-referral-schema-v1` interface. It is not the versioned
 upgrade required above and must not be used as a shortcut to enable five tables.
-The activation review must also establish a payment baseline/start boundary:
+The activation review also established a payment baseline/start boundary:
 late reconciliation of old paid orders must not silently advertise or introduce
 retroactive renewal rewards. Runtime now requires the permanent, timezone-aware
 `LECTURESIFT_REFERRAL_CAMPAIGN_START_AT` boundary and rejects order creation
