@@ -5,7 +5,7 @@ import uuid
 
 from fastapi.testclient import TestClient
 
-from lecturesift import config, payments
+from lecturesift import billing_service, config, payments
 from lecturesift.billing_service import register_user, verify_email
 from main import app
 
@@ -120,8 +120,13 @@ def test_paytr_checkout_and_callback_are_signed_and_idempotent(monkeypatch):
     )
     assert export_response.status_code == 200, export_response.text
     exported = export_response.json()["export"]
-    assert exported["payment_consents"][0]["order_reference"] == reference
-    assert "ip_hash" not in exported["payment_consents"][0]
+    consent = exported["payment_consents"][0]
+    assert consent["order_reference"] == reference
+    assert billing_service.PAYMENT_CONSENT_TERMS_VERSION == "MSS-2026-09-13-v3"
+    assert billing_service.PAYMENT_CONSENT_PRIVACY_VERSION == "2.4-2026-09-13"
+    assert consent["terms_version"] == billing_service.PAYMENT_CONSENT_TERMS_VERSION
+    assert consent["privacy_version"] == billing_service.PAYMENT_CONSENT_PRIVACY_VERSION
+    assert "ip_hash" not in consent
 
 
 def test_paytr_callback_rejects_bad_hash_and_amount(monkeypatch):

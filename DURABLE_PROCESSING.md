@@ -4,12 +4,14 @@ This runbook keeps long video jobs recoverable across deploys and service restar
 
 ## Required services
 
-The OVH production target runs the API, Celery worker, PostgreSQL and Redis 7.4
-inside the private Compose networks in `compose.yaml`. Redis uses `noeviction`
-and persistent AOF/RDB storage; only Caddy is public. A private S3-compatible
-object-storage bucket (Cloudflare R2) remains authoritative for uploaded
-sources and generated artifacts. Render remains only the temporary rollback
-source until the cutover in `VPS_DEPLOYMENT.md` is completed.
+As of 13 September 2026, production runs the API, Celery worker, PostgreSQL and
+Redis on Render, serves the frontend from Netlify and uses a private
+S3-compatible Cloudflare R2 bucket as the authority for uploaded sources and
+generated artifacts. The OVH Compose topology described below is a prospective
+cutover target and must not be reported as live before every admission and
+rollback gate in `VPS_DEPLOYMENT.md` is completed. In that target topology,
+Redis 7.4 uses `noeviction` and persistent AOF/RDB storage inside private
+Compose networks and only Caddy is public.
 
 ## Private R2 configuration
 

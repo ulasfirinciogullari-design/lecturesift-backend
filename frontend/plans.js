@@ -462,9 +462,15 @@ async function buy(planCode, interval = "monthly") {
       && Number.isFinite(currentEnd.getTime())
       && Number.isFinite(includedMinutes)
       && Number.isFinite(usedMinutes);
+    const replacementDetailKey = account?.subscription?.interval === "annual"
+      ? "account.activeAnnualReplacementDetail"
+      : "account.activeReplacementDetail";
+    const replacementDetailFallback = account?.subscription?.interval === "annual"
+      ? "Mevcut {current} yıllık erişimin {date} tarihine kadar açık. Gösterilen {remaining} dakika yalnız şu anki aylık kota pencerende kalan paket hakkıdır. Ödeme onaylandığında {target} için yeni {term} hemen başlar; mevcut yıllık erişimin ve gelecekte açılacak aylık kota hakların sona erer. Bu ay kullanılmayan paket dakikaları aktarılmaz. Otomatik yenileme yoktur."
+      : "Mevcut {current} dönemin {date} tarihine kadar açık ve bu dönemin {remaining} dakika paket hakkı kaldı. Ödeme onaylandığında {target} için yeni {term} hemen başlar. Kullanılmayan süre ve mevcut dönem paket hakkı taşınmaz. Otomatik yenileme yoktur.";
     fixedTermNotice.textContent = canShowCurrentTerm
       ? fillCopy(
-        pt("account.activeReplacementDetail", "Mevcut {current} dönemin {date} tarihine kadar açık ve bu dönemin {remaining} dakika paket hakkı kaldı. Ödeme onaylandığında {target} için yeni {term} hemen başlar. Kullanılmayan süre ve mevcut dönem paket hakkı taşınmaz. Otomatik yenileme yoktur."),
+        pt(replacementDetailKey, replacementDetailFallback),
         {
           current:planLabel(account.plan.code),
           date:new Intl.DateTimeFormat(PLANS_I18N.locale, {dateStyle:"long"}).format(currentEnd),

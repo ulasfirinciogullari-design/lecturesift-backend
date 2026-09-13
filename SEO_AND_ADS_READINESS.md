@@ -1,8 +1,8 @@
 # LectureSift search and advertising readiness
 
-## Current check (12 September 2026)
+## Current check (13 September 2026)
 
-- Merge `ca275122` (PR #91) is the current verified GitHub `main` and live API revision. PR #90 added the AdSense Management API reader; PR #91 added the Google Ads API v25 reader and the 13-language admin status UI. Both readers are deployed but remain disabled and unconfigured in production. Passing CI or a healthy endpoint alone is not evidence that a Google account is connected.
+- Merge `ae62489c` (PR #92) is the current verified GitHub `main` and live API revision. PR #90 added the AdSense Management API reader; PR #91 added the Google Ads API v25 reader and the 13-language admin status UI; PR #92 clarified fixed-term plan management. Both Google readers are deployed but remain disabled and unconfigured in production. Passing CI or a healthy endpoint alone is not evidence that a Google account is connected.
 
 - The current task cannot read the owner's signed-in AdSense tab. Its URL is visible in ambient UI, but the available tools include no browser read/control capability. The previous panel observations below are historical, not today's approval status. Re-enabling Browser has not exposed the missing tools; do not repeatedly request the same action or copy browser cookies.
 - Live GA4 measurement is enabled with `G-4L2CBDSZ48`, while advertising signals remain disabled. Google Ads conversion ID and signup/purchase labels are absent, so the application cannot currently report those conversions. Event arrival in Google Analytics has not been verified in Realtime.
@@ -22,13 +22,13 @@ AdSense Management API v2 can read site approval state, Auto ads state, alerts a
 
 Google Ads API v25 access is associated with an approved Google Cloud project; Google removed developer-token authentication on 9 September 2026. The prepared reader uses a service account that must be added directly to the target Google Ads account with the **Read-only** account role. The OAuth `adwords` scope itself is not read-only, so the Google Ads role is the enforcement boundary. This connection can report account, campaign, performance and eligible incentive status; the fixed API client cannot create campaigns or authorize spending. [Developer-token change](https://developers.google.com/google-ads/api/docs/api-policy/developer-token), [service-account setup](https://developers.google.com/google-ads/api/docs/oauth/service-accounts), [access model](https://developers.google.com/google-ads/api/docs/oauth/access-model)
 
-### Connected-mailbox evidence (12 September 2026)
+### Connected-mailbox evidence (13 September 2026)
 
 - The available Gmail connection is for `ulasweb3@gmail.com`, not the owner-mentioned `ulasfirinciogullari@gmail.com`. These findings therefore cover only the connected mailbox and do not establish what the other mailbox received.
-- Google Ads mail says the existing account is paused until advertiser-verification tasks are completed. It also records rejection of two “Youtube Promotion” campaigns under the Financial Services Verification policy. No campaign should be relaunched until the account owner completes Google's requested identity/business steps and resolves the policy classification in Google Ads.
+- Google Ads mail identifies customer `634-016-3849` and says the account was paused on 12 September until every advertiser-verification task under Account → Admin → Policy is completed. It also records rejection of two “Youtube Promotion” campaigns (`24219853193` and `24219730043`) under the Financial Services Verification policy. No campaign should be relaunched until the account owner completes Google's requested identity/business steps and resolves the policy classification in Google Ads.
 - Google states that a paused account can be unpaused only after advertiser verification. Its Türkiye policy also provides a verification route for non-financial advertisers whose campaigns reach audiences associated with financial-service searches; LectureSift should describe itself there as an education software service and must not claim a financial licence. [Advertiser-verification timing](https://support.google.com/adspolicy/answer/15588490?hl=en), [Türkiye financial-services verification](https://support.google.com/adspolicy/answer/15332527?co=GENIE.CountryCode%3DTR&hl=en)
 - LectureSift's Turkish use of “kredi” for application usage credits may have contributed to an automated financial-services classification. This is an inference from the site wording and rejection category, not a reason supplied by Google.
-- No AdSense message or message confirming an `8,000 TL` promotional balance was found in the connected mailbox. The promotion remains unverified; advertising spend and AdSense publisher income are separate products.
+- Searches for `8.000`, `8000`, `8.000 TL`, `8.000 ₺` and Google Ads promotion/credit/offer terms found no confirming message in the connected mailbox. This does not establish what the unconnected owner-mentioned mailbox received. The promotion remains unverified; advertising spend and AdSense publisher income are separate products.
 
 ## Historical panel check (8 September 2026; not reverified since)
 

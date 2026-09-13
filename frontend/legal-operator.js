@@ -4,6 +4,10 @@
   if (!card || document.querySelector("[data-legal-operator]")) return;
   const i18n = window.LectureSiftI18n;
   const t = (key, fallback) => i18n?.t(key, fallback) || fallback;
+  const segments = location.pathname.split("/").filter(Boolean);
+  if (i18n?.languages && Object.prototype.hasOwnProperty.call(i18n.languages, segments[0])) segments.shift();
+  const rawPagePath = segments.length ? `/${segments.join("/")}` : "/";
+  const pagePath = rawPagePath.endsWith(".html") ? rawPagePath.slice(0, -5) : rawPagePath;
   const ensureDistanceSalesLink = host => {
     if (!host || host.querySelector('a[href*="distance-sales"]')) return;
     const link = document.createElement("a");
@@ -11,13 +15,12 @@
     link.textContent = t("legal.distanceSales", "Mesafeli Satış Sözleşmesi");
     host.append(link);
   };
-  const legalDocumentPages = ["/privacy.html", "/terms.html", "/cookies.html", "/refund.html", "/distance-sales.html"];
-  if (legalDocumentPages.some(path => location.pathname.endsWith(path))) {
+  const legalDocumentPages = new Set(["/privacy", "/terms", "/cookies", "/refund", "/distance-sales"]);
+  if (legalDocumentPages.has(pagePath)) {
     ensureDistanceSalesLink(document.querySelector(".legal-nav"));
     ensureDistanceSalesLink(document.querySelector(".legal-footer nav"));
   }
-  const showOperatorDetails = ["/distance-sales.html", "/contact.html"]
-    .some(path => location.pathname.endsWith(path));
+  const showOperatorDetails = new Set(["/distance-sales", "/contact"]).has(pagePath);
   if (!showOperatorDetails) return;
   if (card.dataset.legalOperatorLoading === "true") return;
   card.dataset.legalOperatorLoading = "true";

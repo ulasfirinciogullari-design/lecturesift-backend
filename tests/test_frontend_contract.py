@@ -73,7 +73,11 @@ def test_account_uses_fixed_term_self_service_and_zero_decimal_payment_amounts()
     assert "payment.fixedTermReplacement" not in catalog
     assert "o anda aktif ücretli dönem varsa" in plan_script
     assert "mevcut dönemin paket hakkı aktarılmaz" in plan_script
-    assert 'pt("account.activeReplacementDetail"' in plan_script
+    assert 'pt(replacementDetailKey' in plan_script
+    assert 'account?.subscription?.interval === "annual"' in plan_script
+    assert 'subscription.interval === "annual"' in auth
+    assert "account.activeAnnualReplacementDetail" in plan_script
+    assert "account.activeAnnualReplacementDetail" in auth
     assert "Math.trunc(includedMinutes - usedMinutes)" in plan_script
     assert 'pt("plans.currencyUnavailable"' in plan_script
     placeholder_contracts = {
@@ -81,6 +85,7 @@ def test_account_uses_fixed_term_self_service_and_zero_decimal_payment_amounts()
         "account.upgradeAction": {"plan"},
         "account.downgradeAction": {"plan"},
         "account.activeReplacementDetail": {"current", "date", "remaining", "term", "target"},
+        "account.activeAnnualReplacementDetail": {"current", "date", "remaining", "term", "target"},
         "account.firstPurchaseDetail": {"term", "target"},
         "plans.currencyUnavailable": {"provider", "currency"},
     }
@@ -96,6 +101,7 @@ def test_account_uses_fixed_term_self_service_and_zero_decimal_payment_amounts()
         "account.upgradeAction",
         "account.downgradeAction",
         "account.activeReplacementDetail",
+        "account.activeAnnualReplacementDetail",
         "account.firstPurchaseDetail",
         "plans.subscription",
         "plans.newMonthlyTerm",
@@ -335,6 +341,8 @@ def test_public_source_copy_matches_the_single_file_picker_contract():
     terms = (FRONTEND / "terms.html").read_text(encoding="utf-8")
     privacy = (FRONTEND / "privacy.html").read_text(encoding="utf-8")
     distance_sales = (FRONTEND / "distance-sales.html").read_text(encoding="utf-8")
+    refund = (FRONTEND / "refund.html").read_text(encoding="utf-8")
+    cookies = (FRONTEND / "cookies.html").read_text(encoding="utf-8")
     script = (FRONTEND / "app.js").read_text(encoding="utf-8")
     translations = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
     assistant = (FRONTEND.parent / "lecturesift" / "site_assistant.py").read_text(encoding="utf-8")
@@ -353,15 +361,31 @@ def test_public_source_copy_matches_the_single_file_picker_contract():
         "plans.multiSource",
         "MP3/video exports",
         "video study exports",
+        "Otomatik yenilenen planlar etkinleştirildiğinde",
+        "Abonelik yenilemesi etkinse",
+        "Vergiler, yenileme şekli",
+        "Ücretli abonelikler ödeme altyapısı etkinleştirilmeden",
+        "ödeme açıldığında",
+        "iyzico/PayTR (etkin ödeme kuruluşları)",
+        "ileride ödeme sağlayıcıları",
+        "ürün taslağıdır",
     )
     public_copy = "\n".join(
-        (workspace, features, video_guide, plans, terms, privacy, distance_sales, translations, assistant, readme)
+        (
+            workspace, features, video_guide, plans, terms, privacy, distance_sales,
+            refund, cookies, translations, assistant, readme,
+        )
     )
     assert not any(claim in public_copy for claim in stale_claims)
-    assert 'data-i18n="legal.termsUpdated">Son güncelleme: 12 Eylül 2026<' in terms
-    assert 'data-i18n="legal.privacyUpdated">Son güncelleme: 12 Eylül 2026 · Sürüm 2.3<' in privacy
-    assert 'data-i18n="legal.distanceSalesVersion">Sürüm: MSS-2026-09-12-v2<' in distance_sales
-    assert 'data-i18n="legal.distanceSalesHistory">Bu çerçeve metin ilk olarak 28 Ağustos 2026 tarihinde yayımlanmış, 12 Eylül 2026 tarihinde güncellenmiştir.' in distance_sales
+    assert 'data-i18n="legal.termsUpdated">Son güncelleme: 13 Eylül 2026<' in terms
+    assert 'data-i18n="legal.privacyUpdated">Son güncelleme: 13 Eylül 2026 · Sürüm 2.4<' in privacy
+    assert 'data-i18n="legal.distanceSalesVersion">Sürüm: MSS-2026-09-13-v3<' in distance_sales
+    assert 'data-i18n="legal.distanceSalesHistory">Bu çerçeve metin ilk olarak 28 Ağustos 2026 tarihinde yayımlanmış, 13 Eylül 2026 tarihinde güncellenmiştir.' in distance_sales
+    assert 'data-i18n="legal.refundUpdated">Son güncelleme: 13 Eylül 2026<' in refund
+    assert 'data-i18n="legal.cookiesUpdated">Son güncelleme: 13 Eylül 2026 · Sürüm 2.4<' in cookies
+    assert "gelecekte açılacak aylık kotalar da sona erer" in terms
+    assert "gelecekte açılacak aylık kotalar da sona erer" in refund
+    assert "gelecekte açılacak aylık kotalar da sona erer" in distance_sales
     assert 'data.append("source_layout", "classic")' in script
     assert 'data.append("files", file)' in script
     assert 'data.append("audio_files"' not in script
@@ -379,6 +403,18 @@ def test_public_source_copy_matches_the_single_file_picker_contract():
         "legal.distanceSalesHistory",
         "legal.termsUpdated",
         "legal.privacyUpdated",
+        "legal.refundUpdated",
+        "legal.cookiesUpdated",
+        "legal.fixedTermTitle",
+        "legal.fixedTermModel",
+        "legal.defectiveServiceRights",
+        "legal.distanceSalesPerformance",
+        "privacy.cardProcessing",
+        "privacy.currentProviders",
+        "privacy.currentNotice",
+        "cookies.requiredInfrastructure",
+        "cookies.externalPayments",
+        "copy.planRightsDisclosure",
         "workspace.errorFallback",
     ):
         payload = re.search(rf'^\s*"{re.escape(key)}":\[(.*?)\],?$', translations, re.MULTILINE)
@@ -449,8 +485,8 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         expected_theme_version = "17"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
         assert "/theme.js?v=11" in content, page.name
-        assert "i18n.js?v=45" in content, page.name
-        assert "page-i18n.js?v=9" in content, page.name
+        assert "i18n.js?v=46" in content, page.name
+        assert "page-i18n.js?v=10" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
     style = (FRONTEND / "theme.css").read_text(encoding="utf-8")
@@ -735,11 +771,11 @@ def test_payment_routes_are_distinct_localized_and_account_history_is_auditable(
         assert len(values) == 13, key
         assert all(str(value).strip() for value in values), key
 
-    assert 'src="/plans.js?v=26"' in plans_html
+    assert 'src="/plans.js?v=27"' in plans_html
     assert 'manualTransfer = {available:Boolean(transferBody?.available), bank:null};' in plans_js
     assert 'order.bank?.iban' in plans_js
     assert 'transferBody?.bank' not in plans_js
-    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=17"', 'href="./auth.css?v=4"'))
+    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=18"', 'href="./auth.css?v=4"'))
     assert all(value in auth_js for value in ("paymentMethodLabel", "paymentMoney", "paymentDateTime", "payment-order-meta"))
     assert all(value in admin_html for value in ('value="iyzico_card"', 'value="iyzico_bank_transfer"', 'value="manual_bank_transfer"', 'value="iyzico_legacy"'))
     assert "provider:selectedProvider" in admin_js
@@ -768,7 +804,10 @@ def test_profile_admin_automatic_payment_and_full_comparison_interfaces_are_pres
     )
     assert "/billing/me/profile" in auth and "/billing/me/change-password" in auth
     assert "/billing/me/subscription/cancel" not in auth
-    assert "fixedTermPlanForm" in account and "account.activeReplacementDetail" in auth
+    assert "fixedTermPlanForm" in account and all(
+        key in auth
+        for key in ("account.activeReplacementDetail", "account.activeAnnualReplacementDetail")
+    )
     assert "/jobs?limit=30" not in auth and "jobHistory" not in account
     assert "/billing/me/export" in auth and "/billing/me/close-account" in auth
     assert 'href="/admin.html"' not in account
@@ -880,7 +919,7 @@ def test_admin_growth_reads_and_escapes_advertising_management_status():
     catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
 
     assert 'id="adminGrowthStatus" class="admin-growth-grid" aria-live="polite"' in admin
-    assert 'src="/admin.js?v=23"' in admin and 'src="/i18n.js?v=45"' in admin
+    assert 'src="/admin.js?v=23"' in admin and 'src="/i18n.js?v=46"' in admin
     assert 'adminRequest("/billing/admin/advertising-readiness").catch(() => null)' in admin_script
     assert "advertisingReadiness:optional[10]" in admin_script
     assert "8.000" not in admin_script and "8000" not in admin_script
@@ -1119,7 +1158,7 @@ def test_distance_sales_contract_covers_digital_service_checkout_requirements():
     contract = (FRONTEND / "distance-sales.html").read_text(encoding="utf-8")
     operator = (FRONTEND / "legal-operator.js").read_text(encoding="utf-8")
     assert "Mesafeli Satış Sözleşmesi" in contract
-    assert "MSS-2026-09-12-v2" in contract
+    assert "MSS-2026-09-13-v3" in contract
     for topic in (
         "Taraflar",
         "Ön bilgilendirme",
@@ -1134,6 +1173,11 @@ def test_distance_sales_contract_covers_digital_service_checkout_requirements():
     assert "/billing/operator" in operator
     assert 'a[href*="distance-sales"]' in operator
     assert "Ödeme, satıcı/sağlayıcının zorunlu kimlik" not in contract
+    assert "30 veya 365 günlük sabit dönemli planların" in contract
+    assert 'data-i18n="legal.fixedTermModel"' in contract
+    assert "Planlanmış gelecek kart tahsilatı olmadığı" in contract
+    assert "gelecekte açılacak aylık kotalar da sona erer" in contract
+    assert "Abonelik yenilemesi etkinse" not in contract
 
 
 def test_privacy_page_uses_current_controller_identity_without_draft_warning():
@@ -1141,15 +1185,24 @@ def test_privacy_page_uses_current_controller_identity_without_draft_warning():
     catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
     assert 'data-i18n="privacy.controllerIdentity"' in privacy
     assert "Canlı satış öncesi tamamlanması zorunludur" not in privacy
+    assert "ürün taslağıdır" not in privacy
+    assert "kartlı ödeme açıldığında" not in privacy
+    assert "iyzico/PayTR (etkin ödeme kuruluşları)" not in privacy
+    assert 'data-i18n="privacy.cardProcessing"' in privacy
+    assert 'data-i18n="privacy.currentProviders"' in privacy
+    assert 'data-i18n="privacy.currentNotice"' in privacy
     assert '"privacy.controllerIdentity"' in catalog
 
 
 def test_delivery_and_refund_terms_are_explicit_and_localized():
     refund = (FRONTEND / "refund.html").read_text(encoding="utf-8")
     catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
-    assert "Teslimat ve İade Şartları" in refund
+    assert "Teslimat, İptal ve İade Şartları" in refund
     assert "Dijital teslimat ve hizmet başlangıcı" in refund
     assert "fiziksel teslimat yapılmaz" in refund
+    assert "Aylık seçenek 30, yıllık seçenek 365 günlük sabit dönemdir" in refund
+    assert "Planlanmış gelecek kart tahsilatı olmadığı" in refund
+    assert "Otomatik yenilenen planlar etkinleştirildiğinde" not in refund
     for key in (
         "refund.pageTitle",
         "refund.navTitle",
@@ -1157,8 +1210,23 @@ def test_delivery_and_refund_terms_are_explicit_and_localized():
         "refund.heroLead",
         "refund.deliveryTitle",
         "refund.deliveryText",
+        "legal.refundUpdated",
+        "legal.fixedTermTitle",
+        "legal.fixedTermModel",
         "legal.taxOffice",
     ):
+        assert f'"{key}"' in catalog
+
+
+def test_cookie_policy_describes_current_payment_records_without_future_only_copy():
+    cookies = (FRONTEND / "cookies.html").read_text(encoding="utf-8")
+    catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    assert "ileride ödeme sağlayıcıları" not in cookies
+    assert "Kartlı ödeme açıldığında" not in cookies
+    assert 'data-i18n="cookies.requiredInfrastructure"' in cookies
+    assert 'data-i18n="cookies.externalPayments"' in cookies
+    assert 'data-i18n="legal.cookiesUpdated"' in cookies
+    for key in ("cookies.requiredInfrastructure", "cookies.externalPayments", "legal.cookiesUpdated"):
         assert f'"{key}"' in catalog
 
 
@@ -1166,10 +1234,12 @@ def test_legal_operator_identity_is_public_only_after_configuration():
     i18n = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
     operator = (FRONTEND / "legal-operator.js").read_text(encoding="utf-8")
     blueprint = (FRONTEND.parent / "render.yaml").read_text(encoding="utf-8")
-    assert 'legalOperatorScript.src = "/legal-operator.js?v=4"' in i18n
+    assert 'legalOperatorScript.src = "/legal-operator.js?v=5"' in i18n
     assert "/billing/operator" in operator
     assert "if (!operator?.configured) return" in operator
-    assert '"/distance-sales.html", "/contact.html"' in operator
+    assert 'new Set(["/distance-sales", "/contact"]).has(pagePath)' in operator
+    assert 'rawPagePath.endsWith(".html") ? rawPagePath.slice(0, -5)' in operator
+    assert "Object.prototype.hasOwnProperty.call(i18n.languages, segments[0])" in operator
     assert "if (!showOperatorDetails) return" in operator
     assert 'card.dataset.legalOperatorLoading === "true"' in operator
     assert all(
@@ -1280,7 +1350,7 @@ def test_public_pages_have_share_metadata_canonical_urls_and_structured_data():
     assert 'url: `${PRODUCTION_ORIGIN}/`' in seo
     assert '"/distance-sales"' in seo
     assert (FRONTEND / "og-image.png").stat().st_size > 100_000
-    assert sitemap.count("<lastmod>2026-09-07</lastmod>") == 13 * 13
+    assert sitemap.count("<lastmod>2026-09-13</lastmod>") == 13 * 13
 
 
 def test_netlify_build_prerenders_every_public_language_with_static_seo():

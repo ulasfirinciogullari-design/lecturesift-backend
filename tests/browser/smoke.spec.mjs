@@ -27,6 +27,24 @@ test('assistant credit choices retain amount, currency and language through sign
   expect(await page.evaluate(()=>localStorage.getItem('lecturesift-currency'))).toBe('JPY');
 });
 
+test('clean localized legal routes load the configured service provider card', async ({page}) => {
+  const cors={'Access-Control-Allow-Origin':'http://127.0.0.1:4173','Access-Control-Allow-Methods':'GET,OPTIONS','Access-Control-Allow-Headers':'authorization,content-type'};
+  await page.route('https://api.lecturesift.com/billing/operator',route=>route.fulfill({status:200,headers:cors,json:{
+    configured:true,operator_name:'Synthetic Education Software',address:'Synthetic test address',country:'TR',
+    phone:'+90 500 000 00 00',email:'operator@example.invalid',tax_id:null,tax_office:'Synthetic Office',
+    registration_id:null,mersis_id:null,trade_registry:null,kep_address:null,chamber_name:null,
+  }}));
+  await page.goto('/en/distance-sales');
+  await page.locator('[data-consent="essential"]').click();
+  const operator=page.locator('[data-legal-operator]');
+  await expect(operator).toBeVisible();
+  await expect(operator).toContainText('Service provider details');
+  await expect(operator).toContainText('Synthetic Education Software');
+  await expect(operator).toContainText('Synthetic Office');
+  await expect(page.locator('[data-i18n="legal.fixedTermModel"]').first())
+    .toContainText('all future monthly allowances under it also end');
+});
+
 test('account shows zero-decimal payments and fixed-term package self-service', async ({page}) => {
   const cors={'Access-Control-Allow-Origin':'http://127.0.0.1:4173','Access-Control-Allow-Methods':'GET,OPTIONS','Access-Control-Allow-Headers':'authorization,content-type'};
   const account={
@@ -88,6 +106,20 @@ test('account shows zero-decimal payments and fixed-term package self-service', 
   await page.locator('.plan-action[data-plan="lite"][data-interval="monthly"]').click();
   await expect(page.locator('#errorBox')).toBeVisible();
   await expect(page.locator('#errorMessage')).toHaveText('iyzico is active, but card checkout does not support JPY. Choose a currency supported by the provider to pay.');
+
+  account.subscription.interval='annual';
+  account.subscription.ends_at='2027-09-01T00:00:00Z';
+  await page.evaluate(()=>localStorage.setItem('lecturesift-currency','TRY'));
+  await page.goto('/en/account.html');
+  await expect(page.locator('#managePlanInterval')).toHaveValue('annual');
+  await expect(page.locator('#managePlanSummary')).toContainText('850 package minutes');
+  await expect(page.locator('#managePlanSummary')).toContainText('only what remains in your current monthly allowance window');
+  await expect(page.locator('#managePlanSummary')).toContainText('all future monthly allowances under it end');
+  await page.locator('#managePlanContinue').click();
+  await expect(page.locator('#checkoutPanel')).toBeVisible();
+  await expect(page.locator('#checkoutInterval')).toHaveValue('annual');
+  await expect(page.locator('#checkoutFixedTermNotice')).toContainText('only what remains in your current monthly allowance window');
+  await expect(page.locator('#checkoutFixedTermNotice')).toContainText('all future monthly allowances under it end');
 });
 
 test('referrals keep sharing, reward choices and coupons usable on narrow screens', async ({page}, testInfo) => {

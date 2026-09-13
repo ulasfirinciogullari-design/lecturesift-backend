@@ -666,8 +666,14 @@ async function initAccount() {
       }
       const endLabel = new Intl.DateTimeFormat(I18N.locale, {dateStyle:"long"}).format(end);
       const remainingPackageMinutes = Math.max(0, Math.trunc(includedMinutes - usedMinutes));
+      const replacementDetailKey = subscription.interval === "annual"
+        ? "account.activeAnnualReplacementDetail"
+        : "account.activeReplacementDetail";
+      const replacementDetailFallback = subscription.interval === "annual"
+        ? "Mevcut {current} yıllık erişimin {date} tarihine kadar açık. Gösterilen {remaining} dakika yalnız şu anki aylık kota pencerende kalan paket hakkıdır. Ödeme onaylandığında {target} için yeni {term} hemen başlar; mevcut yıllık erişimin ve gelecekte açılacak aylık kota hakların sona erer. Bu ay kullanılmayan paket dakikaları aktarılmaz. Otomatik yenileme yoktur."
+        : "Mevcut {current} dönemin {date} tarihine kadar açık ve bu dönemin {remaining} dakika paket hakkı kaldı. Ödeme onaylandığında {target} için yeni {term} hemen başlar. Kullanılmayan süre ve mevcut dönem paket hakkı taşınmaz. Otomatik yenileme yoktur.";
       summary.textContent = fillCopy(
-        t("account.activeReplacementDetail", "Mevcut {current} dönemin {date} tarihine kadar açık ve bu dönemin {remaining} dakika paket hakkı kaldı. Ödeme onaylandığında {target} için yeni {term} hemen başlar. Kullanılmayan süre ve mevcut dönem paket hakkı taşınmaz. Otomatik yenileme yoktur."),
+        t(replacementDetailKey, replacementDetailFallback),
         {current:planName(account.plan.code), date:endLabel, remaining:remainingPackageMinutes.toLocaleString(I18N.locale), term, target:targetPlan},
       );
     };
