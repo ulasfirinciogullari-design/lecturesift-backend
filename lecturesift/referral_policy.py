@@ -1,8 +1,8 @@
-"""Versioned referral terms without database, payment or activation effects.
+"""Active versioned referral terms without direct payment or release effects.
 
-Renewal terms are a pre-release draft. Selecting terms does not authorize a
-reward: the ledger must verify a unique settled payment, attribution, account
-eligibility, the shared monthly limit and reconciliation after the hold.
+Selecting terms does not authorize a reward: the ledger must verify a unique
+settled payment, attribution, account eligibility, the shared monthly limit
+and administrator reconciliation after the hold.
 """
 
 from dataclasses import dataclass, replace

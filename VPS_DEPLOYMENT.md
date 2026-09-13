@@ -1,8 +1,13 @@
-# LectureSift OVH VPS deployment
+# LectureSift OVH VPS deployment target
 
-The production stack runs API, one Celery worker, PostgreSQL, Redis and Caddy
-on the VPS. The private core and public ingress have separate systemd owners.
-Netlify and private Cloudflare R2 remain external.
+**Current status (13 September 2026): this is a prospective cutover runbook,
+not the active production topology.** Production currently serves the frontend
+from Netlify and runs the API, Celery worker, PostgreSQL and Redis on Render;
+private Cloudflare R2 remains authoritative object storage. The OVH host is a
+development/rehearsal copy and has not passed the cutover gates below. If that
+cutover is later authorized and completed, the target stack will run the API,
+one Celery worker, PostgreSQL, Redis and Caddy on the VPS, with separate
+systemd owners for the private core and public ingress.
 
 ## Safety rules
 

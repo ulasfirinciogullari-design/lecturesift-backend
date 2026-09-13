@@ -260,6 +260,8 @@ PAYMENT_ORDERS = Table(
 
 PURCHASE_TERMS_VERSION = "2026-09-08-v3"
 ADMIN_GRANT_TERMS_VERSION = "admin-grant-2026-09-08-v1"
+PAYMENT_CONSENT_TERMS_VERSION = "MSS-2026-09-13-v3"
+PAYMENT_CONSENT_PRIVACY_VERSION = "2.4-2026-09-13"
 PURCHASE_TERMS = Table(
     "billing_purchase_terms",
     METADATA,
@@ -394,8 +396,8 @@ def record_payment_consent(
                 PAYMENT_CONSENTS.insert().values(
                     order_reference=order_reference,
                     user_id=user_id,
-                    terms_version="MSS-2026-08-28-v1",
-                    privacy_version="2.0-2026-08-28",
+                    terms_version=PAYMENT_CONSENT_TERMS_VERSION,
+                    privacy_version=PAYMENT_CONSENT_PRIVACY_VERSION,
                     terms_accepted=1,
                     early_performance_requested=1,
                     language=(language or "tr")[:8],

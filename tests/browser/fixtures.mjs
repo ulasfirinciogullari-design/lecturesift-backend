@@ -22,6 +22,7 @@ const result = {
 };
 const stubs = new Map([
   ['/billing/me', {account}],
+  ['/billing/operator', {configured: false}],
   ['/billing/providers', {providers: [], commerce_identity: {configured: false}}],
   ['/billing/manual-transfer', {available: false}],
   ['/billing/plans?currency=TRY', {plans: [], selected_currency: 'TRY'}],

@@ -110,9 +110,9 @@ veya ön ödemeli bakiye yüklemesiyle mükerrer sayılmamalıdır.
 
 ## İşletim kuralları
 
-### Referans ödülü senaryosu — henüz canlı değil
+### Aktif sürümlü referans ödülü senaryosu
 
-Önerilen edinim ödülü, yeni ve doğrulanmış hesabın ilk uygun ücretli
+Aktif edinim ödülü, yeni ve doğrulanmış hesabın ilk uygun ücretli
 aboneliğine bağlıdır. Davet eden 60 dakika veya sonraki TRY aylık abonelikte
 %10 indirim (en fazla 50 TL) seçer; davet edilen 30 dakika kazanır. Kupon
 tek kullanımlık, 90 gün geçerli ve diğer indirimlerle/yıllık fiyatla birleşmez.
@@ -130,14 +130,18 @@ seferlik edinim maliyeti 12 ay boyunca tekrar oluşuyormuş gibi sayılmamalıd�
 Bunlar doğrulanmış kâr veya bütçe garantisi değildir. Gerçek iş maliyeti,
 iade/itiraz, ücretler ve ödül kullanım oranı izlenmeli; kullanım pahalılaşırsa
 yeni davetler için program durdurulabilmelidir. Kazanılmış koşullar sonradan
-sessizce değiştirilmemelidir. Önizleme kodu şema/yedekleme geçişi tamamlanana
-kadar programı kapalı tutar; bu belge canlıda ödül dağıtıldığını göstermez.
+sessizce değiştirilmemelidir. Program 9 Eylül 2026 ürün sürümünde sürümlü şema
+ve kurtarma kanıtlarıyla etkinleştirildi. Ödüller 14 günlük bekleme ve yönetici
+ödeme mutabakatı olmadan harcanabilir hâle gelmez. Bu kaynak durumu gerçek bir
+ücretli davet satın alımının veya canlıda ödül dağıtımının test edildiğini
+göstermez.
 
 ### Katalog ve ölçüm kontrolleri
 
-8 Eylül devam taslağı: kullanıcı, davet ilişkisinin sonraki abonelik paketleri
-ve yenilemelerde de ödül oluşturmasını seçti; ek dakika alımları hariç.
-İlk alışveriş koşulları korunuyor. Yenileme için uygulama taslağı davetçiye
+9 Eylül'de etkinleştirilen sürümlü kapsam, davet ilişkisinin sonraki abonelik
+paketleri ve yeni dönem satın alımlarında da ödül oluşturmasını içerir; ek
+dakika alımları hariçtir. İlk alışveriş koşulları korunur. Aktif yenileme
+politikası davetçiye
 30 dakika veya %5/en fazla 25 TL kupon; davet edilene tekrar hoş geldin bonusu
 yok. İlk ve sonraki ödüller aynı aylık beş işlem kotasını paylaşır; aynı davet
 edilen kişi için ayda en fazla bir yenileme ödülü ayrılır. Yıllık paketin aylık
@@ -150,8 +154,9 @@ taşınmaz. Sürümlü politika tavanları Lite bölgesel fiyat oranlarından sa
 canlı kur değildir. Kupon seçilen para biriminde verilir ve aynı para biriminde
 kullanılır. Mevcut ödeme seçeneğinin desteklemediği para biriminde yeni kupon
 verilmez; dakika seçeneği kullanılabilir. Eski TRY kuponlarının koşulları korunur.
-Bu değişiklik de kapalı önizleme kodudur; canlı kampanya veya doğrulanmış kâr
-değildir. Üstteki ilk alışveriş hesaplarına ek ayrı bir aylık kota yaratmaz.
+Bu etkin özellik gerçek bir ücretli davet işleminin başarıyla tamamlandığına
+veya doğrulanmış kâra kanıt değildir. Üstteki ilk alışveriş hesaplarına ek ayrı
+bir aylık kota yaratmaz.
 
 - Gerçek son 30 gün API/altyapı faturaları ve iyzico mutabakatı olmadan
   yüzde yüz doğrulanmış marj gösterme. Eksik veri açıkça işaretlenmeli.

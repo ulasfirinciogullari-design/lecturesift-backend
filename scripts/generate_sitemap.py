@@ -18,7 +18,7 @@ PATHS = (
     "/cookies.html",
     "/refund.html",
 )
-LAST_MODIFIED = "2026-09-07"
+LAST_MODIFIED = "2026-09-13"
 
 
 def canonical_path(path: str) -> str:
