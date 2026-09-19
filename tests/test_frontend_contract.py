@@ -1684,7 +1684,9 @@ def test_every_supported_language_has_a_stable_indexable_url():
         assert f"/{language}/*" in redirects
         assert f"<loc>https://lecturesift.com/{language}/</loc>" in sitemap
         assert f'hreflang="{language}"' in sitemap
-    assert sitemap.count("<url>") == 13 * 13
+    assert "<loc>https://lecturesift.com/</loc>" in sitemap
+    # Published editions differ by page; test_seo_integrity checks the complete
+    # URL and alternate-language sets, including the bilingual study resources.
 
     app = (FRONTEND / "app.js").read_text(encoding="utf-8")
     auth = (FRONTEND / "auth.js").read_text(encoding="utf-8")
