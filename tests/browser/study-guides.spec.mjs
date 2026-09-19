@@ -1,6 +1,6 @@
 import {test, expect} from './fixtures.mjs';
 
-test('localized home links to an actual guide edition after client localization', async ({page}) => {
+test('localized home links to an actual guide edition after client localization', async ({page}, testInfo) => {
   await page.goto('/de/');
   const link = page.locator('.study-resource-entry a');
   await expect(link).toHaveAttribute('href', '/en/study-guides');
@@ -9,6 +9,7 @@ test('localized home links to an actual guide edition after client localization'
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await expect(page.locator('.guide-grid .guide-card')).toHaveCount(3);
   await expect(page.getByRole('heading', {level:1})).toContainText('Study guides');
+  await page.screenshot({path:testInfo.outputPath('study-library-layout.jpg'),type:'jpeg',quality:65});
 });
 
 test.describe('open learning material without JavaScript', () => {
@@ -17,6 +18,10 @@ test.describe('open learning material without JavaScript', () => {
   test('source, native answer disclosures, language switch and worksheet remain usable', async ({page}, testInfo) => {
     await page.goto('/study-pack-example');
     await expect(page.locator('#kaynak-2')).toContainText('150 ÷ 5 = 30');
+    await expect(page.locator('.guide-toc ol')).not.toBeVisible();
+    await page.locator('.guide-toc summary').click();
+    await expect(page.locator('.guide-toc ol')).toBeVisible();
+    await page.locator('.guide-toc summary').click();
     const question = page.locator('#sorular details').nth(3);
     await expect(question.locator('p')).not.toBeVisible();
     await question.locator('summary').click();

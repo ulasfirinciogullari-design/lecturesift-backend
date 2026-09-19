@@ -30,6 +30,8 @@
 .guide-toc{align-self:start;position:sticky;top:24px;border-inline-start:1px solid var(--ui-line);padding-inline-start:22px;font-size:14px}
 .guide-toc ol{padding-inline-start:19px;margin:12px 0 24px}
 .guide-toc li{margin:12px 0;padding:0}
+.guide-page .guide-toc details{margin:0;border:0;border-radius:0;padding:0;background:transparent}
+.guide-page .guide-toc summary{padding:8px 0;min-height:40px;font-size:14px;border-bottom:0}
 .guide-note{padding:18px 22px;background:var(--ui-green-wash);border-inline-start:4px solid var(--ui-green);border-radius:0 12px 12px 0;font-size:15px}
 .guide-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:16px;margin-top:24px}
 .guide-card{display:flex;flex-direction:column;align-items:start;gap:4px;padding:22px;border:1px solid var(--ui-line);background:var(--ui-surface);border-radius:16px;text-decoration:none;box-shadow:var(--ui-shadow-soft)}
