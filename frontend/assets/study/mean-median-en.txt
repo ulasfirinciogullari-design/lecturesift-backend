@@ -1,0 +1,21 @@
+LectureSift · A complete study example: mean and median
+https://lecturesift.com/en/study-pack-example
+
+S1 · Understand the data. Imagine that five students take 18, 20, 20, 22 and 70 minutes to travel to school. These numbers were invented for this example. The unit is minutes and there are five observations. This small group cannot establish a result about all students.
+
+S2 · The arithmetic mean. Add the values and divide by the number of observations: 18 + 20 + 20 + 22 + 70 = 150; 150 ÷ 5 = 30 minutes. A mean of 30 does not mean that every student travels for 30 minutes. There is not even a 30-minute observation in this dataset.
+
+S3 · The median. Order the values from smallest to largest. These five values are already ordered, and the third, middle value is 20. The median is 20 minutes. With an even number of observations, we would take the arithmetic mean of the two middle values.
+
+S4 · Interpret a change. If the final journey took 120 rather than 70 minutes, the total would become 200 and the mean would become 40 minutes. The middle value would remain 20, so the median would not change. A large value can affect the mean substantially. However, we do not remove an observation simply because it is large; first we investigate measurement errors and the question we are trying to answer.
+WORKSHEET
+1. Calculate the mean and median.
+2. Why is the mean not everyone’s journey time?
+3. What changes if 70 becomes 120?
+4. Find the median of 10, 12, 14 and 60.
+
+CHECK RECORD
+My answer:
+Source location:
+Corrected explanation:
+Review date:

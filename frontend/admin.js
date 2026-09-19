@@ -942,7 +942,7 @@ function renderAdminGrowth() {
   const policyTotal = Number(policy?.total || 0);
   const policyDetail = policy
     ? `${adminT("admin.adsenseServingDisabled", "Yayın kapalı")}: ${Number(policy.ad_serving_disabled || 0).toLocaleString(adminLocale())} · ${adminT("admin.adsenseServingRestricted", "Yayın kısıtlı")}: ${Number(policy.ad_serving_restricted || 0).toLocaleString(adminLocale())} · ${adminT("admin.adsensePersonalizationRestricted", "Kişiselleştirme kısıtlı")}: ${Number(policy.ad_personalization_restricted || 0).toLocaleString(adminLocale())} · ${adminT("admin.adsenseWarned", "Uyarılan")}: ${Number(policy.warned || 0).toLocaleString(adminLocale())}`
-    : adminT("admin.adsensePolicyUnavailable", "Politika bilgisi alınamadı.");
+    : `${adminT("admin.adsensePolicyUnavailable", "Politika bilgisi alınamadı.")} ${management?.policy_error_code ? adminAdSenseErrorLabel(management.policy_error_code) : ""}`;
   const googleAds = readiness?.google_ads || {};
   const googleAdsManagement = googleAds.management_api;
   const googleAdsConnectionStatus = googleAdsManagement?.status;

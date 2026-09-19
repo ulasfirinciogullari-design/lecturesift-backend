@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 
 ORIGIN = "https://lecturesift.com"
@@ -19,6 +20,7 @@ PATHS = (
     "/refund.html",
 )
 LAST_MODIFIED = "2026-09-13"
+RESOURCES_PATH = Path(__file__).resolve().parents[1] / "frontend" / "study-resources.json"
 
 
 def canonical_path(path: str) -> str:
@@ -43,7 +45,7 @@ def build_sitemap() -> str:
         for path in PATHS:
             lines.append("  <url>")
             lines.append(f"    <loc>{ORIGIN}{localized_path(language, path)}</loc>")
-            lines.append(f"    <lastmod>{LAST_MODIFIED}</lastmod>")
+            lines.append(f"    <lastmod>{'2026-09-19' if path == '/' else LAST_MODIFIED}</lastmod>")
             for alternate in LANGUAGES:
                 href = f"{ORIGIN}{localized_path(alternate, path)}"
                 lines.append(f'    <xhtml:link rel="alternate" hreflang="{alternate}" href="{href}"/>')
@@ -51,6 +53,18 @@ def build_sitemap() -> str:
                 f'    <xhtml:link rel="alternate" hreflang="x-default" '
                 f'href="{ORIGIN}{canonical_path(path)}"/>'
             )
+            lines.append("  </url>")
+    resources = json.loads(RESOURCES_PATH.read_text(encoding="utf-8"))
+    for page in resources["pages"]:
+        path = f'/{page["slug"]}'
+        for language in resources["languages"]:
+            lines.append("  <url>")
+            lines.append(f"    <loc>{ORIGIN}{localized_path(language, path)}</loc>")
+            lines.append(f'    <lastmod>{resources["updated"]}</lastmod>')
+            for alternate in resources["languages"]:
+                href = f"{ORIGIN}{localized_path(alternate, path)}"
+                lines.append(f'    <xhtml:link rel="alternate" hreflang="{alternate}" href="{href}"/>')
+            lines.append(f'    <xhtml:link rel="alternate" hreflang="x-default" href="{ORIGIN}{path}"/>')
             lines.append("  </url>")
     lines.append("</urlset>")
     return "\n".join(lines) + "\n"
