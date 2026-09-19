@@ -77,10 +77,13 @@ def _webhook_signature(payload: dict) -> str:
     ).hexdigest()
 
 
-def test_iyzico_checkout_and_callback_verify_signatures_amount_and_order(monkeypatch):
+@pytest.mark.parametrize("connection_failures", [0, 2])
+def test_iyzico_checkout_and_callback_verify_signatures_amount_and_order(monkeypatch, connection_failures):
     _configure(monkeypatch)
     captured = []
     token = "safe-checkout-token"
+    attempts = {}
+    monkeypatch.setattr(payments.time, "sleep", lambda delay: None)
 
     class FakeResponse:
         def __init__(self, body):
@@ -93,6 +96,9 @@ def test_iyzico_checkout_and_callback_verify_signatures_amount_and_order(monkeyp
             return self._body
 
     def fake_post(url, *, content, headers, timeout):
+        attempts[url] = attempts.get(url, 0) + 1
+        if attempts[url] <= connection_failures:
+            raise payments.httpx.ConnectError("TLS connection reset before sending")
         raw = content.decode("utf-8")
         payload = json.loads(raw)
         captured.append({"url": url, "raw": raw, "payload": payload, "headers": headers})

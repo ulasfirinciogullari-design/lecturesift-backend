@@ -10,6 +10,7 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import secrets
 import time
 from decimal import Decimal
@@ -36,6 +37,8 @@ from .billing_service import (
     record_payment_consent,
 )
 
+
+logger = logging.getLogger(__name__)
 
 PAYTR_TOKEN_URL = "https://www.paytr.com/odeme/api/get-token"
 PAYTR_CHECKOUT_BASE_URL = "https://www.paytr.com/odeme/guvenli"
@@ -343,16 +346,41 @@ def _iyzico_headers(path: str, raw_body: str) -> dict[str, str]:
 
 def _iyzico_post(path: str, payload: dict) -> dict:
     raw_body = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    operation = {
+        IYZICO_INITIALIZE_PATH: "initialize",
+        IYZICO_RETRIEVE_PATH: "retrieve",
+    }.get(path, "unknown")
     try:
-        response = httpx.post(
-            f"{_iyzico_base_url()}{path}",
-            content=raw_body.encode("utf-8"),
-            headers=_iyzico_headers(path, raw_body),
-            timeout=20.0,
-        )
+        for attempt in range(3):
+            try:
+                response = httpx.post(
+                    f"{_iyzico_base_url()}{path}",
+                    content=raw_body.encode("utf-8"),
+                    headers=_iyzico_headers(path, raw_body),
+                    timeout=httpx.Timeout(20.0, connect=5.0),
+                )
+                break
+            except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+                # These failures occur before the HTTP payment request is sent.
+                # Never replay a read/write failure or an HTTP error: the
+                # provider may already have received that request.
+                if attempt == 2:
+                    raise
+                logger.warning(
+                    "iyzico connection retry operation=%s kind=%s attempt=%s",
+                    operation, type(exc).__name__, attempt + 1,
+                )
+                time.sleep(0.25 * (2 ** attempt))
         response.raise_for_status()
         body = response.json()
     except (httpx.HTTPError, ValueError) as exc:
+        # Exception text, response bodies and request headers can contain
+        # checkout tokens or buyer details. Log only bounded diagnostic fields.
+        status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+        logger.warning(
+            "iyzico request failed operation=%s kind=%s status=%s",
+            operation, type(exc).__name__, status,
+        )
         raise PaymentProviderError("iyzico ödeme hizmetine şu anda ulaşılamıyor.") from exc
     if not isinstance(body, dict):
         raise PaymentProviderError("iyzico geçersiz bir yanıt döndürdü.")
