@@ -58,6 +58,30 @@ never printed. The generated fragment keeps
 `LECTURESIFT_ADSENSE_API_ENABLED=false` so obtaining credentials cannot activate
 the integration.
 
+Google's downloaded Desktop client JSON may contain the legacy
+`https://accounts.google.com/o/oauth2/auth` authorization address. The helper
+accepts that exact Google metadata address as well as the v2 address, while
+always opening the fixed v2 endpoint. Other authorization and token hosts or
+paths remain rejected.
+
+### Remote SSH workspace
+
+When Codex runs on a remote SSH host, the callback server is on that host,
+not on the Windows computer. Transfer the Desktop client JSON over the
+existing SSH connection into the private directory, then run the helper
+with `--no-browser --authorization-timeout-seconds 600`. Do not transfer
+browser cookies or put credentials in chat. The helper prints its exact
+loopback address and a short-lived Google consent URL.
+
+In Windows PowerShell, keep a tunnel open using the printed port in both
+places: `ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:PORT:127.0.0.1:PORT lecturesift-dev`.
+Open the consent URL in the normal Windows browser on that same computer.
+An embedded or remotely hosted browser may have a different loopback host.
+Under Google Auth platform → Audience, the authorizing Google account must
+be listed as a test user while the project is in Testing. After the helper
+reports a private credential file, close the task-owned tunnel. Do not log
+the callback URL, which contains a single-use authorization code.
+
 For an **External** OAuth consent screen left in Google's **Testing** publishing
 status, a grant that includes this AdSense scope can produce a refresh token
 that expires after seven days. Move the consent screen through the appropriate
@@ -105,6 +129,16 @@ The default cold-check budget is 10 seconds, with a five-second ceiling on
 each Google request. Successful summaries are cached for 300 seconds; failed
 checks are cached for at most 60 seconds so a provider outage cannot cause an
 admin-page request storm or hide recovery for a full success-cache interval.
+If only the Policy Center request fails or is incomplete, the verified
+account, site and alert summaries remain available, with `policy_issues=null`
+and a safe `policy_error_code`. This partial check also uses the shorter
+cache. An unread policy list is never represented as zero findings.
+
+Site approval and Policy Center enforcement are separate. A `READY` account,
+enabled Auto Ads setting or empty policy list does not establish that the
+site is approved. The selected site's `state` must be inspected separately.
+Google's Sites API has no detailed rejection-reason field; a `NEEDS_ATTENTION`
+reason such as low-value content must be read from the site's AdSense panel.
 
 ## Install and recover on the VPS
 

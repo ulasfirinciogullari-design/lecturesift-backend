@@ -138,6 +138,27 @@ test('admin growth shows read-only advertising summaries and escapes provider va
   expect(unexpected).toEqual([]);
 });
 
+test('a slow policy collection keeps the rejected site visible without implying zero findings', async ({page}) => {
+  const unexpected = await openGrowthView(page, {
+    ok:true,
+    adsense:{management_api:{
+      enabled:true, configured:true, connected:true, status:'connected',
+      checked_at:'2026-09-19T16:18:54Z', cached:false,
+      account:{state:'READY', pending_task_count:0},
+      site:{domain:'lecturesift.com', state:'NEEDS_ATTENTION', auto_ads_enabled:true},
+      alerts:{total:2, info:0, warning:2, severe:0},
+      policy_issues:null, policy_error_code:'provider_unavailable', error_code:null,
+    }},
+    google_ads:{management_api:{status:'not_configured', connected:false}},
+  });
+  const growth = page.locator('#adminGrowthStatus');
+  await expect(growth).toContainText('AdSense bağlantısıBağlı');
+  await expect(growth).toContainText('AdSense site durumuİşlem gerekiyor');
+  await expect(growth).toContainText('Politika bilgisi alınamadı.');
+  await expect(growth).not.toContainText('0 bulgu');
+  expect(unexpected).toEqual([]);
+});
+
 test('admin growth keeps provider failures explicit without presenting credit', async ({page}) => {
   const unexpected = await openGrowthView(page, {
     ok:true,

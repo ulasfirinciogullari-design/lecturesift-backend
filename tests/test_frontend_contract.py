@@ -485,7 +485,7 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         expected_theme_version = "17"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
         assert "/theme.js?v=11" in content, page.name
-        assert "i18n.js?v=46" in content, page.name
+        assert "i18n.js?v=47" in content, page.name
         assert "page-i18n.js?v=10" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
@@ -919,7 +919,7 @@ def test_admin_growth_reads_and_escapes_advertising_management_status():
     catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
 
     assert 'id="adminGrowthStatus" class="admin-growth-grid" aria-live="polite"' in admin
-    assert 'src="/admin.js?v=23"' in admin and 'src="/i18n.js?v=46"' in admin
+    assert 'src="/admin.js?v=24"' in admin and 'src="/i18n.js?v=47"' in admin
     assert 'adminRequest("/billing/admin/advertising-readiness").catch(() => null)' in admin_script
     assert "advertisingReadiness:optional[10]" in admin_script
     assert "8.000" not in admin_script and "8000" not in admin_script
@@ -1060,7 +1060,7 @@ def test_checkout_names_contact_inbox_and_mobile_plan_navigation_are_wired():
     assert "/billing/admin/contact-messages" in admin_js
     assert "adminContactDialog" in admin_html and "admin-contact-reply" in admin_js
     assert "/billing/admin/contact-messages/${encodeURIComponent(messageId)}/reply" in admin_js
-    assert 'href="/rollout.css?v=10"' in admin_html and 'src="/admin.js?v=23"' in admin_html
+    assert 'href="/rollout.css?v=10"' in admin_html and 'src="/admin.js?v=24"' in admin_html
     assert admin_js.count('class="admin-table admin-record-table"') >= 10
     assert all(label in admin_js for label in ('data-label="İş"', 'data-label="Bakiye"', 'data-label="Açıklama"'))
     assert "supportReplyForm" in support_html and "supportThread" in support_html
@@ -1350,7 +1350,6 @@ def test_public_pages_have_share_metadata_canonical_urls_and_structured_data():
     assert 'url: `${PRODUCTION_ORIGIN}/`' in seo
     assert '"/distance-sales"' in seo
     assert (FRONTEND / "og-image.png").stat().st_size > 100_000
-    assert sitemap.count("<lastmod>2026-09-13</lastmod>") == 13 * 13
 
 
 def test_netlify_build_prerenders_every_public_language_with_static_seo():
@@ -1358,7 +1357,6 @@ def test_netlify_build_prerenders_every_public_language_with_static_seo():
     builder = (FRONTEND.parent / "scripts" / "build_localized_site.mjs").read_text(encoding="utf-8")
     assert 'command = "node scripts/build_localized_site.mjs"' in config
     assert 'publish = "dist"' in config
-    assert "Built ${LANGUAGES.length * PUBLIC_PATHS.length} indexable localized pages" in builder
     assert 'rel="canonical"' in builder
     assert 'hreflang="x-default"' in builder
     assert 'data-lecturesift-seo' in builder
@@ -1686,7 +1684,9 @@ def test_every_supported_language_has_a_stable_indexable_url():
         assert f"/{language}/*" in redirects
         assert f"<loc>https://lecturesift.com/{language}/</loc>" in sitemap
         assert f'hreflang="{language}"' in sitemap
-    assert sitemap.count("<url>") == 13 * 13
+    assert "<loc>https://lecturesift.com/</loc>" in sitemap
+    # Published editions differ by page; test_seo_integrity checks the complete
+    # URL and alternate-language sets, including the bilingual study resources.
 
     app = (FRONTEND / "app.js").read_text(encoding="utf-8")
     auth = (FRONTEND / "auth.js").read_text(encoding="utf-8")

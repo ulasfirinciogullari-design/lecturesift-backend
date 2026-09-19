@@ -1,0 +1,21 @@
+LectureSift · Örnek ders paketi: ortalama ve medyan
+https://lecturesift.com/study-pack-example
+
+K1 · Veriyi tanı. Beş öğrencinin okula gidiş süresinin 18, 20, 20, 22 ve 70 dakika olduğunu düşünelim. Bunlar bu örnek için üretilmiş sayılardır. Birim dakikadır; gözlem sayısı beştir. Bu küçük gruptan bütün öğrenciler hakkında sonuç çıkaramayız.
+
+K2 · Aritmetik ortalama. Değerleri toplar, gözlem sayısına böleriz: 18 + 20 + 20 + 22 + 70 = 150; 150 ÷ 5 = 30 dakika. Ortalamanın 30 olması, her öğrencinin 30 dakika yolculuk yaptığı anlamına gelmez. Bu veri grubunda 30 dakikalık bir gözlem bile yoktur.
+
+K3 · Medyan. Medyanı bulmak için sayıları küçükten büyüğe sıralarız. Beş değer zaten sıralıdır ve ortadaki üçüncü değer 20'dir. Medyan 20 dakikadır. Gözlem sayısı çift olsaydı sıralamadaki iki orta değerin aritmetik ortalamasını alırdık.
+
+K4 · Değişimi yorumla. Son öğrencinin süresi 70 yerine 120 olsaydı toplam 200, ortalama 40 dakika olurdu. Ortadaki değer değişmediği için medyan yine 20 kalırdı. Büyük bir değerin ortalamayı nasıl etkileyebildiğini görüyoruz. Ancak sırf büyük görünüyor diye bir gözlemi silmeyiz; önce ölçüm hatası olup olmadığını ve araştırma sorusunu inceleriz.
+ÇALIŞMA SAYFASI
+1. Ortalama ve medyanı hesapla.
+2. Ortalama neden herkesin süresi değildir?
+3. 70 yerine 120 gelirse ne değişir?
+4. 10, 12, 14 ve 60 değerlerinin medyanını bul.
+
+KONTROL KAYDI
+Benim cevabım:
+Kaynak konumu:
+Düzeltilmiş açıklama:
+Tekrar tarihi:

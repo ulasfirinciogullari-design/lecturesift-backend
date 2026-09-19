@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import re
 import shutil
 import subprocess
@@ -18,6 +19,13 @@ ORIGIN = "https://lecturesift.com"
 LANGUAGES = ("tr", "en", "de", "fr", "es", "it", "pt", "ru", "ar", "zh", "ja", "ko", "hi")
 SITEMAP_NAMESPACE = "http://www.sitemaps.org/schemas/sitemap/0.9"
 XHTML_NAMESPACE = "http://www.w3.org/1999/xhtml"
+STUDY_RESOURCES = json.loads((FRONTEND / "study-resources.json").read_text(encoding="utf-8"))
+STUDY_SLUGS = {page["slug"] for page in STUDY_RESOURCES["pages"]}
+
+
+def _page_languages(location: str) -> tuple[str, ...]:
+    slug = urlsplit(location).path.rstrip("/").split("/")[-1]
+    return tuple(STUDY_RESOURCES["languages"]) if slug in STUDY_SLUGS else LANGUAGES
 
 
 class _SeoHeadParser(HTMLParser):
@@ -116,10 +124,10 @@ def test_checked_in_sitemap_matches_its_generator_exactly() -> None:
 def test_sitemap_and_prerendered_pages_are_a_closed_canonical_set(localized_output: Path) -> None:
     records = _sitemap_records()
     assert records
-    expected_hreflang = set(LANGUAGES) | {"x-default"}
     physical_canonicals: list[str] = []
 
     for location, sitemap_alternates in records.items():
+        expected_hreflang = set(_page_languages(location)) | {"x-default"}
         parsed_location = urlsplit(location)
         assert parsed_location.scheme == "https"
         assert parsed_location.netloc == "lecturesift.com"
@@ -156,7 +164,7 @@ def test_every_hreflang_cluster_is_complete_and_reciprocal() -> None:
         source_path = urlsplit(source).path
         first_segment = source_path.strip("/").split("/", 1)[0]
         source_language = first_segment if first_segment in LANGUAGES[1:] else "tr"
-        for language in LANGUAGES:
+        for language in _page_languages(source):
             target = alternates[language]
             assert target in records, f"{source} points to absent hreflang target {target}"
             assert records[target][source_language] == source, (

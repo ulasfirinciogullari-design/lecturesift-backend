@@ -30,6 +30,9 @@
     return language === "tr" ? normalized : `/${language}${normalized === "/" ? "/" : normalized}`;
   };
   const rows = {
+    "guides.open":["Çalışma rehberleri","Study guides","Lernleitfäden (Englisch)","Guides d’étude (anglais)","Guías de estudio (inglés)","Guide di studio (inglese)","Guias de estudo (inglês)","Учебные руководства (английский)","أدلة الدراسة (بالإنجليزية)","学习指南（英语）","学習ガイド（英語）","학습 가이드 (영어)","अध्ययन गाइड (अंग्रेज़ी)"],
+    "guides.homeTitle":["Bir dersin nasıl çalışma paketine dönüştüğünü gör.","See a lesson become a study pack.","Entdecke, wie aus einer Lektion ein Lernpaket wird.","Découvrez comment un cours devient un dossier d’étude.","Descubre cómo una lección se convierte en material de estudio.","Scopri come una lezione diventa un pacchetto di studio.","Veja como uma aula se transforma em material de estudo.","Посмотрите, как урок превращается в учебный набор.","شاهد كيف يتحول درس إلى حزمة دراسية.","看看一节课如何变成学习资料包。","授業が学習パックになる流れを見てみよう。","수업이 학습 자료가 되는 과정을 살펴보세요.","देखें कि एक पाठ अध्ययन पैकेज कैसे बनता है।"],
+    "guides.homeIntro":["Kaynak metni, özeti ve çözümlü soruları birlikte incele. Not kontrolü ve tekrar rehberleriyle kendi çalışma yöntemini kur. Hesap gerekmez.","Explore a source text, its summary and explained questions. Build your study routine with checking and review guides. No account required.","Entdecke Quelltext, Zusammenfassung und erklärte Aufgaben. Mit Leitfäden zur Kontrolle und Wiederholung – ohne Konto, auf Englisch.","Explorez un texte source, son résumé et des questions expliquées. Guides de vérification et de révision sans compte, en anglais.","Explora un texto, su resumen y preguntas explicadas. Guías para comprobar y repasar sin cuenta, en inglés.","Esplora un testo, il riepilogo e le domande spiegate. Guide per verificare e ripassare senza account, in inglese.","Explore um texto, seu resumo e questões explicadas. Guias para conferir e revisar sem conta, em inglês.","Изучите исходный текст, конспект и задания с решениями. Руководства по проверке и повторению без регистрации, на английском.","استكشف نصًا وملخصه وأسئلة مع شرح الإجابات. أدلة للمراجعة والتحقق دون حساب، باللغة الإنجليزية.","阅读原文、摘要和带解析的题目。借助核对与复习指南建立学习方法，无需账号，内容为英语。","原文・要約・解説付きの問題を確認。ノートの点検と復習ガイドを、登録なしで読めます（英語）。","원문, 요약, 해설이 있는 문제를 살펴보세요. 가입 없이 노트 확인과 복습 가이드를 읽을 수 있습니다 (영어).","मूल पाठ, सारांश और हल सहित प्रश्न देखें। बिना खाते के जाँच और दोहराई के गाइड पढ़ें (अंग्रेज़ी)।"],
     "legal.refundUpdated":["Son güncelleme: 13 Eylül 2026","Last updated: 13 September 2026","Letzte Aktualisierung: 13. September 2026","Dernière mise à jour : 13 septembre 2026","Última actualización: 13 de septiembre de 2026","Ultimo aggiornamento: 13 settembre 2026","Última atualização: 13 de setembro de 2026","Последнее обновление: 13 сентября 2026 г.","آخر تحديث: 13 سبتمبر 2026","最后更新：2026年9月13日","最終更新日：2026年9月13日","최종 업데이트: 2026년 9월 13일","अंतिम अपडेट: 13 सितंबर 2026"],
     "legal.cookiesUpdated":["Son güncelleme: 13 Eylül 2026 · Sürüm 2.4","Last updated: 13 September 2026 · Version 2.4","Letzte Aktualisierung: 13. September 2026 · Version 2.4","Dernière mise à jour : 13 septembre 2026 · Version 2.4","Última actualización: 13 de septiembre de 2026 · Versión 2.4","Ultimo aggiornamento: 13 settembre 2026 · Versione 2.4","Última atualização: 13 de setembro de 2026 · Versão 2.4","Последнее обновление: 13 сентября 2026 г. · Версия 2.4","آخر تحديث: 13 سبتمبر 2026 · الإصدار 2.4","最后更新：2026年9月13日 · 版本2.4","最終更新日：2026年9月13日 · バージョン2.4","최종 업데이트: 2026년 9월 13일 · 버전 2.4","अंतिम अपडेट: 13 सितंबर 2026 · संस्करण 2.4"],
     "legal.fixedTermTitle":["Sabit dönemli planlar","Fixed-term plans","Pläne mit fester Laufzeit","Forfaits à durée déterminée","Planes de duración fija","Piani a durata fissa","Planos com prazo fixo","Планы с фиксированным сроком","خطط بمدة ثابتة","固定期限套餐","固定期間プラン","고정 기간 요금제","निश्चित-अवधि प्लान"],
@@ -889,6 +892,11 @@
   }
 
   document.querySelectorAll('a[href]').forEach(anchor => {
+    if (anchor.hasAttribute("data-study-guide")) {
+      anchor.setAttribute("href", selected === "tr" ? "/study-guides" : "/en/study-guides");
+      anchor.setAttribute("hreflang", selected === "tr" ? "tr" : "en");
+      return;
+    }
     const raw = anchor.getAttribute("href");
     if (!raw || raw.startsWith("#") || /^(?:mailto:|tel:|javascript:)/i.test(raw)) return;
     let url;

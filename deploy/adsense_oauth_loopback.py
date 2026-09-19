@@ -37,6 +37,9 @@ import webbrowser
 
 
 AUTHORIZATION_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
+DESKTOP_CONFIG_AUTHORIZATION_ENDPOINTS = frozenset(
+    {AUTHORIZATION_ENDPOINT, "https://accounts.google.com/o/oauth2/auth"}
+)
 TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 ADSENSE_READONLY_SCOPE = "https://www.googleapis.com/auth/adsense.readonly"
 DEFAULT_ACCOUNT_NAME = "accounts/pub-7608481350058806"
@@ -184,7 +187,10 @@ def load_desktop_client(path: Path) -> tuple[str, str]:
         or any(ord(character) < 33 for character in client_secret)
     ):
         raise OAuthSetupError("OAuth desktop client secret is invalid")
-    if installed.get("auth_uri", AUTHORIZATION_ENDPOINT) != AUTHORIZATION_ENDPOINT:
+    # Google still exports the legacy URL in Desktop client JSON. Accept that
+    # exact metadata value; authorization always uses our fixed v2 endpoint.
+    auth_uri = installed.get("auth_uri", AUTHORIZATION_ENDPOINT)
+    if not isinstance(auth_uri, str) or auth_uri not in DESKTOP_CONFIG_AUTHORIZATION_ENDPOINTS:
         raise OAuthSetupError("OAuth authorization endpoint is not the fixed Google endpoint")
     if installed.get("token_uri", TOKEN_ENDPOINT) != TOKEN_ENDPOINT:
         raise OAuthSetupError("OAuth token endpoint is not the fixed Google endpoint")
@@ -275,6 +281,9 @@ def exchange_code(
         ADSENSE_READONLY_SCOPE
     ]:
         raise OAuthSetupError("Google returned a grant outside the requested read-only scope")
+    token_type = document.get("token_type")
+    if not isinstance(token_type, str) or token_type.casefold() != "bearer":
+        raise OAuthSetupError("Google did not return an explicit Bearer token type")
     refresh_token = document.get("refresh_token")
     if (
         not isinstance(refresh_token, str)
@@ -396,6 +405,7 @@ def main() -> int:
     parser.add_argument("--account-name", default=DEFAULT_ACCOUNT_NAME)
     parser.add_argument("--site-domain", default="lecturesift.com")
     parser.add_argument("--replace", action="store_true")
+    parser.add_argument("--no-browser", action="store_true", help="Print the consent URL for use through an SSH loopback tunnel")
     parser.add_argument("--authorization-timeout-seconds", type=int, default=300)
     args = parser.parse_args()
     if not 60 <= args.authorization_timeout_seconds <= 600:
@@ -413,7 +423,8 @@ def main() -> int:
             server.expected_state = state_value
             redirect_uri = f"http://127.0.0.1:{int(server.server_address[1])}/"
             url = authorization_url(client_id, redirect_uri, state_value, challenge)
-            if webbrowser.open(url, new=1, autoraise=True):
+            print(f"Local callback address: {redirect_uri}")
+            if not args.no_browser and webbrowser.open(url, new=1, autoraise=True):
                 print("Complete the AdSense read-only consent in the opened browser.")
             else:
                 print("Open this short-lived Google authorization URL in your local browser:")

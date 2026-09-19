@@ -383,7 +383,16 @@ def _live_summary(settings: _Settings) -> dict[str, Any]:
             )
             sites = _objects(sites_future.result(), "sites")
             alerts = _objects(alerts_future.result(), "alerts")
-            policy_issues = _objects(policy_future.result(), "policyIssues")
+            # Site approval is independent of the Policy Center collection.
+            # Its live endpoint can be much slower than accounts/sites. Keep
+            # verified status visible, but never turn an unread policy list
+            # into an empty (apparently healthy) list.
+            policy_error = None
+            try:
+                policy_issues = _policy_summary(_objects(policy_future.result(), "policyIssues"))
+            except _AdSenseError as exc:
+                policy_issues = None
+                policy_error = exc.code
 
     return {
         "enabled": True,
@@ -395,7 +404,8 @@ def _live_summary(settings: _Settings) -> dict[str, Any]:
         "account": account,
         "site": _site_summary(sites, settings),
         "alerts": _alert_summary(alerts),
-        "policy_issues": _policy_summary(policy_issues),
+        "policy_issues": policy_issues,
+        **({"policy_error_code": policy_error} if policy_error else {}),
         "error_code": None,
     }
 
@@ -451,7 +461,8 @@ def adsense_management_readiness() -> dict[str, Any]:
 
     with _CACHE_CONDITION:
         try:
-            cache_seconds = settings.cache_seconds if result["connected"] else min(
+            complete = result["connected"] and not result.get("policy_error_code")
+            cache_seconds = settings.cache_seconds if complete else min(
                 60, settings.cache_seconds
             )
             _CACHE = (fingerprint, time.monotonic() + cache_seconds, deepcopy(result))

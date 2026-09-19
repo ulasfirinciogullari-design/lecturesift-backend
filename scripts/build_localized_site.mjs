@@ -21,6 +21,10 @@ const GUIDE_PATHS = new Set([
   "/features.html", "/document-summary.html", "/lecture-video-summary.html", "/quiz-flashcards.html",
 ]);
 const PUBLIC_PATH_SET = new Set(PUBLIC_PATHS);
+const STUDY_RESOURCES = JSON.parse(await readFile(path.join(SOURCE, "study-resources.json"), "utf8"));
+const STUDY_PAGES = new Map(STUDY_RESOURCES.pages.map(page => [`/${page.slug}.html`, page]));
+const pageLanguages = publicPath => STUDY_PAGES.has(publicPath) ? STUDY_RESOURCES.languages : LANGUAGES;
+for (const publicPath of STUDY_PAGES.keys()) PUBLIC_PATH_SET.add(publicPath);
 
 const pageCopySource = await readFile(path.join(SOURCE, "page-i18n.js"), "utf8");
 const marker = "window.LECTURESIFT_PAGE_COPY=";
@@ -120,6 +124,7 @@ function translateDocument(html, language) {
     return `${name}="${escapeAttribute(translate(value, language))}"`;
   });
   html = html.replace(/<a\b[^>]*>/gi, tag => tag.replace(/\bhref="(\/[^"]*)"/i, (match, href) => {
+    if (/\bdata-study-guide\b/.test(tag)) return 'href="/en/study-guides"';
     const boundary = href.search(/[?#]/);
     const pathname = boundary >= 0 ? href.slice(0, boundary) : href;
     const suffix = boundary >= 0 ? href.slice(boundary) : "";
@@ -194,10 +199,10 @@ function structuredData(html, language, publicPath, canonical, title, descriptio
       ],
     });
   }
-  if (GUIDE_PATHS.has(publicPath)) {
+  if (GUIDE_PATHS.has(publicPath) || STUDY_PAGES.get(publicPath)?.kind === "article") {
     graph.push({
       "@type": "Article", "@id": `${canonical}#article`, headline: title, description, image,
-      inLanguage: language, dateModified: "2026-08-29", mainEntityOfPage: {"@id": webpageId},
+      inLanguage: language, dateModified: STUDY_PAGES.has(publicPath) ? STUDY_RESOURCES.updated : "2026-08-29", mainEntityOfPage: {"@id": webpageId},
       author: {"@id": organizationId}, publisher: {"@id": organizationId},
     });
   }
@@ -207,7 +212,7 @@ function structuredData(html, language, publicPath, canonical, title, descriptio
       acceptedAnswer: {"@type": "Answer", text: plainText(match[2])},
     }))
     .filter(item => item.name && item.acceptedAnswer.text);
-  if (questions.length) {
+  if (questions.length && !STUDY_PAGES.has(publicPath)) {
     graph.push({"@type": "FAQPage", "@id": `${canonical}#faq`, mainEntity: questions});
   }
   return JSON.stringify({"@context": "https://schema.org", "@graph": graph}).replaceAll("</", "<\\/");
@@ -219,7 +224,7 @@ function staticSeo(html, language, publicPath) {
   const description = html.match(/<meta\s+name="description"\s+content="([^"]+)"\s*\/?\s*>/i)?.[1]?.trim()
     || html.match(/<p\b[^>]*class="[^"]*\blead\b[^"]*"[^>]*>([^<]+)<\/p>/i)?.[1]?.trim();
   if (!description) throw new Error(`${publicPath} has no meta description or introductory lead`);
-  const alternates = LANGUAGES.map(alternate =>
+  const alternates = pageLanguages(publicPath).map(alternate =>
     `  <link rel="alternate" hreflang="${alternate}" href="${ORIGIN}${localizedPath(alternate, publicPath)}">`
   ).join("\n");
   const image = `${ORIGIN}/og-image.png`;
@@ -233,7 +238,7 @@ ${staticDescription}
   <link rel="canonical" href="${canonical}">
 ${alternates}
   <link rel="alternate" hreflang="x-default" href="${ORIGIN}${localizedPath("tr", publicPath)}">
-  <meta property="og:type" content="${ARTICLE_PATHS.has(publicPath) ? "article" : "website"}">
+  <meta property="og:type" content="${ARTICLE_PATHS.has(publicPath) || STUDY_PAGES.get(publicPath)?.kind === "article" ? "article" : "website"}">
   <meta property="og:site_name" content="LectureSift">
   <meta property="og:title" content="${escapeAttribute(title)}">
   <meta property="og:description" content="${escapeAttribute(description)}">
@@ -267,7 +272,7 @@ function validateLocalizedPage(html, language, publicPath) {
     if (!pattern.test(html)) throw new Error(`${localizedPath(language, publicPath)} has no ${label}`);
   }
   const alternateCount = (html.match(/<link\s+rel="alternate"\s+hreflang=/gi) || []).length;
-  if (alternateCount !== LANGUAGES.length + 1) {
+  if (alternateCount !== pageLanguages(publicPath).length + 1) {
     throw new Error(`${localizedPath(language, publicPath)} has ${alternateCount} hreflang links`);
   }
   const schemaSource = html.match(/<script\s+type="application\/ld\+json"\s+data-lecturesift-seo>([\s\S]*?)<\/script>/i)?.[1];
@@ -279,6 +284,9 @@ function validateLocalizedPage(html, language, publicPath) {
 
 await rm(OUTPUT, {recursive: true, force: true});
 await cp(SOURCE, OUTPUT, {recursive: true});
+// Editorial translations are published only in the languages actually written.
+// Do not index copies of Turkish content under unrelated language paths.
+await rm(path.join(OUTPUT, "study-resources.json"));
 
 for (const language of LANGUAGES) {
   for (const publicPath of PUBLIC_PATHS) {
@@ -298,4 +306,32 @@ for (const language of LANGUAGES) {
   }
 }
 
-console.log(`Built ${LANGUAGES.length * PUBLIC_PATHS.length} indexable localized pages in ${OUTPUT}`);
+function studyDocument(page, language) {
+  const copy = page[language];
+  if (!copy?.title || !copy?.description || !copy?.body) throw new Error(`Missing ${language} study resource: ${page.slug}`);
+  const tr = language === "tr";
+  const prefix = tr ? "" : "/en";
+  const alternate = tr ? `/en/${page.slug}` : `/${page.slug}`;
+  const toc = [...copy.body.matchAll(/<section id="([^"]+)"><h2>([^<]+)<\/h2>/g)]
+    .map(([, id, title]) => `<li><a href="#${escapeAttribute(id)}">${title}</a></li>`).join("");
+  return `<!doctype html><html lang="${language}" dir="ltr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escapeAttribute(copy.title)} | LectureSift</title><meta name="description" content="${escapeAttribute(copy.description)}">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/theme.css?v=17"><link rel="stylesheet" href="/study-guides.css?v=1"><script src="/theme.js?v=11"></script></head>
+<body class="guide-page"><a class="guide-skip" href="#content">${tr ? "İçeriğe geç" : "Skip to content"}</a>
+<header class="guide-header"><a class="guide-brand" href="${prefix}/"><img src="/favicon.svg" alt="" width="32" height="32">LectureSift</a><nav aria-label="${tr ? "Ana menü" : "Main navigation"}"><a href="${prefix}/study-guides">${tr ? "Çalışma rehberleri" : "Study guides"}</a><a href="${prefix}/workspace.html">${tr ? "Çalışma alanı" : "Workspace"}</a><a class="guide-language" href="${alternate}" hreflang="${tr ? "en" : "tr"}" lang="${tr ? "en" : "tr"}">${tr ? "English" : "Türkçe"}</a></nav></header>
+<main class="guide-layout" id="content"><article class="guide-article"><p class="guide-eyebrow">${tr ? "Oku · Dene · Kontrol et" : "Read · Practise · Check"}</p><h1>${copy.title}</h1><p class="guide-lead">${copy.description}</p><p class="guide-byline"><a href="${prefix}/about">LectureSift</a> · <time datetime="${STUDY_RESOURCES.updated}">${tr ? "19 Eylül 2026" : "19 September 2026"}</time> · ${tr ? "Herkese açık kaynak" : "Open study resource"}</p>${copy.body}</article><aside class="guide-toc" aria-label="${tr ? "İçindekiler" : "Contents"}"><details><summary>${tr ? "Bu sayfada" : "On this page"}</summary><ol>${toc}</ol><a href="${prefix}/study-guides">${tr ? "Tüm rehberler →" : "All guides →"}</a></details></aside></main>
+<footer class="guide-footer"><nav aria-label="${tr ? "Alt menü" : "Footer navigation"}"><a href="${prefix}/study-guides">${tr ? "Rehberler" : "Guides"}</a><a href="${prefix}/about">${tr ? "Hakkımızda" : "About"}</a><a href="${prefix}/contact">${tr ? "Hata bildir / İletişim" : "Report an error / Contact"}</a><a href="${prefix}/privacy">${tr ? "Gizlilik" : "Privacy"}</a><a href="${prefix}/terms">${tr ? "Kullanım koşulları" : "Terms"}</a></nav><p>${tr ? "LectureSift için yapay zekâ yardımıyla hazırlanmış eğitim kaynakları. Örnek veriler öğretim amaçlıdır. İçerik yöntemi ve düzeltme bilgileri" : "Educational resources prepared for LectureSift with AI assistance. Example data are illustrative. Read about preparation and corrections"}: <a href="${prefix}/study-guides#${tr ? "icerik" : "editorial"}">${tr ? "rehberler hakkında" : "about these guides"}</a>.</p></footer></body></html>`;
+}
+
+for (const [publicPath, page] of STUDY_PAGES) {
+  for (const language of STUDY_RESOURCES.languages) {
+    let html = studyDocument(page, language);
+    html = staticSeo(html, language, publicPath);
+    validateLocalizedPage(html, language, publicPath);
+    const target = path.join(OUTPUT, language === "tr" ? "" : language, `${page.slug}.html`);
+    await mkdir(path.dirname(target), {recursive: true});
+    await writeFile(target, html, "utf8");
+  }
+}
+console.log(`Built ${LANGUAGES.length * PUBLIC_PATHS.length + STUDY_PAGES.size * STUDY_RESOURCES.languages.length} indexable pages in ${OUTPUT}`);

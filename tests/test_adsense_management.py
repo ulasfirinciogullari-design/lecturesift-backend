@@ -357,10 +357,32 @@ def test_paginated_provider_summary_is_not_misreported_as_complete():
 
     result = adsense_management.adsense_management_readiness()
 
-    assert result["connected"] is False
+    assert result["connected"] is True
+    assert result["site"]["state"] == "GETTING_READY"
     assert result["policy_issues"] is None
-    assert result["error_code"] == "invalid_response"
+    assert result["policy_error_code"] == "invalid_response"
+    assert result["error_code"] is None
     assert "private-next-page-token" not in json.dumps(result)
+
+
+@pytest.mark.parametrize("status", [403, 429, 503])
+def test_policy_collection_failure_preserves_verified_site_status_and_retries_soon(monkeypatch, status):
+    clock = {"now": 100.0}
+    monkeypatch.setattr(adsense_management.time, "monotonic", lambda: clock["now"])
+    FakeGoogleClient.api_statuses[f"https://adsense.googleapis.com/v2/{ACCOUNT}/policyIssues"] = status
+    first = adsense_management.adsense_management_readiness()
+    assert first["connected"] is True
+    assert first["account"]["state"] == "READY"
+    assert first["site"]["state"] == "GETTING_READY"
+    assert first["alerts"]["total"] == 3
+    assert first["policy_issues"] is None
+    assert first["policy_error_code"] in {"permission_denied", "rate_limited", "provider_unavailable"}
+    clock["now"] = 161.0
+    FakeGoogleClient.api_statuses = {}
+    recovered = adsense_management.adsense_management_readiness()
+    assert recovered["cached"] is False
+    assert recovered["policy_issues"]["total"] == 3
+    assert "policy_error_code" not in recovered
 
 
 def test_failed_checks_use_short_cache_and_deadline_is_enforced(monkeypatch):
@@ -380,6 +402,23 @@ def test_failed_checks_use_short_cache_and_deadline_is_enforced(monkeypatch):
     assert len(FakeGoogleClient.created) == 2
     with pytest.raises(adsense_management._AdSenseError, match="provider_unavailable"):
         adsense_management._request_timeout(clock["now"] - 1)
+
+
+def test_policy_timeout_does_not_hide_account_and_site(monkeypatch):
+    original = FakeGoogleClient.get
+
+    def timed_get(self, url, **kwargs):
+        if url.endswith("/policyIssues"):
+            raise httpx.ReadTimeout("synthetic private provider details")
+        return original(self, url, **kwargs)
+
+    monkeypatch.setattr(FakeGoogleClient, "get", timed_get)
+    result = adsense_management.adsense_management_readiness()
+    assert result["connected"] is True
+    assert result["site"]["state"] == "GETTING_READY"
+    assert result["policy_issues"] is None
+    assert result["policy_error_code"] == "provider_unavailable"
+    assert "synthetic private" not in json.dumps(result)
 
 
 def test_concurrent_cold_checks_share_one_provider_call(monkeypatch):

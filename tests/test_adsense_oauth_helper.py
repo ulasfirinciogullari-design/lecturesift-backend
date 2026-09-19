@@ -45,7 +45,8 @@ def test_authorization_url_is_fixed_read_only_state_and_pkce():
     assert "https://www.googleapis.com/auth/adsense" not in query["scope"]
 
 
-def test_desktop_client_and_output_are_private_and_outside_repository(tmp_path: Path):
+@pytest.mark.parametrize("auth_uri", sorted(oauth.DESKTOP_CONFIG_AUTHORIZATION_ENDPOINTS))
+def test_desktop_client_and_output_are_private_and_outside_repository(tmp_path: Path, auth_uri):
     tmp_path.chmod(0o700)
     client = tmp_path / "desktop-client.json"
     client.write_text(
@@ -54,7 +55,7 @@ def test_desktop_client_and_output_are_private_and_outside_repository(tmp_path: 
                 "installed": {
                     "client_id": "123-example.apps.googleusercontent.com",
                     "client_secret": "synthetic-secret",
-                    "auth_uri": oauth.AUTHORIZATION_ENDPOINT,
+                    "auth_uri": auth_uri,
                     "token_uri": oauth.TOKEN_ENDPOINT,
                 }
             }
@@ -72,6 +73,11 @@ def test_desktop_client_and_output_are_private_and_outside_repository(tmp_path: 
     with pytest.raises(oauth.OAuthSetupError, match="fixed Google endpoint"):
         oauth.load_desktop_client(client)
     untrusted["installed"]["token_uri"] = oauth.TOKEN_ENDPOINT
+    untrusted["installed"]["auth_uri"] = "https://accounts.google.com.example.test/o/oauth2/auth"
+    client.write_text(json.dumps(untrusted), encoding="utf-8")
+    with pytest.raises(oauth.OAuthSetupError, match="fixed Google endpoint"):
+        oauth.load_desktop_client(client)
+    untrusted["installed"]["auth_uri"] = auth_uri
     client.write_text(json.dumps(untrusted), encoding="utf-8")
 
     output = tmp_path / "adsense-api.env"
@@ -93,7 +99,8 @@ def test_desktop_client_and_output_are_private_and_outside_repository(tmp_path: 
         oauth.validate_private_output(output, replace=False)
 
 
-def test_token_exchange_uses_fixed_endpoint_and_never_prints_token(monkeypatch, capsys):
+@pytest.mark.parametrize("token_type", ["Bearer", "bearer", None, "MAC"])
+def test_token_exchange_uses_fixed_endpoint_and_never_prints_token(monkeypatch, capsys, token_type):
     captured = {}
 
     class Response:
@@ -110,7 +117,7 @@ def test_token_exchange_uses_fixed_endpoint_and_never_prints_token(monkeypatch, 
                     "access_token": "synthetic-access-token",
                     "refresh_token": "synthetic-refresh-token",
                     "scope": oauth.ADSENSE_READONLY_SCOPE,
-                    "token_type": "Bearer",
+                    "token_type": token_type,
                 }
             ).encode()
 
@@ -123,7 +130,7 @@ def test_token_exchange_uses_fixed_endpoint_and_never_prints_token(monkeypatch, 
             return Response()
 
     monkeypatch.setattr(oauth, "build_opener", lambda *handlers: Opener())
-    token = oauth.exchange_code(
+    arguments = dict(
         client_id="123-example.apps.googleusercontent.com",
         client_secret="synthetic-secret",
         code="synthetic-code",
@@ -131,7 +138,11 @@ def test_token_exchange_uses_fixed_endpoint_and_never_prints_token(monkeypatch, 
         redirect_uri="http://127.0.0.1:49152/",
         timeout_seconds=7,
     )
-    assert token == "synthetic-refresh-token"
+    if token_type in {"Bearer", "bearer"}:
+        assert oauth.exchange_code(**arguments) == "synthetic-refresh-token"
+    else:
+        with pytest.raises(oauth.OAuthSetupError, match="explicit Bearer"):
+            oauth.exchange_code(**arguments)
     assert captured == {
         "url": "https://oauth2.googleapis.com/token",
         "method": "POST",
