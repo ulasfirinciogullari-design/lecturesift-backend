@@ -19,6 +19,11 @@ const source = fs.readFileSync(process.argv[3], 'utf8');
 async function run(pathname) {
   let consent = {analytics: scenario !== 'ads_only', advertising: scenario !== 'analytics_only'};
   if (scenario === 'denied') consent = {analytics: false, advertising: false};
+  const pending = /^pending_(cold|warm)_(analytics|advertising|both)$/.exec(scenario);
+  let releaseConfig;
+  const configReady = pending?.[1] === 'cold'
+    ? new Promise(resolve => { releaseConfig = resolve; })
+    : Promise.resolve();
   const scripts = [], requests = [], listeners = new Map();
   const context = {
     location: {pathname, origin: 'https://lecturesift.com', search: '?token=private-value', hash: '#private-fragment'},
@@ -33,6 +38,7 @@ async function run(pathname) {
     fetch: async url => {
       requests.push(url);
       if (scenario === 'unavailable') throw new Error('synthetic unavailable config');
+      await configReady;
       return {ok: true, json: async () => ({
         enabled: true, measurement_id: 'G-SYNTHETIC',
         google_ads: {enabled: scenario !== 'ads_disabled', id: 'AW-123456789', signup_label: 'signup-test', purchase_label: 'purchase-test'},
@@ -41,9 +47,18 @@ async function run(pathname) {
   };
   context.window = context;
   vm.runInNewContext(source, context);
-  await context.LectureSiftAnalytics.refresh();
-  const event = await context.LectureSiftAnalytics.track('test_event', {value: 1});
-  const conversion = await context.LectureSiftAnalytics.trackConversion('purchase', {transaction_id: 'synthetic-order', value: 59.90, currency: 'TRY'});
+  if (!pending || pending[1] === 'warm') await context.LectureSiftAnalytics.refresh();
+  const eventPromise = context.LectureSiftAnalytics.track('test_event', {value: 1});
+  const conversionPromise = context.LectureSiftAnalytics.trackConversion('purchase', {transaction_id: 'synthetic-order', value: 59.90, currency: 'TRY'});
+  if (pending) {
+    consent = {
+      analytics: pending[2] === 'advertising',
+      advertising: pending[2] === 'analytics',
+    };
+    listeners.get('lecturesift:consent')();
+    releaseConfig?.();
+  }
+  const [event, conversion] = await Promise.all([eventPromise, conversionPromise]);
   await context.LectureSiftAnalytics.refresh();
   const beforeRevoke = context.dataLayer?.length || 0;
   if (scenario === 'revoked') {
@@ -141,3 +156,21 @@ def test_revoking_consent_prevents_subsequent_events():
     assert not any(call[0] in {"event", "config"} for call in later)
     assert later[-1][2]["ad_storage"] == "denied"
     assert later[-1][2]["analytics_storage"] == "denied"
+
+
+@pytest.mark.parametrize("configuration", ["cold", "warm"])
+@pytest.mark.parametrize("revoked,analytics,advertising", [
+    ("analytics", False, True),
+    ("advertising", True, False),
+    ("both", False, False),
+])
+def test_revoking_consent_cancels_pending_events(configuration, revoked, analytics, advertising):
+    row, = observe(["/plans"], f"pending_{configuration}_{revoked}")
+    assert row["event"] is analytics
+    assert row["conversion"] is advertising
+    events = [call[1] for call in row["calls"] if call[0] == "event"]
+    assert events.count("test_event") == int(analytics)
+    assert events.count("conversion") == int(advertising)
+    assert len(row["requests"]) == 1
+    if configuration == "cold" and revoked == "both":
+        assert row["scripts"] == []
