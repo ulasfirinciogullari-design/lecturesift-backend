@@ -124,6 +124,8 @@
   async function track(eventName, parameters = {}) {
     if (!EVENT_PATHS.has(unlocalizedPath()) || !choices().analytics) return false;
     const config = await getConfig();
+    // Consent may have been withdrawn while configuration was loading.
+    if (!choices().analytics) return false;
     configureDestinations(config);
     if (!config?.enabled || typeof window.gtag !== "function") return false;
     window.gtag("event", String(eventName), {...parameters, ...pageContext(), send_to: config.measurement_id});
@@ -133,6 +135,7 @@
   async function trackConversion(kind, parameters = {}) {
     if (!EVENT_PATHS.has(unlocalizedPath()) || !choices().advertising) return false;
     const config = await getConfig();
+    if (!choices().advertising) return false;
     configureDestinations(config);
     const ads = config?.google_ads;
     const label = kind === "purchase" ? ads?.purchase_label : kind === "signup" ? ads?.signup_label : null;
