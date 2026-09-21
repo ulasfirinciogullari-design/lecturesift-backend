@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import tempfile
 from datetime import date, datetime
 from functools import lru_cache
@@ -155,3 +156,21 @@ def publish_generated_reel(day: date | None = None) -> dict:
     published = client.publish_media(container["id"])
     write_json(_key(selected_day), {**post, "published_media_id": published.get("id")})
     return {"status": "published", "kind": "generated_reel", "date": selected_day.isoformat(), "media_id": published.get("id")}
+
+
+def main() -> int:
+    if len(sys.argv) != 3 or sys.argv[1] != "prepare":
+        print("Usage: python -m lecturesift.generated_reels prepare YYYY-MM-DD", file=sys.stderr)
+        return 2
+    try:
+        selected_day = date.fromisoformat(sys.argv[2])
+        _ensure_post(selected_day)
+    except (InstagramConfigurationError, RuntimeError, ValueError, KeyError) as exc:
+        print(f"Instagram Reel preparation failed: {exc}", file=sys.stderr)
+        return 1
+    print("prepared")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

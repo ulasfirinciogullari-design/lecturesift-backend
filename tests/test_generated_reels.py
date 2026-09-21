@@ -61,6 +61,15 @@ def test_generated_reel_does_not_republish_a_recent_marker(monkeypatch):
     assert reels.publish_generated_reel(day)["status"] == "already_published"
 
 
+def test_reel_prepare_command_never_publishes(monkeypatch):
+    dates = []
+    monkeypatch.setattr(reels.sys, "argv", ["generated_reels", "prepare", "2026-10-15"])
+    monkeypatch.setattr(reels, "_ensure_post", lambda day: dates.append(day))
+    monkeypatch.setattr(reels, "publish_generated_reel", lambda: (_ for _ in ()).throw(AssertionError("must not publish")))
+    assert reels.main() == 0
+    assert dates == [date(2026, 10, 15)]
+
+
 def test_generated_reel_renderer_outputs_video_with_narration(tmp_path):
     day = date(2026, 9, 21)
     voice, seconds, _music = _reel_audio(day)
