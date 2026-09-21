@@ -94,6 +94,7 @@ def test_daily_publisher_creates_a_reel_container(monkeypatch):
     assert captured["media_type"] == "REELS"
     assert captured["media_url"].endswith("/instagram/daily/reel/2026-08-27.mp4?audio=1")
     assert captured["cover_url"].endswith("/instagram/daily/reel/2026-08-27.jpg")
+    assert "Voice: AI-generated." in captured["caption"]
 
 
 def test_mixed_schedule_includes_photos_and_reels(monkeypatch):
@@ -132,7 +133,7 @@ def test_unavailable_reel_does_not_create_container(monkeypatch):
         daily_social.publish_daily_post(date(2026, 9, 21))
 
 
-def test_editorial_cycle_does_not_repost_a_recent_lesson(monkeypatch):
+def test_editorial_cycle_uses_fresh_reel_after_a_recent_lesson(monkeypatch):
     selected_day = date(2026, 9, 21)
     class FakeClient:
         def get_account(self):
@@ -148,6 +149,6 @@ def test_editorial_cycle_does_not_repost_a_recent_lesson(monkeypatch):
 
     monkeypatch.setattr(daily_social, "INSTAGRAM_DAILY_AUTOMATION_ENABLED", True)
     monkeypatch.setattr(daily_social, "_client", FakeClient)
-    import pytest
-    with pytest.raises(daily_social.InstagramConfigurationError, match="Editorial cycle exhausted"):
-        daily_social.publish_daily_post(selected_day)
+    import lecturesift.generated_reels as generated_reels
+    monkeypatch.setattr(generated_reels, "publish_generated_reel", lambda day: {"status": "published", "kind": "generated_reel", "date": day.isoformat()})
+    assert daily_social.publish_daily_post(selected_day)["kind"] == "generated_reel"

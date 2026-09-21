@@ -390,9 +390,8 @@ def render_daily_image(day: date) -> bytes:
     return render_tip_image(daily_tip(day))
 
 
-def render_daily_reel_cover(day: date) -> bytes:
+def render_tip_reel_cover(tip: DailyTip) -> bytes:
     """Render a 9:16 bilingual hook card with a conservative profile-safe center."""
-    tip = daily_tip(day)
     image = Image.new("RGB", (1080, 1920), "#050b1f")
     draw = ImageDraw.Draw(image)
     draw.ellipse((620, -170, 1220, 430), fill="#18376c")
@@ -429,9 +428,12 @@ def render_daily_reel_cover(day: date) -> bytes:
     return output.getvalue()
 
 
-def _render_reel_step_slide(day: date, slide: int) -> bytes:
+def render_daily_reel_cover(day: date) -> bytes:
+    return render_tip_reel_cover(daily_tip(day))
+
+
+def _render_tip_reel_step_slide(tip: DailyTip, slide: int) -> bytes:
     """Two readable 9:16 teaching frames following the opening hook."""
-    tip = daily_tip(day)
     image = Image.new("RGB", (720, 1280), "#050b1f")
     draw = ImageDraw.Draw(image)
     draw.rounded_rectangle((44, 72, 676, 1208), radius=42, fill="#0b1d3b", outline="#386fff", width=3)
@@ -476,16 +478,26 @@ def _reel_audio(day: date) -> tuple[Path, float, Path]:
 @lru_cache(maxsize=4)
 def render_daily_reel(day: date) -> bytes:
     """Render a narrated three-scene MP4 with original background music."""
+    voice, voice_duration, _music = _reel_audio(day)
+    return render_tip_reel(daily_tip(day), voice.read_bytes(), voice_duration)
+
+
+def render_tip_reel(tip: DailyTip, voice_audio: bytes, voice_duration: float) -> bytes:
+    """Render a narrated three-scene MP4 for a validated study tip."""
     work = tempfile.mkdtemp(prefix="lecturesift-reel-")
     try:
-        voice, voice_duration, music = _reel_audio(day)
+        if not voice_audio or voice_duration <= 0:
+            raise RuntimeError("Instagram Reel voice audio is missing")
+        voice = Path(work) / "voice.mp3"
+        voice.write_bytes(voice_audio)
+        music = _AUDIO_DIR / "music-bed.m4a"
         duration = max(12.5, voice_duration + 0.8)
         slide_durations = (duration * 0.25, duration * 0.43, duration * 0.32)
         output_path = f"{work}/reel.mp4"
         slides = (
-            Image.open(io.BytesIO(render_daily_reel_cover(day))).resize((720, 1280), Image.Resampling.LANCZOS),
-            Image.open(io.BytesIO(_render_reel_step_slide(day, 1))),
-            Image.open(io.BytesIO(_render_reel_step_slide(day, 2))),
+            Image.open(io.BytesIO(render_tip_reel_cover(tip))).resize((720, 1280), Image.Resampling.LANCZOS),
+            Image.open(io.BytesIO(_render_tip_reel_step_slide(tip, 1))),
+            Image.open(io.BytesIO(_render_tip_reel_step_slide(tip, 2))),
         )
         for index, slide in enumerate(slides):
             slide.save(f"{work}/slide-{index}.jpg", format="JPEG", quality=88)
@@ -606,8 +618,11 @@ def publish_daily_post(day: date | None = None) -> dict:
     if any(daily_marker(selected_day) in (item.get("caption") or "") for item in recent):
         return {"status": "already_published", "kind": "daily", "date": selected_day.isoformat()}
     tip = daily_tip(selected_day)
-    if any((item.get("caption") or "").startswith(f"{tip.title} |") for item in recent):
-        raise InstagramConfigurationError("Editorial cycle exhausted; add new lessons before publishing")
+    if selected_day >= date(2026, 10, 15) or any(
+        (item.get("caption") or "").startswith(f"{tip.title} |") for item in recent
+    ):
+        from .generated_reels import publish_generated_reel
+        return publish_generated_reel(selected_day)
     base_url = PUBLIC_BASE_URL or "https://api.lecturesift.com"
     media_type = media_type_for_day(selected_day)
     if media_type == "REELS":
@@ -616,7 +631,7 @@ def publish_daily_post(day: date | None = None) -> dict:
         _verify_public_video(media_url)
         container = client.create_media_container(
             media_url=media_url,
-            caption=tip.caption,
+            caption=tip.caption.replace(daily_marker(selected_day), f"Voice: AI-generated.\n{daily_marker(selected_day)}"),
             media_type="REELS",
             cover_url=cover_url,
         )

@@ -142,10 +142,14 @@ def install_social_routes(app: FastAPI) -> None:
     def instagram_daily_status(day: str | None = None) -> dict:
         selected_day = _parse_day(day) if day else date.today()
         marker = daily_marker(selected_day)
+        generated_marker = f"LectureSift · reel · {selected_day.isoformat()}"
         try:
             _account, recent = _instagram_snapshot()
             completed = completed_indices(recent)
-            marker_present = any(marker in (item.get("caption") or "") for item in recent)
+            marker_present = any(
+                marker in (item.get("caption") or "") or generated_marker in (item.get("caption") or "")
+                for item in recent
+            )
         except InstagramConfigurationError as exc:
             raise HTTPException(503, detail={"code": "LS-IG-01", "message": "Instagram entegrasyonu yapılandırılmamış."}) from exc
         except InstagramAPIError as exc:
@@ -154,7 +158,7 @@ def install_social_routes(app: FastAPI) -> None:
             "ok": True,
             "account": "lecturesift",
             "date": selected_day.isoformat(),
-            "planned_media_type": media_type_for_day(selected_day),
+            "planned_media_type": "REELS" if selected_day >= date(2026, 10, 15) else media_type_for_day(selected_day),
             "marker": marker,
             "marker_present": marker_present,
             "launch_complete": len(completed) == len(LAUNCH_POSTS),
