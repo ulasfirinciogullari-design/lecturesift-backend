@@ -2,17 +2,17 @@ from datetime import date
 import json
 import subprocess
 
-from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
-
 import lecturesift.generated_reels as reels
 from lecturesift.daily_social import _reel_audio, daily_tip, render_tip_reel
 
 
 def test_generated_reel_is_persisted_with_original_narration(monkeypatch):
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    reels._META.create_all(engine)
-    monkeypatch.setattr(reels, "_ready", lambda: engine)
+    objects = {}
+    monkeypatch.setattr(reels, "read_json", lambda key: objects.get(key))
+    monkeypatch.setattr(reels, "write_json", lambda key, value: objects.__setitem__(key, value))
+    monkeypatch.setattr(reels, "write_bytes", lambda key, value, _type: objects.__setitem__(key, value))
+    monkeypatch.setattr(reels, "read_bytes", lambda key: objects.get(key))
+    monkeypatch.setattr(reels, "_recent_reel_titles", lambda: [])
     monkeypatch.setattr(reels, "_recent_titles", lambda: [])
     calls = []
 

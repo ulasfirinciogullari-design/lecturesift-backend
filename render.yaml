@@ -370,7 +370,15 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
-      - key: DATABASE_URL
+      - key: S3_ENDPOINT_URL
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
         sync: false
       - key: INSTAGRAM_DAILY_AUTOMATION_ENABLED
         value: "true"

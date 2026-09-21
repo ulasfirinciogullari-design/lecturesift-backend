@@ -1,15 +1,13 @@
 from datetime import date
 
-from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
-
 import lecturesift.evergreen_social as social
 
 
 def test_evergreen_card_is_persisted_and_reused(monkeypatch):
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    social._META.create_all(engine)
-    monkeypatch.setattr(social, "_engine", lambda: engine)
+    objects = {}
+    monkeypatch.setattr(social, "read_json", lambda key: objects.get(key))
+    monkeypatch.setattr(social, "write_json", lambda key, value: objects.__setitem__(key, value))
+    monkeypatch.setattr(social, "_recent_titles", lambda: [])
     generated = []
 
     def generate(day, recent):

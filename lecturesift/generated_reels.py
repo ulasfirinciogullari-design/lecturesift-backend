@@ -11,53 +11,36 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from openai import OpenAI, OpenAIError
-from sqlalchemy import Column, Date, DateTime, LargeBinary, MetaData, String, Table, Text, select, update
-from sqlalchemy.exc import IntegrityError
 
 from .config import INSTAGRAM_DAILY_AUTOMATION_ENABLED, OPENAI_API_KEY, PUBLIC_BASE_URL
 from .daily_social import (
     DailyTip, _TIPS, _assert_target_account, _client, _verify_public_video, _wait_until_ready,
     render_tip_reel, render_tip_reel_cover,
 )
-from .evergreen_social import _PILLARS, _engine, _generate, _recent_titles
+from .evergreen_social import _PILLARS, _generate, _recent_titles
 from .instagram import InstagramConfigurationError
+from .social_storage import read_bytes, read_json, recent_json, write_bytes, write_json
+
+_PREFIX = "social/instagram/reels/"
 
 
-_META = MetaData()
-_REELS = Table(
-    "instagram_generated_reels", _META,
-    Column("day", Date, primary_key=True),
-    Column("title", String(100), nullable=False),
-    Column("body", String(180), nullable=False),
-    Column("title_tr", String(100), nullable=False),
-    Column("body_tr", String(180), nullable=False),
-    Column("steps_json", Text, nullable=False),
-    Column("keyword", String(80), nullable=False),
-    Column("caption", Text, nullable=False),
-    Column("voice_mp3", LargeBinary, nullable=False),
-    Column("voice_seconds", String(20), nullable=False),
-    Column("published_media_id", String(100)),
-    Column("created_at", DateTime(timezone=True), nullable=False),
-)
+def _key(day: date) -> str:
+    return f"{_PREFIX}{day.isoformat()}.json"
 
 
-@lru_cache(maxsize=1)
-def _ready():
-    engine = _engine()
-    _META.create_all(engine, tables=[_REELS])
-    return engine
+def _audio_key(day: date) -> str:
+    return f"{_PREFIX}{day.isoformat()}.mp3"
 
 
-def _row(day: date):
-    with _ready().connect() as connection:
-        return connection.execute(select(_REELS).where(_REELS.c.day == day)).mappings().first()
+def _row(day: date) -> dict | None:
+    return read_json(_key(day))
 
 
 def _tip_from_row(row) -> DailyTip:
     return DailyTip(
         title=row["title"], body=row["body"], title_tr=row["title_tr"],
         body_tr=row["body_tr"], caption=row["caption"],
-        steps=tuple(json.loads(row["steps_json"])),
+        steps=tuple(row["steps"]),
     )
 
 
@@ -76,12 +59,14 @@ def video_for_day(day: date) -> bytes | None:
 @lru_cache(maxsize=2)
 def _render_saved_video(day: date) -> bytes:
     row = _row(day)
-    return render_tip_reel(_tip_from_row(row), bytes(row["voice_mp3"]), float(row["voice_seconds"]))
+    audio = read_bytes(_audio_key(day))
+    if audio is None:
+        raise RuntimeError("Generated Reel narration is missing")
+    return render_tip_reel(_tip_from_row(row), audio, float(row["voice_seconds"]))
 
 
 def _recent_reel_titles() -> list[str]:
-    with _ready().connect() as connection:
-        return list(connection.execute(select(_REELS.c.title).order_by(_REELS.c.day.desc()).limit(90)).scalars())
+    return [row["title"] for row in recent_json(_PREFIX, limit=60)]
 
 
 def _speech(data: dict) -> tuple[bytes, float]:
@@ -135,16 +120,11 @@ def _ensure_post(day: date):
         + "Save this for your next study session. Voice: AI-generated.\n\n"
         + f"{hashtags}\n{marker}"
     )
-    try:
-        with _ready().begin() as connection:
-            connection.execute(_REELS.insert().values(
-                day=day, title=data["title"], body=data["body"], title_tr=data["title_tr"],
-                body_tr=data["body_tr"], steps_json=json.dumps(data["steps"], ensure_ascii=False),
-                keyword=data["keyword"], caption=caption, voice_mp3=voice,
-                voice_seconds=f"{seconds:.3f}", created_at=datetime.now(ZoneInfo("UTC")),
-            ))
-    except IntegrityError:
-        pass
+    write_bytes(_audio_key(day), voice, "audio/mpeg")
+    write_json(_key(day), {
+        **data, "caption": caption, "voice_seconds": f"{seconds:.3f}",
+        "published_media_id": None, "created_at": datetime.now(ZoneInfo("UTC")).isoformat(),
+    })
     return _row(day)
 
 
@@ -162,8 +142,7 @@ def publish_generated_reel(day: date | None = None) -> dict:
     published_item = next((item for item in recent if marker in (item.get("caption") or "")), None)
     if published_item:
         if published_item.get("id"):
-            with _ready().begin() as connection:
-                connection.execute(update(_REELS).where(_REELS.c.day == selected_day).values(published_media_id=published_item["id"]))
+            write_json(_key(selected_day), {**post, "published_media_id": published_item["id"]})
         return {"status": "already_published", "kind": "generated_reel", "date": selected_day.isoformat()}
     base_url = (PUBLIC_BASE_URL or "https://api.lecturesift.com").rstrip("/")
     media_url = f"{base_url}/instagram/evergreen/reel/{selected_day.isoformat()}.mp4"
@@ -174,6 +153,5 @@ def publish_generated_reel(day: date | None = None) -> dict:
     )
     _wait_until_ready(client, container["id"])
     published = client.publish_media(container["id"])
-    with _ready().begin() as connection:
-        connection.execute(update(_REELS).where(_REELS.c.day == selected_day).values(published_media_id=published.get("id")))
+    write_json(_key(selected_day), {**post, "published_media_id": published.get("id")})
     return {"status": "published", "kind": "generated_reel", "date": selected_day.isoformat(), "media_id": published.get("id")}

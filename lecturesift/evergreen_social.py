@@ -1,7 +1,7 @@
 """A second, original daily study card for the official Instagram account.
 
 The text is generated once, validated, and stored before Meta fetches the image.
-Published rows and recent captions prevent retries from duplicating a post.
+Stored receipts and recent captions prevent retries from duplicating a post.
 """
 
 from __future__ import annotations
@@ -9,32 +9,16 @@ from __future__ import annotations
 import json
 import sys
 from datetime import date, datetime
-from functools import lru_cache
 from zoneinfo import ZoneInfo
 
 from openai import OpenAI, OpenAIError
-from sqlalchemy import Column, Date, DateTime, MetaData, String, Table, Text, create_engine, select, update
-from sqlalchemy.exc import IntegrityError
 
-from .config import DATABASE_URL, INSTAGRAM_DAILY_AUTOMATION_ENABLED, OPENAI_API_KEY, PUBLIC_BASE_URL
+from .config import INSTAGRAM_DAILY_AUTOMATION_ENABLED, OPENAI_API_KEY, PUBLIC_BASE_URL
 from .daily_social import DailyTip, _TIPS, _assert_target_account, _client, _wait_until_ready, render_tip_image
 from .instagram import InstagramAPIError, InstagramConfigurationError
+from .social_storage import read_json, recent_json, write_json
 
-
-_META = MetaData()
-_POSTS = Table(
-    "instagram_evergreen_posts", _META,
-    Column("day", Date, primary_key=True),
-    Column("title", String(100), nullable=False),
-    Column("body", String(180), nullable=False),
-    Column("title_tr", String(100), nullable=False),
-    Column("body_tr", String(180), nullable=False),
-    Column("steps_json", Text, nullable=False),
-    Column("keyword", String(80), nullable=False),
-    Column("caption", Text, nullable=False),
-    Column("published_media_id", String(100)),
-    Column("created_at", DateTime(timezone=True), nullable=False),
-)
+_PREFIX = "social/instagram/cards/"
 
 _PILLARS = (
     ("active recall after class", "#ActiveRecall #LectureNotes #StudyMethods #ExamPrep #UniversityStudy #StudyRoutine #DersÇalışma #LectureSift"),
@@ -54,27 +38,16 @@ _SCHEMA = {
 }
 
 
-@lru_cache(maxsize=1)
-def _engine():
-    if not DATABASE_URL.startswith(("postgres://", "postgresql://", "postgresql+psycopg://")):
-        raise InstagramConfigurationError("Shared Postgres database is required for evergreen publishing")
-    url = DATABASE_URL
-    if url.startswith("postgres://"):
-        url = "postgresql+psycopg://" + url.removeprefix("postgres://")
-    elif url.startswith("postgresql://"):
-        url = "postgresql+psycopg://" + url.removeprefix("postgresql://")
-    engine = create_engine(url, pool_pre_ping=True)
-    _META.create_all(engine, tables=[_POSTS])
-    return engine
+def _key(day: date) -> str:
+    return f"{_PREFIX}{day.isoformat()}.json"
 
 
-def _row(day: date):
-    with _engine().connect() as connection:
-        return connection.execute(select(_POSTS).where(_POSTS.c.day == day)).mappings().first()
+def _row(day: date) -> dict | None:
+    return read_json(_key(day))
 
 
 def _tip_from_row(row) -> DailyTip:
-    steps = tuple(json.loads(row["steps_json"]))
+    steps = tuple(row["steps"])
     return DailyTip(
         title=row["title"], body=row["body"], title_tr=row["title_tr"],
         body_tr=row["body_tr"], caption=row["caption"], steps=steps,
@@ -92,8 +65,7 @@ def status_for_day(day: date) -> dict:
 
 
 def _recent_titles() -> list[str]:
-    with _engine().connect() as connection:
-        return list(connection.execute(select(_POSTS.c.title).order_by(_POSTS.c.day.desc()).limit(90)).scalars())
+    return [row["title"] for row in recent_json(_PREFIX, limit=60)]
 
 
 def _validate(data: dict, recent_titles: list[str]) -> dict:
@@ -186,15 +158,10 @@ def _ensure_post(day: date):
         + "Save this and try it after your next lecture. More study methods at lecturesift.com.\n\n"
         + f"{hashtags}\n{marker}"
     )
-    try:
-        with _engine().begin() as connection:
-            connection.execute(_POSTS.insert().values(
-                day=day, title=data["title"], body=data["body"], title_tr=data["title_tr"],
-                body_tr=data["body_tr"], steps_json=json.dumps(data["steps"], ensure_ascii=False),
-                keyword=data["keyword"], caption=caption, created_at=datetime.now(ZoneInfo("UTC")),
-            ))
-    except IntegrityError:
-        pass
+    write_json(_key(day), {
+        **data, "caption": caption, "published_media_id": None,
+        "created_at": datetime.now(ZoneInfo("UTC")).isoformat(),
+    })
     return _row(day)
 
 
@@ -212,8 +179,7 @@ def publish_evergreen_post(day: date | None = None) -> dict:
     published_item = next((item for item in recent if marker in (item.get("caption") or "")), None)
     if published_item:
         if published_item.get("id"):
-            with _engine().begin() as connection:
-                connection.execute(update(_POSTS).where(_POSTS.c.day == selected_day).values(published_media_id=published_item["id"]))
+            write_json(_key(selected_day), {**post, "published_media_id": published_item["id"]})
         return {"status": "already_published", "kind": "evergreen", "date": selected_day.isoformat()}
     base_url = PUBLIC_BASE_URL or "https://api.lecturesift.com"
     container = client.create_media_container(
@@ -222,8 +188,7 @@ def publish_evergreen_post(day: date | None = None) -> dict:
     )
     _wait_until_ready(client, container["id"])
     published = client.publish_media(container["id"])
-    with _engine().begin() as connection:
-        connection.execute(update(_POSTS).where(_POSTS.c.day == selected_day).values(published_media_id=published.get("id")))
+    write_json(_key(selected_day), {**post, "published_media_id": published.get("id")})
     return {"status": "published", "kind": "evergreen", "date": selected_day.isoformat(), "media_id": published.get("id")}
 
 
