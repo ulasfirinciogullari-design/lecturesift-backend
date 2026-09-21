@@ -2,7 +2,7 @@
 
 `@lecturesift` için tek zamanlanmış yayıncı Render cron görevidir. Her gün
 17:00 UTC'de bir özgün çalışma tekniği paylaşır. `MIXED` ayarı altı günün
-dördünde Reel, ikisinde 3:4 fotoğraf üretir. Reels üç kısa sahneden oluşur:
+dördünde Reel, ikisinde API uyumlu 4:5 fotoğraf üretir. Reels üç kısa sahneden oluşur:
 merak uyandıran giriş, uygulanabilir adımlar ve son adım. Açıklamanın ilk
 satırında konuya uygun arama ifadesi, devamında gerçek öğrenme önerileri ve
 konuyla ilişkili etiketler bulunur. Ürün adı, öneriden sonra gelir.

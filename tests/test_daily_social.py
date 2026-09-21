@@ -21,6 +21,7 @@ def test_daily_image_is_a_jpeg():
     image = render_daily_image(date(2026, 8, 27))
     assert image.startswith(b"\xff\xd8\xff")
     assert len(image) > 10_000
+    assert Image.open(BytesIO(image)).size == (1080, 1350)
 
 
 def test_daily_reel_cover_is_vertical_and_readable():

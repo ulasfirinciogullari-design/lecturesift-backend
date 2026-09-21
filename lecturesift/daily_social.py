@@ -340,12 +340,12 @@ def _fit_wrapped(
 
 
 def render_daily_image(day: date) -> bytes:
-    """Render a saveable 3:4 lesson card with the full three-step method."""
+    """Render an API-compatible 4:5 lesson card with the full three-step method."""
     tip = daily_tip(day)
-    image = Image.new("RGB", (1080, 1440), "#050b1f")
+    image = Image.new("RGB", (1080, 1350), "#050b1f")
     draw = ImageDraw.Draw(image)
     draw.ellipse((650, -100, 1160, 410), fill="#18376c")
-    draw.rounded_rectangle((72, 72, 1008, 1368), radius=58, fill="#08172f", outline="#2c6dff", width=3)
+    draw.rounded_rectangle((72, 72, 1008, 1298), radius=58, fill="#08172f", outline="#2c6dff", width=3)
     draw.rounded_rectangle((118, 130, 430, 204), radius=30, fill="#10294d")
     draw.text((153, 149), "LECTURESIFT", fill="#4ce0d4", font=_font(30, True))
     draw.text((118, 265), "SAVE THIS STUDY METHOD", fill="#8dbdff", font=_font(30, True))
@@ -359,18 +359,18 @@ def render_daily_image(day: date) -> bytes:
     draw.multiline_text((118, body_y), body, fill="#c5daf4", font=body_font, spacing=10)
 
     for index, step in enumerate(tip.steps, 1):
-        top = 655 + (index - 1) * 157
-        draw.rounded_rectangle((118, top, 962, top + 137), radius=26, fill="#10294d")
-        draw.ellipse((144, top + 38, 206, top + 100), fill="#386fff")
-        draw.text((164, top + 51), str(index), fill="white", font=_font(30, True))
-        font, wrapped = _fit_wrapped(draw, step, 700, 96, 36, 29, max_lines=3, bold=False)
-        draw.multiline_text((237, top + 29), wrapped, fill="#edf6ff", font=font, spacing=7)
+        top = 625 + (index - 1) * 145
+        draw.rounded_rectangle((118, top, 962, top + 125), radius=26, fill="#10294d")
+        draw.ellipse((144, top + 31, 206, top + 93), fill="#386fff")
+        draw.text((164, top + 44), str(index), fill="white", font=_font(30, True))
+        font, wrapped = _fit_wrapped(draw, step, 700, 88, 35, 28, max_lines=3, bold=False)
+        draw.multiline_text((237, top + 24), wrapped, fill="#edf6ff", font=font, spacing=7)
 
-    draw.line((118, 1154, 962, 1154), fill="#254b78", width=3)
-    draw.text((118, 1190), "TR", fill="#4ce0d4", font=_font(28, True))
+    draw.line((118, 1078, 962, 1078), fill="#254b78", width=3)
+    draw.text((118, 1118), "TR", fill="#4ce0d4", font=_font(28, True))
     tr_font, tr_title = _fit_wrapped(draw, tip.title_tr, 740, 95, 42, 32, max_lines=2, bold=True)
-    draw.multiline_text((190, 1180), tr_title, fill="#eef5ff", font=tr_font, spacing=8)
-    draw.text((118, 1300), "lecturesift.com  /  Study smarter", fill="#4ce0a3", font=_font(27, True))
+    draw.multiline_text((190, 1108), tr_title, fill="#eef5ff", font=tr_font, spacing=8)
+    draw.text((118, 1234), "lecturesift.com  /  Study smarter", fill="#4ce0a3", font=_font(27, True))
 
     output = io.BytesIO()
     image.save(output, format="JPEG", quality=93, optimize=True)
