@@ -129,7 +129,7 @@ jobs:
           curl --silent --show-error --fail --max-time 25 \
             "https://api.lecturesift.com/instagram/daily/reel/$today.jpg" -o /dev/null
           curl --silent --show-error --fail --max-time 45 \
-            "https://api.lecturesift.com/instagram/daily/reel/$today.mp4" -o /dev/null
+            "https://api.lecturesift.com/instagram/daily/reel/$today.mp4?audio=1" -o /dev/null
 
       - name: Verify today's scheduled post
         if: ${{ github.event_name == 'schedule' && steps.instagram_publishing.outputs.enabled == 'true' }}

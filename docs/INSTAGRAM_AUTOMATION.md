@@ -3,7 +3,12 @@
 `@lecturesift` için tek zamanlanmış yayıncı Render cron görevidir. Her gün
 17:00 UTC'de bir özgün çalışma tekniği paylaşır. `MIXED` ayarı altı günün
 dördünde Reel, ikisinde API uyumlu 4:5 fotoğraf üretir. Reels üç kısa sahneden oluşur:
-merak uyandıran giriş, uygulanabilir adımlar ve son adım. Açıklamanın ilk
+merak uyandıran giriş, uygulanabilir adımlar ve son adım. Her Reel, ilgili
+konuya özel önceden hazırlanmış İngilizce seslendirme ve LectureSift için
+üretilmiş özgün, düşük seviyeli enstrümantal müzik içerir; Türkçe özet ekranda
+kalır. Sesler depoda tutulduğu için yayın anında harici ses servisine ihtiyaç
+duyulmaz. MP4 dosyası Instagram'ın istediği 48 kHz AAC ses akışıyla üretilir.
+Açıklamanın ilk
 satırında konuya uygun arama ifadesi, devamında gerçek öğrenme önerileri ve
 konuyla ilişkili etiketler bulunur. Ürün adı, öneriden sonra gelir.
 Yirmi dört konu tamamlandığında aynı içerik tekrar paylaşılmaz; görev hata
