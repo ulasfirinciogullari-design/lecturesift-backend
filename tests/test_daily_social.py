@@ -116,3 +116,24 @@ def test_unavailable_reel_does_not_create_container(monkeypatch):
     import pytest
     with pytest.raises(daily_social.InstagramAPIError):
         daily_social.publish_daily_post(date(2026, 9, 21))
+
+
+def test_editorial_cycle_does_not_repost_a_recent_lesson(monkeypatch):
+    selected_day = date(2026, 9, 21)
+    class FakeClient:
+        def get_account(self):
+            return {"username": "lecturesift"}
+
+        def get_recent_media(self, limit=25):
+            return {"data": [{"caption": daily_tip(selected_day).caption.replace(
+                daily_social.daily_marker(selected_day), "LectureSift · 2026-08-28"
+            )}]}
+
+        def create_media_container(self, **_kwargs):
+            raise AssertionError("repeated lesson must not be published")
+
+    monkeypatch.setattr(daily_social, "INSTAGRAM_DAILY_AUTOMATION_ENABLED", True)
+    monkeypatch.setattr(daily_social, "_client", FakeClient)
+    import pytest
+    with pytest.raises(daily_social.InstagramConfigurationError, match="Editorial cycle exhausted"):
+        daily_social.publish_daily_post(selected_day)

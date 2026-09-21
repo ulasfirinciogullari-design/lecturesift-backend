@@ -480,11 +480,6 @@ def render_daily_reel(day: date) -> bytes:
         shutil.rmtree(work, ignore_errors=True)
 
 
-def is_already_published(client: InstagramClient, day: date) -> bool:
-    marker = daily_marker(day)
-    return any(marker in (item.get("caption") or "") for item in client.get_recent_media().get("data", []))
-
-
 def media_type_for_day(day: date) -> str:
     configured = INSTAGRAM_DAILY_MEDIA_TYPE.upper()
     if configured == "MIXED":
@@ -565,9 +560,12 @@ def publish_daily_post(day: date | None = None) -> dict:
     selected_day = day or date.today()
     client = _client()
     _assert_target_account(client)
-    if is_already_published(client, selected_day):
+    recent = client.get_recent_media(limit=50).get("data", [])
+    if any(daily_marker(selected_day) in (item.get("caption") or "") for item in recent):
         return {"status": "already_published", "kind": "daily", "date": selected_day.isoformat()}
     tip = daily_tip(selected_day)
+    if any((item.get("caption") or "").startswith(f"{tip.title} |") for item in recent):
+        raise InstagramConfigurationError("Editorial cycle exhausted; add new lessons before publishing")
     base_url = PUBLIC_BASE_URL or "https://api.lecturesift.com"
     media_type = media_type_for_day(selected_day)
     if media_type == "REELS":

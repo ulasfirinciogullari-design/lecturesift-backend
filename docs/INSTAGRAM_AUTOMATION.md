@@ -6,6 +6,8 @@ dördünde Reel, ikisinde API uyumlu 4:5 fotoğraf üretir. Reels üç kısa sah
 merak uyandıran giriş, uygulanabilir adımlar ve son adım. Açıklamanın ilk
 satırında konuya uygun arama ifadesi, devamında gerçek öğrenme önerileri ve
 konuyla ilişkili etiketler bulunur. Ürün adı, öneriden sonra gelir.
+Yirmi dört konu tamamlandığında aynı içerik tekrar paylaşılmaz; görev hata
+verir ve yeni editoryal seri eklenmesi gerekir.
 
 Hesap bağlantısı `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_ACCOUNT_ID` ve
 `INSTAGRAM_APP_SECRET` ile yapılır. Token'ın `instagram_business_basic` ve
