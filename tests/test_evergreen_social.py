@@ -75,3 +75,6 @@ def test_generated_copy_rejects_duplicate_and_empty_steps():
     ]
     with pytest.raises(ValueError):
         social._validate(card, [card["title"]])
+    card["title"] = "Research proves this study method"
+    with pytest.raises(ValueError):
+        social._validate(card, [])

@@ -17,7 +17,7 @@ from sqlalchemy import Column, Date, DateTime, MetaData, String, Table, Text, cr
 from sqlalchemy.exc import IntegrityError
 
 from .config import DATABASE_URL, INSTAGRAM_DAILY_AUTOMATION_ENABLED, OPENAI_API_KEY, PUBLIC_BASE_URL
-from .daily_social import DailyTip, _assert_target_account, _client, _wait_until_ready, render_tip_image
+from .daily_social import DailyTip, _TIPS, _assert_target_account, _client, _wait_until_ready, render_tip_image
 from .instagram import InstagramAPIError, InstagramConfigurationError
 
 
@@ -122,8 +122,11 @@ def _validate(data: dict, recent_titles: list[str]) -> dict:
     if any(len(title_words & set(old.casefold().split())) / max(len(title_words | set(old.casefold().split())), 1) > 0.66
            for old in recent_titles):
         raise ValueError("Generated study title is too similar to a recent post")
-    if any(term in " ".join((cleaned["title"], cleaned["body"])).casefold()
-           for term in ("guaranteed", "100%", "secret algorithm", "viral hack")):
+    editorial_text = " ".join((cleaned["title"], cleaned["body"], *cleaned["steps"])).casefold()
+    if any(term in editorial_text for term in (
+        "guaranteed", "%", "secret algorithm", "viral hack", "research proves",
+        "studies show", "garanti", "mucize",
+    )):
         raise ValueError("Generated study card makes an unsupported claim")
     return cleaned
 
@@ -172,7 +175,7 @@ def _ensure_post(day: date):
     existing = _row(day)
     if existing:
         return existing
-    recent_titles = _recent_titles()
+    recent_titles = _recent_titles() + [tip[0] for tip in _TIPS]
     data = _generate(day, recent_titles)
     _, hashtags = _PILLARS[day.toordinal() % len(_PILLARS)]
     marker = f"LectureSift · idea · {day.isoformat()}"
