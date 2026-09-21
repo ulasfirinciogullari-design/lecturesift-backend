@@ -8,6 +8,7 @@ content, private data, follower scraping or engagement automation is used.
 from __future__ import annotations
 
 import io
+import json
 import shutil
 import subprocess
 import sys
@@ -16,6 +17,7 @@ import time
 from dataclasses import dataclass
 from datetime import date
 from functools import lru_cache
+from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -265,6 +267,8 @@ _TIPS = (
     ),
 )
 
+_AUDIO_DIR = Path(__file__).resolve().parent / "assets" / "instagram"
+
 
 def _index(day: date) -> int:
     return day.toordinal() % len(_TIPS)
@@ -443,11 +447,31 @@ def _render_reel_step_slide(day: date, slide: int) -> bytes:
     return output.getvalue()
 
 
+@lru_cache(maxsize=1)
+def _voice_manifest() -> dict:
+    with (_AUDIO_DIR / "voice" / "manifest.json").open(encoding="utf-8") as source:
+        return json.load(source)
+
+
+def _reel_audio(day: date) -> tuple[Path, float, Path]:
+    index = _index(day)
+    voice = _AUDIO_DIR / "voice" / f"{index:02}.mp3"
+    music = _AUDIO_DIR / "music-bed.m4a"
+    metadata = _voice_manifest()[str(index)]
+    duration = float(metadata["duration_seconds"])
+    if metadata["title"] != _TIPS[index][0] or not voice.is_file() or not music.is_file() or duration <= 0:
+        raise RuntimeError("Instagram Reel audio assets are incomplete")
+    return voice, duration, music
+
+
 @lru_cache(maxsize=4)
 def render_daily_reel(day: date) -> bytes:
-    """Render a three-scene, bounded-memory MP4 without CPU-heavy zoom filters."""
+    """Render a narrated three-scene MP4 with original background music."""
     work = tempfile.mkdtemp(prefix="lecturesift-reel-")
     try:
+        voice, voice_duration, music = _reel_audio(day)
+        duration = max(12.5, voice_duration + 0.8)
+        slide_durations = (duration * 0.25, duration * 0.43, duration * 0.32)
         output_path = f"{work}/reel.mp4"
         slides = (
             Image.open(io.BytesIO(render_daily_reel_cover(day))).resize((720, 1280), Image.Resampling.LANCZOS),
@@ -459,12 +483,21 @@ def render_daily_reel(day: date) -> bytes:
         command = [
             "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
             *[argument for index in range(3) for argument in (
-                "-loop", "1", "-framerate", "24", "-t", "3.5", "-i", f"{work}/slide-{index}.jpg",
+                "-loop", "1", "-framerate", "24", "-t", f"{slide_durations[index]:.3f}", "-i", f"{work}/slide-{index}.jpg",
             )],
-            "-filter_complex", "[0:v][1:v][2:v]concat=n=3:v=1:a=0,format=yuv420p[v]",
-            "-map", "[v]", "-r", "24", "-threads", "1",
+            "-i", str(voice), "-stream_loop", "-1", "-i", str(music),
+            "-filter_complex", (
+                "[0:v][1:v][2:v]concat=n=3:v=1:a=0,format=yuv420p[v];"
+                "[3:a]aresample=48000[voice];"
+                f"[4:a]aresample=48000,atrim=0:{duration:.3f},volume=0.55[bed];"
+                f"[voice][bed]amix=inputs=2:duration=longest:dropout_transition=0:normalize=0,"
+                f"atrim=0:{duration:.3f},alimiter=limit=0.9,"
+                f"afade=t=out:st={duration - 0.4:.3f}:d=0.4[a]"
+            ),
+            "-map", "[v]", "-map", "[a]", "-r", "24", "-threads", "1",
             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24",
-            "-movflags", "+faststart", "-an", output_path,
+            "-c:a", "aac", "-ar", "48000", "-ac", "2", "-b:a", "128k",
+            "-t", f"{duration:.3f}", "-movflags", "+faststart", output_path,
         ]
         completed = subprocess.run(command, capture_output=True, timeout=45, check=False)
         if completed.returncode != 0:

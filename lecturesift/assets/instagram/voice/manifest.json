@@ -1,0 +1,122 @@
+{
+  "0": {
+    "title": "Stop rewatching the whole lecture",
+    "duration_seconds": 10.49542,
+    "script": "Stop rewatching the whole lecture. Write one question you cannot answer. Find that moment in your notes, then answer from memory before replaying."
+  },
+  "1": {
+    "title": "Turn one lecture into 5 questions",
+    "duration_seconds": 9.009342,
+    "script": "One lecture, five questions. Spot five ideas your lecturer repeats. Turn each into a how or why question, then answer from memory."
+  },
+  "2": {
+    "title": "The 2-minute active recall test",
+    "duration_seconds": 7.105306,
+    "script": "Two-minute active recall test. Close your notes. Explain the topic aloud. Then check your notes and fix what you missed."
+  },
+  "3": {
+    "title": "Your slides can be a practice test",
+    "duration_seconds": 7.848345,
+    "script": "Turn slides into a practice test. Hide one slide, write a question about its main idea, then answer before checking it."
+  },
+  "4": {
+    "title": "Find the exact minute you missed",
+    "duration_seconds": 7.801905,
+    "script": "Missed one minute of class? Name the concept, find it in the transcript, replay that moment, and make one flashcard."
+  },
+  "5": {
+    "title": "The 3-pass lecture review",
+    "duration_seconds": 10.1239,
+    "script": "Review a lecture in three passes. First, skim the key ideas. Next, recall them without looking. Finally, answer practice questions."
+  },
+  "6": {
+    "title": "Make flashcards that actually test you",
+    "duration_seconds": 9.380862,
+    "script": "Make flashcards that actually test you. Put one question on the front and one short answer on the back. Split cards that you keep missing."
+  },
+  "7": {
+    "title": "Review a lecture in 10 minutes",
+    "duration_seconds": 9.659501,
+    "script": "Only ten minutes to review? Scan the outline for two. Recall the key ideas for five. Use the last three to fix your gaps."
+  },
+  "8": {
+    "title": "Keep a mistake log for exams",
+    "duration_seconds": 11.006259,
+    "script": "Keep a mistake log for exams. Record every missed practice question. Write why the wrong answer felt right. Retry the question after two days."
+  },
+  "9": {
+    "title": "Use a one-page topic map",
+    "duration_seconds": 7.755465,
+    "script": "Use a one-page topic map. Put the topic in the center, add a few main branches, then explain every connection aloud."
+  },
+  "10": {
+    "title": "Try a closed-book brain dump",
+    "duration_seconds": 9.566621,
+    "script": "Try a closed-book brain dump. Pick one topic and write what you remember for three minutes. Then compare with your notes and fill the gaps."
+  },
+  "11": {
+    "title": "Make a confusion list",
+    "duration_seconds": 10.913379,
+    "script": "Make a confusion list. Write down every fuzzy term. Turn each one into a precise question, then search or replay only that part."
+  },
+  "12": {
+    "title": "Explain it like a tutor",
+    "duration_seconds": 7.616145,
+    "script": "Explain it like a tutor. Pick one concept, describe it without technical words, and revisit the step where you get stuck."
+  },
+  "13": {
+    "title": "Study before the lecture starts",
+    "duration_seconds": 7.987664,
+    "script": "Before your lecture, scan the title and headings. Write two questions you hope it answers. Then listen for those answers."
+  },
+  "14": {
+    "title": "Review within a day",
+    "duration_seconds": 8.359184,
+    "script": "Review within one day. Skim your notes after class, write three questions from memory, and clear up one confusing point."
+  },
+  "15": {
+    "title": "Compare two similar concepts",
+    "duration_seconds": 8.777143,
+    "script": "Compare two similar concepts. Make two columns, write one similarity and two differences, then create a question that tests the contrast."
+  },
+  "16": {
+    "title": "Turn headings into a quiz",
+    "duration_seconds": 7.616145,
+    "script": "Turn your notes into a quiz. Copy three headings. Make each one a how or why question. Answer before reading the section."
+  },
+  "17": {
+    "title": "Space out your review",
+    "duration_seconds": 7.801905,
+    "script": "Space out your review. Test yourself today, again in a few days, then revisit only the ideas you missed."
+  },
+  "18": {
+    "title": "Start with practice questions",
+    "duration_seconds": 7.941224,
+    "script": "Start with practice questions. Try three without notes, mark the steps you guessed, then review those steps and retry."
+  },
+  "19": {
+    "title": "Build a one-page exam sheet",
+    "duration_seconds": 8.126984,
+    "script": "Build a one-page exam sheet. List five key concepts, add an example to each, then cover the page and explain them aloud."
+  },
+  "20": {
+    "title": "Use a question parking lot",
+    "duration_seconds": 8.916463,
+    "script": "Keep a question parking lot. When class gets confusing, note the question and timestamp. Stay with the lecture, then return afterward."
+  },
+  "21": {
+    "title": "Draw it from memory",
+    "duration_seconds": 7.894785,
+    "script": "Draw it from memory. Pick a process, sketch its stages without looking, then check where your diagram breaks."
+  },
+  "22": {
+    "title": "Mix two related topics",
+    "duration_seconds": 7.987664,
+    "script": "Mix two related topics. Shuffle questions from both, then explain why each answer belongs to its topic."
+  },
+  "23": {
+    "title": "End with one takeaway",
+    "duration_seconds": 7.987664,
+    "script": "End every lecture with one takeaway. Write what changed in your understanding. Turn that sentence into a question for next time."
+  }
+}

@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 
 from io import BytesIO
+import json
 
 from PIL import Image
 
@@ -38,6 +39,8 @@ def test_daily_reel_uses_ffmpeg_without_exposing_secrets(monkeypatch, tmp_path):
     def fake_run(command, **kwargs):
         assert command[0] == "ffmpeg"
         assert "libx264" in command and "+faststart" in command
+        assert "aac" in command and "-an" not in command
+        assert any("amix=inputs=2" in part for part in command)
         assert "concat=n=3" in " ".join(command)
         assert "zoompan" not in " ".join(command)
         assert kwargs == {"capture_output": True, "timeout": 45, "check": False}
@@ -47,6 +50,17 @@ def test_daily_reel_uses_ffmpeg_without_exposing_secrets(monkeypatch, tmp_path):
     monkeypatch.setattr(daily_social.subprocess, "run", fake_run)
     content = daily_social.render_daily_reel(date(2026, 8, 27))
     assert content[4:8] == b"ftyp"
+
+
+def test_every_editorial_topic_has_a_narration_and_original_music():
+    manifest = json.loads((daily_social._AUDIO_DIR / "voice" / "manifest.json").read_text())
+    assert set(manifest) == {str(index) for index in range(24)}
+    assert (daily_social._AUDIO_DIR / "music-bed.m4a").stat().st_size > 10_000
+    for index, item in manifest.items():
+        assert item["title"] == daily_social._TIPS[int(index)][0]
+        assert item["duration_seconds"] > 3
+        assert item["script"]
+        assert (daily_social._AUDIO_DIR / "voice" / f"{int(index):02}.mp3").stat().st_size > 10_000
 
 
 def test_daily_publisher_creates_a_reel_container(monkeypatch):
