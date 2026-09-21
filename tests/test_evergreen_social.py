@@ -105,6 +105,8 @@ def test_generated_card_requires_an_example_and_memory_check():
         social._validate({**card, "steps": [card["steps"][0], "Use different colours for each section.", card["steps"][2]]}, [])
     with pytest.raises(ValueError, match="closed-note"):
         social._validate({**card, "steps": [*card["steps"][:2], "Read the questions again and underline important terms."]}, [])
+    with pytest.raises(ValueError, match="too broad"):
+        social._validate({**card, "title": "Identify and Fix Your Study Mistakes"}, [])
 
 
 def test_generation_revises_a_card_rejected_for_long_steps(monkeypatch):
@@ -132,4 +134,5 @@ def test_generation_revises_a_card_rejected_for_long_steps(monkeypatch):
     monkeypatch.setattr(social, "_validate", validate)
     assert social._generate(date(2026, 9, 24), []) == {"title": "Revised"}
     assert len(calls) == 2
+    assert social.json.loads(calls[0][1]["content"])["specific_angle"]
     assert "too short or too long" in calls[1][-1]["content"]

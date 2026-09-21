@@ -29,6 +29,45 @@ _PILLARS = (
     ("finding and fixing study mistakes", "#ExamPrep #MistakeLog #ActiveRecall #PracticeQuestions #StudyRoutine #StudentTips #SınavHazırlığı #LectureSift"),
 )
 
+_ANGLES = (
+    (
+        "recover the missing link in an explanation",
+        "turn one diagram into three why questions",
+        "tell two easily confused concepts apart",
+        "find the first sentence you cannot explain without notes",
+    ),
+    (
+        "turn one wrong answer into a better practice question",
+        "write a plausible wrong answer to expose a misconception",
+        "answer a practice question in reverse",
+        "find the first step where you guessed rather than reasoned",
+    ),
+    (
+        "split a flashcard that asks for two different facts",
+        "make a contrast card with one near miss example",
+        "retry a flashcard you almost remembered",
+        "replace a recognition card with a recall prompt",
+    ),
+    (
+        "test a definition with an example and a near miss",
+        "trace one cause to its immediate effect",
+        "find the boundary where a rule stops applying",
+        "explain a diagram with its labels hidden",
+    ),
+    (
+        "turn a scattered note section into answerable questions",
+        "separate definitions from the examples beneath them",
+        "map each claim in a lecture to its supporting evidence",
+        "flag one unexplained term for a focused follow-up",
+    ),
+    (
+        "make a why-I-missed-it note from one wrong answer",
+        "find the missing condition in a calculation",
+        "tell a careless slip from a concept gap",
+        "solve one missed question again without viewing the correction",
+    ),
+)
+
 _SCHEMA = {
     "type": "object",
     "properties": {name: {"type": "string"} for name in ("title", "body", "title_tr", "body_tr", "keyword")}
@@ -97,6 +136,11 @@ def _validate(data: dict, recent_titles: list[str]) -> dict:
     )):
         raise ValueError("Generated study card needs a closed-note check")
     title = cleaned["title"].casefold()
+    if title.startswith((
+        "identify and fix your", "identify errors in your", "organize your lecture notes",
+        "improve your study", "study smarter", "master your study",
+    )):
+        raise ValueError("Generated study title is too broad")
     if any(title == old.casefold() for old in recent_titles):
         raise ValueError("Generated study title repeats a recent post")
     title_words = set(title.split())
@@ -115,7 +159,10 @@ def _validate(data: dict, recent_titles: list[str]) -> dict:
 def _generate(day: date, recent_titles: list[str], *, pillar_offset: int = 0) -> dict:
     if not OPENAI_API_KEY:
         raise InstagramConfigurationError("OpenAI key is required for evergreen publishing")
-    pillar, _ = _PILLARS[(day.toordinal() + pillar_offset) % len(_PILLARS)]
+    index = day.toordinal() + pillar_offset
+    pillar_index = index % len(_PILLARS)
+    pillar, _ = _PILLARS[pillar_index]
+    angle = _ANGLES[pillar_index][(index // len(_PILLARS)) % len(_ANGLES[pillar_index])]
     client = OpenAI(api_key=OPENAI_API_KEY, timeout=45, max_retries=1)
     messages = [
         {"role": "system", "content": (
@@ -126,14 +173,16 @@ def _generate(day: date, recent_titles: list[str], *, pillar_offset: int = 0) ->
             "not a hashtag. Use only common study advice; do not invent research, statistics, product "
             "capabilities, customer stories, or promises of exam results. No clickbait, spam, or filler. "
             "The steps must teach something a student can try without LectureSift. "
-            "Choose a narrow problem, not a broad topic summary. Step 2 MUST begin 'For example,' "
+            "The specific angle is mandatory: write about that small study problem, not the general topic. "
+            "Give the title a concrete object or action; avoid broad titles like 'Identify Study Mistakes' "
+            "or 'Organize Your Lecture Notes'. Step 2 MUST begin 'For example,' "
             "and demonstrate the method with a real academic subject, term, or question. Step 3 MUST "
             "ask the student to check the answer from memory or without looking at notes. Every step "
             "MUST be at most 95 characters long. Avoid generic hooks such as 'study smarter', "
             "'break down concepts', or 'improve your learning'."
         )},
         {"role": "user", "content": json.dumps({
-            "topic": pillar, "avoid_titles": recent_titles[:90],
+            "topic": pillar, "specific_angle": angle, "avoid_titles": recent_titles[:90],
             "format": "title <= 8 words; body one sentence; three short concrete steps; Turkish title and body",
         })},
     ]
