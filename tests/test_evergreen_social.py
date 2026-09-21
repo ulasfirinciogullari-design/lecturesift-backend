@@ -83,3 +83,25 @@ def test_prepare_command_never_publishes(monkeypatch):
     monkeypatch.setattr(social, "_ensure_post", lambda day: {"title": "Prepared"})
     monkeypatch.setattr(social, "publish_evergreen_post", lambda: (_ for _ in ()).throw(AssertionError("must not publish")))
     assert social.main() == 0
+
+
+def test_generated_card_requires_an_example_and_memory_check():
+    import pytest
+
+    card = {
+        "title": "Map each note to a question",
+        "body": "A question gives a scattered lecture note a useful place to live.",
+        "title_tr": "Her notu bir soruya bağla",
+        "body_tr": "Bir soru, dağınık ders notuna anlamlı bir yer verir.",
+        "keyword": "organize lecture notes",
+        "steps": [
+            "Write one question above each section of your notes.",
+            "For example, put your ATP definition under 'Why do cells need ATP?'",
+            "Hide your notes and answer each question aloud before checking.",
+        ],
+    }
+    assert social._validate(card, [])["title"] == card["title"]
+    with pytest.raises(ValueError, match="example"):
+        social._validate({**card, "steps": [card["steps"][0], "Use different colours for each section.", card["steps"][2]]}, [])
+    with pytest.raises(ValueError, match="closed-note"):
+        social._validate({**card, "steps": [*card["steps"][:2], "Read the questions again and underline important terms."]}, [])

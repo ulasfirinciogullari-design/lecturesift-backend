@@ -32,7 +32,10 @@ _PILLARS = (
 _SCHEMA = {
     "type": "object",
     "properties": {name: {"type": "string"} for name in ("title", "body", "title_tr", "body_tr", "keyword")}
-    | {"steps": {"type": "array", "items": {"type": "string"}}},
+    | {"steps": {
+        "type": "array", "items": {"type": "string"},
+        "description": "Three short actions: first do the method; second give a concrete subject example beginning 'For example,'; third test understanding with notes hidden or from memory.",
+    }},
     "required": ["title", "body", "title_tr", "body_tr", "keyword", "steps"],
     "additionalProperties": False,
 }
@@ -87,6 +90,12 @@ def _validate(data: dict, recent_titles: list[str]) -> dict:
         raise ValueError("Generated study steps are too short or too long")
     if len({step.casefold() for step in cleaned["steps"]}) != 3:
         raise ValueError("Generated study steps repeat")
+    if not any(phrase in cleaned["steps"][1].casefold() for phrase in ("for example", "e.g.", "such as")):
+        raise ValueError("Generated study card needs a concrete example")
+    if not any(phrase in cleaned["steps"][2].casefold() for phrase in (
+        "without looking", "from memory", "close your notes", "cover your notes", "hide your notes",
+    )):
+        raise ValueError("Generated study card needs a closed-note check")
     title = cleaned["title"].casefold()
     if any(title == old.casefold() for old in recent_titles):
         raise ValueError("Generated study title repeats a recent post")
@@ -124,8 +133,9 @@ def _generate(day: date, recent_titles: list[str], *, pillar_offset: int = 0) ->
                         "not a hashtag. Use only common study advice; do not invent research, statistics, product "
                         "capabilities, customer stories, or promises of exam results. No clickbait, spam, or filler. "
                         "The steps must teach something a student can try without LectureSift. "
-                        "Choose a narrow problem, not a broad topic summary. Give one concrete mini-example "
-                        "in a step, and end with a check the student can do from memory. Avoid generic hooks "
+                        "Choose a narrow problem, not a broad topic summary. Step 2 MUST begin 'For example,' "
+                        "and demonstrate the method with a real academic subject, term, or question. Step 3 MUST "
+                        "ask the student to check the answer from memory or without looking at notes. Avoid generic hooks "
                         "such as 'study smarter', 'break down concepts', or 'improve your learning'."
                     )},
                     {"role": "user", "content": json.dumps({
