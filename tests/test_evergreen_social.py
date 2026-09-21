@@ -105,3 +105,31 @@ def test_generated_card_requires_an_example_and_memory_check():
         social._validate({**card, "steps": [card["steps"][0], "Use different colours for each section.", card["steps"][2]]}, [])
     with pytest.raises(ValueError, match="closed-note"):
         social._validate({**card, "steps": [*card["steps"][:2], "Read the questions again and underline important terms."]}, [])
+
+
+def test_generation_revises_a_card_rejected_for_long_steps(monkeypatch):
+    from types import SimpleNamespace
+
+    calls = []
+
+    def create(**kwargs):
+        calls.append(list(kwargs["messages"]))
+        return SimpleNamespace(choices=[SimpleNamespace(
+            finish_reason="stop", message=SimpleNamespace(refusal=None, content="{}"),
+        )])
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            self.chat = SimpleNamespace(completions=SimpleNamespace(create=create))
+
+    def validate(data, recent_titles):
+        if len(calls) == 1:
+            raise ValueError("Generated study steps are too short or too long")
+        return {"title": "Revised"}
+
+    monkeypatch.setattr(social, "OPENAI_API_KEY", "available")
+    monkeypatch.setattr(social, "OpenAI", FakeOpenAI)
+    monkeypatch.setattr(social, "_validate", validate)
+    assert social._generate(date(2026, 9, 24), []) == {"title": "Revised"}
+    assert len(calls) == 2
+    assert "too short or too long" in calls[1][-1]["content"]
