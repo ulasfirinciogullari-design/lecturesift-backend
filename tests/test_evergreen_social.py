@@ -66,13 +66,6 @@ def test_generated_copy_rejects_duplicate_and_empty_steps():
     import pytest
     with pytest.raises(ValueError):
         social._validate(card, [])
-
-
-def test_prepare_command_never_publishes(monkeypatch):
-    monkeypatch.setattr(social.sys, "argv", ["evergreen_social", "prepare", "2026-09-23"])
-    monkeypatch.setattr(social, "_ensure_post", lambda day: {"title": "Prepared"})
-    monkeypatch.setattr(social, "publish_evergreen_post", lambda: (_ for _ in ()).throw(AssertionError("must not publish")))
-    assert social.main() == 0
     card["steps"] = [
         "Close the notes and explain the main idea aloud.",
         "Mark the exact point where your explanation breaks.",
@@ -83,3 +76,10 @@ def test_prepare_command_never_publishes(monkeypatch):
     card["title"] = "Research proves this study method"
     with pytest.raises(ValueError):
         social._validate(card, [])
+
+
+def test_prepare_command_never_publishes(monkeypatch):
+    monkeypatch.setattr(social.sys, "argv", ["evergreen_social", "prepare", "2026-09-23"])
+    monkeypatch.setattr(social, "_ensure_post", lambda day: {"title": "Prepared"})
+    monkeypatch.setattr(social, "publish_evergreen_post", lambda: (_ for _ in ()).throw(AssertionError("must not publish")))
+    assert social.main() == 0
