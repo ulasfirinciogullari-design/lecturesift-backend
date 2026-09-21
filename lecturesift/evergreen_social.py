@@ -123,7 +123,10 @@ def _generate(day: date, recent_titles: list[str], *, pillar_offset: int = 0) ->
                         "include accurate natural Turkish translations. The keyword is a natural search phrase, "
                         "not a hashtag. Use only common study advice; do not invent research, statistics, product "
                         "capabilities, customer stories, or promises of exam results. No clickbait, spam, or filler. "
-                        "The steps must teach something a student can try without LectureSift."
+                        "The steps must teach something a student can try without LectureSift. "
+                        "Choose a narrow problem, not a broad topic summary. Give one concrete mini-example "
+                        "in a step, and end with a check the student can do from memory. Avoid generic hooks "
+                        "such as 'study smarter', 'break down concepts', or 'improve your learning'."
                     )},
                     {"role": "user", "content": json.dumps({
                         "topic": pillar, "avoid_titles": recent_titles[:90],
@@ -194,7 +197,15 @@ def publish_evergreen_post(day: date | None = None) -> dict:
 
 def main() -> int:
     try:
-        result = publish_evergreen_post()
+        if len(sys.argv) == 3 and sys.argv[1] == "prepare":
+            selected_day = date.fromisoformat(sys.argv[2])
+            post = _ensure_post(selected_day)
+            result = {"status": "prepared" if post else "unavailable"}
+        elif len(sys.argv) == 1:
+            result = publish_evergreen_post()
+        else:
+            print("Usage: python -m lecturesift.evergreen_social [prepare YYYY-MM-DD]", file=sys.stderr)
+            return 2
     except (InstagramAPIError, InstagramConfigurationError, RuntimeError, ValueError, KeyError) as exc:
         print(f"Instagram evergreen post failed: {exc}", file=sys.stderr)
         return 1
