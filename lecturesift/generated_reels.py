@@ -159,7 +159,11 @@ def publish_generated_reel(day: date | None = None) -> dict:
         return {"status": "already_published", "kind": "generated_reel", "date": selected_day.isoformat()}
     marker = f"LectureSift · reel · {selected_day.isoformat()}"
     recent = client.get_recent_media(limit=50).get("data", [])
-    if any(marker in (item.get("caption") or "") for item in recent):
+    published_item = next((item for item in recent if marker in (item.get("caption") or "")), None)
+    if published_item:
+        if published_item.get("id"):
+            with _ready().begin() as connection:
+                connection.execute(update(_REELS).where(_REELS.c.day == selected_day).values(published_media_id=published_item["id"]))
         return {"status": "already_published", "kind": "generated_reel", "date": selected_day.isoformat()}
     base_url = (PUBLIC_BASE_URL or "https://api.lecturesift.com").rstrip("/")
     media_url = f"{base_url}/instagram/evergreen/reel/{selected_day.isoformat()}.mp4"

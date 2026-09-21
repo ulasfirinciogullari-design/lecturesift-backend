@@ -209,7 +209,11 @@ def publish_evergreen_post(day: date | None = None) -> dict:
         return {"status": "already_published", "kind": "evergreen", "date": selected_day.isoformat()}
     marker = f"LectureSift · idea · {selected_day.isoformat()}"
     recent = client.get_recent_media(limit=50).get("data", [])
-    if any(marker in (item.get("caption") or "") for item in recent):
+    published_item = next((item for item in recent if marker in (item.get("caption") or "")), None)
+    if published_item:
+        if published_item.get("id"):
+            with _engine().begin() as connection:
+                connection.execute(update(_POSTS).where(_POSTS.c.day == selected_day).values(published_media_id=published_item["id"]))
         return {"status": "already_published", "kind": "evergreen", "date": selected_day.isoformat()}
     base_url = PUBLIC_BASE_URL or "https://api.lecturesift.com"
     container = client.create_media_container(
