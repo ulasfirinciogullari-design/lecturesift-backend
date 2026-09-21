@@ -1290,6 +1290,34 @@ def instagram_daily_image(day: str) -> Response:
     )
 
 
+@app.get("/instagram/evergreen/image/{day}.jpg")
+def instagram_evergreen_image(day: str) -> Response:
+    """Public, persisted study card fetched by Instagram after editorial checks."""
+    from datetime import date
+    from .evergreen_social import image_for_day
+
+    try:
+        selected_day = date.fromisoformat(day)
+    except ValueError:
+        raise HTTPException(400, detail={"code": "LS-IG-06", "message": "Geçersiz tarih."})
+    content = image_for_day(selected_day)
+    if content is None:
+        raise HTTPException(404, detail={"code": "LS-IG-08", "message": "Gönderi görseli bulunamadı."})
+    return Response(content=content, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/instagram/evergreen/status")
+def instagram_evergreen_status(day: str) -> dict:
+    from datetime import date
+    from .evergreen_social import status_for_day
+
+    try:
+        selected_day = date.fromisoformat(day)
+    except ValueError:
+        raise HTTPException(400, detail={"code": "LS-IG-06", "message": "Geçersiz tarih."})
+    return status_for_day(selected_day)
+
+
 @app.get("/instagram/daily/reel/{day}.jpg")
 def instagram_daily_reel_cover(day: str) -> Response:
     """Public deterministic 9:16 cover fetched by Instagram."""
