@@ -70,6 +70,6 @@ test.describe('open learning material without JavaScript', () => {
     await page.locator('#duzeltme .guide-button').click();
     await expect(page).toHaveURL('/study-guides');
     await page.evaluate(() => window.scrollTo(0, 0));
-    await page.screenshot({path:testInfo.outputPath('study-library-turkish-layout.jpg'),type:'jpeg',quality:65});
+    await page.screenshot({path:testInfo.outputPath('study-library-turkish-layout.jpg'),fullPage:true,type:'jpeg',quality:65});
   });
 });
