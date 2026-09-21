@@ -359,7 +359,7 @@ services:
     name: lecturesift-instagram-daily
     runtime: docker
     plan: starter
-    schedule: "0 17 * * *"
+    schedule: "0 8,17 * * *"
     dockerCommand: python -m lecturesift.daily_social
     envVars:
       - key: INSTAGRAM_ACCESS_TOKEN
@@ -367,6 +367,10 @@ services:
       - key: INSTAGRAM_ACCOUNT_ID
         sync: false
       - key: INSTAGRAM_APP_SECRET
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DATABASE_URL
         sync: false
       - key: INSTAGRAM_DAILY_AUTOMATION_ENABLED
         value: "true"

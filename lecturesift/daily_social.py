@@ -15,9 +15,10 @@ import sys
 import tempfile
 import time
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from functools import lru_cache
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -348,9 +349,8 @@ def _fit_wrapped(
     return font, _wrap(draw, text, font, max_width, max_lines)
 
 
-def render_daily_image(day: date) -> bytes:
+def render_tip_image(tip: DailyTip) -> bytes:
     """Render an API-compatible 4:5 lesson card with the full three-step method."""
-    tip = daily_tip(day)
     image = Image.new("RGB", (1080, 1350), "#050b1f")
     draw = ImageDraw.Draw(image)
     draw.ellipse((650, -100, 1160, 410), fill="#18376c")
@@ -384,6 +384,10 @@ def render_daily_image(day: date) -> bytes:
     output = io.BytesIO()
     image.save(output, format="JPEG", quality=93, optimize=True)
     return output.getvalue()
+
+
+def render_daily_image(day: date) -> bytes:
+    return render_tip_image(daily_tip(day))
 
 
 def render_daily_reel_cover(day: date) -> bytes:
@@ -634,7 +638,11 @@ def publish_daily_post(day: date | None = None) -> dict:
 
 def main() -> int:
     try:
-        result = publish_daily_post()
+        if datetime.now(ZoneInfo("Europe/Istanbul")).hour < 16:
+            from .evergreen_social import publish_evergreen_post
+            result = publish_evergreen_post()
+        else:
+            result = publish_daily_post()
     except (InstagramAPIError, InstagramConfigurationError, RuntimeError, KeyError) as exc:
         print(f"Instagram scheduled post failed: {exc}", file=sys.stderr)
         return 1
