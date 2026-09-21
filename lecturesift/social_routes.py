@@ -16,7 +16,7 @@ from .config import (
     INSTAGRAM_GRAPH_API_VERSION,
     PUBLIC_BASE_URL,
 )
-from .daily_social import daily_marker, daily_tip, media_type_for_day, render_daily_image, render_daily_reel, render_daily_reel_cover
+from .daily_social import daily_marker, daily_tip, media_type_for_day, reel_media_url, render_daily_image, render_daily_reel, render_daily_reel_cover
 from .instagram import InstagramAPIError, InstagramClient, InstagramConfigurationError
 from .launch_social import LAUNCH_POSTS, completed_indices, next_pending_post, render_launch_image
 
@@ -62,7 +62,7 @@ def install_social_routes(app: FastAPI) -> None:
             "caption": tip.caption,
             "image_url": f"{base}/instagram/daily/image/{day_text}.jpg",
             "reel_cover_url": f"{base}/instagram/daily/reel/{day_text}.jpg",
-            "reel_video_url": f"{base}/instagram/daily/reel/{day_text}.mp4",
+            "reel_video_url": reel_media_url(selected_day, base),
         }
 
     @app.get("/instagram/launch/image/{index}.jpg")

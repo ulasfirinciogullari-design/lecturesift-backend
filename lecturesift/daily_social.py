@@ -278,6 +278,11 @@ def daily_marker(day: date) -> str:
     return f"LectureSift · {day.isoformat()}"
 
 
+def reel_media_url(day: date, base_url: str) -> str:
+    """Use a new public URL when Reel media changes, avoiding day-long caches."""
+    return f"{base_url.rstrip('/')}/instagram/daily/reel/{day.isoformat()}.mp4?audio=1"
+
+
 def daily_tip(day: date) -> DailyTip:
     title, body, title_tr, body_tr, steps, keyword, hashtags = _TIPS[_index(day)]
     # The publishing marker stays readable and does not consume a hashtag slot.
@@ -602,7 +607,7 @@ def publish_daily_post(day: date | None = None) -> dict:
     base_url = PUBLIC_BASE_URL or "https://api.lecturesift.com"
     media_type = media_type_for_day(selected_day)
     if media_type == "REELS":
-        media_url = f"{base_url}/instagram/daily/reel/{selected_day.isoformat()}.mp4"
+        media_url = reel_media_url(selected_day, base_url)
         cover_url = f"{base_url}/instagram/daily/reel/{selected_day.isoformat()}.jpg"
         _verify_public_video(media_url)
         container = client.create_media_container(

@@ -92,7 +92,7 @@ def test_daily_publisher_creates_a_reel_container(monkeypatch):
     result = daily_social.publish_daily_post(date(2026, 8, 27))
     assert result["media_type"] == "REELS"
     assert captured["media_type"] == "REELS"
-    assert captured["media_url"].endswith("/instagram/daily/reel/2026-08-27.mp4")
+    assert captured["media_url"].endswith("/instagram/daily/reel/2026-08-27.mp4?audio=1")
     assert captured["cover_url"].endswith("/instagram/daily/reel/2026-08-27.jpg")
 
 
