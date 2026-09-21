@@ -12,7 +12,7 @@ from datetime import date, datetime
 from functools import lru_cache
 from zoneinfo import ZoneInfo
 
-from openai import OpenAI
+from openai import OpenAI, OpenAIError
 from sqlalchemy import Column, Date, DateTime, MetaData, String, Table, Text, create_engine, select, update
 from sqlalchemy.exc import IntegrityError
 
@@ -128,33 +128,36 @@ def _validate(data: dict, recent_titles: list[str]) -> dict:
     return cleaned
 
 
-def _generate(day: date, recent_titles: list[str]) -> dict:
+def _generate(day: date, recent_titles: list[str], *, pillar_offset: int = 0) -> dict:
     if not OPENAI_API_KEY:
         raise InstagramConfigurationError("OpenAI key is required for evergreen publishing")
-    pillar, _ = _PILLARS[day.toordinal() % len(_PILLARS)]
+    pillar, _ = _PILLARS[(day.toordinal() + pillar_offset) % len(_PILLARS)]
     client = OpenAI(api_key=OPENAI_API_KEY, timeout=45, max_retries=1)
     for _ in range(3):
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            temperature=0.7,
-            max_tokens=650,
-            response_format={"type": "json_schema", "json_schema": {"name": "study_card", "strict": True, "schema": _SCHEMA}},
-            messages=[
-                {"role": "system", "content": (
-                    "You are the editorial writer for LectureSift, a study tool. Create one original, practical "
-                    "Instagram study card on the requested topic. Write a specific, useful micro-workflow: "
-                    "a strong hook, one clear benefit, and exactly three actionable steps. English is primary; "
-                    "include accurate natural Turkish translations. The keyword is a natural search phrase, "
-                    "not a hashtag. Use only common study advice; do not invent research, statistics, product "
-                    "capabilities, customer stories, or promises of exam results. No clickbait, spam, or filler. "
-                    "The steps must teach something a student can try without LectureSift."
-                )},
-                {"role": "user", "content": json.dumps({
-                    "topic": pillar, "avoid_titles": recent_titles[:90],
-                    "format": "title <= 8 words; body one sentence; three short concrete steps; Turkish title and body",
-                })},
-            ],
-        )
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                temperature=0.7,
+                max_tokens=650,
+                response_format={"type": "json_schema", "json_schema": {"name": "study_card", "strict": True, "schema": _SCHEMA}},
+                messages=[
+                    {"role": "system", "content": (
+                        "You are the editorial writer for LectureSift, a study tool. Create one original, practical "
+                        "Instagram study card on the requested topic. Write a specific, useful micro-workflow: "
+                        "a strong hook, one clear benefit, and exactly three actionable steps. English is primary; "
+                        "include accurate natural Turkish translations. The keyword is a natural search phrase, "
+                        "not a hashtag. Use only common study advice; do not invent research, statistics, product "
+                        "capabilities, customer stories, or promises of exam results. No clickbait, spam, or filler. "
+                        "The steps must teach something a student can try without LectureSift."
+                    )},
+                    {"role": "user", "content": json.dumps({
+                        "topic": pillar, "avoid_titles": recent_titles[:90],
+                        "format": "title <= 8 words; body one sentence; three short concrete steps; Turkish title and body",
+                    })},
+                ],
+            )
+        except OpenAIError as exc:
+            raise InstagramConfigurationError("Study card generation service is unavailable") from exc
         choice = response.choices[0]
         if choice.finish_reason != "stop" or choice.message.refusal:
             continue

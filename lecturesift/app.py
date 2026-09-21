@@ -1318,6 +1318,41 @@ def instagram_evergreen_status(day: str) -> dict:
     return status_for_day(selected_day)
 
 
+@app.get("/instagram/evergreen/reel/{day}.jpg")
+def instagram_generated_reel_cover(day: str) -> Response:
+    from datetime import date
+    from .generated_reels import cover_for_day
+
+    try:
+        selected_day = date.fromisoformat(day)
+    except ValueError:
+        raise HTTPException(400, detail={"code": "LS-IG-06", "message": "Geçersiz tarih."})
+    content = cover_for_day(selected_day)
+    if content is None:
+        raise HTTPException(404, detail={"code": "LS-IG-08", "message": "Gönderi kapağı bulunamadı."})
+    return Response(content=content, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/instagram/evergreen/reel/{day}.mp4")
+def instagram_generated_reel_video(day: str) -> Response:
+    from datetime import date
+    from .generated_reels import video_for_day
+
+    try:
+        selected_day = date.fromisoformat(day)
+        if abs((selected_day - date.today()).days) > 2:
+            raise HTTPException(404, detail={"code": "LS-IG-06", "message": "Gönderi videosu bulunamadı."})
+    except ValueError:
+        raise HTTPException(400, detail={"code": "LS-IG-06", "message": "Geçersiz tarih."})
+    try:
+        content = video_for_day(selected_day)
+    except RuntimeError as exc:
+        raise HTTPException(503, detail={"code": "LS-IG-07", "message": str(exc)}) from exc
+    if content is None:
+        raise HTTPException(404, detail={"code": "LS-IG-08", "message": "Gönderi videosu bulunamadı."})
+    return Response(content=content, media_type="video/mp4", headers={"Cache-Control": "public, max-age=86400"})
+
+
 @app.get("/instagram/daily/reel/{day}.jpg")
 def instagram_daily_reel_cover(day: str) -> Response:
     """Public deterministic 9:16 cover fetched by Instagram."""
