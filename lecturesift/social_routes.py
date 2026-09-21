@@ -14,8 +14,9 @@ from .config import (
     INSTAGRAM_ACCOUNT_ID,
     INSTAGRAM_APP_SECRET,
     INSTAGRAM_GRAPH_API_VERSION,
+    PUBLIC_BASE_URL,
 )
-from .daily_social import render_daily_image, render_daily_reel, render_daily_reel_cover
+from .daily_social import daily_marker, daily_tip, media_type_for_day, render_daily_image, render_daily_reel, render_daily_reel_cover
 from .instagram import InstagramAPIError, InstagramClient, InstagramConfigurationError
 from .launch_social import LAUNCH_POSTS, completed_indices, next_pending_post, render_launch_image
 
@@ -48,6 +49,22 @@ def _instagram_snapshot() -> tuple[dict, list[dict]]:
 
 
 def install_social_routes(app: FastAPI) -> None:
+    @app.get("/instagram/daily/plan")
+    def instagram_daily_plan(day: str | None = None) -> dict:
+        selected_day = _parse_day(day) if day else date.today()
+        day_text = selected_day.isoformat()
+        base = (PUBLIC_BASE_URL or "https://api.lecturesift.com").rstrip("/")
+        tip = daily_tip(selected_day)
+        return {
+            "date": day_text,
+            "media_type": media_type_for_day(selected_day),
+            "title": tip.title,
+            "caption": tip.caption,
+            "image_url": f"{base}/instagram/daily/image/{day_text}.jpg",
+            "reel_cover_url": f"{base}/instagram/daily/reel/{day_text}.jpg",
+            "reel_video_url": f"{base}/instagram/daily/reel/{day_text}.mp4",
+        }
+
     @app.get("/instagram/launch/image/{index}.jpg")
     def instagram_launch_image(index: int) -> Response:
         try:
@@ -124,7 +141,7 @@ def install_social_routes(app: FastAPI) -> None:
     @app.get("/instagram/daily/status")
     def instagram_daily_status(day: str | None = None) -> dict:
         selected_day = _parse_day(day) if day else date.today()
-        marker = f"#LectureSiftGununNotu{selected_day:%Y%m%d}"
+        marker = daily_marker(selected_day)
         try:
             _account, recent = _instagram_snapshot()
             completed = completed_indices(recent)
@@ -137,6 +154,7 @@ def install_social_routes(app: FastAPI) -> None:
             "ok": True,
             "account": "lecturesift",
             "date": selected_day.isoformat(),
+            "planned_media_type": media_type_for_day(selected_day),
             "marker": marker,
             "marker_present": marker_present,
             "launch_complete": len(completed) == len(LAUNCH_POSTS),

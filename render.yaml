@@ -165,7 +165,7 @@ services:
       - key: INSTAGRAM_DAILY_AUTOMATION_ENABLED
         value: "false"
       - key: INSTAGRAM_DAILY_MEDIA_TYPE
-        value: REELS
+        value: MIXED
       - key: PUBLIC_BASE_URL
         value: https://api.lecturesift.com
       - key: LECTURESIFT_GUEST_TRIAL_MINUTES
@@ -369,8 +369,8 @@ services:
       - key: INSTAGRAM_APP_SECRET
         sync: false
       - key: INSTAGRAM_DAILY_AUTOMATION_ENABLED
-        value: "false"
+        value: "true"
       - key: INSTAGRAM_DAILY_MEDIA_TYPE
-        value: REELS
+        value: MIXED
       - key: PUBLIC_BASE_URL
         value: https://api.lecturesift.com
