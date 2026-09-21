@@ -9,6 +9,8 @@ test('localized home links to an actual guide edition after client localization'
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await expect(page.locator('.guide-grid .guide-card')).toHaveCount(3);
   await expect(page.getByRole('heading', {level:1})).toContainText('Study guides');
+  await expect(page.locator('.guide-preview')).toContainText('Mean');
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({path:testInfo.outputPath('study-library-layout.jpg'),type:'jpeg',quality:65});
 });
 
@@ -42,7 +44,7 @@ test.describe('open learning material without JavaScript', () => {
 
   test('every published guide has a readable body and working internal section links', async ({page}) => {
     for (const prefix of ['', '/en']) {
-      for (const slug of ['study-guides','study-pack-example','check-ai-notes','active-recall']) {
+      for (const slug of ['study-guides','study-pack-example','check-ai-notes','active-recall','about-study-guides']) {
         await page.goto(`${prefix}/${slug}`);
         await expect(page.locator('.guide-article h1')).toHaveCount(1);
         await expect(page.locator('.guide-article section').first()).toBeVisible();
@@ -50,5 +52,24 @@ test.describe('open learning material without JavaScript', () => {
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
       }
     }
+  });
+
+  test('about the guides opens a real page from the library and an article in both languages', async ({page}, testInfo) => {
+    for (const prefix of ['', '/en']) {
+      for (const slug of ['study-guides', 'active-recall']) {
+        await page.goto(`${prefix}/${slug}`);
+        await page.locator('.guide-footer [data-guide-about]').click();
+        await expect(page).toHaveURL(`${prefix}/about-study-guides`);
+        await expect(page.getByRole('heading', {level: 1})).toHaveText(prefix ? 'About these guides' : 'Rehberler hakkında');
+        await expect(page.locator(prefix ? '#corrections a[href="/en/contact"]' : '#duzeltme a[href="/contact"]')).toBeVisible();
+      }
+    }
+    await page.locator('.guide-language').click();
+    await expect(page).toHaveURL('/about-study-guides');
+    await expect(page.getByRole('heading', {level: 1})).toHaveText('Rehberler hakkında');
+    await page.locator('#duzeltme .guide-button').click();
+    await expect(page).toHaveURL('/study-guides');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({path:testInfo.outputPath('study-library-turkish-layout.jpg'),type:'jpeg',quality:65});
   });
 });

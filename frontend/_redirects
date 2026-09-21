@@ -28,6 +28,20 @@
 /:lang/refund.html                  /:lang/refund             301!
 
 # Study resources have Turkish and English editions.
+/about-study-guides.html /about-study-guides 301!
+/:lang/about-study-guides.html /:lang/about-study-guides 301!
+/de/about-study-guides /en/about-study-guides 301!
+/fr/about-study-guides /en/about-study-guides 301!
+/es/about-study-guides /en/about-study-guides 301!
+/it/about-study-guides /en/about-study-guides 301!
+/pt/about-study-guides /en/about-study-guides 301!
+/ru/about-study-guides /en/about-study-guides 301!
+/ar/about-study-guides /en/about-study-guides 301!
+/zh/about-study-guides /en/about-study-guides 301!
+/ja/about-study-guides /en/about-study-guides 301!
+/ko/about-study-guides /en/about-study-guides 301!
+/hi/about-study-guides /en/about-study-guides 301!
+
 /study-guides.html /study-guides 301!
 /:lang/study-guides.html /:lang/study-guides 301!
 /de/study-guides /en/study-guides 301!
