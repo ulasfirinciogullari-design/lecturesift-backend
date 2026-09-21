@@ -1236,7 +1236,7 @@ def instagram_create_media(
     client: InstagramClient = Depends(_instagram_client),
 ) -> dict:
     media_type = payload.media_type.upper()
-    if media_type not in {"IMAGE", "REELS", "STORIES"}:
+    if media_type not in {"IMAGE", "VIDEO", "REELS", "STORIES"}:
         raise HTTPException(400, detail={"code": "LS-IG-05", "message": "Desteklenmeyen Instagram medya türü."})
     try:
         result = client.create_media_container(

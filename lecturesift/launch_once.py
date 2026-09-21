@@ -14,7 +14,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from . import daily_social as daily_social_module
-from .daily_social import _client, publish_next_launch_post
+from .daily_social import _client, daily_marker, publish_next_launch_post
 from .instagram import InstagramAPIError, InstagramConfigurationError
 from .launch_social import completed_indices
 
@@ -32,7 +32,7 @@ def _write_status(payload: dict) -> None:
 
 
 def _today_marker(day: date) -> str:
-    return f"#LectureSiftGununNotu{day:%Y%m%d}"
+    return daily_marker(day)
 
 
 def main() -> int:

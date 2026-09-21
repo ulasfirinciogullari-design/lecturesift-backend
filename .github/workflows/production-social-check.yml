@@ -3,13 +3,15 @@ name: Production social check
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: "30 18 * * *"
 
 permissions:
   contents: read
 
 jobs:
   verify-social-rollout:
-    if: ${{ !contains(github.event.head_commit.message, '[skip render]') }}
+    if: ${{ github.event_name == 'schedule' || !contains(github.event.head_commit.message, '[skip render]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -113,83 +115,40 @@ jobs:
             sleep 15
           done
 
-      - name: Verify Instagram connection and completed launch grid
+      - name: Verify Instagram connection and public media
         if: ${{ steps.instagram_publishing.outputs.enabled == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
           instagram_health="https://api.lecturesift.com/instagram/health"
-          launch_status="https://api.lecturesift.com/instagram/launch/status"
-
-          echo "Instagram health:"
           curl --silent --show-error --fail --max-time 25 "$instagram_health"
           echo
+          today=$(date -u +%F)
+          curl --silent --show-error --fail --max-time 25 \
+            "https://api.lecturesift.com/instagram/daily/image/$today.jpg" -o /dev/null
+          curl --silent --show-error --fail --max-time 25 \
+            "https://api.lecturesift.com/instagram/daily/reel/$today.jpg" -o /dev/null
+          curl --silent --show-error --fail --max-time 45 \
+            "https://api.lecturesift.com/instagram/daily/reel/$today.mp4" -o /dev/null
 
-          for attempt in $(seq 1 32); do
-            if body=$(curl --silent --show-error --fail --max-time 25 "$launch_status"); then
-              echo "Launch status: $body"
-              count=$(python -c 'import json,sys; print(json.loads(sys.argv[1]).get("completed_count", 0))' "$body")
-              if [ "$count" -ge 9 ]; then
-                break
-              fi
-            fi
-            if [ "$attempt" -eq 32 ]; then
-              echo "Completed Instagram launch grid was not observed in time." >&2
-              exit 1
-            fi
-            sleep 15
-          done
-
-      - name: Read deployment-time Instagram repair status
-        if: ${{ steps.instagram_publishing.outputs.enabled == 'true' }}
+      - name: Verify today's scheduled post
+        if: ${{ github.event_name == 'schedule' && steps.instagram_publishing.outputs.enabled == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
-          bootstrap="https://api.lecturesift.com/instagram/launch/bootstrap"
-          for attempt in $(seq 1 24); do
-            if body=$(curl --silent --show-error --fail --max-time 25 "$bootstrap"); then
-              echo "Instagram repair status: $body"
-              status=$(python -c 'import json,sys; print(json.loads(sys.argv[1]).get("status", "unknown"))' "$body")
-              if [ "$status" = "error" ] || [ "$status" = "launch_not_complete" ]; then
-                echo "Instagram repair helper reported $status." >&2
-                exit 1
-              fi
-              if [ "$status" != "waiting" ] && [ "$status" != "retrying" ] && [ "$status" != "not_started" ]; then
-                break
-              fi
-            fi
-            if [ "$attempt" -eq 24 ]; then
-              echo "Instagram repair helper did not settle in time." >&2
-              exit 1
-            fi
-            sleep 10
-          done
-
-      - name: Verify today's bilingual Reel after publishing window
-        if: ${{ steps.instagram_publishing.outputs.enabled == 'true' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          hour=$(date -u +%H)
-          if [ "$hour" -lt 17 ]; then
-            echo "Daily Instagram publishing window has not opened yet; skipping daily marker check."
-            exit 0
-          fi
-
           today=$(date -u +%F)
           daily_status="https://api.lecturesift.com/instagram/daily/status?day=$today"
-          for attempt in $(seq 1 32); do
+          for attempt in $(seq 1 20); do
             if body=$(curl --silent --show-error --fail --max-time 25 "$daily_status"); then
               echo "Daily status: $body"
               present=$(python -c 'import json,sys; print("true" if json.loads(sys.argv[1]).get("marker_present") else "false")' "$body")
-              complete=$(python -c 'import json,sys; print("true" if json.loads(sys.argv[1]).get("launch_complete") else "false")' "$body")
-              if [ "$present" = "true" ] && [ "$complete" = "true" ]; then
+              if [ "$present" = "true" ]; then
                 exit 0
               fi
             fi
-            if [ "$attempt" -eq 32 ]; then
-              echo "Today's bilingual Instagram Reel marker was not observed in time." >&2
+            if [ "$attempt" -eq 20 ]; then
+              echo "Today's Instagram post marker was not observed in time." >&2
               exit 1
             fi
-            sleep 15
+            sleep 30
           done

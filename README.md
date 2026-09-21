@@ -86,10 +86,11 @@ The automated suite covers human-readable API errors, SSRF/private-URL rejection
 - `GET /jobs/{job_id}/download`: complete ZIP package
 - `GET /health`: deployment health, engine version, and exact 40-hex build revision (`unknown` when unverified)
 - `GET /instagram/health`: verify the configured Instagram account connection
-- `POST /instagram/media`: create an image, Reel, or Story media container
+- `POST /instagram/media`: create an image, video, Reel, or Story media container
 - `GET /instagram/media/{container_id}`: inspect container processing status
 - `POST /instagram/media/publish`: publish a ready media container
 - `GET /instagram/daily/reel/{date}.mp4`: serve the cached 9:16 video used by the daily cloud scheduler
+- `GET /instagram/daily/plan?day=YYYY-MM-DD`: preview the next caption and photo/Reel format
 
 ## Billing and hosted card payments
 
