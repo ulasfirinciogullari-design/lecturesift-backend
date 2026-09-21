@@ -76,9 +76,6 @@ def test_generated_copy_rejects_duplicate_and_empty_steps():
     card["title"] = "Research proves this study method"
     with pytest.raises(ValueError):
         social._validate(card, [])
-    card["title"] = "Identify and Fix Your Study Mistakes"
-    with pytest.raises(ValueError, match="too broad"):
-        social._validate(card, [])
 
 
 def test_prepare_command_never_publishes(monkeypatch):
@@ -108,6 +105,8 @@ def test_generated_card_requires_an_example_and_memory_check():
         social._validate({**card, "steps": [card["steps"][0], "Use different colours for each section.", card["steps"][2]]}, [])
     with pytest.raises(ValueError, match="closed-note"):
         social._validate({**card, "steps": [*card["steps"][:2], "Read the questions again and underline important terms."]}, [])
+    with pytest.raises(ValueError, match="too broad"):
+        social._validate({**card, "title": "Identify and Fix Your Study Mistakes"}, [])
 
 
 def test_generation_revises_a_card_rejected_for_long_steps(monkeypatch):
