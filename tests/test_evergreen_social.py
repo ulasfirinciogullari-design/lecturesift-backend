@@ -76,6 +76,9 @@ def test_generated_copy_rejects_duplicate_and_empty_steps():
     card["title"] = "Research proves this study method"
     with pytest.raises(ValueError):
         social._validate(card, [])
+    card["title"] = "Identify and Fix Your Study Mistakes"
+    with pytest.raises(ValueError, match="too broad"):
+        social._validate(card, [])
 
 
 def test_prepare_command_never_publishes(monkeypatch):
@@ -132,4 +135,5 @@ def test_generation_revises_a_card_rejected_for_long_steps(monkeypatch):
     monkeypatch.setattr(social, "_validate", validate)
     assert social._generate(date(2026, 9, 24), []) == {"title": "Revised"}
     assert len(calls) == 2
+    assert social.json.loads(calls[0][1]["content"])["specific_angle"]
     assert "too short or too long" in calls[1][-1]["content"]
