@@ -117,32 +117,34 @@ def _generate(day: date, recent_titles: list[str], *, pillar_offset: int = 0) ->
         raise InstagramConfigurationError("OpenAI key is required for evergreen publishing")
     pillar, _ = _PILLARS[(day.toordinal() + pillar_offset) % len(_PILLARS)]
     client = OpenAI(api_key=OPENAI_API_KEY, timeout=45, max_retries=1)
-    for _ in range(3):
+    messages = [
+        {"role": "system", "content": (
+            "You are the editorial writer for LectureSift, a study tool. Create one original, practical "
+            "Instagram study card on the requested topic. Write a specific, useful micro-workflow: "
+            "a strong hook, one clear benefit, and exactly three actionable steps. English is primary; "
+            "include accurate natural Turkish translations. The keyword is a natural search phrase, "
+            "not a hashtag. Use only common study advice; do not invent research, statistics, product "
+            "capabilities, customer stories, or promises of exam results. No clickbait, spam, or filler. "
+            "The steps must teach something a student can try without LectureSift. "
+            "Choose a narrow problem, not a broad topic summary. Step 2 MUST begin 'For example,' "
+            "and demonstrate the method with a real academic subject, term, or question. Step 3 MUST "
+            "ask the student to check the answer from memory or without looking at notes. Every step "
+            "MUST be at most 95 characters long. Avoid generic hooks such as 'study smarter', "
+            "'break down concepts', or 'improve your learning'."
+        )},
+        {"role": "user", "content": json.dumps({
+            "topic": pillar, "avoid_titles": recent_titles[:90],
+            "format": "title <= 8 words; body one sentence; three short concrete steps; Turkish title and body",
+        })},
+    ]
+    for _ in range(4):
         try:
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
                 temperature=0.7,
                 max_tokens=650,
                 response_format={"type": "json_schema", "json_schema": {"name": "study_card", "strict": True, "schema": _SCHEMA}},
-                messages=[
-                    {"role": "system", "content": (
-                        "You are the editorial writer for LectureSift, a study tool. Create one original, practical "
-                        "Instagram study card on the requested topic. Write a specific, useful micro-workflow: "
-                        "a strong hook, one clear benefit, and exactly three actionable steps. English is primary; "
-                        "include accurate natural Turkish translations. The keyword is a natural search phrase, "
-                        "not a hashtag. Use only common study advice; do not invent research, statistics, product "
-                        "capabilities, customer stories, or promises of exam results. No clickbait, spam, or filler. "
-                        "The steps must teach something a student can try without LectureSift. "
-                        "Choose a narrow problem, not a broad topic summary. Step 2 MUST begin 'For example,' "
-                        "and demonstrate the method with a real academic subject, term, or question. Step 3 MUST "
-                        "ask the student to check the answer from memory or without looking at notes. Avoid generic hooks "
-                        "such as 'study smarter', 'break down concepts', or 'improve your learning'."
-                    )},
-                    {"role": "user", "content": json.dumps({
-                        "topic": pillar, "avoid_titles": recent_titles[:90],
-                        "format": "title <= 8 words; body one sentence; three short concrete steps; Turkish title and body",
-                    })},
-                ],
+                messages=messages,
             )
         except OpenAIError as exc:
             raise InstagramConfigurationError("Study card generation service is unavailable") from exc
@@ -151,8 +153,14 @@ def _generate(day: date, recent_titles: list[str], *, pillar_offset: int = 0) ->
             continue
         try:
             return _validate(json.loads(choice.message.content or "{}"), recent_titles)
-        except (ValueError, TypeError):
-            continue
+        except (ValueError, TypeError) as exc:
+            messages.extend([
+                {"role": "assistant", "content": choice.message.content or "{}"},
+                {"role": "user", "content": (
+                    f"Revise this card: {exc}. Keep each step under 95 characters, including the "
+                    "specific example and the closed-note check. Return only valid JSON."
+                )},
+            ])
     raise InstagramConfigurationError("No study card passed the editorial checks")
 
 
