@@ -171,7 +171,7 @@ def test_github_social_checks_wait_for_exact_github_sha_first():
     )
     revision_gate = workflow.index('expected_revision="${GITHUB_SHA,,}"')
     comparison = workflow.index('if [ "$revision" = "$expected_revision" ]')
-    instagram = workflow.index("Verify Instagram connection and completed launch grid")
+    instagram = workflow.index("Verify Instagram connection and public media")
     assert checkout < publishing_gate < revision_gate < comparison < instagram
     assert "matching_services" in workflow
     assert 'names == ["lecturesift-instagram-daily"]' in workflow
@@ -182,8 +182,9 @@ def test_github_social_checks_wait_for_exact_github_sha_first():
     social_condition = (
         "if: ${{ steps.instagram_publishing.outputs.enabled == 'true' }}"
     )
-    assert workflow.count(social_condition) == 3
+    assert workflow.count(social_condition) == 1
     assert workflow.index(social_condition) > comparison
+    assert "github.event_name == 'schedule' && steps.instagram_publishing.outputs.enabled == 'true'" in workflow
     assert "Production API did not serve GITHUB_SHA in time" in workflow
     assert "social checks are blocked" in workflow
 
