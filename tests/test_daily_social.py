@@ -13,7 +13,7 @@ def test_daily_tip_is_stable_and_has_idempotency_marker():
     selected_day = date(2026, 8, 27)
     assert daily_tip(selected_day) == daily_tip(selected_day)
     assert "LectureSift · 2026-08-27" in daily_tip(selected_day).caption
-    assert daily_tip(selected_day).caption.count("#") == 5
+    assert daily_tip(selected_day).caption.count("#") == 8
     assert daily_tip(selected_day).title != daily_tip(selected_day + timedelta(days=1)).title
     assert "1. " in daily_tip(selected_day).caption
 

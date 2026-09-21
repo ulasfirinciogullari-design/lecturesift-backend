@@ -288,7 +288,7 @@ def daily_tip(day: date) -> DailyTip:
     title, body, title_tr, body_tr, steps, keyword, hashtags = _TIPS[_index(day)]
     # The publishing marker stays readable and does not consume a hashtag slot.
     marker = daily_marker(day)
-    selected_hashtags = " ".join(hashtags.split()[:5])
+    selected_hashtags = hashtags
     caption = (
         f"{title} | {keyword}\n\n{body}\n\n"
         + "\n".join(f"{index}. {step}" for index, step in enumerate(steps, 1))
