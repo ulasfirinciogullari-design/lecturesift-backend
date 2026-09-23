@@ -1,5 +1,20 @@
 import {test, expect} from './fixtures.mjs';
 
+test('public runtime bundles preserve every language and picker navigation', async ({page}) => {
+  for (const language of ['tr', 'en', 'de', 'fr', 'es', 'it', 'pt', 'ru', 'ar', 'zh', 'ja', 'ko', 'hi']) {
+    const prefix = language === 'tr' ? '' : `/${language}`;
+    await page.goto(`${prefix}/document-summary`);
+    await expect.poll(() => page.evaluate(() => window.LectureSiftI18n?.language)).toBe(language);
+    await expect(page.locator('html')).toHaveAttribute('lang', language);
+    await expect(page.locator('#uiLanguage')).toHaveValue(language);
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', `https://lecturesift.com${prefix}/document-summary`);
+    expect(await page.evaluate(() => window.LectureSiftI18n.t('language.label'))).not.toBe('language.label');
+  }
+  await page.locator('#uiLanguage').selectOption('en');
+  await expect(page).toHaveURL('/en/document-summary');
+  await expect(page.locator('[data-landing-page] h1')).toContainText('PDF');
+});
+
 test('runtime SEO preserves the language of the breadcrumb home', async ({page}) => {
   for (const prefix of ['', '/en', '/ar']) {
     await page.goto(`${prefix}/document-summary`);

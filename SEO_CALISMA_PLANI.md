@@ -47,6 +47,62 @@ yayın ve Google'ın yeniden taraması ayrıca izlenir.
 
 ## Ölçülmüş başlangıç
 
+### Yayın ve ikinci geliştirme
+
+İlk paket [#107](https://github.com/ulasfirinciogullari-design/lecturesift-backend/pull/107)
+ile ana sürüme alındı. 23 Eylül 22:06 UTC canlı kontrolünde altı ürün
+sayfasındaki içerik, canonical, dil bağlantıları, FAQ ve tarihler doğrulandı.
+GitHub Actions'ta 1.386 uygulama ve 151 tarayıcı testi geçti; ana sürümün
+iki kontrolü de başarılıydı. Aşağıdaki ilk teknik denetim tarihsel kayıttır.
+
+İkinci paket, bu denetimde bulunan bir ölçüm açığını kapatır: çalışma
+rehberleri analytics izin listesinde değildi ve izin/ölçüm dosyalarını
+yüklemiyordu. Rehberler artık küçük izin ve ölçüm dosyalarını doğrudan
+yüklüyor; büyük uygulama ve çeviri katalogları eklenmiyor. Kullanıcı
+istatistik veya reklam izni vermemişse ölçüm yapılandırması da istenmiyor.
+
+`content_action` olayı, izin veren üretim ziyaretçilerinin bilinen bağlantı
+tıklamalarını ayırır: `open_workspace`, `open_registration`, `view_plans`,
+`read_related`, `download_resource`. İçerik kimliği/dili, hedefin sabit yolu
+ve bağlantının yeri gönderilir. Bağlantı yazısı, kullanıcının dosya adı, sorgu ve parça
+değerleri bu olayın parametrelerine alınmaz. Bu olayın `page_location`
+alanı da sorgusuzdur. Genel sayfa görüntülemesinin mevcut kampanya atfı
+korunur. Bunlar tıklama niyetleridir: tamamlanmış yükleme, kayıt, indirme
+başarısı veya satış kanıtı değildir. Yeni reklam dönüşümü tanımlanmaz.
+
+Herkese açık 13 dildeki sayfalarda tüm dillerin 620.983 baytlık çalışma
+zamanı sözlüğü yerine Türkçe kaynak anahtarları, İngilizce yedek ve seçili
+dili içeren dosya oluşturulur. Dosya adı içerik özeti taşıdığı için güncel
+çeviriler eski önbelleğe takılmaz. Dil seçimi yine yeni adrese gider; özel
+uygulama sayfaları mevcut tam sözlüğü kullanır. Bu değişiklik dosya
+boyutunu azaltmayı hedefler; PageSpeed puanı veya saha hız kazanımı değildir.
+
+Yeni içerik `/cornell-notes` ve `/en/cornell-notes`: Cornell'in birincil
+açıklamasına bağlantı, özgün yüzde değişim dersi, doldurulmuş soru/not/özet,
+cevabı açılan uygulama sorusu ve iki düzenlenebilir TXT şablonu içerir.
+Kütüphane ile video sayfaları bu rehbere, rehber video ve belge sayfalarına
+bağlanır. Yalnız yazılmış iki dil indekslenir; site haritası 181 URL olur.
+“Cornell not tutma / Cornell notes template” ürün sayfalarının mevcut
+özetleme niyetinden ayrı bir içerik konusudur; arama hacmi ölçülmemiştir.
+
+### 23 Eylül ek veri doğrulaması
+
+Windsor'ın Search Console site haritası tablosu `/sitemap.xml` için
+son gönderimi 28 Ağustos 18:40 UTC, son okumayı 20 Eylül 11:20 UTC,
+hata ve uyarıyı sıfır bildiriyor. `submitted=531` eski sağlayıcı kaydıdır;
+canlı haritadaki 179 adres veya indeks sayısı yerine kullanılamaz.
+Bu okuma yeni yayından öncedir. Bağlı aracın sunduğu alanlar içinde URL
+Inspection yoktur; güncel indeks/kullanılan canonical bilgisi doğrulanmadı.
+
+24 Ağustos–20 Eylül GA4 alan adı kırılımında yalnız `lecturesift.com`
+döndü: Organic Search 88 oturum/4 aktif kullanıcı, Direct 32/6,
+Unassigned 1/1. Bu sonuç geçmiş ölçüm farkının önizleme trafiğinden
+kaynaklandığı varsayımını desteklemiyor. Kullanıcılar kanallar arasında
+örtüşebileceği için aktif kullanıcı satırları toplanmaz; atıf ve iç kullanım
+hâlâ açıklanmış değildir. Yeni yayın sonrası değişimi bu dönemden çıkaramayız.
+
+Kaynak: [Cornell Üniversitesi not tutma yöntemi](https://lsc.cornell.edu/notes.html).
+
 Search Console ve GA4 verileri 23 Eylül'de bağlı Windsor üzerinden okundu.
 İstenen dönem **24 Ağustos–20 Eylül 2026**; Search Console günlük yanıtının
 ilk satırı 27 Ağustos, son satırı 20 Eylül. Eksik günlere değer uydurulmadı;

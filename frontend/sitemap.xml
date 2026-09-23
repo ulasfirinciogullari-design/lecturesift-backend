@@ -3112,4 +3112,18 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/about-study-guides"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/about-study-guides"/>
   </url>
+  <url>
+    <loc>https://lecturesift.com/cornell-notes</loc>
+    <lastmod>2026-09-23</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/cornell-notes"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/cornell-notes"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/cornell-notes"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/en/cornell-notes</loc>
+    <lastmod>2026-09-23</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/cornell-notes"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/cornell-notes"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/cornell-notes"/>
+  </url>
 </urlset>

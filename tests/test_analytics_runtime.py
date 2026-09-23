@@ -26,8 +26,10 @@ async function run(pathname) {
     : Promise.resolve();
   const scripts = [], requests = [], listeners = new Map();
   const context = {
-    location: {pathname, origin: process.argv[4], search: '?token=private-value', hash: '#private-fragment'},
+    URL,
+    location: {pathname, origin: process.argv[4], href: process.argv[4] + pathname, search: '?token=private-value', hash: '#private-fragment'},
     document: {
+      documentElement: {lang: pathname.startsWith('/en/') ? 'en' : 'tr'},
       readyState: 'complete',
       createElement: () => ({}),
       querySelector: selector => selector === 'script[nonce]' ? {nonce: 'preview-nonce'} : null,
@@ -60,6 +62,16 @@ async function run(pathname) {
   }
   const [event, conversion] = await Promise.all([eventPromise, conversionPromise]);
   await context.LectureSiftAnalytics.refresh();
+  const clickContent = async () => {
+    for (const item of JSON.parse(process.argv[5])) {
+      const link = {href: item.href,
+        hasAttribute: name => name === 'download' && !!item.download,
+        closest: selector => selector === item.placement ? {} : null};
+      listeners.get('click')({target: {closest: selector => selector === 'a[href]' ? link : null}});
+    }
+    await new Promise(setImmediate);
+  };
+  await clickContent();
   const beforeRevoke = context.dataLayer?.length || 0;
   if (scenario === 'revoked') {
     consent = {analytics: false, advertising: false};
@@ -67,6 +79,7 @@ async function run(pathname) {
     await context.LectureSiftAnalytics.refresh();
     await context.LectureSiftAnalytics.track('after_revoke');
     await context.LectureSiftAnalytics.trackConversion('signup');
+    await clickContent();
   }
   return {pathname, scripts: scripts.map(element => element.src),
     scriptNonces: scripts.map(element => element.nonce || ''), requests, event, conversion, beforeRevoke,
@@ -80,9 +93,9 @@ async function run(pathname) {
 """
 
 
-def observe(paths, scenario="allowed", origin="https://lecturesift.com"):
+def observe(paths, scenario="allowed", origin="https://lecturesift.com", links=()):
     result = subprocess.run(
-        [NODE, "-e", HARNESS, json.dumps(paths), scenario, str(ROOT / "frontend/analytics.js"), origin],
+        [NODE, "-e", HARNESS, json.dumps(paths), scenario, str(ROOT / "frontend/analytics.js"), origin, json.dumps(links)],
         check=True, capture_output=True, text=True, timeout=8,
     )
     return json.loads(result.stdout)
@@ -110,6 +123,61 @@ def test_www_production_origin_still_measures_with_consent():
     row, = observe(["/en/document-summary"], origin="https://www.lecturesift.com")
     assert row["event"] is True
     assert configurations(row)["G-SYNTHETIC"]["send_page_view"] is True
+
+
+def test_all_published_guides_have_consent_gated_pageviews():
+    manifest = json.loads((ROOT / "frontend/study-resources.json").read_text())
+    paths = [f'{prefix}/{page["slug"]}{suffix}' for page in manifest["pages"]
+             for prefix in ["", "/en"] for suffix in ["", ".html"]]
+    for row in observe(paths):
+        assert configurations(row)["G-SYNTHETIC"]["send_page_view"] is True, row["pathname"]
+        assert len(row["requests"]) == 1
+    for row in observe(paths, "denied"):
+        assert row["requests"] == [] and row["scripts"] == []
+        assert not row["event"] and not row["conversion"]
+
+
+def test_content_intent_uses_fixed_labels_and_strips_link_query_values():
+    row, = observe(["/en/cornell-notes"], links=[
+        {"href": "/en/workspace.html?file=private-filename#private", "placement": "header"},
+        {"href": "/en/lecture-video-summary?email=private@example.invalid"},
+        {"href": "/assets/study/cornell-notes-en.txt?private=value", "download": True},
+        {"href": "/en/plans#compare"},
+        {"href": "/en/register.html?token=private"},
+        {"href": "https://external.example.invalid/workspace.html"},
+        {"href": "/en/account.html?token=private"},
+        {"href": "/en/cornell-notes#template"},
+        {"href": "/assets/study/private-file.txt", "download": True},
+    ])
+    events = [c[2] for c in row["calls"] if c[:2] == ["event", "content_action"]]
+    assert [e["action"] for e in events] == ["open_workspace", "read_related", "download_resource", "view_plans", "open_registration"]
+    assert [e["target_path"] for e in events] == ["/workspace", "/lecture-video-summary", "/assets/study/cornell-notes-en.txt", "/plans", "/register"]
+    assert events[0]["link_placement"] == "header"
+    for event in events:
+        assert event["content_id"] == "/cornell-notes"
+        assert event["content_language"] == "en"
+        assert event["page_location"] == "https://lecturesift.com/en/cornell-notes"
+        assert event["send_to"] == "G-SYNTHETIC"
+        assert "private" not in json.dumps(event)
+
+
+@pytest.mark.parametrize("scenario", ["denied", "ads_only", "unavailable", "revoked"])
+def test_content_intent_respects_analytics_consent_and_revocation(scenario):
+    row, = observe(["/cornell-notes"], scenario, links=[{"href": "/workspace.html"}])
+    events = [c for c in row["calls"] if c[:2] == ["event", "content_action"]]
+    assert len(events) == (1 if scenario == "revoked" else 0)
+    if scenario == "revoked":
+        assert not any(c[0] == "event" for c in row["calls"][row["beforeRevoke"]:])
+
+
+@pytest.mark.parametrize("path,origin", [
+    ("/cornell-notes", "https://preview.lecturesift.com"),
+    ("/workspace.html", "https://lecturesift.com"),
+    ("/unknown-guide", "https://lecturesift.com"),
+])
+def test_content_intent_stays_off_preview_private_and_unknown_pages(path, origin):
+    row, = observe([path], origin=origin, links=[{"href": "/workspace.html"}])
+    assert row["requests"] == [] and row["calls"] == []
 
 
 def test_all_localized_clean_and_legacy_public_routes_measure_once():
