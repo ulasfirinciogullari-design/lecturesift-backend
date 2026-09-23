@@ -35,9 +35,13 @@ class _SeoHeadParser(HTMLParser):
         self.canonicals: list[str] = []
         self.alternates: dict[str, list[str]] = {}
         self.robots: list[str] = []
+        self.structured_data: list[dict] = []
+        self._json_ld: list[str] | None = None
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attributes = {name.lower(): value or "" for name, value in attrs}
+        if tag.lower() == "script" and attributes.get("type") == "application/ld+json":
+            self._json_ld = []
         if tag.lower() == "html":
             self.document_language = attributes.get("lang", "")
             return
@@ -51,6 +55,15 @@ class _SeoHeadParser(HTMLParser):
             return
         if tag.lower() == "meta" and attributes.get("name", "").lower() == "robots":
             self.robots.append(attributes.get("content", "").lower())
+
+    def handle_data(self, data: str) -> None:
+        if self._json_ld is not None:
+            self._json_ld.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() == "script" and self._json_ld is not None:
+            self.structured_data.append(json.loads("".join(self._json_ld)))
+            self._json_ld = None
 
 
 def _sitemap_records() -> dict[str, dict[str, str]]:
@@ -171,6 +184,33 @@ def test_every_hreflang_cluster_is_complete_and_reciprocal() -> None:
                 f"Non-reciprocal hreflang: {source} -> {target}"
             )
         assert alternates["x-default"] in records
+
+
+def test_breadcrumbs_follow_the_localized_navigation(localized_output: Path) -> None:
+    records = _sitemap_records()
+    for location in records:
+        page = _parse_html(_output_path(localized_output, location))
+        graph = [node for schema in page.structured_data for node in schema.get("@graph", [])]
+        webpage = next(node for node in graph if node.get("@type") == "WebPage")
+        breadcrumbs = [node for node in graph if node.get("@type") == "BreadcrumbList"]
+        prefix = "" if page.document_language == "tr" else f"/{page.document_language}"
+        home = f"{ORIGIN}{prefix}/"
+        if location == home:
+            assert not breadcrumbs and "breadcrumb" not in webpage
+            continue
+
+        assert len(breadcrumbs) == 1, location
+        breadcrumb = breadcrumbs[0]
+        assert webpage["breadcrumb"] == {"@id": breadcrumb["@id"]}
+        expected_urls = [home]
+        slug = urlsplit(location).path.rsplit("/", 1)[-1]
+        if slug in STUDY_SLUGS - {"study-guides"}:
+            expected_urls.append(f"{ORIGIN}{prefix}/study-guides")
+        expected_urls.append(location)
+        items = breadcrumb["itemListElement"]
+        assert [item["item"] for item in items] == expected_urls, location
+        assert [item["position"] for item in items] == list(range(1, len(items) + 1))
+        assert all(item["name"].strip() and item["item"] in records for item in items)
 
 
 NONINDEXABLE_HTML = tuple(

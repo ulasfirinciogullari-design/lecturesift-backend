@@ -180,6 +180,7 @@ function structuredData(html, language, publicPath, canonical, title, descriptio
     {
       "@type": "WebPage", "@id": webpageId, name: title, url: canonical, description,
       inLanguage: language, isPartOf: {"@id": websiteId}, about: {"@id": applicationId},
+      ...(publicPath !== "/" ? {breadcrumb: {"@id": `${canonical}#breadcrumb`}} : {}),
       primaryImageOfPage: {"@type": "ImageObject", url: image, width: 1731, height: 909},
     },
     {
@@ -191,12 +192,20 @@ function structuredData(html, language, publicPath, canonical, title, descriptio
     },
   ];
   if (publicPath !== "/") {
+    const items = [
+      {"@type": "ListItem", position: 1, name: "LectureSift", item: `${ORIGIN}${localizedPath(language, "/")}`},
+    ];
+    if (STUDY_PAGES.has(publicPath) && publicPath !== "/study-guides.html") {
+      items.push({
+        "@type": "ListItem", position: 2,
+        name: STUDY_PAGES.get("/study-guides.html")[language].title,
+        item: `${ORIGIN}${localizedPath(language, "/study-guides.html")}`,
+      });
+    }
+    items.push({"@type": "ListItem", position: items.length + 1, name: title, item: canonical});
     graph.push({
       "@type": "BreadcrumbList", "@id": `${canonical}#breadcrumb`,
-      itemListElement: [
-        {"@type": "ListItem", position: 1, name: "LectureSift", item: `${ORIGIN}/`},
-        {"@type": "ListItem", position: 2, name: title, item: canonical},
-      ],
+      itemListElement: items,
     });
   }
   if (GUIDE_PATHS.has(publicPath) || STUDY_PAGES.get(publicPath)?.kind === "article") {

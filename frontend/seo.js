@@ -139,6 +139,7 @@
       inLanguage: document.documentElement.lang || "tr",
       isPartOf: {"@id": `${PRODUCTION_ORIGIN}/#website`},
       about: {"@id": `${PRODUCTION_ORIGIN}/#application`},
+      ...(path !== "/" ? {breadcrumb: {"@id": `${canonicalUrl}#breadcrumb`}} : {}),
       primaryImageOfPage: {"@type": "ImageObject", url: imageUrl, width: 1731, height: 909},
     },
     {
@@ -173,7 +174,7 @@
       "@type": "BreadcrumbList",
       "@id": `${canonicalUrl}#breadcrumb`,
       itemListElement: [
-        {"@type": "ListItem", position: 1, name: "LectureSift", item: `${PRODUCTION_ORIGIN}/`},
+        {"@type": "ListItem", position: 1, name: "LectureSift", item: `${PRODUCTION_ORIGIN}${language === "tr" ? "/" : `/${language}/`}`},
         {"@type": "ListItem", position: 2, name: pageName, item: canonicalUrl},
       ],
     });
