@@ -1,6 +1,14 @@
 # LectureSift search and advertising readiness
 
-## Current check (13 September 2026)
+## SEO workstream (23 September 2026)
+
+The current organic-search baseline, public-site observations and prioritized
+work are tracked in [SEO_CALISMA_PLANI.md](SEO_CALISMA_PLANI.md). The live sitemap
+now contains 179 URLs; that is not an indexed-page count. Connected Search
+Console and GA4 reports are readable through Windsor. This does not establish
+browser access to Google panels or change any advertising activation status.
+
+## Historical check (13 September 2026)
 
 - Merge `ae62489c` (PR #92) is the current verified GitHub `main` and live API revision. PR #90 added the AdSense Management API reader; PR #91 added the Google Ads API v25 reader and the 13-language admin status UI; PR #92 clarified fixed-term plan management. Both Google readers are deployed but remain disabled and unconfigured in production. Passing CI or a healthy endpoint alone is not evidence that a Google account is connected.
 

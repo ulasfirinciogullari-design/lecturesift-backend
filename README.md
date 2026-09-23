@@ -22,6 +22,9 @@ Production services:
 
 The production deployment stays on `main`.
 
+Organic search baseline, content priorities and verification steps are tracked
+in [SEO_CALISMA_PLANI.md](SEO_CALISMA_PLANI.md).
+
 On the VPS, `/etc/lecturesift/runtime.env` is a root-side source of truth, not
 a container environment file. Production preflight derives independent
 root-only `api.env`, `worker.env`, and `instagram.env` files. This keeps admin,

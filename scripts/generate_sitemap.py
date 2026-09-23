@@ -21,6 +21,7 @@ PATHS = (
 )
 LAST_MODIFIED = "2026-09-13"
 RESOURCES_PATH = Path(__file__).resolve().parents[1] / "frontend" / "study-resources.json"
+LANDING_PATH = RESOURCES_PATH.with_name("landing-pages.json")
 
 
 def canonical_path(path: str) -> str:
@@ -37,6 +38,7 @@ def localized_path(language: str, path: str) -> str:
 
 
 def build_sitemap() -> str:
+    landing = json.loads(LANDING_PATH.read_text(encoding="utf-8"))
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">',
@@ -45,7 +47,8 @@ def build_sitemap() -> str:
         for path in PATHS:
             lines.append("  <url>")
             lines.append(f"    <loc>{ORIGIN}{localized_path(language, path)}</loc>")
-            lines.append(f"    <lastmod>{'2026-09-19' if path == '/' else LAST_MODIFIED}</lastmod>")
+            updated = landing["updated"] if language in landing["pages"].get(path, {}) else "2026-09-19" if path == "/" else LAST_MODIFIED
+            lines.append(f"    <lastmod>{updated}</lastmod>")
             for alternate in LANGUAGES:
                 href = f"{ORIGIN}{localized_path(alternate, path)}"
                 lines.append(f'    <xhtml:link rel="alternate" hreflang="{alternate}" href="{href}"/>')

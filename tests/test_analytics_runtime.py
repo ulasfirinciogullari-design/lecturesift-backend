@@ -26,7 +26,7 @@ async function run(pathname) {
     : Promise.resolve();
   const scripts = [], requests = [], listeners = new Map();
   const context = {
-    location: {pathname, origin: 'https://lecturesift.com', search: '?token=private-value', hash: '#private-fragment'},
+    location: {pathname, origin: process.argv[4], search: '?token=private-value', hash: '#private-fragment'},
     document: {
       readyState: 'complete',
       createElement: () => ({}),
@@ -80,9 +80,9 @@ async function run(pathname) {
 """
 
 
-def observe(paths, scenario="allowed"):
+def observe(paths, scenario="allowed", origin="https://lecturesift.com"):
     result = subprocess.run(
-        [NODE, "-e", HARNESS, json.dumps(paths), scenario, str(ROOT / "frontend/analytics.js")],
+        [NODE, "-e", HARNESS, json.dumps(paths), scenario, str(ROOT / "frontend/analytics.js"), origin],
         check=True, capture_output=True, text=True, timeout=8,
     )
     return json.loads(result.stdout)
@@ -90,6 +90,26 @@ def observe(paths, scenario="allowed"):
 
 def configurations(row):
     return {call[1]: call[2] for call in row["calls"] if call[0] == "config"}
+
+
+@pytest.mark.parametrize("origin", [
+    "http://localhost:4173", "http://127.0.0.1:4173",
+    "https://deploy-preview-107--clever-horse-22b1a8.netlify.app",
+    "https://lecturesift.com.example.invalid", "https://preview.lecturesift.com",
+])
+def test_preview_and_local_origins_never_start_measurement(origin):
+    for row in observe(["/", "/en/document-summary", "/register", "/account"], "revoked", origin):
+        assert row["scripts"] == []
+        assert row["requests"] == []
+        assert row["calls"] == []
+        assert row["event"] is False
+        assert row["conversion"] is False
+
+
+def test_www_production_origin_still_measures_with_consent():
+    row, = observe(["/en/document-summary"], origin="https://www.lecturesift.com")
+    assert row["event"] is True
+    assert configurations(row)["G-SYNTHETIC"]["send_page_view"] is True
 
 
 def test_all_localized_clean_and_legacy_public_routes_measure_once():
