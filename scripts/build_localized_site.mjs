@@ -1,6 +1,7 @@
 import {cp, mkdir, readFile, rm, writeFile} from "node:fs/promises";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
+import {createHash} from "node:crypto";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SOURCE = path.join(ROOT, "frontend");
@@ -183,6 +184,25 @@ function removeStaticTranslationCatalog(html) {
   );
 }
 
+function publicRuntimeSource(language) {
+  const index = LANGUAGES.indexOf(language);
+  let count = 0;
+  const source = dynamicCopySource.replace(/^(\s*,?["'][^"']+["']\s*:\s*)(\[[^\r\n]+\])(\s*,?)$/gm, (match, key, values, suffix) => {
+    const row = JSON.parse(values);
+    if (!Array.isArray(row) || row.length !== LANGUAGES.length) throw new Error(`Invalid runtime translation: ${key}`);
+    // Runtime lookup uses the original language index and Turkish exact-text
+    // keys. Retain those plus the English fallback; other editions navigate.
+    const selected = Array(Math.max(2, index + 1)).fill(null);
+    selected[0] = row[0];
+    selected[1] = row[1];
+    selected[index] = row[index];
+    count += 1;
+    return `${key}${JSON.stringify(selected)}${suffix}`;
+  });
+  if (!count) throw new Error("Runtime translation catalog is unavailable");
+  return source;
+}
+
 function readHeadValue(html, pattern, label, publicPath) {
   const value = html.match(pattern)?.[1]?.trim();
   if (!value) throw new Error(`${publicPath} has no ${label}`);
@@ -330,6 +350,11 @@ await rm(path.join(OUTPUT, "study-resources.json"));
 await rm(path.join(OUTPUT, "landing-pages.json"));
 
 for (const language of LANGUAGES) {
+  const runtimeSource = publicRuntimeSource(language);
+  const runtimeHash = createHash("sha256").update(runtimeSource).digest("hex").slice(0, 12);
+  const runtimePath = `/assets/i18n/${language}-${runtimeHash}.js`;
+  await mkdir(path.join(OUTPUT, "assets/i18n"), {recursive: true});
+  await writeFile(path.join(OUTPUT, runtimePath.slice(1)), runtimeSource, "utf8");
   for (const publicPath of PUBLIC_PATHS) {
     const sourceName = publicPath === "/" ? "index.html" : publicPath.slice(1);
     let html = await readFile(path.join(SOURCE, sourceName), "utf8");
@@ -337,6 +362,7 @@ for (const language of LANGUAGES) {
     html = enrichLandingPage(html, language, publicPath);
     html = canonicalizePublicLinks(html);
     html = removeStaticTranslationCatalog(html);
+    html = html.replace(/src="\/i18n\.js(?:\?[^\"]*)?"/g, `src="${runtimePath}"`);
     html = deferNonCriticalScripts(html);
     html = staticSeo(html, language, publicPath);
     validateLocalizedPage(html, language, publicPath);
@@ -366,6 +392,7 @@ function studyDocument(page, language) {
   const hero = `<header class="guide-intro${library ? " guide-hero" : ""}"><div><p class="guide-eyebrow">${tr ? "LectureSift · Öğrenme kütüphanesi" : "LectureSift · Learning library"}</p><h1>${escapeAttribute(copy.title)}</h1><p class="guide-lead">${escapeAttribute(copy.description)}</p>${library ? `<div class="guide-hero-actions"><a class="guide-button guide-button-primary" href="${prefix}/study-pack-example">${tr ? "Örnek dersi aç" : "Try the example lesson"} <span aria-hidden="true">→</span></a><a class="guide-text-link" href="#${tr ? "basla" : "start"}">${tr ? "Rehber seç" : "Choose a guide"} ↓</a></div><p class="guide-access">${tr ? "Ücretsiz rehberler · Hesap veya kredi gerekmez" : "Free guides · No account or credits needed"}</p>` : `<p class="guide-byline"><span>LectureSift</span><span>${minutes} ${tr ? "dk okuma" : "min read"}</span><time datetime="${STUDY_RESOURCES.updated}">${updated}</time></p>`}</div>${library ? preview : ""}</header>`;
   const products = library
     ? ["/document-summary.html", "/lecture-video-summary.html", "/quiz-flashcards.html"]
+    : page.slug === "cornell-notes" ? ["/lecture-video-summary.html", "/document-summary.html"]
     : [page.slug === "active-recall" ? "/quiz-flashcards.html" : "/document-summary.html"];
   const productLinks = `<nav class="guide-related" data-guide-products aria-label="${tr ? "Kendi kaynaklarınla çalış" : "Study with your own sources"}"><strong>${tr ? "Kendi dersinle uygula" : "Apply it to your own course"}</strong>${products.map(route => `<a href="${localizedPath(language, route)}">${escapeAttribute(LANDING_PAGES.pages[route][language].action)} <span aria-hidden="true">→</span></a>`).join("")}</nav>`;
   const related = (library ? "" : `<nav class="guide-related" aria-label="${tr ? "Diğer çalışma rehberleri" : "More study guides"}"><strong>${tr ? "Çalışmaya devam et" : "Keep learning"}</strong>${STUDY_RESOURCES.pages.filter(item => item.kind === "article" && item.slug !== page.slug && item.slug !== "about-study-guides").map(item => `<a href="${prefix}/${item.slug}">${escapeAttribute(item[language].title)} <span aria-hidden="true">→</span></a>`).join("")}</nav>`) + productLinks;
@@ -382,6 +409,7 @@ function studyDocument(page, language) {
 for (const [publicPath, page] of STUDY_PAGES) {
   for (const language of STUDY_RESOURCES.languages) {
     let html = studyDocument(page, language);
+    html = html.replace("</head>", '<link rel="stylesheet" href="/consent.css?v=2"><script defer src="/consent.js?v=3"></script><script defer src="/analytics.js?v=6"></script></head>');
     html = staticSeo(html, language, publicPath);
     validateLocalizedPage(html, language, publicPath);
     const target = path.join(OUTPUT, language === "tr" ? "" : language, `${page.slug}.html`);

@@ -19,7 +19,8 @@
     hi: ["आपकी गोपनीयता पसंद", "ज़रूरी स्टोरेज साइट को चलाता है। एनालिटिक्स और विज्ञापन तकनीकें केवल आपकी अनुमति और प्रदाता सक्रिय होने पर चलती हैं।", "केवल ज़रूरी", "सभी की अनुमति", "पसंद प्रबंधित करें", "ज़रूरी", "साइन-इन, सुरक्षा, भाषा और भुगतान के लिए आवश्यक।", "एनालिटिक्स", "साइट उपयोग को समग्र रूप से समझने में मदद करता है।", "विज्ञापन", "विज्ञापन दिखाने और कन्वर्ज़न मापने के लिए।", "पसंद सहेजें", "बंद करें", "कुकी और स्टोरेज नीति खोलें"],
   }[language] || null;
   const text = copy || ["Your privacy choices", "Essential storage keeps the site working. Analytics and advertising technologies run only if you allow them and the providers are enabled.", "Essential only", "Allow all", "Manage choices", "Essential", "Required for sign-in, security, language, and payment flows.", "Analytics", "Helps us understand site usage in aggregate.", "Advertising", "Used for ad delivery and conversion measurement.", "Save choices", "Close", "Open the cookie and storage policy"];
-  const cookiesPath = window.LectureSiftI18n?.localizedPath?.(language, "/cookies.html") || "/cookies.html";
+  const cookiesPath = window.LectureSiftI18n?.localizedPath?.(language, "/cookies.html")
+    || (language === "tr" ? "/cookies" : `/${language}/cookies`);
 
   const read = () => {
     try {

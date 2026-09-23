@@ -125,7 +125,7 @@
         "related": [
           {"path": "/check-ai-notes", "title": "Transkript ve notları kontrol et", "text": "Sayıları, koşulları ve kaynaktaki düzeltmeleri gözden geçir."},
           {"path": "/quiz-flashcards", "title": "Kaydından tekrar soruları", "text": "Konuyu yeniden okumadan önce ne hatırladığını dene."},
-          {"path": "/document-summary", "title": "Dersin PDF'si de varsa", "text": "Belge kaynaklarından ayrı bir çalışma paketi hazırlamayı öğren."}
+          {"path": "/cornell-notes", "title": "Cornell notu ve boş şablon", "text": "Bir dersi soru, not ve özet düzenine yerleştir; yeni bir örnekle kendini dene."}
         ],
         "closing": "Bir sonraki tekrarında kaydınla birlikte çalış.",
         "closingText": "Ders dosyanı yükle, ihtiyaç duyduğun çıktıları seç ve tamamlanan paketi kaynakla karşılaştır. Kullanım haklarını Planlar sayfasında görebilirsin."
@@ -167,7 +167,7 @@
         "related": [
           {"path": "/check-ai-notes", "title": "Check transcripts and study notes", "text": "Review numbers, conditions and corrections made in the original source."},
           {"path": "/quiz-flashcards", "title": "Practise questions from your lecture", "text": "Find out what you remember before rereading the topic."},
-          {"path": "/document-summary", "title": "Have the lecture PDF too?", "text": "Learn how to prepare a separate study pack from course documents."}
+          {"path": "/cornell-notes", "title": "Cornell notes and a blank template", "text": "Arrange a lesson into cues, notes and a summary, then test yourself with a new example."}
         ],
         "closing": "Bring your recording into your next review.",
         "closingText": "Upload the lecture, choose the outputs you need and check the finished pack against its source. See Plans for current usage allowances."

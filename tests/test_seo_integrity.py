@@ -247,6 +247,33 @@ def test_landing_examples_faqs_and_dates_survive_prerendering(localized_output: 
     assert not (localized_output / "landing-pages.json").exists()
 
 
+def test_guide_measurement_has_consent_controls_without_the_large_application_scripts(localized_output: Path) -> None:
+    for slug in STUDY_SLUGS:
+        for prefix in ["", "en/"]:
+            html = (localized_output / f"{prefix}{slug}.html").read_text(encoding="utf-8")
+            sources = re.findall(r'<script\b[^>]*\bsrc="([^"]+)"', html)
+            assert sources.count("/consent.js?v=3") == 1
+            assert sources.count("/analytics.js?v=6") == 1
+            assert "/consent.css?v=2" in html
+            assert not any(re.search(r"/(?:i18n|page-i18n|app)\.js", src) for src in sources)
+
+
+def test_public_pages_use_small_language_specific_runtime_but_private_pages_keep_full_catalog(localized_output: Path) -> None:
+    original = (FRONTEND / "i18n.js").read_bytes()
+    for language in LANGUAGES:
+        prefix = "" if language == "tr" else f"/{language}"
+        html = _output_path(localized_output, f"{ORIGIN}{prefix}/document-summary").read_text()
+        source, = re.findall(r'<script[^>]*src="(/assets/i18n/[^\"]+)"', html)
+        assert re.fullmatch(rf"/assets/i18n/{language}-[a-f0-9]{{12}}\.js", source)
+        runtime = (localized_output / source.lstrip("/")).read_bytes()
+        assert len(runtime) < len(original) * 0.5, (language, len(runtime), len(original))
+        for route in ["/", "/plans"]:
+            url = f"{ORIGIN}{prefix}{route}"
+            assert f'src="{source}"' in _output_path(localized_output, url).read_text()
+    assert (localized_output / "i18n.js").read_bytes() == original
+    assert re.search(r'src="(?:\./|/)?i18n\.js\?', (localized_output / "workspace.html").read_text())
+
+
 NONINDEXABLE_HTML = tuple(
     page_path.name
     for page_path in sorted(FRONTEND.glob("*.html"))

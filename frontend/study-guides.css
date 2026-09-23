@@ -63,7 +63,7 @@
 .guide-toc ol{padding-inline-start:18px;margin:10px 0 20px}
 .guide-toc li{margin:12px 0;padding:0;line-height:1.7}
 .guide-toc-home{display:block;border-top:1px solid var(--ui-line);padding-top:12px;font-weight:600;font-size:12px}
-.guide-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;margin-top:24px}
+.guide-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin-top:24px}
 .guide-card{min-width:0;display:flex;flex-direction:column;border:1px solid var(--ui-line);border-radius:16px;background:var(--ui-surface);overflow:hidden;text-decoration:none!important;transition:border-color .18s,transform .18s}
 .guide-card:hover{border-color:var(--ui-action);transform:translateY(-3px)}
 .guide-card-art{display:flex;flex-direction:column;justify-content:space-between;align-items:start;gap:18px;min-height:145px;padding:22px 24px;color:var(--ui-ink)}

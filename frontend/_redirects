@@ -28,6 +28,20 @@
 /:lang/refund.html                  /:lang/refund             301!
 
 # Study resources have Turkish and English editions.
+/cornell-notes.html /cornell-notes 301!
+/:lang/cornell-notes.html /:lang/cornell-notes 301!
+/de/cornell-notes /en/cornell-notes 301!
+/fr/cornell-notes /en/cornell-notes 301!
+/es/cornell-notes /en/cornell-notes 301!
+/it/cornell-notes /en/cornell-notes 301!
+/pt/cornell-notes /en/cornell-notes 301!
+/ru/cornell-notes /en/cornell-notes 301!
+/ar/cornell-notes /en/cornell-notes 301!
+/zh/cornell-notes /en/cornell-notes 301!
+/ja/cornell-notes /en/cornell-notes 301!
+/ko/cornell-notes /en/cornell-notes 301!
+/hi/cornell-notes /en/cornell-notes 301!
+
 /about-study-guides.html /about-study-guides 301!
 /:lang/about-study-guides.html /:lang/about-study-guides 301!
 /de/about-study-guides /en/about-study-guides 301!

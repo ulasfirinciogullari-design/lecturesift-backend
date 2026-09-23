@@ -7,6 +7,17 @@
     "/", "/features", "/plans", "/about", "/contact", "/privacy",
     "/terms", "/cookies", "/refund", "/distance-sales",
     "/document-summary", "/lecture-video-summary", "/quiz-flashcards",
+    "/study-guides", "/study-pack-example", "/check-ai-notes", "/active-recall",
+    "/about-study-guides", "/cornell-notes",
+  ]);
+  const CONTENT_PATHS = new Set([
+    "/", "/document-summary", "/lecture-video-summary", "/quiz-flashcards",
+    "/study-guides", "/study-pack-example", "/check-ai-notes", "/active-recall",
+    "/about-study-guides", "/cornell-notes",
+  ]);
+  const RESOURCE_PATHS = new Set([
+    "/assets/study/mean-median-tr.txt", "/assets/study/mean-median-en.txt",
+    "/assets/study/cornell-notes-tr.txt", "/assets/study/cornell-notes-en.txt",
   ]);
   const EVENT_PATHS = new Set([...PUBLIC_PATHS, "/register", "/account"]);
   const configuredIds = new Set();
@@ -15,9 +26,9 @@
   let configPromise = null;
   let tagLoaded = false;
 
-  function unlocalizedPath() {
+  function unlocalizedPath(pathname = location.pathname) {
     const languages = new Set(["tr", "en", "de", "fr", "es", "it", "pt", "ru", "ar", "zh", "ja", "ko", "hi"]);
-    const parts = location.pathname.split("/").filter(Boolean);
+    const parts = pathname.split("/").filter(Boolean);
     if (languages.has(parts[0])) parts.shift();
     const path = `/${parts.join("/")}`.replace(/\.html$/, "");
     return path === "/index" ? "/" : path;
@@ -118,6 +129,7 @@
 
   async function start() {
     if (!PRODUCTION_ORIGIN || !EVENT_PATHS.has(unlocalizedPath())) return;
+    if (!choices().analytics && !choices().advertising) return;
     const config = await getConfig();
     if (!config) return;
     configureDestinations(config);
@@ -145,6 +157,35 @@
     window.gtag("event", "conversion", {...parameters, ...pageContext(), send_to: `${ads.id}/${label}`});
     return true;
   }
+
+  // These are content interactions, never completed uploads, signups or sales.
+  // Send only known routes and fixed labels; never link text, user files or URL parameters.
+  function contentAction(event) {
+    if (!PRODUCTION_ORIGIN || !CONTENT_PATHS.has(unlocalizedPath()) || !choices().analytics) return;
+    const link = event.target?.closest?.("a[href]");
+    if (!link) return;
+    let destination;
+    try { destination = new URL(link.href, location.href); } catch { return; }
+    if (destination.origin !== location.origin) return;
+    const target = unlocalizedPath(destination.pathname);
+    let action;
+    if (target === "/workspace") action = "open_workspace";
+    else if (target === "/register") action = "open_registration";
+    else if (target === "/plans") action = "view_plans";
+    else if (CONTENT_PATHS.has(target) && target !== unlocalizedPath()) action = "read_related";
+    else if (RESOURCE_PATHS.has(destination.pathname) && link.hasAttribute("download")) action = "download_resource";
+    if (!action) return;
+    void track("content_action", {
+      action, content_type: action, content_id: unlocalizedPath(),
+      content_language: document.documentElement.lang,
+      target_path: action === "download_resource" ? destination.pathname : target,
+      link_placement: link.closest("header") ? "header" : link.closest("footer") ? "footer" : "content",
+      page_location: `${location.origin}${location.pathname}`,
+      transport_type: "beacon",
+    });
+  }
+
+  document.addEventListener("click", contentAction);
 
   window.LectureSiftAnalytics = Object.freeze({track, trackConversion, refresh: start});
   const queued = Array.isArray(window.__lecturesiftAnalyticsQueue) ? window.__lecturesiftAnalyticsQueue.splice(0) : [];
