@@ -2,8 +2,48 @@
 
 Başlangıç denetimi: 23 Eylül 2026. SEO çalışmaları bu proje üzerinden
 takip edilir. Başlangıç varsayımı Türkiye'deki üniversite öğrencileri ve
-Türkçe aramalardır; mevcut İngilizce içerikler de korunur. Pazar önceliği
-henüz kullanıcı tarafından kesinleştirilmedi.
+Türkçe aramalardır. İlk rekabet geliştirmesi üç ana ürün sayfasının Türkçe
+ve İngilizce sürümlerine uygulanır; diğer diller mevcut içeriklerini korur.
+
+## 23 Eylül rekabet geliştirmesi
+
+Kullanıcının uygulama talebi üzerine ilk paket aşağıdaki işleri kapsar:
+
+- PDF, video/ses ve quiz sayfaları için altı özgün içerik sürümü: arama
+  niyetini açıklayan başlıklar, kaynak–sonuç örnekleri, kullanım adımları,
+  ürünün gerçek sınırları, sorular ve ilgili rehberlere bağlantılar.
+- Örnek cevaplar hesaplanabilir ve kaynağı sayfada görünür. Öğretim örneği
+  oldukları açıkça belirtilir; gerçek bir işlem veya müşteri sonucu gibi
+  sunulmaz. Cevap açma ve bağlantılar JavaScript olmadan da çalışır.
+- Rehberlerden ilgili ürün sayfalarına geri bağlantılar eklenir. Mevcut
+  adresler korunur; aynı sorgu için yeni kopya sayfalar üretilmez.
+- Değişen altı ürün sürümü ve on rehber sürümünün güncelleme tarihleri
+  site haritasıyla eşleştirilir. Ürün sayfasındaki tarih, ilk HTML ve
+  tarayıcı sonrasındaki Article verisinde aynı kalır.
+- Üretim dışındaki adreslerde GA4 ve reklam dönüşüm ölçümü başlatılmaz.
+  Kaynak kodda önceden alan adı kısıtı yoktu; bu, önizleme trafiğinin
+  ölçüme karışabilmesine izin veriyordu. Geçmiş 88 oturumun sebebinin
+  önizleme kullanımı olduğu **kanıtlanmış değildir**.
+- Mevcut GitHub Actions akışında dil, tarih, örnek/FAQ ayrımı, dahili
+  bağlantılar, mobil taşma ve üretim dışı ölçüm kontrolleri yapılır.
+  Yerel derleme veya tarayıcı testi çalıştırılmaz.
+
+### Rakip sayfalarından çıkan uygulama önceliği
+
+23 Eylül 2026'da rakiplerin kendi ürün sayfaları incelendi. Aşağıdaki
+gözlemler sayfa sunumuyla ilgilidir; bağımsız kalite, trafik, sıralama veya
+fiyat üstünlüğü ölçümü değildir. Rakiplerin hız, kullanıcı sayısı ve başarı
+iddiaları LectureSift iddiasına dönüştürülmez.
+
+| Kaynak | Görülen yaklaşım | LectureSift'te uygulanan karşılık |
+| --- | --- | --- |
+| [Knowt PDF Summarizer](https://knowt.com/ai-pdf-summarizer) | PDF arama niyetine özel sayfa, görünür yükleme başlangıcı ve kullanım örnekleri. | PDF başlığı, dosya yükleme çağrısı ve kaynağı gösterilen çözümlü örnek. |
+| [Mindgrasp Lecture Summarizer](https://www.mindgrasp.ai/ai-summarizer/lecture) | Kaynak yükleme, analiz ve sonuç aşamalarını anlatan ürün sayfası. | Video/ses iş akışı, transkript–özet ayrımı, zaman damgası ve kayıt kalitesi açıklaması. |
+| [StudyFetch Quizzes](https://www.studyfetch.com/features/quizzes) | Kaynaktan soru üretme, cevaba geri bildirim ve açıklama üzerine kurulan sunum. | Kaynağı ve cevap gerekçesi görünür quiz örneği; bilgi kartı farkı ve aktif hatırlama rehberine bağlantı. |
+
+Sonraki değerlendirme, bu altı adresin gösterim/tıklamalarını başlangıçla
+karşılaştırır. Bu kaynak paketi sıralama veya trafik artışının kanıtı değildir;
+yayın ve Google'ın yeniden taraması ayrıca izlenir.
 
 ## Ölçülmüş başlangıç
 

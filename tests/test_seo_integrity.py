@@ -213,6 +213,40 @@ def test_breadcrumbs_follow_the_localized_navigation(localized_output: Path) -> 
         assert all(item["name"].strip() and item["item"] in records for item in items)
 
 
+def test_landing_examples_faqs_and_dates_survive_prerendering(localized_output: Path) -> None:
+    landing = json.loads((FRONTEND / "landing-pages.json").read_text(encoding="utf-8"))
+    sitemap = ElementTree.parse(FRONTEND / "sitemap.xml")
+    dates = {
+        node.findtext(f"{{{SITEMAP_NAMESPACE}}}loc"): node.findtext(f"{{{SITEMAP_NAMESPACE}}}lastmod")
+        for node in sitemap.findall(f"{{{SITEMAP_NAMESPACE}}}url")
+    }
+    for route, editions in landing["pages"].items():
+        for language, copy in editions.items():
+            prefix = "" if language == "tr" else f"/{language}"
+            location = f"{ORIGIN}{prefix}{route.removesuffix('.html')}"
+            output = _output_path(localized_output, location)
+            html = output.read_text(encoding="utf-8")
+            parsed = _parse_html(output)
+            graph = [node for schema in parsed.structured_data for node in schema.get("@graph", [])]
+            webpage = next(node for node in graph if node["@type"] == "WebPage")
+            article = next(node for node in graph if node["@type"] == "Article")
+            faq = next(node for node in graph if node["@type"] == "FAQPage")
+            assert webpage["name"] == copy["title"]
+            assert webpage["description"] == copy["description"]
+            assert article["dateModified"] == dates[location] == landing["updated"]
+            assert 'id="example"' in html and 'class="landing-source"' in html
+            assert 'class="landing-answer"' in html
+            # The teaching exercise is not a customer FAQ.
+            assert [question["name"] for question in faq["mainEntity"]] == [item["question"] for item in copy["faqs"]]
+            for item in copy["related"]:
+                assert f'href="{prefix}{item["path"]}"' in html
+                assert f'{ORIGIN}{prefix}{item["path"]}' in _sitemap_records()
+        # No English editorial fallback is injected into an unwritten edition.
+        de_html = _output_path(localized_output, f"{ORIGIN}/de{route.removesuffix('.html')}").read_text(encoding="utf-8")
+        assert "data-landing-page" not in de_html
+    assert not (localized_output / "landing-pages.json").exists()
+
+
 NONINDEXABLE_HTML = tuple(
     page_path.name
     for page_path in sorted(FRONTEND.glob("*.html"))

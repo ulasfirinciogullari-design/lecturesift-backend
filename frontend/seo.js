@@ -194,7 +194,7 @@
       description,
       image: imageUrl,
       inLanguage: document.documentElement.lang || "tr",
-      dateModified: "2026-08-29",
+      dateModified: document.querySelector('meta[property="article:modified_time"]')?.content || "2026-08-29",
       mainEntityOfPage: {"@id": `${canonicalUrl}#webpage`},
       author: {"@id": `${PRODUCTION_ORIGIN}/#organization`},
       publisher: {"@id": `${PRODUCTION_ORIGIN}/#organization`},

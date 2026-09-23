@@ -1,0 +1,263 @@
+{
+  "updated": "2026-09-23",
+  "pages": {
+    "/document-summary.html": {
+      "tr": {
+        "title": "Yapay Zekâ ile PDF Özetleme ve Ders Notu | LectureSift",
+        "description": "PDF, Word ve PowerPoint ders dosyalarından özet, not, quiz ve bilgi kartı hazırla. Kaynak–özet örneğini incele, dosyanı yükleyerek başla.",
+        "eyebrow": "PDF VE BELGE ÖZETLEME",
+        "heading": "PDF'den ders notu çıkar. Öğrendiklerini sorularla dene.",
+        "lead": "Uzun bir ders belgesini çalışılabilir parçalara ayır: önemli kavramlar için özet, kendini sınamak için quiz, kısa tekrarlar için bilgi kartları. PDF, Word, PowerPoint, TXT ve Markdown dosyalarını kendi çalışma alanında işle.",
+        "action": "Belge yükle",
+        "stepsTitle": "PDF nasıl özetlenir?",
+        "steps": [
+          {"title": "Ders dosyanı ekle", "text": "Belgeni seç. Birden fazla belge kullanıyorsan ders sırasına göre düzenle. Taranmış sayfaların okunaklı olduğundan emin ol."},
+          {"title": "Çalışma paketini seç", "text": "Çıktı dilini, özet ve transkript seçeneklerini, quiz ve bilgi kartı sayısını belirle. Kullanılabilir seçenekler planına bağlıdır."},
+          {"title": "Kontrol et ve çalış", "text": "İşlem tamamlandığında önemli sayıları ve tanımları belgeyle karşılaştır. İhtiyacına göre PDF, Word veya TXT çıktılarını seç."}
+        ],
+        "example": {
+          "title": "Bir paragraf nasıl çalışma notuna dönüşür?",
+          "sourceTitle": "Örnek kaynak paragrafı",
+          "source": "Beş öğrencinin okula gidiş süresi 18, 20, 20, 22 ve 70 dakikadır. Toplam 150 dakika, aritmetik ortalama 30 dakika ve medyan 20 dakikadır. Bu beş gözlem bütün öğrencilerin yolculuk süresini temsil etmez.",
+          "outputs": [
+            {"title": "Kısa çalışma notu", "text": "Ortalama toplamı gözlem sayısına böler: 150 ÷ 5 = 30 dakika. Medyan sıralı grubun ortasındaki değerdir: 20 dakika. Sonuç yalnız bu beş gözleme aittir."},
+            {"title": "Korunması gereken ayrıntı", "text": "“Her öğrenci 30 dakika yolculuk yapar” denemez. Ortalama, tek tek gözlemlerin yerine geçmez; iyi bir özet bu sınırı da korur."}
+          ],
+          "question": "70 dakikalık yolculuk 120 dakika olsaydı medyan değişir miydi?",
+          "answer": "Hayır. Sıralı grubun ortasındaki değer yine 20 olurdu. Toplam 200'e yükseldiği için ortalama ise 40 dakika olurdu. Özetindeki kavramı yeni bir duruma uygulayarak kontrol etmiş oldun."
+        },
+        "sections": [
+          {"title": "Hangi belgeyi yükleyebilirsin?", "text": "PDF ders notlarını, DOCX belgelerini, PPTX sunumlarını ve TXT veya Markdown metinlerini kullanabilirsin. Metin katmanı olmayan PDF sayfaları ve desteklenen görseller OCR ile okunur. Bulanık taramalar, karmaşık tablolar ve formüller ek kontrol gerektirebilir."},
+          {"title": "Özet, belgenin yerine geçmez", "text": "Tanımın koşulunu, formülün birimini ve örneğin hangi gruba ait olduğunu kontrol et. Uzun bir belgede bölüm başlıklarını sonuçla karşılaştır; eksik görünen noktayı kaynaktan tamamla. Yapay zekâ çıktısı hatasızlık garantisi taşımaz."}
+        ],
+        "faqs": [
+          {"question": "Taranmış PDF'yi özetleyebilir miyim?", "answer": "Evet, metin katmanı bulunmayan sayfalarda OCR kullanılır. Sonucun kalitesi taramanın okunaklılığına bağlıdır; özellikle sayıları, tabloları ve özel terimleri kaynaktan kontrol et."},
+          {"question": "Birden fazla belgeyi birlikte kullanabilir miyim?", "answer": "Evet. Belge dosyalarını ders sırasına koyarak tek çalışma paketi için yükleyebilirsin. Video ve belgeler ayrı işler halinde işlenir."},
+          {"question": "Türkçe PDF'den İngilizce not çıkarabilir miyim?", "answer": "Kaynak dili ile çıktı dili ayrı seçilebilir. Desteklenen 13 çıktı dilinden birini kullanabilir, transkript ve çeviri seçeneklerini çalışma alanında belirleyebilirsin."},
+          {"question": "PDF özetleme ücretsiz mi?", "answer": "Ücretsiz deneme ve kullanım haklarının güncel kapsamını Planlar sayfasından kontrol et. Belge işleme, çıkarılan metne göre dakika eşdeğeriyle hesaplanır; planın kullanılabilir çıktıları ve sınırları belirler."}
+        ],
+        "related": [
+          {"path": "/study-pack-example", "title": "Tam örnek ders paketi", "text": "Kaynak metni, çözümlü soruları ve indirilebilir çalışma kâğıdını incele."},
+          {"path": "/check-ai-notes", "title": "Yapay zekâ notunu kontrol et", "text": "Özetindeki iddiayı kaynağa bağlayan beş adımlık yöntemi uygula."},
+          {"path": "/quiz-flashcards", "title": "Belgeden quiz ve bilgi kartı", "text": "Okuduğunu hatırlayıp hatırlamadığını kısa sorularla sınamaya geç."}
+        ],
+        "closing": "Kendi ders belgenle başla.",
+        "closingText": "Önce bir konu seç. Kaynağı yükle, çalışma paketini oluştur ve önemli noktaları kontrol ederek tekrarına ekle."
+      },
+      "en": {
+        "title": "AI PDF Summarizer for Study Notes and Quizzes | LectureSift",
+        "description": "Turn PDF, Word and PowerPoint course files into summaries, notes, quizzes and flashcards. Explore a worked source-to-summary example, then upload your file.",
+        "eyebrow": "PDF AND DOCUMENT SUMMARIZER",
+        "heading": "Turn a PDF into study notes. Test what you learned.",
+        "lead": "Break a long course document into material you can study: a summary of key ideas, a quiz to test understanding and flashcards for short reviews. Work with PDF, Word, PowerPoint, TXT and Markdown files in your study workspace.",
+        "action": "Upload a document",
+        "stepsTitle": "How to summarize a PDF",
+        "steps": [
+          {"title": "Add your course file", "text": "Choose a document. If you use several documents, put them in lesson order. Make sure scanned pages are readable."},
+          {"title": "Choose your study pack", "text": "Select the output language, summary and transcript options, and the number of quiz questions and flashcards. Available options depend on your plan."},
+          {"title": "Check it and study", "text": "Once processing finishes, compare important numbers and definitions with the document. Choose PDF, Word or TXT exports to suit your study session."}
+        ],
+        "example": {
+          "title": "From a paragraph to a useful study note",
+          "sourceTitle": "Example source paragraph",
+          "source": "Five students take 18, 20, 20, 22 and 70 minutes to travel to school. The total is 150 minutes, the arithmetic mean is 30 minutes and the median is 20 minutes. These five observations do not represent every student's journey.",
+          "outputs": [
+            {"title": "Short study note", "text": "The mean divides the total by the number of observations: 150 ÷ 5 = 30 minutes. The median is the middle of the ordered group: 20 minutes. These results describe only the five observations."},
+            {"title": "A detail worth keeping", "text": "You cannot conclude that every student travels for 30 minutes. A mean does not replace individual observations; a useful summary preserves that limit."}
+          ],
+          "question": "Would the median change if the 70-minute journey took 120 minutes?",
+          "answer": "No. The middle observation would still be 20. The total would rise to 200, so the mean would become 40 minutes. Applying a concept to a changed example checks more than recognition of its definition."
+        },
+        "sections": [
+          {"title": "Which documents can you upload?", "text": "Use PDF course notes, DOCX documents, PPTX presentations, and TXT or Markdown text. PDF pages without a text layer and supported images are read with OCR. Blurry scans, complex tables and formulas can need extra checking."},
+          {"title": "Keep the source beside the summary", "text": "Check the conditions in a definition, the units in a formula and the group an example describes. For a long document, compare its section headings with the result and revisit missing points. AI output is not a guarantee of accuracy."}
+        ],
+        "faqs": [
+          {"question": "Can I summarize a scanned PDF?", "answer": "Yes. OCR reads pages without a text layer. Quality depends on how readable the scan is; check numbers, tables and specialist terms against the original."},
+          {"question": "Can I use more than one document?", "answer": "Yes. Arrange document files in lesson order and upload them for one study pack. Videos and documents are processed as separate jobs."},
+          {"question": "Can a Turkish PDF become English study notes?", "answer": "Source and output languages can be selected separately. Choose one of the 13 supported output languages and set transcript and translation options in the workspace."},
+          {"question": "Is PDF summarization free?", "answer": "Check Plans for the current trial and usage allowances. Document processing is calculated as a minute equivalent based on extracted text; your plan determines available outputs and limits."}
+        ],
+        "related": [
+          {"path": "/study-pack-example", "title": "Explore the complete study pack", "text": "Read the source, work through explained questions and download the worksheet."},
+          {"path": "/check-ai-notes", "title": "Check AI notes against the source", "text": "Use a five-step method to connect each important claim to its evidence."},
+          {"path": "/quiz-flashcards", "title": "Make quizzes and flashcards", "text": "Move from reading a document to testing what you remember."}
+        ],
+        "closing": "Start with your own course document.",
+        "closingText": "Choose one topic, upload the source and create a study pack. Check its important points before adding them to your review."
+      }
+    },
+    "/lecture-video-summary.html": {
+      "tr": {
+        "title": "Ders Videosu Özetleme ve Sesi Yazıya Çevirme | LectureSift",
+        "description": "Ders videosu veya ses kaydından transkript, özet, quiz ve bilgi kartı oluştur. Transkript ile özet farkını örnekle gör, kendi kaydını yükle.",
+        "eyebrow": "DERS VİDEOSU VE SES KAYDI",
+        "heading": "Ders kaydını yazıya çevir. Konuyu özetle, sorularla çalış.",
+        "lead": "Bir ders videosunu yeniden izlerken aradığın tanımı bulmak zor olabilir. Yüklediğin video veya ses kaydını transkript, konu özeti ve tekrar sorularıyla birlikte çalışabileceğin bir pakete dönüştür.",
+        "action": "Ders kaydı yükle",
+        "stepsTitle": "Ders kaydından çalışma paketine",
+        "steps": [
+          {"title": "Kaydını yükle", "text": "Video veya ses dosyanı ekle. Bir dersin birden fazla parçası varsa dosyaları anlatım sırasına göre düzenle."},
+          {"title": "Çıktıları belirle", "text": "Transkript, özet, quiz ve bilgi kartı seçeneklerini ayarla. Sunum içeren videolarda slayt görsellerini de seçebilirsin."},
+          {"title": "Kaynağa dönerek çalış", "text": "Belirsiz terimleri ve sayıları kayıttan dinle. Özetle konuyu gözden geçir, ardından soruları cevaplarını görmeden çöz."}
+        ],
+        "example": {
+          "title": "Transkript ve özet aynı işi yapmaz",
+          "sourceTitle": "Örnek ders anlatımı",
+          "source": "Kütlesi 2 kilogram olan bir cisme 3 metre bölü saniye kare ivme kazandırıyoruz. Net kuvveti bulmak için F eşittir m çarpı a kullanırız: 2 çarpı 3, yani 6 newton. Burada hesapladığımız, cisme etki eden net kuvvettir.",
+          "outputs": [
+            {"title": "Transkriptte aradığın", "text": "Konuşmanın yazılı akışı: hangi değerlerin verildiği ve konuşmacının net kuvvet vurgusu. Bir terim yanlış duyulduysa kayıtla karşılaştırabileceğin metin."},
+            {"title": "Özette aradığın", "text": "F = m × a. Örnekte m = 2 kg ve a = 3 m/s² olduğundan net kuvvet 6 N. Kütle, ivme ve kuvvet birimleriyle birlikte korunmalı."}
+          ],
+          "question": "İvme aynı kalıp kütle 4 kg olursa net kuvvet kaç newton olur?",
+          "answer": "F = 4 × 3 = 12 N. “İvme aynı” koşulu önemli: kütle değiştiğinde kuvvetin nasıl değiştiğini ancak diğer değeri sabit tutarak bu şekilde karşılaştırabiliriz."
+        },
+        "sections": [
+          {"title": "Ses kaydı ile sunumlu video arasındaki fark", "text": "Ses kaydında çalışma paketinin temeli konuşmadır. Sunumlu videoda gerçek sunum kareleri ayrıca seçilebilir; yalnız ses içeren bir dosyadan slayt görüntüsü elde edilmez. Görüntüdeki her değişim ders slaytı anlamına gelmez."},
+          {"title": "Zaman damgaları ve kayıt kalitesi", "text": "Varsayılan hızlı akışta zamanlar yaklaşık ses parçası başlangıçlarıdır. Hassas zaman damgalarını ayrıca seçebilirsin; bu seçenek işlem süresini artırabilir. Gürültü, üst üste konuşma ve özel terimler transkriptte hata oluşturabilir; kritik bölümü tekrar dinle."}
+        ],
+        "faqs": [
+          {"question": "Ders videosu ile ses kaydını birlikte yükleyebilir miyim?", "answer": "Video ve ses kaynaklarını ders sırasına göre düzenleyebilirsin. Belge kaynaklarıyla video kaynaklarını aynı işte karıştırmak yerine ayrı çalışma paketleri oluştur."},
+          {"question": "YouTube bağlantısı yapıştırarak kullanabilir miyim?", "answer": "Bu sayfadaki akış dosya yüklemeyle çalışır. Kullanım hakkına sahip olduğun video veya ses dosyasını cihazından seç; YouTube bağlantısından işleme bu akışta sunulmaz."},
+          {"question": "Transkript ile özet arasındaki fark nedir?", "answer": "Transkript konuşmayı yazılı olarak takip etmene yardımcı olur. Özet, ana kavramları ve ilişkileri daha kısa bir çalışma yapısına dönüştürür. Eksik veya belirsiz bilgiyi asıl kayıttan kontrol et."},
+          {"question": "Ders özetini başka dilde alabilir miyim?", "answer": "Evet. Kaynak dili ve çıktı dili ayrı seçilebilir. Desteklenen 13 çıktı dili arasından seçim yapabilir, transkript çevirisini ayrıca ayarlayabilirsin."}
+        ],
+        "related": [
+          {"path": "/check-ai-notes", "title": "Transkript ve notları kontrol et", "text": "Sayıları, koşulları ve kaynaktaki düzeltmeleri gözden geçir."},
+          {"path": "/quiz-flashcards", "title": "Kaydından tekrar soruları", "text": "Konuyu yeniden okumadan önce ne hatırladığını dene."},
+          {"path": "/document-summary", "title": "Dersin PDF'si de varsa", "text": "Belge kaynaklarından ayrı bir çalışma paketi hazırlamayı öğren."}
+        ],
+        "closing": "Bir sonraki tekrarında kaydınla birlikte çalış.",
+        "closingText": "Ders dosyanı yükle, ihtiyaç duyduğun çıktıları seç ve tamamlanan paketi kaynakla karşılaştır. Kullanım haklarını Planlar sayfasında görebilirsin."
+      },
+      "en": {
+        "title": "Lecture Video Summarizer and Audio to Text | LectureSift",
+        "description": "Turn lecture videos or audio recordings into transcripts, summaries, quizzes and flashcards. Compare a transcript with a summary, then upload your recording.",
+        "eyebrow": "LECTURE VIDEO AND AUDIO",
+        "heading": "Turn a lecture into text. Summarize it and test yourself.",
+        "lead": "Finding one definition in a long recording can interrupt a study session. Turn an uploaded lecture video or audio file into a pack with a transcript, a topic summary and questions you can practise with.",
+        "action": "Upload a lecture",
+        "stepsTitle": "From a recording to a study pack",
+        "steps": [
+          {"title": "Upload your recording", "text": "Add a video or audio file. If a lecture has several parts, arrange the files in the order they were taught."},
+          {"title": "Choose your outputs", "text": "Set transcript, summary, quiz and flashcard options. For videos containing a presentation, you can also select slide images."},
+          {"title": "Study with the source", "text": "Listen again to uncertain terms and numbers. Review the topic through its summary, then attempt the questions before reading their answers."}
+        ],
+        "example": {
+          "title": "A transcript and a summary serve different purposes",
+          "sourceTitle": "Example lecture passage",
+          "source": "We give an object with a mass of 2 kilograms an acceleration of 3 metres per second squared. To find the net force, use F equals m times a: 2 times 3 is 6 newtons. Remember that this calculation gives the net force acting on the object.",
+          "outputs": [
+            {"title": "What to look for in a transcript", "text": "The spoken sequence: the given values and the lecturer's emphasis on net force. If a term was misheard, you have text to compare with the recording."},
+            {"title": "What to look for in a summary", "text": "F = m × a. With m = 2 kg and a = 3 m/s², the net force is 6 N. Keep the units alongside mass, acceleration and force."}
+          ],
+          "question": "What is the net force if the mass becomes 4 kg and acceleration stays the same?",
+          "answer": "F = 4 × 3 = 12 N. The condition that acceleration stays the same matters: holding the other value constant is what allows this comparison."
+        },
+        "sections": [
+          {"title": "Audio recordings and presentation videos", "text": "An audio study pack starts with the spoken content. A video containing a presentation can also supply actual slide images; an audio-only file cannot supply slide pictures. A visual change in a video is not necessarily a lecture slide."},
+          {"title": "Timestamps and recording quality", "text": "The fast default uses approximate audio-chunk start times. You can select precise timestamps separately; this can increase processing time. Noise, overlapping voices and specialist terms may cause transcription errors, so replay important passages."}
+        ],
+        "faqs": [
+          {"question": "Can I combine lecture video and audio files?", "answer": "You can arrange video and audio sources in lesson order. Create separate study packs for document sources and media sources rather than mixing them in one job."},
+          {"question": "Can I paste a YouTube link?", "answer": "This workflow uses file uploads. Select a video or audio file you are entitled to use from your device; processing a YouTube link is not offered in this workflow."},
+          {"question": "How is a transcript different from a summary?", "answer": "A transcript helps you follow the spoken content as text. A summary organizes its main concepts and relationships into a shorter study structure. Check missing or uncertain information against the recording."},
+          {"question": "Can I get notes in another language?", "answer": "Yes. Source and output languages are separate selections. Choose from 13 supported output languages and set transcript translation independently."}
+        ],
+        "related": [
+          {"path": "/check-ai-notes", "title": "Check transcripts and study notes", "text": "Review numbers, conditions and corrections made in the original source."},
+          {"path": "/quiz-flashcards", "title": "Practise questions from your lecture", "text": "Find out what you remember before rereading the topic."},
+          {"path": "/document-summary", "title": "Have the lecture PDF too?", "text": "Learn how to prepare a separate study pack from course documents."}
+        ],
+        "closing": "Bring your recording into your next review.",
+        "closingText": "Upload the lecture, choose the outputs you need and check the finished pack against its source. See Plans for current usage allowances."
+      }
+    },
+    "/quiz-flashcards.html": {
+      "tr": {
+        "title": "PDF ve Ders Notundan Quiz, Bilgi Kartı Oluştur | LectureSift",
+        "description": "PDF, ders videosu veya ses kaydından açıklamalı quiz soruları ve bilgi kartları oluştur. Örnek soruyu çöz, kaynaklarına uygun tekrar paketi hazırla.",
+        "eyebrow": "QUIZ VE BİLGİ KARTI OLUŞTURUCU",
+        "heading": "Ders notunu soruya dönüştür. Neyi bildiğini gör.",
+        "lead": "Bir özeti tanıdık bulmak, konuyu kendi başına açıklayabilmekle aynı şey değildir. Ders belgenden veya kaydından çoktan seçmeli sorular, açıklamalı cevaplar ve kısa soru-cevap kartları hazırlayarak kendini sına.",
+        "action": "Quiz ve bilgi kartı oluştur",
+        "stepsTitle": "Kendi kaynağından tekrar soruları hazırla",
+        "steps": [
+          {"title": "Çalışacağın kaynağı seç", "text": "PDF, Word, PowerPoint veya metin belgesi yükle. Ders videosu ya da ses kaydı kullanıyorsan sorular konuşmadan çıkarılan metne dayanır."},
+          {"title": "Soru ve kart sayısını ayarla", "text": "Çalışma alanında quiz ve bilgi kartı seçeneklerini aç. Planının izin verdiği sayıyı ve paketin çıktı dilini seç."},
+          {"title": "Cevapla, kontrol et, yeniden dene", "text": "Cevabı açmadan önce yanıtını ver. Açıklamayı kaynakla kontrol et ve zorlandığın kavramı sonraki çalışma oturumunda yeniden ele al."}
+        ],
+        "example": {
+          "title": "Aynı kaynaktan bir quiz ve bir bilgi kartı",
+          "sourceTitle": "Örnek kaynak notu",
+          "source": "Bir veri grubunun medyanını bulmadan önce değerler küçükten büyüğe sıralanır. Tek sayıda gözlem varsa ortadaki değer alınır. Çift sayıda gözlem varsa ortadaki iki değerin aritmetik ortalaması hesaplanır.",
+          "outputs": [
+            {"title": "Quiz: kuralı uygula", "text": "10, 12, 14 ve 60 değerlerinin medyanı nedir? A) 12 · B) 13 · C) 14 · D) 24. Seçeneğini belirle; açıklamayı aşağıda kontrol et."},
+            {"title": "Bilgi kartı: kuralı hatırla", "text": "Ön yüz: Çift sayıda gözlem varsa medyan nasıl bulunur? Arka yüz: Önce sırala; ortadaki iki değerin aritmetik ortalamasını al."}
+          ],
+          "question": "Doğru seçeneği ve açıklamasını aç",
+          "answer": "B) 13. Dört gözlem var; ortadaki değerler 12 ve 14. Medyan (12 + 14) ÷ 2 = 13'tür. D seçeneğindeki 24 ise tüm değerlerin aritmetik ortalamasıdır; iki kavramı ayırmak gerekir."
+        },
+        "sections": [
+          {"title": "Quiz ne zaman, bilgi kartı ne zaman?", "text": "Quiz sorusuyla bir kavramı örneğe uygulamayı dene. Bilgi kartında ise tek bir tanım, ayrım veya adımı hatırlamaya odaklan. Uzun bir paragrafı tek kartın cevabına koymak yerine küçük parçalara ayır."},
+          {"title": "Sorunun doğruluğunu da kontrol et", "text": "Soru kökü açık mı, doğru cevap kaynakta destekleniyor mu, başka seçenek de doğru olabilir mi? Yanlış veya belirsiz bir soruyu ezberlemek yerine kaynağa dön. Oluşturulan sorular resmi sınav sorusu ya da sınavda çıkacak konuların garantisi değildir."}
+        ],
+        "faqs": [
+          {"question": "PDF'den test sorusu oluşturabilir miyim?", "answer": "Evet. Desteklenen belgelerden çıkarılan metin, quiz ve bilgi kartı üretiminde kullanılabilir. Taranmış dosyalarda okunan metni ve üretilen cevapları ayrıca kontrol et."},
+          {"question": "Soruların cevapları açıklamalı mı?", "answer": "Quiz sorularında doğru seçeneğe kısa bir açıklama eşlik eder. Bu açıklama yapay zekâ çıktısıdır; önemli tanımları ve hesapları kaynakla doğrula."},
+          {"question": "Kaç soru veya bilgi kartı oluşturabilirim?", "answer": "Kullanılabilir soru ve kart sayıları planına bağlıdır. Güncel hakları Planlar sayfasında, seçilebilir değerleri çalışma alanında görebilirsin."},
+          {"question": "İngilizce veya başka dilde quiz hazırlayabilir miyim?", "answer": "Evet. Çalışma paketinin çıktı dilini desteklenen 13 dilden biri olarak seçebilirsin. Özel terimlerin çevirisini ve sorunun anlamını kaynakla karşılaştır."}
+        ],
+        "related": [
+          {"path": "/active-recall", "title": "Aktif hatırlama ve aralıklı tekrar", "text": "Sorularını sonraki çalışma oturumlarına yerleştiren uygulanabilir plan."},
+          {"path": "/study-pack-example", "title": "Dört çözümlü soruyu dene", "text": "Kaynak metne dönebileceğin tam bir örnek ders paketi."},
+          {"path": "/document-summary", "title": "Önce PDF'den ders notu çıkar", "text": "Tekrar sorularını çalışılabilir bir özetle birlikte hazırla."}
+        ],
+        "closing": "Bir konuyu seç. Cevabına bakmadan dene.",
+        "closingText": "Ders kaynağını yükle ve kendi tekrar paketini hazırla. İlk hedef, bildiklerinle tekrar bakman gereken noktaları ayırmak olsun."
+      },
+      "en": {
+        "title": "AI Quiz and Flashcard Generator from PDFs | LectureSift",
+        "description": "Create explained quiz questions and flashcards from PDFs, lecture videos or audio. Try a worked question and build a review pack from your course material.",
+        "eyebrow": "QUIZ AND FLASHCARD GENERATOR",
+        "heading": "Turn study notes into questions. See what you know.",
+        "lead": "Recognizing a familiar summary is different from explaining a topic on your own. Create multiple-choice questions, explained answers and short question-and-answer cards from your course documents or recordings.",
+        "action": "Create a quiz and flashcards",
+        "stepsTitle": "Build review questions from your own source",
+        "steps": [
+          {"title": "Choose your course material", "text": "Upload a PDF, Word, PowerPoint or text document. If you use a lecture video or audio recording, questions use text extracted from the spoken content."},
+          {"title": "Set question and card counts", "text": "Enable quiz and flashcard options in the workspace. Select a count available with your plan and choose the study pack's output language."},
+          {"title": "Answer, check and try again", "text": "Give your answer before revealing the solution. Check the explanation against the source and revisit difficult concepts in your next study session."}
+        ],
+        "example": {
+          "title": "One source, a quiz question and a flashcard",
+          "sourceTitle": "Example source note",
+          "source": "Before finding a median, sort the observations from smallest to largest. With an odd number of observations, take the middle value. With an even number, calculate the arithmetic mean of the two middle values.",
+          "outputs": [
+            {"title": "Quiz: apply the rule", "text": "What is the median of 10, 12, 14 and 60? A) 12 · B) 13 · C) 14 · D) 24. Choose an answer, then check the explanation below."},
+            {"title": "Flashcard: recall the rule", "text": "Front: How do you find the median with an even number of observations? Back: Sort them first, then take the arithmetic mean of the two middle values."}
+          ],
+          "question": "Reveal the correct answer and explanation",
+          "answer": "B) 13. There are four observations and the middle values are 12 and 14. The median is (12 + 14) ÷ 2 = 13. Option D, 24, is the mean of all four values; it is a different measure."
+        },
+        "sections": [
+          {"title": "When to use a quiz or a flashcard", "text": "Use a quiz question to apply a concept to an example. Use a flashcard to recall one definition, distinction or step. Break long explanations into small parts instead of placing an entire paragraph on one card."},
+          {"title": "Check the question too", "text": "Is the wording clear? Does the source support the answer? Could another option also be correct? Revisit the source instead of memorizing an ambiguous question. Generated questions are not official exam questions or predictions of what your exam will cover."}
+        ],
+        "faqs": [
+          {"question": "Can I generate test questions from a PDF?", "answer": "Yes. Text extracted from supported documents can be used to create quizzes and flashcards. For scanned files, check both the extracted text and the generated answers."},
+          {"question": "Do quiz answers include explanations?", "answer": "The correct option comes with a short explanation. It is AI-generated, so verify important definitions and calculations against the source."},
+          {"question": "How many questions or flashcards can I create?", "answer": "Available counts depend on your plan. See Plans for current allowances and the workspace for the values you can select."},
+          {"question": "Can I generate a quiz in another language?", "answer": "Yes. Choose one of the 13 supported output languages for your study pack. Compare translated specialist terms and the meaning of each question with the source."}
+        ],
+        "related": [
+          {"path": "/active-recall", "title": "Active recall and spaced review", "text": "Follow a practical plan for using your questions across study sessions."},
+          {"path": "/study-pack-example", "title": "Try four explained questions", "text": "Explore a complete example study pack with links back to the source."},
+          {"path": "/document-summary", "title": "Start with PDF study notes", "text": "Prepare your review questions alongside a useful document summary."}
+        ],
+        "closing": "Choose a topic. Try before revealing the answer.",
+        "closingText": "Upload your course material and prepare a review pack. Start by separating what you know from the points you need to revisit."
+      }
+    }
+  }
+}

@@ -22,6 +22,7 @@ const GUIDE_PATHS = new Set([
 ]);
 const PUBLIC_PATH_SET = new Set(PUBLIC_PATHS);
 const STUDY_RESOURCES = JSON.parse(await readFile(path.join(SOURCE, "study-resources.json"), "utf8"));
+const LANDING_PAGES = JSON.parse(await readFile(path.join(SOURCE, "landing-pages.json"), "utf8"));
 const STUDY_PAGES = new Map(STUDY_RESOURCES.pages.map(page => [`/${page.slug}.html`, page]));
 const pageLanguages = publicPath => STUDY_PAGES.has(publicPath) ? STUDY_RESOURCES.languages : LANGUAGES;
 for (const publicPath of STUDY_PAGES.keys()) PUBLIC_PATH_SET.add(publicPath);
@@ -104,6 +105,35 @@ function translate(source, language) {
 
 function escapeAttribute(value) {
   return String(value).replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+}
+
+function enrichLandingPage(html, language, publicPath) {
+  const copy = LANDING_PAGES.pages[publicPath]?.[language];
+  // Publish richer editions only where the editorial copy actually exists.
+  if (!copy) return html;
+  const e = escapeAttribute;
+  const link = route => localizedPath(language, route);
+  const tr = language === "tr";
+  const updated = new Intl.DateTimeFormat(tr ? "tr-TR" : "en-GB", {
+    day: "numeric", month: "long", year: "numeric", timeZone: "UTC",
+  }).format(new Date(`${LANDING_PAGES.updated}T00:00:00Z`));
+  const actions = `<div class="detail-actions"><a class="primary" href="${link("/workspace.html")}">${e(copy.action)}</a><a class="secondary" href="${link("/plans.html")}">${tr ? "Planları ve kullanım haklarını gör" : "See plans and allowances"}</a></div>`;
+  const main = `<main class="detail-main landing-page" data-landing-page>
+    <section class="detail-hero landing-hero"><p class="eyebrow">${e(copy.eyebrow)}</p><h1>${e(copy.heading)}</h1><p>${e(copy.lead)}</p>${actions}<a class="landing-example-link" href="#example">${tr ? "Önce örneği incele ↓" : "Explore the example first ↓"}</a></section>
+    <section class="detail-section landing-example" id="example" aria-labelledby="example-title"><p class="eyebrow">${tr ? "KAYNAKTAN ÇALIŞMA NOTUNA" : "FROM SOURCE TO STUDY NOTE"}</p><h2 id="example-title">${e(copy.example.title)}</h2><p class="intro">${tr ? "Aşağıdaki metin ve cevaplar öğretim amacıyla hazırlanmış örneklerdir; canlı işlem sonucu değildir." : "The text and answers below are teaching examples, not the result of a live processing job."}</p><div class="landing-example-grid"><div class="landing-source"><h3>${e(copy.example.sourceTitle)}</h3><blockquote>${e(copy.example.source)}</blockquote></div><div class="landing-outputs">${copy.example.outputs.map(item => `<article><h3>${e(item.title)}</h3><p>${e(item.text)}</p></article>`).join("")}</div></div><details class="landing-answer"><summary>${e(copy.example.question)}</summary><p>${e(copy.example.answer)}</p></details></section>
+    <section class="detail-section"><h2>${e(copy.stepsTitle)}</h2><ol class="landing-steps">${copy.steps.map(item => `<li><h3>${e(item.title)}</h3><p>${e(item.text)}</p></li>`).join("")}</ol></section>
+    <div class="landing-explain">${copy.sections.map(item => `<section class="detail-section"><h2>${e(item.title)}</h2><p>${e(item.text)}</p></section>`).join("")}</div>
+    <section class="detail-section"><h2>${tr ? "Sık sorulan sorular" : "Frequently asked questions"}</h2><div class="faq-list">${copy.faqs.map(item => `<details><summary>${e(item.question)}</summary><p>${e(item.answer)}</p></details>`).join("")}</div></section>
+    <section class="detail-section landing-related"><h2>${tr ? "Bir sonraki çalışma adımın" : "Your next study step"}</h2><div class="landing-related-grid">${copy.related.map(item => `<a href="${link(item.path)}"><h3>${e(item.title)}</h3><p>${e(item.text)}</p><span aria-hidden="true">↗</span></a>`).join("")}</div></section>
+    <section class="detail-section landing-closing"><h2>${e(copy.closing)}</h2><p>${e(copy.closingText)}</p>${actions}</section>
+    <p class="landing-updated">${tr ? "İçerik güncellemesi" : "Content updated"}: <time datetime="${LANDING_PAGES.updated}">${updated}</time></p>
+  </main>`;
+  if (!/<main\b[^>]*>[\s\S]*?<\/main>/i.test(html)) throw new Error(`Landing page has no main: ${publicPath}`);
+  return html
+    .replace(/<title[^>]*>[\s\S]*?<\/title>/i, () => `<title>${e(copy.title)}</title>`)
+    .replace(/<meta\s+name="description"\s+content="[^"]*"\s*\/?\s*>/i, () => `<meta name="description" content="${e(copy.description)}">`)
+    .replace(/<\/head>/i, `<meta property="article:modified_time" content="${LANDING_PAGES.updated}"><link rel="stylesheet" href="/landing-pages.css?v=1"></head>`)
+    .replace(/<main\b[^>]*>[\s\S]*?<\/main>/i, () => main);
 }
 
 function translateDocument(html, language) {
@@ -211,11 +241,12 @@ function structuredData(html, language, publicPath, canonical, title, descriptio
   if (GUIDE_PATHS.has(publicPath) || STUDY_PAGES.get(publicPath)?.kind === "article") {
     graph.push({
       "@type": "Article", "@id": `${canonical}#article`, headline: title, description, image,
-      inLanguage: language, dateModified: STUDY_PAGES.has(publicPath) ? STUDY_RESOURCES.updated : "2026-08-29", mainEntityOfPage: {"@id": webpageId},
+      inLanguage: language, dateModified: LANDING_PAGES.pages[publicPath]?.[language] ? LANDING_PAGES.updated : STUDY_PAGES.has(publicPath) ? STUDY_RESOURCES.updated : "2026-08-29", mainEntityOfPage: {"@id": webpageId},
       author: {"@id": organizationId}, publisher: {"@id": organizationId},
     });
   }
-  const questions = [...html.matchAll(/<details\b[^>]*>[\s\S]*?<summary\b[^>]*>([\s\S]*?)<\/summary>[\s\S]*?<p\b[^>]*>([\s\S]*?)<\/p>[\s\S]*?<\/details>/gi)]
+  const faqHtml = html.match(/<div\b[^>]*class="[^"]*\bfaq-list\b[^"]*"[^>]*>([\s\S]*?)<\/div>/i)?.[1] || "";
+  const questions = [...faqHtml.matchAll(/<details\b[^>]*>[\s\S]*?<summary\b[^>]*>([\s\S]*?)<\/summary>[\s\S]*?<p\b[^>]*>([\s\S]*?)<\/p>[\s\S]*?<\/details>/gi)]
     .map(match => ({
       "@type": "Question", name: plainText(match[1]),
       acceptedAnswer: {"@type": "Answer", text: plainText(match[2])},
@@ -296,12 +327,14 @@ await cp(SOURCE, OUTPUT, {recursive: true});
 // Editorial translations are published only in the languages actually written.
 // Do not index copies of Turkish content under unrelated language paths.
 await rm(path.join(OUTPUT, "study-resources.json"));
+await rm(path.join(OUTPUT, "landing-pages.json"));
 
 for (const language of LANGUAGES) {
   for (const publicPath of PUBLIC_PATHS) {
     const sourceName = publicPath === "/" ? "index.html" : publicPath.slice(1);
     let html = await readFile(path.join(SOURCE, sourceName), "utf8");
     html = translateDocument(html, language);
+    html = enrichLandingPage(html, language, publicPath);
     html = canonicalizePublicLinks(html);
     html = removeStaticTranslationCatalog(html);
     html = deferNonCriticalScripts(html);
@@ -331,7 +364,11 @@ function studyDocument(page, language) {
   const brand = `<span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>Lecture<span>Sift</span></span>`;
   const preview = `<figure class="guide-preview"><figcaption><span class="guide-preview-dot" aria-hidden="true"></span>${tr ? "Örnek dersin içinden" : "Inside the example lesson"}</figcaption><h2>${tr ? "Aynı veri.<br>İki farklı bakış." : "Same data.<br>Two ways to see it."}</h2><p>${tr ? "Okula gidiş süresi · dakika" : "Journey to school · minutes"}</p><div class="guide-preview-data" aria-label="${tr ? "18, 20, 20, 22 ve 70 dakika" : "18, 20, 20, 22, and 70 minutes"}"><span>18</span><span>20</span><span class="guide-median">20</span><span>22</span><span>70</span></div><dl><div><dt>${tr ? "Ortalama" : "Mean"}</dt><dd>30 <small>${tr ? "dk" : "min"}</small></dd></div><div><dt>${tr ? "Medyan" : "Median"}</dt><dd>20 <small>${tr ? "dk" : "min"}</small></dd></div></dl><a href="${prefix}/study-pack-example">${tr ? "Neden farklılar? Örnekte keşfet" : "Why the difference? Explore the example"} <span aria-hidden="true">↗</span></a></figure>`;
   const hero = `<header class="guide-intro${library ? " guide-hero" : ""}"><div><p class="guide-eyebrow">${tr ? "LectureSift · Öğrenme kütüphanesi" : "LectureSift · Learning library"}</p><h1>${escapeAttribute(copy.title)}</h1><p class="guide-lead">${escapeAttribute(copy.description)}</p>${library ? `<div class="guide-hero-actions"><a class="guide-button guide-button-primary" href="${prefix}/study-pack-example">${tr ? "Örnek dersi aç" : "Try the example lesson"} <span aria-hidden="true">→</span></a><a class="guide-text-link" href="#${tr ? "basla" : "start"}">${tr ? "Rehber seç" : "Choose a guide"} ↓</a></div><p class="guide-access">${tr ? "Ücretsiz rehberler · Hesap veya kredi gerekmez" : "Free guides · No account or credits needed"}</p>` : `<p class="guide-byline"><span>LectureSift</span><span>${minutes} ${tr ? "dk okuma" : "min read"}</span><time datetime="${STUDY_RESOURCES.updated}">${updated}</time></p>`}</div>${library ? preview : ""}</header>`;
-  const related = library ? "" : `<nav class="guide-related" aria-label="${tr ? "Diğer çalışma rehberleri" : "More study guides"}"><strong>${tr ? "Çalışmaya devam et" : "Keep learning"}</strong>${STUDY_RESOURCES.pages.filter(item => item.kind === "article" && item.slug !== page.slug && item.slug !== "about-study-guides").map(item => `<a href="${prefix}/${item.slug}">${escapeAttribute(item[language].title)} <span aria-hidden="true">→</span></a>`).join("")}</nav>`;
+  const products = library
+    ? ["/document-summary.html", "/lecture-video-summary.html", "/quiz-flashcards.html"]
+    : [page.slug === "active-recall" ? "/quiz-flashcards.html" : "/document-summary.html"];
+  const productLinks = `<nav class="guide-related" data-guide-products aria-label="${tr ? "Kendi kaynaklarınla çalış" : "Study with your own sources"}"><strong>${tr ? "Kendi dersinle uygula" : "Apply it to your own course"}</strong>${products.map(route => `<a href="${localizedPath(language, route)}">${escapeAttribute(LANDING_PAGES.pages[route][language].action)} <span aria-hidden="true">→</span></a>`).join("")}</nav>`;
+  const related = (library ? "" : `<nav class="guide-related" aria-label="${tr ? "Diğer çalışma rehberleri" : "More study guides"}"><strong>${tr ? "Çalışmaya devam et" : "Keep learning"}</strong>${STUDY_RESOURCES.pages.filter(item => item.kind === "article" && item.slug !== page.slug && item.slug !== "about-study-guides").map(item => `<a href="${prefix}/${item.slug}">${escapeAttribute(item[language].title)} <span aria-hidden="true">→</span></a>`).join("")}</nav>`) + productLinks;
   return `<!doctype html><html lang="${language}" dir="ltr"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeAttribute(copy.title)} | LectureSift</title><meta name="description" content="${escapeAttribute(copy.description)}">

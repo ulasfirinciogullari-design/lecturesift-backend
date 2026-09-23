@@ -2,6 +2,7 @@
   "use strict";
 
   const API_BASE = "https://api.lecturesift.com";
+  const PRODUCTION_ORIGIN = new Set(["https://lecturesift.com", "https://www.lecturesift.com"]).has(location.origin);
   const PUBLIC_PATHS = new Set([
     "/", "/features", "/plans", "/about", "/contact", "/privacy",
     "/terms", "/cookies", "/refund", "/distance-sales",
@@ -50,6 +51,7 @@
   }
 
   function updateConsent() {
+    if (!PRODUCTION_ORIGIN) return;
     prepareGtag();
     const consent = choices();
     window.gtag("consent", "update", {
@@ -115,14 +117,14 @@
   }
 
   async function start() {
-    if (!EVENT_PATHS.has(unlocalizedPath())) return;
+    if (!PRODUCTION_ORIGIN || !EVENT_PATHS.has(unlocalizedPath())) return;
     const config = await getConfig();
     if (!config) return;
     configureDestinations(config);
   }
 
   async function track(eventName, parameters = {}) {
-    if (!EVENT_PATHS.has(unlocalizedPath()) || !choices().analytics) return false;
+    if (!PRODUCTION_ORIGIN || !EVENT_PATHS.has(unlocalizedPath()) || !choices().analytics) return false;
     const config = await getConfig();
     // Consent may have been withdrawn while configuration was loading.
     if (!choices().analytics) return false;
@@ -133,7 +135,7 @@
   }
 
   async function trackConversion(kind, parameters = {}) {
-    if (!EVENT_PATHS.has(unlocalizedPath()) || !choices().advertising) return false;
+    if (!PRODUCTION_ORIGIN || !EVENT_PATHS.has(unlocalizedPath()) || !choices().advertising) return false;
     const config = await getConfig();
     if (!choices().advertising) return false;
     configureDestinations(config);
