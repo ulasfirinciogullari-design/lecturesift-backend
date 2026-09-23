@@ -6,11 +6,11 @@ test('public runtime bundles preserve every language and picker navigation', asy
     await page.goto(`${prefix}/document-summary`);
     await expect.poll(() => page.evaluate(() => window.LectureSiftI18n?.language)).toBe(language);
     await expect(page.locator('html')).toHaveAttribute('lang', language);
-    await expect(page.locator('#uiLanguage')).toHaveValue(language);
+    await expect(page.locator('.language-switcher, #uiLanguage')).toHaveValue(language);
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', `https://lecturesift.com${prefix}/document-summary`);
     expect(await page.evaluate(() => window.LectureSiftI18n.t('language.label'))).not.toBe('language.label');
   }
-  await page.locator('#uiLanguage').selectOption('en');
+  await page.locator('.language-switcher, #uiLanguage').selectOption('en');
   await expect(page).toHaveURL('/en/document-summary');
   await expect(page.locator('[data-landing-page] h1')).toContainText('PDF');
 });
