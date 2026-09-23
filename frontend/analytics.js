@@ -176,7 +176,7 @@
     else if (RESOURCE_PATHS.has(destination.pathname) && link.hasAttribute("download")) action = "download_resource";
     if (!action) return;
     void track("content_action", {
-      action, content_id: unlocalizedPath(),
+      action, content_type: action, content_id: unlocalizedPath(),
       content_language: document.documentElement.lang,
       target_path: action === "download_resource" ? destination.pathname : target,
       link_placement: link.closest("header") ? "header" : link.closest("footer") ? "footer" : "content",

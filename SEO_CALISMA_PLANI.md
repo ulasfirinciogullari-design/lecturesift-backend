@@ -70,6 +70,16 @@ alanı da sorgusuzdur. Genel sayfa görüntülemesinin mevcut kampanya atfı
 korunur. Bunlar tıklama niyetleridir: tamamlanmış yükleme, kayıt, indirme
 başarısı veya satış kanıtı değildir. Yeni reklam dönüşümü tanımlanmaz.
 
+Temel rapor, bağlı aracın hazır `page_path`, `event_name`, `content_type`,
+`content_id` ve `event_count` alanlarıyla okunabilir. Sabit tıklama türü
+`content_type` alanına da yazılır; bu ayrım için özel boyut oluşturmak
+gerekmez. `target_path` veya `link_placement` gibi ek parametreleri ayrı
+raporlamak ise GA4'te özel boyut tanımı gerektirir; bu tanımlar oluşturulmuş
+sayılmaz. [GA4 hazır alanları](https://developers.google.com/analytics/devguides/reporting/data/v1/api-schema)
+ve [özel boyut açıklaması](https://support.google.com/analytics/answer/14240153)
+bu ayrımı tanımlar. Olayların canlı veri akışına düşmesi, gerçek ve izin
+vermiş ziyaretçi etkileşimlerinden sonra ayrıca doğrulanacaktır.
+
 Herkese açık 13 dildeki sayfalarda tüm dillerin 620.983 baytlık çalışma
 zamanı sözlüğü yerine Türkçe kaynak anahtarları, İngilizce yedek ve seçili
 dili içeren dosya oluşturulur. Dosya adı içerik özeti taşıdığı için güncel

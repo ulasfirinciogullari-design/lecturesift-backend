@@ -154,6 +154,7 @@ def test_content_intent_uses_fixed_labels_and_strips_link_query_values():
     assert [e["target_path"] for e in events] == ["/workspace", "/lecture-video-summary", "/assets/study/cornell-notes-en.txt", "/plans", "/register"]
     assert events[0]["link_placement"] == "header"
     for event in events:
+        assert event["content_type"] == event["action"]
         assert event["content_id"] == "/cornell-notes"
         assert event["content_language"] == "en"
         assert event["page_location"] == "https://lecturesift.com/en/cornell-notes"
