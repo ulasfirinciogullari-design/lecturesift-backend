@@ -47,6 +47,44 @@ yayın ve Google'ın yeniden taraması ayrıca izlenir.
 
 ## Ölçülmüş başlangıç
 
+### Yayın sonrası erişim sorunu — 23 Eylül 2026
+
+İkinci SEO paketi [#108](https://github.com/ulasfirinciogullari-design/lecturesift-backend/pull/108)
+ile birleştirildi. İlk Netlify yayını 181 sayfayı oluşturdu ve gizli bilgi
+taramasını geçti; dosyaları etkinleştiren `updateSiteDeploy` isteği HTTP 500
+ile kesildi. Aynı kaynak ağacını kullanan `2c8843e` yeniden denemesi
+[22:52:46 UTC'de yayımlandı](https://app.netlify.com/projects/clever-horse-22b1a8/deploys/6ab4582758c32c0008d375a6).
+Bu sürümün GitHub Actions kontrolleri 1.397 uygulama ve 163 tarayıcı testi
+geçti. Canlıda iki Cornell rehberi, iki şablon, ürün bağlantıları ve 181
+adreslik site haritası doğrulandı. Türkçe/İngilizce dil dosyası 620.983
+bayttan 106.505 bayta indi; bu yaklaşık %82,8 küçülmedir, PageSpeed puanı değildir.
+
+Yayın başarısından ayrı olarak, kamuya açık dosyalarda aralıklı 500/503
+yanıtları gözlendi. 23:18 UTC örneklemesinde `/favicon.svg` özel alan adında
+200, Netlify alt alan adında 500; İngilizce dil dosyası özel alan adında 500
+döndürdü. Hata yanıtları `Server: Netlify` ve sağlayıcı istek kimliği taşıyor.
+Sorun hem HTTP/1.1 hem HTTP/2 isteklerinde görüldü. Tekrar edilen başarılı
+istekler önceki hatayı ortadan kaldırmış sayılmaz.
+
+- Dil dosyası hata kimliği: `01M388ZVSZWC3Y4KMNQN7WHC18`.
+- Netlify alt alan adı favicon hata kimliği: `01M388ZVYK3FNBKGZ0FY1F40M6`.
+- CSP nonce eklentisinin üretim kapsamı `/about`; `.js`, `.svg` ve `.txt`
+  dosyaları ayrıca dışlanıyor ve `onError: bypass` kullanılıyor. Bu yüzden
+  statik dosya hatalarını bu eklentiye bağlayan bir kanıt yok.
+- Netlify durum sayfasında açık olay bulunmaması, bu alan adı ve bağlantı
+  noktası için sorunsuz erişim kanıtı değildir. Sağlayıcının iç hata nedeni
+  yalnız istemci yanıtlarından kesinleştirilemez.
+
+`Frontend delivery` GitHub Actions kontrolü, ana sürüm güncellemelerinde
+ve ilgili tanılama PR'larında mevcut canlı siteyi ayrı bir ağdan okur.
+İki alan adında iki kısa tur yapar; sayfaları, site haritasını, şablonu ve
+HTML'de bulunan dil dosyasını kontrol eder. İlk başarısız yanıt korunur;
+sonraki başarıyla gizlenmez. Ham yanıt gövdeleri veya kimlik bilgileri
+kaydedilmez. JSON kanıtı istek kimlikleri ve zamanlarla yedi gün saklanır.
+Bu kontrol yeni sürümün yayımlandığının veya tüm kullanıcıların kesintisiz
+eriştiğinin kanıtı değildir; gözlem anındaki canlı yayını raporlar.
+Zamanlanmış yeni bir otomasyon veya sağlayıcı değişikliği yapılmaz.
+
 ### Yayın ve ikinci geliştirme
 
 İlk paket [#107](https://github.com/ulasfirinciogullari-design/lecturesift-backend/pull/107)
