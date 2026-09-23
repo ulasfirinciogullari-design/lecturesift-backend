@@ -1,0 +1,39 @@
+name: Frontend delivery
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - ".github/workflows/frontend-delivery.yml"
+      - "scripts/check_frontend_delivery.py"
+      - "tests/test_frontend_delivery_check.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-delivery-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  public-http-delivery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Inspect the currently published public frontend
+        # Availability evidence is independent from source tests and deploy success.
+        # Public GET requests only. No browser, secrets or retry masking.
+        run: python3 scripts/check_frontend_delivery.py --output delivery-evidence/report.json
+      - name: Preserve delivery observations even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-delivery-${{ github.run_attempt }}
+          path: delivery-evidence/report.json
+          if-no-files-found: error
+          retention-days: 7
