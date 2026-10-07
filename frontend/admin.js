@@ -10,11 +10,113 @@ const ADMIN_REFERRAL_EVIDENCE_RE = /^[A-Za-z0-9][A-Za-z0-9 ._:/-]{7,119}$/;
 const ADMIN_VIEWS = ["overview", "users", "finance", "referrals", "support", "jobs", "costs", "system", "growth", "audit"];
 let adminAccessToken = sessionStorage.getItem(ADMIN_SESSION_TOKEN_KEY) || "";
 let adminLoading = false;
-let adminState = {overview:{counts:{}}, users:[], userPagination:{page:1,total:0,total_pages:1}, orders:[], orderPagination:{page:1,total:0,total_pages:1}, rewards:[], referrals:[], referralsError:"", referralsHasMore:false, referralsLimit:100, refunds:[], credits:[], accountEvents:[], contacts:[], jobs:[], costs:null, billing:null, runtime:null, ads:null, analytics:null, advertisingReadiness:null};
+const emptyAdminState = () => ({overview:{counts:{}}, users:[], userPagination:{page:1,total:0,total_pages:1}, orders:[], orderPagination:{page:1,total:0,total_pages:1}, rewards:[], referrals:[], referralsError:"", referralsHasMore:false, referralsLimit:100, refunds:[], credits:[], accountEvents:[], contacts:[], jobs:[], costs:null, billing:null, runtime:null, ads:null, analytics:null, advertisingReadiness:null});
+let adminState = emptyAdminState();
 let selectedAdminUsers = new Set();
 const adminReferralDrafts = new Map();
 let adminUserSearchTimer = null;
 let adminOrderSearchTimer = null;
+const ADMIN_REQUEST_TIMEOUT_MS = 20000;
+const adminRequests = new Set();
+const adminLoadErrors = new Map();
+const adminLoadedSections = new Set();
+const adminListVersions = {users:0, orders:0, costs:0, contact:0};
+let adminSessionVersion = 0;
+let adminLoadPromise = null;
+
+function endAdminSession(message = "Yönetici oturumu kapatıldı.") {
+  adminSessionVersion += 1;
+  adminAccessToken = "";
+  sessionStorage.removeItem(ADMIN_SESSION_TOKEN_KEY);
+  adminRequests.forEach(controller => controller.abort());
+  Object.keys(adminListVersions).forEach(key => { adminListVersions[key] += 1; });
+  adminLoadErrors.clear();
+  adminLoadedSections.clear();
+  adminState = emptyAdminState();
+  clearTimeout(adminUserSearchTimer);
+  clearTimeout(adminOrderSearchTimer);
+  document.querySelectorAll("#adminPanel .admin-table-wrap").forEach(target => { target.innerHTML = ""; });
+  selectedAdminUsers.clear();
+  adminReferralDrafts.clear();
+  resetAdminReferralConfirmations();
+  document.querySelectorAll("dialog[open]").forEach(dialog => dialog.close());
+  admin$("adminPanel").hidden = true;
+  admin$("adminLogin").hidden = false;
+  admin$("adminToken").value = "";
+  adminNotice(message);
+}
+
+function formatAdminRecordTables(root = admin$("adminPanel")) {
+  root?.querySelectorAll(".admin-record-table td[data-label]").forEach(cell => {
+    if (cell.firstElementChild?.classList.contains("admin-cell-content")) return;
+    const content = document.createElement("div");
+    content.className = "admin-cell-content";
+    content.append(...cell.childNodes);
+    cell.append(content);
+  });
+}
+
+function renderAdminLoadProblems() {
+  const targets = {users:["adminUserList"], orders:["adminOrders"], rewards:["adminRewards"], refunds:["adminRefunds"], credits:["adminCreditEvents"], contacts:["adminContactMessages"], jobs:["adminJobs"], accountEvents:["adminAccountEvents"], costs:["adminCostMetrics", "adminCostAccuracy", "adminCostEconomics", "adminProviderCosts", "adminResourceCosts", "adminJobCosts", "adminFixedCosts", "adminActualCosts", "adminExternalCosts"]};
+  for (const [key, problem] of adminLoadErrors) {
+    for (const id of targets[key] || []) {
+      const target = admin$(id);
+      if (target) target.innerHTML = `<p class="admin-load-error" role="status">${adminEscape(problem.label)} yüklenemedi. ${adminEscape(problem.message)}</p>`;
+    }
+  }
+  for (const [key, id] of [["users", "adminExportUsers"], ["orders", "adminExportOrders"], ["contacts", "adminExportMessages"]]) {
+    if (admin$(id)) admin$(id).disabled = !adminLoadedSections.has(key) || adminLoadErrors.has(key);
+  }
+  const status = admin$("adminDataStatus");
+  formatAdminRecordTables();
+  if (adminLoadErrors.has("costs")) {
+    admin$("adminCostAccuracyBadge").textContent = "Doğrulanamadı";
+    admin$("adminActualCostCount").textContent = "—";
+  }
+  for (const [key, ids] of [["users", ["adminUsersResultCount", "adminUsersPagination"]], ["orders", ["adminOrdersResultCount", "adminOrdersPagination"]]]) {
+    if (adminLoadErrors.has(key)) ids.forEach(id => { if (admin$(id)) admin$(id).textContent = "Güncel kayıt sayısı alınamadı"; });
+  }
+  if (!status) return;
+  status.hidden = adminLoadErrors.size === 0;
+  if (status.hidden) return;
+  status.innerHTML = `<div><strong>Bazı bilgiler güncellenemedi</strong><p>${[...adminLoadErrors.values()].map(item => adminEscape(item.label)).join(" · ")}. Bu bölümler boş veya sorunsuz kabul edilmemeli.</p></div><button type="button" class="admin-action" data-admin-retry>Tekrar dene</button>`;
+  status.querySelector("[data-admin-retry]").addEventListener("click", () => loadAdmin().catch(error => adminNotice(error.message, true)));
+}
+
+async function loadAdminSection(key, label, request, apply, render) {
+  const session = adminSessionVersion;
+  try {
+    const body = await request();
+    if (session !== adminSessionVersion) return;
+    apply(body);
+    adminLoadedSections.add(key);
+    adminLoadErrors.delete(key);
+    render();
+  } catch (error) {
+    if (session !== adminSessionVersion) return;
+    adminLoadErrors.set(key, {label, message:error.message});
+    if (key === "advertisingReadiness") {
+      adminState.advertisingReadiness = null;
+      renderAdminGrowth();
+    }
+    if (["billing", "runtime", "ads", "analytics"].includes(key)) {
+      adminState[key] = null;
+      if (["billing", "runtime"].includes(key)) renderAdminReadiness(adminState.billing, adminState.runtime);
+      else renderAdminGrowth();
+    }
+    if (key === "referrals") {
+      adminState.referrals = [];
+      adminState.referralsError = error.message;
+      renderAdminReferrals([], error.message);
+    }
+  } finally {
+    if (session === adminSessionVersion) {
+      renderMetrics();
+      renderAdminAlerts(adminReadinessChecks(adminState.billing, adminState.runtime));
+      renderAdminLoadProblems();
+    }
+  }
+}
 
 function adminViewFromHash() {
   const hash = window.location.hash.replace(/^#/, "");
@@ -106,6 +208,7 @@ function adminUsd(value, maximumFractionDigits = 4) {
 }
 
 function adminDateObject(value) {
+  if (value === null || value === undefined || value === "") return new Date(NaN);
   if (typeof value === "number" || (/^\d+(\.\d+)?$/.test(String(value || "")))) return new Date(Number(value) * 1000);
   return new Date(value);
 }
@@ -126,6 +229,17 @@ function adminRelativeDate(value) {
 }
 
 function adminNotice(message, error = false) {
+  const dialog = document.querySelector("dialog[open]");
+  if (dialog && error) {
+    let notice = dialog.querySelector(".admin-dialog-notice");
+    if (!notice) {
+      notice = document.createElement("p");
+      notice.className = "notice error admin-dialog-notice";
+      notice.setAttribute("role", "alert");
+      dialog.querySelector(".admin-dialog-head")?.after(notice);
+    }
+    notice.textContent = message;
+  }
   const panelNotice = admin$("adminOperationNotice");
   const node = panelNotice && !admin$("adminPanel")?.hidden ? panelNotice : admin$("adminNotice");
   node.textContent = message;
@@ -134,18 +248,47 @@ function adminNotice(message, error = false) {
 }
 
 async function adminRequest(path, options = {}) {
-  const response = await fetch(`${ADMIN_API}${path}`, {
-    ...options,
-    headers:{"Content-Type":"application/json", Authorization:`Bearer ${adminAccessToken}`, ...(options.headers || {})},
-    cache:"no-store",
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body?.detail?.message || adminT("error.request", "İstek tamamlanamadı."));
-  return body;
+  const {publicRequest = false, ...fetchOptions} = options;
+  const controller = new AbortController();
+  const session = adminSessionVersion;
+  let timedOut = false;
+  adminRequests.add(controller);
+  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, ADMIN_REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${ADMIN_API}${path}`, {
+      ...fetchOptions,
+      headers:{...(!publicRequest ? {"Content-Type":"application/json", Authorization:`Bearer ${adminAccessToken}`} : {}), ...(fetchOptions.headers || {})},
+      signal:controller.signal,
+      cache:"no-store",
+    });
+    if (session !== adminSessionVersion) throw new DOMException("Oturum kapandı.", "AbortError");
+    if (response.status === 401 && !publicRequest) {
+      endAdminSession("Yönetici erişimi doğrulanamadı. Anahtarını kontrol edip yeniden giriş yap.");
+      throw new Error("Yönetici erişimi doğrulanamadı.");
+    }
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+      const error = new Error(body?.detail?.message || (typeof body?.detail === "string" ? body.detail : adminT("error.request", "İstek tamamlanamadı.")));
+      error.status = response.status;
+      throw error;
+    }
+    if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("Sunucudan geçerli bir yanıt alınamadı. Tekrar dene.");
+    if (session !== adminSessionVersion) throw new DOMException("Oturum kapandı.", "AbortError");
+    return body;
+  } catch (error) {
+    if (timedOut) throw new Error(!fetchOptions.method || fetchOptions.method === "GET"
+      ? "Sunucu zamanında yanıt vermedi. Tekrar dene."
+      : "İşlemin sonucu doğrulanamadı. Yeniden göndermeden önce kaydı yenile.");
+    if (error instanceof TypeError) throw new Error("Sunucuya ulaşılamadı. Bağlantını kontrol edip tekrar dene.");
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    adminRequests.delete(controller);
+  }
 }
 
 async function adminPublicRequest(path) {
-  return fetch(`${ADMIN_API}${path}`, {cache:"no-store"}).then(response => response.ok ? response.json() : null).catch(() => null);
+  return adminRequest(path, {publicRequest:true});
 }
 
 function adminStatusLabel(status) {
@@ -172,7 +315,7 @@ function renderAdminPagination(containerId, pagination, onPage) {
   const totalPages = Number(pagination?.total_pages || 1);
   const total = Number(pagination?.total || 0);
   container.innerHTML = `<span>${total.toLocaleString(adminLocale())} kayıttan ${total ? ((page - 1) * Number(pagination?.page_size || 50) + 1).toLocaleString(adminLocale()) : 0}–${Math.min(total, page * Number(pagination?.page_size || 50)).toLocaleString(adminLocale())}</span><div><button class="admin-action" data-page="${page - 1}" ${page <= 1 ? "disabled" : ""}>← Önceki</button><strong>${page.toLocaleString(adminLocale())} / ${totalPages.toLocaleString(adminLocale())}</strong><button class="admin-action" data-page="${page + 1}" ${page >= totalPages ? "disabled" : ""}>Sonraki →</button></div>`;
-  container.querySelectorAll("[data-page]:not([disabled])").forEach(button => button.addEventListener("click", () => onPage(Number(button.dataset.page))));
+  container.querySelectorAll("[data-page]:not([disabled])").forEach(button => button.addEventListener("click", () => onPage(Number(button.dataset.page)).catch(error => adminNotice(error.message, true))));
 }
 
 function renderAdminOrders(orders) {
@@ -387,6 +530,12 @@ function updateAdminBulkToolbar() {
   const count = selectedAdminUsers.size;
   admin$("adminBulkToolbar").hidden = count === 0;
   admin$("adminSelectedCount").textContent = `${count.toLocaleString(adminLocale())} kullanıcı seçildi`;
+  const all = admin$("adminSelectVisibleUsers");
+  if (all) {
+    const visible = adminState.users.filter(user => selectedAdminUsers.has(user.id)).length;
+    all.checked = adminState.users.length > 0 && visible === adminState.users.length;
+    all.indeterminate = visible > 0 && visible < adminState.users.length;
+  }
 }
 
 async function loadAdminExtraEntitlements(userId) {
@@ -502,7 +651,7 @@ function renderAdminContactMessages(messages) {
   document.querySelectorAll("[data-contact-open]").forEach(button => button.addEventListener("click", () => openContactConversation(button.dataset.contactOpen)));
 }
 
-function renderContactConversation(conversation) {
+function renderContactConversation(conversation, {draft = ""} = {}) {
   const message = conversation.message || {};
   const replies = conversation.replies || [];
   admin$("adminContactDialogTitle").textContent = `${message.topic || "Destek"} · ${message.name || "Kullanıcı"}`;
@@ -511,23 +660,34 @@ function renderContactConversation(conversation) {
     ...replies,
   ].map(item => `<article class="support-bubble ${item.direction === "admin" ? "outgoing" : "incoming"}"><header><strong>${adminEscape(item.direction === "admin" ? "LectureSift Destek" : message.name || "Kullanıcı")}</strong><time>${adminEscape(adminDate(item.created_at))}</time></header><p>${adminEscape(item.body).replace(/\n/g, "<br>")}</p>${item.direction === "admin" ? `<small class="delivery-${adminEscape(item.delivery_status)}">${item.delivery_status === "sent" ? "E-posta gönderildi" : item.delivery_status === "failed" ? "Gönderilemedi · yeniden yanıtla" : "Gönderiliyor"}</small>` : ""}</article>`).join("");
   admin$("adminContactDialogBody").innerHTML = `<section class="admin-contact-summary"><a href="mailto:${encodeURIComponent(message.email || "")}">${adminEscape(message.email || "")}</a>${message.order_reference ? `<span>Sipariş: ${adminEscape(message.order_reference)}</span>${message.payment ? `<span>${adminEscape(adminPaymentMethodLabel(message.payment))}${message.payment.payment_method_confirmed === false ? " · doğrulama bekliyor" : ""}</span>` : ""}` : ""}<span class="status-pill ${message.status === "resolved" ? "paid" : ""}">${adminEscape(adminStatusLabel(message.status))}</span></section><section class="support-thread" aria-live="polite">${bubbles}</section><form class="admin-contact-reply" data-contact-reply-form="${adminEscape(message.id)}"><label class="field"><span>Yanıtın</span><textarea name="message" minlength="2" maxlength="4000" placeholder="Kullanıcıya gönderilecek yanıtı yaz…" required></textarea></label><div class="admin-actions"><button class="admin-action approve" type="submit">E-postayla gönder</button><button class="admin-action" type="button" data-contact-dialog-status="${adminEscape(message.id)}" data-status="${message.status === "resolved" ? "read" : "resolved"}">${message.status === "resolved" ? "Konuşmayı yeniden aç" : "Çözümlendi olarak işaretle"}</button></div><button class="admin-action reject" type="button" data-contact-delete="${adminEscape(message.id)}">Konuşmayı sil</button><p class="empty-copy">Yanıt gönderilince kullanıcıya güvenli konuşma bağlantısı da iletilir. Gönderim sonucu burada kalıcı olarak görünür.</p></form>`;
-  admin$("adminContactDialogBody").querySelector("[data-contact-reply-form]")?.addEventListener("submit", submitContactReply);
+  const replyForm = admin$("adminContactDialogBody").querySelector("[data-contact-reply-form]");
+  replyForm.elements.message.value = draft;
+  replyForm.addEventListener("submit", submitContactReply);
   admin$("adminContactDialogBody").querySelector("[data-contact-dialog-status]")?.addEventListener("click", async event => {
-    await updateContactMessage(event.currentTarget, {refresh:false});
-    await openContactConversation(message.id);
+    const version = adminListVersions.contact;
+    const updated = await updateContactMessage(event.currentTarget, {refresh:false});
+    if (!updated || version !== adminListVersions.contact || !replyForm.isConnected || !admin$("adminContactDialog").open) return;
+    await openContactConversation(message.id, {draft:replyForm.elements.message.value});
   });
   admin$("adminContactDialogBody").querySelector("[data-contact-delete]")?.addEventListener("click", () => deleteAdminContact(message.id));
   const thread = admin$("adminContactDialogBody").querySelector(".support-thread");
   if (thread) thread.scrollTop = thread.scrollHeight;
 }
 
-async function openContactConversation(messageId) {
+async function openContactConversation(messageId, {draft = ""} = {}) {
+  const version = ++adminListVersions.contact;
+  const dialog = admin$("adminContactDialog");
+  dialog.querySelector(".admin-dialog-notice")?.remove();
+  admin$("adminContactDialogBody").innerHTML = '<p class="admin-loading" role="status">Konuşma yükleniyor…</p>';
+  if (!dialog.open) dialog.showModal();
   try {
     const body = await adminRequest(`/billing/admin/contact-messages/${encodeURIComponent(messageId)}`);
-    renderContactConversation(body);
-    const dialog = admin$("adminContactDialog");
-    if (!dialog.open) dialog.showModal();
-  } catch (error) { adminNotice(error.message, true); }
+    if (version !== adminListVersions.contact || !dialog.open) return;
+    renderContactConversation(body, {draft});
+  } catch (error) {
+    if (version !== adminListVersions.contact || !dialog.open) return;
+    admin$("adminContactDialogBody").innerHTML = `<p class="admin-load-error" role="alert">${adminEscape(error.message)}</p>`;
+  }
 }
 
 async function submitContactReply(event) {
@@ -535,19 +695,23 @@ async function submitContactReply(event) {
   const form = event.currentTarget;
   const submit = form.querySelector('button[type="submit"]');
   const messageId = form.dataset.contactReplyForm;
+  const version = adminListVersions.contact;
   const bodyText = String(new FormData(form).get("message") || "").trim();
   submit.disabled = true;
   submit.textContent = "Gönderiliyor…";
   try {
     const body = await adminRequest(`/billing/admin/contact-messages/${encodeURIComponent(messageId)}/reply`, {method:"POST", body:JSON.stringify({message:bodyText})});
-    adminNotice(body.notice);
-    renderContactConversation(body);
+    if (version === adminListVersions.contact && form.isConnected && admin$("adminContactDialog").open) {
+      adminNotice(body.notice);
+      renderContactConversation(body);
+    }
     const item = adminState.contacts.find(value => value.id === messageId);
     if (item) Object.assign(item, body.message, {reply_count:(body.replies || []).length, last_reply_at:(body.replies || []).at(-1)?.created_at});
     applyAdminFilters();
   } catch (error) {
     adminNotice(error.message, true);
-    await openContactConversation(messageId);
+    // Keep the draft visible after a failed send. Reloading the conversation
+    // here discarded the user's text and obscured the delivery error.
   } finally {
     submit.disabled = false;
     submit.textContent = "E-postayla gönder";
@@ -573,15 +737,16 @@ function adminReadinessChecks(billing, runtime) {
     {label:"Planlara göre herkese açık sayfa reklamları", ready:Boolean(runtime?.display_ads_configured), severity:"optional", detail:"Free/Lite seçili sayfalar · Plus yalnız ana sayfa · Pro/Max/Business ve reklamsız haklar kapalı", action:"AdSense onayı, sertifikalı CMP ve yayıncı ayarlarını kontrol et"},
     {label:"GA4 ölçümü", ready:Boolean(runtime?.analytics_configured), severity:"recommended", detail:"İzin veren ziyaretçiler için toplu site ölçümü", action:"GA4 ölçüm kimliğini Render’da doğrula"},
     {label:"Google Ads dönüşümleri", ready:Boolean(runtime?.google_ads_conversion_configured), severity:"optional", detail:"Kayıt ve doğrulanmış satın alma dönüşümleri", action:"Google Ads hesabı ve dönüşüm etiketleri hazır olunca Render’a ekle"},
-  ];
+  ].map((item, index) => ({...item, unknown:index < 6 ? !billing || adminLoadErrors.has("billing") : !runtime || adminLoadErrors.has("runtime")}));
 }
 
 function renderAdminReadiness(billing, runtime) {
   const checks = adminReadinessChecks(billing, runtime);
-  const stateText = item => item.ready ? "Hazır" : item.severity === "optional" ? "Opsiyonel · kapalı" : item.severity === "planned" ? "Planlandı" : item.severity === "recommended" ? "Önerilen ayar" : "Kritik eksik";
-  admin$("adminReadiness").innerHTML = checks.map(item => `<article class="readiness-${item.ready ? "ready" : item.severity}"><div><span>${adminEscape(item.label)}</span><small>${adminEscape(item.detail)}</small>${!item.ready ? `<em>${adminEscape(item.action)}</em>` : ""}</div><strong class="${item.ready ? "ready" : item.severity}">${adminEscape(stateText(item))}</strong></article>`).join("");
+  const stateText = item => item.unknown ? "Doğrulanamadı" : item.ready ? "Hazır" : item.severity === "optional" ? "Opsiyonel · kapalı" : item.severity === "planned" ? "Planlandı" : item.severity === "recommended" ? "Önerilen ayar" : "Kritik eksik";
+  admin$("adminReadiness").innerHTML = checks.map(item => `<article class="readiness-${item.unknown ? "unknown" : item.ready ? "ready" : item.severity}"><div><span>${adminEscape(item.label)}</span><small>${adminEscape(item.unknown ? "Durum bilgisi alınamadı; yeniden kontrol et." : item.detail)}</small>${!item.ready && !item.unknown ? `<em>${adminEscape(item.action)}</em>` : ""}</div><strong class="${item.unknown ? "unknown" : item.ready ? "ready" : item.severity}">${adminEscape(stateText(item))}</strong></article>`).join("");
   const payment = billing?.payments || {};
-  admin$("adminPaymentSummary").innerHTML = `<article><small>Öncelikli kart sağlayıcısı</small><strong>${payment.iyzico?.configured ? "iyzico" : payment.paytr?.configured ? "PayTR" : "Bağlı değil"}</strong></article><article><small>iyzico</small><strong class="${payment.iyzico?.configured ? "ready" : "muted"}">${payment.iyzico?.configured ? "Canlı" : "Kapalı"}</strong></article><article><small>Webhook güvenliği</small><strong class="${payment.iyzico?.webhook_signature?.required ? "ready" : "muted"}">${payment.iyzico?.webhook_signature?.required ? "V3 zorunlu" : "Kapalı"}</strong></article><article><small>PayTR</small><strong class="${payment.paytr?.configured ? "ready" : "muted"}">${payment.paytr?.configured ? "Canlı" : "Opsiyonel"}</strong></article><article><small>Havale</small><strong class="${payment.bank_transfer?.configured ? "ready" : "muted"}">${payment.bank_transfer?.configured ? "Canlı" : "Kapalı"}</strong></article>`;
+  admin$("adminPaymentSummary").innerHTML = `<article><small>Öncelikli kart sağlayıcısı</small><strong>${payment.iyzico?.configured ? "iyzico" : payment.paytr?.configured ? "PayTR" : "Bağlı değil"}</strong></article><article><small>iyzico</small><strong class="${payment.iyzico?.configured ? "ready" : "muted"}">${payment.iyzico?.configured ? "Yapılandırılmış" : "Kapalı"}</strong></article><article><small>Webhook güvenliği</small><strong class="${payment.iyzico?.webhook_signature?.required ? "ready" : "muted"}">${payment.iyzico?.webhook_signature?.required ? "V3 zorunlu" : "Kapalı"}</strong></article><article><small>PayTR</small><strong class="${payment.paytr?.configured ? "ready" : "muted"}">${payment.paytr?.configured ? "Canlı" : "Opsiyonel"}</strong></article><article><small>Havale</small><strong class="${payment.bank_transfer?.configured ? "ready" : "muted"}">${payment.bank_transfer?.configured ? "Canlı" : "Kapalı"}</strong></article>`;
+  if (!billing || adminLoadErrors.has("billing")) admin$("adminPaymentSummary").innerHTML = '<p class="admin-load-error">Ödeme altyapısının güncel durumu doğrulanamadı.</p>';
   return checks;
 }
 
@@ -643,9 +808,22 @@ function renderAdminCosts() {
 }
 
 async function loadAdminCosts() {
+  const version = ++adminListVersions.costs;
   const days = Number(admin$("adminCostDays")?.value || 30);
-  adminState.costs = await adminRequest(`/billing/admin/costs?days=${encodeURIComponent(days)}&limit=250`);
-  renderAdminCosts();
+  try {
+    const body = await adminRequest(`/billing/admin/costs?days=${encodeURIComponent(days)}&limit=250`);
+    if (version !== adminListVersions.costs || days !== Number(admin$("adminCostDays")?.value || 30)) return;
+    adminState.costs = body;
+    adminLoadErrors.delete("costs");
+    adminLoadedSections.add("costs");
+    renderAdminCosts();
+  } catch (error) {
+    if (version !== adminListVersions.costs) return;
+    adminLoadErrors.set("costs", {label:"Maliyetler", message:error.message});
+    throw error;
+  } finally {
+    renderAdminLoadProblems();
+  }
 }
 
 async function saveAdminActualCost(event) {
@@ -690,25 +868,25 @@ async function deleteAdminActualCost(button) {
 
 function buildTimeline() {
   const events = [];
-  (adminState.orders.length ? adminState.orders : (adminState.overview.orders || [])).forEach(item => events.push({kind:"order", at:item.created_at, title:`${item.payment_method === "bank_transfer" ? (item.provider === "iyzico" ? "iyzico Korumalı Havale/EFT" : "Manuel havale") : item.payment_method === "unknown" ? "Eski iyzico" : String(item.provider || "Kart").toUpperCase()} siparişi`, detail:`${item.reference} · ${adminMoney(item.amount_minor, item.currency)} · ${adminStatusLabel(item.status)}`, actor:item.user?.email || ""}));
+  (adminState.overview.orders || []).forEach(item => events.push({kind:"order", at:item.created_at, title:`${item.payment_method === "bank_transfer" ? (item.provider === "iyzico" ? "iyzico Korumalı Havale/EFT" : "Manuel havale") : item.payment_method === "unknown" ? "Eski iyzico" : String(item.provider || "Kart").toUpperCase()} siparişi`, detail:`${item.reference} · ${adminMoney(item.amount_minor, item.currency)} · ${adminStatusLabel(item.status)}`, actor:item.user?.email || ""}));
   (adminState.contacts || []).forEach(item => events.push({kind:"contact", at:item.created_at, title:`Destek mesajı: ${item.topic}`, detail:item.message, actor:item.email}));
   (adminState.refunds || []).forEach(item => events.push({kind:"refund", at:item.created_at, title:`İade talebi · ${adminStatusLabel(item.status)}`, detail:`${item.order_reference} · ${item.reason}`, actor:item.user?.email || ""}));
   (adminState.rewards || []).forEach(item => events.push({kind:"reward", at:item.created_at, title:`Instagram bonusu · ${adminStatusLabel(item.status)}`, detail:`@${item.handle} · +${item.minutes} dk`, actor:item.email || ""}));
   (adminState.credits || []).forEach(item => events.push({kind:"credit", at:item.created_at, title:`Dakika işlemi ${item.minutes_delta > 0 ? "+" : ""}${item.minutes_delta}`, detail:item.reason, actor:item.email || ""}));
-  (adminState.users.length ? adminState.users : (adminState.overview.users || [])).forEach(item => events.push({kind:"user", at:item.created_at, title:"Yeni kullanıcı hesabı", detail:item.email_verified ? "E-posta doğrulandı" : "E-posta doğrulaması bekliyor", actor:item.email}));
+  (adminState.overview.users || []).forEach(item => events.push({kind:"user", at:item.created_at, title:"Yeni kullanıcı hesabı", detail:item.email_verified ? "E-posta doğrulandı" : "E-posta doğrulaması bekliyor", actor:item.email}));
   (adminState.jobs || []).forEach(item => events.push({kind:"job", at:item.updated || item.created, title:`İşleme işi · ${adminStatusLabel(item.status)}`, detail:`${item.job_id} · %${Number(item.percent || 0)} · ${item.stage || "—"}`, actor:item.owner_id ? `${item.owner_id.slice(0, 8)}…` : ""}));
-  return events.sort((a, b) => adminDateObject(b.at) - adminDateObject(a.at)).slice(0, 100);
+  return events.sort((a, b) => adminDateObject(b.at) - adminDateObject(a.at));
 }
 
 function renderAdminTimeline() {
   const selected = admin$("adminTimelineFilter")?.value || "all";
-  const events = buildTimeline().filter(item => selected === "all" || item.kind === selected);
+  const events = buildTimeline().filter(item => selected === "all" || item.kind === selected).slice(0, 100);
   const icons = {order:"₺", contact:"✉", refund:"↩", reward:"◎", credit:"+", user:"●", job:"▶"};
   admin$("adminTimeline").innerHTML = events.map(item => `<article><span class="admin-timeline-icon kind-${adminEscape(item.kind)}">${icons[item.kind] || "•"}</span><div><strong>${adminEscape(item.title)}</strong><p>${adminEscape(item.detail)}</p>${item.actor ? `<small>${adminEscape(item.actor)}</small>` : ""}</div><time datetime="${adminEscape(String(item.at))}" title="${adminEscape(adminDate(item.at))}">${adminEscape(adminRelativeDate(item.at))}<small>${adminEscape(adminDate(item.at))}</small></time></article>`).join("") || '<p class="empty-copy">Bu filtrede hareket bulunamadı.</p>';
 }
 
 function renderAdminAlerts(checks) {
-  const critical = checks.filter(item => !item.ready && item.severity === "critical");
+  const critical = checks.filter(item => !item.unknown && !item.ready && item.severity === "critical");
   const newMessages = adminState.contacts.filter(item => item.status === "new").length;
   const openRefunds = adminState.refunds.filter(item => ["requested", "approved_pending_refund"].includes(item.status)).length;
   const failedJobs = adminState.jobs.filter(item => item.status === "failed").length;
@@ -722,6 +900,7 @@ function renderAdminAlerts(checks) {
   else if (dueReferrals) alerts.push({level:"attention", title:`${dueReferrals} davet ödülünün vadesi doldu`, detail:"Sağlayıcı mutabakatından sonra Davetler bölümünden serbest bırak."});
   if (!adminState.referralsError && adminState.referralsHasMore) alerts.push({level:"critical", title:"Davet kuyruğunda daha fazla kayıt var", detail:`Serbest bırakılabilir ödüller önce gösteriliyor; API bu görünümü ${adminState.referralsLimit} kayıtla sınırlıyor.`});
   if (failedJobs) alerts.push({level:"critical", title:`${failedJobs} hatalı işleme işi`, detail:"Hata kodunu işleme işleri tablosundan incele."});
+  if (adminLoadErrors.size || checks.some(item => item.unknown)) alerts.push({level:"attention", title:"Kontrol tamamlanmadı", detail:"Bazı bilgiler henüz doğrulanamadı. Eksik bölüm uyarılarını kontrol et."});
   if (!alerts.length) alerts.push({level:"ok", title:"Acil operasyon uyarısı yok", detail:"Kritik servisler ve bekleyen işlemler normal görünüyor."});
   admin$("adminAlerts").innerHTML = alerts.map(item => `<article class="${item.level}"><strong>${adminEscape(item.title)}</strong><span>${adminEscape(item.detail)}</span></article>`).join("");
 }
@@ -757,6 +936,9 @@ function renderMetrics() {
   admin$("adminUsers24h").textContent = users24h;
   admin$("adminRefundBadge").textContent = `${openRefunds} açık`;
   admin$("adminRewardBadge").textContent = `${adminState.rewards.filter(item => item.status === "pending_verification").length} bekliyor`;
+  for (const [key, ids] of Object.entries({contacts:["adminNewMessages"], refunds:["adminOpenRefunds", "adminRefundBadge"], jobs:["adminActiveJobs", "adminFailedJobs"], rewards:["adminRewardBadge"]})) {
+    if (!adminLoadedSections.has(key) || adminLoadErrors.has(key)) ids.forEach(id => { admin$(id).textContent = "—"; });
+  }
   renderPlanDistribution();
 }
 
@@ -902,6 +1084,7 @@ function renderAdminGrowth() {
   const management = adsense.management_api;
   const connectionStatus = management?.status;
   const connected = connectionStatus === "connected" && management?.connected === true;
+  renderAdminAdSenseSummary(readiness, ads);
   const notConfigured = connectionStatus === "not_configured";
   const connectionLabel = connected
     ? adminT("admin.adsenseConnected", "Bağlı")
@@ -999,7 +1182,7 @@ function renderAdminGrowth() {
     {title:adminT("admin.adsenseAutoAds", "Otomatik reklamlar"), ready:site?.auto_ads_enabled === true, status:autoAdsLabel, detail:autoAdsKnown ? adminT("admin.adsenseAutoAdsSource", "AdSense hesabındaki Auto Ads ayarı.") : adminT("admin.adsenseSiteUnavailable", "Site durumu alınamadı.")},
     {title:adminT("admin.adsenseAlerts", "AdSense uyarıları"), ready:Boolean(alerts && alertTotal === 0), status:alerts ? `${alertTotal.toLocaleString(adminLocale())} ${adminT("admin.adsenseWarningShort", "uyarı")}` : adminT("admin.adsenseUnavailable", "Geçici olarak okunamadı"), detail:alertDetail},
     {title:adminT("admin.adsensePolicyIssues", "Politika sorunları"), ready:Boolean(policy && policyTotal === 0), status:policy ? `${policyTotal.toLocaleString(adminLocale())} ${adminT("admin.adsenseFinding", "bulgu")}` : adminT("admin.adsenseUnavailable", "Geçici olarak okunamadı"), detail:policyDetail},
-    {title:adminT("admin.adsenseServing", "Site reklam yayını"), ready:Boolean(ads.adsense_auto_ads?.enabled), detail:ads.adsense_auto_ads?.enabled ? adminT("admin.adsenseServingOn", "Site tarafındaki reklam gösterimi açık. Gerçek gösterim ve kazanç AdSense raporundan doğrulanır.") : adminT("admin.adsenseServingOff", "Site tarafındaki gösterim kapalı. Google site onayı ve gerekli izin mesajı doğrulandıktan sonra açılır.")},
+    {title:adminT("admin.adsenseServing", "Site reklam yayını"), ready:Boolean(ads.adsense_auto_ads?.enabled), status:adminState.ads ? ads.adsense_auto_ads?.enabled ? adminT("admin.adsenseOn", "Açık") : adminT("admin.adsenseOff", "Kapalı") : adminT("admin.adsenseUnavailable", "Geçici olarak okunamadı"), detail:ads.adsense_auto_ads?.enabled ? adminT("admin.adsenseServingOn", "Site tarafındaki reklam gösterimi açık. Gerçek gösterim ve kazanç AdSense raporundan doğrulanır.") : adminT("admin.adsenseServingOff", "Site tarafındaki gösterim kapalı. Google site onayı ve gerekli izin mesajı doğrulandıktan sonra açılır.")},
     {title:adminT("admin.googleAdsConnection", "Google Ads bağlantısı"), ready:googleAdsConnected, status:googleAdsConnectionLabel, detail:googleAdsConnectionDetail, link:"https://ads.google.com/", label:adminT("admin.googleAdsOpen", "Google Ads panelini aç")},
     {title:adminT("admin.googleAdsAccount", "Google Ads hesabı"), ready:Boolean(googleAdsAccount && String(googleAdsAccount.status || googleAdsAccount.state || "").toUpperCase() === "ENABLED"), status:googleAdsAccountStatus, detail:googleAdsAccountDetail},
     {title:adminT("admin.googleAdsPerformance", "Brüt harcama ve performans"), ready:Boolean(googleAdsConnected && googleAdsLast7Days), status:googleAdsPerformanceStatus, detail:googleAdsPerformanceDetail},
@@ -1008,10 +1191,43 @@ function renderAdminGrowth() {
     {title:adminT("admin.googleAdsAcquisition", "Google Ads dönüşüm ölçümü"), ready:conversions, detail:conversions ? adminT("admin.googleAdsConnected", "Kayıt ve doğrulanmış satın alma dönüşüm etiketleri yapılandırılmış.") : adminT("admin.googleAdsMissing", "Kayıt ve doğrulanmış satın alma dönüşüm bağlantısı tamamlanmamış."), link:"https://ads.google.com/", label:adminT("admin.googleAdsOpen", "Google Ads panelini aç")},
     {title:adminT("admin.adsByPlan", "Paketlere göre reklam"), ready:true, detail:adminT("admin.adsByPlanDetail", "Lite reklamlı; Plus’ta yalnız ana sayfada reklam gösterilebilir. Pro, Max, Business ve kalıcı reklamsız hakkı olanlar reklamsızdır. Önceki satın alımlarla kazanılmış reklamsız haklar korunur.")},
     {title:adminT("nav.workspace", "Çalışma alanı"), ready:true, detail:adminT("admin.workspaceAdFree", "Ders dosyalarında, sonuçlarda, hesap ve asistan sayfalarında reklam gösterilmez.")},
-    {title:adminT("admin.houseCampaign", "LectureSift duyuruları"), ready:Boolean(ads.house_campaign?.enabled), detail:adminT("admin.houseCampaignDetail", "Sitenin kendi paket tanıtımıdır. AdSense reklam gösterimi veya reklam geliri anlamına gelmez.")},
-    {title:adminT("admin.visitorMeasurement", "Ziyaretçi ölçümü"), ready:Boolean(analytics.enabled), detail:analytics.enabled ? adminT("admin.ga4On", "İzin veren ziyaretçiler için GA4 ölçümü açık.") : adminT("admin.ga4Off", "GA4 ölçümü kapalı.")},
+    {title:adminT("admin.houseCampaign", "LectureSift duyuruları"), ready:Boolean(ads.house_campaign?.enabled), status:adminState.ads ? ads.house_campaign?.enabled ? adminT("admin.adsenseOn", "Açık") : adminT("admin.adsenseOff", "Kapalı") : adminT("admin.adsenseUnavailable", "Geçici olarak okunamadı"), detail:adminT("admin.houseCampaignDetail", "Sitenin kendi paket tanıtımıdır. AdSense reklam gösterimi veya reklam geliri anlamına gelmez.")},
+    {title:adminT("admin.visitorMeasurement", "Ziyaretçi ölçümü"), ready:Boolean(analytics.enabled), status:adminState.analytics ? analytics.enabled ? adminT("admin.adsenseOn", "Açık") : adminT("admin.adsenseOff", "Kapalı") : adminT("admin.adsenseUnavailable", "Geçici olarak okunamadı"), detail:analytics.enabled ? adminT("admin.ga4On", "İzin veren ziyaretçiler için GA4 ölçümü açık.") : adminT("admin.ga4Off", "GA4 ölçümü kapalı.")},
   ];
-  admin$("adminGrowthStatus").innerHTML = cards.map(item => `<article class="${item.ready ? "ready" : "missing"}"><header><strong>${adminEscape(item.title)}</strong><span>${adminEscape(item.status || (item.ready ? adminT("admin.adsenseConfigured", "Yapılandırılmış") : adminT("admin.adsenseWaiting", "Bağlantı bekliyor")))}</span></header><p>${adminEscape(item.detail)}</p>${item.link ? `<a href="${adminEscape(item.link)}" target="_blank" rel="noopener noreferrer">${adminEscape(item.label)} ↗</a>` : ''}</article>`).join("");
+  admin$("adminGrowthStatus").innerHTML = cards.map((item, index) => `${index === 0 ? '<h3 class="admin-growth-group">AdSense · Sitedeki reklamlar</h3>' : index === 7 ? '<h3 class="admin-growth-group">Google Ads · Verdiğimiz reklamlar</h3>' : ''}<article class="${item.ready ? "ready" : "missing"}"><header><strong>${adminEscape(item.title)}</strong><span>${adminEscape(item.status || (item.ready ? adminT("admin.adsenseConfigured", "Yapılandırılmış") : adminT("admin.adsenseWaiting", "Bağlantı bekliyor")))}</span></header><p>${adminEscape(item.detail)}</p>${item.link ? `<a href="${adminEscape(item.link)}" target="_blank" rel="noopener noreferrer">${adminEscape(item.label)} ↗</a>` : ''}</article>`).join("");
+}
+
+function renderAdminAdSenseSummary(readiness, ads) {
+  const target = admin$("adminAdSenseSummary");
+  if (!target) return;
+  const config = readiness?.adsense;
+  const management = config?.management_api;
+  const connected = management?.connected === true && management?.status === "connected";
+  const state = connected ? management.site?.state : null;
+  const approved = state === "READY";
+  const consentReady = config?.consent_setup_confirmed === true;
+  const localReady = config?.site_approval_confirmed === true;
+  const serving = ads?.adsense_auto_ads?.enabled === true && !adminLoadErrors.has("ads");
+  const title = !connected ? "Site onayı henüz doğrulanamadı" : state === "NEEDS_ATTENTION"
+    ? "Site onayı için düzeltme gerekiyor" : state === "GETTING_READY"
+      ? "Google siteyi inceliyor" : approved && consentReady && localReady && serving
+        ? "Site tarafında reklam yayını açık" : approved ? "Site onaylı; yayın hazırlığını tamamla" : "Site incelemesi bekleniyor";
+  const detail = state === "NEEDS_ATTENTION"
+    ? "Google hesabının hazır olması, sitenin onaylandığı anlamına gelmez. Ayrıntılı gerekçe AdSense → Siteler bölümündedir; API bu gerekçeyi paylaşmaz."
+    : state === "GETTING_READY" ? "İnceleme sürerken açık görünen otomatik reklam ayarı, reklam gösterildiğini veya gelir oluştuğunu kanıtlamaz."
+      : approved ? "Google site onayı, izin mesajı ve site yayın ayarı ayrı kontrol edilir. Gerçek gösterim ve kazanç AdSense raporundan doğrulanır."
+        : "Güncel site durumu alınmadan onay veya reklam geliri varsayılmaz. Diğer yönetim bölümlerini kullanmaya devam edebilirsin.";
+  const steps = [
+    {title:"Google site onayı", ready:approved, value:state ? adminAdSenseStateLabel(state) : "Doğrulanamadı"},
+    {title:"İzin mesajı", ready:consentReady, value:consentReady ? "Doğrulandı" : "Doğrulama bekliyor"},
+    {title:"Site yayın ayarı", ready:localReady, value:config ? localReady ? "Etkin" : "Kapalı" : "Doğrulanamadı"},
+    {title:"Reklam yayını", ready:serving, value:adminState.ads && !adminLoadErrors.has("ads") ? serving ? "Açık" : "Kapalı" : "Doğrulanamadı"},
+  ];
+  const types = connected && Array.isArray(management.alerts?.types) ? management.alerts.types : [];
+  const notes = [];
+  if (types.includes("adsense-onboarding-incomplete")) notes.push("Google, AdSense kurulumunda tamamlanmamış adımlar bildiriyor.");
+  if (types.includes("ua-conflict-policy-update")) notes.push("Ukrayna politikası bildirimi genel bir duyurudur; tek başına bu siteye verilmiş ihlal kararı sayılmaz.");
+  target.innerHTML = `<div class="admin-adsense-summary-head"><div><p class="eyebrow">ADSENSE YAYIN KONTROLÜ</p><h3>${adminEscape(title)}</h3><p>${adminEscape(detail)}</p></div><a class="admin-action" href="https://adsense.google.com/" target="_blank" rel="noopener noreferrer">AdSense paneli ↗</a></div><ol class="admin-adsense-steps">${steps.map((step, index) => `<li class="${step.ready ? "ready" : "pending"}"><span aria-hidden="true">${index + 1}</span><div><strong>${adminEscape(step.title)}</strong><small>${adminEscape(step.value)}</small></div></li>`).join("")}</ol>${notes.length ? `<ul class="admin-adsense-notes">${notes.map(note => `<li>${adminEscape(note)}</li>`).join("")}</ul>` : ""}`;
 }
 
 function userQuery(page = 1) {
@@ -1026,15 +1242,40 @@ function userQuery(page = 1) {
   return params.toString();
 }
 
-async function loadAdminUsers(page = 1) {
-  const body = await adminRequest(`/billing/admin/users?${userQuery(page)}`);
-  const pagination = body.pagination || {page,total:0,total_pages:1};
-  if (Number(pagination.page) > Number(pagination.total_pages || 1)) {
-    return loadAdminUsers(Number(pagination.total_pages || 1));
+async function loadAdminRecords(key, page, queryFor, render, targetId) {
+  const version = ++adminListVersions[key];
+  const query = queryFor(page);
+  const target = admin$(targetId);
+  target?.setAttribute("aria-busy", "true");
+  try {
+    const path = key === "users" ? "/billing/admin/users?" : "/billing/admin/orders?";
+    const body = await adminRequest(path + query);
+    // Both the request sequence and the current filters matter: a slow
+    // response can arrive during the search input's debounce window.
+    if (version !== adminListVersions[key] || query !== queryFor(page)) return;
+    if (!Array.isArray(body[key])) throw new Error("Kayıt listesi doğrulanamadı.");
+    const pagination = body.pagination || {page, total:body[key].length, total_pages:1};
+    const lastPage = Math.max(1, Number(pagination.total_pages) || 1);
+    if (page > lastPage) return loadAdminRecords(key, lastPage, queryFor, render, targetId);
+    adminState[key] = body[key];
+    adminState[key === "users" ? "userPagination" : "orderPagination"] = pagination;
+    adminLoadErrors.delete(key);
+    adminLoadedSections.add(key);
+    render(body[key]);
+  } catch (error) {
+    if (version !== adminListVersions[key] || query !== queryFor(page)) return;
+    adminLoadErrors.set(key, {label:key === "users" ? "Kullanıcılar" : "Ödemeler", message:error.message});
+    throw error;
+  } finally {
+    if (version === adminListVersions[key]) {
+      target?.setAttribute("aria-busy", "false");
+      renderAdminLoadProblems();
+    }
   }
-  adminState.users = body.users || [];
-  adminState.userPagination = pagination;
-  renderAdminUsers(adminState.users);
+}
+
+async function loadAdminUsers(page = 1) {
+  return loadAdminRecords("users", page, userQuery, renderAdminUsers, "adminUserList");
 }
 
 function orderQuery(page = 1) {
@@ -1050,14 +1291,7 @@ function orderQuery(page = 1) {
 }
 
 async function loadAdminOrders(page = 1) {
-  const body = await adminRequest(`/billing/admin/orders?${orderQuery(page)}`);
-  const pagination = body.pagination || {page,total:0,total_pages:1};
-  if (Number(pagination.page) > Number(pagination.total_pages || 1)) {
-    return loadAdminOrders(Number(pagination.total_pages || 1));
-  }
-  adminState.orders = body.orders || [];
-  adminState.orderPagination = pagination;
-  renderAdminOrders(adminState.orders);
+  return loadAdminRecords("orders", page, orderQuery, renderAdminOrders, "adminOrders");
 }
 
 function normalizeSearch(value) { return String(value || "").toLocaleLowerCase("tr-TR"); }
@@ -1065,10 +1299,11 @@ function normalizeSearch(value) { return String(value || "").toLocaleLowerCase("
 function applyAdminFilters() {
   const messageQuery = normalizeSearch(admin$("adminMessageSearch")?.value);
   const messageStatus = admin$("adminMessageStatus")?.value || "all";
-  renderAdminContactMessages(adminState.contacts.filter(item => (messageStatus === "all" || item.status === messageStatus) && normalizeSearch(`${item.name} ${item.email} ${item.topic} ${item.order_reference} ${item.message}`).includes(messageQuery)));
+  if (adminLoadedSections.has("contacts")) renderAdminContactMessages(adminState.contacts.filter(item => (messageStatus === "all" || item.status === messageStatus) && normalizeSearch(`${item.name} ${item.email} ${item.topic} ${item.order_reference} ${item.message}`).includes(messageQuery)));
   const jobStatus = admin$("adminJobStatus")?.value || "all";
-  renderAdminJobs(adminState.jobs.filter(item => jobStatus === "all" || item.status === jobStatus));
+  if (adminLoadedSections.has("jobs")) renderAdminJobs(adminState.jobs.filter(item => jobStatus === "all" || item.status === jobStatus));
   renderAdminTimeline();
+  renderAdminLoadProblems();
 }
 
 function downloadAdminCsv(filename, rows) {
@@ -1085,82 +1320,103 @@ function downloadAdminCsv(filename, rows) {
 }
 
 async function loadAdmin({silent = false} = {}) {
-  if (adminLoading) return;
+  if (adminLoadPromise) {
+    await adminLoadPromise;
+    if (!adminAccessToken) return;
+    return loadAdmin({silent});
+  }
+  const session = adminSessionVersion;
   adminLoading = true;
   admin$("adminRefresh").disabled = true;
-  try {
-    const overview = await adminRequest("/billing/admin/overview?limit=250");
-    const optional = await Promise.all([
-      adminRequest("/admin/instagram-rewards?status=").catch(() => ({rewards:[]})),
-      adminRequest("/billing/admin/refund-requests").catch(() => ({requests:[]})),
-      adminRequest("/billing/admin/credit-events?limit=250").catch(() => ({events:[]})),
-      adminRequest("/billing/admin/contact-messages?limit=250").catch(() => ({messages:[]})),
-      adminRequest("/billing/admin/jobs?limit=250").catch(() => ({jobs:[], counts:{}})),
-      adminRequest("/billing/admin/account-events?limit=250").catch(() => ({events:[]})),
-      adminPublicRequest("/billing/health"), adminPublicRequest("/rollout/health"),
-      adminPublicRequest("/ads/config"), adminPublicRequest("/analytics/config"),
-      adminRequest("/billing/admin/advertising-readiness").catch(() => null),
-      adminRequest(`/billing/admin/costs?days=${encodeURIComponent(admin$("adminCostDays")?.value || 30)}&limit=250`).catch(() => null),
-      adminRequest("/billing/admin/referrals")
-        .then(body => {
-          const limit = body.limit;
-          const metadataValid = Array.isArray(body.rewards)
-            && typeof body.has_more === "boolean"
-            && typeof limit === "number" && Number.isInteger(limit) && limit >= 1 && limit <= 100
-            && body.rewards.length <= limit
-            && body.rewards.every(reward => {
-              if (!reward || typeof reward.actionable !== "boolean" || typeof reward.hold_complete !== "boolean") return false;
-              const expectedActionable = reward.hold_complete === true && ["minutes", "coupon"].includes(reward.reward_choice);
-              return reward.actionable === expectedActionable;
-            });
-          return metadataValid
-            ? {rewards:body.rewards, hasMore:body.has_more, limit, error:""}
-            : {rewards:[], hasMore:false, limit:100, error:"Davet kuyruğunun güvenlik metadata'sı eksik veya geçersiz."};
-        })
-        .catch(error => ({rewards:[], hasMore:false, limit:100, error:error.message})),
-    ]);
-    adminState = {
-      ...adminState,
-      overview,
-      rewards:optional[0].rewards || [],
-      refunds:optional[1].requests || [],
-      credits:optional[2].events || [],
-      contacts:optional[3].messages || [],
-      jobs:optional[4].jobs || [],
-      accountEvents:optional[5].events || [],
-      billing:optional[6],
-      runtime:optional[7],
-      ads:optional[8],
-      analytics:optional[9],
-      advertisingReadiness:optional[10],
-      costs:optional[11],
-      referrals:optional[12].rewards,
-      referralsError:optional[12].error,
-      referralsHasMore:optional[12].hasMore,
-      referralsLimit:optional[12].limit,
-    };
-    await Promise.all([
-      loadAdminUsers(adminState.userPagination.page || 1),
-      loadAdminOrders(adminState.orderPagination.page || 1),
-    ]);
-    renderMetrics();
-    renderAdminRewards(adminState.rewards.filter(item => item.status === "pending_verification"));
-    renderAdminReferrals(adminState.referrals, adminState.referralsError, adminState.referralsHasMore, adminState.referralsLimit);
-    renderAdminRefunds(adminState.refunds);
-    renderAdminCreditEvents(adminState.credits);
-    renderAdminAccountEvents(adminState.accountEvents);
-    applyAdminFilters();
-    const checks = renderAdminReadiness(adminState.billing, adminState.runtime);
-    renderAdminAlerts(checks);
-    renderAdminGrowth();
-    renderAdminCosts();
-    admin$("adminLastUpdated").textContent = `Son güncelleme: ${adminDate(new Date().toISOString())} · Türkiye saati`;
+  admin$("adminRefresh").textContent = "Güncelleniyor…";
+  adminLoadPromise = (async () => {
+    try {
+      const overview = await adminRequest("/billing/admin/overview?limit=250");
+      if (!overview.counts || typeof overview.counts !== "object" || Array.isArray(overview.counts)) throw new Error("Genel bakış verileri doğrulanamadı.");
+      adminState.overview = overview;
+      adminLoadedSections.add("overview");
+      adminLoadErrors.delete("overview");
+    } catch (error) {
+      if (session === adminSessionVersion) {
+        adminLoadErrors.set("overview", {label:"Genel bakış", message:error.message});
+        renderAdminLoadProblems();
+      }
+      throw error;
+    }
+    if (session !== adminSessionVersion) return;
+    // Authentication and the overview are enough to open the panel. Slow
+    // provider checks must not hold users, orders or navigation hostage.
     admin$("adminLogin").hidden = true;
     admin$("adminPanel").hidden = false;
-    if (!silent) admin$("adminNotice").hidden = true;
+    admin$("adminNotice").hidden = true;
+    admin$("adminLastUpdated").textContent = `Genel bakış: ${adminDate(new Date().toISOString())} · Diğer bölümler yükleniyor…`;
+    for (const [key, id] of Object.entries({users:"adminUserList", orders:"adminOrders", rewards:"adminRewards", refunds:"adminRefunds", credits:"adminCreditEvents", contacts:"adminContactMessages", jobs:"adminJobs", accountEvents:"adminAccountEvents", referrals:"adminReferralRewards", costs:"adminCostMetrics"})) {
+      if (!adminLoadedSections.has(key)) admin$(id).innerHTML = '<p class="admin-loading" role="status">Yükleniyor…</p>';
+    }
+    renderMetrics();
+    renderAdminGrowth();
+    const refreshActivity = () => { applyAdminFilters(); renderAdminLoadProblems(); };
+    const refreshReadiness = () => renderAdminReadiness(adminState.billing, adminState.runtime);
+    const collection = (key, label, path, field, render) => loadAdminSection(key, label,
+      () => adminRequest(path), body => {
+        if (!Array.isArray(body[field])) throw new Error("Kayıt listesi doğrulanamadı.");
+        adminState[key] = body[field];
+      }, render);
+    const object = (key, label, path, render, publicRequest = false) => loadAdminSection(key, label,
+      () => publicRequest ? adminPublicRequest(path) : adminRequest(path), body => { adminState[key] = body; }, render);
+    await Promise.all([
+      collection("rewards", "Bonus talepleri", "/admin/instagram-rewards?status=", "rewards", () => renderAdminRewards(adminState.rewards.filter(item => item.status === "pending_verification"))),
+      collection("refunds", "İade talepleri", "/billing/admin/refund-requests", "requests", () => renderAdminRefunds(adminState.refunds)),
+      collection("credits", "Dakika hareketleri", "/billing/admin/credit-events?limit=250", "events", () => renderAdminCreditEvents(adminState.credits)),
+      collection("contacts", "Destek mesajları", "/billing/admin/contact-messages?limit=250", "messages", refreshActivity),
+      collection("jobs", "İşleme işleri", "/billing/admin/jobs?limit=250", "jobs", refreshActivity),
+      collection("accountEvents", "Yönetici kayıtları", "/billing/admin/account-events?limit=250", "events", () => renderAdminAccountEvents(adminState.accountEvents)),
+      object("billing", "Ödeme altyapısı", "/billing/health", refreshReadiness, true),
+      object("runtime", "Sistem sağlığı", "/rollout/health", refreshReadiness, true),
+      object("ads", "Reklam yayını", "/ads/config", renderAdminGrowth, true),
+      object("analytics", "Ziyaretçi ölçümü", "/analytics/config", renderAdminGrowth, true),
+      object("advertisingReadiness", "AdSense ve Google Ads", "/billing/admin/advertising-readiness", renderAdminGrowth),
+      loadAdminCosts().catch(() => {}),
+      loadAdminSection("referrals", "Davet ödülleri", () => adminRequest("/billing/admin/referrals"), body => {
+        const limit = body.limit;
+        const metadataValid = Array.isArray(body.rewards)
+          && typeof body.has_more === "boolean"
+          && typeof limit === "number" && Number.isInteger(limit) && limit >= 1 && limit <= 100
+          && body.rewards.length <= limit
+          && body.rewards.every(reward => {
+            if (!reward || typeof reward.actionable !== "boolean" || typeof reward.hold_complete !== "boolean") return false;
+            const expectedActionable = reward.hold_complete === true && ["minutes", "coupon"].includes(reward.reward_choice);
+            return reward.actionable === expectedActionable;
+          });
+        adminState.referralsError = metadataValid ? "" : "Davet kuyruğunun güvenlik metadata'sı eksik veya geçersiz.";
+        adminState.referrals = metadataValid ? body.rewards : [];
+        adminState.referralsHasMore = metadataValid && body.has_more;
+        adminState.referralsLimit = metadataValid ? limit : 100;
+        renderAdminReferrals(adminState.referrals, adminState.referralsError, adminState.referralsHasMore, adminState.referralsLimit);
+        if (!metadataValid) throw new Error(adminState.referralsError);
+      }, () => {}),
+      loadAdminUsers(adminState.userPagination.page || 1).catch(() => {}),
+      loadAdminOrders(adminState.orderPagination.page || 1).catch(() => {}),
+    ]);
+    if (session !== adminSessionVersion) return;
+    if (adminLoadErrors.has("referrals")) {
+      adminState.referralsError = adminLoadErrors.get("referrals").message;
+      renderAdminReferrals([], adminState.referralsError);
+    }
+    const checks = renderAdminReadiness(adminState.billing, adminState.runtime);
+    renderAdminAlerts(checks);
+    renderMetrics();
+    renderAdminTimeline();
+    renderAdminLoadProblems();
+    admin$("adminLastUpdated").textContent = `${adminLoadErrors.size ? "Son kontrol" : "Son güncelleme"}: ${adminDate(new Date().toISOString())} · Türkiye saati${adminLoadErrors.size ? " · Eksik bölümler var" : ""}`;
+  })();
+  try {
+    await adminLoadPromise;
   } finally {
+    adminLoadPromise = null;
     adminLoading = false;
     admin$("adminRefresh").disabled = false;
+    admin$("adminRefresh").textContent = adminT("admin.refresh", "Şimdi yenile");
   }
 }
 
@@ -1450,16 +1706,38 @@ async function applyAdminBulkAction() {
 async function updateContactMessage(button, {refresh = true} = {}) {
   button.disabled = true;
   const messageId = button.dataset.contactStatus || button.dataset.contactDialogStatus;
-  try { await adminRequest(`/billing/admin/contact-messages/${encodeURIComponent(messageId)}/status`, {method:"POST", body:JSON.stringify({status:button.dataset.status})}); if (refresh) await loadAdmin(); }
-  catch (error) { adminNotice(error.message, true); button.disabled = false; }
+  try {
+    await adminRequest(`/billing/admin/contact-messages/${encodeURIComponent(messageId)}/status`, {method:"POST", body:JSON.stringify({status:button.dataset.status})});
+    const item = adminState.contacts.find(value => value.id === messageId);
+    if (item) item.status = button.dataset.status;
+    applyAdminFilters();
+    if (refresh) await loadAdmin();
+    return true;
+  } catch (error) {
+    adminNotice(error.message, true);
+    return false;
+  } finally {
+    if (button.isConnected) button.disabled = false;
+  }
 }
 
 setupAdminNavigation();
 admin$("adminTokenForm").addEventListener("submit", async event => {
-  event.preventDefault(); adminAccessToken = admin$("adminToken").value.trim();
-  try { await loadAdmin(); sessionStorage.setItem(ADMIN_SESSION_TOKEN_KEY, adminAccessToken); }
-  catch (error) { sessionStorage.removeItem(ADMIN_SESSION_TOKEN_KEY); adminAccessToken = ""; adminNotice(error.message, true); }
+  event.preventDefault();
+  const button = admin$("adminLoginButton");
+  if (button.disabled) return;
+  adminAccessToken = admin$("adminToken").value.trim();
+  button.disabled = true;
+  button.textContent = "Açılıyor…";
+  try {
+    await loadAdmin();
+    if (adminAccessToken) sessionStorage.setItem(ADMIN_SESSION_TOKEN_KEY, adminAccessToken);
+  } catch (error) { adminNotice(error.message, true); }
+  finally { button.disabled = false; button.textContent = adminT("admin.open", "Paneli aç"); }
 });
+admin$("adminLogout")?.addEventListener("click", () => endAdminSession());
+admin$("adminContactDialog")?.addEventListener("close", () => { adminListVersions.contact += 1; });
+
 admin$("adminRefresh").addEventListener("click", () => loadAdmin().catch(error => adminNotice(error.message, true)));
 admin$("adminReferralReconcileForm")?.addEventListener("submit", reconcileAdminReferralOrder);
 document.addEventListener("visibilitychange", () => {
@@ -1485,6 +1763,14 @@ admin$("adminExportMessages").addEventListener("click", () => downloadAdminCsv("
 admin$("adminExportUsers").addEventListener("click", () => downloadAdminCsv("lecturesift-kullanicilar.csv", adminState.users.map(item => ({kayit_tarihi:item.created_at, son_guncelleme:item.updated_at, ad_soyad:item.name, eposta:item.email, telefon:item.phone || "", ulke:item.country_code || "", eposta_dogrulandi:item.email_verified ? "evet" : "hayir", plan:item.plan_code || "free", kredi_dakika:item.credit_minutes, son_guvenli_ag:item.last_activity?.ip_network || ""}))));
 setInterval(() => {
   const editingReferral = document.activeElement?.closest("[data-referral-release-form], #adminReferralReconcileForm");
-  if (adminAccessToken && admin$("adminAutoRefresh").checked && document.visibilityState === "visible" && !editingReferral) loadAdmin({silent:true}).catch(() => {});
+  const editing = editingReferral || document.querySelector("dialog[open]")
+    || document.activeElement?.matches("input, textarea, select")
+    || [...document.querySelectorAll("#adminPanel textarea:not([readonly]):not([disabled]), #adminReferralsView input:not([type=checkbox]):not([readonly]):not([disabled])")].some(input => input.value.trim());
+  if (adminAccessToken && !adminLoading && admin$("adminAutoRefresh").checked && document.visibilityState === "visible" && !editing) {
+    loadAdmin({silent:true}).catch(error => adminNotice(error.message, true));
+  }
 }, 60000);
-if (adminAccessToken) loadAdmin().catch(() => { sessionStorage.removeItem(ADMIN_SESSION_TOKEN_KEY); adminAccessToken = ""; admin$("adminLogin").hidden = false; });
+if (adminAccessToken) {
+  admin$("adminToken").value = adminAccessToken;
+  loadAdmin().catch(error => adminNotice(error.message, true));
+}
