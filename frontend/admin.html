@@ -4,16 +4,16 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow"><title>Yönetim | LectureSift</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/auth.css?v=4"><link rel="stylesheet" href="/rollout.css?v=10">
-<link rel="stylesheet" href="/theme.css?v=17"><script src="/theme.js?v=11"></script><link rel="stylesheet" href="/product-layout.css?v=4"><link rel="stylesheet" href="/admin-ui.css?v=1"></head>
+<link rel="stylesheet" href="/theme.css?v=17"><script src="/theme.js?v=11"></script><link rel="stylesheet" href="/product-layout.css?v=4"><link rel="stylesheet" href="/admin-ui.css?v=2"></head>
 <body data-page="admin">
   <header class="auth-topbar"><a class="brand" href="/"><span class="brand-mark"><i></i><i></i><i></i></span><span>Lecture<span>Sift</span></span></a><a class="back-link" href="/workspace.html" data-i18n="nav.workspace">Çalışma alanına dön</a></header>
   <main class="account-layout admin-layout">
     <section class="account-hero"><div><p class="eyebrow" data-i18n="admin.eyebrow">Güvenli yönetim</p><h1 data-i18n="admin.title">LectureSift operasyon merkezi</h1><p>Üyelik, ödeme, destek, işlem işleri ve sistem sağlığını tek ekrandan izle ve yönet.</p></div></section>
-    <section id="adminLogin" class="dashboard-card admin-login"><h2 data-i18n="admin.accessTitle">Yönetici erişimi</h2><p class="empty-copy">Yönetici anahtarınla giriş yap. Erişim yalnızca bu sekmede saklanır; işin bitince panelden çıkış yapabilirsin.</p><form id="adminTokenForm" class="form-grid"><label class="field"><span data-i18n="admin.token">ADMIN_ADMIN anahtarı</span><input id="adminToken" type="password" autocomplete="off" required></label><button id="adminLoginButton" class="primary-action" type="submit" data-i18n="admin.open">Paneli aç</button></form><div id="adminNotice" class="notice" hidden></div></section>
+    <section id="adminLogin" class="dashboard-card admin-login"><h2 data-i18n="admin.accessTitle">Yönetici erişimi</h2><p class="empty-copy" data-i18n="admin.sessionHelp">Yönetici anahtarınla giriş yap. Erişim yalnızca bu sekmede saklanır; işin bitince panelden çıkış yapabilirsin.</p><form id="adminTokenForm" class="form-grid"><label class="field"><span data-i18n="admin.token">ADMIN_ADMIN anahtarı</span><input id="adminToken" type="password" autocomplete="off" required></label><button id="adminLoginButton" class="primary-action" type="submit" data-i18n="admin.open">Paneli aç</button></form><div id="adminNotice" class="notice" hidden></div></section>
     <section id="adminPanel" hidden>
       <div class="admin-command-bar">
         <div><strong>Canlı operasyon görünümü</strong><small id="adminLastUpdated">Henüz güncellenmedi</small></div>
-        <div class="admin-command-actions"><label class="admin-toggle"><input id="adminAutoRefresh" type="checkbox" checked> Otomatik yenile <small>60 sn · düzenlerken duraklar</small></label><button id="adminRefresh" type="button" class="secondary-action" data-i18n="admin.refresh">Şimdi yenile</button><button id="adminLogout" type="button" class="admin-action">Çıkış yap</button></div>
+        <div class="admin-command-actions"><label class="admin-toggle"><input id="adminAutoRefresh" type="checkbox" checked> <span data-i18n="admin.autoRefresh">Otomatik yenile</span><small data-i18n="admin.autoRefreshHint">60 sn · düzenlerken duraklar</small></label><button id="adminRefresh" type="button" class="secondary-action" data-i18n="admin.refresh">Şimdi yenile</button><button id="adminLogout" type="button" class="admin-action">Çıkış yap</button></div>
       </div>
       <div id="adminDataStatus" class="admin-data-status" role="status" hidden></div>
       <div id="adminOperationNotice" class="notice admin-operation-notice" hidden aria-live="polite"></div>
@@ -74,7 +74,7 @@
                 <button id="adminBulkApply" type="button" class="admin-action reject">Seçilenlere uygula</button>
                 <button id="adminClearSelection" type="button" class="admin-action">Seçimi temizle</button>
               </div>
-              <p class="empty-copy">Ad, e-posta veya telefonla ara. Seçtiğin filtreler yalnızca bu listeyi etkiler; genel bakışın toplamlarını değiştirmez.</p>
+              <p class="empty-copy" data-i18n="admin.filterScopeHelp">Ad, e-posta veya telefonla ara. Seçtiğin filtreler yalnızca bu listeyi etkiler; genel bakışın toplamlarını değiştirmez.</p>
               <div id="adminUserList" class="admin-table-wrap"></div>
               <div id="adminUsersPagination" class="admin-pagination" aria-label="Kullanıcı sayfaları"></div>
             </section>

@@ -22,6 +22,7 @@ body[data-page="admin"] .admin-command-bar small {font-size: 11px; line-height: 
 body[data-page="admin"] .admin-command-actions {gap: 12px;}
 body[data-page="admin"] .admin-toggle {display: flex; flex-wrap: wrap; align-items: center; gap: 7px; font-size: 12px;}
 body[data-page="admin"] .admin-toggle small {flex-basis: 100%; padding-inline-start: 24px; color: var(--ui-muted);}
+body[data-page="admin"] :is(.admin-command-bar small, .admin-toggle, .admin-pagination, .admin-table small, .admin-metrics small, .admin-metrics span, .admin-readiness small, .admin-timeline p, .admin-timeline time) {color: var(--ui-muted);}
 body[data-page="admin"] .admin-view-heading {align-items: start; gap: 24px; margin-bottom: 20px;}
 body[data-page="admin"] .admin-view-heading h2 {font-size: 26px; line-height: 1.25; letter-spacing: -.025em;}
 body[data-page="admin"] :is(.admin-view-heading > p, .admin-section-note, .empty-copy) {font-size: 13px; line-height: 1.65; color: var(--ui-muted);}
@@ -47,6 +48,8 @@ body[data-page="admin"] .admin-table :is(th, td) {font-size: 12px; line-height: 
 body[data-page="admin"] .admin-table th {font-size: 11px; white-space: nowrap;}
 body[data-page="admin"] .admin-table small {font-size: 11px; line-height: 1.6;}
 .admin-cell-content {min-width: 0; max-width: 100%; overflow-wrap: anywhere;}
+body[data-page="admin"] .admin-table .admin-user-link {min-height: 40px; padding: 0; border: 0; border-radius: 0; background: transparent; background-image: none; color: var(--ui-action); font-size: 13px; text-align: start;}
+body[data-page="admin"] .admin-table .admin-user-link:hover {text-decoration: underline; text-underline-offset: 3px;}
 body[data-page="admin"] .admin-table-wrap[aria-busy="true"] {opacity: .65;}
 body[data-page="admin"] .admin-pagination {font-size: 12px; padding-top: 6px;}
 body[data-page="admin"] :is(.admin-count-badge, .status-pill) {font-size: 11px; white-space: normal;}
@@ -69,8 +72,10 @@ body[data-page="admin"] .admin-growth-grid {grid-template-columns: repeat(2, min
 body[data-page="admin"] .admin-growth-grid article {padding: 18px; border-radius: 12px;}
 body[data-page="admin"] .admin-growth-grid header {align-items: start; gap: 10px; flex-wrap: wrap;}
 body[data-page="admin"] .admin-growth-grid strong {font-size: 13px;}
-body[data-page="admin"] .admin-growth-grid :is(p, a) {font-size: 12px; line-height: 1.65;}
-body[data-page="admin"] .admin-growth-grid header span {font-size: 11px; white-space: normal;}
+body[data-page="admin"] .admin-growth-grid :is(p, a) {font-size: 12px; line-height: 1.65; color: var(--ui-muted);}
+body[data-page="admin"] .admin-growth-grid a {color: var(--ui-action);}
+body[data-page="admin"] .admin-growth-grid header span {font-size: 11px; white-space: normal; color: var(--ui-ochre); background: var(--ui-ochre-wash);}
+body[data-page="admin"] .admin-growth-grid .ready header span {color: var(--ui-green); background: var(--ui-green-wash);}
 .admin-growth-group {grid-column: 1 / -1; font-size: 15px; margin: 18px 0 0; padding-bottom: 12px; border-bottom: 1px solid var(--ui-line);}
 .admin-growth-group:first-child {margin-top: 0;}
 .admin-adsense-summary-head {display: flex; align-items: start; justify-content: space-between; gap: 24px;}
@@ -118,6 +123,7 @@ body[data-page="admin"] .admin-growth-grid header span {font-size: 11px; white-s
   body[data-page="admin"] .admin-metrics article {padding: 14px;}
   body[data-page="admin"] .admin-metrics strong {font-size: 27px;}
   body[data-page="admin"] .admin-growth-grid {grid-template-columns: minmax(0, 1fr);}
+  body[data-page="admin"] .admin-record-table tr {background: var(--ui-surface); border-color: var(--ui-line);}
   body[data-page="admin"] .admin-table td {padding: 10px 6px; grid-template-columns: 96px minmax(0, 1fr); font-size: 13px;}
   body[data-page="admin"] .admin-table td::before {font-size: 10px; line-height: 1.8; color: var(--ui-muted);}
   body[data-page="admin"] .admin-table td[data-label="Seç"] {grid-template-columns: 1fr;}
