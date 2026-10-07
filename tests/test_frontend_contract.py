@@ -923,7 +923,7 @@ def test_admin_growth_reads_and_escapes_advertising_management_status():
     assert '"/billing/admin/advertising-readiness"' in admin_script
     assert "renderAdminAdSenseSummary" in admin_script
     assert 'id="adminAdSenseSummary"' in admin
-    assert 'href="/admin-ui.css?v=1"' in admin
+    assert re.search(r'href="/admin-ui\.css\?v=[1-9]\d*"', admin)
     assert "8.000" not in admin_script and "8000" not in admin_script
     assert all(
         value in admin_script
