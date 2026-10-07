@@ -10,7 +10,7 @@ body[data-page="admin"] .account-hero p {max-width: 740px; font-size: 14px; line
 body[data-page="admin"] .admin-login {max-width: 540px; margin: 20px auto; padding: 28px;}
 body[data-page="admin"] .admin-workspace {display: grid; grid-template-columns: 216px minmax(0, 1fr); gap: 24px; align-items: start;}
 body[data-page="admin"] .admin-sidebar {top: 24px; padding: 14px 10px; border-radius: 16px;}
-body[data-page="admin"] .admin-sidebar-label {padding: 0 10px; font-size: 10px; letter-spacing: .12em;}
+body[data-page="admin"] .admin-sidebar-label {padding: 0 10px; font-size: 10px; letter-spacing: .12em; color: #f1cb87 !important;}
 body[data-page="admin"] .admin-section-nav {gap: 5px;}
 body[data-page="admin"] .admin-section-nav button {min-height: 56px; padding: 10px; border-radius: 10px; grid-template-columns: 28px minmax(0, 1fr);}
 body[data-page="admin"] .admin-section-nav strong {font-size: 13px;}
@@ -53,6 +53,7 @@ body[data-page="admin"] .admin-table .admin-user-link:hover {text-decoration: un
 body[data-page="admin"] .admin-table-wrap[aria-busy="true"] {opacity: .65;}
 body[data-page="admin"] .admin-pagination {font-size: 12px; padding-top: 6px;}
 body[data-page="admin"] :is(.admin-count-badge, .status-pill) {font-size: 11px; white-space: normal;}
+body[data-page="admin"] .admin-count-badge {color: var(--ui-action); background: var(--ui-surface-soft);}
 body[data-page="admin"] .admin-timeline strong {font-size: 13px;}
 body[data-page="admin"] .admin-timeline :is(p, time, small) {font-size: 11px; line-height: 1.6;}
 body[data-page="admin"] .admin-timeline article {padding: 15px 0;}

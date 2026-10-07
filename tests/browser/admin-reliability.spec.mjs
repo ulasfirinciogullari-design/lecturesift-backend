@@ -263,30 +263,36 @@ test('support status failures and late replies preserve the active response draf
 });
 
 test('admin advertising layout stays readable in each viewport and theme', async ({page}, testInfo) => {
+  const assertTextContrast = async selector => {
+    const contrastRatios = await page.locator(selector).evaluateAll(nodes => {
+      const rgb = value => (value.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+      const luminance = values => values.map(value => {
+        const channel = value / 255;
+        return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4;
+      }).reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
+      return nodes.map(node => {
+        const ink = luminance(rgb(getComputedStyle(node).color));
+        const background = node.matches('.admin-sidebar-label') ? node.closest('.admin-sidebar')
+          : node.matches('p') ? node.closest('article') : node;
+        const paper = luminance(rgb(getComputedStyle(background).backgroundColor));
+        return {text:node.textContent, ratio:(Math.max(ink, paper) + .05) / (Math.min(ink, paper) + .05)};
+      });
+    });
+    expect(contrastRatios.length).toBeGreaterThan(0);
+    for (const {text, ratio} of contrastRatios) expect(ratio, text).toBeGreaterThanOrEqual(4.5);
+  };
   const theme = testInfo.project.name.endsWith('dark') ? 'dark' : 'light';
   const unexpected = await openAdmin(page, {hash:'growth', theme});
   await expect(page.locator('#adminRefresh')).toBeEnabled();
   await expect(page.locator('#adminAdSenseSummary')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
-  const contrastRatios = await page.locator('#adminGrowthStatus article p, #adminGrowthStatus article header span').evaluateAll(nodes => {
-    const rgb = value => (value.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
-    const luminance = values => values.map(value => {
-      const channel = value / 255;
-      return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4;
-    }).reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
-    return nodes.map(node => {
-      const ink = luminance(rgb(getComputedStyle(node).color));
-      const background = node.matches('header span') ? node : node.closest('article');
-      const paper = luminance(rgb(getComputedStyle(background).backgroundColor));
-      return {text:node.textContent, ratio:(Math.max(ink, paper) + .05) / (Math.min(ink, paper) + .05)};
-    });
-  });
-  expect(contrastRatios.length).toBeGreaterThan(0);
-  for (const {text, ratio} of contrastRatios) expect(ratio, text).toBeGreaterThanOrEqual(4.5);
+  await assertTextContrast('#adminGrowthStatus article p, #adminGrowthStatus article header span');
+  if (await page.locator('.admin-sidebar-label').isVisible()) await assertTextContrast('.admin-sidebar-label');
   await page.screenshot({path:testInfo.outputPath('admin-growth-layout.jpg'), type:'jpeg', quality:75, fullPage:true});
   await page.locator('[data-admin-view-button="users"]').click();
   await expect(page.locator('#adminUserList')).toContainText(user.email);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  await assertTextContrast('#adminUsersResultCount');
   await page.screenshot({path:testInfo.outputPath('admin-users-layout.jpg'), type:'jpeg', quality:75, fullPage:true});
   expect(unexpected).toEqual([]);
 });
