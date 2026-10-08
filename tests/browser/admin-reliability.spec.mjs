@@ -119,17 +119,27 @@ test('administrator can find a lesson, inspect escaped outputs and download with
 
 test('user detail filters lessons on the server and actual error state remains searchable', async ({page}) => {
   const paths = [];
+  let failOnce = true;
   const unexpected = await openAdmin(page, {hash:'users', override:async (route, url) => {
     if (url.pathname !== '/billing/admin/jobs') return false;
     paths.push(url.search);
+    if (url.searchParams.has('owner_id') && failOnce) {
+      failOnce = false;
+      await route.fulfill({status:503, headers:CORS, json:{detail:{message:'Ders listesi şu anda alınamadı'}}});
+      return true;
+    }
     await route.fulfill({headers:CORS, json:{jobs:url.searchParams.has('owner_id') ? [{...lesson, status:'error', percent:42, error_code:'LS-TEST-01'}] : []}});
     return true;
   }});
   await expect(page.locator('#adminRefresh')).toBeEnabled();
-  await page.locator('[data-user-open]').click();
+  await page.getByRole('button', {name:'Aç ve düzenle', exact:true}).click();
   await page.getByRole('button', {name:'Derslerini görüntüle', exact:true}).click();
   await expect(page.locator('#adminUserDialog')).not.toBeVisible();
   await expect(page.locator('#adminJobsView')).toBeVisible();
+  await expect(page.locator('#adminJobs')).toContainText('Ders listesi şu anda alınamadı');
+  await page.evaluate(() => applyAdminFilters());
+  await expect(page.locator('#adminJobs')).toContainText('Ders listesi şu anda alınamadı');
+  await page.locator('#adminJobs').getByRole('button', {name:'Tekrar dene'}).click();
   await expect(page.locator('#adminJobs')).toContainText(lesson.title);
   expect(paths).toContain(`?limit=250&owner_id=${user.id}`);
   await page.locator('#adminJobStatus').selectOption('error');

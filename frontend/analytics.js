@@ -8,16 +8,17 @@
     "/terms", "/cookies", "/refund", "/distance-sales",
     "/document-summary", "/lecture-video-summary", "/quiz-flashcards",
     "/study-guides", "/study-pack-example", "/check-ai-notes", "/active-recall",
-    "/about-study-guides", "/cornell-notes",
+    "/about-study-guides", "/cornell-notes", "/pdf-note-check",
   ]);
   const CONTENT_PATHS = new Set([
     "/", "/document-summary", "/lecture-video-summary", "/quiz-flashcards",
     "/study-guides", "/study-pack-example", "/check-ai-notes", "/active-recall",
-    "/about-study-guides", "/cornell-notes",
+    "/about-study-guides", "/cornell-notes", "/pdf-note-check",
   ]);
   const RESOURCE_PATHS = new Set([
     "/assets/study/mean-median-tr.txt", "/assets/study/mean-median-en.txt",
     "/assets/study/cornell-notes-tr.txt", "/assets/study/cornell-notes-en.txt",
+    "/assets/study/pdf-check-tr.txt", "/assets/study/pdf-check-en.txt",
   ]);
   const EVENT_PATHS = new Set([...PUBLIC_PATHS, "/register", "/account"]);
   const configuredIds = new Set();

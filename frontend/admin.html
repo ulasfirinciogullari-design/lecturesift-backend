@@ -115,10 +115,10 @@
 
           <section id="adminJobsView" class="admin-view" role="tabpanel" data-admin-view="jobs" hidden>
             <div class="admin-view-heading"><div><p class="eyebrow">İŞLEME</p><h2>Video ve belge işleri</h2></div><p>Kuyruktaki işleri, ilerlemeyi ve oluşan hataları hızlıca incele.</p></div>
-            <section id="adminJobsSection" class="dashboard-card wide-card"><div class="admin-section-head"><div><p class="eyebrow">İŞ KUYRUĞU</p><h2>İşleme işleri</h2></div><div class="admin-filters"><select id="adminJobStatus" class="admin-filter" aria-label="Tüm durumlar"><option value="all">Tüm durumlar</option><option value="queued">Kuyrukta</option><option value="working">Çalışıyor</option><option value="done">Tamamlandı</option><option value="error">Hatalı</option></select><input id="adminJobSearch" class="admin-filter" type="search" placeholder="Ders, kullanıcı veya e-posta ara" aria-label="Ders, kullanıcı veya e-posta ara"></div></div><div id="adminJobScope" class="admin-work-scope"></div><p class="empty-copy">Son 250 işi gösterir. İncele düğmesiyle özeti, transkripti, quiz ve bilgi kartlarını aç; saklanan çıktı dosyalarını indir. Kullanıcı detayından o kişinin derslerine geçebilirsin.</p><div id="adminJobs" class="admin-table-wrap"></div></section>
+            <section id="adminJobsSection" class="dashboard-card wide-card"><div class="admin-section-head"><div><p class="eyebrow">İŞ KUYRUĞU</p><h2>İşleme işleri</h2></div><div class="admin-filters"><select id="adminJobStatus" class="admin-filter" aria-label="Tüm durumlar"><option value="all">Tüm durumlar</option><option value="queued">Kuyrukta</option><option value="working">Çalışıyor</option><option value="done">Tamamlandı</option><option value="error">Hatalı</option></select><input id="adminJobSearch" class="admin-filter" type="search" placeholder="Ders, kullanıcı veya e-posta ara" aria-label="Ders, kullanıcı veya e-posta ara"></div></div><div id="adminJobScope" class="admin-work-scope"></div><p class="empty-copy" data-i18n="admin.lessonListHelp">Son 250 işi gösterir. İncele düğmesiyle özeti, transkripti, quiz ve bilgi kartlarını aç; saklanan çıktı dosyalarını indir. Kullanıcı detayından o kişinin derslerine geçebilirsin.</p><div id="adminJobs" class="admin-table-wrap"></div></section>
           </section>
 
-          <dialog id="adminJobDialog" class="admin-detail-dialog"><form method="dialog" class="admin-dialog-head"><div><p class="eyebrow">DERS VE ÇIKTILAR</p><h2 id="adminJobDialogTitle">Ders ayrıntısı</h2></div><button class="admin-dialog-close" value="close" aria-label="Kapat">×</button></form><div id="adminJobDialogBody"></div></dialog>
+          <dialog id="adminJobDialog" class="admin-detail-dialog"><form method="dialog" class="admin-dialog-head"><div><p class="eyebrow" data-i18n="admin.lessonOutputs">DERS VE ÇIKTILAR</p><h2 id="adminJobDialogTitle">Ders ayrıntısı</h2></div><button class="admin-dialog-close" value="close" aria-label="Kapat">×</button></form><div id="adminJobDialogBody"></div></dialog>
 
           <section id="adminCostsView" class="admin-view" role="tabpanel" data-admin-view="costs" hidden>
             <div class="admin-view-heading"><div><p class="eyebrow">MALİYET MERKEZİ</p><h2>Gider, fatura ve birim ekonomi</h2></div><p>Tahmini operasyon giderini faturayla doğrulanmış gerçek giderden ayır; her tutarın kaynağını, dönemini ve doğruluk durumunu gör.</p></div>
@@ -153,6 +153,6 @@
       </div>
     </section>
   </main>
-  <script src="/page-i18n.js?v=10"></script><script src="/i18n.js?v=47"></script><script src="/admin-work.js?v=1"></script><script src="/admin.js?v=27"></script>
+  <script src="/page-i18n.js?v=10"></script><script src="/i18n.js?v=48"></script><script src="/admin-work.js?v=1"></script><script src="/admin.js?v=27"></script>
 <script src="/product-layout.js?v=1"></script></body>
 </html>

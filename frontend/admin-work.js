@@ -1,12 +1,14 @@
 /* Retained lesson content is fetched only after an administrator opens it. */
 let adminWorkOwner = null;
 let adminWorkScopedJobs = [];
+let adminWorkState = {loading:false, error:''};
 let adminWorkListVersion = 0;
 let adminWorkDetailVersion = 0;
 
 function resetAdminWork() {
   adminWorkOwner = null;
   adminWorkScopedJobs = [];
+  adminWorkState = {loading:false, error:''};
   adminWorkListVersion += 1;
   adminWorkDetailVersion += 1;
   document.getElementById('adminJobDialogBody')?.replaceChildren();
@@ -20,6 +22,7 @@ function adminJobsPath() {
 async function showAdminUserWork(user = null) {
   adminWorkOwner = user;
   adminWorkScopedJobs = [];
+  adminWorkState = {loading:true, error:''};
   const version = ++adminWorkListVersion;
   const path = adminJobsPath();
   admin$('adminUserDialog')?.close();
@@ -42,6 +45,7 @@ async function showAdminUserWork(user = null) {
   try {
     const body = await adminRequest(path);
     if (version !== adminWorkListVersion || path !== adminJobsPath()) return;
+    adminWorkState = {loading:false, error:''};
     if (user) adminWorkScopedJobs = body.jobs || [];
     else adminState.jobs = body.jobs || [];
     adminLoadedSections.add('jobs');
@@ -49,12 +53,26 @@ async function showAdminUserWork(user = null) {
     applyAdminFilters();
   } catch (error) {
     if (version !== adminWorkListVersion) return;
-    admin$('adminJobs').textContent = error.message;
+    adminWorkState = {loading:false, error:error.message};
+    adminWorkList([]);
     adminNotice(error.message, true);
   }
 }
 
 function adminWorkList(jobs) {
+  if (adminWorkState.loading || adminWorkState.error) {
+    const target = admin$('adminJobs');
+    target.textContent = adminWorkState.loading ? 'Dersler yükleniyor…' : adminWorkState.error;
+    if (adminWorkState.error) {
+      const retry = document.createElement('button');
+      retry.type = 'button';
+      retry.className = 'admin-action';
+      retry.textContent = 'Tekrar dene';
+      retry.addEventListener('click', () => showAdminUserWork(adminWorkOwner));
+      target.append(retry);
+    }
+    return;
+  }
   const rows = jobs.map(job => `<tr><td data-label="Ders"><strong>${adminEscape(job.title || 'Ders analizi')}</strong><br><small>${adminEscape(job.job_id)}</small><br><small>${adminEscape(job.source_file_count ? `${job.source_file_count} kaynak dosya` : '')}</small></td><td data-label="Kullanıcı"><strong>${adminEscape(job.owner_name || '')}</strong><br><small>${adminEscape(job.owner_email || job.owner_id || 'Misafir/hesapsız')}</small></td><td data-label="Durum"><span class="status-pill ${job.status === 'done' ? 'paid' : ''}">${adminEscape(adminStatusLabel(job.status))}</span><div class="admin-progress"><span style="width:${Math.max(0, Math.min(100, Number(job.percent || 0)))}%"></span></div><small>%${Number(job.percent || 0)} · ${adminEscape(job.stage || '—')}</small></td><td data-label="Başlangıç">${adminEscape(adminRelativeDate(job.created))}</td><td data-label="İşlem"><button class="admin-action" type="button" data-job-open="${adminEscape(job.job_id)}">İncele</button>${job.error_code ? `<p>${adminEscape(job.error_code)}</p>` : ''}</td></tr>`).join('');
   admin$('adminJobs').innerHTML = `<table class="admin-table admin-record-table"><thead><tr><th>Ders / kaynaklar</th><th>Kullanıcı</th><th>Durum ve ilerleme</th><th>Başlangıç</th><th>İşlem</th></tr></thead><tbody>${rows || '<tr><td colspan="5">Bu filtreye uygun ders bulunamadı.</td></tr>'}</tbody></table>`;
   admin$('adminJobs').querySelectorAll('[data-job-open]').forEach(button => button.addEventListener('click', () => openAdminJob(button.dataset.jobOpen)));
@@ -131,8 +149,8 @@ async function openAdminJob(jobId) {
     appendAdminWorkSection(root, 'Kaynak dosya adları', (result.source_files || []).join('\n'));
     appendAdminWorkSection(root, 'Özet', result.summary, true);
     appendAdminWorkSection(root, 'Önemli noktalar', adminWorkText(result.key_points));
-    appendAdminWorkSection(root, 'Kavramlar', adminWorkText(result.important_terms));
-    appendAdminWorkSection(root, 'Ders notları', adminWorkText(result.notes));
+    appendAdminWorkSection(root, 'Kavramlar', (result.important_terms || []).map(item => `${item.term || ''}: ${item.definition || ''}`).join('\n\n'));
+    appendAdminWorkSection(root, 'Ders notları', (result.notes || []).map(item => [item.heading, item.content, ...(item.bullets || [])].filter(Boolean).join('\n')).join('\n\n'));
     appendAdminWorkSection(root, 'Sınava hazırlık', adminWorkText(result.exam_focus));
     const quiz = (result.quiz || []).map((item, index) => `${index + 1}. ${item.question || ''}\n${(item.options || []).map((option, i) => `${i + 1}) ${option}`).join('\n')}\nCevap: ${Number.isInteger(item.answer_index) && item.options?.[item.answer_index] != null ? item.options[item.answer_index] : item.answer || '—'}\n${item.explanation || ''}`).join('\n\n');
     appendAdminWorkSection(root, 'Quiz ve cevaplar', quiz);
