@@ -43,7 +43,16 @@
   }
 
   function choices() {
-    return window.LectureSiftConsent?.get?.() || {analytics: false, advertising: false};
+    const saved = window.LectureSiftConsent?.get?.() || {analytics: false, advertising: false};
+    const provider = window.LectureSiftConsent?.google?.();
+    const google = provider
+      ? Object.fromEntries(["analytics_storage", "ad_storage", "ad_user_data", "ad_personalization"].map(key => [key, provider[key] === "granted" ? "granted" : "denied"]))
+      : {analytics_storage: saved.analytics ? "granted" : "denied",
+        ad_storage: saved.advertising ? "granted" : "denied",
+        ad_user_data: saved.advertising ? "granted" : "denied",
+        ad_personalization: saved.advertising ? "granted" : "denied"};
+    return {google, analytics: google.analytics_storage === "granted",
+      advertising: google.ad_storage === "granted" && google.ad_user_data === "granted"};
   }
 
   function prepareGtag() {
@@ -66,12 +75,7 @@
     if (!PRODUCTION_ORIGIN) return;
     prepareGtag();
     const consent = choices();
-    window.gtag("consent", "update", {
-      analytics_storage: consent.analytics ? "granted" : "denied",
-      ad_storage: consent.advertising ? "granted" : "denied",
-      ad_user_data: consent.advertising ? "granted" : "denied",
-      ad_personalization: consent.advertising ? "granted" : "denied",
-    });
+    window.gtag("consent", "update", consent.google);
     const gaId = String(remoteConfig?.measurement_id || "");
     if (gaId) window[`ga-disable-${gaId}`] = !consent.analytics;
   }
@@ -124,7 +128,7 @@
     }
     if (adsReady && !configuredIds.has(adsId)) {
       configuredIds.add(adsId);
-      window.gtag("config", adsId, {...pageContext(), allow_ad_personalization_signals: consent.advertising});
+      window.gtag("config", adsId, {...pageContext(), allow_ad_personalization_signals: consent.google.ad_personalization === "granted"});
     }
   }
 

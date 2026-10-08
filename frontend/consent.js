@@ -2,6 +2,29 @@
   "use strict";
 
   const STORAGE_KEY = "lecturesift-consent-v1";
+  const GOOGLE_PURPOSES = ["analytics_storage", "ad_storage", "ad_user_data", "ad_personalization"];
+  const PUBLIC_PATHS = new Set([
+    "/", "/features", "/plans", "/about", "/contact", "/privacy", "/terms",
+    "/cookies", "/refund", "/distance-sales", "/document-summary", "/lecture-video-summary",
+    "/quiz-flashcards", "/study-guides", "/study-pack-example", "/check-ai-notes",
+    "/active-recall", "/about-study-guides", "/cornell-notes", "/pdf-note-check",
+  ]);
+  const path = location.pathname.replace(/^\/(tr|en|de|fr|es|it|pt|ru|ar|zh|ja|ko|hi)(?=\/|$)/, "")
+    .replace(/\.html$/, "").replace(/\/$/, "") || "/";
+  const publicPage = ["https://lecturesift.com", "https://www.lecturesift.com"].includes(location.origin)
+    && PUBLIC_PATHS.has(path === "/index" ? "/" : path);
+  let cmpState = publicPage ? "checking" : "local";
+  let cmpApiReady = false;
+  let cmpModeReady = false;
+  let cmpTcfSeen = false;
+  let cmpUiShown = false;
+  let cmpNeedsFreshPage = false;
+  let cmpReloading = false;
+  let cmpEnabled = false;
+  let cmpValues = null;
+  let cmpTimer;
+  let cmpStorageRecord = null;
+  const denied = () => Object.fromEntries(GOOGLE_PURPOSES.map(key => [key, "denied"]));
   const language = window.LectureSiftI18n?.language || document.documentElement.lang || "tr";
   const copy = {
     tr: ["Gizlilik tercihlerin", "Zorunlu kayıtlar siteyi çalıştırır. İstatistik ve reklam teknolojileri yalnızca izin verirsen ve sağlayıcılar etkinse çalışır.", "Yalnızca zorunlu", "Tümüne izin ver", "Tercihleri yönet", "Zorunlu", "Giriş, güvenlik, dil ve ödeme akışları için gereklidir.", "İstatistik", "Siteyi nasıl kullandığını toplu olarak anlamamıza yardım eder.", "Reklam", "Reklam gösterimi ve dönüşüm ölçümü için kullanılır.", "Tercihleri kaydet", "Kapat", "Çerez ve depolama politikasını aç"],
@@ -30,10 +53,64 @@
       return null;
     }
   };
-  const write = choices => {
-    const value = {version: 1, necessary: true, analytics: !!choices.analytics, advertising: !!choices.advertising, updated_at: new Date().toISOString()};
+  const storageRecord = () => {
+    try { return localStorage.getItem(STORAGE_KEY); } catch (_) { return null; }
+  };
+  const googleChoices = () => {
+    if (["checking", "loading", "unavailable"].includes(cmpState)) return denied();
+    const saved = read();
+    if (saved?.google_pending === true) return denied();
+    if (cmpState === "google") {
+      if (!saved?.google_consent) return denied();
+      return restrictLocalDenials(Object.fromEntries(GOOGLE_PURPOSES.map(key =>
+        [key, cmpValues?.[key] === "granted" && saved.google_consent[key] === "granted" ? "granted" : "denied"])));
+    }
+    return restrictLocalDenials(Object.fromEntries(GOOGLE_PURPOSES.map(key => {
+      const allowed = key === "analytics_storage" ? saved?.analytics : saved?.advertising;
+      const providerAllowed = !saved?.google_consent || saved.google_consent[key] === "granted";
+      return [key, allowed && providerAllowed ? "granted" : "denied"];
+    })));
+  };
+  const restrictLocalDenials = values => {
+    const deniedLocally = read()?.google_local_denied;
+    return Object.fromEntries(GOOGLE_PURPOSES.map(key => [key,
+      Array.isArray(deniedLocally) && deniedLocally.includes(key) ? "denied" : values[key]]));
+  };
+  const effective = () => {
+    const google = googleChoices();
+    return {...(read() || {version: 1}), necessary: true,
+      analytics: google.analytics_storage === "granted",
+      advertising: GOOGLE_PURPOSES.slice(1).every(key => google[key] === "granted"),
+    };
+  };
+  const notify = () => document.dispatchEvent(new CustomEvent("lecturesift:consent", {detail: effective()}));
+  const providerPending = (revoke = false) => {
+    const value = {...(read() || {version: 1, necessary: true, analytics: false, advertising: false}), google_pending: true};
+    if (revoke) Object.assign(value, {analytics: false, advertising: false, google_consent: denied()});
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(value)); } catch (_) {}
-    document.dispatchEvent(new CustomEvent("lecturesift:consent", {detail: value}));
+    cmpStorageRecord = storageRecord();
+  };
+  const providerNotApplicable = () => {
+    const value = read();
+    if (!value) return;
+    delete value.google_pending;
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(value)); } catch (_) {}
+  };
+  const write = (choices, google = null) => {
+    const value = {version: 1, necessary: true, analytics: !!choices.analytics, advertising: !!choices.advertising, updated_at: new Date().toISOString()};
+    // A local checkbox cannot widen a previous Google purpose-specific choice.
+    const previousGoogle = google || read()?.google_consent;
+    if (previousGoogle) value.google_consent = Object.fromEntries(GOOGLE_PURPOSES.map(key => [key, previousGoogle[key] === "granted" ? "granted" : "denied"]));
+    if (!google && read()?.google_pending === true) value.google_pending = true;
+    const localDenials = new Set(Array.isArray(read()?.google_local_denied) ? read().google_local_denied : []);
+    if (!google && (previousGoogle || read()?.google_pending)) {
+      for (const key of GOOGLE_PURPOSES) {
+        if (!(key === "analytics_storage" ? choices.analytics : choices.advertising)) localDenials.add(key);
+      }
+    }
+    if (localDenials.size) value.google_local_denied = GOOGLE_PURPOSES.filter(key => localDenials.has(key));
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(value)); } catch (_) {}
+    notify();
     return value;
   };
 
@@ -72,6 +149,16 @@
   root.addEventListener("click", event => {
     const action = event.target.closest("[data-consent]")?.dataset.consent;
     if (!action) return;
+    if (action === "manage" && cmpState === "google" && cmpApiReady
+      && typeof window.googlefc?.showRevocationMessage === "function") {
+      cmpValues = null;
+      cmpUiShown = true;
+      cmpNeedsFreshPage = true;
+      providerPending(true);
+      notify();
+      window.googlefc.callbackQueue.push({CONSENT_API_READY: () => window.googlefc.showRevocationMessage()});
+      return;
+    }
     if (action === "manage") {
       const saved = read();
       analytics.checked = !!saved?.analytics;
@@ -85,11 +172,146 @@
     if (action === "save") { write({analytics: analytics.checked, advertising: advertising.checked}); banner.hidden = true; close(); }
   });
   document.addEventListener("keydown", event => { if (event.key === "Escape" && !modal.hidden) close(); });
+  window.addEventListener("storage", event => {
+    if (event.key === STORAGE_KEY || event.key === null) {
+      // Another document owns this newer choice; this document's provider
+      // snapshot must not write over it when an earlier callback arrives.
+      cmpNeedsFreshPage = true;
+      notify();
+    }
+  });
 
   window.LectureSiftConsent = Object.freeze({
-    get: () => read() || {version: 1, necessary: true, analytics: false, advertising: false},
-    allows: category => category === "necessary" || !!read()?.[category],
+    get: effective,
+    google: googleChoices,
+    allows: category => category === "necessary" || effective()[category] === true,
     open: () => root.querySelector('[data-consent="manage"]').click(),
   });
   document.dispatchEvent(new CustomEvent("lecturesift:consent-ready", {detail: window.LectureSiftConsent.get()}));
+
+  function failCmp() {
+    clearTimeout(cmpTimer);
+    cmpState = "unavailable";
+    cmpValues = null;
+    // A config fetch error does not establish that the provider was enabled or
+    // that the user revoked consent. Preserve choices for an explicit rollback.
+    providerPending(cmpEnabled);
+    // Keep local preferences usable, while Google technologies stay denied.
+    banner.hidden = !!read();
+    notify();
+  }
+
+  function refreshGoogleChoices() {
+    if (cmpState !== "google" || !cmpModeReady || cmpUiShown || cmpNeedsFreshPage) return;
+    if (storageRecord() !== cmpStorageRecord) {
+      cmpNeedsFreshPage = true;
+      notify();
+      return;
+    }
+    try {
+      const values = window.googlefc.getGoogleConsentModeValues();
+      const names = ["analyticsStoragePurposeConsentStatus", "adStoragePurposeConsentStatus",
+        "adUserDataPurposeConsentStatus", "adPersonalizationPurposeConsentStatus"];
+      // GRANTED=1. UNKNOWN, NOT_APPLICABLE and NOT_CONFIGURED never grant a
+      // purpose for a visitor whose TCF response says GDPR applies.
+      cmpValues = Object.fromEntries(GOOGLE_PURPOSES.map((key, index) => [key, values?.[names[index]] === 1 ? "granted" : "denied"]));
+      const permitted = restrictLocalDenials(cmpValues);
+      write({analytics: permitted.analytics_storage === "granted",
+        advertising: permitted.ad_storage === "granted" || permitted.ad_user_data === "granted" || permitted.ad_personalization === "granted"}, permitted);
+      cmpStorageRecord = storageRecord();
+    } catch (_) { failCmp(); }
+  }
+
+  function consentData(data, success) {
+    if (!success || !data || typeof data.gdprApplies !== "boolean" || data.cmpStatus === "error") {
+      failCmp();
+      return;
+    }
+    clearTimeout(cmpTimer);
+    if (data.gdprApplies === false) {
+      cmpState = "local";
+      cmpValues = null;
+      providerNotApplicable();
+      banner.hidden = !!read();
+      notify();
+      return;
+    }
+    cmpState = "google";
+    cmpValues = null;
+    if (storageRecord() !== cmpStorageRecord) cmpNeedsFreshPage = true;
+    const changedDecision = data.eventStatus === "useractioncomplete" && cmpTcfSeen;
+    cmpTcfSeen = true;
+    if (changedDecision) {
+      // The old consent-mode snapshot can outlive the TCF change callback.
+      // Persist denial until the next page initializes both APIs afresh.
+      providerPending(true);
+      const saved = read();
+      if (saved) {
+        delete saved.google_local_denied;
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch (_) {}
+      }
+      cmpNeedsFreshPage = true;
+      notify();
+      if (!cmpReloading) { cmpReloading = true; location.reload(); }
+      return;
+    }
+    cmpUiShown = data.eventStatus !== "tcloaded" && data.eventStatus !== "useractioncomplete";
+    if (cmpUiShown) cmpNeedsFreshPage = true;
+    providerPending(cmpUiShown);
+    banner.hidden = true;
+    close();
+    notify();
+    refreshGoogleChoices();
+  }
+
+  async function startGoogleCmp() {
+    if (!publicPage) return;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    try {
+      const response = await fetch("https://api.lecturesift.com/ads/config", {signal: controller.signal});
+      if (!response.ok) throw new Error("consent-config-unavailable");
+      const {consent} = await response.json();
+      // An older API omits the optional descriptor and retains local choices.
+      if (!consent || consent.google_cmp_enabled === false) {
+        cmpState = "local";
+        providerNotApplicable();
+        notify();
+        return;
+      }
+      if (consent.google_cmp_enabled !== true || !/^pub-[0-9]{16}$/.test(consent.publisher_id || "")) throw new Error("invalid-consent-config");
+      cmpEnabled = true;
+      cmpState = "loading";
+      providerPending();
+      window.dataLayer = window.dataLayer || [];
+      window.gtag = window.gtag || function gtag(){ window.dataLayer.push(arguments); };
+      if (!window.__lecturesiftConsentDefaulted) {
+        window.__lecturesiftConsentDefaulted = true;
+        window.gtag("consent", "default", {...denied(), wait_for_update: 500});
+        window.gtag("js", new Date());
+      }
+      window.googlefc = window.googlefc || {};
+      window.googlefc.callbackQueue = window.googlefc.callbackQueue || [];
+      window.googlefc.callbackQueue.push({CONSENT_API_READY: () => {
+        if (typeof window.__tcfapi !== "function") { failCmp(); return; }
+        cmpApiReady = true;
+        window.__tcfapi("addEventListener", 2, consentData);
+      }});
+      window.googlefc.callbackQueue.push({CONSENT_MODE_DATA_READY: () => {
+        cmpModeReady = true;
+        refreshGoogleChoices();
+      }});
+      cmpTimer = setTimeout(failCmp, 12000);
+      const script = document.createElement("script");
+      script.async = true;
+      script.src = `https://fundingchoicesmessages.google.com/i/${consent.publisher_id}?ers=1`;
+      script.referrerPolicy = "strict-origin-when-cross-origin";
+      const nonce = document.querySelector("script[nonce]")?.nonce;
+      if (nonce) script.nonce = nonce;
+      script.onerror = failCmp;
+      document.head.append(script);
+    } catch (_) { failCmp(); }
+    finally { clearTimeout(timeout); }
+  }
+  void startGoogleCmp();
 })();

@@ -36,7 +36,11 @@ async function run(pathname) {
       head: {append: element => scripts.push(element)},
       addEventListener: (name, callback) => listeners.set(name, callback),
     },
-    LectureSiftConsent: {get: () => consent},
+    LectureSiftConsent: {get: () => consent, ...(scenario.startsWith('cmp_') ? {google: () => ({
+      analytics_storage: 'granted', ad_storage: 'granted',
+      ad_user_data: scenario === 'cmp_no_user_data' ? 'denied' : 'granted',
+      ad_personalization: 'denied',
+    })} : {})},
     fetch: async url => {
       requests.push(url);
       if (scenario === 'unavailable') throw new Error('synthetic unavailable config');
@@ -237,6 +241,23 @@ def test_analytics_and_advertising_permissions_are_independent(scenario, analyti
     assert row["conversion"] is ads
     assert ("G-SYNTHETIC" in configurations(row)) is analytics
     assert ("AW-123456789" in configurations(row)) is ads
+
+
+def test_google_cmp_personalization_refusal_is_not_overwritten_by_conversion_consent():
+    row, = observe(["/plans"], "cmp_partial")
+    assert row["event"] is True and row["conversion"] is True
+    assert configurations(row)["AW-123456789"]["allow_ad_personalization_signals"] is False
+    updates = [call[2] for call in row["calls"] if call[:2] == ["consent", "update"]]
+    assert updates
+    assert all(value == {"analytics_storage": "granted", "ad_storage": "granted",
+                         "ad_user_data": "granted", "ad_personalization": "denied"} for value in updates)
+
+
+def test_google_cmp_user_data_refusal_blocks_ads_conversion_but_keeps_allowed_analytics():
+    row, = observe(["/plans"], "cmp_no_user_data")
+    assert row["event"] is True and row["conversion"] is False
+    assert "AW-123456789" not in configurations(row)
+    assert all(call[2]["ad_user_data"] == "denied" for call in row["calls"] if call[:2] == ["consent", "update"])
 
 
 def test_revoking_consent_prevents_subsequent_events():

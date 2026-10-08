@@ -955,11 +955,11 @@
   consentStyle.href = "/consent.css?v=2";
   document.head.append(consentStyle);
   const consentScript = document.createElement("script");
-  consentScript.src = "/consent.js?v=2";
+  consentScript.src = "/consent.js?v=4";
   consentScript.defer = true;
   document.head.append(consentScript);
   const analyticsScript = document.createElement("script");
-  analyticsScript.src = "/analytics.js?v=5";
+  analyticsScript.src = "/analytics.js?v=8";
   analyticsScript.defer = true;
   document.head.append(analyticsScript);
   const rewardedAdsScript = document.createElement("script");

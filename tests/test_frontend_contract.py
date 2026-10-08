@@ -1389,7 +1389,7 @@ def test_optional_analytics_and_advertising_are_consent_gated():
     cookies = (FRONTEND / "cookies.html").read_text(encoding="utf-8")
 
     consent_css = (FRONTEND / "consent.css").read_text(encoding="utf-8")
-    assert 'consentScript.src = "/consent.js?v=2"' in i18n
+    assert 'consentScript.src = "/consent.js?v=4"' in i18n
     assert 'consentStyle.href = "/consent.css?v=2"' in i18n
     assert 'const STORAGE_KEY = "lecturesift-consent-v1"' in consent
     assert 'footerTarget = document.querySelector(".footer-bottom,.legal-footer,.site-footer,footer")' in consent
@@ -1397,7 +1397,7 @@ def test_optional_analytics_and_advertising_are_consent_gated():
     assert ".consent-manage{position:fixed" not in consent_css
     assert 'analytics: false, advertising: false' in consent
     assert 'category === "necessary"' in consent
-    assert 'analyticsScript.src = "/analytics.js?v=5"' in i18n
+    assert 'analyticsScript.src = "/analytics.js?v=8"' in i18n
     assert 'window.LectureSiftConsent?.get?.()' in analytics
     assert "/analytics/config" in analytics
     assert "googletagmanager.com/gtag/js" in analytics
@@ -1520,6 +1520,7 @@ def test_adsense_and_measurement_deployment_settings_are_staged_safely():
     for key in (
         "LECTURESIFT_ADSENSE_ENABLED",
         "LECTURESIFT_ADSENSE_CMP_READY",
+        "LECTURESIFT_GOOGLE_CMP_ENABLED",
         "LECTURESIFT_GA_MEASUREMENT_ID",
         "LECTURESIFT_GOOGLE_ADS_ID",
         "LECTURESIFT_GOOGLE_ADS_SIGNUP_LABEL",
@@ -1532,6 +1533,7 @@ def test_adsense_and_measurement_deployment_settings_are_staged_safely():
 
     assert "LECTURESIFT_ADSENSE_ENABLED=false" in example
     assert "LECTURESIFT_ADSENSE_CMP_READY=false" in example
+    assert "LECTURESIFT_GOOGLE_CMP_ENABLED=false" in example
     assert "LECTURESIFT_REWARDED_AD_GLOBAL_DAILY_LIMIT_MINUTES=0" in example
     for key in (
         "LECTURESIFT_REWARDED_AD_GLOBAL_DAILY_LIMIT_MINUTES",
@@ -1727,6 +1729,11 @@ def test_google_ads_conversions_are_consent_gated_and_csp_allows_measurement():
     assert "lecturesift-purchase-${reference}" in auth
     assert "https://www.googletagmanager.com" in headers
     assert "https://www.google-analytics.com" in headers
+    policy = headers.split('Content-Security-Policy = "', 1)[1].split('"', 1)[0]
+    directives = {item.strip().split()[0]: item.strip().split()[1:] for item in policy.split(';') if item.strip()}
+    for directive in ("script-src", "connect-src", "frame-src"):
+        assert "https://fundingchoicesmessages.google.com" in directives[directive]
+    assert "'unsafe-eval'" not in directives["script-src"]
     assert 'Strict-Transport-Security = "max-age=31536000; includeSubDomains"' in headers
     assert 'for = "/:lang/verify.html"' in headers
     assert 'for = "/:lang/reset-password.html"' in headers

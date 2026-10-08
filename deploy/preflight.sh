@@ -187,6 +187,19 @@ if [[ "${INSTAGRAM_DAILY_AUTOMATION_ENABLED:-false}" == "true" ]]; then
   fi
 fi
 
+google_cmp_enabled="${LECTURESIFT_GOOGLE_CMP_ENABLED:-false}"
+if [[ "$google_cmp_enabled" != "true" && "$google_cmp_enabled" != "false" ]]; then
+  echo "LECTURESIFT_GOOGLE_CMP_ENABLED must be exactly true or false." >&2
+  exit 1
+fi
+if [[ "$google_cmp_enabled" == "true" ]]; then
+  google_cmp_publisher="${LECTURESIFT_ADSENSE_PUBLISHER_ID-ca-pub-7608481350058806}"
+  if [[ ! "$google_cmp_publisher" =~ ^ca-pub-[0-9]{16}$ ]]; then
+    echo "The enabled Google consent message requires a valid AdSense publisher ID." >&2
+    exit 1
+  fi
+fi
+
 adsense_api_enabled="${LECTURESIFT_ADSENSE_API_ENABLED:-false}"
 if [[ "$adsense_api_enabled" != "true" && "$adsense_api_enabled" != "false" ]]; then
   echo "LECTURESIFT_ADSENSE_API_ENABLED must be exactly true or false." >&2

@@ -204,6 +204,8 @@ services:
         sync: false
       - key: LECTURESIFT_ADSENSE_PUBLISHER_ID
         value: ca-pub-7608481350058806
+      - key: LECTURESIFT_GOOGLE_CMP_ENABLED
+        sync: false
       - key: LECTURESIFT_ADSENSE_API_ENABLED
         sync: false
       - key: LECTURESIFT_ADSENSE_API_CLIENT_ID

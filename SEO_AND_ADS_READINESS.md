@@ -93,6 +93,17 @@ advertising signals disabled.
   and TCF integration check. Neither value is inferred from the public
   publisher ID, `ads.txt`, an old panel observation or the site's own consent
   dialog.
+- `LECTURESIFT_GOOGLE_CMP_ENABLED` is a separate, default-off opt-in for the
+  published Google consent message. `/ads/config` exposes only
+  `consent.google_cmp_enabled` and the validated public `pub-…` publisher ID;
+  this descriptor remains available when ad inventory and the CMP-readiness
+  attestation are off. It includes no Management API credentials. Publish the
+  intended message in Google, opt in to this integration, and verify the live
+  message and TCF consent events before setting `LECTURESIFT_ADSENSE_CMP_READY`.
+  Enabling the message does not enable ads, prove site approval, remove account
+  ad-free rights or bypass the existing page and consent gates. The Render
+  value is operator supplied; the application and environment example default
+  to `false`.
 - Keep `LECTURESIFT_DISPLAY_ADS_ENABLED=false` when using AdSense Auto ads. A
   valid enabled GPT banner path takes precedence over Auto ads and is a separate
   inventory mode. This change requires
