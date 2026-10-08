@@ -1,0 +1,3070 @@
+{
+  "siteUrl": "sc-domain:lecturesift.com",
+  "reportDate": "2026-10-09",
+  "reportTimeZone": "Europe/Istanbul",
+  "scope": "All 183 URLs in the live sitemap snapshot. Legacy/private/malformed URLs inspected earlier are excluded from these counts.",
+  "sitemapSnapshot": {
+    "observedAt": "2026-10-08T21:57:05.765908+00:00",
+    "urls": [
+      "https://lecturesift.com/",
+      "https://lecturesift.com/features",
+      "https://lecturesift.com/document-summary",
+      "https://lecturesift.com/lecture-video-summary",
+      "https://lecturesift.com/quiz-flashcards",
+      "https://lecturesift.com/plans",
+      "https://lecturesift.com/about",
+      "https://lecturesift.com/contact",
+      "https://lecturesift.com/privacy",
+      "https://lecturesift.com/terms",
+      "https://lecturesift.com/distance-sales",
+      "https://lecturesift.com/cookies",
+      "https://lecturesift.com/refund",
+      "https://lecturesift.com/en/",
+      "https://lecturesift.com/en/features",
+      "https://lecturesift.com/en/document-summary",
+      "https://lecturesift.com/en/lecture-video-summary",
+      "https://lecturesift.com/en/quiz-flashcards",
+      "https://lecturesift.com/en/plans",
+      "https://lecturesift.com/en/about",
+      "https://lecturesift.com/en/contact",
+      "https://lecturesift.com/en/privacy",
+      "https://lecturesift.com/en/terms",
+      "https://lecturesift.com/en/distance-sales",
+      "https://lecturesift.com/en/cookies",
+      "https://lecturesift.com/en/refund",
+      "https://lecturesift.com/de/",
+      "https://lecturesift.com/de/features",
+      "https://lecturesift.com/de/document-summary",
+      "https://lecturesift.com/de/lecture-video-summary",
+      "https://lecturesift.com/de/quiz-flashcards",
+      "https://lecturesift.com/de/plans",
+      "https://lecturesift.com/de/about",
+      "https://lecturesift.com/de/contact",
+      "https://lecturesift.com/de/privacy",
+      "https://lecturesift.com/de/terms",
+      "https://lecturesift.com/de/distance-sales",
+      "https://lecturesift.com/de/cookies",
+      "https://lecturesift.com/de/refund",
+      "https://lecturesift.com/fr/",
+      "https://lecturesift.com/fr/features",
+      "https://lecturesift.com/fr/document-summary",
+      "https://lecturesift.com/fr/lecture-video-summary",
+      "https://lecturesift.com/fr/quiz-flashcards",
+      "https://lecturesift.com/fr/plans",
+      "https://lecturesift.com/fr/about",
+      "https://lecturesift.com/fr/contact",
+      "https://lecturesift.com/fr/privacy",
+      "https://lecturesift.com/fr/terms",
+      "https://lecturesift.com/fr/distance-sales",
+      "https://lecturesift.com/fr/cookies",
+      "https://lecturesift.com/fr/refund",
+      "https://lecturesift.com/es/",
+      "https://lecturesift.com/es/features",
+      "https://lecturesift.com/es/document-summary",
+      "https://lecturesift.com/es/lecture-video-summary",
+      "https://lecturesift.com/es/quiz-flashcards",
+      "https://lecturesift.com/es/plans",
+      "https://lecturesift.com/es/about",
+      "https://lecturesift.com/es/contact",
+      "https://lecturesift.com/es/privacy",
+      "https://lecturesift.com/es/terms",
+      "https://lecturesift.com/es/distance-sales",
+      "https://lecturesift.com/es/cookies",
+      "https://lecturesift.com/es/refund",
+      "https://lecturesift.com/it/",
+      "https://lecturesift.com/it/features",
+      "https://lecturesift.com/it/document-summary",
+      "https://lecturesift.com/it/lecture-video-summary",
+      "https://lecturesift.com/it/quiz-flashcards",
+      "https://lecturesift.com/it/plans",
+      "https://lecturesift.com/it/about",
+      "https://lecturesift.com/it/contact",
+      "https://lecturesift.com/it/privacy",
+      "https://lecturesift.com/it/terms",
+      "https://lecturesift.com/it/distance-sales",
+      "https://lecturesift.com/it/cookies",
+      "https://lecturesift.com/it/refund",
+      "https://lecturesift.com/pt/",
+      "https://lecturesift.com/pt/features",
+      "https://lecturesift.com/pt/document-summary",
+      "https://lecturesift.com/pt/lecture-video-summary",
+      "https://lecturesift.com/pt/quiz-flashcards",
+      "https://lecturesift.com/pt/plans",
+      "https://lecturesift.com/pt/about",
+      "https://lecturesift.com/pt/contact",
+      "https://lecturesift.com/pt/privacy",
+      "https://lecturesift.com/pt/terms",
+      "https://lecturesift.com/pt/distance-sales",
+      "https://lecturesift.com/pt/cookies",
+      "https://lecturesift.com/pt/refund",
+      "https://lecturesift.com/ru/",
+      "https://lecturesift.com/ru/features",
+      "https://lecturesift.com/ru/document-summary",
+      "https://lecturesift.com/ru/lecture-video-summary",
+      "https://lecturesift.com/ru/quiz-flashcards",
+      "https://lecturesift.com/ru/plans",
+      "https://lecturesift.com/ru/about",
+      "https://lecturesift.com/ru/contact",
+      "https://lecturesift.com/ru/privacy",
+      "https://lecturesift.com/ru/terms",
+      "https://lecturesift.com/ru/distance-sales",
+      "https://lecturesift.com/ru/cookies",
+      "https://lecturesift.com/ru/refund",
+      "https://lecturesift.com/ar/",
+      "https://lecturesift.com/ar/features",
+      "https://lecturesift.com/ar/document-summary",
+      "https://lecturesift.com/ar/lecture-video-summary",
+      "https://lecturesift.com/ar/quiz-flashcards",
+      "https://lecturesift.com/ar/plans",
+      "https://lecturesift.com/ar/about",
+      "https://lecturesift.com/ar/contact",
+      "https://lecturesift.com/ar/privacy",
+      "https://lecturesift.com/ar/terms",
+      "https://lecturesift.com/ar/distance-sales",
+      "https://lecturesift.com/ar/cookies",
+      "https://lecturesift.com/ar/refund",
+      "https://lecturesift.com/zh/",
+      "https://lecturesift.com/zh/features",
+      "https://lecturesift.com/zh/document-summary",
+      "https://lecturesift.com/zh/lecture-video-summary",
+      "https://lecturesift.com/zh/quiz-flashcards",
+      "https://lecturesift.com/zh/plans",
+      "https://lecturesift.com/zh/about",
+      "https://lecturesift.com/zh/contact",
+      "https://lecturesift.com/zh/privacy",
+      "https://lecturesift.com/zh/terms",
+      "https://lecturesift.com/zh/distance-sales",
+      "https://lecturesift.com/zh/cookies",
+      "https://lecturesift.com/zh/refund",
+      "https://lecturesift.com/ja/",
+      "https://lecturesift.com/ja/features",
+      "https://lecturesift.com/ja/document-summary",
+      "https://lecturesift.com/ja/lecture-video-summary",
+      "https://lecturesift.com/ja/quiz-flashcards",
+      "https://lecturesift.com/ja/plans",
+      "https://lecturesift.com/ja/about",
+      "https://lecturesift.com/ja/contact",
+      "https://lecturesift.com/ja/privacy",
+      "https://lecturesift.com/ja/terms",
+      "https://lecturesift.com/ja/distance-sales",
+      "https://lecturesift.com/ja/cookies",
+      "https://lecturesift.com/ja/refund",
+      "https://lecturesift.com/ko/",
+      "https://lecturesift.com/ko/features",
+      "https://lecturesift.com/ko/document-summary",
+      "https://lecturesift.com/ko/lecture-video-summary",
+      "https://lecturesift.com/ko/quiz-flashcards",
+      "https://lecturesift.com/ko/plans",
+      "https://lecturesift.com/ko/about",
+      "https://lecturesift.com/ko/contact",
+      "https://lecturesift.com/ko/privacy",
+      "https://lecturesift.com/ko/terms",
+      "https://lecturesift.com/ko/distance-sales",
+      "https://lecturesift.com/ko/cookies",
+      "https://lecturesift.com/ko/refund",
+      "https://lecturesift.com/hi/",
+      "https://lecturesift.com/hi/features",
+      "https://lecturesift.com/hi/document-summary",
+      "https://lecturesift.com/hi/lecture-video-summary",
+      "https://lecturesift.com/hi/quiz-flashcards",
+      "https://lecturesift.com/hi/plans",
+      "https://lecturesift.com/hi/about",
+      "https://lecturesift.com/hi/contact",
+      "https://lecturesift.com/hi/privacy",
+      "https://lecturesift.com/hi/terms",
+      "https://lecturesift.com/hi/distance-sales",
+      "https://lecturesift.com/hi/cookies",
+      "https://lecturesift.com/hi/refund",
+      "https://lecturesift.com/study-guides",
+      "https://lecturesift.com/en/study-guides",
+      "https://lecturesift.com/study-pack-example",
+      "https://lecturesift.com/en/study-pack-example",
+      "https://lecturesift.com/check-ai-notes",
+      "https://lecturesift.com/en/check-ai-notes",
+      "https://lecturesift.com/active-recall",
+      "https://lecturesift.com/en/active-recall",
+      "https://lecturesift.com/about-study-guides",
+      "https://lecturesift.com/en/about-study-guides",
+      "https://lecturesift.com/cornell-notes",
+      "https://lecturesift.com/en/cornell-notes",
+      "https://lecturesift.com/pdf-note-check",
+      "https://lecturesift.com/en/pdf-note-check"
+    ]
+  },
+  "historyRetrievedAtUtc": "2026-10-08T22:03:02Z",
+  "inspectionWindowUtc": {
+    "first": "2026-10-08T21:45:52.878985+00:00",
+    "last": "2026-10-08T22:01:32.408162+00:00"
+  },
+  "inspectionsReusedFromEarlierSameSession": 16,
+  "additionalInspectionRequests": 167,
+  "totalAccountInspectionRequestsAfterSweep": 199,
+  "coverageCounts": {
+    "Submitted and indexed": 152,
+    "Alternate page with proper canonical tag": 3,
+    "URL is unknown to Google": 21,
+    "Discovered - currently not indexed": 7
+  },
+  "languageCounts": {
+    "tr": {
+      "total": 20,
+      "indexed": 18,
+      "notIndexed": 2
+    },
+    "en": {
+      "total": 20,
+      "indexed": 15,
+      "notIndexed": 5
+    },
+    "de": {
+      "total": 13,
+      "indexed": 12,
+      "notIndexed": 1
+    },
+    "fr": {
+      "total": 13,
+      "indexed": 10,
+      "notIndexed": 3
+    },
+    "es": {
+      "total": 13,
+      "indexed": 9,
+      "notIndexed": 4
+    },
+    "it": {
+      "total": 13,
+      "indexed": 11,
+      "notIndexed": 2
+    },
+    "pt": {
+      "total": 13,
+      "indexed": 10,
+      "notIndexed": 3
+    },
+    "ru": {
+      "total": 13,
+      "indexed": 11,
+      "notIndexed": 2
+    },
+    "ar": {
+      "total": 13,
+      "indexed": 10,
+      "notIndexed": 3
+    },
+    "zh": {
+      "total": 13,
+      "indexed": 12,
+      "notIndexed": 1
+    },
+    "ja": {
+      "total": 13,
+      "indexed": 10,
+      "notIndexed": 3
+    },
+    "ko": {
+      "total": 13,
+      "indexed": 12,
+      "notIndexed": 1
+    },
+    "hi": {
+      "total": 13,
+      "indexed": 12,
+      "notIndexed": 1
+    }
+  },
+  "canonicalFieldAvailability": "GSC Wizard omits googleCanonical and userCanonical. Google-selected canonical URLs remain unverified; live HTML canonical checks are recorded separately.",
+  "inspections": [
+    {
+      "url": "https://lecturesift.com/",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-01T18:09:40+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:45:52.878985+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/features",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-30T07:43:26+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:44.032778+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/document-summary",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-05T12:38:26+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:17.614939+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/lecture-video-summary",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-01T09:19:39+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:17.723948+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/quiz-flashcards",
+      "verdict": "NEUTRAL",
+      "coverage_state": "Alternate page with proper canonical tag",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-08-29T21:42:44+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:51:23.260946+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/plans",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-08T16:05:15+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:57:21.07237+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/about",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-05T04:58:24+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:57:21.209329+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/contact",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-07T05:39:57+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:57:20.956212+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/privacy",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-05T09:17:15+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:57:21.178525+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/terms",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-06T17:15:04+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:57:21.176913+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/distance-sales",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-12T22:43:27+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:57:27.590148+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/cookies",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-11T17:13:09+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:57:27.921448+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/refund",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-15T08:20:53+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:57:27.677631+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-07T05:18:31+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:17.686123+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/features",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-19T17:14:51+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:47:40.270174+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/document-summary",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-28T04:57:51+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:17.743378+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/lecture-video-summary",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T21:46:17.670739+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/quiz-flashcards",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T21:46:24.375133+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/plans",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-28T03:43:10+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:57:27.853326+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/about",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T21:57:27.848427+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/contact",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-29T08:08:51+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:57:34.141617+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/privacy",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-29T23:35:19+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:57:34.313857+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/terms",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-01T17:17:13+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:57:34.56324+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/distance-sales",
+      "verdict": "NEUTRAL",
+      "coverage_state": "Discovered - currently not indexed",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": "CRAWLING_USER_AGENT_UNSPECIFIED",
+      "requested_at": "2026-10-08T21:57:34.396208+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/cookies",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-04T00:09:24+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:57:34.548005+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/refund",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-29T03:02:08+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:57:40.746809+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/de/",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-19T23:27:03+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:57:41.0178+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/de/features",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T21:57:41.025127+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/de/document-summary",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-05T20:53:26+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:57:41.103514+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/de/lecture-video-summary",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-11T06:13:55+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:57:41.22661+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/de/quiz-flashcards",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-02T01:56:25+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:57:47.39831+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/de/plans",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-11T13:18:40+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:57:47.719153+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/de/about",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-06T02:40:37+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:57:47.664862+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/de/contact",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-01T01:06:18+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:57:47.729154+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/de/privacy",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-30T08:03:37+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:57:47.807603+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/de/terms",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-27T03:45:09+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:17.113003+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/de/distance-sales",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-04T07:32:21+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:17.328862+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/de/cookies",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-30T07:38:22+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:17.248889+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/de/refund",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-04T11:14:28+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:17.31101+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/fr/",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-11T12:15:26+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:17.393345+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/fr/features",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T21:58:23.680646+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/fr/document-summary",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-11T11:38:41+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:23.937378+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/fr/lecture-video-summary",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-05T09:10:39+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:24.046711+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/fr/quiz-flashcards",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-30T07:43:29+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:23.923293+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/fr/plans",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T21:58:24.067782+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/fr/about",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-29T22:54:07+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:30.249214+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/fr/contact",
+      "verdict": "NEUTRAL",
+      "coverage_state": "Discovered - currently not indexed",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": "CRAWLING_USER_AGENT_UNSPECIFIED",
+      "requested_at": "2026-10-08T21:58:30.608246+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/fr/privacy",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-01T16:35:17+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:30.655584+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/fr/terms",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-30T18:17:24+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:30.630189+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/fr/distance-sales",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-01T16:05:37+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:30.746838+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/fr/cookies",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-30T09:21:20+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:36.968018+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/fr/refund",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-01T10:33:43+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:37.318967+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/es/",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-16T15:39:41+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:37.336601+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/es/features",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-03T20:37:02+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:37.298514+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/es/document-summary",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T21:58:37.422773+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/es/lecture-video-summary",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-30T23:35:15+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:43.474626+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/es/quiz-flashcards",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T21:58:43.968524+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/es/plans",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-23T22:25:03+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:43.942365+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/es/about",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-01T16:23:03+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:43.965748+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/es/contact",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T21:58:44.030236+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/es/privacy",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-01T09:54:42+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:51.440544+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/es/terms",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-01T16:59:09+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:51.336403+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/es/distance-sales",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-08T18:03:41+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:51.537983+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/es/cookies",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-30T14:42:40+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:51.489728+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/es/refund",
+      "verdict": "NEUTRAL",
+      "coverage_state": "Discovered - currently not indexed",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": "CRAWLING_USER_AGENT_UNSPECIFIED",
+      "requested_at": "2026-10-08T21:58:51.565449+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/it/",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-15T18:07:23+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:57.824733+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/it/features",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-21T20:03:07+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:58.065889+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/it/document-summary",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-06T22:17:11+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:58.138115+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/it/lecture-video-summary",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-01T05:49:34+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:58:58.188925+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/it/quiz-flashcards",
+      "verdict": "NEUTRAL",
+      "coverage_state": "Discovered - currently not indexed",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": "CRAWLING_USER_AGENT_UNSPECIFIED",
+      "requested_at": "2026-10-08T21:58:58.220095+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/it/plans",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-01T01:12:39+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:04.457487+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/it/about",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-04T00:17:45+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:04.596337+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/it/contact",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T21:59:04.692199+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/it/privacy",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-29T22:59:15+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:04.778294+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/it/terms",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-04T08:49:18+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:04.808857+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/it/distance-sales",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-16T11:25:10+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:10.98745+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/it/cookies",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-20T18:17:11+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:11.235016+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/it/refund",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-01T23:41:45+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:11.369122+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/pt/",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-27T19:01:48+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:11.398071+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/pt/features",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-05T10:31:18+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:11.394054+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/pt/document-summary",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-11T05:43:12+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:17.767041+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/pt/lecture-video-summary",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T21:59:17.842331+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/pt/quiz-flashcards",
+      "verdict": "NEUTRAL",
+      "coverage_state": "Alternate page with proper canonical tag",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-08-30T06:07:56+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:20.916634+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/pt/plans",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-05T02:55:23+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:17.942642+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/pt/about",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-06T01:50:00+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:18.048279+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/pt/contact",
+      "verdict": "NEUTRAL",
+      "coverage_state": "Alternate page with proper canonical tag",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-08-30T02:03:58+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:28.416543+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/pt/privacy",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-16T11:18:50+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:28.196701+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/pt/terms",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-06T02:37:13+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:28.211442+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/pt/distance-sales",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-01T06:34:47+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:28.430195+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/pt/cookies",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-01T20:56:20+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:28.31446+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/pt/refund",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-01T16:56:48+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:34.843768+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ru/",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-29T21:30:47+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:34.752697+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ru/features",
+      "verdict": "NEUTRAL",
+      "coverage_state": "Discovered - currently not indexed",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": "CRAWLING_USER_AGENT_UNSPECIFIED",
+      "requested_at": "2026-10-08T21:59:34.86613+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ru/document-summary",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-11T03:42:46+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:34.999655+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ru/lecture-video-summary",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-05T09:37:52+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:35.099714+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ru/quiz-flashcards",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-30T23:58:52+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:41.321524+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ru/plans",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T21:59:41.537043+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ru/about",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-23T01:09:31+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:41.403037+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ru/contact",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-10T04:27:37+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:41.650969+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ru/privacy",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-07T22:40:31+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:41.69226+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ru/terms",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-04T04:03:58+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:48.014752+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ru/distance-sales",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-18T03:58:05+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:47.950429+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ru/cookies",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-17T01:49:56+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:48.158813+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ru/refund",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-29T17:19:31+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:48.234074+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ar/",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-08-29T23:44:00+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:48.195391+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ar/features",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-19T12:50:05+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:54.575016+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ar/document-summary",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T21:59:54.563532+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ar/lecture-video-summary",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-14T13:41:56+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:54.790588+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ar/quiz-flashcards",
+      "verdict": "NEUTRAL",
+      "coverage_state": "Discovered - currently not indexed",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": "CRAWLING_USER_AGENT_UNSPECIFIED",
+      "requested_at": "2026-10-08T21:59:54.806947+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ar/plans",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-13T11:51:15+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:59:54.874353+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ar/about",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-13T10:48:46+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:02.373135+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ar/contact",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T22:00:02.370467+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ar/privacy",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-10T22:00:09+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:02.567115+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ar/terms",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-13T01:41:26+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:02.422109+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ar/distance-sales",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-10T22:27:18+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:02.332258+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ar/cookies",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-12T08:03:13+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:09.331451+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ar/refund",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-11T17:27:54+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:09.339568+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/zh/",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-15T04:38:45+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:09.510156+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/zh/features",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T22:00:09.267406+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/zh/document-summary",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-01T15:56:24+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:09.442801+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/zh/lecture-video-summary",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-30T18:31:43+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:15.970167+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/zh/quiz-flashcards",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-01T02:40:09+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:16.052153+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/zh/plans",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-23T18:47:21+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:16.151134+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/zh/about",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-08T20:31:02+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:16.153056+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/zh/contact",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-29T19:55:32+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:16.140741+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/zh/privacy",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-14T04:19:48+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:23.025618+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/zh/terms",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-30T03:34:38+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:22.623332+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/zh/distance-sales",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-17T08:56:33+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:22.758289+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/zh/cookies",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-30T11:02:34+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:22.771431+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/zh/refund",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-05T05:05:42+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:22.822688+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ja/",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-08T21:18:31+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:29.251812+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ja/features",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-04T18:19:37+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:29.384614+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ja/document-summary",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T22:00:29.419761+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ja/lecture-video-summary",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-14T07:10:56+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:29.443727+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ja/quiz-flashcards",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-30T10:03:25+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:29.666295+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ja/plans",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T22:00:37.202817+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ja/about",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-05T21:38:49+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:37.17812+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ja/contact",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T22:00:37.127696+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ja/privacy",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-01T16:29:46+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:37.349909+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ja/terms",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-15T11:58:08+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:37.345719+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ja/distance-sales",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-05T14:52:50+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:43.800539+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ja/cookies",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-29T06:56:40+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:43.820464+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ja/refund",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-01T10:34:42+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:43.955993+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ko/",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-08-29T21:28:17+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:43.976825+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ko/features",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-04T23:06:58+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:44.023643+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ko/document-summary",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-28T07:02:56+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:50.512735+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ko/lecture-video-summary",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-05T08:20:02+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:50.499583+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ko/quiz-flashcards",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-26T06:46:58+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:50.70862+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ko/plans",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-04T10:17:33+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:50.512549+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ko/about",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-24T08:09:41+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:50.624552+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ko/contact",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T22:00:57.413693+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ko/privacy",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-06T02:48:40+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:57.160949+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ko/terms",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-01T14:05:43+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:57.111443+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ko/distance-sales",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-27T18:59:45+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:57.299698+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ko/cookies",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-30T05:40:12+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:00:57.38211+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ko/refund",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-26T05:09:50+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:01:03.882154+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/hi/",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-08-29T09:11:53+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:01:03.756429+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/hi/features",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-22T19:17:55+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:01:04.077581+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/hi/document-summary",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-11T21:59:50+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:01:03.955925+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/hi/lecture-video-summary",
+      "verdict": "NEUTRAL",
+      "coverage_state": "Discovered - currently not indexed",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": "CRAWLING_USER_AGENT_UNSPECIFIED",
+      "requested_at": "2026-10-08T22:01:04.127446+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/hi/quiz-flashcards",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-11T11:22:46+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:01:11.839175+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/hi/plans",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-14T21:35:59+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:01:11.881635+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/hi/about",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-16T23:56:23+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:01:11.796598+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/hi/contact",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-08-30T00:26:41+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:01:11.946843+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/hi/privacy",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-14T06:03:04+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:01:11.710059+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/hi/terms",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-14T13:59:20+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:01:18.369089+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/hi/distance-sales",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-15T06:59:08+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:01:18.483518+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/hi/cookies",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-17T09:03:20+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:01:18.529401+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/hi/refund",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-14T00:18:57+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:01:18.524145+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/study-guides",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-26T17:28:30+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:37.783772+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/study-guides",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-20T02:26:05+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:37.800352+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/study-pack-example",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-03T02:57:54+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:01:18.811651+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/study-pack-example",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-20T06:14:42+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:01:25.011632+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/check-ai-notes",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-20T10:48:20+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:01:24.99261+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/check-ai-notes",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-20T06:55:15+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:01:25.324851+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/active-recall",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-25T22:40:04+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:24.378135+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/active-recall",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-20T06:57:05+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:30.801564+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/about-study-guides",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-25T15:03:03+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:01:25.319186+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/about-study-guides",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-25T18:10:52+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T22:01:25.692609+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/cornell-notes",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-26T12:16:07+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:24.433362+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/cornell-notes",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-25T13:03:59+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:24.576855+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/pdf-note-check",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T22:01:32.408162+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/pdf-note-check",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T22:01:31.642499+00:00"
+    }
+  ],
+  "nonIndexedLiveChecks": [
+    {
+      "url": "https://lecturesift.com/ar/contact",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/ar/contact",
+      "canonicalUrl": "https://lecturesift.com/ar/contact",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "ar",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "title-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Title is only 21 chars"
+        },
+        {
+          "id": "meta-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Meta description is only 37 chars"
+        },
+        {
+          "id": "thin-content",
+          "category": "content",
+          "severity": "low",
+          "message": "Thin content (130 words)"
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/ar/document-summary",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/ar/document-summary",
+      "canonicalUrl": "https://lecturesift.com/ar/document-summary",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "ar",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "schema-article-missing-datepublished",
+          "category": "structured-data",
+          "severity": "medium",
+          "message": "Article is missing required field \"datePublished\""
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/ar/quiz-flashcards",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/ar/quiz-flashcards",
+      "canonicalUrl": "https://lecturesift.com/ar/quiz-flashcards",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "ar",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "thin-content",
+          "category": "content",
+          "severity": "low",
+          "message": "Thin content (263 words)"
+        },
+        {
+          "id": "schema-article-missing-datepublished",
+          "category": "structured-data",
+          "severity": "medium",
+          "message": "Article is missing required field \"datePublished\""
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/de/features",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/de/features",
+      "canonicalUrl": "https://lecturesift.com/de/features",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "de",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "title-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Title is only 24 chars"
+        },
+        {
+          "id": "schema-article-missing-datepublished",
+          "category": "structured-data",
+          "severity": "medium",
+          "message": "Article is missing required field \"datePublished\""
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/en/about",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/en/about",
+      "canonicalUrl": "https://lecturesift.com/en/about",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "en",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "title-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Title is only 22 chars"
+        },
+        {
+          "id": "meta-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Meta description is only 18 chars"
+        },
+        {
+          "id": "thin-content",
+          "category": "content",
+          "severity": "low",
+          "message": "Thin content (231 words)"
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/en/distance-sales",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/en/distance-sales",
+      "canonicalUrl": "https://lecturesift.com/en/distance-sales",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "en",
+      "auditIndexable": true,
+      "issues": []
+    },
+    {
+      "url": "https://lecturesift.com/en/lecture-video-summary",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/en/lecture-video-summary",
+      "canonicalUrl": "https://lecturesift.com/en/lecture-video-summary",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "en",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "schema-article-missing-datepublished",
+          "category": "structured-data",
+          "severity": "medium",
+          "message": "Article is missing required field \"datePublished\""
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/en/pdf-note-check",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/en/pdf-note-check",
+      "canonicalUrl": "https://lecturesift.com/en/pdf-note-check",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "en",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "title-long",
+          "category": "meta",
+          "severity": "low",
+          "message": "Title is 64 chars (over ~60 may truncate)"
+        },
+        {
+          "id": "schema-article-missing-datepublished",
+          "category": "structured-data",
+          "severity": "medium",
+          "message": "Article is missing required field \"datePublished\""
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/en/quiz-flashcards",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/en/quiz-flashcards",
+      "canonicalUrl": "https://lecturesift.com/en/quiz-flashcards",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "en",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "schema-article-missing-datepublished",
+          "category": "structured-data",
+          "severity": "medium",
+          "message": "Article is missing required field \"datePublished\""
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/es/contact",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/es/contact",
+      "canonicalUrl": "https://lecturesift.com/es/contact",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "es",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "title-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Title is only 22 chars"
+        },
+        {
+          "id": "meta-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Meta description is only 38 chars"
+        },
+        {
+          "id": "thin-content",
+          "category": "content",
+          "severity": "low",
+          "message": "Thin content (142 words)"
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/es/document-summary",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/es/document-summary",
+      "canonicalUrl": "https://lecturesift.com/es/document-summary",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "es",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "meta-long",
+          "category": "meta",
+          "severity": "low",
+          "message": "Meta description is 168 chars (over ~160 may truncate)"
+        },
+        {
+          "id": "schema-article-missing-datepublished",
+          "category": "structured-data",
+          "severity": "medium",
+          "message": "Article is missing required field \"datePublished\""
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/es/quiz-flashcards",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/es/quiz-flashcards",
+      "canonicalUrl": "https://lecturesift.com/es/quiz-flashcards",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "es",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "meta-long",
+          "category": "meta",
+          "severity": "low",
+          "message": "Meta description is 166 chars (over ~160 may truncate)"
+        },
+        {
+          "id": "schema-article-missing-datepublished",
+          "category": "structured-data",
+          "severity": "medium",
+          "message": "Article is missing required field \"datePublished\""
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/es/refund",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/es/refund",
+      "canonicalUrl": "https://lecturesift.com/es/refund",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "es",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "meta-long",
+          "category": "meta",
+          "severity": "low",
+          "message": "Meta description is 174 chars (over ~160 may truncate)"
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/fr/contact",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/fr/contact",
+      "canonicalUrl": "https://lecturesift.com/fr/contact",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "fr",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "title-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Title is only 23 chars"
+        },
+        {
+          "id": "meta-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Meta description is only 40 chars"
+        },
+        {
+          "id": "thin-content",
+          "category": "content",
+          "severity": "low",
+          "message": "Thin content (147 words)"
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/fr/features",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/fr/features",
+      "canonicalUrl": "https://lecturesift.com/fr/features",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "fr",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "schema-article-missing-datepublished",
+          "category": "structured-data",
+          "severity": "medium",
+          "message": "Article is missing required field \"datePublished\""
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/fr/plans",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/fr/plans",
+      "canonicalUrl": "https://lecturesift.com/fr/plans",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "fr",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "title-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Title is only 22 chars"
+        },
+        {
+          "id": "meta-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Meta description is only 52 chars"
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/hi/lecture-video-summary",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/hi/lecture-video-summary",
+      "canonicalUrl": "https://lecturesift.com/hi/lecture-video-summary",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "hi",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "schema-article-missing-datepublished",
+          "category": "structured-data",
+          "severity": "medium",
+          "message": "Article is missing required field \"datePublished\""
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/it/contact",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/it/contact",
+      "canonicalUrl": "https://lecturesift.com/it/contact",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "it",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "title-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Title is only 22 chars"
+        },
+        {
+          "id": "meta-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Meta description is only 40 chars"
+        },
+        {
+          "id": "thin-content",
+          "category": "content",
+          "severity": "low",
+          "message": "Thin content (131 words)"
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/it/quiz-flashcards",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/it/quiz-flashcards",
+      "canonicalUrl": "https://lecturesift.com/it/quiz-flashcards",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "it",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "thin-content",
+          "category": "content",
+          "severity": "low",
+          "message": "Thin content (291 words)"
+        },
+        {
+          "id": "schema-article-missing-datepublished",
+          "category": "structured-data",
+          "severity": "medium",
+          "message": "Article is missing required field \"datePublished\""
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/ja/contact",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/ja/contact",
+      "canonicalUrl": "https://lecturesift.com/ja/contact",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "ja",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "title-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Title is only 20 chars"
+        },
+        {
+          "id": "meta-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Meta description is only 24 chars"
+        },
+        {
+          "id": "thin-content",
+          "category": "content",
+          "severity": "medium",
+          "message": "Thin content (45 words)"
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/ja/document-summary",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/ja/document-summary",
+      "canonicalUrl": "https://lecturesift.com/ja/document-summary",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "ja",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "title-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Title is only 27 chars"
+        },
+        {
+          "id": "thin-content",
+          "category": "content",
+          "severity": "medium",
+          "message": "Thin content (93 words)"
+        },
+        {
+          "id": "schema-article-missing-datepublished",
+          "category": "structured-data",
+          "severity": "medium",
+          "message": "Article is missing required field \"datePublished\""
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/ja/plans",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/ja/plans",
+      "canonicalUrl": "https://lecturesift.com/ja/plans",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "ja",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "title-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Title is only 17 chars"
+        },
+        {
+          "id": "meta-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Meta description is only 26 chars"
+        },
+        {
+          "id": "thin-content",
+          "category": "content",
+          "severity": "low",
+          "message": "Thin content (118 words)"
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/ko/contact",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/ko/contact",
+      "canonicalUrl": "https://lecturesift.com/ko/contact",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "ko",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "title-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Title is only 16 chars"
+        },
+        {
+          "id": "meta-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Meta description is only 19 chars"
+        },
+        {
+          "id": "thin-content",
+          "category": "content",
+          "severity": "low",
+          "message": "Thin content (119 words)"
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/pdf-note-check",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/pdf-note-check",
+      "canonicalUrl": "https://lecturesift.com/pdf-note-check",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "tr",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "title-long",
+          "category": "meta",
+          "severity": "low",
+          "message": "Title is 72 chars (over ~60 may truncate)"
+        },
+        {
+          "id": "schema-article-missing-datepublished",
+          "category": "structured-data",
+          "severity": "medium",
+          "message": "Article is missing required field \"datePublished\""
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/pt/contact",
+      "source": "Bounded live HTTP GET; sub-agent multilingual_seo_review",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/pt/contact",
+      "canonicalUrl": "https://lecturesift.com/pt/contact",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "pt",
+      "legacyHtmlStatus": 301,
+      "legacyHtmlLocation": "/pt/contact"
+    },
+    {
+      "url": "https://lecturesift.com/pt/lecture-video-summary",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/pt/lecture-video-summary",
+      "canonicalUrl": "https://lecturesift.com/pt/lecture-video-summary",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "pt",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "thin-content",
+          "category": "content",
+          "severity": "low",
+          "message": "Thin content (282 words)"
+        },
+        {
+          "id": "schema-article-missing-datepublished",
+          "category": "structured-data",
+          "severity": "medium",
+          "message": "Article is missing required field \"datePublished\""
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/pt/quiz-flashcards",
+      "source": "Bounded live HTTP GET; sub-agent multilingual_seo_review",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/pt/quiz-flashcards",
+      "canonicalUrl": "https://lecturesift.com/pt/quiz-flashcards",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "pt",
+      "legacyHtmlStatus": 301,
+      "legacyHtmlLocation": "/pt/quiz-flashcards"
+    },
+    {
+      "url": "https://lecturesift.com/quiz-flashcards",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/quiz-flashcards",
+      "canonicalUrl": "https://lecturesift.com/quiz-flashcards",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "tr",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "schema-article-missing-datepublished",
+          "category": "structured-data",
+          "severity": "medium",
+          "message": "Article is missing required field \"datePublished\""
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/ru/features",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/ru/features",
+      "canonicalUrl": "https://lecturesift.com/ru/features",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "ru",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "title-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Title is only 25 chars"
+        },
+        {
+          "id": "schema-article-missing-datepublished",
+          "category": "structured-data",
+          "severity": "medium",
+          "message": "Article is missing required field \"datePublished\""
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/ru/plans",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/ru/plans",
+      "canonicalUrl": "https://lecturesift.com/ru/plans",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "ru",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "title-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Title is only 19 chars"
+        },
+        {
+          "id": "meta-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Meta description is only 57 chars"
+        }
+      ]
+    },
+    {
+      "url": "https://lecturesift.com/zh/features",
+      "source": "GSC Wizard live on-page audit",
+      "statusCode": 200,
+      "finalUrl": "https://lecturesift.com/zh/features",
+      "canonicalUrl": "https://lecturesift.com/zh/features",
+      "canonicalIsSelf": true,
+      "noindex": false,
+      "lang": "zh",
+      "auditIndexable": true,
+      "issues": [
+        {
+          "id": "title-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Title is only 16 chars"
+        },
+        {
+          "id": "meta-short",
+          "category": "meta",
+          "severity": "low",
+          "message": "Meta description is only 69 chars"
+        },
+        {
+          "id": "thin-content",
+          "category": "content",
+          "severity": "low",
+          "message": "Thin content (134 words)"
+        },
+        {
+          "id": "schema-article-missing-datepublished",
+          "category": "structured-data",
+          "severity": "medium",
+          "message": "Article is missing required field \"datePublished\""
+        }
+      ]
+    }
+  ],
+  "liveAuditInterpretation": {
+    "checkedNonIndexedUrls": 31,
+    "allHttp200": true,
+    "allSelfCanonical": true,
+    "anyNoindex": false,
+    "note": "Current HTTP/meta checks do not prove historical Google crawl conditions or why Google has not crawled a URL.",
+    "providerWarnings": "Word counts and title/description lengths are heuristics, not proof of an indexing cause. Article.datePublished is recommended, not a Google-required field."
+  },
+  "actions": {
+    "applicationSourceChanged": false,
+    "localTestsOrBuildsRun": false,
+    "sitemapResubmittedAtUtc": "2026-10-08T21:48:32.384Z",
+    "sitemapSubmissionAccepted": true,
+    "additionalSitemapSubmissionDuringSweep": false,
+    "individualRequestIndexingPerformed": false,
+    "recurringTrackerCreated": false
+  }
+}

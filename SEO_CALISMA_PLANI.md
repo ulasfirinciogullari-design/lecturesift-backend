@@ -5,6 +5,223 @@ takip edilir. Başlangıç varsayımı Türkiye'deki üniversite öğrencileri v
 Türkçe aramalardır. İlk rekabet geliştirmesi üç ana ürün sayfasının Türkçe
 ve İngilizce sürümlerine uygulanır; diğer diller mevcut içeriklerini korur.
 
+## 9 Ekim 2026 sayfa açıklamalarının iyileştirilmesi
+
+Canlı denetimde Hakkımızda ve İletişim açıklamaları yalnız sayfa adını
+tekrar ediyordu; örneğin İngilizce Hakkımızda açıklaması “About LectureSift.”
+idi. Bu iki sayfanın Türkçe kaynak açıklaması ve 13 dildeki karşılıkları,
+mevcut gövde içeriğini özetleyecek şekilde düzenlendi. Hakkımızda ürünün
+öğrenme materyalleri üretme amacını ve AI çıktılarının kontrolünü;
+İletişim ise teknik destek, hesap, ödeme/iptal/iade ve gizlilik konularıyla
+form/e-posta kanallarını anlatıyor. Yeni özellik, yanıt süresi veya sonuç
+garantisi eklenmedi.
+
+Bu bir açıklama iyileştirmesidir; indekslenmemenin kanıtlanmış nedeni
+veya indeksleme çözümü olarak sunulmaz. Mevcut üretim akışı açıklamaları
+statik olarak çevirip ilk HTML, Open Graph ve Twitter alanlarına taşır.
+Canonical, robots, sayfa gövdesi ve
+site haritası tarihleri değiştirilmedi.
+
+Kaynak değişikliği güncel ana sürümden ayrı dalda hazırlanıyor. Mevcut
+GitHub Actions kontrolleri çalıştırılacak; yerel test/derleme yapılmadı.
+Bu aşamada canlı etkinleşme veya Google'ın yeni açıklamaları kullanması
+doğrulanmış değildir. Aşağıdaki denetim sonuçları bu metin değişikliğinden
+önceki gözlemlerdir.
+
+## 9 Ekim 2026 tam site haritası URL Denetimi
+
+İlk 30 adreslik inceleme, kullanıcının devam talebiyle **canlı site
+haritasındaki 183 adresin tamamına** genişletildi. Harita 00:57 TSİ'de
+okundu. Aynı oturumdaki 16 güncel harita adresinin sonucu tekrar
+kullanıldı, kalan 167 adres Google URL Denetimi ile okundu. Son denetim
+01:01:32 TSİ'de tamamlandı; tüm sonuçlar 00:45–01:01 TSİ aralığından.
+Hata veya atlanan URL yok. Eski/özel adresler dahil oturumdaki toplam
+URL Denetimi isteği 199; aşağıdaki sayılar yalnız 183 harita adresine aittir.
+
+| Google'ın bildirdiği durum | Haritadaki URL sayısı |
+| --- | ---: |
+| Gönderildi ve indekslendi | **152** |
+| Google tarafından bilinmiyor | **21** |
+| Keşfedildi, şu anda indekslenmiş değil | **7** |
+| Uygun canonical etiketli alternatif sayfa | **3** |
+| Toplam | **183** |
+
+[183 adreslik CSV dökümü](docs/seo/sitemap-url-inspection-2026-10-09.csv)
+ve [ayrıntılı JSON kanıtı](docs/seo/sitemap-url-inspection-2026-10-09.json)
+her adresin durumunu, denetim zamanını ve son Google taramasını içerir.
+CSV'deki canlı HTTP/canonical alanları indeks dışı 31 adres için
+doldurulmuştur; diğer satırlardaki boş alanlar canlı hata anlamına gelmez.
+Google'ın seçtiği canonical alanı araçta sunulmadığından açıkça
+`NOT_EXPOSED_BY_GSC_WIZARD` olarak işaretlidir; tahminle doldurulmadı.
+
+İndeks dışı **31 adresin tamamı** canlıda ayrıca kontrol edildi: 29'u
+GSC Wizard'ın uzak sayfa denetimiyle, Portekizce iki adres sınırlı HTTP
+istekleriyle. Hepsi **200, self-canonical ve noindex olmadan** yanıt
+veriyor. Bu harita kapsamında Google'ın robots/noindex/404/sunucu hatası
+nedeniyle dışladığı bir kayıt bulunmadı. Bu gözlem geçmişteki bütün
+tarama koşullarının sorunsuz olduğunu kanıtlamaz.
+
+Üç alternatif canonical kaydı `/quiz-flashcards`, `/pt/quiz-flashcards`
+ve `/pt/contact`. Son taramaları 29–30 Ağustos UTC; üç adresin de
+canonical/yönlendirme düzeltmesi 7 Eylül'deki `2176d74` sürümünde mevcut.
+Portekizce iki eski `.html` adresi bugün temiz karşılıklarına 301 veriyor.
+Google'ın kesin canonical hedefleri mevcut aracın sınırlaması nedeniyle
+hâlâ doğrulanmamış durumda.
+
+Keşfedilip taranmayan 7 adres: `/en/distance-sales`, `/fr/contact`,
+`/es/refund`, `/it/quiz-flashcards`, `/ru/features`, `/ar/quiz-flashcards`
+ve `/hi/lecture-video-summary`. Bu 7 ve Google tarafından bilinmeyen
+21 adresin hiçbirinde son tarama tarihi yok. Yeni yayınlanan
+`/pdf-note-check` ile `/en/pdf-note-check` bilinmeyen 21 adresin içinde;
+yeni sayfalar bu denetim sırasında indekslenmiş sayılmadı.
+
+Çok dilli kaynak incelemesinde genel sayfaların çeviri katalogları ve
+dil bağlantılarında yeni kusur bulunmadı. Kısa başlık/açıklama, kelime
+sayısı ve önerilen Article alanlarına ilişkin araç uyarıları tek başına
+indekslenmeme nedeni sayılmadı. Özellikle Japonca/Çince sayfaların düşük
+kelime sayısından içerik kalitesi sonucu çıkarılmadı. Google'ın neden
+henüz taramadığı mevcut verilerle kesinleştirilemiyor.
+
+Önceki **00:48:32 TSİ site haritası gönderimi kabul edildi**; tam inceleme
+sırasında tekrar gönderim yapılmadı. Yeni kaynak hatası saptanmadığından
+uygulama kodu değiştirilmedi. `lastmod` tarihleri yapay olarak
+yenilenmedi, indekslenebilir sayfalara `noindex` eklenmedi. Rapor ve
+kanıtlar çalışma alanına kaydedildi; yerel test/derleme veya yeni CI
+çalıştırılmadı. Sonraki anlamlı değişiklik Google'ın haritayı yeniden
+okuması veya bu adreslerden birini ilk kez/yeniden taraması olacak;
+aynı kaydı birkaç dakika arayla tekrar sorgulamak yeni tarama başlatmaz.
+
+Dayanaklar: [Google URL Denetimi açıklaması](https://support.google.com/webmasters/answer/9012289?hl=en),
+[sayfa indeksleme durumları](https://support.google.com/webmasters/answer/7440203?hl=en)
+ve [site haritası / lastmod yönergeleri](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap).
+
+## 9 Ekim 2026 ilk 30 adreslik Google URL Denetimi
+
+İlk bağlantıdaki boş mülk listesi, kullanıcının Search Console erişimli
+Google hesabını GSC Wizard'a eklemesiyle giderildi. Mevcut
+`sc-domain:lecturesift.com` mülkü sahip yetkisiyle okunabiliyor; yeni
+Search Console mülkü oluşturulmadı.
+
+9 Ekim **00:45–00:47 TSİ** arasında **30 farklı URL** Google URL Denetimi
+ile okundu. Türkçe quiz için ayrıntılı tekrar dahil 31 istek yapıldı;
+tüm istekler başarılı oldu. Bu, öncelikli sayfalar ve eski/özel/hatalı
+adreslerden oluşan bir örneklemdir; tüm sitenin indeks sayısı değildir.
+[URL bazında sonuçlar, son taramalar ve canlı denetim verileri](docs/seo/url-inspection-2026-10-09.json)
+ayrı kaydedildi. Dosyadaki API zamanları UTC, buradaki saatler TSİ'dir.
+
+| Google'ın bildirdiği durum | URL sayısı | Yorum |
+| --- | ---: | --- |
+| Submitted and indexed | 18 | 13 güncel herkese açık adres ve eski taramaya dayanan 5 eski/özel adres. |
+| URL is unknown to Google | 4 | 2 önemli İngilizce ürün sayfası, eski İngilizce quiz `.html` adresi ve hatalı iç içe adres. |
+| Page with redirect | 5 | Temiz adreslere taşınmış eski `.html` adresleri; beklenen dışlama. |
+| Excluded by ‘noindex’ tag | 2 | İngilizce çalışma alanının temiz ve `.html` adresleri; beklenen dışlama. |
+| Alternate page with proper canonical tag | 1 | Türkçe `/quiz-flashcards`; eski tarama kaydı ayrıca incelendi. |
+
+Ana sayfa, PDF, video, quiz, Cornell ve aktif hatırlama sayfalarının TR/EN
+sürümlerinden oluşan 12 öncelikli adresin **9'u indeksli**, 3'ü indeks
+dışı. Cornell ve aktif hatırlama rehberlerinin iki dili de indeksli.
+
+| Öncelikli indeks dışı adres | Google sonucu ve son tarama | Canlı durum ve değerlendirme |
+| --- | --- | --- |
+| `/quiz-flashcards` | Uygun canonical etiketli alternatif; 30 Ağustos 00:42 TSİ (29 Ağustos 21:42 UTC). | 200, self-canonical, indekslemeye izinli. Eski `/quiz-flashcards.html` Google'da indeksli; canlıda temiz adrese 301 veriyor. |
+| `/en/lecture-video-summary` | Google tarafından bilinmiyor; son tarama yok. | 200, self-canonical, site haritasında ve İngilizce ana sayfa/özellikler/Cornell/kütüphane bağlantılarında mevcut. Eski `.html` sürümü Google'da indeksli, canlıda temiz adrese 301 veriyor. |
+| `/en/quiz-flashcards` | Google tarafından bilinmiyor; son tarama yok. | 200, self-canonical, site haritasında ve İngilizce ana sayfa/özellikler/aktif hatırlama/kütüphane bağlantılarında mevcut. Eski `.html` sürümü de Google tarafından bilinmiyor. |
+
+Kaynak geçmişi eski quiz sonucunu açıklayan somut kanıt sunuyor:
+29 Ağustos sürümü `/quiz-flashcards.html` canonical'ı üretiyordu.
+[7 Eylül `2176d74` değişikliği](https://github.com/ulasfirinciogullari-design/lecturesift-backend/commit/2176d7494788aa08555cf55c1262784f5119ffce)
+canonical, site haritası ve dahili bağlantıları temiz adreslere çevirdi,
+`.html` için 301 ekledi. Google'ın quiz kaydının son taraması bundan önce.
+Bu, eski kaydın etkisini destekler; Google'ın bugün seçtiği adresin
+doğrudan okunması yerine geçmez. İngilizce sayfaların neden henüz
+taranmadığı mevcut verilerden kesinleştirilemez.
+
+Google'ın **seçtiği canonical adres** bu denetimde henüz doğrulanamadı:
+GSC Wizard'ın tekli/toplu denetim ve geçmiş araçları `googleCanonical`
+ve `userCanonical` alanlarını aktarmıyor. Bu alanların araçta bulunmaması,
+Google'ın boş canonical döndürdüğü anlamına gelmez. [Google API şeması](https://developers.google.com/webmaster-tools/v1/urlInspection.index/UrlInspectionResult)
+bu alanları destekliyor; canlı HTML beyanı ayrı bir veridir. Bu görevde
+çağrılabilir oturumlu tarayıcı aracı da yok. Kullanıcı işlemleri kendisinin
+yapması yerine ajanın sürdürmesini istedi; manuel ekran okuma kullanıcıya
+bekleyen görev olarak bırakılmadı. Kesin canonical hedefi mevcut araç
+kısıtı nedeniyle doğrulanmamış olarak tutuluyor.
+
+`/fr/workspace.html`, `/lecture-video-summary.html`, `/fr/refund.html`,
+`/quiz-flashcards.html` ve `/en/lecture-video-summary.html` eski Ağustos
+taramalarıyla hâlâ indeksli görünüyor. Canlıda ilki `noindex,follow`,
+diğer dördü 301 taşıyor. Düzeltmelerin Google tarafından yeniden
+işlendiği henüz söylenemez; robots.txt ile taramalarını engellememek gerekir.
+
+### Yapılan işlem ve kalan takip
+
+00:48 TSİ canlı site haritası 183 URL içeriyordu; 00:40'taki 181 adrese
+başka yayınla `/pdf-note-check` ve `/en/pdf-note-check` eklenmişti.
+Bu görev bu sayfaları oluşturmadı. Haritada eski `.html` adresi yok;
+üç öncelikli indeks dışı ürün adresi mevcut.
+
+Site haritası **9 Ekim 00:48:32 TSİ** tarihinde Search Console'a yeniden
+gönderildi; yanıt `accepted=true`, `confirmed=true`, `isPending=true`.
+Google'ın dosyayı yeniden okuması bekleniyor. Bu, URL başına “Dizine
+eklenmesini iste” veya “Düzeltmeyi doğrula” işlemi değildir ve indeksleme
+başarısı sayılmaz. Önceki son okuma 4 Ekim 12:11 TSİ idi; eski sitemap
+yanıtındaki `indexed=0`, URL Denetimi sonuçlarının yerine kullanılmadı.
+
+Sorunlu üç ürün sayfasının uzak canlı denetiminde erişim, robots veya
+canonical engeli bulunmadı. Aracın `Article.datePublished` alanını
+“required” sayan uyarısı, [Google'ın Article belgesindeki](https://developers.google.com/search/docs/appearance/structured-data/article)
+önerilen alan tanımıyla aynı değildir; indekslenmeme sebebi diye sunulmadı,
+uydurma yayın tarihi eklenmedi. Yeni bir kaynak hatası kanıtlanmadığından
+uygulama kodu değiştirilmedi; rapor ve kanıt dosyası güncellendi.
+Yerel test/derleme veya yeni CI çalıştırılmadı.
+
+Sonraki kontrol: yeniden gönderilen site haritasının okunma tarihini ve
+üç ürün sayfasının son tarama/indeks durumunu tekrar karşılaştırmak;
+Türkçe quiz için Google'ın seçtiği canonical adresi tamamlamak.
+Yeni zamanlanmış otomasyon oluşturulmadı.
+
+**00:51 TSİ takip kontrolü:** Quiz URL Denetimi aynı alternatif sayfa
+durumunu ve 29 Ağustos 21:42 UTC son taramasını döndürdü. Site haritasının
+00:48:32 TSİ gönderimi hâlâ beklemede; son indirilme tarihi hâlâ 4 Ekim.
+Aynı harita tekrar tekrar gönderilmedi. Mevcut araçlar doğrudan
+“Dizine eklenmesini iste” eylemini veya Google'ın seçtiği canonical
+alanını sunmuyor. Kaynakta doğru self-canonical ve kalıcı yönlendirme
+zaten bulunduğundan yeni bir kod değişikliği gerekmedi.
+
+### Aynı oturumdaki ilk canlı doğrulama — 00:40 TSİ
+
+9 Ekim **00:40 TSİ** (8 Ekim 21:40 UTC) sırasında 23 sınırlı, salt okunur
+HTTP isteği yapıldı. Aşağıdaki 12 sayfanın her biri 200 döndürdü; ilk
+HTML'de tek ve kendisini gösteren canonical vardı, `noindex` yoktu.
+Adresler `https://lecturesift.com` alan adına göredir; bu tablo Google'ın
+indeksindeki canonical seçimini değil, **sitenin bildirdiği** adresi kaydeder.
+
+| Türkçe adres / canonical | İngilizce adres / canonical | HTTP |
+| --- | --- | --- |
+| `/` | `/en/` | Her ikisi 200 |
+| `/document-summary` | `/en/document-summary` | Her ikisi 200 |
+| `/lecture-video-summary` | `/en/lecture-video-summary` | Her ikisi 200 |
+| `/quiz-flashcards` | `/en/quiz-flashcards` | Her ikisi 200 |
+| `/cornell-notes` | `/en/cornell-notes` | Her ikisi 200 |
+| `/active-recall` | `/en/active-recall` | Her ikisi 200 |
+
+Önceki kaynak düzeltmelerinin canlı davranışı ayrıca doğrulandı:
+
+- `/features.html`, `/en/plans.html`, `/ko/privacy.html` temiz adreslerine
+  301 veriyor; `www` ürün adresi ana alan adına 301 veriyor.
+- Üretim Netlify alt alan adındaki `/document-summary?seo_probe=canonical`
+  aynı yol ve sorguyla `https://lecturesift.com` adresine 301 veriyor.
+- `/en/en/features` ve denetim için seçilen var olmayan İngilizce adres
+  gerçek 404 döndürüyor; ikisinde de `noindex,nofollow` var.
+- `/en/workspace` ve `/fr/workspace.html` 200 ve `noindex,follow`
+  döndürüyor. Çalışma alanının indeks dışı bırakılması kasıtlıdır;
+  bu işareti kaldırmak bir SEO düzeltmesi değildir.
+- `robots.txt` 200, `Allow: /` ve doğru site haritası adresini veriyor.
+  Canlı `sitemap.xml` 200 ve 181 adres içeriyor; bu indeks sayısı değildir.
+
+`6bc4a46` kaynak sürümünün canonical, hreflang, site haritası ve
+yönlendirme üretimi salt okunur incelendi. [Google canonical yönergeleri](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls)
+site sinyalleri ile Google'ın seçimini birbirinden ayırır.
+
 ## 8–9 Ekim 2026 Search Console incelemesi
 
 Windsor üzerinden `sc-domain:lecturesift.com` yeniden okundu. 8 Ekim
