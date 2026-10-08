@@ -70,6 +70,7 @@ def test_display_ads_are_disabled_by_default_and_hide_unit_details(monkeypatch):
     monkeypatch.setattr(config, "DISPLAY_AD_UNIT_PATH", "/1234567/lecturesift_banner")
     monkeypatch.setattr(config, "ADSENSE_ENABLED", False)
     monkeypatch.setattr(config, "ADSENSE_CMP_READY", False)
+    monkeypatch.setattr(config, "GOOGLE_CMP_ENABLED", False)
     monkeypatch.setattr(config, "ADSENSE_PUBLISHER_ID", "ca-pub-7608481350058806")
     monkeypatch.setattr(config, "SITE_BANNER_ENABLED", True)
     disabled = client.get("/ads/config")
@@ -79,6 +80,7 @@ def test_display_ads_are_disabled_by_default_and_hide_unit_details(monkeypatch):
         "provider": None,
         "banner_unit_path": None,
         "consent_required": True,
+        "consent": {"google_cmp_enabled": False, "publisher_id": None},
         "paid_plans_ad_free": False,
         "plan_ad_modes": {"lite": "standard", "plus": "limited", "pro": "none", "max": "none", "business": "none"},
         "limited_ad_paths": ["/"],
@@ -110,6 +112,65 @@ def test_display_ads_are_disabled_by_default_and_hide_unit_details(monkeypatch):
 
 
 @pytest.mark.parametrize(
+    "cmp_enabled,publisher_id,expected",
+    [
+        (False, "ca-pub-7608481350058806", False),
+        (True, "ca-pub-7608481350058806", True),
+        (True, "", False),
+        (True, "pub-7608481350058806", False),
+        (True, "ca-pub-123", False),
+        (True, "ca-pub-7608481350058806/other", False),
+        (True, "ca-pub-7608481350058806\n", False),
+        (True, "ca-pub-７６０８４８１３５００５８８０６", False),
+    ],
+)
+def test_google_cmp_can_be_configured_while_inventory_stays_disabled(
+    monkeypatch, cmp_enabled, publisher_id, expected
+):
+    monkeypatch.setattr(config, "GOOGLE_CMP_ENABLED", cmp_enabled)
+    monkeypatch.setattr(config, "ADSENSE_PUBLISHER_ID", publisher_id)
+    monkeypatch.setattr(config, "DISPLAY_ADS_ENABLED", False)
+    monkeypatch.setattr(config, "ADSENSE_ENABLED", False)
+    monkeypatch.setattr(config, "ADSENSE_CMP_READY", False)
+    monkeypatch.setattr(config, "ADSENSE_API_CLIENT_SECRET", "private-cmp-test-secret")
+    monkeypatch.setattr(config, "ADSENSE_API_REFRESH_TOKEN", "private-cmp-test-refresh")
+
+    response = client.get("/ads/config")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["consent"] == {
+        "google_cmp_enabled": expected,
+        "publisher_id": "pub-7608481350058806" if expected else None,
+    }
+    assert body["enabled"] is False
+    assert body["provider"] is None
+    assert body["banner_unit_path"] is None
+    assert body["adsense_auto_ads"] == {"enabled": False, "publisher_id": None}
+    assert body["consent_required"] is True
+    assert body["plan_ad_modes"]["pro"] == "none"
+    assert "private-cmp-test-" not in response.text
+
+
+def test_google_cmp_opt_in_does_not_replace_adsense_readiness_attestation(monkeypatch):
+    monkeypatch.setattr(config, "GOOGLE_CMP_ENABLED", True)
+    monkeypatch.setattr(config, "ADSENSE_PUBLISHER_ID", "ca-pub-7608481350058806")
+    monkeypatch.setattr(config, "DISPLAY_ADS_ENABLED", False)
+    monkeypatch.setattr(config, "ADSENSE_ENABLED", True)
+    monkeypatch.setattr(config, "ADSENSE_CMP_READY", False)
+
+    blocked = client.get("/ads/config").json()
+    assert blocked["consent"]["google_cmp_enabled"] is True
+    assert blocked["enabled"] is False
+    assert blocked["adsense_auto_ads"]["enabled"] is False
+
+    monkeypatch.setattr(config, "ADSENSE_CMP_READY", True)
+    ready = client.get("/ads/config").json()
+    assert ready["consent"] == blocked["consent"]
+    assert ready["provider"] == "google_adsense_auto"
+    assert ready["adsense_auto_ads"]["enabled"] is True
+
+
+@pytest.mark.parametrize(
     "activated,cmp_ready,publisher_id,expected",
     [
         (False, False, "ca-pub-7608481350058806", False),
@@ -127,6 +188,7 @@ def test_adsense_requires_manual_activation_cmp_readiness_and_valid_id(
     monkeypatch.setattr(config, "DISPLAY_ADS_ENABLED", False)
     monkeypatch.setattr(config, "ADSENSE_ENABLED", activated)
     monkeypatch.setattr(config, "ADSENSE_CMP_READY", cmp_ready)
+    monkeypatch.setattr(config, "GOOGLE_CMP_ENABLED", False)
     monkeypatch.setattr(config, "ADSENSE_PUBLISHER_ID", publisher_id)
     body = client.get("/ads/config").json()
     assert body["enabled"] is expected
@@ -136,6 +198,7 @@ def test_adsense_requires_manual_activation_cmp_readiness_and_valid_id(
         "enabled": expected,
         "publisher_id": publisher_id if expected else None,
     }
+    assert body["consent"] == {"google_cmp_enabled": False, "publisher_id": None}
 
     # The health endpoint must use the same activation gate, not publisher-ID
     # presence. Stub infrastructure checks so this remains a local config test.

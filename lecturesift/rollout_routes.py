@@ -413,11 +413,19 @@ def rollout_health(readiness: bool = False) -> dict:
 def ads_config() -> dict:
     provider = _display_ads_provider()
     adsense_enabled = provider == "google_adsense_auto"
+    google_cmp_enabled = bool(
+        config.GOOGLE_CMP_ENABLED
+        and re.fullmatch(r"ca-pub-[0-9]{16}", config.ADSENSE_PUBLISHER_ID)
+    )
     return {
         "enabled": provider is not None,
         "provider": provider,
         "banner_unit_path": config.DISPLAY_AD_UNIT_PATH if provider == "google_gpt" else None,
         "consent_required": True,
+        "consent": {
+            "google_cmp_enabled": google_cmp_enabled,
+            "publisher_id": config.ADSENSE_PUBLISHER_ID.removeprefix("ca-") if google_cmp_enabled else None,
+        },
         "paid_plans_ad_free": False,
         "plan_ad_modes": {"lite": "standard", "plus": "limited", "pro": "none", "max": "none", "business": "none"},
         "limited_ad_paths": ["/"],

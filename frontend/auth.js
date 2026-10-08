@@ -111,10 +111,38 @@ function validatedReferralSummary(body) {
 
 function recordAnalytics(type, name, parameters = {}) {
   const analytics = window.LectureSiftAnalytics;
-  if (type === "conversion" && analytics?.trackConversion) return void analytics.trackConversion(name, parameters);
-  if (type === "event" && analytics?.track) return void analytics.track(name, parameters);
-  window.__lecturesiftAnalyticsQueue = window.__lecturesiftAnalyticsQueue || [];
-  window.__lecturesiftAnalyticsQueue.push({type, name, parameters});
+  try {
+    if (type === "conversion" && analytics?.trackConversion) return Promise.resolve(analytics.trackConversion(name, parameters)).then(value => value === true, () => false);
+    if (type === "event" && analytics?.track) return Promise.resolve(analytics.track(name, parameters)).then(value => value === true, () => false);
+    return new Promise(resolve => {
+      window.__lecturesiftAnalyticsQueue = window.__lecturesiftAnalyticsQueue || [];
+      window.__lecturesiftAnalyticsQueue.push({type, name, parameters, resolve});
+    });
+  } catch (_) { return Promise.resolve(false); }
+}
+
+const purchaseAnalyticsInFlight = new Set();
+const purchaseAnalyticsRecorded = new Set();
+async function recordPurchaseAnalytics(purchase) {
+  const reference = String(purchase.transaction_id || "");
+  if (!reference) return;
+  const conversionKey = `lecturesift-purchase-${reference}`;
+  await Promise.all(["event", "conversion"].map(async type => {
+    const key = `${conversionKey}-${type}`;
+    let recorded = false;
+    try { recorded = sessionStorage.getItem(key) === "1"; } catch (_) {}
+    if (recorded || purchaseAnalyticsRecorded.has(key) || purchaseAnalyticsInFlight.has(key)) return;
+    purchaseAnalyticsInFlight.add(key);
+    try {
+      const queued = await recordAnalytics(type, "purchase", purchase);
+      // This records an accepted tag-queue call, never confirmed delivery.
+      // Unavailable or denied destinations remain retryable independently.
+      if (queued === true) {
+        purchaseAnalyticsRecorded.add(key);
+        try { sessionStorage.setItem(key, "1"); } catch (_) {}
+      }
+    } finally { purchaseAnalyticsInFlight.delete(key); }
+  }));
 }
 
 function errorMessage(body, fallback) {
@@ -755,19 +783,13 @@ async function initAccount() {
         const order = (body.account.payment_orders || []).find(item => item.reference === reference);
         if (order?.status === "paid") {
           showFormNotice("paymentResultNotice", t("payment.confirmed", "Ödeme doğrulandı; plan veya kredilerin hesabına eklendi."));
-          const conversionKey = `lecturesift-purchase-${reference}`;
-          if (!sessionStorage.getItem(conversionKey)) {
-            const purchaseCurrency = String(order.currency || "TRY").toUpperCase();
-            const purchase = {
-              transaction_id: reference,
-              value: Number(order.amount_minor || 0) / minorUnitDivisor(purchaseCurrency),
-              currency: purchaseCurrency,
-              items: [{item_id: order.plan_code, item_name: planName(order.plan_code), quantity: 1}],
-            };
-            sessionStorage.setItem(conversionKey, "1");
-            recordAnalytics("event", "purchase", purchase);
-            recordAnalytics("conversion", "purchase", purchase);
-          }
+          const purchaseCurrency = String(order.currency || "TRY").toUpperCase();
+          void recordPurchaseAnalytics({
+            transaction_id: reference,
+            value: Number(order.amount_minor || 0) / minorUnitDivisor(purchaseCurrency),
+            currency: purchaseCurrency,
+            items: [{item_id: order.plan_code, item_name: planName(order.plan_code), quantity: 1}],
+          });
           return;
         }
         if (["failed", "token_failed"].includes(order?.status)) {

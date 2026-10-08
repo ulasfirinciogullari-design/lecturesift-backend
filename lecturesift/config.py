@@ -326,6 +326,9 @@ ADSENSE_CMP_READY = os.getenv("LECTURESIFT_ADSENSE_CMP_READY", "false").lower() 
 ADSENSE_PUBLISHER_ID = os.getenv(
     "LECTURESIFT_ADSENSE_PUBLISHER_ID", "ca-pub-7608481350058806"
 ).strip()
+# Load the published Google consent message independently from ad inventory.
+# This opt-in is not a site-approval or successful CMP-integration attestation.
+GOOGLE_CMP_ENABLED = os.getenv("LECTURESIFT_GOOGLE_CMP_ENABLED", "false").lower() == "true"
 # The Management API connection is independent from ad serving. It stays
 # disabled until a narrowly scoped OAuth grant has been installed in the API
 # role. OAuth endpoints and the adsense.readonly scope are fixed in the client

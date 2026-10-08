@@ -29,6 +29,7 @@ async function run(pathname) {
     URL,
     location: {pathname, origin: process.argv[4], href: process.argv[4] + pathname, search: '?token=private-value', hash: '#private-fragment'},
     document: {
+      referrer: process.argv[6],
       documentElement: {lang: pathname.startsWith('/en/') ? 'en' : 'tr'},
       readyState: 'complete',
       createElement: () => ({}),
@@ -36,7 +37,11 @@ async function run(pathname) {
       head: {append: element => scripts.push(element)},
       addEventListener: (name, callback) => listeners.set(name, callback),
     },
-    LectureSiftConsent: {get: () => consent},
+    LectureSiftConsent: {get: () => consent, ...(scenario.startsWith('cmp_') ? {google: () => ({
+      analytics_storage: 'granted', ad_storage: 'granted',
+      ad_user_data: scenario === 'cmp_no_user_data' ? 'denied' : 'granted',
+      ad_personalization: 'denied',
+    })} : {})},
     fetch: async url => {
       requests.push(url);
       if (scenario === 'unavailable') throw new Error('synthetic unavailable config');
@@ -93,9 +98,9 @@ async function run(pathname) {
 """
 
 
-def observe(paths, scenario="allowed", origin="https://lecturesift.com", links=()):
+def observe(paths, scenario="allowed", origin="https://lecturesift.com", links=(), referrer=""):
     result = subprocess.run(
-        [NODE, "-e", HARNESS, json.dumps(paths), scenario, str(ROOT / "frontend/analytics.js"), origin, json.dumps(links)],
+        [NODE, "-e", HARNESS, json.dumps(paths), scenario, str(ROOT / "frontend/analytics.js"), origin, json.dumps(links), referrer],
         check=True, capture_output=True, text=True, timeout=8,
     )
     return json.loads(result.stdout)
@@ -220,6 +225,29 @@ def test_account_and_registration_convert_without_automatic_pageviews_or_private
         assert row["conversion"] is True
 
 
+@pytest.mark.parametrize("referrer,expected", [
+    ("https://lecturesift.com/verify.html?email=private@example.invalid&token=secret#fragment", "https://lecturesift.com"),
+    ("https://lecturesift.com/en/reset-password?token=secret", "https://lecturesift.com"),
+    ("https://user:password@example.invalid/private/path?email=private@example.invalid", "https://example.invalid"),
+    ("javascript:secret", ""),
+    ("not a URL", ""),
+    ("", ""),
+])
+def test_google_configs_and_events_never_forward_private_referrer_paths_or_parameters(referrer, expected):
+    for row in observe(["/account.html", "/en/register", "/plans"], referrer=referrer):
+        outgoing = [call[2] for call in row["calls"] if call[0] in {"config", "event"}]
+        assert outgoing
+        assert all(parameters["page_referrer"] == expected for parameters in outgoing)
+        assert "secret" not in json.dumps(row["calls"])
+        assert "private@example.invalid" not in json.dumps(row["calls"])
+
+
+def test_token_pages_suppress_browser_navigation_referrers():
+    for name in ("verify.html", "reset-password.html"):
+        html = (ROOT / "frontend" / name).read_text(encoding="utf-8")
+        assert '<meta name="referrer" content="no-referrer">' in html
+
+
 @pytest.mark.parametrize("scenario", ["denied", "unavailable"])
 def test_no_tag_or_event_when_consent_or_configuration_is_unavailable(scenario):
     row, = observe(["/en/plans"], scenario)
@@ -237,6 +265,23 @@ def test_analytics_and_advertising_permissions_are_independent(scenario, analyti
     assert row["conversion"] is ads
     assert ("G-SYNTHETIC" in configurations(row)) is analytics
     assert ("AW-123456789" in configurations(row)) is ads
+
+
+def test_google_cmp_personalization_refusal_is_not_overwritten_by_conversion_consent():
+    row, = observe(["/plans"], "cmp_partial")
+    assert row["event"] is True and row["conversion"] is True
+    assert configurations(row)["AW-123456789"]["allow_ad_personalization_signals"] is False
+    updates = [call[2] for call in row["calls"] if call[:2] == ["consent", "update"]]
+    assert updates
+    assert all(value == {"analytics_storage": "granted", "ad_storage": "granted",
+                         "ad_user_data": "granted", "ad_personalization": "denied"} for value in updates)
+
+
+def test_google_cmp_user_data_refusal_blocks_ads_conversion_but_keeps_allowed_analytics():
+    row, = observe(["/plans"], "cmp_no_user_data")
+    assert row["event"] is True and row["conversion"] is False
+    assert "AW-123456789" not in configurations(row)
+    assert all(call[2]["ad_user_data"] == "denied" for call in row["calls"] if call[:2] == ["consent", "update"])
 
 
 def test_revoking_consent_prevents_subsequent_events():
