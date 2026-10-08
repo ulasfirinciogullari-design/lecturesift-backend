@@ -5,7 +5,91 @@ takip edilir. Başlangıç varsayımı Türkiye'deki üniversite öğrencileri v
 Türkçe aramalardır. İlk rekabet geliştirmesi üç ana ürün sayfasının Türkçe
 ve İngilizce sürümlerine uygulanır; diğer diller mevcut içeriklerini korur.
 
+## 9 Ekim 2026 Google'ın seçtiği canonical hedefleri doğrulandı
+
+Kullanıcının TinyFish profilinde Google oturumunu kaydetmesinin ardından,
+**02:40 TSİ sonrasında** `sc-domain:lecturesift.com` mülküne fiilen erişildi.
+GSC Wizard ve Windsor'ın sunmadığı canonical alanları, Google Search
+Console'un kendi URL Denetimi ekranından okundu. Bu yöntemle canonical
+bilgisine erişim engeli giderildi; aracı sağlayıcıların çıktı şeması
+değiştirilmiş veya Google'ın indeks durumu düzelmiş sayılmıyor.
+
+| Denetlenen temiz adres | Google'ın seçtiği canonical |
+| --- | --- |
+| `/quiz-flashcards` | `https://lecturesift.com/quiz-flashcards.html` |
+| `/pt/quiz-flashcards` | `https://lecturesift.com/pt/quiz-flashcards.html` |
+| `/pt/contact` | `https://lecturesift.com/pt/contact.html` |
+
+Google üç kayıtta da seçimin beyan edilen canonical ile aynı olduğunu
+gösteriyor; `.html` adresleri aynı Google indeks kaydındaki kullanıcı
+canonical alanından okundu. Bunlar bugünkü canlı HTML'den tahmin edilmedi.
+Üçü de uygun canonical etiketli alternatif sayfa nedeniyle indeks dışında.
+Tarama kayıtları 29–30 Ağustos'tan; 7 Eylül'deki temiz URL/301 düzeltmesinden
+önce. Tarayıcı ekranının saat dilimi görünmediğinden saatler UTC veya TSİ'ye
+çevrilmeden kanıt dosyasında ham gösterimleriyle korundu.
+
+**02:41 TSİ canlı kontrolü:** Üç temiz adres 200, self-canonical ve noindex
+olmadan yanıt veriyor; üç eski `.html` adresi temiz karşılıklarına 301
+yönleniyor. Yanlış yönde yeni bir yönlendirme saptanmadı. Uygulama kodunda
+bu nedenle ek canonical değişikliği yapılmadı.
+
+Üç temiz adres için Google'ın kendi ekranından birer indeksleme isteği
+gönderildi ve üçünün de “Dizine eklenmesi istendi” onayı alındı.
+Kota, CAPTCHA veya uygunluk reddi görülmedi. Kabul, URL'nin öncelikli tarama
+kuyruğuna alındığını gösterir; yeniden tarama veya indekslenme tamamlandı
+anlamına gelmez. Tekrar gönderim yapılmadı.
+
+[Google ekranı gözlemleri ve canlı kanıtlar](docs/seo/google-selected-canonicals-2026-10-09.json)
+alanları, canonical çözümleme dayanağını ve istek sonuçlarını ayrı tutar.
+Bu kayıtlar ham Google API JSON'u değildir; API içe aktarıcısına verilmedi.
+
+Site haritası canlıda 200 ve geçerli XML; 183 benzersiz URL ile üç hedefi
+içeriyor. Search Console sitemap kaydı 0 hata/0 uyarı, `isPending=true`;
+önceki gönderim tekrar edilmedi. URL Denetimi'ndeki “Geçici işleme hatası”
+etiketi, Google'ın [açıklamasına](https://support.google.com/webmasters/answer/9012289?hl=en)
+göre raporlama sisteminin sitemap bilgisini getirmesiyle ilgilidir;
+canlı sitemap dosyasının bozuk olduğunun kanıtı değildir.
+
+Yerel test veya derleme çalıştırılmadı. Aşağıdaki erişim engeli kayıtları,
+Google oturumu kaydedilmeden önceki tarihsel durumu anlatır; bu bölüm
+onların canonical hedeflerinin bilinmediğine ilişkin sonucunu günceller.
+
 ## 9 Ekim 2026 sağlayıcıdan bağımsız Google okuma yolu
+
+**Doğrudan tarayıcı denemesi:** Kullanıcının ek manuel adım olmadan devam
+talebi üzerine TinyFish'in varsayılan mevcut profilinde tek, sınırlı ve
+salt okunur deneme yapıldı. Hedef `sc-domain:lecturesift.com` mülkünde
+`https://lecturesift.com/quiz-flashcards` denetimiydi. Tarayıcı Google'ın
+`accounts.google.com/v3/signin/identifier` giriş ekranına yönlendirildi;
+e-posta/telefon girişi isteniyordu. Denetim paneline girilmedi ve canonical
+değeri alınmadı. [Tamamlanan deneme](https://agent.tinyfish.ai/runs/a8fddba5-259c-434e-b4e9-49e5efa7debb)
+3 adım ve 11 saniye sürdü. Yeni giriş, parola/kasa kullanımı, OAuth onayı,
+çerez aktarımı veya hesap değişikliği yapılmadı. Açık Codex sekmesi bu
+denemede kontrol edilmedi.
+
+PR #117'nin birleşme sonrası [Actions çalışması](https://github.com/ulasfirinciogullari-design/lecturesift-backend/actions/runs/37857587930)
+da başarılı tamamlandı: 1.456 Python testi (3 atlandı), 223 tarayıcı
+senaryosu (5 atlandı); uzak derlemede 183 indekslenebilir sayfa.
+Bu sonuç Google erişimi veya canonical doğrulaması sayılmıyor.
+
+**02:10 TSİ ek erişim araştırması:** Yerel özellik listesinde
+`browser_use`, `browser_use_external`, `browser_use_full_cdp_access`,
+`computer_use` ve `in_app_browser` zaten açık. Buna karşın mevcut sohbetin
+araç kataloğunda yerel tarayıcı okuma/tıklama aracı yok. Bu nedenle
+"Browser kapalı" teşhisi konmadı ve kullanıcıdan tekrar etkinleştirme
+istenmedi. [Resmî Browser belgesinde](https://learn.chatgpt.com/docs/browser)
+eksik araçları bu sohbete kullanıcı işlemi olmadan bağlayan desteklenmiş
+bir yöntem doğrulanamadı.
+
+İzlenen proje kaynaklarında hazır Search Console yetkilendirmesi,
+URL Inspection çağrısı veya zamanlanmış ham GSC dışa aktarımı bulunmadı.
+Mevcut Ads/AdSense entegrasyonları Search Console izni sağlamıyor.
+[GSC Wizard'ın kamuya açık deposu](https://github.com/jbobbink/seo-gsc-wizard)
+ise istemci/skill paketi; Google yanıtını işleyen sunucu kodunu içermiyor.
+Bu depoyu değiştirerek uzak canonical çıktısını düzeltmek mümkün görünmüyor.
+Gizli kimlik bilgisi veya tarayıcı oturumu çıkarılmadı; yeni yetkilendirme,
+yerel test/derleme veya sonuç vermeyen yeni uygulama değişikliği yapılmadı.
+Google'ın gerçek canonical hedefleri hâlâ doğrulanmamış durumda.
 
 GSC Wizard desteğini beklemeden Google'ın kendi URL Denetimi API'sini
 kullanmak için [native Google onayı ve JSON aktarım yolu](docs/seo/direct-google-inspection.md)
@@ -28,6 +112,23 @@ edildi: açık Codex sekmesini okuyup tıklayacak araç yok. Ayrı TinyFish
 tarayıcı araçları mevcut, ancak profil listesindeki hiçbir profilde Google
 oturumu kayıtlı değil. Ayrı giriş yolu kullanıcıya sunuldu; oturum açıldığı
 veya Search Console'a erişildiği henüz doğrulanmadı.
+
+Kullanıcı sonrasında ek bir manuel adım yapmadan devam edilmesini istedi;
+yeni giriş veya hesap bağlantısı başlatılmadı. Mevcut Windsor.ai bağlantısı
+ayrıca okundu: `searchconsole` altında `sc-domain:lecturesift.com` bağlı,
+ancak `get_fields`/hesaba özel `get_options` URL Denetimi veya canonical
+alanı sunmuyor; `list_actions` sonucu da boş. Bu nedenle Windsor üzerinden
+de gerçek Google canonical yanıtı alınamadı.
+
+Yardımcı program ve belgeler [PR #117](https://github.com/ulasfirinciogullari-design/lecturesift-backend/pull/117)
+ile yayımlandı. Uzak [Actions çalışması](https://github.com/ulasfirinciogullari-design/lecturesift-backend/actions/runs/37857102265)
+**02:06 TSİ’de başarılı tamamlandı**: 1.456 Python testi (3 atlandı),
+223 tarayıcı senaryosu (5 atlandı) geçti. PR #117 ana dala birleştirildi:
+`cd9d5fce4017ae44ceda8d4b5b7d68ffad91afd3`. Bu yardımcı program ve belge
+değişikliğidir; canlı Google erişimi veya indeksleme düzeltmesi değildir.
+Gerçek Google yanıtı alınmadı ve hiçbir canonical hedefi doğrulanmış olarak
+işaretlenmedi. Destek e-posta konusu tekrar okundu; henüz yalnız gönderilen
+mesaj var. Yerel test/derleme çalıştırılmadı.
 
 ## 9 Ekim 2026 Google canonical alanı teşhisi
 
@@ -73,9 +174,11 @@ bildirdiği günlük kota sayacı 231/2.000; bu sayı sadece bu 31 çağrıya
 atfedilmez.
 
 Bu takip Google'a yeniden indeksleme veya yeniden tarama isteği göndermez.
-Sonraki sonuçlar GSC Wizard takip geçmişinde tutulur. Site haritasının yeniden okunması ve
-üç alternatif kayıtta Google'ın seçtiği canonical hedefinin mevcut araç
-sınırları içinde doğrulanması da açık takip konularıdır.
+Sonraki sonuçlar GSC Wizard takip geçmişinde tutulur. Açık takip konuları,
+site haritasının yeniden okunması ve üç alternatif URL'nin yeniden taranması,
+Google'ın canonical seçiminin temiz adreslere geçmesi ve indeks durumudur.
+Mevcut `.html` canonical hedefleri yukarıdaki doğrudan Google denetiminde
+doğrulandı.
 
 ## 9 Ekim 2026 sayfa açıklamalarının iyileştirilmesi
 

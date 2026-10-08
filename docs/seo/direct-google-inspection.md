@@ -1,10 +1,39 @@
 # Google URL Denetimi sonucunu doğrudan alma
 
-GSC Wizard canonical alanlarını aktarmadığında Google'ın kendi APIs Explorer
-ekranı kullanılabilir. Google hesabındaki onay tarayıcıda verilir. Parola,
-çerez, erişim tokenı veya yetkilendirme kodu dışarı aktarılmaz.
+GSC Wizard canonical alanlarını aktarmadığında Google Search Console'un kendi
+URL Denetimi ekranı veya APIs Explorer kullanılabilir. Google hesabındaki
+giriş ve onay Google'ın kendi ekranında yapılır. Parola, çerez, erişim tokenı
+veya yetkilendirme kodu dışarı aktarılmaz.
 
-## Google ekranında yapılacak işlem
+## Search Console ekranından denetim
+
+9 Ekim 2026'da kullanıcının kaydettiği TinyFish tarayıcı profiliyle Search
+Console mülküne erişim doğrulandı. Profil yönetimi için kalıcı giriş noktası
+[TinyFish Profiles](https://agent.tinyfish.ai/profiles) sayfasıdır. Bu çalışmada
+araçtan alınan iki geçici devir bağlantısının süresi doldu; nedeni doğrulanmadı.
+
+1. Kullanıcının Google'ın kendi giriş ekranında oturum açıp kaydettiği
+   TinyFish profilini kullan. Codex tarayıcısındaki çerez veya kimlik
+   bilgilerini başka bir tarayıcıya kopyalama.
+2. Her oturumda çağrılabilir tarayıcı okuma/kontrol aracını ve
+   `sc-domain:lecturesift.com` mülküne fiilî erişimi doğrula. Açık sekme adresi
+   veya kayıtlı profilin varlığı erişim kanıtı değildir.
+3. Search Console'da hedef URL'yi denetle; indeks durumunu, son tarama
+   zamanını, kullanıcı tarafından beyan edilen canonical'ı ve Google'ın
+   seçtiği canonical'ın ekranda gösterilen değerini birlikte kaydet.
+
+Google'ın seçimi **Kullanıcı tarafından beyan edilen standart URL ile aynı**
+ise adresi aynı Google indeks kaydındaki beyan edilen canonical alanından
+çözümle. Bugünkü canlı HTML etiketinden çıkarma: eski tarama kaydı `.html`
+adresini gösterirken canlı sayfa temiz adresi gösterebilir.
+
+[9 Ekim gözlemleri](google-selected-canonicals-2026-10-09.json), ekranın
+gösterdiği değeri, çözümleme dayanağını ve canlı kontrolleri ayrı tutar.
+Bu gözlemler ham Google API JSON'u değildir ve aşağıdaki API içe aktarıcısına
+verilmez. Ekrandan gönderilen indeksleme isteğinin kabulü de yeniden taramanın
+veya indekslemenin tamamlandığı anlamına gelmez.
+
+## Alternatif: APIs Explorer ile ham JSON alma
 
 1. [Google index.inspect sayfasını](https://developers.google.com/webmaster-tools/v1/urlInspection.index/inspect)
    açıp **Try it!** panelini kullan.
@@ -30,13 +59,13 @@ Her gövde ayrı bir URL Denetimi isteğidir. 401/403 veya başka API hata
 yanıtı canonical sonucu olarak kullanılmaz. Hata kodu paylaşılabilir;
 kimlik bilgisi paylaşmak gerekmez.
 
-Google onayı yalnız APIs Explorer oturumunu yetkilendirir; ajanın mevcut
-bağlantısına Google erişimi eklemez. Açık Codex sekmesini okuma aracı
-bulunmadığından bu akışta sonuç JSON'unun çalışma alanına aktarılması gerekir.
-Google'ın standart Search Console URL Denetimi ekranı canonical alanını
-gösterir, ancak bu ekran için belgelenmiş bir JSON indirme düğmesi varsayılmaz.
+Google onayı yalnız APIs Explorer oturumunu yetkilendirir; başka bir ajan
+bağlantısına Google erişimi eklemez. Bu akışta gerçek API yanıtının JSON
+gövdesi çalışma alanına aktarılır. Search Console URL Denetimi ekranı için
+belgelenmiş bir JSON indirme düğmesi varsayılmaz; ekran gözlemleri API yanıtı
+biçimine dönüştürülmez.
 
-## Sonucu rapora alma
+## API sonucunu rapora alma
 
 `scripts/import_gsc_url_inspection.py` yalnız sağlanan JSON dosyasını işler.
 Kimlik bilgisi kullanmaz ve ağa bağlanmaz. Örnek kullanım:
