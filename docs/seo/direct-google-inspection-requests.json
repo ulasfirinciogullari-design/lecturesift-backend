@@ -1,0 +1,12 @@
+{
+  "method": "POST",
+  "endpoint": "https://searchconsole.googleapis.com/v1/urlInspection/index:inspect",
+  "scope": "https://www.googleapis.com/auth/webmasters.readonly",
+  "note": "One request body per API invocation. Authorize only in Google's native consent UI; this file contains no credentials or inspection results.",
+  "requests": [
+    {"siteUrl": "sc-domain:lecturesift.com", "inspectionUrl": "https://lecturesift.com/quiz-flashcards"},
+    {"siteUrl": "sc-domain:lecturesift.com", "inspectionUrl": "https://lecturesift.com/pt/quiz-flashcards"},
+    {"siteUrl": "sc-domain:lecturesift.com", "inspectionUrl": "https://lecturesift.com/pt/contact"},
+    {"siteUrl": "sc-domain:lecturesift.com", "inspectionUrl": "https://lecturesift.com/"}
+  ]
+}

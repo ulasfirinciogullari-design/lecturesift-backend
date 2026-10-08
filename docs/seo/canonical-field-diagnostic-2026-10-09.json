@@ -1,0 +1,77 @@
+{
+  "status": "provider_request_sent_awaiting_reply",
+  "diagnosticDate": "2026-10-09",
+  "reportTimeZone": "Europe/Istanbul",
+  "cases": [
+    {
+      "request": {
+        "siteUrl": "sc-domain:lecturesift.com",
+        "inspectionUrl": "https://lecturesift.com/"
+      },
+      "responseFields": [
+        "siteUrl",
+        "inspectionUrl",
+        "verdict",
+        "coverageState",
+        "robotsTxtState",
+        "indexingState",
+        "lastCrawlTime",
+        "pageFetchState",
+        "crawledAs",
+        "referringUrls"
+      ],
+      "observed": {
+        "verdict": "PASS",
+        "coverageState": "Submitted and indexed",
+        "lastCrawlTime": "2026-10-01T18:09:40Z"
+      },
+      "googleCanonicalExposed": false,
+      "userCanonicalExposed": false
+    },
+    {
+      "request": {
+        "siteUrl": "sc-domain:lecturesift.com",
+        "inspectionUrl": "https://lecturesift.com/quiz-flashcards"
+      },
+      "responseFields": [
+        "siteUrl",
+        "inspectionUrl",
+        "verdict",
+        "coverageState",
+        "robotsTxtState",
+        "indexingState",
+        "lastCrawlTime",
+        "pageFetchState",
+        "crawledAs",
+        "referringUrls"
+      ],
+      "observed": {
+        "verdict": "NEUTRAL",
+        "coverageState": "Alternate page with proper canonical tag",
+        "lastCrawlTime": "2026-08-29T21:42:44Z"
+      },
+      "googleCanonicalExposed": false,
+      "userCanonicalExposed": false
+    }
+  ],
+  "conclusion": "The connected GSC Wizard tool exposes neither canonical field, including for an indexed control URL. The actual upstream Google response is not accessible and has not been inferred.",
+  "requestedFields": [
+    "inspectionResult.indexStatusResult.googleCanonical",
+    "inspectionResult.indexStatusResult.userCanonical",
+    "inspectionResult.inspectionResultLink"
+  ],
+  "sources": [
+    "https://developers.google.com/webmaster-tools/v1/urlInspection.index/UrlInspectionResult",
+    "https://developers.google.com/webmaster-tools/v1/urlInspection.index/inspect",
+    "https://www.gscwizard.com/docs/indexing/url-inspection.html",
+    "https://www.gscwizard.com/claude-search-console-mcp.html"
+  ],
+  "supportRequest": {
+    "recipient": "support@gscwizard.com",
+    "subject": "Expose Google-selected and user-declared canonical fields in URL Inspection (lecturesift.com)",
+    "html": "<p>Hello GSC Wizard support,</p>\n<p>We need Google's selected canonical for <strong>sc-domain:lecturesift.com</strong>, but the ChatGPT/MCP URL Inspection response does not expose <code>googleCanonical</code> or <code>userCanonical</code>.</p>\n<p>Reproduced on 8 October 2026 with <code>inspect_url</code>:</p>\n<ul>\n<li><code>inspectionUrl=https://lecturesift.com/</code>: <code>PASS</code>, <code>Submitted and indexed</code>, last crawl <code>2026-10-01T18:09:40Z</code>. Neither canonical field appears in the text response or structured result.</li>\n<li><code>inspectionUrl=https://lecturesift.com/quiz-flashcards</code>: <code>NEUTRAL</code>, <code>Alternate page with proper canonical tag</code>, last crawl <code>2026-08-29T21:42:44Z</code>. Neither canonical field appears.</li>\n</ul>\n<p>The current tool schema accepts only <code>siteUrl</code> and <code>inspectionUrl</code>, and its output schema omits both fields. Your server reference says REST and MCP use the same tool pipeline, so we have not assumed REST exposes additional data.</p>\n<p><a href=\"https://developers.google.com/webmaster-tools/v1/urlInspection.index/UrlInspectionResult\">Google's response schema</a> defines <code>inspectionResult.indexStatusResult.googleCanonical</code> and <code>inspectionResult.indexStatusResult.userCanonical</code>. Please expose these upstream values, when present, in the tool response and output schema, and preserve them in inspection history/tracker exports. Exposing <code>inspectionResult.inspectionResultLink</code> would also help.</p>\n<p>Please distinguish a field genuinely omitted by Google from one not exposed by GSC Wizard. We understand Google may omit <code>googleCanonical</code> for a non-indexed page; the requested value must not be inferred from the site's current HTML.</p>\n<p>Could you enable the fields or provide the authorized upstream canonical results for the homepage control and these three affected URLs?</p>\n<ul><li>https://lecturesift.com/quiz-flashcards</li><li>https://lecturesift.com/pt/quiz-flashcards</li><li>https://lecturesift.com/pt/contact</li></ul>\n<p>Thank you.</p>",
+    "sentAtUtc": "2026-10-08T22:54:42Z",
+    "deliveryEvidence": "Gmail send_draft returned labelIds containing SENT; recipient delivery and provider response are not yet confirmed."
+  },
+  "localTestsOrBuildsRun": false
+}
