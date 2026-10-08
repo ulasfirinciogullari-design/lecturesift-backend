@@ -1411,7 +1411,7 @@ def test_optional_analytics_and_advertising_are_consent_gated():
     assert 'ad_storage: "denied"' in analytics
     assert 'ad_user_data: "denied"' in analytics
     assert 'trackConversion' in analytics
-    assert '`${ads.id}/${label}`' in analytics
+    assert '`${adsId}/${label}`' in analytics
     assert "lecturesift-consent-v1" in cookies
     assert "consent.storageContent" in cookies
     rewarded = (FRONTEND / "rewarded-ads.js").read_text(encoding="utf-8")
