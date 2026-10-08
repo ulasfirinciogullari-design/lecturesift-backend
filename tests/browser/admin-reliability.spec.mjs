@@ -1,5 +1,7 @@
 import {test, expect} from './fixtures.mjs';
 
+const lesson = {job_id:'lesson-1', title:'Örnek istatistik dersi', owner_id:'11111111-1111-4111-8111-111111111111', owner_email:'student@example.invalid', owner_name:'Örnek Öğrenci', status:'done', percent:100, stage:'done', source_file_count:1, created:1791410400, options:{output_language:'tr'}};
+
 const API = 'https://api.lecturesift.com';
 const CORS = {
   'Access-Control-Allow-Origin':'http://127.0.0.1:4173',
@@ -75,6 +77,89 @@ async function openAdmin(page, {override, saved = false, hash = 'overview', them
   }
   return unexpected;
 }
+
+test('administrator can find a lesson, inspect escaped outputs and download with authorization', async ({page}, testInfo) => {
+  const unexpected = await openAdmin(page, {hash:'jobs', override:async (route, url) => {
+    if (url.pathname === '/billing/admin/jobs') {
+      await route.fulfill({headers:CORS, json:{jobs:[lesson]}});
+      return true;
+    }
+    if (url.pathname === '/billing/admin/jobs/lesson-1') {
+      expect(route.request().headers().authorization).toBe('Bearer synthetic-admin-token');
+      await route.fulfill({headers:CORS, json:{job:lesson, result:{title:lesson.title, summary:'<img src=x onerror="alert(1)"> Ders özeti', transcript:'Özel transkript', source_files:['ders.pdf'], quiz:[{question:'2 + 2?', options:['3','4'], answer_index:1, explanation:'Toplama'}], flashcards:[{front:'Medyan?', back:'Ortadaki değer'}], artifacts:[{file:'notes.txt',label:'Ders notları'}]}}});
+      return true;
+    }
+    if (url.pathname === '/billing/admin/jobs/lesson-1/artifacts/notes.txt') {
+      expect(route.request().headers().authorization).toBe('Bearer synthetic-admin-token');
+      expect(url.search).toBe('');
+      await route.fulfill({headers:{...CORS,'Content-Type':'application/octet-stream'}, body:'Synthetic private output'});
+      return true;
+    }
+    return false;
+  }});
+  await page.locator('#adminJobSearch').fill('student@example.invalid');
+  await page.locator('[data-job-open]').click();
+  const dialog = page.locator('#adminJobDialog');
+  await expect(dialog).toContainText('Ders özeti');
+  await expect(dialog.locator('img')).toHaveCount(0);
+  await dialog.getByText('Quiz ve cevaplar', {exact:true}).click();
+  await expect(dialog).toContainText('Cevap: 4');
+  const downloadEvent = page.waitForEvent('download');
+  await dialog.getByRole('button', {name:'Ders notları indir', exact:true}).click();
+  const download = await downloadEvent;
+  expect(download.suggestedFilename()).toBe('notes.txt');
+  expect(await download.failure()).toBeNull();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  await page.screenshot({path:testInfo.outputPath('admin-lesson-layout.jpg'),type:'jpeg',quality:65});
+  await dialog.getByRole('button', {name:'Kapat', exact:true}).click();
+  await page.locator('#adminJobSearch').fill('does-not-exist');
+  await expect(page.locator('#adminJobs')).toContainText('uygun ders bulunamadı');
+  expect(unexpected).toEqual([]);
+});
+
+test('user detail filters lessons on the server and actual error state remains searchable', async ({page}) => {
+  const paths = [];
+  const unexpected = await openAdmin(page, {hash:'users', override:async (route, url) => {
+    if (url.pathname !== '/billing/admin/jobs') return false;
+    paths.push(url.search);
+    await route.fulfill({headers:CORS, json:{jobs:url.searchParams.has('owner_id') ? [{...lesson, status:'error', percent:42, error_code:'LS-TEST-01'}] : []}});
+    return true;
+  }});
+  await expect(page.locator('#adminRefresh')).toBeEnabled();
+  await page.locator('[data-user-open]').click();
+  await page.getByRole('button', {name:'Derslerini görüntüle', exact:true}).click();
+  await expect(page.locator('#adminUserDialog')).not.toBeVisible();
+  await expect(page.locator('#adminJobsView')).toBeVisible();
+  await expect(page.locator('#adminJobs')).toContainText(lesson.title);
+  expect(paths).toContain(`?limit=250&owner_id=${user.id}`);
+  await page.locator('#adminJobStatus').selectOption('error');
+  await expect(page.locator('#adminJobs')).toContainText('LS-TEST-01');
+  await page.getByRole('button', {name:'Tüm kullanıcılar', exact:true}).click();
+  await expect(page.locator('#adminJobs')).toContainText('uygun ders bulunamadı');
+  expect(unexpected).toEqual([]);
+});
+
+test('lesson inspection can recover from failure and clears content on logout', async ({page}) => {
+  let failed = true;
+  const unexpected = await openAdmin(page, {hash:'jobs', override:async (route, url) => {
+    if (url.pathname === '/billing/admin/jobs') {
+      await route.fulfill({headers:CORS, json:{jobs:[lesson]}});
+      return true;
+    }
+    if (url.pathname !== '/billing/admin/jobs/lesson-1') return false;
+    await route.fulfill({status:failed ? 503 : 200, headers:CORS, json:failed ? {detail:{message:'Geçici depolama hatası'}} : {job:lesson,result:null,result_message:'Çıktının saklama süresi dolmuş'}});
+    return true;
+  }});
+  await page.locator('[data-job-open]').click();
+  await expect(page.locator('#adminJobDialog')).toContainText('Geçici depolama hatası');
+  failed = false;
+  await page.locator('#adminJobDialog').getByRole('button', {name:'Tekrar dene'}).click();
+  await expect(page.locator('#adminJobDialog')).toContainText('saklama süresi dolmuş');
+  await page.evaluate(() => endAdminSession());
+  await expect(page.locator('#adminJobDialog')).not.toBeVisible();
+  await expect(page.locator('#adminJobDialogBody')).toBeEmpty();
+  expect(unexpected).toEqual([]);
+});
 
 test('a pending advertising provider does not block the panel or user records', async ({page}) => {
   let release;

@@ -150,3 +150,15 @@ body[data-page="admin"] .admin-growth-grid .ready header span {color: var(--ui-g
   .admin-adsense-steps li {display: block;}
   .admin-adsense-steps li > span {width: 25px; margin-bottom: 8px;}
 }
+
+/* Lesson inspection keeps long transcripts and filenames inside the dialog. */
+.admin-work-scope,.admin-work-downloads{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:12px 0}
+.admin-work-scope:empty{display:none}
+.admin-work-downloads button{white-space:normal;overflow-wrap:anywhere;text-align:start;max-width:100%}
+.admin-work-section{border:1px solid var(--border);border-radius:12px;margin:12px 0;padding:14px;min-width:0}
+.admin-work-section summary{cursor:pointer;font-weight:700;overflow-wrap:anywhere}
+.admin-work-text{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7;margin-top:14px;max-height:60vh;overflow:auto}
+#adminJobDialogBody{min-width:0;padding:0 20px 20px}
+#adminJobDialogTitle{overflow-wrap:anywhere}
+#adminJobSearch{max-width:100%;min-width:0}
+@media(max-width:640px){#adminJobDialogBody{padding:0 12px 16px}.admin-work-scope{align-items:flex-start;flex-direction:column}.admin-work-downloads button{width:100%}}

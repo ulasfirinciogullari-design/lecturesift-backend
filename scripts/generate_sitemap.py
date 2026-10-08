@@ -63,7 +63,7 @@ def build_sitemap() -> str:
         for language in resources["languages"]:
             lines.append("  <url>")
             lines.append(f"    <loc>{ORIGIN}{localized_path(language, path)}</loc>")
-            lines.append(f'    <lastmod>{resources["updated"]}</lastmod>')
+            lines.append(f'    <lastmod>{page.get("updated", resources["updated"])}</lastmod>')
             for alternate in resources["languages"]:
                 href = f"{ORIGIN}{localized_path(alternate, path)}"
                 lines.append(f'    <xhtml:link rel="alternate" hreflang="{alternate}" href="{href}"/>')
