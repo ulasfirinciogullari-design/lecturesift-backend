@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "status": "all_three_canonical_targets_verified_indexing_requests_accepted",
+  "siteUrl": "sc-domain:lecturesift.com",
+  "source": {
+    "kind": "native_google_search_console_indexed_url_inspection_ui",
+    "browserProvider": "TinyFish",
+    "accessVerified": true,
+    "rawGoogleApiResponse": false,
+    "googleSessionSavedAtUtc": "2026-10-08T23:40:10.000Z"
+  },
+  "recordedAtUtc": "2026-10-08T23:45:12Z",
+  "cases": [
+    {
+      "inspectionUrl": "https://lecturesift.com/quiz-flashcards",
+      "inspectionPageUrl": "https://search.google.com/search-console/inspect?resource_id=sc-domain%3Alecturesift.com&id=6rPkuK-oltcGvpPzNr8NlQ",
+      "browserRunUrl": "https://agent.tinyfish.ai/runs/e126864f-6cb9-4478-9127-6d2cbd164b15",
+      "indexedResult": {
+        "headline": "URL Google'da yok",
+        "coverageState": "Doğru standart etikete sahip alternatif sayfa",
+        "userDeclaredCanonical": "https://lecturesift.com/quiz-flashcards.html",
+        "googleSelectedCanonicalResolved": "https://lecturesift.com/quiz-flashcards.html",
+        "resolutionBasis": "Google UI explicitly says same as the separately observed user-declared canonical; not inferred from live HTML.",
+        "lastCrawlDisplayed": "29 Ağu 2026 17:42:44",
+        "lastCrawlDisplayTimeZone": "not exposed; no UTC conversion inferred",
+        "crawlAllowed": "Evet",
+        "indexingAllowed": "Evet",
+        "pageFetch": "Başarılı",
+        "sitemapDisplayed": "Geçici işleme hatası",
+        "googleSelectedCanonicalLabelReported": "Kullanıcı tarafından beyan edilen standart URL ile aynı"
+      },
+      "indexingRequest": {
+        "status": "accepted",
+        "confirmationTitle": "Dizine eklenmesi istendi",
+        "confirmationMeaning": "URL was added to a priority crawl queue; repeated submission does not change its priority.",
+        "attempts": 1,
+        "browserRunUrl": "https://agent.tinyfish.ai/runs/d5c9558c-643f-4f6b-a8be-0811fc0212f9",
+        "indexedAfterRequestVerified": false
+      }
+    },
+    {
+      "inspectionUrl": "https://lecturesift.com/pt/quiz-flashcards",
+      "inspectionPageUrl": "https://search.google.com/search-console/inspect?resource_id=sc-domain%3Alecturesift.com&id=jhD_ut56KYlJlJnDJ1_Bog",
+      "browserRunUrl": "https://agent.tinyfish.ai/runs/923930d3-861c-492b-a4f9-6560d2c259e2",
+      "indexedResult": {
+        "headline": "URL Google'da yok",
+        "coverageState": "Doğru standart etikete sahip alternatif sayfa",
+        "googleSelectedCanonicalLabelReported": "Same as user-declared canonical",
+        "userDeclaredCanonical": "https://lecturesift.com/pt/quiz-flashcards.html",
+        "googleSelectedCanonicalResolved": "https://lecturesift.com/pt/quiz-flashcards.html",
+        "resolutionBasis": "Google UI same-as relation and separately observed user-declared canonical, not live HTML.",
+        "lastCrawlDisplayed": "30 Ağu 2026 02:07:56",
+        "lastCrawlDisplayTimeZone": "not exposed; no UTC conversion inferred",
+        "crawlAllowed": "Evet",
+        "indexingAllowed": "Evet",
+        "pageFetch": "Başarılı",
+        "sitemapDisplayed": "https://lecturesift.com/sitemap.xml"
+      },
+      "indexingRequest": {
+        "status": "accepted",
+        "confirmationTitle": "Dizine eklenmesi istendi",
+        "confirmationMeaning": "URL was added to a priority crawl queue; repeated submission does not change its priority.",
+        "followupButton": "Tekrar istek gönder",
+        "attempts": 1,
+        "indexedAfterRequestVerified": false
+      }
+    },
+    {
+      "inspectionUrl": "https://lecturesift.com/pt/contact",
+      "inspectionPageUrl": "https://search.google.com/search-console/inspect?resource_id=sc-domain%3Alecturesift.com&id=BkQRwupaHZAh60x0rYPx1A",
+      "browserRunUrl": "https://agent.tinyfish.ai/runs/8bfa0e09-3c66-4b5e-ba9d-4d2aee79cc2e",
+      "indexedResult": {
+        "headline": "URL Google'da yok. Bu sayfa dizine eklenmedi.",
+        "coverageState": "Doğru standart etikete sahip alternatif sayfa",
+        "userDeclaredCanonical": "https://lecturesift.com/pt/contact.html",
+        "googleSelectedCanonicalResolved": "https://lecturesift.com/pt/contact.html",
+        "resolutionBasis": "Google UI explicitly says same as the separately observed user-declared canonical; not inferred from live HTML.",
+        "lastCrawlDisplayed": "29 Ağu 2026 22:03:58",
+        "lastCrawlDisplayTimeZone": "not exposed; no UTC conversion inferred",
+        "crawlAllowed": "Evet",
+        "indexingAllowed": "Evet",
+        "pageFetch": "Başarılı",
+        "sitemapDisplayed": "Geçici işleme hatası",
+        "googleSelectedCanonicalLabelReported": "Kullanıcı tarafından beyan edilen standart URL ile aynı"
+      },
+      "indexingRequest": {
+        "status": "accepted",
+        "confirmationTitle": "Dizine eklenmesi istendi",
+        "confirmationMeaning": "URL was added to a priority crawl queue; repeated submission does not change its priority.",
+        "attempts": 1,
+        "indexedAfterRequestVerified": false
+      }
+    }
+  ],
+  "liveChecks": {
+    "checkedAtUtc": "2026-10-08T23:41:23Z/2026-10-08T23:41:25Z",
+    "cleanUrls": [
+      {
+        "url": "https://lecturesift.com/quiz-flashcards",
+        "status": 200,
+        "canonical": "https://lecturesift.com/quiz-flashcards",
+        "noindex": false
+      },
+      {
+        "url": "https://lecturesift.com/pt/quiz-flashcards",
+        "status": 200,
+        "canonical": "https://lecturesift.com/pt/quiz-flashcards",
+        "noindex": false
+      },
+      {
+        "url": "https://lecturesift.com/pt/contact",
+        "status": 200,
+        "canonical": "https://lecturesift.com/pt/contact",
+        "noindex": false
+      }
+    ],
+    "legacyRedirects": [
+      {
+        "url": "https://lecturesift.com/quiz-flashcards.html",
+        "status": 301,
+        "location": "/quiz-flashcards"
+      },
+      {
+        "url": "https://lecturesift.com/pt/quiz-flashcards.html",
+        "status": 301,
+        "location": "/pt/quiz-flashcards"
+      },
+      {
+        "url": "https://lecturesift.com/pt/contact.html",
+        "status": 301,
+        "location": "/pt/contact"
+      }
+    ]
+  },
+  "sitemap": {
+    "liveStatus": 200,
+    "liveUniqueUrls": 183,
+    "containsAllThreeTargetUrls": true,
+    "googleErrors": 0,
+    "googleWarnings": 0,
+    "isPending": true,
+    "lastSubmittedUtc": "2026-10-08T21:48:32.384Z",
+    "lastDownloadedUtc": "2026-10-04T09:11:09.776Z",
+    "resubmittedAgain": false
+  },
+  "localTestsOrBuildsRun": false,
+  "completedRecordedAtUtc": "2026-10-08T23:49:21Z",
+  "historicalCanonicalCorrectionCommit": "2176d7494788aa08555cf55c1262784f5119ffce",
+  "outcomeLimit": "All three indexing requests were accepted; subsequent Google recrawl, canonical change and indexing have not yet been observed."
+}
