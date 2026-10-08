@@ -1,0 +1,639 @@
+{
+  "siteUrl": "sc-domain:lecturesift.com",
+  "reportDate": "2026-10-09",
+  "reportTimeZone": "Europe/Istanbul",
+  "source": "Google URL Inspection via GSC Wizard",
+  "scope": "30 selected priority URLs and legacy/private/malformed variants; not a whole-site index count",
+  "uniqueUrls": 30,
+  "inspectionRequests": 31,
+  "followUpChecks": [
+    {
+      "checkedAtLocal": "2026-10-09T00:51:00+03:00",
+      "timestampPrecision": "minute",
+      "source": "GSC Wizard",
+      "inspection": {
+        "siteUrl": "sc-domain:lecturesift.com",
+        "inspectionUrl": "https://lecturesift.com/quiz-flashcards",
+        "verdict": "NEUTRAL",
+        "coverageState": "Alternate page with proper canonical tag",
+        "robotsTxtState": "ALLOWED",
+        "indexingState": "INDEXING_ALLOWED",
+        "lastCrawlTime": "2026-08-29T21:42:44Z",
+        "pageFetchState": "SUCCESSFUL",
+        "crawledAs": "MOBILE",
+        "referringUrls": [
+          "https://lecturesift.com/it/"
+        ]
+      },
+      "sitemaps": {
+        "siteUrl": "sc-domain:lecturesift.com",
+        "sitemaps": [
+          {
+            "path": "https://lecturesift.com/sitemap.xml",
+            "lastSubmitted": "2026-10-08T21:48:32.384Z",
+            "isPending": true,
+            "isSitemapsIndex": false,
+            "type": "sitemap",
+            "lastDownloaded": "2026-10-04T09:11:09.776Z",
+            "warnings": "0",
+            "errors": "0",
+            "contents": [
+              {
+                "type": "web",
+                "submitted": "181",
+                "indexed": "0"
+              }
+            ]
+          }
+        ]
+      },
+      "note": "One additional quiz inspection after the 31-request baseline. No additional sitemap submission."
+    }
+  ],
+  "historySelection": "Latest inspection per URL. The repeated /quiz-flashcards inspection supersedes its first result; the 31-request total is confirmed by GSC Wizard quota count, while this file retains 30 unique URL records.",
+  "timestampConvention": "API timestamps retain their returned UTC offsets; report date uses Europe/Istanbul.",
+  "canonicalFieldAvailability": {
+    "googleCanonical": "Not exposed by the available GSC Wizard tools; not verified.",
+    "userCanonical": "Not exposed by the available GSC Wizard inspection tools; live HTML checked separately.",
+    "note": "Missing tool fields must not be treated as null canonical values returned by Google."
+  },
+  "coverageCounts": {
+    "Submitted and indexed": 18,
+    "URL is unknown to Google": 4,
+    "Page with redirect": 5,
+    "Excluded by ‘noindex’ tag": 2,
+    "Alternate page with proper canonical tag": 1
+  },
+  "inspections": [
+    {
+      "url": "https://lecturesift.com/",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-01T18:09:40+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:45:52.878985+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/active-recall",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-25T22:40:04+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:24.378135+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/cornell-notes",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-26T12:16:07+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:24.433362+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/document-summary",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-05T12:38:26+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:17.614939+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-07T05:18:31+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:17.686123+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/active-recall",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-20T06:57:05+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:30.801564+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/cornell-notes",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-25T13:03:59+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:24.576855+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/document-summary",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-28T04:57:51+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:17.743378+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/en/features",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T21:46:37.771989+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/features",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-19T17:14:51+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:47:40.270174+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/lecture-video-summary",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T21:46:17.670739+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/lecture-video-summary.html",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-08-30T02:07:39+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:47:39.999499+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/plans.html",
+      "verdict": "NEUTRAL",
+      "coverage_state": "Page with redirect",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-28T03:43:10+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:31.086463+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/quiz-flashcards",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T21:46:24.375133+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/quiz-flashcards.html",
+      "verdict": "NEUTRAL",
+      "coverage_state": "URL is unknown to Google",
+      "robots_txt_state": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "indexing_state": "INDEXING_STATE_UNSPECIFIED",
+      "last_crawl_time": null,
+      "page_fetch_state": "PAGE_FETCH_STATE_UNSPECIFIED",
+      "crawled_as": null,
+      "requested_at": "2026-10-08T21:47:39.990544+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/study-guides",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-20T02:26:05+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:37.800352+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/workspace",
+      "verdict": "NEUTRAL",
+      "coverage_state": "Excluded by ‘noindex’ tag",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "BLOCKED_BY_META_TAG",
+      "last_crawl_time": "2026-09-28T04:57:08+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:31.092458+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/workspace.html",
+      "verdict": "NEUTRAL",
+      "coverage_state": "Excluded by ‘noindex’ tag",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "BLOCKED_BY_META_TAG",
+      "last_crawl_time": "2026-09-27T07:07:36+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:37.346742+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/features",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-30T07:43:26+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:44.032778+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/features.html",
+      "verdict": "NEUTRAL",
+      "coverage_state": "Page with redirect",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-30T07:43:26+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:31.136583+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/fr/refund.html",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-08-30T00:55:45+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:47.353983+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/fr/workspace.html",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-08-29T22:08:38+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:37.749642+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ko/privacy.html",
+      "verdict": "NEUTRAL",
+      "coverage_state": "Page with redirect",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-21T18:02:35+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:31.130643+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/lecture-video-summary",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-01T09:19:39+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:17.723948+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/lecture-video-summary.html",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-08-30T09:08:13+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:44.380951+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/plans.html",
+      "verdict": "NEUTRAL",
+      "coverage_state": "Page with redirect",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-10-08T16:05:15+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:44.445365+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/quiz-flashcards",
+      "verdict": "NEUTRAL",
+      "coverage_state": "Alternate page with proper canonical tag",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-08-29T21:42:44+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:47:12.452756+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/quiz-flashcards.html",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-08-30T02:12:35+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:47:39.812798+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/study-guides",
+      "verdict": "PASS",
+      "coverage_state": "Submitted and indexed",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-26T17:28:30+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:37.783772+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/zh/quiz-flashcards.html",
+      "verdict": "NEUTRAL",
+      "coverage_state": "Page with redirect",
+      "robots_txt_state": "ALLOWED",
+      "indexing_state": "INDEXING_ALLOWED",
+      "last_crawl_time": "2026-09-15T04:05:07+00:00",
+      "page_fetch_state": "SUCCESSFUL",
+      "crawled_as": "MOBILE",
+      "requested_at": "2026-10-08T21:46:44.350457+00:00"
+    }
+  ],
+  "liveFocusedAudit": {
+    "siteUrl": "sc-domain:lecturesift.com",
+    "contextRange": {
+      "startDate": "2026-09-08",
+      "endDate": "2026-10-05"
+    },
+    "auditedCount": 3,
+    "skipped": [],
+    "summary": {
+      "total_pages": 3,
+      "total_issues": 3,
+      "by_severity": {
+        "critical": 0,
+        "high": 0,
+        "medium": 3,
+        "low": 0,
+        "info": 0
+      },
+      "indexable_pages": 3,
+      "non_indexable_pages": 0
+    },
+    "pages": [
+      {
+        "url": "https://lecturesift.com/quiz-flashcards",
+        "finalUrl": "https://lecturesift.com/quiz-flashcards",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 333,
+        "impressions": 0,
+        "clicks": 0,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "PDF ve Ders Notundan Quiz, Bilgi Kartı Oluştur | LectureSift",
+        "titleLength": 60,
+        "metaDescriptionLength": 148,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 9,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 554,
+        "canonicalUrl": "https://lecturesift.com/quiz-flashcards",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 20,
+        "externalLinks": 0,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "Answer",
+          "Article",
+          "BreadcrumbList",
+          "FAQPage",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "Question",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [
+          {
+            "type": "Article",
+            "level": "error",
+            "field": "datePublished",
+            "message": "Article is missing required field \"datePublished\""
+          }
+        ],
+        "hasViewport": true,
+        "faviconPresent": true,
+        "lang": "tr",
+        "hreflangCount": 14,
+        "bodyBytes": 15108,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "schema-article-missing-datepublished",
+            "category": "structured-data",
+            "severity": "medium",
+            "message": "Article is missing required field \"datePublished\""
+          }
+        ]
+      },
+      {
+        "url": "https://lecturesift.com/en/quiz-flashcards",
+        "finalUrl": "https://lecturesift.com/en/quiz-flashcards",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 255,
+        "impressions": 0,
+        "clicks": 0,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "AI Quiz and Flashcard Generator from PDFs | LectureSift",
+        "titleLength": 55,
+        "metaDescriptionLength": 155,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 9,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 662,
+        "canonicalUrl": "https://lecturesift.com/en/quiz-flashcards",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 20,
+        "externalLinks": 0,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "Answer",
+          "Article",
+          "BreadcrumbList",
+          "FAQPage",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "Question",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [
+          {
+            "type": "Article",
+            "level": "error",
+            "field": "datePublished",
+            "message": "Article is missing required field \"datePublished\""
+          }
+        ],
+        "hasViewport": true,
+        "faviconPresent": true,
+        "lang": "en",
+        "hreflangCount": 14,
+        "bodyBytes": 14705,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "schema-article-missing-datepublished",
+            "category": "structured-data",
+            "severity": "medium",
+            "message": "Article is missing required field \"datePublished\""
+          }
+        ]
+      },
+      {
+        "url": "https://lecturesift.com/en/lecture-video-summary",
+        "finalUrl": "https://lecturesift.com/en/lecture-video-summary",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 279,
+        "impressions": 0,
+        "clicks": 0,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "Lecture Video Summarizer and Audio to Text | LectureSift",
+        "titleLength": 56,
+        "metaDescriptionLength": 157,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 9,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 678,
+        "canonicalUrl": "https://lecturesift.com/en/lecture-video-summary",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 20,
+        "externalLinks": 0,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "Answer",
+          "Article",
+          "BreadcrumbList",
+          "FAQPage",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "Question",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [
+          {
+            "type": "Article",
+            "level": "error",
+            "field": "datePublished",
+            "message": "Article is missing required field \"datePublished\""
+          }
+        ],
+        "hasViewport": true,
+        "faviconPresent": true,
+        "lang": "en",
+        "hreflangCount": 14,
+        "bodyBytes": 15000,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "schema-article-missing-datepublished",
+            "category": "structured-data",
+            "severity": "medium",
+            "message": "Article is missing required field \"datePublished\""
+          }
+        ]
+      }
+    ],
+    "dataSource": "api"
+  },
+  "sitemapSubmission": {
+    "sitemapUrl": "https://lecturesift.com/sitemap.xml",
+    "accepted": true,
+    "confirmed": true,
+    "lastSubmitted": "2026-10-08T21:48:32.384Z",
+    "isPending": true,
+    "note": "Submission queues a sitemap download; it is not an individual request for indexing and does not confirm indexing."
+  },
+  "sitemapLiveObservation": {
+    "observedAt": "2026-10-08T21:48:31.617608+00:00",
+    "urlCount": 183,
+    "addedSincePreviousObservation": [
+      "https://lecturesift.com/en/pdf-note-check",
+      "https://lecturesift.com/pdf-note-check"
+    ],
+    "note": "Previous 00:40 Europe/Istanbul observation contained 181 URLs. These two pages were not created by this task."
+  }
+}
