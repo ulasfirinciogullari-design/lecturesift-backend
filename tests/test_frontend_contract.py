@@ -1391,7 +1391,7 @@ def test_optional_analytics_and_advertising_are_consent_gated():
     cookies = (FRONTEND / "cookies.html").read_text(encoding="utf-8")
 
     consent_css = (FRONTEND / "consent.css").read_text(encoding="utf-8")
-    assert 'consentScript.src = "/consent.js?v=4"' in i18n
+    assert 'consentScript.src = "/consent.js?v=5"' in i18n
     assert 'consentStyle.href = "/consent.css?v=2"' in i18n
     assert 'const STORAGE_KEY = "lecturesift-consent-v1"' in consent
     assert 'footerTarget = document.querySelector(".footer-bottom,.legal-footer,.site-footer,footer")' in consent
