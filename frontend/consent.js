@@ -56,6 +56,8 @@
   const storageRecord = () => {
     try { return localStorage.getItem(STORAGE_KEY); } catch (_) { return null; }
   };
+  const hasSavedChoice = value => typeof value?.updated_at === "string"
+    && Number.isFinite(Date.parse(value.updated_at));
   const googleChoices = () => {
     if (["checking", "loading", "unavailable"].includes(cmpState)) return denied();
     const saved = read();
@@ -141,7 +143,9 @@
   const analytics = root.querySelector("#consentAnalytics");
   const advertising = root.querySelector("#consentAdvertising");
   const current = read();
-  banner.hidden = !!current;
+  // Provider initialization can create a denial placeholder before the visitor
+  // chooses anything. Only a recorded choice may dismiss the local banner.
+  banner.hidden = hasSavedChoice(current);
   analytics.checked = !!current?.analytics;
   advertising.checked = !!current?.advertising;
 
@@ -197,7 +201,7 @@
     // that the user revoked consent. Preserve choices for an explicit rollback.
     providerPending(cmpEnabled);
     // Keep local preferences usable, while Google technologies stay denied.
-    banner.hidden = !!read();
+    banner.hidden = hasSavedChoice(read());
     notify();
   }
 
@@ -232,7 +236,7 @@
       cmpState = "local";
       cmpValues = null;
       providerNotApplicable();
-      banner.hidden = !!read();
+      banner.hidden = hasSavedChoice(read());
       notify();
       return;
     }
@@ -276,6 +280,7 @@
       if (!consent || consent.google_cmp_enabled === false) {
         cmpState = "local";
         providerNotApplicable();
+        banner.hidden = hasSavedChoice(read());
         notify();
         return;
       }

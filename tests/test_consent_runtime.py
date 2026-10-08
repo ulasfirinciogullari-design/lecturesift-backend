@@ -13,6 +13,7 @@ pytestmark = pytest.mark.skipif(NODE is None, reason="Node is required for conse
 HARNESS = r"""
 const fs = require('fs'), vm = require('vm');
 const scenario = process.argv[1];
+const mode = scenario.startsWith('first_') ? scenario.slice(6) : scenario;
 const callbacks = new Map(), windowCallbacks = new Map(), timers = new Map(), scripts = [], requests = [], events = [];
 let timerId = 0, tcListener, modeReady, revocations = 0, reloads = 0, configAttempts = 0;
 let values = {analyticsStoragePurposeConsentStatus: 1, adStoragePurposeConsentStatus: 1,
@@ -23,11 +24,12 @@ if (scenario === 'not_configured') for (const key in values) values[key] = 4;
 if (scenario === 'unknown') for (const key in values) values[key] = 0;
 if (scenario === 'mixed_statuses') values.analyticsStoragePurposeConsentStatus = 4;
 const storage = new Map([['lecturesift-consent-v1', JSON.stringify({version: 1, necessary: true,
-  analytics: true, advertising: true, ...(scenario === 'private_precise' ? {google_consent: {
+  analytics: true, advertising: true, updated_at: '2026-09-01T12:00:00.000Z', ...(scenario === 'private_precise' ? {google_consent: {
     analytics_storage: 'granted', ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'denied'}} : {}),
   ...(scenario === 'config_rollback_denied' ? {google_consent: {
     analytics_storage: 'denied', ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied'}} : {}),
   ...(scenario === 'config_rollback_local_refused' ? {google_local_denied: ['analytics_storage', 'ad_storage', 'ad_user_data', 'ad_personalization']} : {})})]]);
+if (scenario.startsWith('first_')) storage.clear();
 class Element {
   constructor(tag) { this.tagName = tag; this.hidden = false; this.checked = false;
     this.classList = {add() {}}; this.nodes = new Map(); this.listeners = new Map(); }
@@ -46,8 +48,8 @@ const document = {
   dispatchEvent(event) { events.push(event.detail); callbacks.get(event.type)?.(event); },
   head: {append(script) {
     scripts.push(script);
-    if (scenario === 'pending' || scenario === 'timeout') return;
-    if (scenario === 'loader_failure') { script.onerror(); return; }
+    if (mode === 'pending' || mode === 'timeout') return;
+    if (mode === 'loader_failure') { script.onerror(); return; }
     context.googlefc.getGoogleConsentModeValues = () => values;
     context.googlefc.showRevocationMessage = () => {
       revocations++;
@@ -56,7 +58,7 @@ const document = {
     context.__tcfapi = (command, version, fn) => {
       if (command !== 'addEventListener' || version !== 2) throw new Error('wrong TCF subscription');
       tcListener = fn;
-      fn({gdprApplies: scenario !== 'not_applicable', cmpStatus: 'loaded',
+      fn({gdprApplies: !mode.startsWith('not_applicable'), cmpStatus: 'loaded',
         eventStatus: scenario === 'initial_action_complete' ? 'useractioncomplete' : 'tcloaded'}, scenario !== 'tcf_failure');
     };
     const queue = context.googlefc.callbackQueue;
@@ -84,9 +86,9 @@ function createWindow(pathname) {
   clearTimeout: id => timers.delete(id),
   fetch: async url => {
     requests.push(url);
-    if (scenario === 'config_failure' || (scenario.startsWith('config_rollback') && configAttempts++ === 0)) throw new Error('synthetic config failure');
+    if (mode === 'config_failure' || (mode.startsWith('config_rollback') && configAttempts++ === 0)) throw new Error('synthetic config failure');
     return {ok: true, json: async () => ({enabled: false, adsense_auto_ads: {enabled: false},
-      consent: {google_cmp_enabled: scenario !== 'off' && !scenario.startsWith('config_rollback'),
+      consent: {google_cmp_enabled: mode !== 'off' && !mode.startsWith('config_rollback'),
         publisher_id: scenario === 'invalid_publisher' ? 'pub-1/../../other' : 'pub-7608481350058806'}})};
   },
   };
@@ -96,6 +98,7 @@ function createWindow(pathname) {
 let context = createWindow(scenario.startsWith('private') ? '/account' : '/en/pdf-note-check');
 vm.runInNewContext(fs.readFileSync(process.argv[2], 'utf8'), context);
 const initial = context.LectureSiftConsent.get();
+const initialBannerHidden = root.querySelector('.consent-banner').hidden;
 function click(action) { root.listeners.get('click')({target: {closest: () => ({dataset: {consent: action}})}}); }
 function navigate(pathname) {
   // Navigation discards the old browser Window and its callbacks. Reusing a
@@ -108,7 +111,12 @@ function navigate(pathname) {
 }
 (async () => {
   await new Promise(setImmediate); await new Promise(setImmediate);
-  if (scenario === 'timeout') for (const timer of [...timers.values()]) if (timer.delay === 12000) timer.fn();
+  if (mode === 'timeout') for (const timer of [...timers.values()]) if (timer.delay === 12000) timer.fn();
+  if (scenario === 'first_not_applicable_reload' || scenario === 'first_config_rollback') {
+    navigate('/plans');
+    await new Promise(setImmediate); await new Promise(setImmediate);
+  }
+  if (scenario === 'first_not_applicable_choose') click('all');
   if (scenario === 'revoked') {
     for (const key in values) values[key] = 2;
     tcListener({gdprApplies: true, cmpStatus: 'loaded', eventStatus: 'useractioncomplete'}, true);
@@ -167,8 +175,8 @@ function navigate(pathname) {
   if (['pending', 'config_failure', 'loader_failure', 'timeout', 'private_precise'].includes(scenario)) click('all');
   console.log(JSON.stringify({initial, effective: context.LectureSiftConsent.get(),
     google: context.LectureSiftConsent.google(), scripts: scripts.map(s => ({src: s.src, nonce: s.nonce})),
-    requests, revocations, reloads, bannerHidden: root.querySelector('.consent-banner').hidden,
-    saved: JSON.parse(storage.get('lecturesift-consent-v1')), events,
+    requests, revocations, reloads, initialBannerHidden, bannerHidden: root.querySelector('.consent-banner').hidden,
+    saved: JSON.parse(storage.get('lecturesift-consent-v1') || 'null'), events,
     tagCalls: (context.dataLayer || []).map(args => Array.from(args))}));
 })().catch(error => { console.error(error.message); process.exitCode = 1; });
 """
@@ -192,6 +200,31 @@ def test_cmp_loads_with_ads_disabled_without_loading_any_ad_or_measurement_scrip
     assert result["tagCalls"][0][0:2] == ["consent", "default"]
     assert result["tagCalls"][0][2]["ad_storage"] == "denied"
     assert result["bannerHidden"] is True
+
+
+@pytest.mark.parametrize("scenario", ["first_not_applicable", "first_not_applicable_reload",
+    "first_config_failure", "first_loader_failure", "first_timeout", "first_off", "first_config_rollback"])
+def test_first_visit_keeps_local_banner_until_a_choice_exists(scenario):
+    result = run(scenario)
+    assert result["initialBannerHidden"] is False
+    assert result["bannerHidden"] is False
+    assert "updated_at" not in (result["saved"] or {})
+    assert set(result["google"].values()) == {"denied"}
+
+
+def test_first_non_gdpr_visitor_can_record_local_choice_and_dismiss_banner():
+    result = run("first_not_applicable_choose")
+    assert result["initialBannerHidden"] is False
+    assert result["bannerHidden"] is True
+    assert result["saved"]["updated_at"]
+    assert set(result["google"].values()) == {"granted"}
+
+
+def test_previous_explicit_local_choice_still_hides_non_gdpr_banner():
+    result = run("not_applicable")
+    assert result["initialBannerHidden"] is True
+    assert result["bannerHidden"] is True
+    assert set(result["google"].values()) == {"granted"}
 
 
 @pytest.mark.parametrize("scenario", ["pending", "timeout", "config_failure", "loader_failure", "tcf_failure", "not_configured", "unknown", "invalid_publisher", "denied", "revoked"])
