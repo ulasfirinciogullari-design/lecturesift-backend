@@ -7,7 +7,7 @@ test('localized home links to an actual guide edition after client localization'
   await link.click();
   await expect(page).toHaveURL(/\/en\/study-guides$/);
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
-  await expect(page.locator('.guide-grid .guide-card')).toHaveCount(4);
+  await expect(page.locator('.guide-grid .guide-card')).toHaveCount(5);
   await expect(page.getByRole('heading', {level:1})).toContainText('Study guides');
   await expect(page.locator('.guide-preview')).toContainText('Mean');
   await page.evaluate(() => window.scrollTo(0, 0));
@@ -84,13 +84,30 @@ test.describe('open learning material without JavaScript', () => {
 
   test('every published guide has a readable body and working internal section links', async ({page}) => {
     for (const prefix of ['', '/en']) {
-      for (const slug of ['study-guides','study-pack-example','check-ai-notes','active-recall','about-study-guides','cornell-notes']) {
+      for (const slug of ['study-guides','study-pack-example','check-ai-notes','active-recall','about-study-guides','cornell-notes','pdf-note-check']) {
         await page.goto(`${prefix}/${slug}`);
         await expect(page.locator('.guide-article h1')).toHaveCount(1);
         await expect(page.locator('.guide-article section').first()).toBeVisible();
         expect(await page.locator('.guide-toc a[href^="#"]').evaluateAll(links => links.every(link => document.getElementById(link.hash.slice(1))))).toBe(true);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
       }
+    }
+  });
+
+  test('PDF checking exercise and worksheet work without an account or JavaScript', async ({page}) => {
+    for (const prefix of ['', '/en']) {
+      await page.goto(`${prefix}/study-guides`);
+      await page.locator(`.guide-card[href="${prefix}/pdf-note-check"]`).click();
+      await expect(page.locator('.guide-article table')).toContainText(prefix ? '60%' : '%60');
+      const answer = page.locator('.guide-article details').first();
+      await answer.locator('summary').click();
+      await expect(answer.locator('p')).toContainText(prefix ? '20 percentage points' : '20 yüzde puan');
+      const downloaded = page.waitForEvent('download');
+      await page.locator('a[download]').click();
+      const file = await downloaded;
+      expect(file.suggestedFilename()).toBe(`pdf-check-${prefix ? 'en' : 'tr'}.txt`);
+      expect(await file.failure()).toBeNull();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     }
   });
 

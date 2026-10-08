@@ -358,30 +358,40 @@ class JobStore:
                     del self._jobs[job_id]
                     self._flush_locked()
 
-    def list_for_admin(self, limit: int = 100) -> list[dict[str, Any]]:
+    def list_for_admin(self, limit: int = 100, owner_id: str = "") -> list[dict[str, Any]]:
         """Return a secret-free, newest-first operational view of all jobs."""
         safe_limit = max(1, min(250, int(limit)))
         with self._lock:
             self._refresh_locked()
             job_ids = sorted(
-                self._jobs,
+                (job_id for job_id, data in self._jobs.items()
+                 if not owner_id or (data.get("options") or {}).get("billing_user_id") == owner_id),
                 key=lambda job_id: float(self._jobs[job_id].get("created", 0)),
                 reverse=True,
             )[:safe_limit]
-            owners = {
-                job_id: str(
-                    (self._jobs[job_id].get("options") or {}).get("billing_user_id") or ""
-                )
-                for job_id in job_ids
-            }
-        jobs: list[dict[str, Any]] = []
-        for job_id in job_ids:
-            item = self.public(job_id)
-            if not item:
-                continue
-            item["owner_id"] = owners[job_id] or None
-            jobs.append(item)
-        return jobs
+            # One consistent metadata snapshot, without N Redis reads or any
+            # completed-result downloads while opening an operational list.
+            return [self.admin_summary(self._jobs[job_id]) for job_id in job_ids]
+
+    @staticmethod
+    def admin_summary(data: dict[str, Any], owner_id: str = "") -> dict[str, Any]:
+        fields = ("job_id", "title", "status", "percent", "stage", "created", "updated",
+                  "source_type", "source_layout", "source_file_count", "file_size_bytes",
+                  "stored_bytes", "duration_seconds", "billable_minutes", "document_words",
+                  "retention_seconds", "error_code", "public_error")
+        item = {key: data.get(key) for key in fields}
+        options = data.get("options") or {}
+        item["owner_id"] = owner_id or options.get("billing_user_id") or None
+        item["options"] = {key: options[key] for key in (
+            "job_type", "output_language", "include_summary", "include_transcript",
+            "include_quiz", "include_flashcards", "include_slides",
+        ) if key in options}
+        item["result_ready"] = data.get("status") == "done" and (
+            data.get("queue_mode") != "celery" or data.get("worker_state") == "done"
+        )
+        if data.get("status") == "done" and not item["result_ready"]:
+            item.update(status="working", percent=99, stage="worker_publish")
+        return item
 
     def delete_for_user(self, user_id: str) -> dict[str, int]:
         removed: list[tuple[str, Path]] = []

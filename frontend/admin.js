@@ -34,6 +34,7 @@ function endAdminSession(message = "Yönetici oturumu kapatıldı.") {
   adminLoadErrors.clear();
   adminLoadedSections.clear();
   adminState = emptyAdminState();
+  resetAdminWork();
   clearTimeout(adminUserSearchTimer);
   clearTimeout(adminOrderSearchTimer);
   document.querySelectorAll("#adminPanel .admin-table-wrap").forEach(target => { target.innerHTML = ""; });
@@ -277,7 +278,7 @@ function adminNotice(message, error = false) {
 }
 
 async function adminRequest(path, options = {}) {
-  const {publicRequest = false, timeoutMs = ADMIN_REQUEST_TIMEOUT_MS, ...fetchOptions} = options;
+  const {publicRequest = false, binary = false, timeoutMs = ADMIN_REQUEST_TIMEOUT_MS, ...fetchOptions} = options;
   const controller = new AbortController();
   const session = adminSessionVersion;
   let timedOut = false;
@@ -295,7 +296,7 @@ async function adminRequest(path, options = {}) {
       endAdminSession("Yönetici erişimi doğrulanamadı. Anahtarını kontrol edip yeniden giriş yap.");
       throw new Error("Yönetici erişimi doğrulanamadı.");
     }
-    const body = await response.json().catch(() => null);
+    const body = binary && response.ok ? await response.blob() : await response.json().catch(() => null);
     if (!response.ok) {
       const error = new Error(body?.detail?.message || (typeof body?.detail === "string" ? body.detail : adminT("error.request", "İstek tamamlanamadı.")));
       error.status = response.status;
@@ -321,7 +322,7 @@ async function adminPublicRequest(path) {
 }
 
 function adminStatusLabel(status) {
-  const labels = {pending:"Bekliyor", created:"Başlatıldı", paid:"Tamamlandı", failed:"Hatalı", token_failed:"Ödeme başlatılamadı", rejected:"Reddedildi", cancelled:"İptal", requested:"İncelenecek", approved_pending_refund:"İade bekliyor", completed:"Tamamlandı", pending_verification:"Doğrulanacak", approved:"Onaylandı", queued:"Kuyrukta", working:"Çalışıyor", done:"Tamamlandı", new:"Yeni", read:"Okundu", resolved:"Çözümlendi"};
+  const labels = {pending:"Bekliyor", created:"Başlatıldı", paid:"Tamamlandı", error:"Hatalı", failed:"Hatalı", token_failed:"Ödeme başlatılamadı", rejected:"Reddedildi", cancelled:"İptal", requested:"İncelenecek", approved_pending_refund:"İade bekliyor", completed:"Tamamlandı", pending_verification:"Doğrulanacak", approved:"Onaylandı", queued:"Kuyrukta", working:"Çalışıyor", done:"Tamamlandı", new:"Yeni", read:"Okundu", resolved:"Çözümlendi"};
   return labels[status] || adminT(`order.${status}`, status || "—");
 }
 
@@ -633,7 +634,7 @@ function openAdminUserDialog(userId) {
   admin$("adminUserDialogTitle").textContent = user.name || user.email;
   admin$("adminUserDialogBody").innerHTML = `<div class="admin-detail-summary">
       <article><small>E-posta</small><strong>${adminEscape(user.email)}</strong></article><article><small>Hesap oluşturma</small><strong>${adminEscape(adminDate(user.created_at))}</strong></article><article><small>Son güncelleme</small><strong>${adminEscape(adminDate(user.updated_at))}</strong></article><article><small>Son güvenli ağ</small><strong>${adminEscape(activity?.ip_network || "Henüz kaydedilmedi")}</strong></article><article><small>Son hareket</small><strong>${adminEscape(activity?.created_at ? adminDate(activity.created_at) : "—")}</strong></article><article><small>Cihaz bilgisi</small><strong>${adminEscape(activity?.user_agent || "—")}</strong></article>
-    </div><div class="admin-user-tools">
+    </div><div class="admin-user-tools"><section class="admin-user-form"><h3>Dersler ve çıktılar</h3><p>Bu kullanıcının işlerini, saklanan sonuçlarını ve çıktı dosyalarını incele.</p><button type="button" class="admin-action approve" id="adminUserWork">Derslerini görüntüle</button></section>
       <section id="adminExtraEntitlements" class="admin-user-form" data-user-id="${adminEscape(user.id)}"><h3>Asistan kredisi ve reklamsız kullanım</h3><p role="status">Haklar yükleniyor…</p></section>
       <section class="admin-user-form"><h3>Yakın hesap hareketleri</h3><p>Güvenlik için tam IP tutulmaz; /24 veya /64 maskeli ağ, tek yönlü iz ve cihaz bilgisi sınırlı süre saklanır.</p><div id="adminUserActivity"><p class="empty-copy">Hareketler yükleniyor…</p></div></section>
       <form class="admin-user-form" data-user-profile-form="${adminEscape(user.id)}"><h3>Profil ve doğrulama</h3><div class="admin-form-grid"><label><span>Ad</span><input name="first_name" value="${adminEscape(user.first_name || "")}" minlength="2" maxlength="80" required></label><label><span>Soyad</span><input name="last_name" value="${adminEscape(user.last_name || "")}" minlength="2" maxlength="80" required></label><label class="wide"><span>E-posta</span><input name="email" type="email" value="${adminEscape(user.email)}" required></label><label><span>Telefon</span><input name="phone" value="${adminEscape(user.phone || "")}" maxlength="32"></label><label><span>Ülke kodu</span><input name="country_code" value="${adminEscape(user.country_code || "TR")}" minlength="2" maxlength="2" required></label><label><span>Arayüz dili</span><select name="preferred_language">${languageOptions}</select></label><label class="admin-check"><input name="email_verified" type="checkbox" ${user.email_verified ? "checked" : ""}><span>E-posta doğrulandı</span></label></div><button class="admin-action approve" type="submit">Profili kaydet</button></form>
@@ -644,6 +645,7 @@ function openAdminUserDialog(userId) {
     </div>`;
   const dialog = admin$("adminUserDialog");
   dialog.showModal();
+  admin$("adminUserWork").addEventListener("click", () => showAdminUserWork(user));
   document.querySelectorAll("[data-user-profile-form]").forEach(form => form.addEventListener("submit", event => saveAdminUser(event, form)));
   document.querySelectorAll("[data-user-credit-form]").forEach(form => form.addEventListener("submit", event => adjustAdminUserCredit(event, form)));
   document.querySelectorAll("[data-user-subscription-form]").forEach(form => form.addEventListener("submit", event => saveAdminSubscription(event, form)));
@@ -671,7 +673,7 @@ function renderAdminCreditEvents(events) {
 }
 
 function renderAdminAccountEvents(events) {
-  const rows = events.map(item => `<tr><td data-label="Tarih" title="${adminEscape(adminDate(item.created_at))}">${adminEscape(adminRelativeDate(item.created_at))}</td><td data-label="Kullanıcı">${adminEscape(item.subject_email)}</td><td data-label="İşlem">${adminEscape(item.action)}</td><td data-label="Açıklama">${adminEscape(item.summary)}</td><td data-label="Yapan">${adminEscape(item.actor)}</td></tr>`).join("");
+  const rows = events.map(item => `<tr><td data-label="Tarih" title="${adminEscape(adminDate(item.created_at))}">${adminEscape(adminRelativeDate(item.created_at))}</td><td data-label="Kullanıcı">${adminEscape(item.subject_email)}</td><td data-label="İşlem">${adminEscape(({lesson_inspected:"Ders incelendi", lesson_output_downloaded:"Ders çıktısı indirildi"})[item.action] || item.action)}</td><td data-label="Açıklama">${adminEscape(item.summary)}</td><td data-label="Yapan">${adminEscape(item.actor)}</td></tr>`).join("");
   admin$("adminAccountEvents").innerHTML = `<table class="admin-table admin-record-table"><thead><tr><th>Tarih</th><th>Kullanıcı</th><th>İşlem</th><th>Açıklama</th><th>Yapan</th></tr></thead><tbody>${rows || '<tr><td colspan="5">Henüz yönetici hesap işlemi yok.</td></tr>'}</tbody></table>`;
 }
 
@@ -783,8 +785,7 @@ function renderAdminReadiness(billing, runtime) {
 }
 
 function renderAdminJobs(jobs) {
-  const rows = jobs.map(job => `<tr><td data-label="İş"><strong>${adminEscape(job.job_id)}</strong><br><small>${adminEscape(job.owner_id ? `Hesap: ${job.owner_id.slice(0, 8)}…` : "Misafir/hesapsız")}</small></td><td data-label="Durum"><span class="status-pill ${job.status === "done" ? "paid" : ""}">${adminEscape(adminStatusLabel(job.status))}</span></td><td data-label="İlerleme"><div class="admin-progress"><span style="width:${Math.max(0, Math.min(100, Number(job.percent || 0)))}%"></span></div><small>%${Number(job.percent || 0)} · ${adminEscape(job.stage || "—")}</small></td><td data-label="Başlangıç" title="${adminEscape(adminDate(job.created))}">${adminEscape(adminRelativeDate(job.created))}</td><td data-label="Hata">${adminEscape(job.error_code || job.public_error || job.error || "—")}</td></tr>`).join("");
-  admin$("adminJobs").innerHTML = `<table class="admin-table admin-record-table"><thead><tr><th>İş kimliği</th><th>Durum</th><th>İlerleme / aşama</th><th>Başlangıç</th><th>Hata</th></tr></thead><tbody>${rows || '<tr><td colspan="5">Kayıtlı iş bulunamadı.</td></tr>'}</tbody></table>`;
+  adminWorkList(jobs);
 }
 
 function renderAdminCosts() {
@@ -921,7 +922,7 @@ function renderAdminAlerts(checks) {
   const critical = checks.filter(item => !item.unknown && !item.ready && item.severity === "critical");
   const newMessages = adminState.contacts.filter(item => item.status === "new").length;
   const openRefunds = adminState.refunds.filter(item => ["requested", "approved_pending_refund"].includes(item.status)).length;
-  const failedJobs = adminState.jobs.filter(item => item.status === "failed").length;
+  const failedJobs = adminState.jobs.filter(item => ["error", "failed"].includes(item.status)).length;
   const dueReferrals = adminState.referrals.filter(adminReferralDue).length;
   const alerts = [];
   if (critical.length) alerts.push({level:"critical", title:`${critical.length} kritik altyapı işi`, detail:critical.map(item => item.label).join(" · ")});
@@ -944,7 +945,7 @@ function renderMetrics() {
   const newMessages = adminState.contacts.filter(item => item.status === "new").length;
   const openRefunds = adminState.refunds.filter(item => ["requested", "approved_pending_refund"].includes(item.status)).length;
   const activeJobs = adminState.jobs.filter(item => ["queued", "working"].includes(item.status)).length;
-  const failedJobs = adminState.jobs.filter(item => item.status === "failed").length;
+  const failedJobs = adminState.jobs.filter(item => ["error", "failed"].includes(item.status)).length;
   const revenueMap = {...(adminState.overview.revenue_by_currency || {})};
   if (!Object.keys(revenueMap).length) orders.filter(item => item.status === "paid").forEach(item => { const currency = item.currency || "TRY"; revenueMap[currency] = Number(revenueMap[currency] || 0) + Number(item.amount_minor || 0); });
   const revenues = Object.entries(revenueMap).map(([currency, amount]) => adminMoney(amount, currency));
@@ -1333,7 +1334,8 @@ function applyAdminFilters() {
   const messageStatus = admin$("adminMessageStatus")?.value || "all";
   if (adminLoadedSections.has("contacts")) renderAdminContactMessages(adminState.contacts.filter(item => (messageStatus === "all" || item.status === messageStatus) && normalizeSearch(`${item.name} ${item.email} ${item.topic} ${item.order_reference} ${item.message}`).includes(messageQuery)));
   const jobStatus = admin$("adminJobStatus")?.value || "all";
-  if (adminLoadedSections.has("jobs")) renderAdminJobs(adminState.jobs.filter(item => jobStatus === "all" || item.status === jobStatus));
+  const jobQuery = normalizeSearch(admin$("adminJobSearch")?.value);
+  if (adminLoadedSections.has("jobs")) renderAdminJobs((adminWorkOwner ? adminWorkScopedJobs : adminState.jobs).filter(item => (jobStatus === "all" || item.status === jobStatus || (jobStatus === "error" && item.status === "failed")) && normalizeSearch(`${item.title || ""} ${item.job_id} ${item.owner_email || ""} ${item.owner_name || ""}`).includes(jobQuery)));
   renderAdminTimeline();
   renderAdminLoadProblems();
 }
@@ -1806,7 +1808,7 @@ admin$("adminReferralReconcileForm")?.addEventListener("submit", reconcileAdminR
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") resetAdminReferralConfirmations();
 });
-["adminMessageSearch","adminMessageStatus","adminJobStatus","adminTimelineFilter"].forEach(id => admin$(id)?.addEventListener(id.includes("Search") ? "input" : "change", applyAdminFilters));
+["adminMessageSearch","adminMessageStatus","adminJobSearch","adminJobStatus","adminTimelineFilter"].forEach(id => admin$(id)?.addEventListener(id.includes("Search") ? "input" : "change", applyAdminFilters));
 admin$("adminCostDays")?.addEventListener("change", () => loadAdminCosts().catch(error => adminNotice(error.message, true)));
 admin$("adminActualCostForm")?.addEventListener("submit", saveAdminActualCost);
 admin$("adminActualCosts")?.addEventListener("click", event => {

@@ -33,6 +33,20 @@ https://clever-horse-22b1a8.netlify.app/* https://lecturesift.com/:splat 301!
 /:lang/refund.html                  /:lang/refund             301!
 
 # Study resources have Turkish and English editions.
+/pdf-note-check.html /pdf-note-check 301!
+/:lang/pdf-note-check.html /:lang/pdf-note-check 301!
+/de/pdf-note-check /en/pdf-note-check 301!
+/fr/pdf-note-check /en/pdf-note-check 301!
+/es/pdf-note-check /en/pdf-note-check 301!
+/it/pdf-note-check /en/pdf-note-check 301!
+/pt/pdf-note-check /en/pdf-note-check 301!
+/ru/pdf-note-check /en/pdf-note-check 301!
+/ar/pdf-note-check /en/pdf-note-check 301!
+/zh/pdf-note-check /en/pdf-note-check 301!
+/ja/pdf-note-check /en/pdf-note-check 301!
+/ko/pdf-note-check /en/pdf-note-check 301!
+/hi/pdf-note-check /en/pdf-note-check 301!
+
 /cornell-notes.html /cornell-notes 301!
 /:lang/cornell-notes.html /:lang/cornell-notes 301!
 /de/cornell-notes /en/cornell-notes 301!

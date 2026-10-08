@@ -485,7 +485,8 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         expected_theme_version = "17"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
         assert "/theme.js?v=11" in content, page.name
-        assert "i18n.js?v=47" in content, page.name
+        expected_i18n_version = "48" if page.name == "admin.html" else "47"
+        assert f"i18n.js?v={expected_i18n_version}" in content, page.name
         assert "page-i18n.js?v=10" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
@@ -919,7 +920,7 @@ def test_admin_growth_reads_and_escapes_advertising_management_status():
     catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
 
     assert 'id="adminGrowthStatus" class="admin-growth-grid" aria-live="polite"' in admin
-    assert 'src="/admin.js?v=26"' in admin and 'src="/i18n.js?v=47"' in admin
+    assert 'src="/admin.js?v=27"' in admin and 'src="/i18n.js?v=48"' in admin
     assert '"/billing/admin/advertising-readiness"' in admin_script
     assert "renderAdminAdSenseSummary" in admin_script
     assert 'id="adminAdSenseSummary"' in admin
@@ -1065,9 +1066,10 @@ def test_checkout_names_contact_inbox_and_mobile_plan_navigation_are_wired():
     assert "/billing/admin/contact-messages" in admin_js
     assert "adminContactDialog" in admin_html and "admin-contact-reply" in admin_js
     assert "/billing/admin/contact-messages/${encodeURIComponent(messageId)}/reply" in admin_js
-    assert 'href="/rollout.css?v=10"' in admin_html and 'src="/admin.js?v=26"' in admin_html
-    assert admin_js.count('class="admin-table admin-record-table"') >= 10
-    assert all(label in admin_js for label in ('data-label="İş"', 'data-label="Bakiye"', 'data-label="Açıklama"'))
+    assert 'href="/rollout.css?v=10"' in admin_html and 'src="/admin.js?v=27"' in admin_html
+    assert (admin_js + (FRONTEND / "admin-work.js").read_text()).count('class="admin-table admin-record-table"') >= 10
+    assert all(label in admin_js for label in ('data-label="Bakiye"', 'data-label="Açıklama"'))
+    assert 'data-label="Ders"' in (FRONTEND / "admin-work.js").read_text()
     assert "supportReplyForm" in support_html and "supportThread" in support_html
     assert "/contact/conversations/" in support_js and "conversationToken" in support_js
     assert ".topbar .top-actions .top-link" in rollout_css

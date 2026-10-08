@@ -9,7 +9,7 @@ import unicodedata
 from datetime import date
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from . import config
@@ -945,10 +945,12 @@ def admin_credit_events(limit: int = Query(100, ge=1, le=250), admin: dict = Dep
 @router.get("/billing/admin/jobs")
 def admin_processing_jobs(
     limit: int = Query(100, ge=1, le=250),
+    owner_id: str = Query("", max_length=80),
     admin: dict = Depends(_admin),
 ) -> dict:
     del admin
-    jobs = JOBS.list_for_admin(limit)
+    from .admin_jobs import enrich_owners
+    jobs = enrich_owners(JOBS.list_for_admin(limit, owner_id))
     counts: dict[str, int] = {}
     for item in jobs:
         status = str(item.get("status") or "unknown")
@@ -959,6 +961,19 @@ def admin_processing_jobs(
         "jobs": jobs,
         "worker": worker_health(),
     }
+
+
+@router.get("/billing/admin/jobs/{job_id}")
+def admin_job_detail(job_id: str, admin: dict = Depends(_admin)) -> JSONResponse:
+    from .admin_jobs import detail, _PRIVATE_HEADERS
+    return JSONResponse(detail(job_id, admin["actor"]), headers=_PRIVATE_HEADERS)
+
+
+@router.get("/billing/admin/jobs/{job_id}/artifacts/{filename}")
+def admin_job_artifact(job_id: str, filename: str, admin: dict = Depends(_admin)) -> FileResponse:
+    from .admin_jobs import artifact, _PRIVATE_HEADERS
+    return FileResponse(artifact(job_id, filename, admin["actor"]), filename=filename,
+                        media_type="application/octet-stream", headers=_PRIVATE_HEADERS)
 
 
 @router.get("/billing/admin/costs")
