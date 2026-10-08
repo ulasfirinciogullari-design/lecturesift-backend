@@ -295,7 +295,7 @@ function staticSeo(html, language, publicPath) {
     : `  <meta name="description" content="${escapeAttribute(description)}">\n`;
   const metadata = `
 ${staticDescription}
-  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
+  <meta name="robots" content="max-image-preview:large,max-snippet:-1,max-video-preview:-1">
   <link rel="canonical" href="${canonical}">
 ${alternates}
   <link rel="alternate" hreflang="x-default" href="${ORIGIN}${localizedPath("tr", publicPath)}">

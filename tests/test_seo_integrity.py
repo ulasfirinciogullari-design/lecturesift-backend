@@ -152,7 +152,7 @@ def test_sitemap_and_prerendered_pages_are_a_closed_canonical_set(localized_outp
         page = _parse_html(output_path)
         assert page.canonicals == [location], f"Non-self canonical on {location}"
         assert not any("noindex" in value for value in page.robots), location
-        assert page.robots == ["index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1"], location
+        assert page.robots == ["max-image-preview:large,max-snippet:-1,max-video-preview:-1"], location
         assert set(page.alternates) == expected_hreflang
         assert all(len(values) == 1 for values in page.alternates.values())
         assert {language: values[0] for language, values in page.alternates.items()} == sitemap_alternates
