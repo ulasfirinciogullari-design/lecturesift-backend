@@ -5,6 +5,58 @@ takip edilir. Başlangıç varsayımı Türkiye'deki üniversite öğrencileri v
 Türkçe aramalardır. İlk rekabet geliştirmesi üç ana ürün sayfasının Türkçe
 ve İngilizce sürümlerine uygulanır; diğer diller mevcut içeriklerini korur.
 
+## 8–9 Ekim 2026 Search Console incelemesi
+
+Windsor üzerinden `sc-domain:lecturesift.com` yeniden okundu. 8 Ekim
+20:56:53 UTC veri görüntüsünde site haritası **181 adres, 0 hata, 0 uyarı**
+bildiriyor; son okuma 4 Ekim 09:11 UTC. Bu, indekslenen sayfa sayısı değildir.
+8 Eylül–5 Ekim kesinleşmiş 28 günlük site toplamı **133 gösterim, 3 tıklama,
+%2,26 CTR**. Görünür sorgu satırları anonimleştirilen sorguları içermediği
+için bu toplamın yerine kullanılamaz. Bu küçük örneklem rekabette başarı
+veya yayın değişikliklerinin etkisini kanıtlamaz.
+
+Canlı isteklerde doğrulananlar:
+
+- `/features.html`, `/en/plans.html`, `/ko/privacy.html` temiz adreslerine
+  301 ile gidiyor. Geçmiş raporlarda `.html` gösterimi bulunması bugünkü
+  yönlendirme hatasının kanıtı değil.
+- `/en/workspace` ve `/fr/workspace.html` ilk HTML'de `noindex,follow`
+  taşıyor; robots.txt bunların taranmasını engellemiyor.
+- `www` ana alan adına yönleniyor. Buna karşılık üretimin Netlify alt
+  alan adı kendi adresinde 200 veriyor. Kaynak düzeltmesi bu belirli alan
+  adını, yolu ve sorguyu koruyarak `lecturesift.com` adresine 301 ile taşır.
+- `/en/en/features` yanlış iç içe adreste İngilizce sayfayı 200 ile
+  sunuyor. Kaynak düzeltmesi geniş dil rewrite kurallarını kaldırır;
+  yalnız gerçek ortak dosyalar ve açık noindex uygulama sayfaları için
+  tam adresli kurallar üretir. Hatalı iç içe adresler 404 olur; eksik bir
+  çeviri de sessizce Türkçe sayfaya dönüşmez.
+- Herkese açık sayfalardaki büyük resim/arama önizlemesi izinleri ilk
+  HTML'e eklenir; rehberler dahil 181 adres için JavaScript gerekmez.
+  Bu izinler Google'ın o görünümü kullanacağına dair garanti değildir.
+
+Kaynak kontrolleri mevcut GitHub Actions üzerinden yürütülür. Yerel
+derleme/test yapılmaz. Kaynak değişikliği, CI başarısı ve canlı etkinleşme
+ayrı ayrı doğrulanmalıdır.
+
+Netlify destek kaydı #1128504'e gelen yanıt, 23 Eylül aralıklı 500
+yanıtlarını sağlayıcının yaklaşık bir saatlik kısmi kesintisiyle eşleştirip
+çözüldüğünü bildiriyor. 8 Ekim ana sürümünün
+[Frontend delivery kontrolü başarılı](https://github.com/ulasfirinciogullari-design/lecturesift-backend/actions/runs/37710583709).
+Bugünkü sınırlı okumalarda da 500 görülmedi; bunlar kesintisiz hizmet
+garantisi değildir. Aşağıdaki 23 Eylül hata kayıtları tarihsel kanıttır.
+
+Search Console'da doğrudan yapılan bir ayar değişikliği veya “Düzeltmeyi
+doğrula” işlemi yoktur: mevcut Windsor bağlantısının yazma eylemi listesi
+boş; alanları performans ve site haritasıyla sınırlı. URL Denetimi için
+GSC Wizard önerildi, bağlantısı henüz doğrulanmadı. Bu erişimle öncelikle
+TR/EN ürün sayfaları, Cornell/aktif hatırlama rehberleri, eski `.html`
+adresleri ve çalışma alanının son tarama, indekslenme nedeni ve Google'ın
+seçtiği canonical bilgisi okunmalı. Sonuç olmadan “tüm indeksleme
+sorunları çözüldü” veya “yeniden indeksleme istendi” denmemelidir.
+
+Teknik dayanaklar: [Netlify adres kuralları](https://docs.netlify.com/manage/routing/redirects/redirect-options/),
+[Google robots önizleme yönergeleri](https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag).
+
 ## 23 Eylül rekabet geliştirmesi
 
 Kullanıcının uygulama talebi üzerine ilk paket aşağıdaki işleri kapsar:

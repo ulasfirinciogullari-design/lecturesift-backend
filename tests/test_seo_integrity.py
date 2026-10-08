@@ -152,6 +152,7 @@ def test_sitemap_and_prerendered_pages_are_a_closed_canonical_set(localized_outp
         page = _parse_html(output_path)
         assert page.canonicals == [location], f"Non-self canonical on {location}"
         assert not any("noindex" in value for value in page.robots), location
+        assert page.robots == ["max-image-preview:large,max-snippet:-1,max-video-preview:-1"], location
         assert set(page.alternates) == expected_hreflang
         assert all(len(values) == 1 for values in page.alternates.values())
         assert {language: values[0] for language, values in page.alternates.items()} == sitemap_alternates
@@ -325,6 +326,45 @@ def test_index_aliases_are_permanent_redirects_not_duplicate_200_pages() -> None
             (f"/{language}/", "301"),
             (f"/{language}/", "301!"),
         } or generic_index_rule in permanent_language
+
+
+def test_locale_rewrites_only_serve_noindex_app_pages_and_real_assets(localized_output: Path) -> None:
+    lines = (localized_output / "_redirects").read_text(encoding="utf-8").splitlines()
+    rules = [line.split() for line in lines if line.strip() and not line.startswith("#")]
+    assert len(rules) < 2000
+    rewrites = {source: target for source, target, status in rules if status == "200"}
+    assert rewrites
+    for source, target in rewrites.items():
+        assert "*" not in source and ":" not in source, source
+        assert source.split("/")[1] in LANGUAGES[1:]
+        target_file = localized_output / target.lstrip("/")
+        assert target_file.is_file(), (source, target)
+        if target_file.suffix == ".html":
+            page = _parse_html(target_file)
+            assert not page.canonicals, (source, target)
+            assert any("noindex" in value for value in page.robots), (source, target)
+        else:
+            assert target.startswith("/assets/") or target_file.suffix in {
+                ".js", ".css", ".png", ".svg", ".jpg", ".webp", ".ico", ".woff2",
+            }
+    for language in LANGUAGES[1:]:
+        for filename in NONINDEXABLE_HTML:
+            assert rewrites[f"/{language}/{filename}"] == f"/{filename}"
+            assert rewrites[f"/{language}/{Path(filename).stem}"] == f"/{filename}"
+        assert rewrites[f"/{language}/auth.css"] == "/auth.css"
+        assert rewrites[f"/{language}/assets/study/cornell-notes-en.txt"] == "/assets/study/cornell-notes-en.txt"
+        for nested in ("en/features", "de/", "sitemap.xml", "features", "not-a-real-seo-page"):
+            assert f"/{language}/{nested}" not in rewrites
+
+
+def test_production_host_alias_redirect_precedes_path_rules(localized_output: Path) -> None:
+    rules = [line.split() for line in (localized_output / "_redirects").read_text().splitlines()
+             if line.strip() and not line.startswith("#")]
+    for position, scheme in enumerate(("http", "https")):
+        assert rules[position] == [
+            f"{scheme}://clever-horse-22b1a8.netlify.app/*", f"{ORIGIN}/:splat", "301!",
+        ]
+    assert all("deploy-preview" not in rule[0] for rule in rules)
 
 
 def test_html_aliases_permanently_redirect_to_sitemap_clean_urls() -> None:
