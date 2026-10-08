@@ -1,5 +1,18 @@
 import {test, expect} from './fixtures.mjs';
 
+test('locale rewrites keep private pages and assets available without serving nested public copies', async ({request}) => {
+  for (const prefix of ['/en', '/fr', '/hi']) {
+    const workspace = await request.get(`${prefix}/workspace`);
+    expect(workspace.status()).toBe(200);
+    expect(await workspace.text()).toContain('content="noindex,follow"');
+    expect((await request.get(`${prefix}/auth.css`)).status()).toBe(200);
+    expect((await request.get(`${prefix}/assets/study/cornell-notes-en.txt`)).status()).toBe(200);
+    expect((await request.get(`${prefix}/en/features`)).status()).toBe(404);
+    expect((await request.get(`${prefix}/de/`)).status()).toBe(404);
+    expect((await request.get(`${prefix}/sitemap.xml`)).status()).toBe(404);
+  }
+});
+
 test('public runtime bundles preserve every language and picker navigation', async ({page}) => {
   for (const language of ['tr', 'en', 'de', 'fr', 'es', 'it', 'pt', 'ru', 'ar', 'zh', 'ja', 'ko', 'hi']) {
     const prefix = language === 'tr' ? '' : `/${language}`;

@@ -1,3 +1,8 @@
+# Consolidate the production hosting alias onto the public domain. Preview
+# and branch deploy hosts are intentionally not matched by these exact hosts.
+http://clever-horse-22b1a8.netlify.app/* https://lecturesift.com/:splat 301!
+https://clever-horse-22b1a8.netlify.app/* https://lecturesift.com/:splat 301!
+
 # One public content item has one crawlable URL. Netlify serves clean URLs, so
 # legacy .html aliases are permanent redirects rather than duplicate 200 pages.
 /index.html                         /                         301!
@@ -111,17 +116,8 @@
 
 /tr             /               301!
 /tr/*           /:splat         301!
+# The build appends exact rewrites for shared assets and noindex app pages.
+# Never restore /:lang/* -> /:splat: it serves duplicate content at nested
+# locale URLs and hides missing translations behind Turkish public pages.
 # Existing locale index files handle their own trailing slash. A forced
 # /en -> /en/ rule also matches /en/ on Netlify and redirects to itself.
-/en/*           /:splat         200
-/de/*           /:splat         200
-/fr/*           /:splat         200
-/es/*           /:splat         200
-/it/*           /:splat         200
-/pt/*           /:splat         200
-/ru/*           /:splat         200
-/ar/*           /:splat         200
-/zh/*           /:splat         200
-/ja/*           /:splat         200
-/ko/*           /:splat         200
-/hi/*           /:splat         200

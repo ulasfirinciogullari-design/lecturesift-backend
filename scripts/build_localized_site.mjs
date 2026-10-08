@@ -1,4 +1,4 @@
-import {cp, mkdir, readFile, rm, writeFile} from "node:fs/promises";
+import {cp, mkdir, readdir, readFile, rm, writeFile} from "node:fs/promises";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {createHash} from "node:crypto";
@@ -295,6 +295,7 @@ function staticSeo(html, language, publicPath) {
     : `  <meta name="description" content="${escapeAttribute(description)}">\n`;
   const metadata = `
 ${staticDescription}
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
   <link rel="canonical" href="${canonical}">
 ${alternates}
   <link rel="alternate" hreflang="x-default" href="${ORIGIN}${localizedPath("tr", publicPath)}">
@@ -417,4 +418,36 @@ for (const [publicPath, page] of STUDY_PAGES) {
     await writeFile(target, html, "utf8");
   }
 }
+// Localized public pages are physical files. Only private app pages and shared
+// assets need rewrites; a broad locale splat also exposes /en/en/features and
+// silently substitutes Turkish when a translated page is missing.
+const sharedRoutes = new Map();
+for (const entry of await readdir(SOURCE, {withFileTypes: true})) {
+  if (!entry.isFile()) continue;
+  const route = `/${entry.name}`;
+  if (entry.name.endsWith(".html")) {
+    if (entry.name === "404.html" || entry.name === "index.html" || PUBLIC_PATH_SET.has(route)) continue;
+    const html = await readFile(path.join(SOURCE, entry.name), "utf8");
+    if (!/<meta\s+name="robots"\s+content="[^"]*\bnoindex\b/i.test(html)) {
+      throw new Error(`Shared app page must be explicitly noindex: ${route}`);
+    }
+    sharedRoutes.set(route, route);
+    sharedRoutes.set(route.slice(0, -5), route);
+  } else if (/\.(?:js|css|png|svg|jpg|webp|ico|woff2)$/.test(entry.name)) {
+    sharedRoutes.set(route, route);
+  }
+}
+async function sharedAssets(directory, prefix) {
+  for (const entry of await readdir(directory, {withFileTypes: true})) {
+    const route = `${prefix}/${entry.name}`;
+    if (entry.isDirectory()) await sharedAssets(path.join(directory, entry.name), route);
+    else if (entry.isFile()) sharedRoutes.set(route, route);
+  }
+}
+await sharedAssets(path.join(OUTPUT, "assets"), "/assets");
+const sharedRewrites = LANGUAGES.filter(language => language !== "tr").flatMap(language =>
+  [...sharedRoutes].sort(([a], [b]) => a.localeCompare(b)).map(([from, to]) => `/${language}${from} ${to} 200`)
+);
+const redirects = await readFile(path.join(SOURCE, "_redirects"), "utf8");
+await writeFile(path.join(OUTPUT, "_redirects"), `${redirects}\n${sharedRewrites.join("\n")}\n`, "utf8");
 console.log(`Built ${LANGUAGES.length * PUBLIC_PATHS.length + STUDY_PAGES.size * STUDY_RESOURCES.languages.length} indexable pages in ${OUTPUT}`);

@@ -1686,7 +1686,7 @@ def test_every_supported_language_has_a_stable_indexable_url():
     assert 'link[rel="alternate"][hreflang=' in seo
     assert 'hreflang: "x-default"' in seo
     for language in languages[1:]:
-        assert f"/{language}/*" in redirects
+        assert not re.search(rf"^/{language}/\*\s+/?:splat\s+200", redirects, re.MULTILINE)
         assert f"<loc>https://lecturesift.com/{language}/</loc>" in sitemap
         assert f'hreflang="{language}"' in sitemap
     assert "<loc>https://lecturesift.com/</loc>" in sitemap
