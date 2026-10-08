@@ -540,7 +540,8 @@ function renderAdminUsers(users) {
       <td data-label="İşlem"><button class="admin-action" data-user-open="${adminEscape(user.id)}">Aç ve düzenle</button></td>
     </tr>`;
   }).join("");
-  admin$("adminUserList").innerHTML = `<table class="admin-table admin-record-table"><thead><tr><th><input id="adminSelectVisibleUsers" type="checkbox" aria-label="Bu sayfadaki kullanıcıları seç"></th><th>Kullanıcı</th><th>Doğrulama</th><th>Plan</th><th>Dakika</th><th>Kayıt zamanı</th><th>Son hareket / ağ</th><th>İşlem</th></tr></thead><tbody>${rows || '<tr><td colspan="8">Kullanıcı bulunamadı.</td></tr>'}</tbody></table>`;
+  const selectAll = users.length ? `<label class="admin-selection-control"><input id="adminSelectVisibleUsers" type="checkbox"><span>${adminEscape(adminT("admin.selectVisibleUsers", "Bu sayfadaki kullanıcıları seç"))}</span></label>` : "";
+  admin$("adminUserList").innerHTML = `${selectAll}<table class="admin-table admin-record-table"><thead><tr><th>Seç</th><th>Kullanıcı</th><th>Doğrulama</th><th>Plan</th><th>Dakika</th><th>Kayıt zamanı</th><th>Son hareket / ağ</th><th>İşlem</th></tr></thead><tbody>${rows || '<tr><td colspan="8">Kullanıcı bulunamadı.</td></tr>'}</tbody></table>`;
   admin$("adminUsersResultCount").textContent = `${Number(adminState.userPagination.total || 0).toLocaleString(adminLocale())} kayıt`;
   renderAdminPagination("adminUsersPagination", adminState.userPagination, page => loadAdminUsers(page));
   admin$("adminSelectVisibleUsers")?.addEventListener("change", event => {

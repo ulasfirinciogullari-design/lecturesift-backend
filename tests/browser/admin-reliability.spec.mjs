@@ -283,10 +283,10 @@ test('unverified account closure accepts SİL, allows cancellation and dismisses
     return true;
   }});
   await expect(page.locator('#adminRefresh')).toBeEnabled();
-  await page.locator('[data-user-open]').click();
+  await page.getByRole('button', {name:'Aç ve düzenle', exact:true}).click();
   await page.locator('#adminUserDialog .admin-dialog-close').click();
   expect(deletions).toEqual([]);
-  await page.locator('[data-user-open]').click();
+  await page.getByRole('button', {name:'Aç ve düzenle', exact:true}).click();
   const form = page.locator('[data-user-close-form]');
   await form.locator('[name="reason"]').fill('Doğrulanmamış test hesabı');
   await form.locator('[name="confirmation_word"]').fill('yanlış');
