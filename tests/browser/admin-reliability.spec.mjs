@@ -269,11 +269,16 @@ test('support status failures and late replies preserve the active response draf
 test('unverified account closure accepts SİL, allows cancellation and dismisses notices', async ({page}) => {
   await page.clock.install();
   let closed = false;
+  let releaseAdvertising;
+  const advertisingReady = new Promise(resolve => { releaseAdvertising = resolve; });
   const deletions = [];
   const nativeDialogs = [];
   page.on('dialog', async dialog => { nativeDialogs.push(dialog.message()); await dialog.dismiss(); });
   const unexpected = await openAdmin(page, {hash:'users', override:async (route, url) => {
-    if (url.pathname === '/billing/admin/users') {
+    if (url.pathname === '/billing/admin/advertising-readiness') {
+      await advertisingReady;
+      await route.fulfill({status:200, headers:CORS, json:advertising});
+    } else if (url.pathname === '/billing/admin/users') {
       await route.fulfill({status:200, headers:CORS, json:{users:closed ? [] : [{...user, email_verified:false}], pagination:{...pagination, total:closed ? 0 : 1}}});
     } else if (url.pathname === `/billing/admin/users/${user.id}` && route.request().method() === 'DELETE') {
       deletions.push(route.request().postDataJSON());
@@ -282,28 +287,32 @@ test('unverified account closure accepts SİL, allows cancellation and dismisses
     } else return false;
     return true;
   }});
+  try {
+    await expect(page.locator('#adminUserList')).toContainText(user.email);
+    await expect(page.locator('#adminRefresh')).toBeDisabled();
+    await page.getByRole('button', {name:'Aç ve düzenle', exact:true}).click();
+    await page.locator('#adminUserDialog .admin-dialog-close').click();
+    expect(deletions).toEqual([]);
+    await page.getByRole('button', {name:'Aç ve düzenle', exact:true}).click();
+    const form = page.locator('[data-user-close-form]');
+    await form.locator('[name="reason"]').fill('Doğrulanmamış test hesabı');
+    await form.locator('[name="confirmation_word"]').fill('yanlış');
+    await form.locator('button[type="submit"]').click();
+    await expect(page.locator('.admin-dialog-notice')).toContainText('SİL yaz');
+    expect(deletions).toEqual([]);
+    await page.locator('.admin-dialog-notice .admin-notice-close').click();
+    await expect(page.locator('.admin-dialog-notice')).toBeHidden();
+    await form.locator('[name="confirmation_word"]').fill('SİL');
+    await form.locator('button[type="submit"]').click();
+    await expect(page.locator('#adminUserDialog')).toBeHidden();
+    await expect(page.locator('#adminOperationNotice')).toContainText('Hesap kapatıldı');
+    await expect(page.locator('#adminUserList')).not.toContainText(user.email);
+    expect(deletions).toEqual([{confirmation_email:user.email, reason:'Doğrulanmamış test hesabı'}]);
+    expect(nativeDialogs).toEqual([]);
+    await page.clock.runFor(8_100);
+    await expect(page.locator('#adminOperationNotice')).toBeHidden();
+  } finally { releaseAdvertising(); }
   await expect(page.locator('#adminRefresh')).toBeEnabled();
-  await page.getByRole('button', {name:'Aç ve düzenle', exact:true}).click();
-  await page.locator('#adminUserDialog .admin-dialog-close').click();
-  expect(deletions).toEqual([]);
-  await page.getByRole('button', {name:'Aç ve düzenle', exact:true}).click();
-  const form = page.locator('[data-user-close-form]');
-  await form.locator('[name="reason"]').fill('Doğrulanmamış test hesabı');
-  await form.locator('[name="confirmation_word"]').fill('yanlış');
-  await form.locator('button[type="submit"]').click();
-  await expect(page.locator('.admin-dialog-notice')).toContainText('SİL yaz');
-  expect(deletions).toEqual([]);
-  await page.locator('.admin-dialog-notice .admin-notice-close').click();
-  await expect(page.locator('.admin-dialog-notice')).toBeHidden();
-  await form.locator('[name="confirmation_word"]').fill('SİL');
-  await form.locator('button[type="submit"]').click();
-  await expect(page.locator('#adminUserDialog')).toBeHidden();
-  await expect(page.locator('#adminOperationNotice')).toContainText('Hesap kapatıldı');
-  await expect(page.locator('#adminUserList')).not.toContainText(user.email);
-  expect(deletions).toEqual([{confirmation_email:user.email, reason:'Doğrulanmamış test hesabı'}]);
-  expect(nativeDialogs).toEqual([]);
-  await page.clock.runFor(8_100);
-  await expect(page.locator('#adminOperationNotice')).toBeHidden();
   expect(unexpected).toEqual([]);
 });
 

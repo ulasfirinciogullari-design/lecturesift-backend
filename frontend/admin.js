@@ -1675,6 +1675,15 @@ function adminDeleteConfirmation(value) {
   return String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 }
 
+async function refreshAdminUsersAfterMutation(message) {
+  // Reflect the mutation immediately, even while the general refresh is
+  // waiting for an advertising provider. Other sections report their own
+  // refresh errors through adminDataStatus.
+  try { await loadAdminUsers(adminState.userPagination.page || 1); }
+  catch (error) { adminNotice(`${message}\nListe yenilenemedi: ${error.message}`, true); }
+  if (adminAccessToken) void loadAdmin({silent:true}).catch(() => {});
+}
+
 async function closeAdminUser(event, form) {
   event.preventDefault();
   const userId = form.dataset.userCloseForm;
@@ -1694,8 +1703,7 @@ async function closeAdminUser(event, form) {
     selectedAdminUsers.delete(userId);
     admin$("adminUserDialog")?.close();
     adminNotice(body.message);
-    try { await loadAdmin({silent:true}); }
-    catch (error) { adminNotice(`${body.message} Liste yenilenemedi: ${error.message}`, true); }
+    await refreshAdminUsersAfterMutation(body.message);
   } catch (error) { adminNotice(error.message, true); }
   finally { if (submit.isConnected) submit.disabled = false; }
 }
@@ -1753,8 +1761,7 @@ async function applyAdminBulkAction() {
     admin$("adminBulkConfirmation").value = "";
     updateAdminBulkToolbar();
     adminNotice(message, Boolean(body.failed));
-    try { await loadAdmin({silent:true}); }
-    catch (error) { adminNotice(`${message}\nListe yenilenemedi: ${error.message}`, true); }
+    await refreshAdminUsersAfterMutation(message);
   } catch (error) { adminNotice(error.message, true); }
   finally { button.disabled = false; }
 }
