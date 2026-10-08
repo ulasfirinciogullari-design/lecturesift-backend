@@ -241,7 +241,6 @@ if [[ ! "$google_ads_timeout_seconds" =~ ^(0|[1-9][0-9]?)$ ]] ||
 fi
 if [[ "$google_ads_api_enabled" == "true" ]]; then
   google_ads_api_required=(
-    LECTURESIFT_GOOGLE_ADS_API_SERVICE_ACCOUNT_JSON
     LECTURESIFT_GOOGLE_ADS_API_CUSTOMER_ID
   )
   google_ads_api_missing=()
@@ -267,6 +266,19 @@ import os
 import re
 
 raw = os.environ.get("LECTURESIFT_GOOGLE_ADS_API_SERVICE_ACCOUNT_JSON", "").strip()
+oauth_client = os.environ.get("LECTURESIFT_GOOGLE_ADS_API_CLIENT_ID", "").strip()
+oauth_secret = os.environ.get("LECTURESIFT_GOOGLE_ADS_API_CLIENT_SECRET", "")
+oauth_refresh = os.environ.get("LECTURESIFT_GOOGLE_ADS_API_REFRESH_TOKEN", "")
+if any((oauth_client, oauth_secret, oauth_refresh)):
+    # No partial grants, mixed credentials, whitespace, or provider overrides.
+    valid = (
+        not raw
+        and len(oauth_client) <= 512
+        and re.fullmatch(r"[A-Za-z0-9._-]+\.apps\.googleusercontent\.com", oauth_client)
+        and re.fullmatch(r"[\x21-\x7e]{1,8192}", oauth_secret)
+        and re.fullmatch(r"[\x21-\x7e]{1,8192}", oauth_refresh)
+    )
+    raise SystemExit(0 if valid else 1)
 try:
     def unique_object(pairs):
         value = {}
@@ -310,7 +322,7 @@ except (ValueError, TypeError, UnicodeError, json.JSONDecodeError, binascii.Erro
 raise SystemExit(0 if valid else 1)
 PY
   then
-    echo "Google Ads service-account JSON is invalid." >&2
+    echo "Google Ads credentials are invalid; configure exactly one complete service-account or user OAuth grant." >&2
     exit 1
   fi
 fi

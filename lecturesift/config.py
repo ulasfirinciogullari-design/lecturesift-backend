@@ -371,7 +371,7 @@ GOOGLE_ADS_ID = os.getenv("LECTURESIFT_GOOGLE_ADS_ID", "").strip().upper()
 GOOGLE_ADS_SIGNUP_LABEL = os.getenv("LECTURESIFT_GOOGLE_ADS_SIGNUP_LABEL", "").strip()
 GOOGLE_ADS_PURCHASE_LABEL = os.getenv("LECTURESIFT_GOOGLE_ADS_PURCHASE_LABEL", "").strip()
 # This connection reads account reporting only. Google Ads API v25 access is
-# tied to the service account's Cloud project; the client deliberately sends no
+# tied to the credential's Cloud project; the client deliberately sends no
 # retired developer-token header and exposes no configurable provider origin.
 GOOGLE_ADS_API_ENABLED = (
     os.getenv("LECTURESIFT_GOOGLE_ADS_API_ENABLED", "false").lower() == "true"
@@ -379,6 +379,11 @@ GOOGLE_ADS_API_ENABLED = (
 GOOGLE_ADS_API_SERVICE_ACCOUNT_JSON = os.getenv(
     "LECTURESIFT_GOOGLE_ADS_API_SERVICE_ACCOUNT_JSON", ""
 ).strip()
+# Optional existing-client user OAuth instead of a service-account key. Keep
+# this grant separate from AdSense; configure exactly one complete auth mode.
+GOOGLE_ADS_API_CLIENT_ID = os.getenv("LECTURESIFT_GOOGLE_ADS_API_CLIENT_ID", "").strip()
+GOOGLE_ADS_API_CLIENT_SECRET = os.getenv("LECTURESIFT_GOOGLE_ADS_API_CLIENT_SECRET", "")
+GOOGLE_ADS_API_REFRESH_TOKEN = os.getenv("LECTURESIFT_GOOGLE_ADS_API_REFRESH_TOKEN", "")
 GOOGLE_ADS_API_CUSTOMER_ID = os.getenv(
     "LECTURESIFT_GOOGLE_ADS_API_CUSTOMER_ID", ""
 ).strip()
