@@ -5,6 +5,52 @@ takip edilir. Başlangıç varsayımı Türkiye'deki üniversite öğrencileri v
 Türkçe aramalardır. İlk rekabet geliştirmesi üç ana ürün sayfasının Türkçe
 ve İngilizce sürümlerine uygulanır; diğer diller mevcut içeriklerini korur.
 
+## 9 Ekim 2026 sağlayıcıdan bağımsız Google okuma yolu
+
+GSC Wizard desteğini beklemeden Google'ın kendi URL Denetimi API'sini
+kullanmak için [native Google onayı ve JSON aktarım yolu](docs/seo/direct-google-inspection.md)
+hazırlandı. Kullanıcı Google izin adımını yapabileceğini bildirdi;
+bu, iznin verildiği veya gerçek API sonucunun alındığı anlamına gelmez.
+Google'ın `webmasters.readonly` onayı resmi APIs Explorer ekranında verilir.
+Bu onay ajanın mevcut bağlantısına otomatik erişim eklemez; kullanıcıdan
+yalnız API'nin JSON yanıt gövdesi alınır, token/çerez/parola alınmaz.
+
+Öncelikli üç alternatif adres ve indeksli ana sayfa için istek gövdeleri
+hazırlandı. Yerel JSON yardımcı programı Google'ın canonical alanlarını
+ve alanın mevcut olup olmadığını koruyacak şekilde eklendi. Bu program
+Google'a bağlanmaz ve GSC Wizard özetinden canonical tahmin etmez.
+Gerçek Google yanıtı gelene kadar canonical hedefleri doğrulanmamış kalır.
+Kaynak incelemesi tamamlandı; yerel test/derleme çalıştırılmadı. Yardımcı
+programın testleri mevcut GitHub Actions akışında doğrulanacak.
+
+Kullanıcının tarayıcıdan devam talebi üzerine araç erişimi yeniden kontrol
+edildi: açık Codex sekmesini okuyup tıklayacak araç yok. Ayrı TinyFish
+tarayıcı araçları mevcut, ancak profil listesindeki hiçbir profilde Google
+oturumu kayıtlı değil. Ayrı giriş yolu kullanıcıya sunuldu; oturum açıldığı
+veya Search Console'a erişildiği henüz doğrulanmadı.
+
+## 9 Ekim 2026 Google canonical alanı teşhisi
+
+Kullanıcının eksik alanı çözme talebi üzerine `/quiz-flashcards` ve
+indeksli ana sayfa kontrol örneği yeniden okundu. Ana sayfa `PASS` ve
+`Submitted and indexed` döndürdüğü halde, iki örneğin hem metin hem
+yapılandırılmış yanıtında `googleCanonical` ve `userCanonical` yok.
+GSC Wizard'ın araç çıktı şeması da bu alanları sunmuyor. Bu gözlem,
+Google'ın ham yanıtının boş olduğunu kanıtlamaz; ham yanıt erişilebilir
+değil. Google'ın seçimi canlı HTML'den tahmin edilmedi.
+
+Sağlayıcının resmî belgesine göre MCP ve REST aynı araç hattını kullanır;
+belgelenmiş bir raw/full seçeneği bulunmadı. Google'ın resmî yanıt şeması
+iki canonical alanını destekler, ancak indeks dışı bir sayfada Google'ın
+`googleCanonical` alanını vermemesi de mümkündür. Çözüm, alanı sağlayıcı
+yanıtında korumak ve Google'ın döndürmemesi ile aracın sunmamasını ayırmaktır.
+
+[İki örnekli teşhis ve destek isteği](docs/seo/canonical-field-diagnostic-2026-10-09.json)
+hazırlandı. Kullanıcının açık gönderim talimatıyla destek mesajı
+**9 Ekim 01:54 TSİ'de support@gscwizard.com adresine gönderildi**;
+Gmail yanıtındaki `SENT` durumu doğrulandı. Sağlayıcının yanıtı bekleniyor.
+Sorun çözülmüş olarak işaretlenmedi; yeni bir yerel test/derleme çalıştırılmadı.
+
 ## 9 Ekim 2026 GSC URL takibi
 
 **01:41 TSİ:** Tam site haritası denetiminde indeks dışında bulunan
