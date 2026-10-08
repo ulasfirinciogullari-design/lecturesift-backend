@@ -173,6 +173,9 @@ def isolated_google_ads(monkeypatch):
     values = {
         "GOOGLE_ADS_API_ENABLED": True,
         "GOOGLE_ADS_API_SERVICE_ACCOUNT_JSON": _service_account(),
+        "GOOGLE_ADS_API_CLIENT_ID": "",
+        "GOOGLE_ADS_API_CLIENT_SECRET": "",
+        "GOOGLE_ADS_API_REFRESH_TOKEN": "",
         "GOOGLE_ADS_API_CUSTOMER_ID": CUSTOMER_ID,
         "GOOGLE_ADS_API_CACHE_SECONDS": 300,
         "GOOGLE_ADS_API_TIMEOUT_SECONDS": 4.0,
@@ -311,6 +314,151 @@ def test_only_readonly_search_queries_are_source_controlled():
     assert "fetchincentive" not in joined
     assert "applyincentive" not in joined
     assert "mutate" not in joined
+
+
+def _use_user_oauth(monkeypatch):
+    values = {
+        "GOOGLE_ADS_API_SERVICE_ACCOUNT_JSON": "",
+        "GOOGLE_ADS_API_CLIENT_ID": "ads-user.apps.googleusercontent.com",
+        "GOOGLE_ADS_API_CLIENT_SECRET": "private-ads-client-secret",
+        "GOOGLE_ADS_API_REFRESH_TOKEN": "private-ads-refresh-token",
+    }
+    for name, value in values.items():
+        monkeypatch.setattr(config, name, value)
+
+
+def test_user_oauth_refreshes_existing_grant_without_requesting_new_scopes(
+    monkeypatch, caplog
+):
+    _use_user_oauth(monkeypatch)
+
+    # The reporting path must not try to parse or sign a service-account JWT.
+    def unexpected_service_account(_raw):
+        pytest.fail("user OAuth attempted to load a service-account key")
+
+    monkeypatch.setattr(google_ads, "_service_account", unexpected_service_account)
+    result = google_ads.google_ads_management_readiness()
+    cached = google_ads.google_ads_management_readiness()
+
+    assert result["connected"] is True
+    assert result["account"]["currency_code"] == "TRY"
+    assert result["periods"]["this_month"]["cost_micros"] == 3_000_000
+    assert cached == {**result, "cached": True}
+    assert len(FakeGoogleAdsClient.created) == 1
+    fake = FakeGoogleAdsClient.created[0]
+    assert fake.options["follow_redirects"] is False
+    assert fake.posts[0]["url"] == "https://oauth2.googleapis.com/token"
+    assert fake.posts[0]["data"] == {
+        "grant_type": "refresh_token",
+        "client_id": "ads-user.apps.googleusercontent.com",
+        "client_secret": "private-ads-client-secret",
+        "refresh_token": "private-ads-refresh-token",
+    }
+    assert {call["url"] for call in fake.posts[1:]} == {
+        f"https://googleads.googleapis.com/v25/customers/{CUSTOMER_ID}/googleAds:search"
+    }
+    assert {call["json"]["query"] for call in fake.posts[1:]} == google_ads._ALLOWED_QUERIES
+    settings = google_ads._settings()
+    visible = json.dumps(result) + repr(settings) + settings.fingerprint + caplog.text
+    for secret in (
+        settings.client_id, settings.client_secret, settings.refresh_token,
+        "short-lived-access-token",
+    ):
+        assert secret not in visible
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("CLIENT_ID", ""),
+        ("CLIENT_SECRET", ""),
+        ("REFRESH_TOKEN", ""),
+        ("CLIENT_ID", "https://evil.example/client"),
+        ("CLIENT_ID", "x" * 513 + ".apps.googleusercontent.com"),
+        ("CLIENT_SECRET", "secret\nwith-newline"),
+        ("REFRESH_TOKEN", "contains whitespace"),
+        ("REFRESH_TOKEN", "x" * 8193),
+        ("SERVICE_ACCOUNT_JSON", _service_account()),
+    ],
+)
+def test_partial_malformed_or_mixed_user_oauth_never_contacts_google(
+    monkeypatch, name, value
+):
+    _use_user_oauth(monkeypatch)
+    monkeypatch.setattr(config, f"GOOGLE_ADS_API_{name}", value)
+
+    result = google_ads.google_ads_management_readiness()
+
+    assert result["configured"] is False
+    assert result["connected"] is False
+    assert result["error_code"] == "configuration_invalid"
+    assert FakeGoogleAdsClient.created == []
+
+
+def test_service_account_with_partial_user_oauth_is_rejected(monkeypatch):
+    monkeypatch.setattr(config, "GOOGLE_ADS_API_CLIENT_ID", "ads-user.apps.googleusercontent.com")
+
+    result = google_ads.google_ads_management_readiness()
+
+    assert result["error_code"] == "configuration_invalid"
+    assert FakeGoogleAdsClient.created == []
+
+
+@pytest.mark.parametrize(
+    "scope",
+    [
+        None,
+        [],
+        "https://www.googleapis.com/auth/adsense.readonly",
+        f"{google_ads._OAUTH_SCOPE} https://www.googleapis.com/auth/adsense.readonly",
+    ],
+)
+def test_user_oauth_requires_explicit_exact_ads_scope_before_queries(monkeypatch, scope):
+    _use_user_oauth(monkeypatch)
+    if scope is None:
+        FakeGoogleAdsClient.token_payload.pop("scope")
+    else:
+        FakeGoogleAdsClient.token_payload["scope"] = scope
+
+    result = google_ads.google_ads_management_readiness()
+
+    assert result["connected"] is False
+    assert result["error_code"] == "scope_mismatch"
+    assert len(FakeGoogleAdsClient.created[0].posts) == 1
+
+
+@pytest.mark.parametrize("status", [400, 401])
+def test_user_oauth_revoked_grant_is_opaque_and_stops_before_ads(monkeypatch, status, caplog):
+    _use_user_oauth(monkeypatch)
+    FakeGoogleAdsClient.token_status = status
+    FakeGoogleAdsClient.token_payload = {
+        "error": "invalid_grant",
+        "error_description": "private-ads-refresh-token private-ads-client-secret",
+    }
+
+    result = google_ads.google_ads_management_readiness()
+
+    assert result["connected"] is False
+    assert result["error_code"] == "authentication_failed"
+    assert len(FakeGoogleAdsClient.created[0].posts) == 1
+    assert "private-ads" not in json.dumps(result) + caplog.text
+
+
+def test_user_oauth_rotation_invalidates_cache_and_never_uses_adsense_grant(monkeypatch):
+    _use_user_oauth(monkeypatch)
+    old_fingerprint = google_ads._settings().fingerprint
+    assert google_ads.google_ads_management_readiness()["connected"] is True
+    monkeypatch.setattr(config, "GOOGLE_ADS_API_REFRESH_TOKEN", "rotated-ads-refresh-token")
+    assert google_ads._settings().fingerprint != old_fingerprint
+    assert google_ads.google_ads_management_readiness()["cached"] is False
+    assert len(FakeGoogleAdsClient.created) == 2
+    assert FakeGoogleAdsClient.created[-1].posts[0]["data"]["refresh_token"] == "rotated-ads-refresh-token"
+
+    for name in ("CLIENT_ID", "CLIENT_SECRET", "REFRESH_TOKEN"):
+        monkeypatch.setattr(config, f"GOOGLE_ADS_API_{name}", "")
+        monkeypatch.setattr(config, f"ADSENSE_API_{name}", "unrelated-adsense-grant")
+    assert google_ads.google_ads_management_readiness()["error_code"] == "configuration_invalid"
+    assert len(FakeGoogleAdsClient.created) == 2
 
 
 @pytest.mark.parametrize("encode", [False, True])
@@ -602,9 +750,18 @@ def test_deployment_contract_is_opt_in_and_keeps_key_in_api_role_only():
         "- key: LECTURESIFT_GOOGLE_ADS_API_SERVICE_ACCOUNT_JSON\n        sync: false"
         in render
     )
-    assert "Google Ads service-account JSON is invalid." in preflight
+    assert "configure exactly one complete service-account or user OAuth grant" in preflight
     assert '"LECTURESIFT_GOOGLE_ADS_API_SERVICE_ACCOUNT_JSON"' in roles
     assert '"LECTURESIFT_GOOGLE_ADS_API_SERVICE_ACCOUNT_JSON"' in probe
+    for name in ("CLIENT_ID", "CLIENT_SECRET", "REFRESH_TOKEN"):
+        key = f"LECTURESIFT_GOOGLE_ADS_API_{name}"
+        assert f"{key}=\n" in example
+        assert render.count(f"- key: {key}") == 1
+        assert f"- key: {key}\n        sync: false" in render
+        assert key in preflight
+        if name != "CLIENT_ID":
+            assert f'"{key}"' in roles
+            assert f'"{key}"' in probe
     assert "cryptography==50.0.1" in requirements
     assert "CUSTOMER_NOT_ALLOWLISTED_FOR_THIS_FEATURE" in documentation
     assert "developer-token" in documentation

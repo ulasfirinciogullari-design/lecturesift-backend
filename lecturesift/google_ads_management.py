@@ -1,9 +1,9 @@
 """Fail-closed, read-only Google Ads API v25 account reporting.
 
-The integration accepts one service-account key, exchanges a source-built JWT
-for the fixed ``adwords`` OAuth scope, and submits only fixed GAQL ``search``
-queries to Google's fixed v25 origin.  Provider responses are reduced to a
-small operational summary; customer IDs, resource names, coupon codes, OAuth
+The integration accepts either one service-account key or a separately issued
+user OAuth refresh grant for the fixed ``adwords`` scope. It submits only fixed
+GAQL ``search`` queries to Google's fixed v25 origin. Provider responses become
+a small operational summary; customer IDs, resource names, coupon codes, OAuth
 tokens, private keys and raw provider errors never enter our API output.
 """
 
@@ -41,6 +41,8 @@ _CUSTOMER_ID = re.compile(r"^[0-9]{10}$")
 _PROJECT_ID = re.compile(r"^[a-z][a-z0-9.-]{4,61}[a-z0-9]$")
 _PRIVATE_KEY_ID = re.compile(r"^[A-Fa-f0-9]{16,128}$")
 _CLIENT_ID = re.compile(r"^[0-9]{10,40}$")
+_OAUTH_CLIENT_ID = re.compile(r"^[A-Za-z0-9._-]+\.apps\.googleusercontent\.com$")
+_OAUTH_SECRET = re.compile(r"^[\x21-\x7e]{1,8192}$")
 _ACCESS_TOKEN = re.compile(r"^[\x21-\x7e]{1,4096}$")
 _CURRENCY = re.compile(r"^[A-Z]{3}$")
 _TIME_ZONE = re.compile(r"^[A-Za-z0-9._+-]+(?:/[A-Za-z0-9._+-]+)*$")
@@ -108,23 +110,47 @@ class _Settings:
     customer_id: str
     cache_seconds: int
     timeout_seconds: float
+    client_id: str = field(default="", repr=False)
+    client_secret: str = field(default="", repr=False)
+    refresh_token: str = field(default="", repr=False)
+
+    @property
+    def auth_mode(self) -> str | None:
+        oauth_present = any((self.client_id, self.client_secret, self.refresh_token))
+        if self.service_account_json:
+            if (
+                not oauth_present
+                and len(self.service_account_json) <= _MAX_SERVICE_ACCOUNT_BYTES * 2
+            ):
+                return "service_account"
+        elif (
+            len(self.client_id) <= 512
+            and _OAUTH_CLIENT_ID.fullmatch(self.client_id)
+            and _OAUTH_SECRET.fullmatch(self.client_secret)
+            and _OAUTH_SECRET.fullmatch(self.refresh_token)
+        ):
+            return "user_oauth"
+        return None
 
     @property
     def configured(self) -> bool:
         return bool(
             self.enabled
-            and 1 <= len(self.service_account_json) <= _MAX_SERVICE_ACCOUNT_BYTES * 2
+            and self.auth_mode is not None
             and _CUSTOMER_ID.fullmatch(self.customer_id)
         )
 
     @property
     def fingerprint(self) -> str:
         # A digest invalidates the process cache after key rotation without
-        # retaining the raw service-account JSON in the cache key.
+        # retaining raw credential values in the cache key.
         material = "\0".join(
             (
                 str(self.enabled),
                 self.service_account_json,
+                self.client_id,
+                self.client_secret,
+                self.refresh_token,
                 self.customer_id,
                 str(self.cache_seconds),
                 str(self.timeout_seconds),
@@ -151,6 +177,9 @@ def _settings() -> _Settings:
         service_account_json=str(
             getattr(config, "GOOGLE_ADS_API_SERVICE_ACCOUNT_JSON", "") or ""
         ).strip(),
+        client_id=str(getattr(config, "GOOGLE_ADS_API_CLIENT_ID", "") or "").strip(),
+        client_secret=str(getattr(config, "GOOGLE_ADS_API_CLIENT_SECRET", "") or ""),
+        refresh_token=str(getattr(config, "GOOGLE_ADS_API_REFRESH_TOKEN", "") or ""),
         customer_id=str(getattr(config, "GOOGLE_ADS_API_CUSTOMER_ID", "") or "").strip(),
         cache_seconds=max(
             60, min(3600, int(getattr(config, "GOOGLE_ADS_API_CACHE_SECONDS", 300)))
@@ -395,13 +424,27 @@ def _json_object(
 
 def _access_token(
     client: httpx.Client,
-    account: _ServiceAccount,
+    settings: _Settings,
+    account: _ServiceAccount | None,
     deadline: float,
 ) -> str:
+    if settings.auth_mode == "service_account" and account is not None:
+        data = {"grant_type": _JWT_GRANT_TYPE, "assertion": _jwt_assertion(account)}
+    elif settings.auth_mode == "user_oauth" and account is None:
+        # A refresh exchange uses an existing grant; it does not request or
+        # expand scopes. The returned scope must confirm the separate Ads grant.
+        data = {
+            "grant_type": "refresh_token",
+            "client_id": settings.client_id,
+            "client_secret": settings.client_secret,
+            "refresh_token": settings.refresh_token,
+        }
+    else:
+        raise _GoogleAdsError("configuration_invalid")
     try:
         response = client.post(
             _TOKEN_URL,
-            data={"grant_type": _JWT_GRANT_TYPE, "assertion": _jwt_assertion(account)},
+            data=data,
             headers={"Accept": "application/json"},
             timeout=_request_timeout(deadline),
         )
@@ -412,7 +455,7 @@ def _access_token(
     token_type = payload.get("token_type")
     returned_scope = payload.get("scope")
     expires_in = payload.get("expires_in")
-    if returned_scope is not None and (
+    if (settings.auth_mode == "user_oauth" or returned_scope is not None) and (
         not isinstance(returned_scope, str) or returned_scope.split() != [_OAUTH_SCOPE]
     ):
         raise _GoogleAdsError("scope_mismatch")
@@ -626,7 +669,13 @@ def _incentive_failure(error: _GoogleAdsError) -> dict[str, Any]:
 
 
 def _live_summary(settings: _Settings) -> dict[str, Any]:
-    service_account = _service_account(settings.service_account_json)
+    if not settings.configured:
+        raise _GoogleAdsError("configuration_invalid")
+    service_account = (
+        _service_account(settings.service_account_json)
+        if settings.auth_mode == "service_account"
+        else None
+    )
     deadline = time.monotonic() + settings.timeout_seconds
     timeout = httpx.Timeout(min(_MAX_REQUEST_TIMEOUT_SECONDS, settings.timeout_seconds))
     with _HTTP_CLIENT_FACTORY(
@@ -634,7 +683,7 @@ def _live_summary(settings: _Settings) -> dict[str, Any]:
         follow_redirects=False,
         headers={"User-Agent": "LectureSift-GoogleAds-ReadOnly/1"},
     ) as client:
-        token = _access_token(client, service_account, deadline)
+        token = _access_token(client, settings, service_account, deadline)
         with ThreadPoolExecutor(max_workers=6, thread_name_prefix="google-ads-readonly") as pool:
             account_future = pool.submit(
                 _search, client, settings, token, _ACCOUNT_QUERY, deadline=deadline
