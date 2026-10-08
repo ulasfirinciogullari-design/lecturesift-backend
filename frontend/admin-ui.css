@@ -71,6 +71,7 @@ body[data-page="admin"] .admin-notice-close {flex: 0 0 40px; min-height: 40px; b
 body[data-page="admin"] .admin-bulk-delete-warning {flex-basis: 100%; grid-column: 1 / -1; margin: 0; font-size: 12px; line-height: 1.65; color: var(--ui-muted);}
 body[data-page="admin"] .admin-selection-control {display: inline-flex; align-items: center; gap: 10px; min-height: 44px; margin: 0 0 12px; font-size: 13px; color: var(--ui-ink); cursor: pointer;}
 body[data-page="admin"] .admin-selection-control input {width: 18px; height: 18px; margin: 0;}
+body[data-page="admin"] #adminSelectedCount {color: var(--ui-ink);}
 body[data-page="admin"] .admin-user-tools {gap: 16px;}
 body[data-page="admin"] .admin-user-form {padding: 18px; border-radius: 12px;}
 body[data-page="admin"] .admin-user-form h3 {font-size: 16px;}
