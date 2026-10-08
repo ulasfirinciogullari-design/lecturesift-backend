@@ -924,7 +924,10 @@ def test_admin_growth_reads_and_escapes_advertising_management_status():
     assert "renderAdminAdSenseSummary" in admin_script
     assert 'id="adminAdSenseSummary"' in admin
     assert re.search(r'href="/admin-ui\.css\?v=[1-9]\d*"', admin)
-    assert "8.000" not in admin_script and "8000" not in admin_script
+    # Advertising must not invent the previously reported 8,000 TRY credit.
+    # Unrelated numeric values, such as notice timeouts, are not ad claims.
+    advertising_script = admin_script.split("function adminAdSenseStateLabel(", 1)[1].split("function userQuery(", 1)[0]
+    assert "8.000" not in advertising_script and "8000" not in advertising_script
     assert all(
         value in admin_script
         for value in (
