@@ -5,6 +5,32 @@ takip edilir. Başlangıç varsayımı Türkiye'deki üniversite öğrencileri v
 Türkçe aramalardır. İlk rekabet geliştirmesi üç ana ürün sayfasının Türkçe
 ve İngilizce sürümlerine uygulanır; diğer diller mevcut içeriklerini korur.
 
+## 9 Ekim 2026 GSC URL takibi
+
+**01:41 TSİ:** Tam site haritası denetiminde indeks dışında bulunan
+**31 URL**, GSC Wizard'ın mevcut URL takip özelliğine alındı. Kayıtlar
+`isActive=true`; sağlayıcının varsayılanı olan `emailDigestEnabled=true`
+değeri korunuyor. Düzenli kontrol, GSC Wizard uygulamasının mevcut cron
+özelliği üzerinden yürütülür; yeni bir Codex zamanlanmış otomasyonu
+oluşturulmadı. Bu ayarlar, e-posta özetinin gönderildiğini kanıtlamaz;
+alıcı ve gönderim zamanı mevcut araçta görünmüyor.
+
+**01:46 TSİ:** 31 adresin başlangıç denetimi tamamlandı; bekleyen veya
+hatalı kayıt yok. Bu takip kümesinin tamamı hâlâ indeks dışında:
+**18 Google tarafından bilinmiyor, 10 keşfedilmiş fakat indekslenmemiş,
+3 uygun canonical etiketli alternatif**. Bu sayılar ilk 183 URL'lik
+denetimin tarihsel 152/31 sonucunu değiştirmez; yalnız seçili 31 adresin
+sonraki görüntüsüdür. Bazı neden etiketleri değişmiş, indekslenen yeni
+adres görülmemiştir. [Takip başlangıç kanıtı](docs/seo/indexing-tracker-2026-10-09.json)
+ayarları, her URL'nin son kontrolünü ve durumunu içerir. Sağlayıcının
+bildirdiği günlük kota sayacı 231/2.000; bu sayı sadece bu 31 çağrıya
+atfedilmez.
+
+Bu takip Google'a yeniden indeksleme veya yeniden tarama isteği göndermez.
+Sonraki sonuçlar GSC Wizard takip geçmişinde tutulur. Site haritasının yeniden okunması ve
+üç alternatif kayıtta Google'ın seçtiği canonical hedefinin mevcut araç
+sınırları içinde doğrulanması da açık takip konularıdır.
+
 ## 9 Ekim 2026 sayfa açıklamalarının iyileştirilmesi
 
 Canlı denetimde Hakkımızda ve İletişim açıklamaları yalnız sayfa adını
@@ -19,14 +45,40 @@ garantisi eklenmedi.
 Bu bir açıklama iyileştirmesidir; indekslenmemenin kanıtlanmış nedeni
 veya indeksleme çözümü olarak sunulmaz. Mevcut üretim akışı açıklamaları
 statik olarak çevirip ilk HTML, Open Graph ve Twitter alanlarına taşır.
-Canonical, robots, sayfa gövdesi ve
-site haritası tarihleri değiştirilmedi.
+Canonical, robots, sayfa gövdesi ve site haritası tarihleri değiştirilmedi.
 
-Kaynak değişikliği güncel ana sürümden ayrı dalda hazırlanıyor. Mevcut
-GitHub Actions kontrolleri çalıştırılacak; yerel test/derleme yapılmadı.
-Bu aşamada canlı etkinleşme veya Google'ın yeni açıklamaları kullanması
-doğrulanmış değildir. Aşağıdaki denetim sonuçları bu metin değişikliğinden
-önceki gözlemlerdir.
+Kaynak değişikliği `df39541` ana sürümünden ayrı
+`codex/seo-metadata-descriptions` dalında hazırlandı ve
+[PR #115](https://github.com/ulasfirinciogullari-design/lecturesift-backend/pull/115)
+açıldı. PR sürümü `0a4a98a`; GitHub Actions
+[37852750562](https://github.com/ulasfirinciogullari-design/lecturesift-backend/actions/runs/37852750562)
+01:26 TSİ'de başarıyla tamamlandı: **1.434 Python testi geçti, 3 atlandı;
+223 tarayıcı senaryosu geçti, 5 atlandı**. Uzak derleme 183 indekslenebilir
+sayfa üretti. Netlify önizleme yayını başarılı; bu görevden önizleme
+HTML'ini okuma denemesi 401 verdiği için içeriği ayrıca doğrulanamadı.
+Kullanıcının tamamını uygulama talebiyle PR **01:32 TSİ'de ana dala
+birleştirildi**: `b80df35072b53c2b5c0756932f778086cbdb1a2a`.
+Yayın sonrasında **26 canlı HTML** doğrudan okundu: yeni description,
+Open Graph ve Twitter açıklamalarının tamamı 13 dildeki kaynakla birebir
+eşleşiyor; tümü 200 ve self-canonical. GSC Wizard'ın uzak canlı denetimi
+de bu 26 sayfayı indekslenebilir ve noindex olmadan doğruladı. Türkçe ve
+Portekizce quiz sayfaları ayrıca 200/self-canonical/indekslenebilir;
+üç eski `.html` adresi temiz karşılıklarına 301 veriyor.
+[Canlı yayın kanıtı](docs/seo/live-deployment-2026-10-09.json) kaydedildi.
+
+Ana dalın [Frontend delivery kontrolü](https://github.com/ulasfirinciogullari-design/lecturesift-backend/actions/runs/37854110748)
+ve [site yedekleme işi](https://github.com/ulasfirinciogullari-design/lecturesift-backend/actions/runs/37854110595)
+başarılı. Birleşme sonrası [Actions testleri](https://github.com/ulasfirinciogullari-design/lecturesift-backend/actions/runs/37854110632)
+de **01:37 TSİ'de başarıyla tamamlandı**; hem `pytest` hem
+`browser-smoke` başarılı. Kaynak değişikliği, uzak CI ve canlı etkinleşme
+ayrı ayrı doğrulandı. Yerel test/derleme çalıştırılmadı.
+
+Google'ın 01:32 TSİ'deki sitemap kaydı hâlâ `isPending=true`, 0 hata ve
+0 uyarı; aynı harita yeniden gönderilmedi. Mevcut araçlarda Google'a
+bireysel yeniden indeksleme isteği gönderen veya Google-selected canonical
+alanını açan bir eylem yok. Site tarafındaki yayının tamamlanması,
+Google'ın yeniden taramayı veya indekslemeyi tamamladığı anlamına gelmez.
+Aşağıdaki denetim sonuçları bu metin değişikliğinden önceki gözlemlerdir.
 
 ## 9 Ekim 2026 tam site haritası URL Denetimi
 
@@ -174,10 +226,12 @@ uydurma yayın tarihi eklenmedi. Yeni bir kaynak hatası kanıtlanmadığından
 uygulama kodu değiştirilmedi; rapor ve kanıt dosyası güncellendi.
 Yerel test/derleme veya yeni CI çalıştırılmadı.
 
-Sonraki kontrol: yeniden gönderilen site haritasının okunma tarihini ve
-üç ürün sayfasının son tarama/indeks durumunu tekrar karşılaştırmak;
-Türkçe quiz için Google'ın seçtiği canonical adresi tamamlamak.
-Yeni zamanlanmış otomasyon oluşturulmadı.
+Bu ilk incelemenin sonraki kontrolü, yeniden gönderilen site haritasının
+okunma tarihini ve üç ürün sayfasının son tarama/indeks durumunu tekrar
+karşılaştırmak, Türkçe quiz için Google'ın seçtiği canonical adresi
+tamamlamaktı. O aşamada yeni zamanlanmış otomasyon oluşturulmadı.
+Güncel takip kapsamı, yukarıdaki [31 URL'lik GSC URL takibi](#9-ekim-2026-gsc-url-takibi)
+bölümünde tüm indeks dışı harita adreslerine genişletildi.
 
 **00:51 TSİ takip kontrolü:** Quiz URL Denetimi aynı alternatif sayfa
 durumunu ve 29 Ağustos 21:42 UTC son taramasını döndürdü. Site haritasının

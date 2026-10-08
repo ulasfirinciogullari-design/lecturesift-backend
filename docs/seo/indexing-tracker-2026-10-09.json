@@ -1,0 +1,379 @@
+{
+  "siteUrl": "sc-domain:lecturesift.com",
+  "observedAtUtc": "2026-10-08T22:46:08Z",
+  "scope": "Only the 31 non-indexed URLs from the earlier 183-URL sitemap inspection; not the whole site's current index count.",
+  "addedAtUtc": "2026-10-08T22:41:37.34623+00:00",
+  "settings": {
+    "isActive": true,
+    "staleCrawlThresholdDays": 120,
+    "emailDigestEnabled": true
+  },
+  "emailNote": "Provider default is enabled; recipients and delivery timing are not exposed by the connector. No separate email-send action was called.",
+  "pollingNote": "GSC Wizard's existing hourly job performs ongoing inspection. These reads do not request Google crawling or indexing. No Codex scheduled task was created.",
+  "stats": {
+    "total": 31,
+    "indexed": 0,
+    "notIndexed": 31,
+    "pending": 0,
+    "errors": 0,
+    "warnings": 0,
+    "lastCheckAt": "2026-10-08T22:46:05.856+00:00"
+  },
+  "coverageCounts": {
+    "URL is unknown to Google": 18,
+    "Discovered - currently not indexed": 10,
+    "Alternate page with proper canonical tag": 3
+  },
+  "googleSelectedCanonical": "NOT_EXPOSED_BY_GSC_WIZARD",
+  "manualInitialInspections": 31,
+  "accountInspectionQuotaAfterSetup": {
+    "count": 231,
+    "limit": 2000,
+    "remaining": 1769,
+    "note": "Provider-reported account/property counter; not attributed solely to these 31 manual calls."
+  },
+  "urls": [
+    {
+      "url": "https://lecturesift.com/ar/document-summary",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "URL is unknown to Google",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:44:46.923+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/en/lecture-video-summary",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "URL is unknown to Google",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:42:09.222+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/en/quiz-flashcards",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "URL is unknown to Google",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:42:15.984+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/en/about",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "URL is unknown to Google",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:42:22.67+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/de/features",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "URL is unknown to Google",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:42:36.187+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/en/distance-sales",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "Discovered - currently not indexed",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:42:29.474+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/fr/contact",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "URL is unknown to Google",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:42:56.363+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/quiz-flashcards",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "Alternate page with proper canonical tag",
+      "indexingState": "INDEXING_ALLOWED",
+      "lastCrawlTime": "2026-08-29T21:42:44+00:00",
+      "lastCheckAt": "2026-10-08T22:42:40.294+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/fr/plans",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "URL is unknown to Google",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:42:49.644+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/fr/features",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "URL is unknown to Google",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:42:42.887+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/es/document-summary",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "Discovered - currently not indexed",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:43:02.995+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/es/quiz-flashcards",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "Discovered - currently not indexed",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:43:29.792+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/es/contact",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "Discovered - currently not indexed",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:43:36.558+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/es/refund",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "URL is unknown to Google",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:43:43.267+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/it/quiz-flashcards",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "Discovered - currently not indexed",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:43:49.967+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/it/contact",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "URL is unknown to Google",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:43:56.795+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/pt/lecture-video-summary",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "Discovered - currently not indexed",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:44:03.493+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/pt/quiz-flashcards",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "Alternate page with proper canonical tag",
+      "indexingState": "INDEXING_ALLOWED",
+      "lastCrawlTime": "2026-08-30T06:07:56+00:00",
+      "lastCheckAt": "2026-10-08T22:44:10.371+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/pt/contact",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "Alternate page with proper canonical tag",
+      "indexingState": "INDEXING_ALLOWED",
+      "lastCrawlTime": "2026-08-30T02:03:58+00:00",
+      "lastCheckAt": "2026-10-08T22:44:17.211+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/ru/features",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "Discovered - currently not indexed",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:44:24.031+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/ru/plans",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "URL is unknown to Google",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:44:30.78+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/ar/quiz-flashcards",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "URL is unknown to Google",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:44:53.651+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/ar/contact",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "Discovered - currently not indexed",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:45:00.402+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/zh/features",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "URL is unknown to Google",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:45:07.703+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/ja/document-summary",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "URL is unknown to Google",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:45:14.414+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/ja/plans",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "URL is unknown to Google",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:45:21.155+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/ja/contact",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "URL is unknown to Google",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:45:27.966+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/ko/contact",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "Discovered - currently not indexed",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:45:34.803+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/hi/lecture-video-summary",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "Discovered - currently not indexed",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:45:41.59+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/pdf-note-check",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "URL is unknown to Google",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:45:48.336+00:00",
+      "warningType": null,
+      "checkCount": 1
+    },
+    {
+      "url": "https://lecturesift.com/en/pdf-note-check",
+      "currentStatus": "not_indexed",
+      "verdict": "NEUTRAL",
+      "coverageState": "URL is unknown to Google",
+      "indexingState": "INDEXING_STATE_UNSPECIFIED",
+      "lastCrawlTime": null,
+      "lastCheckAt": "2026-10-08T22:46:05.856+00:00",
+      "warningType": null,
+      "checkCount": 1
+    }
+  ],
+  "localTestsOrBuildsRun": false
+}
