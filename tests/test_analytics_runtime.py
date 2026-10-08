@@ -29,6 +29,7 @@ async function run(pathname) {
     URL,
     location: {pathname, origin: process.argv[4], href: process.argv[4] + pathname, search: '?token=private-value', hash: '#private-fragment'},
     document: {
+      referrer: process.argv[6],
       documentElement: {lang: pathname.startsWith('/en/') ? 'en' : 'tr'},
       readyState: 'complete',
       createElement: () => ({}),
@@ -97,9 +98,9 @@ async function run(pathname) {
 """
 
 
-def observe(paths, scenario="allowed", origin="https://lecturesift.com", links=()):
+def observe(paths, scenario="allowed", origin="https://lecturesift.com", links=(), referrer=""):
     result = subprocess.run(
-        [NODE, "-e", HARNESS, json.dumps(paths), scenario, str(ROOT / "frontend/analytics.js"), origin, json.dumps(links)],
+        [NODE, "-e", HARNESS, json.dumps(paths), scenario, str(ROOT / "frontend/analytics.js"), origin, json.dumps(links), referrer],
         check=True, capture_output=True, text=True, timeout=8,
     )
     return json.loads(result.stdout)
@@ -222,6 +223,29 @@ def test_account_and_registration_convert_without_automatic_pageviews_or_private
         assert conversion[2]["send_to"] == "AW-123456789/purchase-test"
         assert conversion[2]["currency"] == "TRY" and conversion[2]["value"] == 59.9
         assert row["conversion"] is True
+
+
+@pytest.mark.parametrize("referrer,expected", [
+    ("https://lecturesift.com/verify.html?email=private@example.invalid&token=secret#fragment", "https://lecturesift.com"),
+    ("https://lecturesift.com/en/reset-password?token=secret", "https://lecturesift.com"),
+    ("https://user:password@example.invalid/private/path?email=private@example.invalid", "https://example.invalid"),
+    ("javascript:secret", ""),
+    ("not a URL", ""),
+    ("", ""),
+])
+def test_google_configs_and_events_never_forward_private_referrer_paths_or_parameters(referrer, expected):
+    for row in observe(["/account.html", "/en/register", "/plans"], referrer=referrer):
+        outgoing = [call[2] for call in row["calls"] if call[0] in {"config", "event"}]
+        assert outgoing
+        assert all(parameters["page_referrer"] == expected for parameters in outgoing)
+        assert "secret" not in json.dumps(row["calls"])
+        assert "private@example.invalid" not in json.dumps(row["calls"])
+
+
+def test_token_pages_suppress_browser_navigation_referrers():
+    for name in ("verify.html", "reset-password.html"):
+        html = (ROOT / "frontend" / name).read_text(encoding="utf-8")
+        assert '<meta name="referrer" content="no-referrer">' in html
 
 
 @pytest.mark.parametrize("scenario", ["denied", "unavailable"])

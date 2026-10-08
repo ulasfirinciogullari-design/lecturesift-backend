@@ -67,10 +67,11 @@ const document = {
     queue.forEach(item => context.googlefc.callbackQueue.push(item));
   }},
 };
-const context = {
+function createWindow(pathname) {
+  const context = {
   document, console,
   location: {origin: scenario === 'preview' ? 'https://preview.example' : 'https://lecturesift.com',
-    pathname: scenario.startsWith('private') ? '/account' : '/en/pdf-note-check', reload() { reloads++; }},
+    pathname, reload() { reloads++; }},
   addEventListener: (name, callback) => windowCallbacks.set(name, callback),
   localStorage: {getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value)},
   CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options.detail; } },
@@ -88,15 +89,21 @@ const context = {
       consent: {google_cmp_enabled: scenario !== 'off' && !scenario.startsWith('config_rollback'),
         publisher_id: scenario === 'invalid_publisher' ? 'pub-1/../../other' : 'pub-7608481350058806'}})};
   },
-};
-context.window = context;
+  };
+  context.window = context;
+  return context;
+}
+let context = createWindow(scenario.startsWith('private') ? '/account' : '/en/pdf-note-check');
 vm.runInNewContext(fs.readFileSync(process.argv[2], 'utf8'), context);
 const initial = context.LectureSiftConsent.get();
 function click(action) { root.listeners.get('click')({target: {closest: () => ({dataset: {consent: action}})}}); }
 function navigate(pathname) {
-  context.location.pathname = pathname;
-  delete context.googlefc;
-  delete context.__tcfapi;
+  // Navigation discards the old browser Window and its callbacks. Reusing a
+  // contextified object can retain provider globals from the previous page.
+  callbacks.clear();
+  windowCallbacks.clear();
+  timers.clear();
+  context = createWindow(pathname);
   vm.runInNewContext(fs.readFileSync(process.argv[2], 'utf8'), context);
 }
 (async () => {

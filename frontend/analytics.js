@@ -36,10 +36,17 @@
   }
 
   function pageContext() {
+    // The previous same-origin page can contain verification tokens or email.
+    // Only its origin is needed for attribution; never forward that full URL.
+    let referrer = "";
+    try {
+      const url = new URL(document.referrer);
+      if (["http:", "https:"].includes(url.protocol)) referrer = url.origin;
+    } catch (_) {}
     // Public landing-page campaign parameters remain available for attribution.
     // Account and registration events must not send their query or fragment.
-    if (PUBLIC_PATHS.has(unlocalizedPath())) return {};
-    return {page_location: `${location.origin}${location.pathname}`};
+    if (PUBLIC_PATHS.has(unlocalizedPath())) return {page_referrer: referrer};
+    return {page_location: `${location.origin}${location.pathname}`, page_referrer: referrer};
   }
 
   function choices() {
@@ -100,7 +107,7 @@
           return response.json();
         })
         .then(value => (remoteConfig = value))
-        .catch(() => null);
+        .catch(() => { configPromise = null; return null; });
     }
     return configPromise;
   }
@@ -146,8 +153,9 @@
     // Consent may have been withdrawn while configuration was loading.
     if (!choices().analytics) return false;
     configureDestinations(config);
-    if (!config?.enabled || typeof window.gtag !== "function") return false;
-    window.gtag("event", String(eventName), {...parameters, ...pageContext(), send_to: config.measurement_id});
+    const measurementId = String(config?.measurement_id || "").toUpperCase();
+    if (!config?.enabled || !configuredIds.has(measurementId) || typeof window.gtag !== "function") return false;
+    window.gtag("event", String(eventName), {...parameters, ...pageContext(), send_to: measurementId});
     return true;
   }
 
@@ -157,9 +165,10 @@
     if (!choices().advertising) return false;
     configureDestinations(config);
     const ads = config?.google_ads;
+    const adsId = String(ads?.id || "").toUpperCase();
     const label = kind === "purchase" ? ads?.purchase_label : kind === "signup" ? ads?.signup_label : null;
-    if (!ads?.enabled || !label || typeof window.gtag !== "function") return false;
-    window.gtag("event", "conversion", {...parameters, ...pageContext(), send_to: `${ads.id}/${label}`});
+    if (!ads?.enabled || !configuredIds.has(adsId) || !label || typeof window.gtag !== "function") return false;
+    window.gtag("event", "conversion", {...parameters, ...pageContext(), send_to: `${adsId}/${label}`});
     return true;
   }
 
@@ -195,8 +204,9 @@
   window.LectureSiftAnalytics = Object.freeze({track, trackConversion, refresh: start});
   const queued = Array.isArray(window.__lecturesiftAnalyticsQueue) ? window.__lecturesiftAnalyticsQueue.splice(0) : [];
   queued.forEach(item => {
-    if (item?.type === "conversion") void trackConversion(item.name, item.parameters);
-    else if (item?.type === "event") void track(item.name, item.parameters);
+    const result = item?.type === "conversion" ? trackConversion(item.name, item.parameters)
+      : item?.type === "event" ? track(item.name, item.parameters) : Promise.resolve(false);
+    void result.then(value => item?.resolve?.(value === true), () => item?.resolve?.(false));
   });
   document.addEventListener("lecturesift:consent", () => { updateConsent(); void start(); });
   document.addEventListener("lecturesift:consent-ready", () => { updateConsent(); void start(); });

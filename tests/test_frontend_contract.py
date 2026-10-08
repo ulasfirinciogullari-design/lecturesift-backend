@@ -776,7 +776,7 @@ def test_payment_routes_are_distinct_localized_and_account_history_is_auditable(
     assert 'manualTransfer = {available:Boolean(transferBody?.available), bank:null};' in plans_js
     assert 'order.bank?.iban' in plans_js
     assert 'transferBody?.bank' not in plans_js
-    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=18"', 'href="./auth.css?v=4"'))
+    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=19"', 'href="./auth.css?v=4"'))
     assert all(value in auth_js for value in ("paymentMethodLabel", "paymentMoney", "paymentDateTime", "payment-order-meta"))
     assert all(value in admin_html for value in ('value="iyzico_card"', 'value="iyzico_bank_transfer"', 'value="manual_bank_transfer"', 'value="iyzico_legacy"'))
     assert "provider:selectedProvider" in admin_js
@@ -1143,7 +1143,9 @@ def test_secure_card_checkout_is_prepared_without_collecting_card_details():
     assert all(value in plans for value in ("checkoutForm", "checkoutAddress", "checkoutCity", "checkoutZipCode", "paytrFrame"))
     assert "/billing/checkout" in script and "body.checkout_url" in script
     assert "card_number" not in plans.lower() and "cvv" not in plans.lower()
-    assert "frame-src https://www.paytr.com" in headers
+    policy = headers.split('Content-Security-Policy = "', 1)[1].split('"', 1)[0]
+    directives = {item.strip().split()[0]: item.strip().split()[1:] for item in policy.split(';') if item.strip()}
+    assert "https://www.paytr.com" in directives["frame-src"]
     plans_hook = rollout.split("async function installPlansPage()", 1)[1].split(
         "function accountToken()", 1
     )[0]
@@ -1397,7 +1399,7 @@ def test_optional_analytics_and_advertising_are_consent_gated():
     assert ".consent-manage{position:fixed" not in consent_css
     assert 'analytics: false, advertising: false' in consent
     assert 'category === "necessary"' in consent
-    assert 'analyticsScript.src = "/analytics.js?v=8"' in i18n
+    assert 'analyticsScript.src = "/analytics.js?v=9"' in i18n
     assert 'window.LectureSiftConsent?.get?.()' in analytics
     assert "/analytics/config" in analytics
     assert "googletagmanager.com/gtag/js" in analytics
@@ -1724,7 +1726,8 @@ def test_google_ads_conversions_are_consent_gated_and_csp_allows_measurement():
     blueprint = (FRONTEND.parent / "render.yaml").read_text(encoding="utf-8")
     assert 'choices().advertising' in analytics
     assert 'recordAnalytics("conversion", "signup"' in auth
-    assert 'recordAnalytics("conversion", "purchase"' in auth
+    assert 'void recordPurchaseAnalytics({' in auth
+    assert 'recordAnalytics(type, "purchase", purchase)' in auth
     assert 'recordPlanAnalytics("begin_checkout"' in plans
     assert "lecturesift-purchase-${reference}" in auth
     assert "https://www.googletagmanager.com" in headers
