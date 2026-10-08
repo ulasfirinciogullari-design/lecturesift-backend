@@ -3,7 +3,7 @@ import {test, expect} from './fixtures.mjs';
 const API = 'https://api.lecturesift.com';
 const CORS = {
   'Access-Control-Allow-Origin':'http://127.0.0.1:4173',
-  'Access-Control-Allow-Methods':'GET,POST,OPTIONS',
+  'Access-Control-Allow-Methods':'GET,POST,DELETE,PATCH,OPTIONS',
   'Access-Control-Allow-Headers':'authorization, content-type',
 };
 const user = {
@@ -146,7 +146,7 @@ test('late search responses cannot replace the current filter or overview histor
   expect(unexpected).toEqual([]);
 });
 
-test('request timeouts release loading controls and preserve the admin session', async ({page}) => {
+test('advertising gets a longer bounded timeout while the panel remains usable', async ({page}) => {
   await page.clock.install();
   let release;
   let providerStarted = false;
@@ -162,6 +162,10 @@ test('request timeouts release loading controls and preserve the admin session',
     await expect(page.locator('#adminUserList')).toContainText(user.email);
     await expect.poll(() => providerStarted).toBe(true);
     await page.clock.runFor(20_100);
+    await expect(page.locator('#adminRefresh')).toBeDisabled();
+    await page.locator('[data-admin-view-button="users"]').click();
+    await expect(page.locator('#adminUserList')).toContainText(user.email);
+    await page.clock.runFor(25_000);
     await expect(page.locator('#adminRefresh')).toBeEnabled();
     await expect(page.locator('#adminDataStatus')).toContainText('AdSense ve Google Ads');
     await expect(page.locator('#adminPanel')).toBeVisible();
@@ -259,6 +263,113 @@ test('support status failures and late replies preserve the active response draf
     await expect(page.locator('#adminContactMessages')).toContainText('1 yanıt');
     await expect(draft).toHaveValue('Yeni konuşma taslağı');
   } finally { releaseReply(); }
+  expect(unexpected).toEqual([]);
+});
+
+test('unverified account closure accepts SİL, allows cancellation and dismisses notices', async ({page}) => {
+  await page.clock.install();
+  let closed = false;
+  let releaseAdvertising;
+  const advertisingReady = new Promise(resolve => { releaseAdvertising = resolve; });
+  const deletions = [];
+  const nativeDialogs = [];
+  page.on('dialog', async dialog => { nativeDialogs.push(dialog.message()); await dialog.dismiss(); });
+  const unexpected = await openAdmin(page, {hash:'users', override:async (route, url) => {
+    if (url.pathname === '/billing/admin/advertising-readiness') {
+      await advertisingReady;
+      await route.fulfill({status:200, headers:CORS, json:advertising});
+    } else if (url.pathname === '/billing/admin/users') {
+      await route.fulfill({status:200, headers:CORS, json:{users:closed ? [] : [{...user, email_verified:false}], pagination:{...pagination, total:closed ? 0 : 1}}});
+    } else if (url.pathname === `/billing/admin/users/${user.id}` && route.request().method() === 'DELETE') {
+      deletions.push(route.request().postDataJSON());
+      closed = true;
+      await route.fulfill({status:200, headers:CORS, json:{ok:true, status:'closed', message:'Hesap kapatıldı ve ders dosyaları silindi.'}});
+    } else return false;
+    return true;
+  }});
+  try {
+    await expect(page.locator('#adminUserList')).toContainText(user.email);
+    await expect(page.locator('#adminRefresh')).toBeDisabled();
+    await page.getByRole('button', {name:'Aç ve düzenle', exact:true}).click();
+    await page.locator('#adminUserDialog .admin-dialog-close').click();
+    expect(deletions).toEqual([]);
+    await page.getByRole('button', {name:'Aç ve düzenle', exact:true}).click();
+    const form = page.locator('[data-user-close-form]');
+    await form.locator('[name="reason"]').fill('Doğrulanmamış test hesabı');
+    await form.locator('[name="confirmation_word"]').fill('yanlış');
+    await form.locator('button[type="submit"]').click();
+    await expect(page.locator('.admin-dialog-notice')).toContainText('SİL yaz');
+    expect(deletions).toEqual([]);
+    await page.locator('.admin-dialog-notice .admin-notice-close').click();
+    await expect(page.locator('.admin-dialog-notice')).toBeHidden();
+    await form.locator('[name="confirmation_word"]').fill('SİL');
+    await form.locator('button[type="submit"]').click();
+    await expect(page.locator('#adminUserDialog')).toBeHidden();
+    await expect(page.locator('#adminOperationNotice')).toContainText('Hesap kapatıldı');
+    await expect(page.locator('#adminUserList')).not.toContainText(user.email);
+    expect(deletions).toEqual([{confirmation_email:user.email, reason:'Doğrulanmamış test hesabı'}]);
+    expect(nativeDialogs).toEqual([]);
+    await page.clock.runFor(8_100);
+    await expect(page.locator('#adminOperationNotice')).toBeHidden();
+  } finally { releaseAdvertising(); }
+  await expect(page.locator('#adminRefresh')).toBeEnabled();
+  expect(unexpected).toEqual([]);
+});
+
+test('bulk closure keeps failed accounts selected, shows their errors and retries only those accounts', async ({page}, testInfo) => {
+  await page.clock.install();
+  const second = {...user, id:'22222222-2222-4222-8222-222222222222', email:'second@example.invalid', email_verified:false};
+  let users = [{...user, email_verified:false}, second];
+  const requests = [];
+  const nativeDialogs = [];
+  let overviewReads = 0;
+  page.on('dialog', async dialog => { nativeDialogs.push(dialog.message()); await dialog.dismiss(); });
+  const unexpected = await openAdmin(page, {hash:'users', override:async (route, url) => {
+    if (url.pathname === '/billing/admin/overview') { overviewReads += 1; return false; }
+    if (url.pathname === '/billing/admin/users') {
+      await route.fulfill({status:200, headers:CORS, json:{users, pagination:{...pagination, total:users.length}}});
+    } else if (url.pathname === '/billing/admin/users/bulk-action') {
+      requests.push(route.request().postDataJSON());
+      const first = requests.length === 1;
+      users = first ? [second] : [];
+      await route.fulfill({status:200, headers:CORS, json:{
+        ok:true, succeeded:1, failed:first ? 1 : 0,
+        message:`1 kullanıcı için işlem tamamlandı; ${first ? 1 : 0} işlem uygulanamadı.`,
+        results:first ? [{user_id:user.id, ok:true}, {user_id:second.id, ok:false, message:'Hesap işlemi tamamlanamadı. <img src=x onerror=alert(1)>'}]
+          : [{user_id:second.id, ok:true}],
+      }});
+    } else return false;
+    return true;
+  }});
+  await expect(page.locator('#adminRefresh')).toBeEnabled();
+  await page.locator('#adminSelectVisibleUsers').check();
+  await page.clock.runFor(60_100);
+  expect(overviewReads).toBe(1);
+  await page.locator('#adminBulkAction').selectOption('delete');
+  await expect(page.locator('#adminBulkDeleteWarning')).toContainText('geri alınamaz');
+  await page.locator('#adminBulkReason').fill('Doğrulanmamış test hesapları');
+  await page.locator('#adminBulkConfirmation').fill('SIL');
+  await page.locator('#adminBulkApply').click();
+  await expect(page.locator('#adminBulkApply')).toBeEnabled();
+  await expect(page.locator('#adminOperationNotice')).toContainText(`${second.email}: Hesap işlemi tamamlanamadı.`);
+  expect(await page.locator('#adminOperationNotice img').count()).toBe(0);
+  await expect(page.locator(`[data-user-select="${second.id}"]`)).toBeChecked();
+  await expect(page.locator('#adminSelectedCount')).toContainText('1 kullanıcı');
+  await expect(page.locator('#adminUserList')).not.toContainText(user.email);
+  await expect(page.locator('#adminBulkConfirmation')).toHaveValue('');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  await page.screenshot({path:testInfo.outputPath('admin-bulk-notice-layout.jpg'), type:'jpeg', quality:75, fullPage:true});
+  await page.locator('#adminOperationNotice .admin-notice-close').click();
+  await expect(page.locator('#adminOperationNotice')).toBeHidden();
+  await page.locator('#adminBulkApply').click();
+  await expect(page.locator('#adminOperationNotice')).toContainText('SİL yaz');
+  expect(requests).toHaveLength(1);
+  await page.locator('#adminBulkConfirmation').fill('SİL');
+  await page.locator('#adminBulkApply').click();
+  await expect(page.locator('#adminBulkToolbar')).toBeHidden();
+  await expect(page.locator('#adminOperationNotice')).toContainText('0 işlem uygulanamadı');
+  expect(requests.map(request => request.user_ids)).toEqual([[user.id, second.id], [second.id]]);
+  expect(nativeDialogs).toEqual([]);
   expect(unexpected).toEqual([]);
 });
 

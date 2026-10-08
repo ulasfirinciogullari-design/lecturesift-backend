@@ -685,6 +685,61 @@ def test_admin_can_manage_profile_subscription_sessions_and_close_account(monkey
     assert all(changed_email not in item["summary"] for item in closed_events)
 
 
+@pytest.mark.parametrize("missing_profile", [False, True])
+@pytest.mark.parametrize("bulk", [False, True])
+def test_admin_closes_unverified_accounts_including_legacy_records(monkeypatch, missing_profile, bulk):
+    monkeypatch.setattr(config, "ADMIN_ADMIN", "admin-secret")
+    email = f"unverified-{uuid.uuid4()}@example.com"
+    created = register_user(email, "Strong-test-password1", "Test", "User", country_code="TR")
+    user_id = created["user"]["id"]
+    if missing_profile:
+        with ENGINE.begin() as connection:
+            connection.execute(delete(USER_PROFILES).where(USER_PROFILES.c.user_id == user_id))
+    legacy_session = billing_service.issue_session(user_id, email)
+    if missing_profile:
+        assert billing_service.authenticate_session(legacy_session)["id"] == user_id
+
+    if bulk:
+        response = client.post(
+            "/billing/admin/users/bulk-action", headers=auth("admin-secret"),
+            json={"user_ids": [user_id], "action": "delete", "confirmation": "SİL", "reason": "Test account cleanup"},
+        )
+        assert response.status_code == 200
+        assert response.json()["succeeded"] == 1
+        assert response.json()["failed"] == 0
+        assert response.json()["results"][0]["result"]["status"] == "closed"
+    else:
+        response = client.request(
+            "DELETE", f"/billing/admin/users/{user_id}", headers=auth("admin-secret"),
+            json={"confirmation_email": email, "reason": "Test account cleanup"},
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "closed"
+
+    with ENGINE.connect() as connection:
+        closed = connection.execute(
+            select(billing_service.USERS).where(billing_service.USERS.c.id == user_id)
+        ).one()
+        assert closed.email.startswith("deleted+") and closed.email.endswith("@users.invalid")
+        assert closed.credit_minutes == 0
+        assert connection.execute(
+            select(billing_service.AUTH_TOKENS).where(billing_service.AUTH_TOKENS.c.user_id == user_id)
+        ).first() is None
+    with pytest.raises(billing_service.BillingError):
+        verify_email(created["verification_token"])
+    with pytest.raises(billing_service.BillingAuthenticationError):
+        billing_service.authenticate_session(legacy_session)
+    assert client.get("/billing/me", headers=auth(legacy_session)).status_code == 401
+    users = client.get(
+        "/billing/admin/users", params={"search": email}, headers=auth("admin-secret")
+    ).json()["users"]
+    assert users == []
+    events = client.get(
+        "/billing/admin/account-events?limit=100", headers=auth("admin-secret")
+    ).json()["events"]
+    assert any(item["subject_user_id"] == user_id and item["action"] == "account_closed" for item in events)
+
+
 def test_rewarded_ad_sessions_are_opt_in_capped_and_single_use(
     monkeypatch, isolated_reward_database
 ):

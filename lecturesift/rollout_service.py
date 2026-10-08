@@ -2254,10 +2254,9 @@ def admin_close_user_account(
         user = connection.execute(
             select(USERS).where(USERS.c.id == user_id).with_for_update()
         ).first()
-        profile = connection.execute(
-            select(USER_PROFILES).where(USER_PROFILES.c.user_id == user_id)
-        ).first()
-        if not user or not profile:
+        # Legacy registrations can predate USER_PROFILES. Their credentials,
+        # tokens and data still need the same closure path as a full profile.
+        if not user:
             raise BillingError("Kullanıcı bulunamadı.")
         if confirmation_email.strip().casefold() != user.email.casefold():
             raise BillingError("Onay e-postası kullanıcı hesabıyla eşleşmiyor.")

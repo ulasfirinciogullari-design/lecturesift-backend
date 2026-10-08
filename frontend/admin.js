@@ -23,6 +23,7 @@ const adminLoadedSections = new Set();
 const adminListVersions = {users:0, orders:0, costs:0, contact:0};
 let adminSessionVersion = 0;
 let adminLoadPromise = null;
+const adminNoticeTimers = new Map();
 
 function endAdminSession(message = "Yönetici oturumu kapatıldı.") {
   adminSessionVersion += 1;
@@ -38,6 +39,7 @@ function endAdminSession(message = "Yönetici oturumu kapatıldı.") {
   document.querySelectorAll("#adminPanel .admin-table-wrap").forEach(target => { target.innerHTML = ""; });
   selectedAdminUsers.clear();
   adminReferralDrafts.clear();
+  clearAdminNotices();
   resetAdminReferralConfirmations();
   document.querySelectorAll("dialog[open]").forEach(dialog => dialog.close());
   admin$("adminPanel").hidden = true;
@@ -228,6 +230,35 @@ function adminRelativeDate(value) {
   return new Intl.RelativeTimeFormat(adminLocale(), {numeric:"auto"}).format(amount, unit);
 }
 
+function dismissAdminNotice(node) {
+  clearTimeout(adminNoticeTimers.get(node));
+  adminNoticeTimers.delete(node);
+  node.hidden = true;
+}
+
+function clearAdminNotices() {
+  document.querySelectorAll("#adminNotice, #adminOperationNotice, .admin-dialog-notice").forEach(dismissAdminNotice);
+}
+
+function showAdminNotice(node, message, error) {
+  dismissAdminNotice(node);
+  const text = document.createElement("span");
+  text.className = "admin-notice-message";
+  text.textContent = message;
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "admin-notice-close";
+  close.textContent = "×";
+  close.setAttribute("aria-label", adminT("admin.dismissNotice", "Bildirimi kapat"));
+  close.addEventListener("click", () => dismissAdminNotice(node));
+  node.replaceChildren(text, close);
+  node.classList.add("admin-dismissible-notice");
+  node.classList.toggle("error", error);
+  node.setAttribute("role", error ? "alert" : "status");
+  node.hidden = false;
+  if (!error) adminNoticeTimers.set(node, setTimeout(() => dismissAdminNotice(node), 8000));
+}
+
 function adminNotice(message, error = false) {
   const dialog = document.querySelector("dialog[open]");
   if (dialog && error) {
@@ -238,22 +269,20 @@ function adminNotice(message, error = false) {
       notice.setAttribute("role", "alert");
       dialog.querySelector(".admin-dialog-head")?.after(notice);
     }
-    notice.textContent = message;
+    showAdminNotice(notice, message, error);
   }
   const panelNotice = admin$("adminOperationNotice");
   const node = panelNotice && !admin$("adminPanel")?.hidden ? panelNotice : admin$("adminNotice");
-  node.textContent = message;
-  node.classList.toggle("error", error);
-  node.hidden = false;
+  showAdminNotice(node, message, error);
 }
 
 async function adminRequest(path, options = {}) {
-  const {publicRequest = false, ...fetchOptions} = options;
+  const {publicRequest = false, timeoutMs = ADMIN_REQUEST_TIMEOUT_MS, ...fetchOptions} = options;
   const controller = new AbortController();
   const session = adminSessionVersion;
   let timedOut = false;
   adminRequests.add(controller);
-  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, ADMIN_REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
   try {
     const response = await fetch(`${ADMIN_API}${path}`, {
       ...fetchOptions,
@@ -511,7 +540,8 @@ function renderAdminUsers(users) {
       <td data-label="İşlem"><button class="admin-action" data-user-open="${adminEscape(user.id)}">Aç ve düzenle</button></td>
     </tr>`;
   }).join("");
-  admin$("adminUserList").innerHTML = `<table class="admin-table admin-record-table"><thead><tr><th><input id="adminSelectVisibleUsers" type="checkbox" aria-label="Bu sayfadaki kullanıcıları seç"></th><th>Kullanıcı</th><th>Doğrulama</th><th>Plan</th><th>Dakika</th><th>Kayıt zamanı</th><th>Son hareket / ağ</th><th>İşlem</th></tr></thead><tbody>${rows || '<tr><td colspan="8">Kullanıcı bulunamadı.</td></tr>'}</tbody></table>`;
+  const selectAll = users.length ? `<label class="admin-selection-control"><input id="adminSelectVisibleUsers" type="checkbox"><span>${adminEscape(adminT("admin.selectVisibleUsers", "Bu sayfadaki kullanıcıları seç"))}</span></label>` : "";
+  admin$("adminUserList").innerHTML = `${selectAll}<table class="admin-table admin-record-table"><thead><tr><th>Seç</th><th>Kullanıcı</th><th>Doğrulama</th><th>Plan</th><th>Dakika</th><th>Kayıt zamanı</th><th>Son hareket / ağ</th><th>İşlem</th></tr></thead><tbody>${rows || '<tr><td colspan="8">Kullanıcı bulunamadı.</td></tr>'}</tbody></table>`;
   admin$("adminUsersResultCount").textContent = `${Number(adminState.userPagination.total || 0).toLocaleString(adminLocale())} kayıt`;
   renderAdminPagination("adminUsersPagination", adminState.userPagination, page => loadAdminUsers(page));
   admin$("adminSelectVisibleUsers")?.addEventListener("change", event => {
@@ -524,6 +554,7 @@ function renderAdminUsers(users) {
   }));
   document.querySelectorAll("[data-user-open]").forEach(button => button.addEventListener("click", () => openAdminUserDialog(button.dataset.userOpen)));
   updateAdminBulkToolbar();
+  formatAdminRecordTables(admin$("adminUserList"));
 }
 
 function updateAdminBulkToolbar() {
@@ -592,6 +623,7 @@ async function archiveAdminOrder(button) {
 function openAdminUserDialog(userId) {
   const user = adminState.users.find(item => item.id === userId);
   if (!user) return;
+  clearAdminNotices();
   const languages = [["tr","Türkçe"],["en","English"],["de","Deutsch"],["fr","Français"],["es","Español"],["it","Italiano"],["pt","Português"],["ru","Русский"],["ar","العربية"],["zh","中文"],["ja","日本語"],["ko","한국어"],["hi","हिन्दी"]];
   const plans = [["free","Ücretsiz"],["lite","Lite"],["plus","Plus"],["pro","Pro"],["max","Max"],["business","Business"]];
   const subscription = user.subscription || null;
@@ -608,7 +640,7 @@ function openAdminUserDialog(userId) {
       <form class="admin-user-form" data-user-credit-form="${adminEscape(user.id)}"><h3>Dakika bakiyesi</h3><p>Mevcut ek bakiye: ${Number(user.credit_minutes || 0).toLocaleString(adminLocale())} dk.</p><div class="admin-form-grid compact-grid"><label><span>Dakika</span><input name="minutes_delta" type="number" min="-10000" max="10000" required></label><label class="wide"><span>İşlem nedeni</span><input name="reason" minlength="4" maxlength="240" required></label></div><button class="admin-action approve" type="submit">Dakikayı uygula</button></form>
       <form class="admin-user-form" data-user-subscription-form="${adminEscape(user.id)}"><h3>Abonelik ve plan</h3><div class="admin-form-grid"><label><span>Plan</span><select name="plan_code">${planOptions}</select></label><label><span>Dönem</span><select name="interval"><option value="monthly" ${subscription?.interval !== "annual" ? "selected" : ""}>Aylık</option><option value="annual" ${subscription?.interval === "annual" ? "selected" : ""}>Yıllık</option></select></label><label><span>Erişim süresi (gün)</span><input name="duration_days" type="number" min="1" max="3660" value="${subscription?.interval === "annual" ? 365 : 30}" required></label></div><button class="admin-action approve" type="submit">Planı kaydet</button></form>
       <section class="admin-user-form admin-security-tools"><h3>Güvenlik</h3><p>Kullanıcı tüm cihazlarda yeniden giriş yapmak zorunda kalır.</p><button class="admin-action" type="button" data-user-revoke="${adminEscape(user.id)}">Tüm oturumları kapat</button></section>
-      ${user.is_protected ? '<section class="admin-user-form"><h3>Korunan hesap</h3><p>Bu işletme hesabı panelden kapatılamaz.</p></section>' : `<form class="admin-user-form danger-zone" data-user-close-form="${adminEscape(user.id)}" data-user-email="${adminEscape(user.email)}"><h3>Hesabı kapat ve anonimleştir</h3><p>Onay için yalnızca SİL yaz. Bu işlem oturumları kapatır ve ders dosyalarını siler.</p><div class="admin-form-grid"><label><span>Onay</span><input name="confirmation_word" autocomplete="off" placeholder="SİL" required></label><label><span>Neden</span><input name="reason" minlength="4" maxlength="500" required></label></div><button class="admin-action reject" type="submit">Hesabı kapat</button></form>`}
+      ${user.is_protected ? '<section class="admin-user-form"><h3>Korunan hesap</h3><p>Bu işletme hesabı panelden kapatılamaz.</p></section>' : `<form class="admin-user-form danger-zone" data-user-close-form="${adminEscape(user.id)}" data-user-email="${adminEscape(user.email)}"><h3>Hesabı kapat ve anonimleştir</h3><p>${adminEscape(adminT("admin.deleteWarning", "SİL yazarak onayla. Seçilen hesaplar kapatılır, oturumları sonlandırılır ve ders dosyaları silinir. Bu işlem geri alınamaz."))}</p><div class="admin-form-grid"><label><span>Onay</span><input name="confirmation_word" autocomplete="off" placeholder="SİL" required></label><label><span>Neden</span><input name="reason" minlength="4" maxlength="500" required></label></div><button class="admin-action reject" type="submit">Hesabı kapat</button></form>`}
     </div>`;
   const dialog = admin$("adminUserDialog");
   dialog.showModal();
@@ -1363,7 +1395,7 @@ async function loadAdmin({silent = false} = {}) {
         adminState[key] = body[field];
       }, render);
     const object = (key, label, path, render, publicRequest = false) => loadAdminSection(key, label,
-      () => publicRequest ? adminPublicRequest(path) : adminRequest(path), body => { adminState[key] = body; }, render);
+      () => publicRequest ? adminPublicRequest(path) : adminRequest(path, key === "advertisingReadiness" ? {timeoutMs:45000} : {}), body => { adminState[key] = body; }, render);
     await Promise.all([
       collection("rewards", "Bonus talepleri", "/admin/instagram-rewards?status=", "rewards", () => renderAdminRewards(adminState.rewards.filter(item => item.status === "pending_verification"))),
       collection("refunds", "İade talepleri", "/billing/admin/refund-requests", "requests", () => renderAdminRefunds(adminState.refunds)),
@@ -1639,25 +1671,41 @@ async function revokeAdminSessions(button) {
   } catch (error) { adminNotice(error.message, true); button.disabled = false; }
 }
 
+function adminDeleteConfirmation(value) {
+  return String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+
+async function refreshAdminUsersAfterMutation(message) {
+  // Reflect the mutation immediately, even while the general refresh is
+  // waiting for an advertising provider. Other sections report their own
+  // refresh errors through adminDataStatus.
+  try { await loadAdminUsers(adminState.userPagination.page || 1); }
+  catch (error) { adminNotice(`${message}\nListe yenilenemedi: ${error.message}`, true); }
+  if (adminAccessToken) void loadAdmin({silent:true}).catch(() => {});
+}
+
 async function closeAdminUser(event, form) {
   event.preventDefault();
   const userId = form.dataset.userCloseForm;
   const submit = form.querySelector('button[type="submit"]');
+  if (submit.disabled) return;
+  clearAdminNotices();
   const data = new FormData(form);
-  const confirmation = String(data.get("confirmation_word") || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("tr-TR").trim();
+  const confirmation = adminDeleteConfirmation(data.get("confirmation_word"));
   const email = String(form.dataset.userEmail || "").trim();
   if (confirmation !== "sil") return adminNotice("Hesabı kapatmak için onay alanına SİL yaz.", true);
-  if (!window.confirm(`${email} hesabı kapatılacak, oturumları iptal edilecek ve ders dosyaları silinecek. Bu işlem geri alınamaz. Devam edilsin mi?`)) return;
   submit.disabled = true;
   try {
     const body = await adminRequest(`/billing/admin/users/${encodeURIComponent(userId)}`, {
       method:"DELETE",
       body:JSON.stringify({confirmation_email:email, reason:String(data.get("reason") || "").trim()}),
     });
-    adminNotice(body.message);
+    selectedAdminUsers.delete(userId);
     admin$("adminUserDialog")?.close();
-    await loadAdmin({silent:true});
-  } catch (error) { adminNotice(error.message, true); submit.disabled = false; }
+    adminNotice(body.message);
+    await refreshAdminUsersAfterMutation(body.message);
+  } catch (error) { adminNotice(error.message, true); }
+  finally { if (submit.isConnected) submit.disabled = false; }
 }
 
 function syncAdminBulkFields() {
@@ -1666,21 +1714,30 @@ function syncAdminBulkFields() {
   admin$("adminBulkPlan").hidden = action !== "subscription";
   admin$("adminBulkReason").hidden = !["credit", "delete"].includes(action);
   admin$("adminBulkConfirmation").hidden = action !== "delete";
+  admin$("adminBulkDeleteWarning").hidden = action !== "delete";
+  admin$("adminBulkConfirmation").value = "";
   admin$("adminBulkApply").classList.toggle("reject", action === "delete");
   admin$("adminBulkApply").classList.toggle("approve", action !== "delete");
 }
 
 async function applyAdminBulkAction() {
+  const button = admin$("adminBulkApply");
+  if (button.disabled) return;
+  clearAdminNotices();
   const ids = [...selectedAdminUsers];
   if (!ids.length) return adminNotice("En az bir kullanıcı seç.", true);
   const action = admin$("adminBulkAction").value;
   const confirmation = admin$("adminBulkConfirmation").value.trim();
-  if (action === "delete" && confirmation.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("tr-TR") !== "sil") {
+  if (action === "delete" && adminDeleteConfirmation(confirmation) !== "sil") {
     return adminNotice("Toplu hesap kapatma için SİL yaz.", true);
   }
+  const reason = admin$("adminBulkReason").value.trim();
+  if (["credit", "delete"].includes(action) && (reason.length < 4 || reason.length > 500)) {
+    return adminNotice("İşlem nedenini 4 ile 500 karakter arasında yaz.", true);
+  }
   const labels = {credit:"dakika bakiyesi güncellenecek", subscription:"plan atanacak", revoke_sessions:"tüm oturumlar kapatılacak", delete:"hesaplar kapatılıp anonimleştirilecek"};
-  if (!window.confirm(`${ids.length} kullanıcı için ${labels[action]}. Devam edilsin mi?`)) return;
-  const button = admin$("adminBulkApply");
+  if (action !== "delete" && !window.confirm(`${ids.length} kullanıcı için ${labels[action]}. Devam edilsin mi?`)) return;
+  const userLabels = new Map([...(adminState.overview.users || []), ...adminState.users].map(user => [user.id, user.email || user.id]));
   button.disabled = true;
   try {
     const body = await adminRequest("/billing/admin/users/bulk-action", {
@@ -1689,16 +1746,22 @@ async function applyAdminBulkAction() {
         user_ids:ids,
         action,
         confirmation,
-        reason:admin$("adminBulkReason").value.trim(),
+        reason,
         minutes_delta:Number(admin$("adminBulkMinutes").value || 0),
         plan_code:admin$("adminBulkPlan").value,
         interval:"monthly",
         duration_days:30,
       }),
     });
-    selectedAdminUsers.clear();
-    adminNotice(body.message, Boolean(body.failed));
-    await loadAdmin({silent:true});
+    const results = Array.isArray(body.results) ? body.results : [];
+    results.filter(item => item.ok).forEach(item => selectedAdminUsers.delete(item.user_id));
+    const failures = results.filter(item => !item.ok);
+    const details = failures.map(item => `${userLabels.get(item.user_id) || item.user_id}: ${item.message || "İşlem uygulanamadı."}`).join("\n");
+    const message = [body.message, details].filter(Boolean).join("\n");
+    admin$("adminBulkConfirmation").value = "";
+    updateAdminBulkToolbar();
+    adminNotice(message, Boolean(body.failed));
+    await refreshAdminUsersAfterMutation(message);
   } catch (error) { adminNotice(error.message, true); }
   finally { button.disabled = false; }
 }
@@ -1756,14 +1819,14 @@ admin$("adminOrderSearch").addEventListener("input", () => { clearTimeout(adminO
 ["adminOrderStatus","adminOrderProvider","adminOrderPageSize"].forEach(id => admin$(id)?.addEventListener("change", () => loadAdminOrders(1).catch(error => adminNotice(error.message, true))));
 admin$("adminBulkAction").addEventListener("change", syncAdminBulkFields);
 admin$("adminBulkApply").addEventListener("click", applyAdminBulkAction);
-admin$("adminClearSelection").addEventListener("click", () => { selectedAdminUsers.clear(); renderAdminUsers(adminState.users); });
+admin$("adminClearSelection").addEventListener("click", () => { selectedAdminUsers.clear(); admin$("adminBulkConfirmation").value = ""; admin$("adminBulkReason").value = ""; clearAdminNotices(); renderAdminUsers(adminState.users); });
 syncAdminBulkFields();
 admin$("adminExportOrders").addEventListener("click", () => downloadAdminCsv("lecturesift-siparisler.csv", adminState.orders.map(item => ({siparis_no:item.order_number || item.reference, olusturma_zamani:item.created_at, son_guncelleme:item.updated_at, musteri:item.user?.name || "", eposta:item.user?.email || "", odeme_yontemi:adminPaymentMethodLabel(item), saglayici:item.provider, plan:item.plan_code, donem:item.interval, tutar_minor:item.amount_minor, para_birimi:item.currency, durum:item.status, guvenli_ag:item.user?.last_activity?.ip_network || ""}))));
 admin$("adminExportMessages").addEventListener("click", () => downloadAdminCsv("lecturesift-mesajlar.csv", adminState.contacts.map(item => ({tarih:item.created_at, ad_soyad:item.name, eposta:item.email, konu:item.topic, siparis_no:item.order_reference || "", durum:item.status, mesaj:item.message}))));
 admin$("adminExportUsers").addEventListener("click", () => downloadAdminCsv("lecturesift-kullanicilar.csv", adminState.users.map(item => ({kayit_tarihi:item.created_at, son_guncelleme:item.updated_at, ad_soyad:item.name, eposta:item.email, telefon:item.phone || "", ulke:item.country_code || "", eposta_dogrulandi:item.email_verified ? "evet" : "hayir", plan:item.plan_code || "free", kredi_dakika:item.credit_minutes, son_guvenli_ag:item.last_activity?.ip_network || ""}))));
 setInterval(() => {
   const editingReferral = document.activeElement?.closest("[data-referral-release-form], #adminReferralReconcileForm");
-  const editing = editingReferral || document.querySelector("dialog[open]")
+  const editing = editingReferral || selectedAdminUsers.size > 0 || document.querySelector("dialog[open]")
     || document.activeElement?.matches("input, textarea, select")
     || [...document.querySelectorAll("#adminPanel textarea:not([readonly]):not([disabled]), #adminReferralsView input:not([type=checkbox]):not([readonly]):not([disabled])")].some(input => input.value.trim());
   if (adminAccessToken && !adminLoading && admin$("adminAutoRefresh").checked && document.visibilityState === "visible" && !editing) {
