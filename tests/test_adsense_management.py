@@ -174,7 +174,14 @@ def test_readonly_status_is_reduced_to_safe_summary_and_cached():
     }
     assert fake.posts[0][3] <= adsense_management._MAX_REQUEST_TIMEOUT_SECONDS
     assert fake.gets[0][0] == f"https://adsense.googleapis.com/v2/{ACCOUNT}"
-    assert all(call[3] <= adsense_management._MAX_REQUEST_TIMEOUT_SECONDS for call in fake.gets)
+    assert all(
+        call[3] <= adsense_management._MAX_REQUEST_TIMEOUT_SECONDS
+        for call in fake.gets if not call[0].endswith("/policyIssues")
+    )
+    policy_call = next(call for call in fake.gets if call[0].endswith("/policyIssues"))
+    assert policy_call[3] <= adsense_management._MAX_POLICY_TIMEOUT_SECONDS
+    assert policy_call[1] == {"pageSize": 10000, "fields": "policyIssues(action),nextPageToken"}
+    assert policy_call[2]["x-goog-request-params"] == "parent=accounts%2Fpub-7608481350058806"
     assert {call[0] for call in fake.gets[1:]} == {
         f"https://adsense.googleapis.com/v2/{ACCOUNT}/sites",
         f"https://adsense.googleapis.com/v2/{ACCOUNT}/alerts",
@@ -419,6 +426,31 @@ def test_policy_timeout_does_not_hide_account_and_site(monkeypatch):
     assert result["policy_issues"] is None
     assert result["policy_error_code"] == "provider_unavailable"
     assert "synthetic private" not in json.dumps(result)
+
+
+def test_slow_policy_center_gets_its_own_budget_and_empty_list_is_not_site_approval(monkeypatch):
+    original = FakeGoogleClient.get
+
+    def slow_policy_get(self, url, **kwargs):
+        if url.endswith("/policyIssues"):
+            # Reproduce the provider's 17-second response without slowing CI.
+            if kwargs["timeout"] < 17:
+                raise httpx.ReadTimeout("policy service still processing")
+            return _response(200, {})
+        return original(self, url, **kwargs)
+
+    monkeypatch.setattr(FakeGoogleClient, "get", slow_policy_get)
+    FakeGoogleClient.payload_overrides[f"https://adsense.googleapis.com/v2/{ACCOUNT}/sites"] = {
+        "sites": [{"domain": "lecturesift.com", "state": "NEEDS_ATTENTION"}]
+    }
+    result = adsense_management.adsense_management_readiness()
+
+    assert result["connected"] is True
+    assert result["site"]["state"] == "NEEDS_ATTENTION"
+    assert result["policy_issues"]["total"] == 0
+    assert "policy_error_code" not in result
+    assert all(call[3] <= 5 for call in FakeGoogleClient.created[0].gets)
+    assert adsense_management.adsense_management_readiness()["cached"] is True
 
 
 def test_concurrent_cold_checks_share_one_provider_call(monkeypatch):

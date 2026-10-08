@@ -919,7 +919,7 @@ def test_admin_growth_reads_and_escapes_advertising_management_status():
     catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
 
     assert 'id="adminGrowthStatus" class="admin-growth-grid" aria-live="polite"' in admin
-    assert 'src="/admin.js?v=25"' in admin and 'src="/i18n.js?v=47"' in admin
+    assert 'src="/admin.js?v=26"' in admin and 'src="/i18n.js?v=47"' in admin
     assert '"/billing/admin/advertising-readiness"' in admin_script
     assert "renderAdminAdSenseSummary" in admin_script
     assert 'id="adminAdSenseSummary"' in admin
@@ -1062,7 +1062,7 @@ def test_checkout_names_contact_inbox_and_mobile_plan_navigation_are_wired():
     assert "/billing/admin/contact-messages" in admin_js
     assert "adminContactDialog" in admin_html and "admin-contact-reply" in admin_js
     assert "/billing/admin/contact-messages/${encodeURIComponent(messageId)}/reply" in admin_js
-    assert 'href="/rollout.css?v=10"' in admin_html and 'src="/admin.js?v=25"' in admin_html
+    assert 'href="/rollout.css?v=10"' in admin_html and 'src="/admin.js?v=26"' in admin_html
     assert admin_js.count('class="admin-table admin-record-table"') >= 10
     assert all(label in admin_js for label in ('data-label="İş"', 'data-label="Bakiye"', 'data-label="Açıklama"'))
     assert "supportReplyForm" in support_html and "supportThread" in support_html

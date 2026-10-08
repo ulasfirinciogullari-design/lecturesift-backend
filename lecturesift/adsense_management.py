@@ -16,6 +16,7 @@ import re
 import threading
 import time
 from typing import Any
+from urllib.parse import urlencode
 
 import httpx
 
@@ -26,6 +27,11 @@ _TOKEN_URL = "https://oauth2.googleapis.com/token"
 _API_ROOT = "https://adsense.googleapis.com/v2"
 _MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 _MAX_REQUEST_TIMEOUT_SECONDS = 5.0
+# Policy Center commonly responds after 15–20 seconds, even for an empty
+# account. Give that collection its own budget without slowing failed auth or
+# site requests. Browser callers and coalesced requests allow this full check.
+_MAX_POLICY_TIMEOUT_SECONDS = 25.0
+_CHECK_TIMEOUT_SECONDS = 35.0
 _READONLY_SCOPE = "https://www.googleapis.com/auth/adsense.readonly"
 _ACCOUNT_NAME = re.compile(r"^accounts/pub-[0-9]+$")
 _PUBLISHER_ID = re.compile(r"^ca-pub-[0-9]+$")
@@ -187,11 +193,11 @@ def _json_object(response: httpx.Response, *, token_request: bool = False) -> di
     return value
 
 
-def _request_timeout(deadline: float) -> float:
+def _request_timeout(deadline: float, maximum: float = _MAX_REQUEST_TIMEOUT_SECONDS) -> float:
     remaining = deadline - time.monotonic()
     if remaining <= 0:
         raise _AdSenseError("provider_unavailable")
-    return min(_MAX_REQUEST_TIMEOUT_SECONDS, remaining)
+    return min(maximum, remaining)
 
 
 def _refresh_access_token(client: httpx.Client, settings: _Settings, deadline: float) -> str:
@@ -234,17 +240,24 @@ def _get(
     *,
     deadline: float,
     not_found_code: str | None = None,
+    max_timeout: float = _MAX_REQUEST_TIMEOUT_SECONDS,
+    parent: str | None = None,
 ) -> dict[str, Any]:
     # Every caller supplies a source-controlled relative path; redirects stay
     # disabled so credentials cannot follow a provider response to another host.
     if not path.startswith("/") or "//" in path or "?" in path or "#" in path:
         raise _AdSenseError("configuration_invalid")
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    if parent is not None:
+        if not _ACCOUNT_NAME.fullmatch(parent):
+            raise _AdSenseError("configuration_invalid")
+        headers["x-goog-request-params"] = urlencode({"parent": parent})
     try:
         response = client.get(
             f"{_API_ROOT}{path}",
             params=params,
-            headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
-            timeout=_request_timeout(deadline),
+            headers=headers,
+            timeout=_request_timeout(deadline, max_timeout),
         )
     except (httpx.TimeoutException, httpx.NetworkError, httpx.ProtocolError) as exc:
         raise _AdSenseError("provider_unavailable") from exc
@@ -336,7 +349,9 @@ def _policy_summary(issues: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _live_summary(settings: _Settings) -> dict[str, Any]:
-    deadline = time.monotonic() + settings.timeout_seconds
+    started_at = time.monotonic()
+    deadline = started_at + settings.timeout_seconds
+    policy_deadline = started_at + _CHECK_TIMEOUT_SECONDS
     timeout = httpx.Timeout(min(_MAX_REQUEST_TIMEOUT_SECONDS, settings.timeout_seconds))
     with _HTTP_CLIENT_FACTORY(
         timeout=timeout,
@@ -378,8 +393,10 @@ def _live_summary(settings: _Settings) -> dict[str, Any]:
                 client,
                 f"{resource_path}/policyIssues",
                 token,
-                {"pageSize": 10000},
-                deadline=deadline,
+                {"pageSize": 10000, "fields": "policyIssues(action),nextPageToken"},
+                deadline=policy_deadline,
+                max_timeout=_MAX_POLICY_TIMEOUT_SECONDS,
+                parent=settings.account_name,
             )
             sites = _objects(sites_future.result(), "sites")
             alerts = _objects(alerts_future.result(), "alerts")
@@ -421,7 +438,7 @@ def adsense_management_readiness() -> dict[str, Any]:
 
     fingerprint = settings.fingerprint
     global _CACHE, _CACHE_IN_FLIGHT
-    wait_deadline = time.monotonic() + settings.timeout_seconds
+    wait_deadline = time.monotonic() + _CHECK_TIMEOUT_SECONDS
     with _CACHE_CONDITION:
         while True:
             now = time.monotonic()

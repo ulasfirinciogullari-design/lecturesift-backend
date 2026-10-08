@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow"><title>Yönetim | LectureSift</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/auth.css?v=4"><link rel="stylesheet" href="/rollout.css?v=10">
-<link rel="stylesheet" href="/theme.css?v=17"><script src="/theme.js?v=11"></script><link rel="stylesheet" href="/product-layout.css?v=4"><link rel="stylesheet" href="/admin-ui.css?v=3"></head>
+<link rel="stylesheet" href="/theme.css?v=17"><script src="/theme.js?v=11"></script><link rel="stylesheet" href="/product-layout.css?v=4"><link rel="stylesheet" href="/admin-ui.css?v=4"></head>
 <body data-page="admin">
   <header class="auth-topbar"><a class="brand" href="/"><span class="brand-mark"><i></i><i></i><i></i></span><span>Lecture<span>Sift</span></span></a><a class="back-link" href="/workspace.html" data-i18n="nav.workspace">Çalışma alanına dön</a></header>
   <main class="account-layout admin-layout">
@@ -69,8 +69,9 @@
                 <select id="adminBulkAction" class="admin-filter" aria-label="Dakika ekle/düş"><option value="credit">Dakika ekle/düş</option><option value="subscription">Plan ata</option><option value="revoke_sessions">Oturumları kapat</option><option value="delete">Hesapları kapat</option></select>
                 <input id="adminBulkMinutes" class="admin-filter" type="number" min="-10000" max="10000" aria-label="Dakika" placeholder="Dakika">
                 <select id="adminBulkPlan" class="admin-filter" aria-label="Plan ata" hidden><option value="free">Ücretsiz</option><option value="lite">Lite</option><option value="plus">Plus</option><option value="pro">Pro</option><option value="max">Max</option><option value="business">Business</option></select>
-                <input id="adminBulkReason" class="admin-filter" aria-label="İşlem nedeni" placeholder="İşlem nedeni">
+                <input id="adminBulkReason" class="admin-filter" aria-label="İşlem nedeni" placeholder="İşlem nedeni" maxlength="500">
                 <input id="adminBulkConfirmation" class="admin-filter" aria-label="Silmek için SİL yaz" placeholder="Silmek için SİL yaz" hidden>
+                <p id="adminBulkDeleteWarning" class="admin-bulk-delete-warning" data-i18n="admin.deleteWarning" hidden>SİL yazarak onayla. Seçilen hesaplar kapatılır, oturumları sonlandırılır ve ders dosyaları silinir. Bu işlem geri alınamaz.</p>
                 <button id="adminBulkApply" type="button" class="admin-action reject">Seçilenlere uygula</button>
                 <button id="adminClearSelection" type="button" class="admin-action">Seçimi temizle</button>
               </div>
@@ -150,6 +151,6 @@
       </div>
     </section>
   </main>
-  <script src="/page-i18n.js?v=10"></script><script src="/i18n.js?v=47"></script><script src="/admin.js?v=25"></script>
+  <script src="/page-i18n.js?v=10"></script><script src="/i18n.js?v=47"></script><script src="/admin.js?v=26"></script>
 <script src="/product-layout.js?v=1"></script></body>
 </html>
