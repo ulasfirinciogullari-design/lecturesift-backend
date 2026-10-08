@@ -1,0 +1,2375 @@
+{
+  "merge_commit": "b80df35072b53c2b5c0756932f778086cbdb1a2a",
+  "pull_request": "https://github.com/ulasfirinciogullari-design/lecturesift-backend/pull/115",
+  "recorded_at_utc": "2026-10-08T22:34:50.390055+00:00",
+  "public_html": {
+    "source_commit": "b80df35072b53c2b5c0756932f778086cbdb1a2a",
+    "method": "Bounded public HTML reads; no local application, test runner or build executed.",
+    "observations": [
+      {
+        "url": "https://lecturesift.com/about",
+        "read_at": "2026-10-08T22:34:07.171257+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/about",
+        "metadata": {
+          "lang": "tr",
+          "description": "LectureSift, öğrenciler için ders videolarını ve ses kayıtlarını not, quiz ve bilgi kartlarına dönüştürür. Yapay zekâ çıktılarının doğrulanmasını önemser.",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "LectureSift, öğrenciler için ders videolarını ve ses kayıtlarını not, quiz ve bilgi kartlarına dönüştürür. Yapay zekâ çıktılarının doğrulanmasını önemser.",
+          "twitter:description": "LectureSift, öğrenciler için ders videolarını ve ses kayıtlarını not, quiz ve bilgi kartlarına dönüştürür. Yapay zekâ çıktılarının doğrulanmasını önemser."
+        },
+        "canonicals": [
+          "https://lecturesift.com/about"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "LectureSift, öğrenciler için ders videolarını ve ses kayıtlarını not, quiz ve bilgi kartlarına dönüştürür. Yapay zekâ çıktılarının doğrulanmasını önemser.",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/en/about",
+        "read_at": "2026-10-08T22:34:07.548899+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/en/about",
+        "metadata": {
+          "lang": "en",
+          "description": "Meet LectureSift: turning lecture video and audio into notes, quizzes and flashcards for learners, with AI outputs that should be checked.",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "Meet LectureSift: turning lecture video and audio into notes, quizzes and flashcards for learners, with AI outputs that should be checked.",
+          "twitter:description": "Meet LectureSift: turning lecture video and audio into notes, quizzes and flashcards for learners, with AI outputs that should be checked."
+        },
+        "canonicals": [
+          "https://lecturesift.com/en/about"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "Meet LectureSift: turning lecture video and audio into notes, quizzes and flashcards for learners, with AI outputs that should be checked.",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/de/about",
+        "read_at": "2026-10-08T22:34:08.027128+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/de/about",
+        "metadata": {
+          "lang": "de",
+          "description": "LectureSift verwandelt Vorlesungsvideos und Audioaufnahmen in Notizen, Quizfragen und Lernkarten für Lernende. KI-Ergebnisse sollten überprüft werden.",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "LectureSift verwandelt Vorlesungsvideos und Audioaufnahmen in Notizen, Quizfragen und Lernkarten für Lernende. KI-Ergebnisse sollten überprüft werden.",
+          "twitter:description": "LectureSift verwandelt Vorlesungsvideos und Audioaufnahmen in Notizen, Quizfragen und Lernkarten für Lernende. KI-Ergebnisse sollten überprüft werden."
+        },
+        "canonicals": [
+          "https://lecturesift.com/de/about"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "LectureSift verwandelt Vorlesungsvideos und Audioaufnahmen in Notizen, Quizfragen und Lernkarten für Lernende. KI-Ergebnisse sollten überprüft werden.",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/fr/about",
+        "read_at": "2026-10-08T22:34:08.416271+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/fr/about",
+        "metadata": {
+          "lang": "fr",
+          "description": "LectureSift aide les apprenants à transformer cours vidéo et audio en notes, quiz et fiches de révision, tout en invitant à vérifier les résultats de l’IA.",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "LectureSift aide les apprenants à transformer cours vidéo et audio en notes, quiz et fiches de révision, tout en invitant à vérifier les résultats de l’IA.",
+          "twitter:description": "LectureSift aide les apprenants à transformer cours vidéo et audio en notes, quiz et fiches de révision, tout en invitant à vérifier les résultats de l’IA."
+        },
+        "canonicals": [
+          "https://lecturesift.com/fr/about"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "LectureSift aide les apprenants à transformer cours vidéo et audio en notes, quiz et fiches de révision, tout en invitant à vérifier les résultats de l’IA.",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/es/about",
+        "read_at": "2026-10-08T22:34:08.910202+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/es/about",
+        "metadata": {
+          "lang": "es",
+          "description": "Conoce LectureSift: convierte clases en vídeo y audio en apuntes, cuestionarios y tarjetas de estudio para estudiantes. Revisa los resultados de la IA.",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "Conoce LectureSift: convierte clases en vídeo y audio en apuntes, cuestionarios y tarjetas de estudio para estudiantes. Revisa los resultados de la IA.",
+          "twitter:description": "Conoce LectureSift: convierte clases en vídeo y audio en apuntes, cuestionarios y tarjetas de estudio para estudiantes. Revisa los resultados de la IA."
+        },
+        "canonicals": [
+          "https://lecturesift.com/es/about"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "Conoce LectureSift: convierte clases en vídeo y audio en apuntes, cuestionarios y tarjetas de estudio para estudiantes. Revisa los resultados de la IA.",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/it/about",
+        "read_at": "2026-10-08T22:34:09.071487+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/it/about",
+        "metadata": {
+          "lang": "it",
+          "description": "Scopri LectureSift: dalle lezioni video e audio a note, quiz e schede per lo studio. Invitiamo gli studenti a verificare i risultati dell’IA.",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "Scopri LectureSift: dalle lezioni video e audio a note, quiz e schede per lo studio. Invitiamo gli studenti a verificare i risultati dell’IA.",
+          "twitter:description": "Scopri LectureSift: dalle lezioni video e audio a note, quiz e schede per lo studio. Invitiamo gli studenti a verificare i risultati dell’IA."
+        },
+        "canonicals": [
+          "https://lecturesift.com/it/about"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "Scopri LectureSift: dalle lezioni video e audio a note, quiz e schede per lo studio. Invitiamo gli studenti a verificare i risultati dell’IA.",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/pt/about",
+        "read_at": "2026-10-08T22:34:09.463740+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/pt/about",
+        "metadata": {
+          "lang": "pt",
+          "description": "Conheça o LectureSift: transforma aulas em vídeo e áudio em notas, questionários e cartões de estudo para estudantes, com resultados de IA a verificar.",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "Conheça o LectureSift: transforma aulas em vídeo e áudio em notas, questionários e cartões de estudo para estudantes, com resultados de IA a verificar.",
+          "twitter:description": "Conheça o LectureSift: transforma aulas em vídeo e áudio em notas, questionários e cartões de estudo para estudantes, com resultados de IA a verificar."
+        },
+        "canonicals": [
+          "https://lecturesift.com/pt/about"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "Conheça o LectureSift: transforma aulas em vídeo e áudio em notas, questionários e cartões de estudo para estudantes, com resultados de IA a verificar.",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/ru/about",
+        "read_at": "2026-10-08T22:34:09.762834+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/ru/about",
+        "metadata": {
+          "lang": "ru",
+          "description": "LectureSift превращает видео- и аудиозаписи лекций в конспекты, тесты и карточки для учащихся. Узнайте о нашем подходе и проверке результатов ИИ.",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "LectureSift превращает видео- и аудиозаписи лекций в конспекты, тесты и карточки для учащихся. Узнайте о нашем подходе и проверке результатов ИИ.",
+          "twitter:description": "LectureSift превращает видео- и аудиозаписи лекций в конспекты, тесты и карточки для учащихся. Узнайте о нашем подходе и проверке результатов ИИ."
+        },
+        "canonicals": [
+          "https://lecturesift.com/ru/about"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "LectureSift превращает видео- и аудиозаписи лекций в конспекты, тесты и карточки для учащихся. Узнайте о нашем подходе и проверке результатов ИИ.",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/ar/about",
+        "read_at": "2026-10-08T22:34:10.240115+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/ar/about",
+        "metadata": {
+          "lang": "ar",
+          "description": "تعرّف على LectureSift: نحول محاضرات الفيديو والصوت إلى ملاحظات واختبارات وبطاقات تعليمية للمتعلمين، ونؤكد ضرورة التحقق من مخرجات الذكاء الاصطناعي.",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "تعرّف على LectureSift: نحول محاضرات الفيديو والصوت إلى ملاحظات واختبارات وبطاقات تعليمية للمتعلمين، ونؤكد ضرورة التحقق من مخرجات الذكاء الاصطناعي.",
+          "twitter:description": "تعرّف على LectureSift: نحول محاضرات الفيديو والصوت إلى ملاحظات واختبارات وبطاقات تعليمية للمتعلمين، ونؤكد ضرورة التحقق من مخرجات الذكاء الاصطناعي."
+        },
+        "canonicals": [
+          "https://lecturesift.com/ar/about"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "تعرّف على LectureSift: نحول محاضرات الفيديو والصوت إلى ملاحظات واختبارات وبطاقات تعليمية للمتعلمين، ونؤكد ضرورة التحقق من مخرجات الذكاء الاصطناعي.",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/zh/about",
+        "read_at": "2026-10-08T22:34:10.438894+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/zh/about",
+        "metadata": {
+          "lang": "zh",
+          "description": "了解 LectureSift 如何帮助学习者将课程视频和音频转化为笔记、测验和记忆卡片，以及我们为何强调核查人工智能生成的内容。",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "了解 LectureSift 如何帮助学习者将课程视频和音频转化为笔记、测验和记忆卡片，以及我们为何强调核查人工智能生成的内容。",
+          "twitter:description": "了解 LectureSift 如何帮助学习者将课程视频和音频转化为笔记、测验和记忆卡片，以及我们为何强调核查人工智能生成的内容。"
+        },
+        "canonicals": [
+          "https://lecturesift.com/zh/about"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "了解 LectureSift 如何帮助学习者将课程视频和音频转化为笔记、测验和记忆卡片，以及我们为何强调核查人工智能生成的内容。",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/ja/about",
+        "read_at": "2026-10-08T22:34:10.714535+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/ja/about",
+        "metadata": {
+          "lang": "ja",
+          "description": "LectureSiftは、講義の動画や音声を学習者向けのノート、クイズ、暗記カードに変換します。サービスの目的と、AIの出力を確認することを重視する姿勢をご紹介します。",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "LectureSiftは、講義の動画や音声を学習者向けのノート、クイズ、暗記カードに変換します。サービスの目的と、AIの出力を確認することを重視する姿勢をご紹介します。",
+          "twitter:description": "LectureSiftは、講義の動画や音声を学習者向けのノート、クイズ、暗記カードに変換します。サービスの目的と、AIの出力を確認することを重視する姿勢をご紹介します。"
+        },
+        "canonicals": [
+          "https://lecturesift.com/ja/about"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "LectureSiftは、講義の動画や音声を学習者向けのノート、クイズ、暗記カードに変換します。サービスの目的と、AIの出力を確認することを重視する姿勢をご紹介します。",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/ko/about",
+        "read_at": "2026-10-08T22:34:10.879992+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/ko/about",
+        "metadata": {
+          "lang": "ko",
+          "description": "LectureSift가 학습자를 위해 강의 영상과 음성을 노트, 퀴즈, 플래시카드로 바꾸는 방법과 AI가 생성한 내용을 검증해야 한다는 원칙을 알아보세요.",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "LectureSift가 학습자를 위해 강의 영상과 음성을 노트, 퀴즈, 플래시카드로 바꾸는 방법과 AI가 생성한 내용을 검증해야 한다는 원칙을 알아보세요.",
+          "twitter:description": "LectureSift가 학습자를 위해 강의 영상과 음성을 노트, 퀴즈, 플래시카드로 바꾸는 방법과 AI가 생성한 내용을 검증해야 한다는 원칙을 알아보세요."
+        },
+        "canonicals": [
+          "https://lecturesift.com/ko/about"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "LectureSift가 학습자를 위해 강의 영상과 음성을 노트, 퀴즈, 플래시카드로 바꾸는 방법과 AI가 생성한 내용을 검증해야 한다는 원칙을 알아보세요.",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/hi/about",
+        "read_at": "2026-10-08T22:34:11.339944+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/hi/about",
+        "metadata": {
+          "lang": "hi",
+          "description": "LectureSift शिक्षार्थियों के लिए लेक्चर वीडियो और ऑडियो को नोट्स, क्विज़ और फ्लैशकार्ड में बदलता है। जानें कि AI के नतीजों की जाँच क्यों ज़रूरी है।",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "LectureSift शिक्षार्थियों के लिए लेक्चर वीडियो और ऑडियो को नोट्स, क्विज़ और फ्लैशकार्ड में बदलता है। जानें कि AI के नतीजों की जाँच क्यों ज़रूरी है।",
+          "twitter:description": "LectureSift शिक्षार्थियों के लिए लेक्चर वीडियो और ऑडियो को नोट्स, क्विज़ और फ्लैशकार्ड में बदलता है। जानें कि AI के नतीजों की जाँच क्यों ज़रूरी है।"
+        },
+        "canonicals": [
+          "https://lecturesift.com/hi/about"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "LectureSift शिक्षार्थियों के लिए लेक्चर वीडियो और ऑडियो को नोट्स, क्विज़ और फ्लैशकार्ड में बदलता है। जानें कि AI के नतीजों की जाँच क्यों ज़रूरी है।",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/contact",
+        "read_at": "2026-10-08T22:34:11.623720+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/contact",
+        "metadata": {
+          "lang": "tr",
+          "description": "Teknik sorunlar, hesap ve giriş, ödeme, iptal, iade veya gizlilik taleplerin için LectureSift desteğine iletişim formu ya da e-posta ile ulaş.",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "Teknik sorunlar, hesap ve giriş, ödeme, iptal, iade veya gizlilik taleplerin için LectureSift desteğine iletişim formu ya da e-posta ile ulaş.",
+          "twitter:description": "Teknik sorunlar, hesap ve giriş, ödeme, iptal, iade veya gizlilik taleplerin için LectureSift desteğine iletişim formu ya da e-posta ile ulaş."
+        },
+        "canonicals": [
+          "https://lecturesift.com/contact"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "Teknik sorunlar, hesap ve giriş, ödeme, iptal, iade veya gizlilik taleplerin için LectureSift desteğine iletişim formu ya da e-posta ile ulaş.",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/en/contact",
+        "read_at": "2026-10-08T22:34:11.897059+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/en/contact",
+        "metadata": {
+          "lang": "en",
+          "description": "Contact LectureSift support by form or email for technical issues, account access, billing, cancellations, refunds or privacy requests.",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "Contact LectureSift support by form or email for technical issues, account access, billing, cancellations, refunds or privacy requests.",
+          "twitter:description": "Contact LectureSift support by form or email for technical issues, account access, billing, cancellations, refunds or privacy requests."
+        },
+        "canonicals": [
+          "https://lecturesift.com/en/contact"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "Contact LectureSift support by form or email for technical issues, account access, billing, cancellations, refunds or privacy requests.",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/de/contact",
+        "read_at": "2026-10-08T22:34:12.068901+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/de/contact",
+        "metadata": {
+          "lang": "de",
+          "description": "Kontaktiere den LectureSift-Support per Formular oder E-Mail bei technischen Problemen, Kontozugang, Zahlungen, Stornierungen, Erstattungen oder Datenschutz.",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "Kontaktiere den LectureSift-Support per Formular oder E-Mail bei technischen Problemen, Kontozugang, Zahlungen, Stornierungen, Erstattungen oder Datenschutz.",
+          "twitter:description": "Kontaktiere den LectureSift-Support per Formular oder E-Mail bei technischen Problemen, Kontozugang, Zahlungen, Stornierungen, Erstattungen oder Datenschutz."
+        },
+        "canonicals": [
+          "https://lecturesift.com/de/contact"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "Kontaktiere den LectureSift-Support per Formular oder E-Mail bei technischen Problemen, Kontozugang, Zahlungen, Stornierungen, Erstattungen oder Datenschutz.",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/fr/contact",
+        "read_at": "2026-10-08T22:34:12.345606+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/fr/contact",
+        "metadata": {
+          "lang": "fr",
+          "description": "Contactez l’assistance LectureSift par formulaire ou e-mail pour les problèmes techniques, le compte, les paiements, remboursements ou données personnelles.",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "Contactez l’assistance LectureSift par formulaire ou e-mail pour les problèmes techniques, le compte, les paiements, remboursements ou données personnelles.",
+          "twitter:description": "Contactez l’assistance LectureSift par formulaire ou e-mail pour les problèmes techniques, le compte, les paiements, remboursements ou données personnelles."
+        },
+        "canonicals": [
+          "https://lecturesift.com/fr/contact"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "Contactez l’assistance LectureSift par formulaire ou e-mail pour les problèmes techniques, le compte, les paiements, remboursements ou données personnelles.",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/es/contact",
+        "read_at": "2026-10-08T22:34:12.831733+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/es/contact",
+        "metadata": {
+          "lang": "es",
+          "description": "Contacta con el soporte de LectureSift por formulario o correo para problemas técnicos, acceso a tu cuenta, pagos, cancelaciones, reembolsos o privacidad.",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "Contacta con el soporte de LectureSift por formulario o correo para problemas técnicos, acceso a tu cuenta, pagos, cancelaciones, reembolsos o privacidad.",
+          "twitter:description": "Contacta con el soporte de LectureSift por formulario o correo para problemas técnicos, acceso a tu cuenta, pagos, cancelaciones, reembolsos o privacidad."
+        },
+        "canonicals": [
+          "https://lecturesift.com/es/contact"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "Contacta con el soporte de LectureSift por formulario o correo para problemas técnicos, acceso a tu cuenta, pagos, cancelaciones, reembolsos o privacidad.",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/it/contact",
+        "read_at": "2026-10-08T22:34:13.000695+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/it/contact",
+        "metadata": {
+          "lang": "it",
+          "description": "Contatta l’assistenza LectureSift tramite modulo o email per problemi tecnici, accesso all’account, pagamenti, cancellazioni, rimborsi o privacy.",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "Contatta l’assistenza LectureSift tramite modulo o email per problemi tecnici, accesso all’account, pagamenti, cancellazioni, rimborsi o privacy.",
+          "twitter:description": "Contatta l’assistenza LectureSift tramite modulo o email per problemi tecnici, accesso all’account, pagamenti, cancellazioni, rimborsi o privacy."
+        },
+        "canonicals": [
+          "https://lecturesift.com/it/contact"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "Contatta l’assistenza LectureSift tramite modulo o email per problemi tecnici, accesso all’account, pagamenti, cancellazioni, rimborsi o privacy.",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/pt/contact",
+        "read_at": "2026-10-08T22:34:13.191398+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/pt/contact",
+        "metadata": {
+          "lang": "pt",
+          "description": "Fale com o suporte do LectureSift por formulário ou e-mail sobre problemas técnicos, acesso à conta, pagamentos, cancelamentos, reembolsos ou privacidade.",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "Fale com o suporte do LectureSift por formulário ou e-mail sobre problemas técnicos, acesso à conta, pagamentos, cancelamentos, reembolsos ou privacidade.",
+          "twitter:description": "Fale com o suporte do LectureSift por formulário ou e-mail sobre problemas técnicos, acesso à conta, pagamentos, cancelamentos, reembolsos ou privacidade."
+        },
+        "canonicals": [
+          "https://lecturesift.com/pt/contact"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "Fale com o suporte do LectureSift por formulário ou e-mail sobre problemas técnicos, acesso à conta, pagamentos, cancelamentos, reembolsos ou privacidade.",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/ru/contact",
+        "read_at": "2026-10-08T22:34:13.784486+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/ru/contact",
+        "metadata": {
+          "lang": "ru",
+          "description": "Свяжитесь с поддержкой LectureSift через форму или почту с техническими проблемами и вопросами доступа к аккаунту, оплаты, отмены, возврата или конфиденциальности.",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "Свяжитесь с поддержкой LectureSift через форму или почту с техническими проблемами и вопросами доступа к аккаунту, оплаты, отмены, возврата или конфиденциальности.",
+          "twitter:description": "Свяжитесь с поддержкой LectureSift через форму или почту с техническими проблемами и вопросами доступа к аккаунту, оплаты, отмены, возврата или конфиденциальности."
+        },
+        "canonicals": [
+          "https://lecturesift.com/ru/contact"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "Свяжитесь с поддержкой LectureSift через форму или почту с техническими проблемами и вопросами доступа к аккаунту, оплаты, отмены, возврата или конфиденциальности.",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/ar/contact",
+        "read_at": "2026-10-08T22:34:14.084486+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/ar/contact",
+        "metadata": {
+          "lang": "ar",
+          "description": "تواصل مع دعم LectureSift عبر النموذج أو البريد الإلكتروني بشأن المشكلات التقنية، أو الوصول إلى الحساب، أو الدفع والإلغاء والاسترداد، أو طلبات الخصوصية.",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "تواصل مع دعم LectureSift عبر النموذج أو البريد الإلكتروني بشأن المشكلات التقنية، أو الوصول إلى الحساب، أو الدفع والإلغاء والاسترداد، أو طلبات الخصوصية.",
+          "twitter:description": "تواصل مع دعم LectureSift عبر النموذج أو البريد الإلكتروني بشأن المشكلات التقنية، أو الوصول إلى الحساب، أو الدفع والإلغاء والاسترداد، أو طلبات الخصوصية."
+        },
+        "canonicals": [
+          "https://lecturesift.com/ar/contact"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "تواصل مع دعم LectureSift عبر النموذج أو البريد الإلكتروني بشأن المشكلات التقنية، أو الوصول إلى الحساب، أو الدفع والإلغاء والاسترداد، أو طلبات الخصوصية.",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/zh/contact",
+        "read_at": "2026-10-08T22:34:14.253435+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/zh/contact",
+        "metadata": {
+          "lang": "zh",
+          "description": "如遇技术问题，或需要咨询账户登录、付款、取消、退款及隐私事宜，请通过联系表单或电子邮件联系 LectureSift 支持团队。",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "如遇技术问题，或需要咨询账户登录、付款、取消、退款及隐私事宜，请通过联系表单或电子邮件联系 LectureSift 支持团队。",
+          "twitter:description": "如遇技术问题，或需要咨询账户登录、付款、取消、退款及隐私事宜，请通过联系表单或电子邮件联系 LectureSift 支持团队。"
+        },
+        "canonicals": [
+          "https://lecturesift.com/zh/contact"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "如遇技术问题，或需要咨询账户登录、付款、取消、退款及隐私事宜，请通过联系表单或电子邮件联系 LectureSift 支持团队。",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/ja/contact",
+        "read_at": "2026-10-08T22:34:14.642939+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/ja/contact",
+        "metadata": {
+          "lang": "ja",
+          "description": "技術的な問題、アカウントへのログイン、支払い、キャンセル、返金、プライバシーに関するご相談は、お問い合わせフォームまたはメールでLectureSiftサポートへご連絡ください。",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "技術的な問題、アカウントへのログイン、支払い、キャンセル、返金、プライバシーに関するご相談は、お問い合わせフォームまたはメールでLectureSiftサポートへご連絡ください。",
+          "twitter:description": "技術的な問題、アカウントへのログイン、支払い、キャンセル、返金、プライバシーに関するご相談は、お問い合わせフォームまたはメールでLectureSiftサポートへご連絡ください。"
+        },
+        "canonicals": [
+          "https://lecturesift.com/ja/contact"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "技術的な問題、アカウントへのログイン、支払い、キャンセル、返金、プライバシーに関するご相談は、お問い合わせフォームまたはメールでLectureSiftサポートへご連絡ください。",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/ko/contact",
+        "read_at": "2026-10-08T22:34:14.924545+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/ko/contact",
+        "metadata": {
+          "lang": "ko",
+          "description": "기술 문제, 계정 로그인, 결제, 취소, 환불 또는 개인정보 관련 요청은 문의 양식이나 이메일로 LectureSift 지원팀에 전달하세요.",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "기술 문제, 계정 로그인, 결제, 취소, 환불 또는 개인정보 관련 요청은 문의 양식이나 이메일로 LectureSift 지원팀에 전달하세요.",
+          "twitter:description": "기술 문제, 계정 로그인, 결제, 취소, 환불 또는 개인정보 관련 요청은 문의 양식이나 이메일로 LectureSift 지원팀에 전달하세요."
+        },
+        "canonicals": [
+          "https://lecturesift.com/ko/contact"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "기술 문제, 계정 로그인, 결제, 취소, 환불 또는 개인정보 관련 요청은 문의 양식이나 이메일로 LectureSift 지원팀에 전달하세요.",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      },
+      {
+        "url": "https://lecturesift.com/hi/contact",
+        "read_at": "2026-10-08T22:34:15.101517+00:00",
+        "status": 200,
+        "final_url": "https://lecturesift.com/hi/contact",
+        "metadata": {
+          "lang": "hi",
+          "description": "तकनीकी समस्याओं, खाते में लॉगिन, भुगतान, रद्दीकरण, रिफंड या गोपनीयता संबंधी अनुरोधों के लिए फ़ॉर्म या ईमेल से LectureSift सहायता से संपर्क करें।",
+          "robots": "max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+          "og:description": "तकनीकी समस्याओं, खाते में लॉगिन, भुगतान, रद्दीकरण, रिफंड या गोपनीयता संबंधी अनुरोधों के लिए फ़ॉर्म या ईमेल से LectureSift सहायता से संपर्क करें।",
+          "twitter:description": "तकनीकी समस्याओं, खाते में लॉगिन, भुगतान, रद्दीकरण, रिफंड या गोपनीयता संबंधी अनुरोधों के लिए फ़ॉर्म या ईमेल से LectureSift सहायता से संपर्क करें।"
+        },
+        "canonicals": [
+          "https://lecturesift.com/hi/contact"
+        ],
+        "x_robots_tag": null,
+        "expected_description": "तकनीकी समस्याओं, खाते में लॉगिन, भुगतान, रद्दीकरण, रिफंड या गोपनीयता संबंधी अनुरोधों के लिए फ़ॉर्म या ईमेल से LectureSift सहायता से संपर्क करें।",
+        "description_matches_source": true,
+        "og_matches_source": true,
+        "twitter_matches_source": true
+      }
+    ]
+  },
+  "gsc_wizard_about": {
+    "inspectedAt": "2026-10-08T22:33:32.534Z",
+    "method": "GSC Wizard audit_onpage_seo (live remote HTTP crawl)",
+    "property": "sc-domain:lecturesift.com",
+    "sourceCommit": "b80df35072b53c2b5c0756932f778086cbdb1a2a",
+    "limitations": [
+      "This is a live HTTP audit, not Google URL Inspection or evidence of Google index inclusion.",
+      "Tool reports noindex boolean but not raw robots directives.",
+      "Tool reports meta-description length but not the text. Equal lengths are not proof of exact textual equality."
+    ],
+    "auditedCount": 13,
+    "skipped": [],
+    "summary": {
+      "total_pages": 13,
+      "total_issues": 25,
+      "by_severity": {
+        "critical": 0,
+        "high": 0,
+        "medium": 2,
+        "low": 23,
+        "info": 0
+      },
+      "indexable_pages": 13,
+      "non_indexable_pages": 0
+    },
+    "pages": [
+      {
+        "url": "https://lecturesift.com/zh/about",
+        "finalUrl": "https://lecturesift.com/zh/about",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 238,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "关于我们 | LectureSift",
+        "titleLength": 18,
+        "metaDescriptionLength": 64,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 42,
+        "canonicalUrl": "https://lecturesift.com/zh/about",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 14,
+        "externalLinks": 0,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": true,
+        "lang": "zh",
+        "hreflangCount": 14,
+        "bodyBytes": 7875,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "title-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Title is only 18 chars"
+          },
+          {
+            "id": "meta-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Meta description is only 64 chars"
+          },
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "medium",
+            "message": "Thin content (42 words)"
+          }
+        ],
+        "expectedMetaDescription": "了解 LectureSift 如何帮助学习者将课程视频和音频转化为笔记、测验和记忆卡片，以及我们为何强调核查人工智能生成的内容。",
+        "expectedMetaDescriptionLength": 64,
+        "metaDescriptionLengthMatchesSource": true,
+        "metaDescriptionTextVerified": false
+      },
+      {
+        "url": "https://lecturesift.com/about",
+        "finalUrl": "https://lecturesift.com/about",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 2032,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "Hakkımızda | LectureSift",
+        "titleLength": 24,
+        "metaDescriptionLength": 154,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 188,
+        "canonicalUrl": "https://lecturesift.com/about",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 14,
+        "externalLinks": 0,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": true,
+        "lang": "tr",
+        "hreflangCount": 14,
+        "bodyBytes": 8365,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "title-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Title is only 24 chars"
+          },
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "low",
+            "message": "Thin content (188 words)"
+          }
+        ],
+        "expectedMetaDescription": "LectureSift, öğrenciler için ders videolarını ve ses kayıtlarını not, quiz ve bilgi kartlarına dönüştürür. Yapay zekâ çıktılarının doğrulanmasını önemser.",
+        "expectedMetaDescriptionLength": 154,
+        "metaDescriptionLengthMatchesSource": true,
+        "metaDescriptionTextVerified": false
+      },
+      {
+        "url": "https://lecturesift.com/en/about",
+        "finalUrl": "https://lecturesift.com/en/about",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 132,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "About Us | LectureSift",
+        "titleLength": 22,
+        "metaDescriptionLength": 138,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 231,
+        "canonicalUrl": "https://lecturesift.com/en/about",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 14,
+        "externalLinks": 0,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": true,
+        "lang": "en",
+        "hreflangCount": 14,
+        "bodyBytes": 7862,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "title-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Title is only 22 chars"
+          },
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "low",
+            "message": "Thin content (231 words)"
+          }
+        ],
+        "expectedMetaDescription": "Meet LectureSift: turning lecture video and audio into notes, quizzes and flashcards for learners, with AI outputs that should be checked.",
+        "expectedMetaDescriptionLength": 138,
+        "metaDescriptionLengthMatchesSource": true,
+        "metaDescriptionTextVerified": false
+      },
+      {
+        "url": "https://lecturesift.com/de/about",
+        "finalUrl": "https://lecturesift.com/de/about",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 232,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "Über uns | LectureSift",
+        "titleLength": 22,
+        "metaDescriptionLength": 150,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 220,
+        "canonicalUrl": "https://lecturesift.com/de/about",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 14,
+        "externalLinks": 0,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": true,
+        "lang": "de",
+        "hreflangCount": 14,
+        "bodyBytes": 8224,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "title-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Title is only 22 chars"
+          },
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "low",
+            "message": "Thin content (220 words)"
+          }
+        ],
+        "expectedMetaDescription": "LectureSift verwandelt Vorlesungsvideos und Audioaufnahmen in Notizen, Quizfragen und Lernkarten für Lernende. KI-Ergebnisse sollten überprüft werden.",
+        "expectedMetaDescriptionLength": 150,
+        "metaDescriptionLengthMatchesSource": true,
+        "metaDescriptionTextVerified": false
+      },
+      {
+        "url": "https://lecturesift.com/it/about",
+        "finalUrl": "https://lecturesift.com/it/about",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 246,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "Chi siamo | LectureSift",
+        "titleLength": 23,
+        "metaDescriptionLength": 141,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 243,
+        "canonicalUrl": "https://lecturesift.com/it/about",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 14,
+        "externalLinks": 0,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": true,
+        "lang": "it",
+        "hreflangCount": 14,
+        "bodyBytes": 8099,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "title-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Title is only 23 chars"
+          },
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "low",
+            "message": "Thin content (243 words)"
+          }
+        ],
+        "expectedMetaDescription": "Scopri LectureSift: dalle lezioni video e audio a note, quiz e schede per lo studio. Invitiamo gli studenti a verificare i risultati dell’IA.",
+        "expectedMetaDescriptionLength": 141,
+        "metaDescriptionLengthMatchesSource": true,
+        "metaDescriptionTextVerified": false
+      },
+      {
+        "url": "https://lecturesift.com/pt/about",
+        "finalUrl": "https://lecturesift.com/pt/about",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 237,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "Sobre nós | LectureSift",
+        "titleLength": 23,
+        "metaDescriptionLength": 151,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 247,
+        "canonicalUrl": "https://lecturesift.com/pt/about",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 14,
+        "externalLinks": 0,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": true,
+        "lang": "pt",
+        "hreflangCount": 14,
+        "bodyBytes": 8190,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "title-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Title is only 23 chars"
+          },
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "low",
+            "message": "Thin content (247 words)"
+          }
+        ],
+        "expectedMetaDescription": "Conheça o LectureSift: transforma aulas em vídeo e áudio em notas, questionários e cartões de estudo para estudantes, com resultados de IA a verificar.",
+        "expectedMetaDescriptionLength": 151,
+        "metaDescriptionLengthMatchesSource": true,
+        "metaDescriptionTextVerified": false
+      },
+      {
+        "url": "https://lecturesift.com/ru/about",
+        "finalUrl": "https://lecturesift.com/ru/about",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 292,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "О нас | LectureSift",
+        "titleLength": 19,
+        "metaDescriptionLength": 145,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 215,
+        "canonicalUrl": "https://lecturesift.com/ru/about",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 14,
+        "externalLinks": 0,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": true,
+        "lang": "ru",
+        "hreflangCount": 14,
+        "bodyBytes": 9909,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "title-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Title is only 19 chars"
+          },
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "low",
+            "message": "Thin content (215 words)"
+          }
+        ],
+        "expectedMetaDescription": "LectureSift превращает видео- и аудиозаписи лекций в конспекты, тесты и карточки для учащихся. Узнайте о нашем подходе и проверке результатов ИИ.",
+        "expectedMetaDescriptionLength": 145,
+        "metaDescriptionLengthMatchesSource": true,
+        "metaDescriptionTextVerified": false
+      },
+      {
+        "url": "https://lecturesift.com/ar/about",
+        "finalUrl": "https://lecturesift.com/ar/about",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 433,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "نبذة عنا |\nLectureSift",
+        "titleLength": 22,
+        "metaDescriptionLength": 146,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 208,
+        "canonicalUrl": "https://lecturesift.com/ar/about",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 14,
+        "externalLinks": 0,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": true,
+        "lang": "ar",
+        "hreflangCount": 14,
+        "bodyBytes": 9480,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "title-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Title is only 22 chars"
+          },
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "low",
+            "message": "Thin content (208 words)"
+          }
+        ],
+        "expectedMetaDescription": "تعرّف على LectureSift: نحول محاضرات الفيديو والصوت إلى ملاحظات واختبارات وبطاقات تعليمية للمتعلمين، ونؤكد ضرورة التحقق من مخرجات الذكاء الاصطناعي.",
+        "expectedMetaDescriptionLength": 146,
+        "metaDescriptionLengthMatchesSource": true,
+        "metaDescriptionTextVerified": false
+      },
+      {
+        "url": "https://lecturesift.com/ja/about",
+        "finalUrl": "https://lecturesift.com/ja/about",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 221,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "会社概要| LectureSift",
+        "titleLength": 17,
+        "metaDescriptionLength": 84,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 40,
+        "canonicalUrl": "https://lecturesift.com/ja/about",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 14,
+        "externalLinks": 0,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": true,
+        "lang": "ja",
+        "hreflangCount": 14,
+        "bodyBytes": 8869,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "title-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Title is only 17 chars"
+          },
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "medium",
+            "message": "Thin content (40 words)"
+          }
+        ],
+        "expectedMetaDescription": "LectureSiftは、講義の動画や音声を学習者向けのノート、クイズ、暗記カードに変換します。サービスの目的と、AIの出力を確認することを重視する姿勢をご紹介します。",
+        "expectedMetaDescriptionLength": 84,
+        "metaDescriptionLengthMatchesSource": true,
+        "metaDescriptionTextVerified": false
+      },
+      {
+        "url": "https://lecturesift.com/ko/about",
+        "finalUrl": "https://lecturesift.com/ko/about",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 238,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "회사 소개 |\nLectureSift",
+        "titleLength": 19,
+        "metaDescriptionLength": 86,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 194,
+        "canonicalUrl": "https://lecturesift.com/ko/about",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 14,
+        "externalLinks": 0,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": true,
+        "lang": "ko",
+        "hreflangCount": 14,
+        "bodyBytes": 8428,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "title-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Title is only 19 chars"
+          },
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "low",
+            "message": "Thin content (194 words)"
+          }
+        ],
+        "expectedMetaDescription": "LectureSift가 학습자를 위해 강의 영상과 음성을 노트, 퀴즈, 플래시카드로 바꾸는 방법과 AI가 생성한 내용을 검증해야 한다는 원칙을 알아보세요.",
+        "expectedMetaDescriptionLength": 86,
+        "metaDescriptionLengthMatchesSource": true,
+        "metaDescriptionTextVerified": false
+      },
+      {
+        "url": "https://lecturesift.com/hi/about",
+        "finalUrl": "https://lecturesift.com/hi/about",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 256,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "हमारे बारे में |\nLectureSift",
+        "titleLength": 28,
+        "metaDescriptionLength": 147,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 275,
+        "canonicalUrl": "https://lecturesift.com/hi/about",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 14,
+        "externalLinks": 0,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": true,
+        "lang": "hi",
+        "hreflangCount": 14,
+        "bodyBytes": 11626,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "title-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Title is only 28 chars"
+          },
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "low",
+            "message": "Thin content (275 words)"
+          }
+        ],
+        "expectedMetaDescription": "LectureSift शिक्षार्थियों के लिए लेक्चर वीडियो और ऑडियो को नोट्स, क्विज़ और फ्लैशकार्ड में बदलता है। जानें कि AI के नतीजों की जाँच क्यों ज़रूरी है।",
+        "expectedMetaDescriptionLength": 147,
+        "metaDescriptionLengthMatchesSource": true,
+        "metaDescriptionTextVerified": false
+      },
+      {
+        "url": "https://lecturesift.com/fr/about",
+        "finalUrl": "https://lecturesift.com/fr/about",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 249,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "À propos de nous | LectureSift",
+        "titleLength": 30,
+        "metaDescriptionLength": 155,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 289,
+        "canonicalUrl": "https://lecturesift.com/fr/about",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 14,
+        "externalLinks": 0,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": true,
+        "lang": "fr",
+        "hreflangCount": 14,
+        "bodyBytes": 8476,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "low",
+            "message": "Thin content (289 words)"
+          }
+        ],
+        "expectedMetaDescription": "LectureSift aide les apprenants à transformer cours vidéo et audio en notes, quiz et fiches de révision, tout en invitant à vérifier les résultats de l’IA.",
+        "expectedMetaDescriptionLength": 155,
+        "metaDescriptionLengthMatchesSource": true,
+        "metaDescriptionTextVerified": false
+      },
+      {
+        "url": "https://lecturesift.com/es/about",
+        "finalUrl": "https://lecturesift.com/es/about",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 280,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "Acerca de nosotros | LectureSift",
+        "titleLength": 32,
+        "metaDescriptionLength": 151,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 248,
+        "canonicalUrl": "https://lecturesift.com/es/about",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 14,
+        "externalLinks": 0,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": true,
+        "lang": "es",
+        "hreflangCount": 14,
+        "bodyBytes": 8247,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "low",
+            "message": "Thin content (248 words)"
+          }
+        ],
+        "expectedMetaDescription": "Conoce LectureSift: convierte clases en vídeo y audio en apuntes, cuestionarios y tarjetas de estudio para estudiantes. Revisa los resultados de la IA.",
+        "expectedMetaDescriptionLength": 151,
+        "metaDescriptionLengthMatchesSource": true,
+        "metaDescriptionTextVerified": false
+      }
+    ]
+  },
+  "gsc_wizard_contact_and_quiz": {
+    "siteUrl": "sc-domain:lecturesift.com",
+    "contextRange": {
+      "startDate": "2026-09-08",
+      "endDate": "2026-10-05"
+    },
+    "auditedCount": 15,
+    "skipped": [],
+    "summary": {
+      "total_pages": 15,
+      "total_issues": 30,
+      "by_severity": {
+        "critical": 0,
+        "high": 0,
+        "medium": 4,
+        "low": 26,
+        "info": 0
+      },
+      "indexable_pages": 15,
+      "non_indexable_pages": 0
+    },
+    "pages": [
+      {
+        "url": "https://lecturesift.com/ru/contact",
+        "finalUrl": "https://lecturesift.com/ru/contact",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 244,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "Контакт | LectureSift",
+        "titleLength": 21,
+        "metaDescriptionLength": 163,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 125,
+        "canonicalUrl": "https://lecturesift.com/ru/contact",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 12,
+        "externalLinks": 1,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": false,
+        "lang": "ru",
+        "hreflangCount": 14,
+        "bodyBytes": 10079,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "title-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Title is only 21 chars"
+          },
+          {
+            "id": "meta-long",
+            "category": "meta",
+            "severity": "low",
+            "message": "Meta description is 163 chars (over ~160 may truncate)"
+          },
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "low",
+            "message": "Thin content (125 words)"
+          }
+        ]
+      },
+      {
+        "url": "https://lecturesift.com/zh/contact",
+        "finalUrl": "https://lecturesift.com/zh/contact",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 218,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "联系 | LectureSift",
+        "titleLength": 16,
+        "metaDescriptionLength": 63,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 47,
+        "canonicalUrl": "https://lecturesift.com/zh/contact",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 12,
+        "externalLinks": 1,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": false,
+        "lang": "zh",
+        "hreflangCount": 14,
+        "bodyBytes": 8433,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "title-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Title is only 16 chars"
+          },
+          {
+            "id": "meta-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Meta description is only 63 chars"
+          },
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "medium",
+            "message": "Thin content (47 words)"
+          }
+        ]
+      },
+      {
+        "url": "https://lecturesift.com/contact",
+        "finalUrl": "https://lecturesift.com/contact",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 253,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "İletişim | LectureSift<",
+        "titleLength": 23,
+        "metaDescriptionLength": 142,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 110,
+        "canonicalUrl": "https://lecturesift.com/contact",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 12,
+        "externalLinks": 1,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": false,
+        "lang": "tr",
+        "hreflangCount": 14,
+        "bodyBytes": 8349,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "title-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Title is only 23 chars"
+          },
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "low",
+            "message": "Thin content (110 words)"
+          }
+        ]
+      },
+      {
+        "url": "https://lecturesift.com/en/contact",
+        "finalUrl": "https://lecturesift.com/en/contact",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 238,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "Contact | LectureSift",
+        "titleLength": 21,
+        "metaDescriptionLength": 135,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 125,
+        "canonicalUrl": "https://lecturesift.com/en/contact",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 12,
+        "externalLinks": 1,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": false,
+        "lang": "en",
+        "hreflangCount": 14,
+        "bodyBytes": 8351,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "title-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Title is only 21 chars"
+          },
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "low",
+            "message": "Thin content (125 words)"
+          }
+        ]
+      },
+      {
+        "url": "https://lecturesift.com/de/contact",
+        "finalUrl": "https://lecturesift.com/de/contact",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 225,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "Kontakt | LectureSift",
+        "titleLength": 21,
+        "metaDescriptionLength": 157,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 122,
+        "canonicalUrl": "https://lecturesift.com/de/contact",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 12,
+        "externalLinks": 1,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": false,
+        "lang": "de",
+        "hreflangCount": 14,
+        "bodyBytes": 8635,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "title-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Title is only 21 chars"
+          },
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "low",
+            "message": "Thin content (122 words)"
+          }
+        ]
+      },
+      {
+        "url": "https://lecturesift.com/fr/contact",
+        "finalUrl": "https://lecturesift.com/fr/contact",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 305,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "Contacter | LectureSift",
+        "titleLength": 23,
+        "metaDescriptionLength": 156,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 147,
+        "canonicalUrl": "https://lecturesift.com/fr/contact",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 12,
+        "externalLinks": 1,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": false,
+        "lang": "fr",
+        "hreflangCount": 14,
+        "bodyBytes": 8769,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "title-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Title is only 23 chars"
+          },
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "low",
+            "message": "Thin content (147 words)"
+          }
+        ]
+      },
+      {
+        "url": "https://lecturesift.com/es/contact",
+        "finalUrl": "https://lecturesift.com/es/contact",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 286,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "Contacto | LectureSift",
+        "titleLength": 22,
+        "metaDescriptionLength": 154,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 142,
+        "canonicalUrl": "https://lecturesift.com/es/contact",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 12,
+        "externalLinks": 1,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": false,
+        "lang": "es",
+        "hreflangCount": 14,
+        "bodyBytes": 8635,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "title-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Title is only 22 chars"
+          },
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "low",
+            "message": "Thin content (142 words)"
+          }
+        ]
+      },
+      {
+        "url": "https://lecturesift.com/it/contact",
+        "finalUrl": "https://lecturesift.com/it/contact",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 248,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "Contatto | LectureSift",
+        "titleLength": 22,
+        "metaDescriptionLength": 145,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 131,
+        "canonicalUrl": "https://lecturesift.com/it/contact",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 12,
+        "externalLinks": 1,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": false,
+        "lang": "it",
+        "hreflangCount": 14,
+        "bodyBytes": 8548,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "title-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Title is only 22 chars"
+          },
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "low",
+            "message": "Thin content (131 words)"
+          }
+        ]
+      },
+      {
+        "url": "https://lecturesift.com/pt/contact",
+        "finalUrl": "https://lecturesift.com/pt/contact",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 272,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "Contato | LectureSift",
+        "titleLength": 21,
+        "metaDescriptionLength": 154,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 131,
+        "canonicalUrl": "https://lecturesift.com/pt/contact",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 12,
+        "externalLinks": 1,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": false,
+        "lang": "pt",
+        "hreflangCount": 14,
+        "bodyBytes": 8586,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "title-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Title is only 21 chars"
+          },
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "low",
+            "message": "Thin content (131 words)"
+          }
+        ]
+      },
+      {
+        "url": "https://lecturesift.com/ar/contact",
+        "finalUrl": "https://lecturesift.com/ar/contact",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 355,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "الاتصال |\nLectureSift",
+        "titleLength": 21,
+        "metaDescriptionLength": 151,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 130,
+        "canonicalUrl": "https://lecturesift.com/ar/contact",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 12,
+        "externalLinks": 1,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": false,
+        "lang": "ar",
+        "hreflangCount": 14,
+        "bodyBytes": 9718,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "title-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Title is only 21 chars"
+          },
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "low",
+            "message": "Thin content (130 words)"
+          }
+        ]
+      },
+      {
+        "url": "https://lecturesift.com/ja/contact",
+        "finalUrl": "https://lecturesift.com/ja/contact",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 219,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "お問い合わせ | LectureSift",
+        "titleLength": 20,
+        "metaDescriptionLength": 88,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 45,
+        "canonicalUrl": "https://lecturesift.com/ja/contact",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 12,
+        "externalLinks": 1,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": false,
+        "lang": "ja",
+        "hreflangCount": 14,
+        "bodyBytes": 9453,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "title-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Title is only 20 chars"
+          },
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "medium",
+            "message": "Thin content (45 words)"
+          }
+        ]
+      },
+      {
+        "url": "https://lecturesift.com/ko/contact",
+        "finalUrl": "https://lecturesift.com/ko/contact",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 226,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "문의 |\nLectureSift",
+        "titleLength": 16,
+        "metaDescriptionLength": 77,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 119,
+        "canonicalUrl": "https://lecturesift.com/ko/contact",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 12,
+        "externalLinks": 1,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": false,
+        "lang": "ko",
+        "hreflangCount": 14,
+        "bodyBytes": 8664,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "title-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Title is only 16 chars"
+          },
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "low",
+            "message": "Thin content (119 words)"
+          }
+        ]
+      },
+      {
+        "url": "https://lecturesift.com/hi/contact",
+        "finalUrl": "https://lecturesift.com/hi/contact",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 315,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "संपर्क करें |\nLectureSift",
+        "titleLength": 25,
+        "metaDescriptionLength": 144,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 0,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 148,
+        "canonicalUrl": "https://lecturesift.com/hi/contact",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 12,
+        "externalLinks": 1,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "BreadcrumbList",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [],
+        "hasViewport": true,
+        "faviconPresent": false,
+        "lang": "hi",
+        "hreflangCount": 14,
+        "bodyBytes": 10956,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "title-short",
+            "category": "meta",
+            "severity": "low",
+            "message": "Title is only 25 chars"
+          },
+          {
+            "id": "thin-content",
+            "category": "content",
+            "severity": "low",
+            "message": "Thin content (148 words)"
+          }
+        ]
+      },
+      {
+        "url": "https://lecturesift.com/quiz-flashcards",
+        "finalUrl": "https://lecturesift.com/quiz-flashcards",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 237,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "PDF ve Ders Notundan Quiz, Bilgi Kartı Oluştur | LectureSift",
+        "titleLength": 60,
+        "metaDescriptionLength": 148,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 9,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 554,
+        "canonicalUrl": "https://lecturesift.com/quiz-flashcards",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 20,
+        "externalLinks": 0,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "Answer",
+          "Article",
+          "BreadcrumbList",
+          "FAQPage",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "Question",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [
+          {
+            "type": "Article",
+            "level": "error",
+            "field": "datePublished",
+            "message": "Article is missing required field \"datePublished\""
+          }
+        ],
+        "hasViewport": true,
+        "faviconPresent": true,
+        "lang": "tr",
+        "hreflangCount": 14,
+        "bodyBytes": 15108,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "schema-article-missing-datepublished",
+            "category": "structured-data",
+            "severity": "medium",
+            "message": "Article is missing required field \"datePublished\""
+          }
+        ]
+      },
+      {
+        "url": "https://lecturesift.com/pt/quiz-flashcards",
+        "finalUrl": "https://lecturesift.com/pt/quiz-flashcards",
+        "statusCode": 200,
+        "redirected": false,
+        "redirectChain": [],
+        "responseTimeMs": 369,
+        "indexable": true,
+        "indexabilityStatus": "Indexable",
+        "title": "Criador de questionários e flashcards | LectureSift",
+        "titleLength": 51,
+        "metaDescriptionLength": 151,
+        "metaKeywords": null,
+        "h1Count": 1,
+        "h3Count": 4,
+        "h4Count": 0,
+        "h5Count": 0,
+        "h6Count": 0,
+        "wordCount": 302,
+        "canonicalUrl": "https://lecturesift.com/pt/quiz-flashcards",
+        "canonicalIsSelf": true,
+        "noindex": false,
+        "internalLinks": 15,
+        "externalLinks": 0,
+        "imagesMissingAlt": 0,
+        "imagesCount": 0,
+        "hasStructuredData": true,
+        "structuredDataTypes": [
+          "Answer",
+          "Article",
+          "BreadcrumbList",
+          "FAQPage",
+          "ImageObject",
+          "ListItem",
+          "Offer",
+          "Organization",
+          "Question",
+          "SoftwareApplication",
+          "WebPage",
+          "WebSite"
+        ],
+        "schemaIssues": [
+          {
+            "type": "Article",
+            "level": "error",
+            "field": "datePublished",
+            "message": "Article is missing required field \"datePublished\""
+          }
+        ],
+        "hasViewport": true,
+        "faviconPresent": true,
+        "lang": "pt",
+        "hreflangCount": 14,
+        "bodyBytes": 11103,
+        "contentEncoding": "br",
+        "issues": [
+          {
+            "id": "schema-article-missing-datepublished",
+            "category": "structured-data",
+            "severity": "medium",
+            "message": "Article is missing required field \"datePublished\""
+          }
+        ]
+      }
+    ],
+    "dataSource": "api"
+  },
+  "legacy_redirects": [
+    {
+      "url": "https://lecturesift.com/quiz-flashcards.html",
+      "status": 301,
+      "location": "/quiz-flashcards"
+    },
+    {
+      "url": "https://lecturesift.com/pt/quiz-flashcards.html",
+      "status": 301,
+      "location": "/pt/quiz-flashcards"
+    },
+    {
+      "url": "https://lecturesift.com/pt/contact.html",
+      "status": 301,
+      "location": "/pt/contact"
+    }
+  ],
+  "google_selected_canonical": "NOT_EXPOSED_BY_GSC_WIZARD",
+  "google_sitemap_status_at_2026_10_08_2232_utc": {
+    "isPending": true,
+    "lastSubmitted": "2026-10-08T21:48:32.384Z",
+    "lastDownloaded": "2026-10-04T09:11:09.776Z",
+    "warnings": 0,
+    "errors": 0
+  },
+  "local_tests_or_builds_run": false,
+  "post_merge_github_actions": {
+    "commit": "b80df35072b53c2b5c0756932f778086cbdb1a2a",
+    "tests": {
+      "run_id": 37854110632,
+      "conclusion": "success",
+      "jobs": {
+        "pytest": "success",
+        "browser-smoke": "success"
+      }
+    },
+    "frontend_delivery": {
+      "run_id": 37854110748,
+      "conclusion": "success"
+    },
+    "site_backup": {
+      "run_id": 37854110595,
+      "conclusion": "success"
+    }
+  }
+}
