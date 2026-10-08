@@ -696,7 +696,7 @@ def authenticate_session(token: str) -> dict:
     with ENGINE.connect() as connection:
         row = connection.execute(select(USERS).where(USERS.c.id == user_id)).first()
         profile = _profile_for(connection, user_id) if row else None
-    if not row:
+    if not row or (row.email.startswith("deleted+") and row.email.endswith("@users.invalid")):
         raise BillingAuthenticationError("Hesap bulunamadı.")
     if profile and int(payload.get("ver", 1)) != int(profile.session_version):
         raise BillingAuthenticationError("Oturum geçersiz veya süresi dolmuş.")

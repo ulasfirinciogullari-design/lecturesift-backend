@@ -307,7 +307,7 @@ test('unverified account closure accepts SİL, allows cancellation and dismisses
   expect(unexpected).toEqual([]);
 });
 
-test('bulk closure keeps failed accounts selected, shows their errors and retries only those accounts', async ({page}) => {
+test('bulk closure keeps failed accounts selected, shows their errors and retries only those accounts', async ({page}, testInfo) => {
   await page.clock.install();
   const second = {...user, id:'22222222-2222-4222-8222-222222222222', email:'second@example.invalid', email_verified:false};
   let users = [{...user, email_verified:false}, second];
@@ -349,6 +349,7 @@ test('bulk closure keeps failed accounts selected, shows their errors and retrie
   await expect(page.locator('#adminUserList')).not.toContainText(user.email);
   await expect(page.locator('#adminBulkConfirmation')).toHaveValue('');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  await page.screenshot({path:testInfo.outputPath('admin-bulk-notice-layout.jpg'), type:'jpeg', quality:75, fullPage:true});
   await page.locator('#adminOperationNotice .admin-notice-close').click();
   await expect(page.locator('#adminOperationNotice')).toBeHidden();
   await page.locator('#adminBulkApply').click();

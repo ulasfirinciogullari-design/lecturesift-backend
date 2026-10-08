@@ -695,6 +695,9 @@ def test_admin_closes_unverified_accounts_including_legacy_records(monkeypatch, 
     if missing_profile:
         with ENGINE.begin() as connection:
             connection.execute(delete(USER_PROFILES).where(USER_PROFILES.c.user_id == user_id))
+    legacy_session = billing_service.issue_session(user_id, email)
+    if missing_profile:
+        assert billing_service.authenticate_session(legacy_session)["id"] == user_id
 
     if bulk:
         response = client.post(
@@ -724,6 +727,9 @@ def test_admin_closes_unverified_accounts_including_legacy_records(monkeypatch, 
         ).first() is None
     with pytest.raises(billing_service.BillingError):
         verify_email(created["verification_token"])
+    with pytest.raises(billing_service.BillingAuthenticationError):
+        billing_service.authenticate_session(legacy_session)
+    assert client.get("/billing/me", headers=auth(legacy_session)).status_code == 401
     users = client.get(
         "/billing/admin/users", params={"search": email}, headers=auth("admin-secret")
     ).json()["users"]
