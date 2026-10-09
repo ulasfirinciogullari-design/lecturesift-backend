@@ -5,6 +5,38 @@ takip edilir. Başlangıç varsayımı Türkiye'deki üniversite öğrencileri v
 Türkçe aramalardır. İlk rekabet geliştirmesi üç ana ürün sayfasının Türkçe
 ve İngilizce sürümlerine uygulanır; diğer diller mevcut içeriklerini korur.
 
+## 9 Ekim 2026 ana sayfa ve ürünlerin indeks kaybı takibi
+
+**16:44 TSİ:** Önceki takip yalnız ilk denetimde indeks dışında olan
+31 adresi kapsıyordu. Eksik beş ana adres eklendi: `/`, `/en/`,
+`/document-summary`, `/en/document-summary`, `/lecture-video-summary`.
+Beşinin ilk URL Denetimi sonucu indeksli. Bu işlem yeni indeksleme
+sağlamadı; mevcut indeks durumunu takip için başlangıç olarak kaydetti.
+
+Takip artık **36 URL: 8 indeksli, 28 indeks dışı**. Türkçe/İngilizce
+ana sayfalar ve üç ana ürünün iki dildeki sekiz adresi tamamen kapsamda;
+eski 31 adres korunuyor. Kapsam genişlediği için önceki 3/31 oranıyla
+doğrudan başarı karşılaştırması yapılmaz. Takip ve mevcut e-posta özeti
+etkin; yeni indeksleme isteği veya ayrı mesaj gönderilmedi.
+
+**Takip sıklığı netleştirildi:** Sağlayıcının [resmî belgesi](https://www.gscwizard.com/indexing-monitor.html)
+her URL için günlük kontrolü, 24 saate yayılmış işlemeyi anlatıyor.
+Saatlik cron bütün URL'lerin saatte bir yenilendiği anlamına gelmiyor;
+`120 gün` ayarı ise Google'ın son tarama yaşı için uyarı eşiği.
+Bu nedenle önceki 12–13 saatlik gözlemden arıza sonucu çıkarılmıyor.
+Gerçek arka plan çalışması ve e-posta teslimi henüz gözlenmedi. Sonraki
+anlamlı değerlendirme, yeni grubun da günlük aralığı dolduktan sonra
+**10 Ekim 16:45 TSİ sonrasında**, manuel yenileme yapmadan kayıtlı
+`lastCheckAt/checkCount` değerlerini okumaktır. Bu bir gözlem noktasıdır;
+yeni zamanlanmış görev veya çalışma saati garantisi değildir.
+
+Hesap yanıtında mevcut deneme erişiminin bitişi **16 Ekim 00:29 TSİ**.
+Ücretli abonelik başlatılmadı. Sağlayıcı takibinin deneme sonrasındaki
+sürekliliği doğrulanmış değildir; mevcut Chrome üzerinden Google ekranını
+doğrudan okuma yolu ayrı kalır. [Kapsam, başlangıç sonuçları ve çalışma
+sıklığı kanıtı](docs/seo/core-indexing-monitor-2026-10-09.json).
+Yerel test/derleme ve uygulama kodu değişikliği yok.
+
 ## 9 Ekim 2026 öğleden sonra takip kontrolü
 
 Bekleyen dört öncelikli URL bir kez yeniden denetlendi; yeni indeksleme
@@ -915,7 +947,7 @@ alındığını veya Google tarafından işlendiğini iddia etmez.
 | P0 | Ölçümün güvenilirliğini doğrula | Üretimde `content_action/open_workspace` alınıyor. `target_path` ve `link_placement` tanımları UI/API ile doğrulandı; 9 Ekim gün içi raporunda `/plans`/`content` alanlarıyla ilk olay görüldü. Tüm eylem türlerinin doğrulanması, iç kullanım/atıf ve gerçek ödeme karşılaştırması açık; yapay olay veya müşteri kaydı kullanılmadı. |
 | P0 | Gezinme yolu düzeltmesini doğrula | Tamamlandı: kaynak/önceki uzak CI ve 9 Ekim TR/EN/AR canlı JSON-LD zincirleri doğrulandı. |
 | P1 | İlk üç ürün sayfasını geliştir | İlk paket tamamlandı: altı TR/EN sürümü PR107 ile yayımlandı; örnekler, adımlar, sınırlar ve ilgili rehberler canlı doğrulandı. Yeni gelişim ölçülmüş sorgulara göre seçilecek. |
-| P1 | Google URL Denetimi ve canonical | 183 URL'nin ilk indeks denetimi ve yedi öncelikli istek tamam. Son kontrolde TR/EN quiz ile PT iletişim indeksli ve temiz canonical; native Google UI ile doğrulandı. Dört öncelikli adres bekliyor. Sitemap işlendi, 0 hata/uyarı. 31 URL'lik takipte 3 indeksli/28 indeks dışı; yalnız yedi kayıt yeni. Tüm 183 adresin canonical alanı alınmış değildir. |
+| P1 | Google URL Denetimi ve canonical | 183 URL'nin ilk indeks denetimi ve yedi öncelikli istek tamam. TR/EN quiz ile PT iletişim temiz canonical ile indeksli; dört öncelikli adres bekliyor. Sitemap işlendi, 0 hata/uyarı. Ana sayfa/ürün takibi genişletildi: 36 URL'de 8 indeksli/28 indeks dışı; beş ek adres zaten indeksliydi. Günlük otomatik çalışmanın fiilen gözlenmesi açık. Tüm 183 adresin canonical alanı alınmış değildir. |
 | P1 | Mobil hız başlangıcını ölç | Tamamlandı: başlangıçta ana sayfa 71, PDF ürünü 98; 03:23 TSİ yayın sonrası tekil ana sayfa ölçümü 99/LCP 1,6 sn. Saha verisi yok. PR121'in responsive görsel düzeltmesi uzak CI'da ve 03:12 TSİ canlı TR/EN HTML/görsel yanıtında doğrulandı. |
 | P2 | İlk rehber kümesini genişlet | İlk paket tamamlandı: Cornell, aktif hatırlama ve PDF not kontrol rehberleri/ürün bağlantıları yayımlandı. Yeni konu seçimi sorgu verisiyle yapılacak; yalnız gerçekten yazılmış dil sürümleri yayımlanacak. |
 
@@ -949,7 +981,7 @@ kayıt/ürün kullanımı. Düşük hacimde birkaç gösterim veya tıklamayla k
 başarı/başarısızlık hükmü verilmez. 7 Ekim hedefinin veri incelemesi
 9 Ekim'de, tamamlanmış 8 Eylül–5 Ekim penceresiyle yapıldı. Sonraki tam
 28 günlük karşılaştırma penceresi 6 Ekim–2 Kasım; veri kesinleştikten sonra
-okunmalı. İndeks durumu mevcut 31 URL'lik GSC Wizard takibinden izlenir;
+okunmalı. İndeks durumu mevcut 36 URL'lik GSC Wizard takibinden izlenir;
 bu belge yeni bir zamanlanmış Codex otomasyonu oluşturmaz.
 
 ## Başvuru kaynakları
