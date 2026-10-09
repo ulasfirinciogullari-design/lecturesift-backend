@@ -419,7 +419,7 @@ function studyDocument(page, language) {
 for (const [publicPath, page] of STUDY_PAGES) {
   for (const language of STUDY_RESOURCES.languages) {
     let html = studyDocument(page, language);
-    html = html.replace("</head>", '<link rel="stylesheet" href="/consent.css?v=2"><script defer src="/consent.js?v=5"></script><script defer src="/analytics.js?v=9"></script></head>');
+    html = html.replace("</head>", '<link rel="stylesheet" href="/consent.css?v=2"><script defer src="/consent.js?v=6"></script><script defer src="/analytics.js?v=9"></script></head>');
     html = staticSeo(html, language, publicPath);
     validateLocalizedPage(html, language, publicPath);
     const target = path.join(OUTPUT, language === "tr" ? "" : language, `${page.slug}.html`);

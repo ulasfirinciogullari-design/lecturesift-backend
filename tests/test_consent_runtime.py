@@ -13,8 +13,10 @@ pytestmark = pytest.mark.skipif(NODE is None, reason="Node is required for conse
 HARNESS = r"""
 const fs = require('fs'), vm = require('vm');
 const scenario = process.argv[1];
-const mode = scenario.startsWith('first_') ? scenario.slice(6) : scenario;
+const loaderRecovery = scenario.startsWith('loader_recovery_');
+let mode = loaderRecovery ? 'loader_failure' : scenario.startsWith('first_') ? scenario.slice(6) : scenario;
 const callbacks = new Map(), windowCallbacks = new Map(), timers = new Map(), scripts = [], requests = [], events = [];
+const recoverySnapshots = {};
 let timerId = 0, tcListener, modeReady, revocations = 0, reloads = 0, configAttempts = 0;
 let values = {analyticsStoragePurposeConsentStatus: 1, adStoragePurposeConsentStatus: 1,
   adUserDataPurposeConsentStatus: 1, adPersonalizationPurposeConsentStatus: 1};
@@ -26,10 +28,10 @@ if (scenario === 'mixed_statuses') values.analyticsStoragePurposeConsentStatus =
 const storage = new Map([['lecturesift-consent-v1', JSON.stringify({version: 1, necessary: true,
   analytics: true, advertising: true, updated_at: '2026-09-01T12:00:00.000Z', ...(scenario === 'private_precise' ? {google_consent: {
     analytics_storage: 'granted', ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'denied'}} : {}),
-  ...(scenario === 'config_rollback_denied' ? {google_consent: {
+  ...(scenario === 'config_rollback_denied' || scenario.endsWith('_provider_denied') ? {google_consent: {
     analytics_storage: 'denied', ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied'}} : {}),
   ...(scenario === 'config_rollback_local_refused' ? {google_local_denied: ['analytics_storage', 'ad_storage', 'ad_user_data', 'ad_personalization']} : {})})]]);
-if (scenario.startsWith('first_')) storage.clear();
+if (scenario.startsWith('first_') || (loaderRecovery && !scenario.endsWith('_provider_denied'))) storage.clear();
 class Element {
   constructor(tag) { this.tagName = tag; this.hidden = false; this.checked = false;
     this.classList = {add() {}}; this.nodes = new Map(); this.listeners = new Map(); }
@@ -111,6 +113,18 @@ function navigate(pathname) {
 }
 (async () => {
   await new Promise(setImmediate); await new Promise(setImmediate);
+  if (loaderRecovery) {
+    recoverySnapshots.failed = context.LectureSiftConsent.google();
+    if (scenario.endsWith('_local_refused')) click('essential');
+    navigate('/account');
+    recoverySnapshots.private = context.LectureSiftConsent.google();
+    mode = scenario.includes('_off') ? 'off' : 'not_applicable';
+    navigate('/plans');
+    await new Promise(setImmediate); await new Promise(setImmediate);
+    recoverySnapshots.beforeChoice = context.LectureSiftConsent.google();
+    recoverySnapshots.bannerHidden = root.querySelector('.consent-banner').hidden;
+    click('all');
+  }
   if (mode === 'timeout') for (const timer of [...timers.values()]) if (timer.delay === 12000) timer.fn();
   if (scenario === 'first_not_applicable_reload' || scenario === 'first_config_rollback') {
     navigate('/plans');
@@ -175,7 +189,7 @@ function navigate(pathname) {
   if (['pending', 'config_failure', 'loader_failure', 'timeout', 'private_precise'].includes(scenario)) click('all');
   console.log(JSON.stringify({initial, effective: context.LectureSiftConsent.get(),
     google: context.LectureSiftConsent.google(), scripts: scripts.map(s => ({src: s.src, nonce: s.nonce})),
-    requests, revocations, reloads, initialBannerHidden, bannerHidden: root.querySelector('.consent-banner').hidden,
+    requests, revocations, reloads, recoverySnapshots, initialBannerHidden, bannerHidden: root.querySelector('.consent-banner').hidden,
     saved: JSON.parse(storage.get('lecturesift-consent-v1') || 'null'), events,
     tagCalls: (context.dataLayer || []).map(args => Array.from(args))}));
 })().catch(error => { console.error(error.message); process.exitCode = 1; });
@@ -256,6 +270,25 @@ def test_config_failure_then_explicit_cmp_off_preserves_real_choices_without_inv
     expected = "granted" if scenario == "config_rollback" else "denied"
     assert set(result["google"].values()) == {expected}
     assert "google_pending" not in result["saved"]
+
+
+@pytest.mark.parametrize("applicability", ["non_gdpr", "off"])
+@pytest.mark.parametrize("previous_decision", ["", "_provider_denied", "_local_refused"])
+def test_loader_failure_is_pending_until_recovery_without_inventing_a_user_refusal(applicability, previous_decision):
+    result = run(f"loader_recovery_{applicability}{previous_decision}")
+    for stage in ("failed", "private", "beforeChoice"):
+        assert set(result["recoverySnapshots"][stage].values()) == {"denied"}
+    if not previous_decision:
+        assert result["recoverySnapshots"]["bannerHidden"] is False
+    expected = "denied" if previous_decision else "granted"
+    assert set(result["google"].values()) == {expected}
+    assert "google_pending" not in result["saved"]
+    if previous_decision == "_provider_denied":
+        assert set(result["saved"]["google_consent"].values()) == {"denied"}
+    elif previous_decision == "_local_refused":
+        assert set(result["saved"]["google_local_denied"]) == set(result["google"])
+    else:
+        assert "google_consent" not in result["saved"]
 
 
 @pytest.mark.parametrize("scenario", ["late_storage_event", "late_storage_without_event", "late_tcf_after_storage"])

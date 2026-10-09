@@ -57,15 +57,54 @@ _POLICY_ACTIONS = frozenset(
         "AD_PERSONALIZATION_RESTRICTED",
     }
 )
+_DIAGNOSTIC_STAGES = frozenset({"oauth", "account", "sites", "alerts", "policy", "cache_wait", "internal"})
+_FAILURE_TYPES = frozenset({"timeout", "network", "http", "response", "unknown"})
 _HTTP_CLIENT_FACTORY = httpx.Client
 
 
 class _AdSenseError(RuntimeError):
-    """Internal provider failure carrying only a safe, fixed error code."""
+    """Internal provider failure carrying fixed codes and bounded diagnostics."""
 
-    def __init__(self, code: str):
+    def __init__(self, code: str, *, failure_type: str = "response"):
         super().__init__(code)
         self.code = code
+        self.failure_type = failure_type
+        self.stage: str | None = None
+        self.elapsed_ms: int | None = None
+
+
+def _elapsed_ms(started_at: float) -> int:
+    return max(0, round((time.monotonic() - started_at) * 1000))
+
+
+def _diagnostics(stage: str, failure_type: str, elapsed_ms: int) -> dict[str, Any]:
+    # Never serialize exception messages, URLs, response data or headers. Keep
+    # future callers from accidentally adding a provider-derived stage/type.
+    return {
+        "stage": stage if stage in _DIAGNOSTIC_STAGES else "internal",
+        "failure_type": failure_type if failure_type in _FAILURE_TYPES else "unknown",
+        "elapsed_ms": max(0, int(elapsed_ms)),
+    }
+
+
+def _error_diagnostics(error: _AdSenseError, started_at: float) -> dict[str, Any]:
+    return _diagnostics(
+        error.stage or "internal", error.failure_type,
+        error.elapsed_ms if error.elapsed_ms is not None else _elapsed_ms(started_at),
+    )
+
+
+def _at_stage(stage: str, operation: Any, *args: Any, **kwargs: Any) -> Any:
+    # Each parallel collection owns its own timing/context. A slow policy check
+    # must not be mistaken for the sites or alerts request that actually failed.
+    started_at = time.monotonic()
+    try:
+        return operation(*args, **kwargs)
+    except _AdSenseError as exc:
+        if exc.stage is None:
+            exc.stage = stage
+            exc.elapsed_ms = _elapsed_ms(started_at)
+        raise
 
 
 @dataclass(frozen=True)
@@ -138,7 +177,10 @@ def _settings() -> _Settings:
     )
 
 
-def _empty_summary(settings: _Settings, *, error_code: str | None = None) -> dict[str, Any]:
+def _empty_summary(
+    settings: _Settings, *, error_code: str | None = None,
+    diagnostics: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     enabled = settings.enabled
     configured = settings.configured
     return {
@@ -153,6 +195,7 @@ def _empty_summary(settings: _Settings, *, error_code: str | None = None) -> dic
         "alerts": None,
         "policy_issues": None,
         "error_code": error_code,
+        **({"diagnostics": diagnostics} if diagnostics is not None else {}),
     }
 
 
@@ -164,14 +207,14 @@ def _provider_error(response: httpx.Response, *, token_request: bool = False) ->
     if 200 <= response.status_code < 300:
         return
     if response.status_code == 429:
-        raise _AdSenseError("rate_limited")
+        raise _AdSenseError("rate_limited", failure_type="http")
     if response.status_code == 403:
-        raise _AdSenseError("permission_denied")
+        raise _AdSenseError("permission_denied", failure_type="http")
     if response.status_code == 401 or (token_request and response.status_code == 400):
-        raise _AdSenseError("authentication_failed")
+        raise _AdSenseError("authentication_failed", failure_type="http")
     if response.status_code >= 500:
-        raise _AdSenseError("provider_unavailable")
-    raise _AdSenseError("invalid_response")
+        raise _AdSenseError("provider_unavailable", failure_type="http")
+    raise _AdSenseError("invalid_response", failure_type="http")
 
 
 def _json_object(response: httpx.Response, *, token_request: bool = False) -> dict[str, Any]:
@@ -196,7 +239,7 @@ def _json_object(response: httpx.Response, *, token_request: bool = False) -> di
 def _request_timeout(deadline: float, maximum: float = _MAX_REQUEST_TIMEOUT_SECONDS) -> float:
     remaining = deadline - time.monotonic()
     if remaining <= 0:
-        raise _AdSenseError("provider_unavailable")
+        raise _AdSenseError("provider_unavailable", failure_type="timeout")
     return min(maximum, remaining)
 
 
@@ -213,8 +256,10 @@ def _refresh_access_token(client: httpx.Client, settings: _Settings, deadline: f
             headers={"Accept": "application/json"},
             timeout=_request_timeout(deadline),
         )
-    except (httpx.TimeoutException, httpx.NetworkError, httpx.ProtocolError) as exc:
-        raise _AdSenseError("provider_unavailable") from exc
+    except httpx.TimeoutException as exc:
+        raise _AdSenseError("provider_unavailable", failure_type="timeout") from exc
+    except (httpx.NetworkError, httpx.ProtocolError) as exc:
+        raise _AdSenseError("provider_unavailable", failure_type="network") from exc
     payload = _json_object(response, token_request=True)
     token = payload.get("access_token")
     token_type = payload.get("token_type")
@@ -259,10 +304,12 @@ def _get(
             headers=headers,
             timeout=_request_timeout(deadline, max_timeout),
         )
-    except (httpx.TimeoutException, httpx.NetworkError, httpx.ProtocolError) as exc:
-        raise _AdSenseError("provider_unavailable") from exc
+    except httpx.TimeoutException as exc:
+        raise _AdSenseError("provider_unavailable", failure_type="timeout") from exc
+    except (httpx.NetworkError, httpx.ProtocolError) as exc:
+        raise _AdSenseError("provider_unavailable", failure_type="network") from exc
     if response.status_code == 404 and not_found_code:
-        raise _AdSenseError(not_found_code)
+        raise _AdSenseError(not_found_code, failure_type="http")
     return _json_object(response)
 
 
@@ -358,22 +405,23 @@ def _live_summary(settings: _Settings) -> dict[str, Any]:
         follow_redirects=False,
         headers={"User-Agent": "LectureSift-AdSense-ReadOnly/1"},
     ) as client:
-        token = _refresh_access_token(client, settings, deadline)
+        token = _at_stage("oauth", _refresh_access_token, client, settings, deadline)
         resource_path = f"/{settings.account_name}"
-        account_payload = _get(
+        account_payload = _at_stage(
+            "account", _get,
             client,
             resource_path,
             token,
             deadline=deadline,
             not_found_code="account_not_found",
         )
-        account = _account_summary(account_payload, settings)
+        account = _at_stage("account", _account_summary, account_payload, settings)
         # These read-only collections are independent. Fetching them together
         # bounds a cold admin check to one downstream timeout window instead of
         # three consecutive windows.
         with ThreadPoolExecutor(max_workers=3, thread_name_prefix="adsense-readonly") as pool:
             sites_future = pool.submit(
-                _get,
+                _at_stage, "sites", _get,
                 client,
                 f"{resource_path}/sites",
                 token,
@@ -381,7 +429,7 @@ def _live_summary(settings: _Settings) -> dict[str, Any]:
                 deadline=deadline,
             )
             alerts_future = pool.submit(
-                _get,
+                _at_stage, "alerts", _get,
                 client,
                 f"{resource_path}/alerts",
                 token,
@@ -389,7 +437,7 @@ def _live_summary(settings: _Settings) -> dict[str, Any]:
                 deadline=deadline,
             )
             policy_future = pool.submit(
-                _get,
+                _at_stage, "policy", _get,
                 client,
                 f"{resource_path}/policyIssues",
                 token,
@@ -398,18 +446,21 @@ def _live_summary(settings: _Settings) -> dict[str, Any]:
                 max_timeout=_MAX_POLICY_TIMEOUT_SECONDS,
                 parent=settings.account_name,
             )
-            sites = _objects(sites_future.result(), "sites")
-            alerts = _objects(alerts_future.result(), "alerts")
+            sites = _at_stage("sites", _objects, sites_future.result(), "sites")
+            alerts = _at_stage("alerts", _objects, alerts_future.result(), "alerts")
             # Site approval is independent of the Policy Center collection.
             # Its live endpoint can be much slower than accounts/sites. Keep
             # verified status visible, but never turn an unread policy list
             # into an empty (apparently healthy) list.
             policy_error = None
+            policy_diagnostics = None
             try:
-                policy_issues = _policy_summary(_objects(policy_future.result(), "policyIssues"))
+                policy_objects = _at_stage("policy", _objects, policy_future.result(), "policyIssues")
+                policy_issues = _at_stage("policy", _policy_summary, policy_objects)
             except _AdSenseError as exc:
                 policy_issues = None
                 policy_error = exc.code
+                policy_diagnostics = _error_diagnostics(exc, started_at)
 
     return {
         "enabled": True,
@@ -419,10 +470,11 @@ def _live_summary(settings: _Settings) -> dict[str, Any]:
         "checked_at": _checked_at(),
         "cached": False,
         "account": account,
-        "site": _site_summary(sites, settings),
-        "alerts": _alert_summary(alerts),
+        "site": _at_stage("sites", _site_summary, sites, settings),
+        "alerts": _at_stage("alerts", _alert_summary, alerts),
         "policy_issues": policy_issues,
         **({"policy_error_code": policy_error} if policy_error else {}),
+        **({"policy_diagnostics": policy_diagnostics} if policy_diagnostics is not None else {}),
         "error_code": None,
     }
 
@@ -434,11 +486,15 @@ def adsense_management_readiness() -> dict[str, Any]:
     if not settings.enabled:
         return _empty_summary(settings)
     if not settings.configured:
-        return _empty_summary(settings, error_code="configuration_invalid")
+        return _empty_summary(
+            settings, error_code="configuration_invalid",
+            diagnostics=_diagnostics("internal", "unknown", 0),
+        )
 
     fingerprint = settings.fingerprint
     global _CACHE, _CACHE_IN_FLIGHT
-    wait_deadline = time.monotonic() + _CHECK_TIMEOUT_SECONDS
+    wait_started_at = time.monotonic()
+    wait_deadline = wait_started_at + _CHECK_TIMEOUT_SECONDS
     with _CACHE_CONDITION:
         while True:
             now = time.monotonic()
@@ -451,23 +507,33 @@ def adsense_management_readiness() -> dict[str, Any]:
                 break
             remaining = wait_deadline - now
             if remaining <= 0:
-                result = _empty_summary(settings, error_code="provider_unavailable")
+                result = _empty_summary(
+                    settings, error_code="provider_unavailable",
+                    diagnostics=_diagnostics("cache_wait", "timeout", _elapsed_ms(wait_started_at)),
+                )
                 result["checked_at"] = _checked_at()
                 return result
             _CACHE_CONDITION.wait(timeout=remaining)
 
     # Provider I/O happens outside the condition lock. Other requests for this
     # process wait for the same bounded check and then reuse its cached result.
+    check_started_at = time.monotonic()
     try:
         try:
             result = _live_summary(settings)
         except _AdSenseError as exc:
-            result = _empty_summary(settings, error_code=exc.code)
+            result = _empty_summary(
+                settings, error_code=exc.code,
+                diagnostics=_error_diagnostics(exc, check_started_at),
+            )
             result["checked_at"] = _checked_at()
         except Exception:
             # Unknown library/provider failures are intentionally opaque. Raw
             # exceptions can contain request details or OAuth response bodies.
-            result = _empty_summary(settings, error_code="provider_unavailable")
+            result = _empty_summary(
+                settings, error_code="provider_unavailable",
+                diagnostics=_diagnostics("internal", "unknown", _elapsed_ms(check_started_at)),
+            )
             result["checked_at"] = _checked_at()
     except BaseException:
         with _CACHE_CONDITION:

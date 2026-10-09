@@ -481,6 +481,7 @@ async function restoreRequestedJob() {
   if (!/^[A-Za-z0-9-]{8,80}$/.test(requested)) return;
   requestedJobLoaded = true;
   jobId = requested;
+  $("analyzeButton").disabled = true;
   try {
     const response = await fetch(`${API}/jobs/${encodeURIComponent(jobId)}`, {cache:"no-store", headers:{Authorization:`Bearer ${billingToken}`}});
     if (!response.ok) { const error = await responseError(response); showError(error.message, error.code); return; }
@@ -912,9 +913,18 @@ $("analyzeButton").onclick = async () => {
     $("progressRing").dataset.state = "processing";
     updateProgress(0, t("uploadAccepted"), profileDetail(progressProfileFor()));
   };
-  request.onload = async () => {
-    if (request.status < 300) {
-      const created = JSON.parse(request.responseText);
+  request.onload = () => {
+    if (request.status >= 200 && request.status < 300) {
+      let created;
+      try {
+        created = JSON.parse(request.responseText);
+        if (typeof created?.job_id !== "string" || !/^[A-Za-z0-9-]{8,80}$/.test(created.job_id)) {
+          throw new Error("Invalid upload response");
+        }
+      } catch {
+        showError("", "LS-NETWORK-01");
+        return;
+      }
       jobId = created.job_id;
       if (created.ocr_required) {
         const pageCount = Number(created.ocr_pages || 0);

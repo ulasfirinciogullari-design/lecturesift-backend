@@ -920,7 +920,7 @@ def test_admin_growth_reads_and_escapes_advertising_management_status():
     catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
 
     assert 'id="adminGrowthStatus" class="admin-growth-grid" aria-live="polite"' in admin
-    assert 'src="/admin.js?v=27"' in admin and 'src="/i18n.js?v=48"' in admin
+    assert 'src="/admin.js?v=28"' in admin and 'src="/i18n.js?v=48"' in admin
     assert '"/billing/admin/advertising-readiness"' in admin_script
     assert "renderAdminAdSenseSummary" in admin_script
     assert 'id="adminAdSenseSummary"' in admin
@@ -1066,7 +1066,7 @@ def test_checkout_names_contact_inbox_and_mobile_plan_navigation_are_wired():
     assert "/billing/admin/contact-messages" in admin_js
     assert "adminContactDialog" in admin_html and "admin-contact-reply" in admin_js
     assert "/billing/admin/contact-messages/${encodeURIComponent(messageId)}/reply" in admin_js
-    assert 'href="/rollout.css?v=10"' in admin_html and 'src="/admin.js?v=27"' in admin_html
+    assert 'href="/rollout.css?v=10"' in admin_html and 'src="/admin.js?v=28"' in admin_html
     assert (admin_js + (FRONTEND / "admin-work.js").read_text()).count('class="admin-table admin-record-table"') >= 10
     assert all(label in admin_js for label in ('data-label="Bakiye"', 'data-label="Açıklama"'))
     assert 'data-label="Ders"' in (FRONTEND / "admin-work.js").read_text()
@@ -1391,7 +1391,7 @@ def test_optional_analytics_and_advertising_are_consent_gated():
     cookies = (FRONTEND / "cookies.html").read_text(encoding="utf-8")
 
     consent_css = (FRONTEND / "consent.css").read_text(encoding="utf-8")
-    assert 'consentScript.src = "/consent.js?v=5"' in i18n
+    assert 'consentScript.src = "/consent.js?v=6"' in i18n
     assert 'consentStyle.href = "/consent.css?v=2"' in i18n
     assert 'const STORAGE_KEY = "lecturesift-consent-v1"' in consent
     assert 'footerTarget = document.querySelector(".footer-bottom,.legal-footer,.site-footer,footer")' in consent
@@ -1570,7 +1570,7 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=35"' in index
+    assert 'src="./app.js?v=36"' in index
     assert 'src="/rollout.js?v=11"' in index
     assert '$("plans").scrollIntoView' not in app
 

@@ -955,7 +955,7 @@
   consentStyle.href = "/consent.css?v=2";
   document.head.append(consentStyle);
   const consentScript = document.createElement("script");
-  consentScript.src = "/consent.js?v=5";
+  consentScript.src = "/consent.js?v=6";
   consentScript.defer = true;
   document.head.append(consentScript);
   const analyticsScript = document.createElement("script");

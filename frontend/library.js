@@ -6,6 +6,7 @@
   const t = (key, vars = {}) => Object.entries(vars).reduce((s, [k, v]) => s.replace(`{${k}}`, v), window.LectureSiftI18n?.t(key) || key);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
   const locale = () => window.LectureSiftI18n?.locale || 'tr-TR';
+  const workspacePath = () => window.LectureSiftI18n?.localizedPath?.(window.LectureSiftI18n.language, '/workspace.html') || '/workspace.html';
   let state = {folders: [], jobs: []};
   let folder = 'all';
   let busy = false;
@@ -39,8 +40,8 @@
       const label = job.title || t(job.job_type === 'audio_export' ? 'history.audioExport' : 'history.studyPack');
       const status = t(job.status === 'done' ? 'history.ready' : job.status === 'error' ? 'history.failed' : 'history.processing');
       const choices = [{id:'', name:t('library.root')}, ...state.folders].map(item => `<option value="${esc(item.id)}" ${item.id === (job.folder_id || '') ? 'selected' : ''}>${esc(item.name)}</option>`).join('');
-      return `<article class="library-lesson"><div class="library-lesson-icon" aria-hidden="true">${job.job_type === 'audio_export' ? '♫' : '▤'}</div><div class="library-lesson-copy"><h2>${esc(label)}</h2><p><time>${esc(date(job.created))}</time><span class="library-status ${job.status === 'done' ? 'ready' : ''}">${esc(status)}</span></p><small>${esc(t('library.expires', {date:date(job.expires_at)}))}</small></div><div class="library-lesson-actions"><label><span class="sr-only">${esc(t('library.move'))}</span><select data-library-move="${esc(job.job_id)}">${choices}</select></label><div>${job.status !== 'error' ? `<a class="library-open" href="/workspace.html?job=${encodeURIComponent(job.job_id)}#study">${esc(t('history.open'))} ↗</a>` : ''}<button class="library-delete" type="button" data-library-delete="${esc(job.job_id)}" ${job.can_delete ? '' : 'disabled'}>${esc(t('library.delete'))}</button></div></div></article>`;
-    }).join('') || `<div class="library-empty"><span aria-hidden="true">▤</span><p>${esc(t('library.empty'))}</p><a href="/workspace.html?source=upload">${esc(t('redesign.new'))} →</a></div>`;
+      return `<article class="library-lesson"><div class="library-lesson-icon" aria-hidden="true">${job.job_type === 'audio_export' ? '♫' : '▤'}</div><div class="library-lesson-copy"><h2>${esc(label)}</h2><p><time>${esc(date(job.created))}</time><span class="library-status ${job.status === 'done' ? 'ready' : ''}">${esc(status)}</span></p><small>${esc(t('library.expires', {date:date(job.expires_at)}))}</small></div><div class="library-lesson-actions"><label><span class="sr-only">${esc(t('library.move'))}</span><select data-library-move="${esc(job.job_id)}">${choices}</select></label><div>${job.status !== 'error' ? `<a class="library-open" href="${esc(workspacePath())}?job=${encodeURIComponent(job.job_id)}#study">${esc(t('history.open'))} ↗</a>` : ''}<button class="library-delete" type="button" data-library-delete="${esc(job.job_id)}" ${job.can_delete ? '' : 'disabled'}>${esc(t('library.delete'))}</button></div></div></article>`;
+    }).join('') || `<div class="library-empty"><span aria-hidden="true">▤</span><p>${esc(t('library.empty'))}</p><a href="${esc(workspacePath())}?source=upload">${esc(t('redesign.new'))} →</a></div>`;
   }
   async function load() {
     state = await request('/library');
