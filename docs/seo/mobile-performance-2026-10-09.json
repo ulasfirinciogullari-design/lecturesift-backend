@@ -211,6 +211,58 @@
       "webpSignature": true,
       "bodyTruncated": false
     },
-    "postReleasePageSpeedMeasuredInThisFollowup": false
+    "postReleasePageSpeedMeasuredInThisFollowup": true
+  },
+  "postReleaseHomepageReport": {
+    "source": "Official Google PageSpeed Insights webform through existing owner Chrome/SSH browser bridge; Google remote Lighthouse execution, no TinyFish or local Lighthouse.",
+    "targetUrl": "https://lecturesift.com/",
+    "reportUrl": "https://pagespeed.web.dev/analysis/https-lecturesift-com/rlitij1087?form_factor=mobile",
+    "reportTimeRaw": "9 Eki 2026 03:23:17",
+    "captureTimeZoneRaw": "GMT+3",
+    "reportTimeUtc": "2026-10-09T00:23:17Z",
+    "observedAtUtc": "2026-10-09T00:26:06.183020+00:00",
+    "strategy": "mobile",
+    "lighthouseVersion": "13.5.0",
+    "device": "Emulated Moto G Power",
+    "network": "Slow 4G throttling",
+    "browser": "HeadlessChromium 153.0.8010.36",
+    "loadCondition": "First page load; single page session",
+    "scores": {
+      "performance": 99,
+      "accessibility": 100,
+      "bestPractices": 100,
+      "seo": 100
+    },
+    "labMetrics": {
+      "fcpSeconds": 1.3,
+      "lcpSeconds": 1.6,
+      "speedIndexSeconds": 2.7,
+      "tbtMilliseconds": 10,
+      "cls": 0
+    },
+    "crux": {
+      "displayRaw": "Veri Yok",
+      "fieldMetricsAvailable": false
+    },
+    "remainingOpportunities": [
+      {
+        "name": "Render-blocking requests",
+        "estimatedSavingsMilliseconds": 860
+      },
+      {
+        "name": "Use efficient cache lifetimes",
+        "estimatedSavingsKiB": 24
+      },
+      {
+        "name": "Minify CSS",
+        "estimatedSavingsKiB": 2
+      },
+      {
+        "name": "Reduce unused JavaScript",
+        "estimatedSavingsKiB": 35
+      }
+    ],
+    "longMainThreadTasks": 1,
+    "comparisonLimit": "A single post-release lab sample, not a controlled causal experiment. It does not prove field Core Web Vitals or that one code change caused the full score difference. The PDF baseline was not repeated."
   }
 }
