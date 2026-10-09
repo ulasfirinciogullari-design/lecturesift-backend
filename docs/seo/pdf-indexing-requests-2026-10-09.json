@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-09T00:36:26.077919+00:00",
+  "siteUrl": "sc-domain:lecturesift.com",
+  "source": "Native Google Search Console UI in owner Chrome through the existing SSH browser bridge.",
+  "records": [
+    {
+      "inspectionUrl": "https://lecturesift.com/pdf-note-check",
+      "inspectionPageUrl": "https://search.google.com/search-console/inspect?resource_id=sc-domain%3Alecturesift.com&id=OfMM8DxlrbOkJlcmMQ6zvA",
+      "observedAtUtc": "2026-10-09T00:33:43.148499+00:00",
+      "requestActor": "owner completed the manual flow after the prior handoff; agent verified the resulting acceptance",
+      "userReportedCompletion": true,
+      "requestSubmittedByAgentThisSession": false,
+      "accepted": true,
+      "confirmationTitleRaw": "Dizine eklenmesi istendi",
+      "buttonAfterRaw": "TEKRAR İSTEK GÖNDER",
+      "indexedRecordAtObservation": {
+        "state": "not_indexed",
+        "coverageStateRaw": "URL Google tarafından bilinmiyor",
+        "lastCrawlRaw": "Yok",
+        "userCanonicalRaw": "Yok",
+        "googleCanonicalRaw": "Yok"
+      }
+    },
+    {
+      "inspectionUrl": "https://lecturesift.com/en/pdf-note-check",
+      "inspectionPageUrl": "https://search.google.com/search-console/inspect?resource_id=sc-domain%3Alecturesift.com&id=VOCZyZopN6pkjo7c8jR-nA",
+      "requestActor": "agent; first request for this URL after owner completed the preceding manual verification",
+      "requestSubmittedByAgentThisSession": true,
+      "requestClicksThisSession": 1,
+      "requestedAtUtc": "2026-10-09T00:34:21.593999+00:00",
+      "observedAtUtc": "2026-10-09T00:35:35.496853+00:00",
+      "accepted": true,
+      "confirmationTitleRaw": "Dizine eklenmesi istendi",
+      "confirmationMeaning": "URL added to a priority crawl queue; repeated submissions do not improve queue position.",
+      "confirmationDialogObserved": true,
+      "indexedRecordBeforeRequest": {
+        "state": "not_indexed",
+        "coverageStateRaw": "Keşfedildi - şu anda dizine eklenmiş değil",
+        "sitemap": "https://lecturesift.com/sitemap.xml",
+        "lastCrawlRaw": "Yok",
+        "userCanonicalRaw": "Yok",
+        "googleCanonicalRaw": "Yok"
+      }
+    }
+  ],
+  "acceptedEarlier": 5,
+  "additionalAcceptancesConfirmed": 2,
+  "acceptedTotal": 7,
+  "allSevenPriorityRequestsAccepted": true,
+  "indexingCompletionVerified": false,
+  "googleCanonicalChangesVerified": false,
+  "captchaAutomaticallySolvedOrBypassed": false,
+  "priorEvidence": [
+    "priority-indexing-2026-10-09.json",
+    "chrome-google-inspection-2026-10-09.json",
+    "google-selected-canonicals-2026-10-09.json"
+  ],
+  "limits": [
+    "Accepted indexing requests are crawl queue acknowledgements, not completed indexing or a selected canonical.",
+    "No previously accepted URL was submitted again.",
+    "The English guide is now discovered in the indexed record; this does not establish a completed crawl.",
+    "Historical five-request and read-only-session snapshots remain unchanged."
+  ],
+  "localTestsOrBuildsRun": false,
+  "cleanup": {
+    "taskTabClosed": true,
+    "otherTaskTabStillPresent": true
+  }
+}
