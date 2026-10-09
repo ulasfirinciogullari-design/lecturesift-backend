@@ -2,6 +2,7 @@ import json
 import shutil
 import threading
 import time
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
@@ -272,12 +273,15 @@ class JobStore:
             data = self._jobs.get(job_id)
             return data.copy() if data else None
 
-    def update(self, job_id: str, **values: Any) -> None:
+    def update(self, job_id: str, *, notify_failure: bool = False,
+               notification_context: dict | None = None, **values: Any) -> None:
         with self._lock, self._distributed_write_lock():
             self._refresh_locked()
             data = self._jobs[job_id]
             data.update(values)
             data["updated"] = time.time()
+            if notify_failure:
+                self._queue_failure_notification_locked(data, notification_context)
             self._flush_locked()
 
     def update_task(self, job_id: str, task: str, percent: float, stage: str) -> None:
@@ -312,12 +316,78 @@ class JobStore:
             "celery_task_id",
             "queue_error",
             "recovery_error",
+            "_failure_notification",
         ):
             data.pop(key, None)
-        options = dict(data.get("options") or {})
-        options.pop("billing_user_id", None)
-        data["options"] = options
+        data["options"] = {key: value for key, value in (data.get("options") or {}).items()
+                           if key != "billing_user_id" and not str(key).startswith("_")}
         return data
+
+    def queue_failure_notification(self, job_id: str, quota_context: dict | None = None) -> bool:
+        """Persist one terminal-failure email request without storing recipient PII."""
+        with self._lock, self._distributed_write_lock():
+            self._refresh_locked()
+            data = self._jobs.get(job_id)
+            if not self._queue_failure_notification_locked(data, quota_context):
+                return False
+            self._flush_locked()
+            return True
+
+    @staticmethod
+    def _queue_failure_notification_locked(data: dict | None, quota_context: dict | None = None) -> bool:
+        if (not data or data.get("status") != "error"
+            or not (data.get("options") or {}).get("billing_user_id")
+            or data.get("_failure_notification")):
+            return False
+        now = time.time()
+        data["_failure_notification"] = {
+            "state": "pending", "queued_at": now, "next_attempt_at": now,
+            "expires_at": now + 23 * 3600, "attempts": 0,
+            "quota_context": {key: value for key, value in (quota_context or {}).items()
+                if key in {"required_minutes", "remaining_minutes", "max_minutes_per_job"}
+                and (value is None or isinstance(value, (int, float)) and not isinstance(value, bool) and 0 <= value < 10**12)},
+        }
+        return True
+
+    def failure_notifications_due(self, limit: int = 5) -> list[str]:
+        with self._lock:
+            self._refresh_locked()
+            now = time.time()
+            return [job_id for job_id, data in self._jobs.items()
+                    if (notice := data.get("_failure_notification") or {}).get("state") in {"pending", "retry", "sending"}
+                    and float(notice.get("next_attempt_at") or 0) <= now
+                    and float(notice.get("lease_until") or 0) <= now][:max(1, min(25, limit))]
+
+    def claim_failure_notification(self, job_id: str) -> tuple[dict, str] | None:
+        with self._lock, self._distributed_write_lock():
+            self._refresh_locked()
+            data = self._jobs.get(job_id)
+            notice = (data or {}).get("_failure_notification") or {}
+            now = time.time()
+            if (notice.get("state") not in {"pending", "retry", "sending"}
+                or float(notice.get("next_attempt_at") or 0) > now
+                or float(notice.get("lease_until") or 0) > now):
+                return None
+            if data.get("status") != "error" or float(notice.get("expires_at") or 0) <= now or notice.get("attempts", 0) >= 6:
+                notice["state"] = "cancelled" if data.get("status") != "error" else "exhausted"
+                self._flush_locked()
+                return None
+            claim = uuid.uuid4().hex
+            notice.update(state="sending", claim=claim, lease_until=now + 180,
+                          attempts=int(notice.get("attempts") or 0) + 1)
+            self._flush_locked()
+            return json.loads(json.dumps(data)), claim
+
+    def update_failure_notification(self, job_id: str, claim: str, **values: Any) -> bool:
+        with self._lock, self._distributed_write_lock():
+            self._refresh_locked()
+            data = self._jobs.get(job_id)
+            notice = (data or {}).get("_failure_notification") or {}
+            if not claim or notice.get("claim") != claim:
+                return False
+            notice.update(values)
+            self._flush_locked()
+            return True
 
     def list_for_user(self, user_id: str, limit: int | None = 50) -> list[dict[str, Any]]:
         with self._lock:
@@ -391,6 +461,23 @@ class JobStore:
         )
         if data.get("status") == "done" and not item["result_ready"]:
             item.update(status="working", percent=99, stage="worker_publish")
+        if item["status"] == "error":
+            # Workers store the already user-facing rejection in `error`.
+            # Provider diagnostics remain in technical_error and must never
+            # be used as a fallback in this metadata-only administrator view.
+            item["public_error"] = next((
+                message for key in ("error", "public_error")
+                if isinstance(message := data.get(key), str) and message.strip()
+            ), None)
+        else:
+            # Recovery can retain an earlier failure in persisted metadata.
+            # Keep that history intact without presenting it as a current
+            # error on queued, working, publishing or completed jobs.
+            item.update(error_code=None, public_error=None)
+        notice = data.get("_failure_notification") or {}
+        if notice.get("state") in {"pending", "retry", "sending", "sent", "cancelled", "exhausted", "ineligible", "recipient_changed", "envelope_changed", "delivery_unknown"}:
+            item["failure_notification"] = {key: notice.get(key) for key in
+                ("state", "attempts", "queued_at", "sent_at")}
         return item
 
     def delete_for_user(self, user_id: str) -> dict[str, int]:

@@ -29,10 +29,15 @@ async def _loop():
 
 @asynccontextmanager
 async def lifespan(app):
+    from .job_notifications import delivery_loop
     task = asyncio.create_task(_loop(), name='assistant-retention')
+    email_task = asyncio.create_task(delivery_loop(), name='job-failure-notifications')
     try:
         yield
     finally:
         task.cancel()
+        email_task.cancel()
         with suppress(asyncio.CancelledError):
             await task
+        with suppress(asyncio.CancelledError):
+            await email_task

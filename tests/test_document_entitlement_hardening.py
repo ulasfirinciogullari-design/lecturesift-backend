@@ -1,6 +1,47 @@
+from copy import deepcopy
+from dataclasses import asdict
+
+import pytest
+
+from lecturesift import billing_service as billing
 from lecturesift.billing_service import BillingError
 from lecturesift.jobs import JOBS
 import lecturesift.pipeline as pipeline
+
+
+@pytest.mark.parametrize('document_mode', [False, True])
+@pytest.mark.parametrize(('required_minutes', 'message'), [
+    (561, 'hesabında 60 dakika kaldı'),
+    (31, 'free planında tek iş sınırı 30 dakikadır'),
+])
+def test_document_limit_explains_usage_units_without_changing_media_limits_or_balance(
+    monkeypatch, document_mode, required_minutes, message,
+):
+    status = {'plan': asdict(billing.PLAN_BY_CODE['free']), 'remaining_minutes': 60, 'used_minutes': 0}
+    original = deepcopy(status)
+    monkeypatch.setattr(billing, 'require_job_entitlement', lambda _user_id: status)
+    monkeypatch.setattr(billing, 'record_usage', lambda *a, **k: pytest.fail('rejection charged usage'))
+
+    with pytest.raises(BillingError, match=message) as caught:
+        billing.require_duration_entitlement('synthetic-user', required_minutes * 60,
+            document_mode=document_mode)
+
+    explanation = str(caught.value)
+    assert caught.value.notification_context == {
+        'required_minutes': required_minutes, 'remaining_minutes': 60, 'max_minutes_per_job': 30,
+    }
+    if document_mode:
+        assert f'Bu belge için {required_minutes} dakika kullanım hakkı gerekiyor' in explanation
+        assert ('Daha kısa bir belge yükle' if required_minutes == 561 else 'Belgeyi böl') in explanation
+    else:
+        assert explanation.startswith(
+            f'Bu kaynak yaklaşık {required_minutes} dakika' if required_minutes == 561
+            else f'Bu iş yaklaşık {required_minutes} dakika'
+        )
+        assert 'kullanım hakkı gerekiyor' not in explanation
+    assert status == original
+    assert billing.require_duration_entitlement('synthetic-user', 30 * 60,
+        document_mode=document_mode) == original
 
 
 def test_actual_document_quota_uses_final_ocr_values(tmp_path, monkeypatch):

@@ -21,7 +21,8 @@ jobs:
     timeout-minutes: 25
     services:
       assistant-postgres:
-        image: postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+        # Preserve the pinned image while avoiding shared-runner Docker Hub limits.
+        image: mirror.gcr.io/library/postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
         env:
           POSTGRES_DB: assistant_ci
           POSTGRES_USER: assistant_ci
@@ -55,9 +56,40 @@ jobs:
         run: bash deploy/check_shell_syntax.sh
       - name: Validate locked image inputs before building
         run: python3 deploy/supply_chain_lock.py --root .
+      - name: Prepare CI registry mirrors for the locked Dockerfiles
+        # Only registry addresses change; source Dockerfiles and digests stay intact.
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import re
+
+          locked = dict(line.split('=', 1) for line in Path('deploy/supply_chain.lock').read_text().splitlines())
+          targets = (
+              ('Dockerfile', 'lecturesift-media.Dockerfile', (('FROM ', locked['application_base']),)),
+              ('deploy/egress-proxy/Dockerfile', 'lecturesift-proxy.Dockerfile', (
+                  ('FROM ', locked['proxy_base']), ('COPY --from=', locked['application_base']),
+              )),
+          )
+          for original, output, references in targets:
+              source = Path(original).read_text()
+              for prefix, reference in references:
+                  if not re.fullmatch(r'(?:python|debian):[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}', reference):
+                      raise SystemExit(f'Unexpected locked CI image in {original}')
+                  source, count = re.subn(
+                      r'^' + re.escape(prefix + reference) + r'(?=\s|$)',
+                      prefix + 'mirror.gcr.io/library/' + reference, source, flags=re.MULTILINE,
+                  )
+                  if count != 1:
+                      raise SystemExit(f'Expected one locked image reference in {original}')
+              if re.search(r'^\s*(?:FROM\s+|COPY\s+--from=)(?!mirror\.gcr\.io/library/)', source, re.MULTILINE | re.IGNORECASE):
+                  raise SystemExit(f'Unmapped CI image reference in {original}')
+              (Path(os.environ['RUNNER_TEMP']) / output).write_text(source)
+          PY
       - name: Build locked egress proxy without cache
         run: |
           docker build --pull --no-cache --platform linux/amd64 \
+            --file "$RUNNER_TEMP/lecturesift-proxy.Dockerfile" \
             --tag lecturesift-egress-proxy:ci \
             deploy/egress-proxy
       - name: Smoke test locked egress proxy
@@ -73,7 +105,7 @@ jobs:
               ! grep -q "^URIs: http://" /etc/apt/sources.list.d/debian.sources
             '
       - name: Build and verify the shared media image
-        run: docker build --pull --platform linux/amd64 --tag lecturesift-media:ci .
+        run: docker build --pull --platform linux/amd64 --file "$RUNNER_TEMP/lecturesift-media.Dockerfile" --tag lecturesift-media:ci .
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

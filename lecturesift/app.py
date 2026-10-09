@@ -264,6 +264,7 @@ def _public_job(data: dict) -> dict:
         "remote_result_key",
         "remote_download_key",
         "queue_error",
+        "_failure_notification",
     ):
         result.pop(key, None)
     result["options"] = {

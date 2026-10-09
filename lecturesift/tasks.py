@@ -239,6 +239,8 @@ def _quota_error(
         worker_state="rejected",
         error_code="LS-BILL-10",
         error=str(exc),
+        notify_failure=True,
+        notification_context=getattr(exc, "notification_context", None),
     )
     _cleanup_terminal_sources(
         job_dir,
@@ -271,6 +273,7 @@ def _retry_or_fail(
             error_code=normalized.code,
             error=normalized.user_message,
             technical_error=normalized.technical_message,
+            notify_failure=True,
         )
         _cleanup_terminal_sources(
             job_dir,
@@ -291,7 +294,9 @@ def _retry_or_fail(
         stage="worker_retry" if retries < task.max_retries else "error",
         worker_state="retrying" if retries < task.max_retries else "failed",
         error=None if retries < task.max_retries else "İşlem worker üzerinde tamamlanamadı.",
+        error_code=None if retries < task.max_retries else normalized.code,
         technical_error=str(exc),
+        notify_failure=retries >= task.max_retries,
     )
     if retries >= task.max_retries:
         _cleanup_terminal_sources(
@@ -485,6 +490,7 @@ def process_uploaded_job(
                 ),
                 eta_started_at=time.time(),
             )
+            pipeline_options["_worker_managed"] = True
             process_job(job_id, audio_paths, pipeline_options, visual_paths or None)
             enforce_job_workspace(job_dir, work_root=WORK_DIR)
             finished = JOBS.get(job_id) or {}
@@ -492,6 +498,7 @@ def process_uploaded_job(
                 transient = _processing_error(finished)
                 if transient:
                     raise transient
+                JOBS.update(job_id, status="error", worker_state="rejected", notify_failure=True)
                 _cleanup_terminal_sources(
                     job_dir,
                     data=finished or data,
@@ -548,6 +555,7 @@ def process_url_job(self, job_id: str, url: str, options: dict) -> dict:
             return {"job_id": job_id, "status": "done"}
         JOBS.update(job_id, status="error", stage="error", worker_state="error", percent=0,
                     error_code="LS-URL-06",
-                    error="Bağlantıyla kaynak ekleme kaldırıldı. Video, ses veya belge dosyanı yükle.")
+                    error="Bağlantıyla kaynak ekleme kaldırıldı. Video, ses veya belge dosyanı yükle.",
+                    notify_failure=True)
         _cleanup_terminal_sources(_stored_job_dir(data), data=data)
         return {"job_id": job_id, "status": "error"}

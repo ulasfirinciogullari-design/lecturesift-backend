@@ -16,7 +16,8 @@ from deploy import verify_schema_transition_v4 as verifier
 from lecturesift import billing_service as billing, rollout_service, costs, referrals, assistant_wallet
 
 ROOT = Path(__file__).resolve().parents[1]
-IMAGE = 'postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af'
+# Use the same digest and registry namespace as the allocated CI service.
+IMAGE = 'mirror.gcr.io/library/postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af'
 
 
 @pytest.fixture

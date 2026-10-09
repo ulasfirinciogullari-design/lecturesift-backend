@@ -652,7 +652,7 @@ def test_manifest_legacy_strict_current_and_schema_contract_on_postgres_18(tmp_p
             "POSTGRES_INITDB_ARGS=--locale=en_US.UTF8 --encoding=UTF8",
             "--publish",
             f"127.0.0.1:{port}:5432",
-            POSTGRES_18_IMAGE,
+            "mirror.gcr.io/library/" + POSTGRES_18_IMAGE,
         ],
         timeout=300,
     )
