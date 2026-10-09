@@ -164,8 +164,11 @@ async def enforce_maintenance_fence(request: Request, call_next):
 
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
-    """Apply browser hardening and prevent sensitive responses from being cached."""
+    """Harden API responses, keep them out of search, and protect sensitive caches."""
     response = await call_next(request)
+    # Search-visible pages live on the frontend; API data and interactive docs
+    # are operational surfaces, including when returned as HTML or JSON.
+    response.headers.setdefault("X-Robots-Tag", "noindex")
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "no-referrer")

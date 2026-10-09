@@ -58,6 +58,28 @@
     || "LectureSift ders videolarını transkript, özet, quiz ve bilgi kartlarına dönüştürür.";
   const imageUrl = `${PRODUCTION_ORIGIN}/og-image.png`;
   const imageAlt = document.title;
+  const applicationId = `${PRODUCTION_ORIGIN}/#application`;
+  const productDescription = "Video, ses, PDF, Word ve PowerPoint ders kaynaklarını özet, transkript, quiz, bilgi kartı ve indirilebilir çalışma paketine dönüştür.";
+  const translatedProduct = window.LectureSiftI18n?.exact?.(productDescription);
+  let applicationDescription = language === "tr" ? productDescription
+    : translatedProduct && translatedProduct !== productDescription ? translatedProduct
+      : "Convert video, audio, PDF, Word and PowerPoint course resources into summaries, transcripts, quizzes, flashcards and downloadable study packs.";
+  try {
+    const staticSchema = document.head.querySelector('script[type="application/ld+json"][data-lecturesift-seo]');
+    const staticGraph = JSON.parse(staticSchema?.textContent || "null")?.["@graph"];
+    if (Array.isArray(staticGraph)) {
+      const page = staticGraph.find(node => node?.["@type"] === "WebPage"
+        && node["@id"] === `${canonicalUrl}#webpage` && node.inLanguage === language);
+      const application = staticGraph.find(node => node?.["@type"] === "SoftwareApplication"
+        && node["@id"] === applicationId && node.url === `${PRODUCTION_ORIGIN}/`);
+      if (page && typeof application?.description === "string" && application.description.trim()) {
+        applicationDescription = application.description;
+      }
+    }
+  } catch {
+    // A missing or malformed static graph must not turn policy/article copy
+    // into the description of the product on non-prerendered pages.
+  }
 
   const setMeta = (selector, attributes) => {
     let node = document.head.querySelector(selector);
@@ -144,7 +166,7 @@
     },
     {
       "@type": "SoftwareApplication",
-      "@id": `${PRODUCTION_ORIGIN}/#application`,
+      "@id": applicationId,
       name: "LectureSift",
       url: `${PRODUCTION_ORIGIN}/`,
       applicationCategory: "EducationalApplication",
@@ -152,7 +174,7 @@
       operatingSystem: "Web",
       isAccessibleForFree: true,
       availableLanguage: LANGUAGES,
-      description,
+      description: applicationDescription,
       image: imageUrl,
       featureList: [
         "Video ve ses transkripti",

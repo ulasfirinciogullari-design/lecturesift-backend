@@ -1340,7 +1340,7 @@ def test_public_pages_have_share_metadata_canonical_urls_and_structured_data():
     seo = (FRONTEND / "seo.js").read_text(encoding="utf-8")
     sitemap = (FRONTEND / "sitemap.xml").read_text(encoding="utf-8")
 
-    assert 'seoScript.src = "/seo.js?v=4"' in i18n
+    assert 'seoScript.src = "/seo.js?v=5"' in i18n
     assert 'link[rel="canonical"]' in seo
     assert 'meta[property="og:image"]' in seo
     assert 'meta[property="og:image:width"]' in seo

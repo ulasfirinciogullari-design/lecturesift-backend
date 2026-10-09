@@ -32,6 +32,7 @@ def _assert_maintenance(response, mode: str) -> None:
     assert response.headers["retry-after"] == "60"
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["pragma"] == "no-cache"
+    assert response.headers["x-robots-tag"] == "noindex"
 
 
 def test_maintenance_mode_normalization_fails_closed():

@@ -5,6 +5,7 @@ import json
 import re
 import shutil
 import subprocess
+from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -35,6 +36,7 @@ class _SeoHeadParser(HTMLParser):
         self.canonicals: list[str] = []
         self.alternates: dict[str, list[str]] = {}
         self.robots: list[str] = []
+        self.descriptions: list[str] = []
         self.structured_data: list[dict] = []
         self._json_ld: list[str] | None = None
 
@@ -55,6 +57,8 @@ class _SeoHeadParser(HTMLParser):
             return
         if tag.lower() == "meta" and attributes.get("name", "").lower() == "robots":
             self.robots.append(attributes.get("content", "").lower())
+        if tag.lower() == "meta" and attributes.get("name", "").lower() == "description":
+            self.descriptions.append(attributes.get("content", ""))
 
     def handle_data(self, data: str) -> None:
         if self._json_ld is not None:
@@ -212,6 +216,30 @@ def test_breadcrumbs_follow_the_localized_navigation(localized_output: Path) -> 
         assert [item["item"] for item in items] == expected_urls, location
         assert [item["position"] for item in items] == list(range(1, len(items) + 1))
         assert all(item["name"].strip() and item["item"] in records for item in items)
+
+
+def test_shared_application_description_matches_the_homepage_in_every_language(localized_output: Path) -> None:
+    product_descriptions = {}
+    for language in LANGUAGES:
+        prefix = "" if language == "tr" else f"/{language}"
+        home = _parse_html(_output_path(localized_output, f"{ORIGIN}{prefix}/"))
+        assert len(home.descriptions) == 1 and home.descriptions[0].strip()
+        product_descriptions[language] = home.descriptions[0]
+    assert len(set(product_descriptions.values())) == len(LANGUAGES)
+
+    # Includes policy pages, product landing pages, and authored study guides.
+    # Their own subjects must never replace the shared application's identity.
+    for location in _sitemap_records():
+        page = _parse_html(_output_path(localized_output, location))
+        graph = [node for schema in page.structured_data for node in schema.get("@graph", [])]
+        application = next(node for node in graph if node.get("@type") == "SoftwareApplication")
+        webpage = next(node for node in graph if node.get("@type") == "WebPage")
+        assert application["@id"] == f"{ORIGIN}/#application"
+        assert application["description"] == product_descriptions[page.document_language], location
+        assert len(page.descriptions) == 1
+        assert unescape(webpage["description"]) == page.descriptions[0], location
+        for article in (node for node in graph if node.get("@type") == "Article"):
+            assert article["description"] == webpage["description"], location
 
 
 def test_landing_examples_faqs_and_dates_survive_prerendering(localized_output: Path) -> None:
