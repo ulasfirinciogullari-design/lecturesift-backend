@@ -7,6 +7,39 @@ veya yetkilendirme kodu dışarı aktarılmaz.
 
 ## Search Console ekranından denetim
 
+### Mevcut Chrome ve SSH köprüsü
+
+9 Ekim'de kullanıcının başka sohbette hazırladığı, Windows Chrome'a bağlı
+mevcut SSH köprüsü bu sohbetten de fiilen doğrulandı. TinyFish gerektirmeden
+LectureSift paneli ve Google'ın indeks kayıtları okunabildi. Bu erişim
+ambient sekme adresinden çıkarılmadı: hedef sekmeye bağlı DOM yanıtı alındı.
+
+Bu ortamda mevcut yardımcı
+`~/.config/lecturesift-browser/control.py` üzerinden `status`, `tabs`,
+`command` ve bekleyen komutlar için `result ID` kullanılıyor. Yardımcı kendi
+yerel yetkilendirmesini kullanır; token, Google çerezi veya profil dosyası
+kopyalanmaz, çıktı veya depoya eklenmez. `connected=true` yalnız bağlantı
+durumudur; Google mülküne erişim her seferinde sayfada ayrıca doğrulanır.
+
+Sekmeler hedef kimlikleriyle ayrılır. Diğer sohbetin açık sayfası
+değiştirilmeden bu göreve ait tek Search Console sekmesi kullanıldı.
+`Target.createTarget` yardımcıda desteklenmediği için köprünün izin listesi
+değiştirilmedi ve süreç yeniden başlatılmadı; mevcut sayfadaki normal
+`window.open(..., '_blank', 'noopener')` işlemiyle ayrı sekme açıldı ve yeni
+hedef kimliği sekme listesinden doğrulandı. Komut beklemede dönerse aynı
+eylem tekrar gönderilmez; kendi komut kimliğiyle sonucu alınır. İş sonunda
+yalnız göreve ait sekme kapatılır, diğer sohbetin sekmesi ve köprüsü korunur.
+
+Bağlantı kullanıcının Chrome ve SSH/Powershell oturumuna bağlıdır; bilgisayar
+kapanınca çalışacağı veya yeni sohbetlere kendiliğinden bağlanacağı
+varsayılmaz. Bu, yerel test/derleme veya tarayıcı test matrisi çalıştırmaz;
+istenen sağlayıcı ekranının mevcut kullanıcı oturumuyla denetlenmesidir.
+Google CAPTCHA isterse istek otomatik tekrarlanmaz veya başka oturumla
+aşılmaya çalışılmaz. Chrome'a geçiş kullanıcının TinyFish bağımlılığını
+kaldırma talebiyle yapıldı; bu geçişte yeni indeksleme isteği gönderilmedi.
+
+### Alternatif: kayıtlı TinyFish profili
+
 9 Ekim 2026'da kullanıcının kaydettiği TinyFish tarayıcı profiliyle Search
 Console mülküne erişim doğrulandı. Profil yönetimi için kalıcı giriş noktası
 [TinyFish Profiles](https://agent.tinyfish.ai/profiles) sayfasıdır. Bu çalışmada
@@ -22,6 +55,9 @@ araçtan alınan iki geçici devir bağlantısının süresi doldu; nedeni doğr
    zamanını, kullanıcı tarafından beyan edilen canonical'ı ve Google'ın
    seçtiği canonical'ın ekranda gösterilen değerini birlikte kaydet.
 
+### Alanları yorumlama
+
+Google'ın seçimi **İncelenen URL** ise denetlenen hedef URL'yi kullan.
 Google'ın seçimi **Kullanıcı tarafından beyan edilen standart URL ile aynı**
 ise adresi aynı Google indeks kaydındaki beyan edilen canonical alanından
 çözümle. Bugünkü canlı HTML etiketinden çıkarma: eski tarama kaydı `.html`

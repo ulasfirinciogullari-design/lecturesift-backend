@@ -5,6 +5,50 @@ takip edilir. Başlangıç varsayımı Türkiye'deki üniversite öğrencileri v
 Türkçe aramalardır. İlk rekabet geliştirmesi üç ana ürün sayfasının Türkçe
 ve İngilizce sürümlerine uygulanır; diğer diller mevcut içeriklerini korur.
 
+## 9 Ekim 2026 TinyFish olmadan Chrome erişimi doğrulandı
+
+Kullanıcının isteğiyle mevcut Windows Chrome/SSH köprüsü bu sohbetten
+kullanıldı. Yeni hizmet, Google oturum aktarımı veya köprü yapılandırma
+değişikliği gerekmedi. Diğer sohbetin sayfası korunarak bu göreve ait ayrı
+sekmede `sc-domain:lecturesift.com` paneli ve gerçek URL Denetimi kayıtları
+okundu. Böylece canonical denetimi TinyFish'e bağlı kalmıyor. Erişim,
+kullanıcının Chrome ve SSH bağlantısı açık olduğu sürece kullanılabilir;
+ambient sekme bilgisi erişim kanıtı olarak alınmadı.
+
+| URL | Google indeks kaydı | Google'ın seçtiği canonical | Ham son tarama |
+| --- | --- | --- | --- |
+| `/` | İndeksli | `https://lecturesift.com/` | `1 Eki 2026 21:09:40` |
+| `/document-summary` | İndeksli | `https://lecturesift.com/document-summary` | `5 Eki 2026 15:38:26` |
+| `/lecture-video-summary` | İndeksli | `https://lecturesift.com/lecture-video-summary` | `1 Eki 2026 12:19:39` |
+| `/pdf-note-check` | Google tarafından bilinmiyor | `Yok` | `Yok` |
+| `/en/pdf-note-check` | Google tarafından bilinmiyor | `Yok` | `Yok` |
+
+İndeksli üç kayıtta Google'ın alanı “İncelenen URL”; hedef adres buradan
+çözümlendi. Üçünün kullanıcı canonical'ı da aynı temiz URL. Tarama izni ve
+indeksleme izni `Evet`, sayfa getirme `Başarılı`. Zaman dilimi görünmediği
+için son tarama saatleri dönüştürülmedi. Önceden okunan Türkçe quiz kaydıyla
+birlikte ana sayfa/üç ürün için native Google alanlarının denetimi tamamlandı.
+
+İki PDF rehberinde eksik canonical aracı uygulamadan kaynaklanmıyor:
+Google'ın kendi indeks kaydı da `Yok` gösteriyor. Bu gözlem, önceki Türkçe
+PDF canlı testinin indeks kaydı olarak okunamadığı belirsizliğini kapatır.
+CAPTCHA çıkan indeksleme isteği Chrome'da tekrar gönderilmedi; bu oturumda
+yeni indeksleme isteği sayısı sıfır. Kabul edilmiş toplam sayı hâlâ beş.
+
+[Beş native Google kaydı](docs/seo/chrome-google-inspection-2026-10-09.json)
+ve [tekrar kullanılabilir erişim yöntemi](docs/seo/direct-google-inspection.md)
+kaydedildi. Göreve ait sekme iş sonunda kapatıldı; diğer sohbetin sekmesi
+korundu. Yerel test veya derleme çalıştırılmadı.
+
+**03:23 TSİ yayın sonrası mobil ölçüm:** Aynı Chrome bağlantısından Google'ın
+uzak PageSpeed raporu alındı: [ana sayfa 99 puan](https://pagespeed.web.dev/analysis/https-lecturesift-com/rlitij1087?form_factor=mobile),
+FCP 1,3 sn, LCP 1,6 sn, TBT 10 ms, CLS 0, Speed Index 2,7 sn. SEO,
+erişilebilirlik ve iyi uygulamalar 100. Saha verisi yine yok. Bu tekil
+laboratuvar örneği; önceki puanla farkın tamamı tek görsel değişikliğine
+bağlanmaz ve saha Core Web Vitals sonucu sayılmaz. [Ölçüm kaydı](docs/seo/mobile-performance-2026-10-09.json)
+önceki raporları ve yayın sonrasındaki raporu ayrı tutar. PDF ürünü için
+ikinci ölçüm yapılmadı. Yeni TinyFish çalışması veya yerel Lighthouse yok.
+
 ## 9 Ekim 2026 kalan işler ve güncel durum
 
 Öncelikli dört indeks dışı adresin canlı yanıtı ve keşif yolları yeniden
@@ -75,8 +119,9 @@ ikinci bir teslim yöntemi eklenmez. PR121'in kaynak commit'i `ece07d8`
 tek `assistant.css?v=4` bağlantısı görüldü. Gerçek 960 px/q80 görsel
 uç noktası 200 `image/webp`, 29.104 bayt döndürdü; kaynak PNG'den yaklaşık
 %98,3 küçük. Böylece görsel teslim düzeltmesinin canlı olduğu doğrulandı.
-Üstteki hız raporları bu değişikliğin öncesini ölçer; yeni hız puanı veya
-sıralama artışı iddia edilmez. PR121'in ayrı laboratuvar raporları farklı
+Üstteki iki hız raporu bu değişikliğin öncesini ölçer; 03:23 TSİ yayın
+sonrası ölçüm yukarıdaki bölümde ayrı kaydedilmiştir. Sıralama artışı
+iddia edilmez. PR121'in ayrı laboratuvar raporları farklı
 puanlar kaydetti; tekil ölçümlerdeki fark bir iyileşme oranı olarak
 kullanılmaz. Tema betiği ilk boyamadaki tema seçimini yaptığı için rastgele
 ertelenmedi; kalan CSS/JS önerileri bu değişiklikle çözülmüş sayılmaz.
@@ -768,8 +813,8 @@ alındığını veya Google tarafından işlendiğini iddia etmez.
 | P0 | Ölçümün güvenilirliğini doğrula | Kısmen doğrulandı: üretimde `content_action/open_workspace` alınıyor. Diğer dört tür, iç kullanım/atıf ve gerçek ödeme karşılaştırması açık; yapay olay veya müşteri kaydı kullanılmadı. |
 | P0 | Gezinme yolu düzeltmesini doğrula | Tamamlandı: kaynak/önceki uzak CI ve 9 Ekim TR/EN/AR canlı JSON-LD zincirleri doğrulandı. |
 | P1 | İlk üç ürün sayfasını geliştir | İlk paket tamamlandı: altı TR/EN sürümü PR107 ile yayımlandı; örnekler, adımlar, sınırlar ve ilgili rehberler canlı doğrulandı. Yeni gelişim ölçülmüş sorgulara göre seçilecek. |
-| P1 | Google URL Denetimi ve canonical | 183 URL'nin indeks durumu incelendi; üç alternatif sayfanın eski `.html` canonical seçimi native Google ekranında doğrulandı. Beş istek kabul edildi; iki PDF rehberinde CAPTCHA nedeniyle istek işi açık. Yeniden tarama/canonical değişimi Google'dan bekleniyor; tüm 183 adresin canonical alanı alınmış değildir. |
-| P1 | Mobil hız başlangıcını ölç | Tamamlandı: bu oturumun Google uzak mobil raporunda ana sayfa 71, PDF ürünü 98. Saha verisi yok. PR121'in responsive görsel düzeltmesi uzak CI'da ve 03:12 TSİ canlı TR/EN HTML/görsel yanıtında doğrulandı; yayın sonrası puan henüz ölçülmedi. |
+| P1 | Google URL Denetimi ve canonical | 183 URL'nin indeks durumu incelendi; ana sayfa/üç ürün ve sorunlu alternatiflerin native canonical alanları okundu. İki PDF rehberinde Google'ın kendi kaydı da bilinmiyor/`Yok`. Beş istek kabul edildi; PDF rehberlerinin istek işi CAPTCHA nedeniyle açık. Yeniden tarama/canonical değişimi Google'dan bekleniyor; tüm 183 adresin canonical alanı alınmış değildir. |
+| P1 | Mobil hız başlangıcını ölç | Tamamlandı: başlangıçta ana sayfa 71, PDF ürünü 98; 03:23 TSİ yayın sonrası tekil ana sayfa ölçümü 99/LCP 1,6 sn. Saha verisi yok. PR121'in responsive görsel düzeltmesi uzak CI'da ve 03:12 TSİ canlı TR/EN HTML/görsel yanıtında doğrulandı. |
 | P2 | İlk rehber kümesini genişlet | İlk paket tamamlandı: Cornell, aktif hatırlama ve PDF not kontrol rehberleri/ürün bağlantıları yayımlandı. Yeni konu seçimi sorgu verisiyle yapılacak; yalnız gerçekten yazılmış dil sürümleri yayımlanacak. |
 
 ### İlk içerik ve sorgu eşlemesi
