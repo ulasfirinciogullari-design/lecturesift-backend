@@ -1,0 +1,201 @@
+{
+  "schemaVersion": 1,
+  "recordType": "post_request_indexing_followup",
+  "observedOnUtcDate": "2026-10-09",
+  "siteUrl": "sc-domain:lecturesift.com",
+  "sources": {
+    "tracker": "GSC Wizard check_tracked_url_now; one refresh of seven URLs, not indexing submissions",
+    "nativeGoogle": "Google Search Console indexed-record UI through existing owner Chrome/SSH bridge",
+    "rawGoogleApiResponse": false
+  },
+  "trackerRefresh": {
+    "completedByUtc": "2026-10-09T00:49:15Z",
+    "siteUrl": "sc-domain:lecturesift.com",
+    "count": 7,
+    "results": [
+      {
+        "url": "https://lecturesift.com/quiz-flashcards",
+        "currentStatus": "indexed",
+        "previousStatus": "not_indexed",
+        "verdict": "PASS",
+        "coverageState": "Submitted and indexed",
+        "lastCrawlTime": "2026-10-08T23:50:31Z",
+        "warningType": null
+      },
+      {
+        "url": "https://lecturesift.com/pt/quiz-flashcards",
+        "currentStatus": "not_indexed",
+        "previousStatus": "not_indexed",
+        "verdict": "NEUTRAL",
+        "coverageState": "Alternate page with proper canonical tag",
+        "lastCrawlTime": "2026-08-30T06:07:56Z",
+        "warningType": null
+      },
+      {
+        "url": "https://lecturesift.com/pt/contact",
+        "currentStatus": "indexed",
+        "previousStatus": "not_indexed",
+        "verdict": "PASS",
+        "coverageState": "Submitted and indexed",
+        "lastCrawlTime": "2026-10-08T23:48:14Z",
+        "warningType": null
+      },
+      {
+        "url": "https://lecturesift.com/en/quiz-flashcards",
+        "currentStatus": "indexed",
+        "previousStatus": "not_indexed",
+        "verdict": "PASS",
+        "coverageState": "Submitted and indexed",
+        "lastCrawlTime": "2026-10-08T23:58:33Z",
+        "warningType": null
+      },
+      {
+        "url": "https://lecturesift.com/en/lecture-video-summary",
+        "currentStatus": "not_indexed",
+        "previousStatus": "not_indexed",
+        "verdict": "NEUTRAL",
+        "coverageState": "URL is unknown to Google",
+        "lastCrawlTime": null,
+        "warningType": null
+      },
+      {
+        "url": "https://lecturesift.com/pdf-note-check",
+        "currentStatus": "not_indexed",
+        "previousStatus": "not_indexed",
+        "verdict": "NEUTRAL",
+        "coverageState": "Discovered - currently not indexed",
+        "lastCrawlTime": null,
+        "warningType": null
+      },
+      {
+        "url": "https://lecturesift.com/en/pdf-note-check",
+        "currentStatus": "not_indexed",
+        "previousStatus": "not_indexed",
+        "verdict": "NEUTRAL",
+        "coverageState": "URL is unknown to Google",
+        "lastCrawlTime": null,
+        "warningType": null
+      }
+    ]
+  },
+  "trackerAfterRefresh": {
+    "lastCheckAtUtc": "2026-10-09T00:49:04.492Z",
+    "total": 31,
+    "indexed": 3,
+    "notIndexed": 28,
+    "errors": 0,
+    "warnings": 0,
+    "isActive": true,
+    "emailDigestEnabled": true,
+    "note": "Only seven priority URLs refreshed in this follow-up; the other 24 retain their older stored checks. This cohort is not the site's overall index count."
+  },
+  "nativeGoogleCases": [
+    {
+      "recordView": "indexed_record",
+      "headline": "URL Google'da mevcut",
+      "coverageState": "Sayfa dizine eklendi",
+      "googleCanonicalRaw": "İncelenen URL",
+      "canonicalResolution": "Resolved from the inspected URL identified in the same native Google indexed-record screen, not live HTML.",
+      "crawlAllowed": "Evet",
+      "pageFetch": "Başarılı",
+      "indexingAllowed": "Evet",
+      "lastCrawlDisplayTimeZone": null,
+      "breadcrumbResult": "1 geçerli öğe algılandı",
+      "url": "https://lecturesift.com/quiz-flashcards",
+      "observedAtUtc": "2026-10-09T00:52:55.858765Z",
+      "inspectionPageUrl": "https://search.google.com/search-console/inspect?resource_id=sc-domain%3Alecturesift.com&id=qmE8U5XVcueCkvo3eZ_HkA",
+      "lastCrawlDisplayed": "9 Eki 2026 02:50:31",
+      "sitemapDisplayed": "https://lecturesift.com/sitemap.xml",
+      "previousGoogleCanonical": "https://lecturesift.com/quiz-flashcards.html",
+      "userCanonical": "https://lecturesift.com/quiz-flashcards",
+      "googleCanonical": "https://lecturesift.com/quiz-flashcards"
+    },
+    {
+      "recordView": "indexed_record",
+      "headline": "URL Google'da mevcut",
+      "coverageState": "Sayfa dizine eklendi",
+      "googleCanonicalRaw": "İncelenen URL",
+      "canonicalResolution": "Resolved from the inspected URL identified in the same native Google indexed-record screen, not live HTML.",
+      "crawlAllowed": "Evet",
+      "pageFetch": "Başarılı",
+      "indexingAllowed": "Evet",
+      "lastCrawlDisplayTimeZone": null,
+      "breadcrumbResult": "1 geçerli öğe algılandı",
+      "url": "https://lecturesift.com/pt/contact",
+      "observedAtUtc": "2026-10-09T00:54:17.430192Z",
+      "inspectionPageUrl": "https://search.google.com/search-console/inspect?resource_id=sc-domain%3Alecturesift.com&id=2hk9JrJ3y9QlS3czxKZ1yw",
+      "lastCrawlDisplayed": "9 Eki 2026 02:48:14",
+      "sitemapDisplayed": "Geçici işleme hatası",
+      "previousGoogleCanonical": "https://lecturesift.com/pt/contact.html",
+      "userCanonical": "https://lecturesift.com/pt/contact",
+      "googleCanonical": "https://lecturesift.com/pt/contact"
+    },
+    {
+      "recordView": "indexed_record",
+      "headline": "URL Google'da mevcut",
+      "coverageState": "Sayfa dizine eklendi",
+      "googleCanonicalRaw": "İncelenen URL",
+      "canonicalResolution": "Resolved from the inspected URL identified in the same native Google indexed-record screen, not live HTML.",
+      "crawlAllowed": "Evet",
+      "pageFetch": "Başarılı",
+      "indexingAllowed": "Evet",
+      "lastCrawlDisplayTimeZone": null,
+      "breadcrumbResult": "1 geçerli öğe algılandı",
+      "url": "https://lecturesift.com/en/quiz-flashcards",
+      "observedAtUtc": "2026-10-09T00:54:01.079640Z",
+      "inspectionPageUrl": "https://search.google.com/search-console/inspect?resource_id=sc-domain%3Alecturesift.com&id=vooPKyfytt7u17FcNqcmlg",
+      "lastCrawlDisplayed": "9 Eki 2026 02:58:33",
+      "sitemapDisplayed": "Geçici işleme hatası",
+      "previousGoogleCanonical": null,
+      "userCanonical": "https://lecturesift.com/en/quiz-flashcards",
+      "googleCanonical": "https://lecturesift.com/en/quiz-flashcards"
+    }
+  ],
+  "sitemap": {
+    "path": "https://lecturesift.com/sitemap.xml",
+    "lastSubmitted": "2026-10-08T21:48:32.384Z",
+    "isPending": false,
+    "isSitemapsIndex": false,
+    "type": "sitemap",
+    "lastDownloaded": "2026-10-08T22:17:48.588Z",
+    "warnings": "0",
+    "errors": "0",
+    "contents": [
+      {
+        "type": "web",
+        "submitted": "183",
+        "indexed": "0"
+      }
+    ],
+    "indexedFieldInterpretation": "contents[].indexed is deprecated by Google and is not used as the site's indexed URL count.",
+    "resubmitted": false,
+    "reference": "https://developers.google.com/webmaster-tools/v1/sitemaps"
+  },
+  "remainingPriorityUrls": [
+    "https://lecturesift.com/pt/quiz-flashcards",
+    "https://lecturesift.com/en/lecture-video-summary",
+    "https://lecturesift.com/pdf-note-check",
+    "https://lecturesift.com/en/pdf-note-check"
+  ],
+  "interpretation": [
+    "Three URLs are now confirmed indexed with clean self-canonical selections in the native Google UI.",
+    "Two previously observed .html canonical selections have changed: Turkish quiz and Portuguese contact. Portuguese quiz still has its old crawl in the refreshed tracker; its canonical was not reread in this follow-up.",
+    "Unknown/discovered states for the other three pending priority URLs differ from some earlier snapshots. Preserve each dated observation; this does not revoke the accepted requests or establish a new source defect.",
+    "No additional indexing or sitemap submissions were made. All seven prior accepted request records remain unchanged.",
+    "Old inspection result links can retain an older record: the Turkish quiz's prior result still showed August data. A fresh URL inspection through the search field produced a new result link and the current indexed record.",
+    "Raw browser crawl times are preserved without assigning a timezone. Separate tracker API lastCrawlTime values include their original UTC offsets."
+  ],
+  "priorEvidence": [
+    "google-selected-canonicals-2026-10-09.json",
+    "priority-indexing-2026-10-09.json",
+    "pdf-indexing-requests-2026-10-09.json"
+  ],
+  "boundaries": {
+    "newIndexingRequests": 0,
+    "localTestsOrBuildsRun": false,
+    "sourceCodeChanged": false,
+    "captchaAutomaticallySolvedOrBypassed": false,
+    "taskTabClosed": true,
+    "otherTaskTabPreserved": true
+  }
+}

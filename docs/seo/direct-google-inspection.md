@@ -66,6 +66,15 @@ araçtan alınan iki geçici devir bağlantısının süresi doldu; nedeni doğr
 
 ### Alanları yorumlama
 
+**Eski denetim bağlantısı güncel kayıt garantisi değildir.** 9 Ekim'deki
+takipte Türkçe quiz'in önceki `id=...` bağlantısı hâlâ Ağustos taramasını
+gösterdi. Search Console'un URL alanından yeni denetim başlatıldığında yeni
+rapor bağlantısı, Ekim taraması ve temiz canonical geldi. Takip okumasında
+URL alanına hedefi yazıp arama işlemini tamamla; doğru hedef, rapor bağlantısı
+ve son tarama alanını birlikte kaydet. Bu okuma yeniden indeksleme isteği
+değildir. SPA içinde eski paneller DOM'da kalabildiğinden yalnız görünür
+panelin alanlarını ve düğmelerini kullan.
+
 Google'ın seçimi **İncelenen URL** ise denetlenen hedef URL'yi kullan.
 Google'ın seçimi **Kullanıcı tarafından beyan edilen standart URL ile aynı**
 ise adresi aynı Google indeks kaydındaki beyan edilen canonical alanından
