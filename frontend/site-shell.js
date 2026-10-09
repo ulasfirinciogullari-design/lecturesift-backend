@@ -178,13 +178,15 @@
     cache: "no-store",
     headers: {Authorization: `Bearer ${token}`},
   }).then(response => {
+    if (localStorage.getItem(TOKEN_KEY) !== token) throw new Error("account-session-changed");
     if (response.ok) return response.json();
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       localStorage.removeItem(TOKEN_KEY);
       setSessionState(false);
     }
     throw new Error(`account-status-${response.status}`);
   }).then(body => {
+    if (localStorage.getItem(TOKEN_KEY) !== token || !body?.account) return;
     setSessionState(Boolean(body?.account));
     window.dispatchEvent(new CustomEvent("lecturesift:account-state", {detail: {signedIn: Boolean(body?.account)}}));
   }).catch(() => {

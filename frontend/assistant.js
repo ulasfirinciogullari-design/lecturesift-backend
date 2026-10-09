@@ -51,6 +51,7 @@
   $('.assistant-mode [data-mode=chat]').textContent=t('chatmode');
   let imageCredits=0, mode='chat';
   let history = [], attachment = null, sessionToken = token(), busy = false, available = false, trialCount = 0, pending = null;
+  let sessionRevision=0, operationRevision=0, openingRevision=0, balanceRevision=0;
   const setStatus = text => { $('.assistant-status').textContent = text; };
   const updateBalance = value => {if(Number.isFinite(value)&&value>=0)$('.assistant-balance').textContent=format('balance',value);};
   for(const key of ['suggeststudy','suggestaccount','suggestinvite']) {
@@ -58,12 +59,19 @@
     button.addEventListener('click',()=>{if(busy)return;$('textarea').value=t(key);$('textarea').focus();});
     $('.assistant-suggestions').append(button);
   }
-  async function request(endpoint, data, auth = true) {
+  async function request(endpoint, data, auth = true, authToken = token()) {
     const headers = {'Content-Type':'application/json'};
-    if (auth && token()) headers.Authorization = `Bearer ${token()}`;
+    if (auth && authToken) headers.Authorization = `Bearer ${authToken}`;
     const response = await fetch(API + endpoint, {method:data ? 'POST':'GET', headers, body:data ? JSON.stringify(data):undefined, signal:AbortSignal.timeout(endpoint==='/assistant/image'?110000:65000)});
     const body = await response.json();
-    if (!response.ok) { const error = new Error(body.detail?.code || 'LS-ASSIST-07'); error.status=response.status; throw error; }
+    if (!response.ok) {
+      const code=body?.detail?.code;
+      const error=new Error(typeof code==='string'?code:'LS-ASSIST-07');error.status=response.status;
+      // A gateway failure can arrive after settlement. Only the API's explicit
+      // no-charge outcomes permit a new request ID on the next manual retry.
+      error.noCharge=['LS-ASSIST-01','LS-ASSIST-05','LS-ASSIST-07'].includes(code);
+      throw error;
+    }
     return body;
   }
   const siteT = (key, fallback) => window.LectureSiftI18n?.t?.(key, fallback) || fallback;
@@ -162,15 +170,20 @@
     if(!node || !Number.isSafeInteger(value) || value<1)return;
     const charge=document.createElement('small');charge.className='assistant-message-charge';charge.textContent=format('used',value);node.append(charge);
   }
-  function reset() { mode='chat';updateMode();history=[]; pending=null; attachment=null; $('.assistant-attachment').hidden=true; $('.assistant-messages').replaceChildren();$('.assistant-suggestions').hidden=false; $('textarea').value=''; setStatus(''); }
+  function reset() { operationRevision++;setBusy(false);mode='chat';updateMode();history=[]; pending=null; attachment=null; $('.assistant-attachment').hidden=true; $('.assistant-messages').replaceChildren();$('.assistant-suggestions').hidden=false; $('textarea').value=''; setStatus(''); }
   function syncSession() {
-    reset();sessionToken=token();available=false;
+    sessionRevision++;openingRevision++;balanceRevision++;reset();sessionToken=token();available=false;
     $('.assistant-balance').textContent=t('limited');
     $('.assistant-limit').textContent=t(token()?'usage':'trialnote');
     $('.assistant-credit-bar a').textContent=t(token()?'buy':'signup');
     $('.assistant-credit-bar a').href=token()&&pageRoot?'#assistantCreditShop':path(token()?'/plans.html#assistantCredits':'/register.html');
     $('.assistant-mode').hidden=true;
   }
+  function currentSession(revision, owner) {
+    if(sessionToken!==token())syncSession();
+    return revision===sessionRevision&&owner===sessionToken;
+  }
+  window.addEventListener('storage',event=>{if((event.key===null||event.key==='lecturesift-billing-token')&&sessionToken!==token())syncSession();});
   function setBusy(value) { busy=value; dialog.querySelectorAll('form button,.assistant-clear').forEach(button=>{button.disabled=value;}); $('textarea').disabled=value; }
   function updateMode() {
     const creating=mode==='image';
@@ -212,21 +225,26 @@
   async function openAssistant() {
     if (sessionToken !== token()) syncSession();
     const openingSession=sessionToken;
+    const openingSessionRevision=sessionRevision, opening=++openingRevision, openingBalance=balanceRevision;
+    const currentOpening=()=>currentSession(openingSessionRevision,openingSession)&&opening===openingRevision;
     if(!pageRoot){dialog.showModal();$('textarea').focus();}
     if (!$('.assistant-messages').children.length) addMessage(t(token()?'welcomeowned':'welcome'), 'assistant', token() ? 'workspace' : 'register');
     try {
       const offers=await request('/assistant/catalog'+(pageRoot?'?currency='+encodeURIComponent(selectedCurrency()):''), null, false);
-      if(openingSession!==token()){syncSession();return;}
+      if(!currentOpening())return;
       available=offers.available===true;
       renderCreditShop(offers);
       imageCredits=offers.image?.credits||0;
       $('.assistant-mode').hidden=!(available&&offers.image?.available===true&&token());
       $('.assistant-mode [data-mode=image]').textContent=`${t('imagemode')} · ${format('packcount',imageCredits)}`;
       if($('.assistant-mode').hidden){mode='chat';updateMode();}
-      if (!available) { setStatus(t('unavailable')); return; }
-      if (token()) { const wallet=await request('/assistant/wallet');if(openingSession!==token()){syncSession();return;}updateBalance(wallet.balance);setStatus(''); }
-      else setStatus(t('trial'));
-    } catch { available=false; setStatus(t('unavailable')); }
+      if (!available) { if(!busy)setStatus(t('unavailable')); return; }
+      if (openingSession) {
+        const wallet=await request('/assistant/wallet',null,true,openingSession);if(!currentOpening())return;
+        if(openingBalance===balanceRevision)updateBalance(wallet.balance);
+        if(!busy)setStatus('');
+      } else if(!busy)setStatus(t('trial'));
+    } catch { if(currentOpening()&&openingBalance===balanceRevision&&!busy){available=false;setStatus(t('unavailable'));} }
   }
   launch.addEventListener('click',openAssistant);
   if(pageRoot) {
@@ -267,10 +285,13 @@
   }
   $('input[type=file]').addEventListener('change',async event=>{
     const file=event.target.files[0];event.target.value='';if(!file)return;
+    if(sessionToken!==token()){syncSession();return;}if(busy||!sessionToken)return;
+    const owner=sessionToken, revision=sessionRevision, operation=++operationRevision;
+    const current=()=>currentSession(revision,owner)&&operation===operationRevision;
     setBusy(true);setStatus(t('waiting'));
-    try {attachment=await prepare(file);$('.assistant-attachment span').textContent=file.name;$('.assistant-attachment').hidden=false;setStatus(attachment.media_kind==='video_frames'?t('media'):'');}
-    catch {attachment=null;$('.assistant-attachment').hidden=true;setStatus(t('media'));}
-    finally {setBusy(false);}
+    try {const prepared=await prepare(file);if(!current())return;attachment=prepared;$('.assistant-attachment span').textContent=file.name;$('.assistant-attachment').hidden=false;setStatus(attachment.media_kind==='video_frames'?t('media'):'');}
+    catch {if(current()){attachment=null;$('.assistant-attachment').hidden=true;setStatus(t('media'));}}
+    finally {if(current())setBusy(false);}
   });
   $('form').addEventListener('submit',async event=>{
     event.preventDefault();if(busy)return;
@@ -280,25 +301,30 @@
     if(!token()&&trialCount>=3){addMessage(t('signup'),'assistant','register');return;}
     const creating=token()&&mode==='image';
     if(creating&&new TextEncoder().encode(message).length>1000){setStatus(t('shortprompt'));return;}
+    const owner=sessionToken, revision=sessionRevision, operation=++operationRevision;
+    const current=()=>currentSession(revision,owner)&&operation===operationRevision;
+    balanceRevision++;
     setBusy(true);$('.assistant-suggestions').hidden=true;setStatus(t('waiting'));addMessage(message,'user');
     try {
       let answer;
-      if(!token()) {answer=await request('/assistant/trial',{message:message.slice(0,500),language:language()},false);trialCount++;}
+      if(!owner) {answer=await request('/assistant/trial',{message:message.slice(0,500),language:language()},false);trialCount++;}
       else if(creating) {
         const signature='image:'+message;
         if(!pending||pending.signature!==signature)pending={signature,payload:{request_id:crypto.randomUUID(),prompt:message}};
-        answer=await request('/assistant/image',pending.payload);
+        answer=await request('/assistant/image',pending.payload,true,owner);
       }
       else {
         const lessonId=new URLSearchParams(location.search).get('job') || '';
         const payload={message,language:language(),currency:selectedCurrency(),history:history.slice(-6),lesson_id:lessonId,...(attachment||{images:[],media_kind:'none'})};
         const signature=JSON.stringify(payload);
         if(!pending || pending.signature!==signature) pending={signature,payload:{request_id:crypto.randomUUID(),...payload}};
-        answer=await request('/assistant/chat',pending.payload);
+        answer=await request('/assistant/chat',pending.payload,true,owner);
       }
-      if(sessionToken!==token()){syncSession();return;}
+      if(!current())return;
+      const imageAnswer=answer?.kind==='image'&&/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(answer.image||'')&&answer.image.length<=1500100;
+      if(creating?!imageAnswer:!answer||typeof answer.answer!=='string'||!answer.answer.trim()||[...answer.answer].length>5000)throw new Error('Invalid assistant response');
       let replyNode;
-      if(answer.kind==='image'&&/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(answer.image||'')&&answer.image.length<=1500100){
+      if(imageAnswer){
         const node=addMessage(t('generated'));replyNode=node;
         const picture=document.createElement('img');picture.src=answer.image;picture.alt=message;picture.width=1024;picture.height=1024;node.append(picture);
         const download=document.createElement('a');download.className='assistant-action';download.href=answer.image;download.download='lecturesift-image.jpg';download.textContent=t('downloadimage');node.append(download);
@@ -307,14 +333,16 @@
       }else replyNode=addMessage(answer.answer,'assistant',answer.action,answer);
       if(token())appendCharge(replyNode,answer.charged_credits);
       pending=null;
-      history.push({role:'user',content:message.slice(0,2000)},{role:'assistant',content:answer.answer.slice(0,2000)});
+      history.push({role:'user',content:[...message].slice(0,2000).join('')},{role:'assistant',content:[...answer.answer].slice(0,2000).join('')});
       history=history.slice(-6);$('textarea').value='';attachment=null;$('.assistant-attachment').hidden=true;
-      updateBalance(answer.balance);
+      balanceRevision++;updateBalance(answer.balance);
       setStatus(token()?'':t('signup'));
     } catch(error) {
-      if(error.status && error.status!==409) pending=null;
-      const text=!error.status||error.status===409?t('uncertain'):error.status===402?t('empty'):error.status===401?t('signup'):error.message==='LS-ASSIST-01'?t('unavailable'):t('error');
+      if(!current())return;
+      const uncertain=!error.status||error.status===409||(error.status>=500&&!error.noCharge);
+      if(!uncertain)pending=null;
+      const text=uncertain?t('uncertain'):error.status===402?t('empty'):error.status===401?t('signup'):error.message==='LS-ASSIST-01'?t('unavailable'):t('error');
       addMessage(text,'assistant',error.status===402?'plans':error.status===401||!token()?'register':'none');setStatus('');
-    } finally {setBusy(false);$('textarea').focus();}
+    } finally {if(current()){setBusy(false);$('textarea').focus();}}
   });
 })();

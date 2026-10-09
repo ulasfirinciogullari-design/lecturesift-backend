@@ -158,12 +158,28 @@ function showNotice(message, isError = false) {
 }
 
 async function request(path, options = {}, token = "") {
+  const sameSession = () => !token || localStorage.getItem(TOKEN_KEY) === token;
+  if (!sameSession()) throw new Error(t("error.request", "İstek tamamlanamadı."));
   const headers = {"Content-Type": "application/json", ...(options.headers || {})};
   if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(`${API}${path}`, {...options, headers});
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(errorMessage(body, t("error.request", "İstek tamamlanamadı.")));
+  const body = await response.json().catch(() => null);
+  if (!sameSession()) throw new Error(t("error.request", "İstek tamamlanamadı."));
+  if (!response.ok) {
+    const error = new Error(errorMessage(body, t("error.request", "İstek tamamlanamadı.")));
+    error.status = response.status;
+    throw error;
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error(t("error.request", "İstek tamamlanamadı."));
   return body;
+}
+
+function sessionTokenFrom(body) {
+  const token = body?.token;
+  if (typeof token !== "string" || !token || token.length > 4096 || /\s/.test(token)) {
+    throw new Error(t("error.request", "İstek tamamlanamadı."));
+  }
+  return token;
 }
 
 function setBusy(button, busy, label) {
@@ -192,8 +208,13 @@ function populateCountrySelect(select, selected = "") {
 }
 
 function safeNext() {
-  const value = new URLSearchParams(location.search).get("next") || "/account.html";
-  return value.startsWith("/") && !value.startsWith("//") ? value : "/account.html";
+  const fallback = I18N.localizedPath ? I18N.localizedPath(I18N.language, "/account.html") : "/account.html";
+  const value = new URLSearchParams(location.search).get("next") || fallback;
+  if (!value.startsWith("/") || value.startsWith("//") || /[\\\u0000-\u0020]/.test(value)) return fallback;
+  try {
+    const url = new URL(value, location.origin);
+    return url.origin === location.origin ? `${url.pathname}${url.search}${url.hash}` : fallback;
+  } catch (_) { return fallback; }
 }
 
 async function initRegister() {
@@ -235,6 +256,7 @@ async function initRegister() {
           ...(normalizedReferral ? {referral_code: normalizedReferral} : {}),
         }),
       });
+      if (typeof body.user?.email !== "string" || !body.user.email) throw new Error(t("error.request", "İstek tamamlanamadı."));
       $("registerForm").hidden = true;
       $("successBox").hidden = false;
       $("successEmail").textContent = body.user.email;
@@ -259,7 +281,7 @@ async function initRegister() {
 }
 
 async function initLogin() {
-  if (localStorage.getItem(TOKEN_KEY)) location.replace("/account.html");
+  if (localStorage.getItem(TOKEN_KEY)) return location.replace(safeNext());
   $("loginForm").addEventListener("submit", async event => {
     event.preventDefault();
     const button = $("loginSubmit");
@@ -269,7 +291,7 @@ async function initLogin() {
         method: "POST",
         body: JSON.stringify({email: $("email").value.trim(), password: $("password").value}),
       });
-      localStorage.setItem(TOKEN_KEY, body.token);
+      localStorage.setItem(TOKEN_KEY, sessionTokenFrom(body));
       location.replace(safeNext());
     } catch (error) { showNotice(error.message, true); }
     finally { setBusy(button, false, t("auth.signIn", "Giriş yap")); }
@@ -290,7 +312,7 @@ async function initVerify() {
   const email = params.get("email") || "";
   $("verifyEmail").value = email;
   const complete = body => {
-    localStorage.setItem(TOKEN_KEY, body.token);
+    localStorage.setItem(TOKEN_KEY, sessionTokenFrom(body));
     $("verifyTitle").textContent = t("auth.emailVerified", "E-posta doğrulandı");
     $("verifyText").textContent = t("auth.accountActive", "Hesabın etkin. LectureSift çalışma alanına geçebilirsin.");
     $("verifyCodeForm").hidden = true;
@@ -370,13 +392,16 @@ async function initAccount() {
   };
   let token = localStorage.getItem(TOKEN_KEY);
   if (!token) return location.replace(accountSignInPath());
+  window.addEventListener("storage", event => {
+    if (event.key === TOKEN_KEY && event.newValue !== token) location.reload();
+  });
   let currentAccount = null;
   let referralLoadStarted = false;
   const accountViews = ["overview", "profile", "payments", "referrals", "security"];
   const accountViewKey = "lecturesift-account-view";
 
   const activateAccountView = (requested, {focus = false, updateHash = true} = {}) => {
-    if (requested === "lessons") { location.replace("/workspace.html#library"); return; }
+    if (requested === "lessons") { location.replace(`${localized("/workspace.html")}#library`); return; }
     const view = accountViews.includes(requested) ? requested : "overview";
     document.querySelectorAll("[data-account-view]").forEach(panel => {
       const selected = panel.dataset.accountView === view;
@@ -619,6 +644,11 @@ async function initAccount() {
   };
 
   const renderAccount = account => {
+    if (!account || typeof account.user?.email !== "string" || !account.user.email
+      || typeof account.plan?.code !== "string" || !Number.isFinite(account.used_minutes)
+      || (account.remaining_minutes !== null && !Number.isFinite(account.remaining_minutes))) {
+      throw new Error(t("error.request", "İstek tamamlanamadı."));
+    }
     currentAccount = account;
     const user = account.user;
     $("accountName").textContent = user.name || user.email;
@@ -802,14 +832,29 @@ async function initAccount() {
     showFormNotice("paymentResultNotice", t("payment.stillPending", "Ödeme bildirimi henüz gelmedi. Sipariş numaranla birkaç dakika sonra tekrar kontrol edebilirsin."));
   };
 
-  try {
-    const body = await request("/billing/me", {}, token);
-    renderAccount(body.account);
-  } catch {
-    localStorage.removeItem(TOKEN_KEY);
-    location.replace(accountSignInPath());
-  }
-  void reconcilePaymentRedirect();
+  const loadAccount = async () => {
+    const retry = $("accountRetry");
+    retry.disabled = true;
+    try {
+      const body = await request("/billing/me", {}, token);
+      renderAccount(body.account);
+      $("accountLoadState").hidden = true;
+      return true;
+    } catch (error) {
+      if (error.status === 401 && localStorage.getItem(TOKEN_KEY) === token) {
+        localStorage.removeItem(TOKEN_KEY);
+        location.replace(accountSignInPath());
+      } else {
+        $("accountLoadError").textContent = error.message || t("error.request", "İstek tamamlanamadı.");
+        $("accountLoadState").hidden = false;
+      }
+      return false;
+    } finally { retry.disabled = false; }
+  };
+  $("accountRetry").addEventListener("click", async () => {
+    if (await loadAccount()) void reconcilePaymentRedirect();
+  });
+  if (await loadAccount()) void reconcilePaymentRedirect();
   $("createReferralCodeButton").addEventListener("click", async () => {
     const button = $("createReferralCodeButton");
     setBusy(button, true, rt("creating", "Bağlantı oluşturuluyor…"));
@@ -903,7 +948,7 @@ async function initAccount() {
     const button = $("passwordSubmit"); setBusy(button, true, t("state.saving", "Kaydediliyor…"));
     try {
       const body = await request("/billing/me/change-password", {method:"POST", body:JSON.stringify({current_password:$("currentPassword").value, new_password:next})}, token);
-      token = body.token; localStorage.setItem(TOKEN_KEY, token); renderAccount(body.account); $("passwordForm").reset(); showFormNotice("passwordNotice", body.message);
+      token = sessionTokenFrom(body); localStorage.setItem(TOKEN_KEY, token); renderAccount(body.account); $("passwordForm").reset(); showFormNotice("passwordNotice", body.message);
     } catch (error) { showFormNotice("passwordNotice", error.message, true); }
     finally { setBusy(button, false, t("security.changePassword", "Parolayı değiştir")); }
   });

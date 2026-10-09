@@ -20,8 +20,9 @@
     const token = localStorage.getItem('lecturesift-billing-token');
     if (!token) throw new Error(t('library.login'));
     const response = await fetch(`https://api.lecturesift.com${path}`, {...options, headers: {Authorization:`Bearer ${token}`, 'Content-Type':'application/json'}, cache:'no-store'});
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.detail?.message || t('library.error'));
+    const body = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(body?.detail?.message || t('library.error'));
+    if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error(t('library.error'));
     return body;
   }
   const date = seconds => new Intl.DateTimeFormat(locale(), {dateStyle:'medium'}).format(new Date(Number(seconds) * 1000));
@@ -44,16 +45,35 @@
     }).join('') || `<div class="library-empty"><span aria-hidden="true">▤</span><p>${esc(t('library.empty'))}</p><a href="${esc(workspacePath())}?source=upload">${esc(t('redesign.new'))} →</a></div>`;
   }
   async function load() {
-    state = await request('/library');
+    const next = await request('/library');
+    const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+    const optionalText = value => value == null || typeof value === 'string';
+    const timestamp = value => typeof value === 'number' && Number.isFinite(new Date(value * 1000).getTime());
+    if (!Array.isArray(next.folders) || !next.folders.every(item => object(item) && typeof item.id === 'string' && item.id && typeof item.name === 'string')
+      || !Array.isArray(next.jobs) || !next.jobs.every(job => object(job) && typeof job.job_id === 'string' && job.job_id
+        && optionalText(job.title) && optionalText(job.folder_id) && optionalText(job.job_type)
+        && typeof job.status === 'string' && typeof job.can_delete === 'boolean'
+        && timestamp(job.created) && timestamp(job.expires_at)
+        && (job.stored_bytes == null || (typeof job.stored_bytes === 'number' && Number.isFinite(job.stored_bytes) && job.stored_bytes >= 0)))) {
+      throw new Error(t('library.error'));
+    }
+    state = next;
     loaded = true;
     render();
+  }
+  async function refreshAfterChange() {
+    // The write has already succeeded. Keep that confirmed state visible even
+    // if the follow-up read fails, so the user is not prompted to repeat it.
+    render();
+    try { await load(); }
+    catch { notice(t('library.refreshError'), true); return false; }
   }
   async function run(action, message = '') {
     if (busy) return;
     busy = true;
     root.setAttribute('aria-busy', 'true');
     notice('');
-    try { await action(); if (message) notice(message); }
+    try { const refreshed = await action(); if (message && refreshed !== false) notice(message); }
     catch (error) { notice(error.message || t('library.error'), true); }
     finally { busy = false; root.removeAttribute('aria-busy'); }
   }
@@ -63,8 +83,10 @@
     if (!name?.trim()) return;
     await run(async () => {
       const body = await request(rename ? `/library/folders/${encodeURIComponent(folder)}` : '/library/folders', {method:rename ? 'PATCH' : 'POST', body:JSON.stringify({name:name.trim()})});
+      if (!body.folder || typeof body.folder.id !== 'string' || typeof body.folder.name !== 'string') throw new Error(t('library.error'));
+      state.folders = [...state.folders.filter(item => item.id !== body.folder.id), body.folder];
       folder = body.folder.id;
-      await load();
+      return refreshAfterChange();
     }, t('library.saved'));
   }
   $('librarySearch').addEventListener('input', render);
@@ -73,7 +95,13 @@
   $('libraryRename').addEventListener('click', () => saveFolder(true));
   $('libraryDeleteFolder').addEventListener('click', () => {
     if (busy || !folder || folder === 'all' || !confirm(t('library.confirmFolder'))) return;
-    run(async () => { await request(`/library/folders/${encodeURIComponent(folder)}`, {method:'DELETE'}); folder = ''; await load(); }, t('library.deleted'));
+    run(async () => {
+      await request(`/library/folders/${encodeURIComponent(folder)}`, {method:'DELETE'});
+      state.folders = state.folders.filter(item => item.id !== folder);
+      state.jobs = state.jobs.map(job => job.folder_id === folder ? {...job, folder_id:null} : job);
+      folder = '';
+      return refreshAfterChange();
+    }, t('library.deleted'));
   });
   $('libraryFolders').addEventListener('click', event => {
     const button = event.target.closest('[data-library-folder]');
@@ -83,15 +111,25 @@
     const input = event.target.closest('[data-library-move]');
     if (!input) return;
     if (busy) { render(); return; }
+    const jobId = input.dataset.libraryMove, folderId = input.value || null;
     run(async () => {
-      try { await request(`/library/lessons/${encodeURIComponent(input.dataset.libraryMove)}`, {method:'PATCH', body:JSON.stringify({folder_id:input.value || null})}); await load(); }
+      try {
+        await request(`/library/lessons/${encodeURIComponent(jobId)}`, {method:'PATCH', body:JSON.stringify({folder_id:folderId})});
+        state.jobs = state.jobs.map(job => job.job_id === jobId ? {...job, folder_id:folderId} : job);
+        return refreshAfterChange();
+      }
       catch (error) { render(); throw error; }
     }, t('library.saved'));
   });
   $('libraryLessons').addEventListener('click', event => {
     const button = event.target.closest('[data-library-delete]');
     if (!button || busy || !confirm(t('library.confirmDelete'))) return;
-    run(async () => { await request(`/library/lessons/${encodeURIComponent(button.dataset.libraryDelete)}`, {method:'DELETE'}); await load(); }, t('library.deleted'));
+    run(async () => {
+      const jobId = button.dataset.libraryDelete;
+      await request(`/library/lessons/${encodeURIComponent(jobId)}`, {method:'DELETE'});
+      state.jobs = state.jobs.filter(job => job.job_id !== jobId);
+      return refreshAfterChange();
+    }, t('library.deleted'));
   });
   document.addEventListener('lecturesift:library-open', () => run(load));
   document.addEventListener('lecturesift:language', () => { if (loaded) render(); });
