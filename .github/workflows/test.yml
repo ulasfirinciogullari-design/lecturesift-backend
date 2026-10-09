@@ -21,7 +21,8 @@ jobs:
     timeout-minutes: 25
     services:
       assistant-postgres:
-        image: postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+        # Preserve the pinned image while avoiding shared-runner Docker Hub limits.
+        image: mirror.gcr.io/library/postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
         env:
           POSTGRES_DB: assistant_ci
           POSTGRES_USER: assistant_ci
