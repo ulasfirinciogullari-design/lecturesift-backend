@@ -85,7 +85,7 @@ test('a late currency response cannot replace the latest price or checkout curre
     await expect(page.locator('[data-plan="lite"][data-interval="monthly"]')).toBeDisabled();
     await page.locator('#billingCurrency').selectOption('EUR');
     await expect(page.locator('#plansGrid')).toHaveAttribute('aria-busy', 'false');
-    await expect(page.locator('.plan-card').filter({has:page.locator('[data-plan="lite"]')}).toContainText('€22.22');
+    await expect(page.locator('.plan-card').filter({has:page.locator('[data-plan="lite"]')})).toContainText('€22.22');
     const response = page.waitForResponse(`${API}/billing/plans?currency=USD`);
     pending.resolve();
     await finishResponse(page, response);
