@@ -149,6 +149,60 @@ test('user detail filters lessons on the server and actual error state remains s
   expect(unexpected).toEqual([]);
 });
 
+test('quota rejection explains the limit without presenting required minutes as spent', async ({page}) => {
+  const rejected = {...lesson, status:'error', percent:0, stage:'error', source_type:'document',
+    error_code:'LS-BILL-10', billable_minutes:561, document_words:112035,
+    public_error:'Bu belge için 561 dakika kullanım hakkı gerekiyor; hesabında 60 dakika kaldı. <img src=x onerror="alert(1)">'};
+  const unexpected = await openAdmin(page, {hash:'jobs', override:async (route, url) => {
+    if (url.pathname === '/billing/admin/jobs') {
+      await route.fulfill({headers:CORS, json:{jobs:[rejected]}});
+      return true;
+    }
+    if (url.pathname === '/billing/admin/jobs/lesson-1') {
+      await route.fulfill({headers:CORS, json:{job:rejected, result:null}});
+      return true;
+    }
+    return false;
+  }});
+  const list = page.locator('#adminJobs');
+  await expect(list).toContainText('Kullanım sınırı');
+  await expect(list).toContainText('hesabında 60 dakika kaldı');
+  await expect(list.locator('img')).toHaveCount(0);
+  await page.locator('[data-job-open]').click();
+  const dialog = page.locator('#adminJobDialog');
+  await expect(dialog).toContainText('Gereken kullanım hakkı');
+  await expect(dialog).toContainText('561 dakika');
+  await expect(dialog).toContainText('Hesaptan düşülen miktarı göstermez.');
+  await expect(dialog).toContainText('Belge uzunluğu');
+  await expect(dialog).not.toContainText('Kullanılan dakika');
+  await expect(dialog).toContainText('hesabında 60 dakika kaldı');
+  await expect(dialog.locator('img')).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  expect(unexpected).toEqual([]);
+});
+
+test('completed lesson does not display a stale error from an earlier attempt', async ({page}) => {
+  const recovered = {...lesson, error_code:'LS-AI-08', public_error:'Önceki deneme tamamlanamadı.'};
+  const unexpected = await openAdmin(page, {hash:'jobs', override:async (route, url) => {
+    if (url.pathname === '/billing/admin/jobs') {
+      await route.fulfill({headers:CORS, json:{jobs:[recovered]}});
+      return true;
+    }
+    if (url.pathname === '/billing/admin/jobs/lesson-1') {
+      await route.fulfill({headers:CORS, json:{job:recovered, result:null, result_message:'Çıktının saklama süresi dolmuş'}});
+      return true;
+    }
+    return false;
+  }});
+  await expect(page.locator('#adminJobs')).toContainText(lesson.title);
+  await expect(page.locator('#adminJobs')).not.toContainText('LS-AI-08');
+  await expect(page.locator('#adminJobs')).not.toContainText(recovered.public_error);
+  await page.locator('[data-job-open]').click();
+  await expect(page.locator('#adminJobDialog')).toContainText('saklama süresi dolmuş');
+  await expect(page.locator('#adminJobDialog')).not.toContainText(recovered.public_error);
+  expect(unexpected).toEqual([]);
+});
+
 test('lesson inspection can recover from failure and clears content on logout', async ({page}) => {
   let failed = true;
   const unexpected = await openAdmin(page, {hash:'jobs', override:async (route, url) => {

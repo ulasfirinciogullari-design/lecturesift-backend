@@ -63,6 +63,62 @@ def test_list_is_metadata_only_and_filters_owner_before_limit(state, monkeypatch
     assert 'job_dir' not in item and 'billing_user_id' not in item['options']
 
 
+def test_billing_rejection_explanation_is_visible_without_private_diagnostics(state):
+    client, store, user, path = state
+    explanation = 'Bu belge için 561 dakika kullanım hakkı gerekiyor; hesabında 60 dakika kaldı.'
+    store.update('lesson-1', status='error', worker_state='rejected', error_code='LS-BILL-10',
+        error=explanation, technical_error='secret provider response /private/source.pdf',
+        queue_error='secret queue diagnostic', recovery_error='secret recovery diagnostic')
+
+    for endpoint in ('/billing/admin/jobs', '/billing/admin/jobs/lesson-1'):
+        response = client.get(endpoint, headers=ADMIN)
+        assert response.status_code == 200
+        body = response.json()
+        item = body['jobs'][0] if 'jobs' in body else body['job']
+        assert item['error_code'] == 'LS-BILL-10'
+        assert item['public_error'] == explanation
+        assert item['result_ready'] is False
+        assert 'secret' not in response.text and '/private/' not in response.text
+        assert 'technical_error' not in item and 'error' not in item
+
+
+@pytest.mark.parametrize(('status', 'worker_state', 'expected_status'), [
+    ('queued', 'retrying', 'queued'),
+    ('working', 'processing', 'working'),
+    ('done', 'publishing', 'working'),
+    ('done', 'done', 'done'),
+])
+def test_recovered_job_hides_old_failure_without_rewriting_history(
+    state, status, worker_state, expected_status,
+):
+    client, store, user, path = state
+    store.update('lesson-1', status=status, queue_mode='celery', worker_state=worker_state,
+        error_code='LS-AI-08', error='Earlier incomplete response.',
+        public_error='Earlier public explanation.')
+
+    response = client.get('/billing/admin/jobs', headers=ADMIN)
+    item, = response.json()['jobs']
+    assert item['status'] == expected_status
+    assert item['error_code'] is None and item['public_error'] is None
+    if worker_state == 'publishing':
+        assert item['stage'] == 'worker_publish' and item['result_ready'] is False
+    persisted = store.metadata('lesson-1')
+    assert persisted['error_code'] == 'LS-AI-08'
+    assert persisted['error'] == 'Earlier incomplete response.'
+    assert persisted['public_error'] == 'Earlier public explanation.'
+
+
+@pytest.mark.parametrize('public_message', [None, 'Servis geçici olarak kullanılamıyor.'])
+def test_admin_error_explanation_never_falls_back_to_provider_diagnostics(public_message):
+    item = jobs.JobStore.admin_summary({
+        'status': 'error', 'error_code': 'LS-SYSTEM-01', 'public_error': public_message,
+        'technical_error': 'secret provider response /private/source.pdf',
+        'queue_error': 'secret queue diagnostic', 'recovery_error': 'secret recovery diagnostic',
+    })
+    assert item['public_error'] == public_message
+    assert 'secret' not in json.dumps(item) and '/private/' not in json.dumps(item)
+
+
 def test_inspection_and_manifest_download_require_admin_and_are_audited(state):
     client, store, user, path = state
     for endpoint in ('lesson-1', 'lesson-1/artifacts/notes.txt'):

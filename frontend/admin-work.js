@@ -65,6 +65,11 @@ async function refreshAdminWorkList() {
   }
 }
 
+function adminWorkStatusLabel(job) {
+  if (job.status === 'error' && ['LS-BILL-10', 'LS-GUEST-04'].includes(job.error_code)) return 'Kullanım sınırı';
+  return adminStatusLabel(job.status);
+}
+
 function adminWorkList(jobs) {
   if (adminWorkState.loading || adminWorkState.error) {
     const target = admin$('adminJobs');
@@ -79,7 +84,7 @@ function adminWorkList(jobs) {
     }
     return;
   }
-  const rows = jobs.map(job => `<tr><td data-label="Ders"><strong>${adminEscape(job.title || 'Ders analizi')}</strong><br><small>${adminEscape(job.job_id)}</small><br><small>${adminEscape(job.source_file_count ? `${job.source_file_count} kaynak dosya` : '')}</small></td><td data-label="Kullanıcı"><strong>${adminEscape(job.owner_name || '')}</strong><br><small>${adminEscape(job.owner_email || job.owner_id || 'Misafir/hesapsız')}</small></td><td data-label="Durum"><span class="status-pill ${job.status === 'done' ? 'paid' : ''}">${adminEscape(adminStatusLabel(job.status))}</span><div class="admin-progress"><span style="width:${Math.max(0, Math.min(100, Number(job.percent || 0)))}%"></span></div><small>%${Number(job.percent || 0)} · ${adminEscape(job.stage || '—')}</small></td><td data-label="Başlangıç">${adminEscape(adminRelativeDate(job.created))}</td><td data-label="İşlem"><button class="admin-action" type="button" data-job-open="${adminEscape(job.job_id)}">İncele</button>${job.error_code ? `<p>${adminEscape(job.error_code)}</p>` : ''}</td></tr>`).join('');
+  const rows = jobs.map(job => `<tr><td data-label="Ders"><strong>${adminEscape(job.title || 'Ders analizi')}</strong><br><small>${adminEscape(job.job_id)}</small><br><small>${adminEscape(job.source_file_count ? `${job.source_file_count} kaynak dosya` : '')}</small></td><td data-label="Kullanıcı"><strong>${adminEscape(job.owner_name || '')}</strong><br><small>${adminEscape(job.owner_email || job.owner_id || 'Misafir/hesapsız')}</small></td><td data-label="Durum"><span class="status-pill ${job.status === 'done' ? 'paid' : ''}">${adminEscape(adminWorkStatusLabel(job))}</span><div class="admin-progress"><span style="width:${Math.max(0, Math.min(100, Number(job.percent || 0)))}%"></span></div><small>%${Number(job.percent || 0)} · ${adminEscape(job.stage || '—')}</small>${job.status === 'error' && job.public_error ? `<p>${adminEscape(job.public_error)}</p>` : ''}</td><td data-label="Başlangıç">${adminEscape(adminRelativeDate(job.created))}</td><td data-label="İşlem"><button class="admin-action" type="button" data-job-open="${adminEscape(job.job_id)}">İncele</button>${job.status === 'error' && job.error_code ? `<p>${adminEscape(job.error_code)}</p>` : ''}</td></tr>`).join('');
   admin$('adminJobs').innerHTML = `<table class="admin-table admin-record-table"><thead><tr><th>Ders / kaynaklar</th><th>Kullanıcı</th><th>Durum ve ilerleme</th><th>Başlangıç</th><th>İşlem</th></tr></thead><tbody>${rows || '<tr><td colspan="5">Bu filtreye uygun ders bulunamadı.</td></tr>'}</tbody></table>`;
   admin$('adminJobs').querySelectorAll('[data-job-open]').forEach(button => button.addEventListener('click', () => openAdminJob(button.dataset.jobOpen)));
 }
@@ -117,13 +122,13 @@ async function openAdminJob(jobId) {
     const job = body.job;
     const result = body.result;
     admin$('adminJobDialogTitle').textContent = result?.title || job.title || 'Ders ayrıntısı';
-    root.innerHTML = `<div class="admin-detail-summary"><article><small>Kullanıcı</small><strong>${adminEscape(job.owner_email || job.owner_id || 'Misafir/hesapsız')}</strong></article><article><small>Durum</small><strong>${adminEscape(adminStatusLabel(job.status))} · %${Number(job.percent || 0)}</strong></article><article><small>Başlangıç</small><strong>${adminEscape(adminDate(job.created))}</strong></article><article><small>Kaynak</small><strong>${Number(job.source_file_count || 0)} dosya · ${(Number(job.file_size_bytes || 0) / 1048576).toLocaleString(adminLocale(), {maximumFractionDigits:1})} MB</strong></article><article><small>Kullanılan dakika</small><strong>${job.billable_minutes == null ? 'Henüz hesaplanmadı' : adminEscape(job.billable_minutes)}</strong></article><article><small>Çıktı dili</small><strong>${adminEscape(job.options?.output_language || '—')}</strong></article></div>`;
+    root.innerHTML = `<div class="admin-detail-summary"><article><small>Kullanıcı</small><strong>${adminEscape(job.owner_email || job.owner_id || 'Misafir/hesapsız')}</strong></article><article><small>Durum</small><strong>${adminEscape(adminWorkStatusLabel(job))} · %${Number(job.percent || 0)}</strong></article><article><small>Başlangıç</small><strong>${adminEscape(adminDate(job.created))}</strong></article><article><small>Kaynak</small><strong>${Number(job.source_file_count || 0)} dosya · ${(Number(job.file_size_bytes || 0) / 1048576).toLocaleString(adminLocale(), {maximumFractionDigits:1})} MB</strong></article><article><small>Gereken kullanım hakkı</small><strong>${job.billable_minutes == null ? 'Henüz hesaplanmadı' : `${adminEscape(job.billable_minutes)} dakika`}</strong><small>Hesaptan düşülen miktarı göstermez.</small></article>${job.document_words != null ? `<article><small>Belge uzunluğu</small><strong>${Number(job.document_words).toLocaleString(adminLocale())} kelime</strong></article>` : ''}<article><small>Çıktı dili</small><strong>${adminEscape(job.options?.output_language || '—')}</strong></article></div>`;
     const note = document.createElement('p');
     note.className = 'empty-copy';
     note.textContent = 'Saklanan ders çıktıları gösterilir. Kaynak dosyalar işlem sonunda temizlenebilir; silinmiş veya süresi dolmuş dersler burada bulunmaz. İçerik incelemeleri yönetici işlem kaydına eklenir.';
     root.append(note);
     if (!result) {
-      appendAdminWorkSection(root, 'İşlem bilgisi', body.result_message || job.public_error || job.error_code || 'Dersin çıktıları henüz hazır değil.', true);
+      appendAdminWorkSection(root, 'İşlem bilgisi', body.result_message || (job.status === 'error' && (job.public_error || job.error_code)) || 'Dersin çıktıları henüz hazır değil.', true);
       return;
     }
     const downloads = document.createElement('div');

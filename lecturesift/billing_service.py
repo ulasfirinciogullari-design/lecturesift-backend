@@ -1521,11 +1521,23 @@ def require_duration_entitlement(
     required_minutes = max(1, int(math.ceil(max(0.0, duration_seconds) / 60)))
     remaining = status["remaining_minutes"]
     if remaining is not None and required_minutes > int(remaining):
+        if document_mode:
+            raise BillingError(
+                f"Bu belge için {required_minutes} dakika kullanım hakkı gerekiyor; "
+                f"hesabında {int(remaining)} dakika kaldı. "
+                "Daha kısa bir belge yükle veya dakika hakkını artır."
+            )
         raise BillingError(
             f"Bu kaynak yaklaşık {required_minutes} dakika; hesabında {int(remaining)} dakika kaldı. "
             "Daha kısa bir kaynak yükle veya dakika hakkını artır."
         )
     if required_minutes > plan.max_minutes_per_job:
+        if document_mode:
+            raise BillingError(
+                f"Bu belge için {required_minutes} dakika kullanım hakkı gerekiyor; "
+                f"{plan.code} planında tek iş sınırı {plan.max_minutes_per_job} dakikadır. "
+                "Belgeyi böl veya planını yükselt."
+            )
         raise BillingError(
             f"Bu iş yaklaşık {required_minutes} dakika; {plan.code} planında tek iş sınırı "
             f"{plan.max_minutes_per_job} dakikadır. Kaynağı böl veya planını yükselt."

@@ -391,6 +391,19 @@ class JobStore:
         )
         if data.get("status") == "done" and not item["result_ready"]:
             item.update(status="working", percent=99, stage="worker_publish")
+        if item["status"] == "error":
+            # Workers store the already user-facing rejection in `error`.
+            # Provider diagnostics remain in technical_error and must never
+            # be used as a fallback in this metadata-only administrator view.
+            item["public_error"] = next((
+                message for key in ("error", "public_error")
+                if isinstance(message := data.get(key), str) and message.strip()
+            ), None)
+        else:
+            # Recovery can retain an earlier failure in persisted metadata.
+            # Keep that history intact without presenting it as a current
+            # error on queued, working, publishing or completed jobs.
+            item.update(error_code=None, public_error=None)
         return item
 
     def delete_for_user(self, user_id: str) -> dict[str, int]:
