@@ -30,10 +30,10 @@ function adminResponses(advertisingReadiness) {
   ]);
 }
 
-async function openGrowthView(page, advertisingReadiness, {readinessStatus = 200} = {}) {
+async function openGrowthView(page, advertisingReadiness, {readinessStatus = 200, override, language = 'tr'} = {}) {
   const responses = adminResponses(advertisingReadiness);
   const unexpected = [];
-  await page.addInitScript(() => localStorage.setItem('lecturesift-ui', 'tr'));
+  await page.addInitScript(value => localStorage.setItem('lecturesift-ui', value), language);
   await page.route(`${API_ORIGIN}/**`, async route => {
     const request = route.request();
     const url = new URL(request.url());
@@ -50,6 +50,7 @@ async function openGrowthView(page, advertisingReadiness, {readinessStatus = 200
       await route.fulfill({status:204, headers:CORS});
       return;
     }
+    if (override && await override(route, url)) return;
     if (key === '/billing/admin/advertising-readiness' && readinessStatus !== 200) {
       await route.fulfill({status:readinessStatus, headers:CORS, json:{detail:{message:'synthetic provider failure'}}});
       return;
@@ -261,3 +262,145 @@ test('admin growth never trusts a promotion outside a verified Google Ads connec
   await expect(growth).not.toContainText('8.000');
   expect(unexpected).toEqual([]);
 });
+
+const connectedAdSense = {
+  status:'connected', connected:true, checked_at:'2026-10-09T12:00:00Z', cached:true,
+  account:{state:'READY', pending_task_count:0},
+  site:{domain:'lecturesift.com', state:'NEEDS_ATTENTION', auto_ads_enabled:true},
+  alerts:{total:0, info:0, warning:0, severe:0},
+  policy_issues:{total:0, warned:0, ad_serving_disabled:0, ad_serving_restricted:0, ad_personalization_restricted:0},
+};
+
+test('AdSense income preserves empty, signed earnings and unavailable report states separately', async ({page}) => {
+  const unexpected = await openGrowthView(page, {
+    adsense:{publisher_configured:true, site_approval_confirmed:false, consent_setup_confirmed:false, management_api:{...connectedAdSense, reports:{
+      today:{status:'empty', currency_code:'TRY', start_date:'2026-10-09', end_date:'2026-10-09', estimated_earnings_micros:null, page_views:null, impressions:null, clicks:null},
+      last_7_days:{status:'available', currency_code:'USD', start_date:'2026-10-02', end_date:'2026-10-08', estimated_earnings_micros:-1250000, page_views:123, impressions:245, clicks:null},
+      this_month:{status:'unavailable', currency_code:null, start_date:null, end_date:null, error_code:'provider_unavailable', diagnostics:{stage:'reports_this_month', failure_type:'timeout', elapsed_ms:1500, response_body:'secret-must-not-render'}},
+    }}},
+    google_ads:{management_api:{status:'not_configured', connected:false}},
+  });
+  const empty = page.locator('[data-adsense-report="today"]');
+  await expect(empty).toContainText('Henüz veri yok');
+  await expect(empty).toContainText('2026-10-09');
+  await expect(empty).not.toContainText('₺0');
+  await expect(empty).not.toContainText('Sayfa görüntüleme: 0');
+  const available = page.locator('[data-adsense-report="last_7_days"]');
+  await expect(available.locator('header span')).toContainText(/-.*1,25/);
+  await expect(available).toContainText('USD');
+  await expect(available).toContainText('2026-10-02 – 2026-10-08');
+  await expect(available).toContainText('Sayfa görüntüleme: 123');
+  await expect(available).toContainText('Gösterim: 245');
+  await expect(available).toContainText('Tıklama: —');
+  const unavailable = page.locator('[data-adsense-report="this_month"]');
+  await expect(unavailable).toContainText('Geçici olarak okunamadı');
+  await expect(unavailable).toContainText('reports_this_month');
+  await expect(unavailable).toContainText('timeout');
+  await expect(unavailable).toContainText('1.500 ms');
+  await expect(page.locator('#adminGrowthView')).not.toContainText('secret-must-not-render');
+  await expect(page.locator('#adminAdSenseSummary')).toContainText('Site onayı için düzeltme gerekiyor');
+  await expect(page.locator('#adminGrowthStatus')).toContainText('AdSense bağlantısıBağlı');
+  expect(unexpected).toEqual([]);
+});
+
+for (const configResponse of [{name:'503', status:503, body:{detail:{message:'synthetic config failure'}}}, {name:'null', status:200, body:null}, {name:'empty object', status:200, body:{}}]) {
+  test(`unknown ${configResponse.name} configuration and counts never become off, unconfigured or zero`, async ({page}) => {
+    const unexpected = await openGrowthView(page, {
+      adsense:{management_api:{...connectedAdSense, account:{state:'READY', pending_task_count:null}, alerts:{total:null}, policy_issues:{total:null}}},
+      google_ads:{management_api:{status:'not_configured', connected:false}},
+    }, {override:async (route, url) => {
+      if (!['/ads/config', '/analytics/config'].includes(url.pathname)) return false;
+      await route.fulfill({status:configResponse.status, headers:CORS, contentType:'application/json', body:JSON.stringify(configResponse.body)});
+      return true;
+    }});
+    const growth = page.locator('#adminGrowthStatus');
+    for (const title of ['Site reklam yayını', 'Ziyaretçi ölçümü', 'Google Ads dönüşüm ölçümü']) {
+      const card = growth.locator('article').filter({has:page.getByText(title, {exact:true})});
+      await expect(card.locator('header span')).toHaveText('Geçici olarak okunamadı');
+      await expect(card).toContainText('doğrulanamadı');
+      await expect(card).not.toContainText('GA4 ölçümü kapalı.');
+      await expect(card).not.toContainText('Site tarafındaki gösterim kapalı.');
+      await expect(card).not.toContainText('tamamlanmamış');
+    }
+    await expect(growth).not.toContainText('0 uyarı');
+    await expect(growth).not.toContainText('0 bulgu');
+    await expect(growth).not.toContainText('Bekleyen görev: 0');
+    await expect(page.locator('#adminAdSenseSummary li').filter({hasText:'İzin mesajı'})).toContainText('Geçici olarak okunamadı');
+    expect(unexpected).toEqual([]);
+  });
+}
+
+test('growth refresh requests only advertising data and recovers without duplicate provider requests', async ({page}) => {
+  const requests = [];
+  let capture = false;
+  let releaseRefresh;
+  const refreshPending = new Promise(resolve => { releaseRefresh = resolve; });
+  const initial = {adsense:{management_api:{status:'unavailable', connected:false, error_code:'provider_unavailable', diagnostics:{stage:'oauth', failure_type:'network', elapsed_ms:100}}}, google_ads:{management_api:{status:'not_configured', connected:false}}};
+  const unexpected = await openGrowthView(page, initial, {override:async (route, url) => {
+    if (!capture) return false;
+    requests.push(url.pathname);
+    if (url.pathname !== '/billing/admin/advertising-readiness') return false;
+    await refreshPending;
+    await route.fulfill({headers:CORS, json:{adsense:{management_api:connectedAdSense}, google_ads:initial.google_ads}});
+    return true;
+  }});
+  await expect(page.locator('#adminRefresh')).toBeEnabled();
+  await page.locator('#adminAutoRefresh').uncheck();
+  await expect(page.locator('#adminGrowthStatus')).toContainText('Kontrol adımı: oauth');
+  await expect(page.locator('#adminGrowthStatus')).toContainText('Hata türü: network');
+  capture = true;
+  try {
+    await page.locator('#adminGrowthRefresh').click();
+    await expect(page.locator('#adminGrowthRefresh')).toBeDisabled();
+    await expect(page.locator('#adminGrowthStatus')).toHaveAttribute('aria-busy', 'true');
+    // A second caller must share the in-flight provider read.
+    await page.evaluate(() => { void loadAdminGrowth(); });
+    await expect.poll(() => requests.length).toBe(3);
+    expect([...requests].sort()).toEqual(['/ads/config', '/analytics/config', '/billing/admin/advertising-readiness']);
+    releaseRefresh();
+    await expect(page.locator('#adminGrowthRefresh')).toBeEnabled();
+    await expect(page.locator('#adminGrowthStatus')).toHaveAttribute('aria-busy', 'false');
+    await expect(page.locator('#adminGrowthStatus')).toContainText('AdSense bağlantısıBağlı');
+    await expect(page.locator('#adminGrowthStatus')).toContainText('önbellek');
+    expect(requests).toHaveLength(3);
+  } finally { releaseRefresh(); }
+  expect(unexpected).toEqual([]);
+});
+
+test('one failed Google Ads period or campaign report leaves connected account and other spend visible', async ({page}) => {
+  const unexpected = await openGrowthView(page, {
+    adsense:{management_api:{status:'not_configured', connected:false}},
+    google_ads:{id_configured:true, signup_configured:false, purchase_configured:true, management_api:{
+      status:'connected', connected:true, checked_at:'2026-10-09T12:00:00Z',
+      account:{status:'ENABLED', currency_code:'TRY', time_zone:'Europe/Istanbul'},
+      periods:{today:{cost_micros:1500000, impressions:2, clicks:1, conversions:0}, last_7_days:null, this_month:{cost_micros:5000000, impressions:25, clicks:4, conversions:1}},
+      period_errors:{last_7_days:'provider_unavailable'}, campaigns:null, campaigns_error_code:'permission_denied',
+    }},
+  });
+  const growth = page.locator('#adminGrowthStatus');
+  await expect(growth).toContainText('Google Ads bağlantısıBağlı');
+  await expect(growth).toContainText('Google Ads hesabıEtkin');
+  await expect(growth).toContainText('Bugün: ₺1,50');
+  await expect(growth).toContainText('Son 7 gün: Geçici olarak okunamadı');
+  await expect(growth).toContainText('Ay başından beri: ₺5,00');
+  await expect(growth).not.toContainText('Kampanya: 0');
+  await expect(growth).toContainText('Bağlı Google hesabının erişim izni yok.');
+  await expect(growth).toContainText('Kayıt dönüşümü: Yapılandırılmamış');
+  expect(unexpected).toEqual([]);
+});
+
+for (const language of ['en', 'ar']) {
+  test(`advertising summary and groups use the selected ${language} language`, async ({page}) => {
+    const unexpected = await openGrowthView(page, {adsense:{management_api:connectedAdSense}, google_ads:{management_api:{status:'not_configured', connected:false}}}, {language});
+    await expect(page.locator('#adminRefresh')).toBeEnabled();
+    await expect(page.locator('html')).toHaveAttribute('lang', language);
+    const labels = await page.evaluate(() => ['admin.adsenseSummaryFix', 'admin.adsenseGroup', 'admin.googleAdsGroup', 'admin.adsensePublisher', 'admin.growthRefresh'].map(key => window.LectureSiftI18n.t(key)));
+    for (const label of labels) {
+      expect(label).not.toMatch(/^admin\./);
+      await expect(page.locator('#adminGrowthView')).toContainText(label);
+    }
+    await expect(page.locator('#adminAdSenseSummary')).not.toContainText('Site onayı için düzeltme gerekiyor');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    expect(unexpected).toEqual([]);
+  });
+}

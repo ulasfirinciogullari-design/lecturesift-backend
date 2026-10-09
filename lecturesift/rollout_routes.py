@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import hmac
 import re
@@ -451,8 +452,13 @@ def ads_config() -> dict:
 
 @router.get("/billing/admin/advertising-readiness")
 def advertising_readiness(admin: dict = Depends(_admin)) -> dict:
-    adsense_management = adsense_management_readiness()
-    google_ads_management = google_ads_management_readiness()
+    # Independent cached readers must share a wall-clock window. Sequential
+    # checks can otherwise consume the entire admin request timeout together.
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="advertising-readiness") as pool:
+        adsense_future = pool.submit(adsense_management_readiness)
+        google_ads_future = pool.submit(google_ads_management_readiness)
+        adsense_management = adsense_future.result()
+        google_ads_management = google_ads_future.result()
     return {
         "ok": True,
         "adsense": {

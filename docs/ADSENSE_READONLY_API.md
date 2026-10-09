@@ -125,14 +125,49 @@ separate flags remain closed. Never paste the private fragment into a deploy
 command, issue, commit, build log or Codex conversation. The worker and
 Instagram services must not receive any of these credentials.
 
-The default cold-check budget is 10 seconds, with a five-second ceiling on
-each Google request. Successful summaries are cached for 300 seconds; failed
-checks are cached for at most 60 seconds so a provider outage cannot cause an
-admin-page request storm or hide recovery for a full success-cache interval.
-If only the Policy Center request fails or is incomplete, the verified
-account, site and alert summaries remain available, with `policy_issues=null`
-and a safe `policy_error_code`. This partial check also uses the shorter
-cache. An unread policy list is never represented as zero findings.
+Account, site, alert and income-report requests share a default ten-second
+request-start deadline and a five-second HTTP inactivity ceiling. Policy
+Center retains its separate 25-second inactivity ceiling within the existing
+35-second request-start window. These are not hard wall-clock cancellation
+guarantees. After account verification, at most six independent downstream
+requests run together; three of these are income reports. The admin route
+also starts the AdSense and Google Ads readers in parallel. Concurrent cold
+requests within one process share each reader's existing cached check.
+
+Complete summaries are cached for 300 seconds by default. Failed checks and
+summaries with an unavailable optional section use at most 60 seconds, so a
+provider outage cannot cause an admin-page request storm or hide recovery for
+a full success-cache interval. If alerts or Policy Center fail, account and
+site data remain available: the failed field is `null`, accompanied by
+`alerts_error_code` or `policy_error_code`. Unread lists never become zero
+findings. Optional `alerts_diagnostics` / `policy_diagnostics`, or top-level
+`diagnostics` on a failed connection check, contain only an allowlisted stage,
+failure type and elapsed milliseconds. No raw provider errors are exposed.
+
+The optional `reports` object contains `today`, `last_7_days` and `this_month`.
+Each fixed read-only request uses the configured site's exact `DOMAIN_NAME`
+filter, account reporting time zone, and only `ESTIMATED_EARNINGS`,
+`PAGE_VIEWS`, `IMPRESSIONS` and `CLICKS`. The returned period includes:
+
+- `status`: `available`, `empty` or `unavailable`;
+- the validated source `currency_code` and actual inclusive `start_date` /
+  `end_date` supplied by Google;
+- `estimated_earnings_micros`, `page_views`, `impressions` and `clicks`, each
+  nullable when absent; validated explicit zero is preserved;
+- a fixed `error_code` and safe `diagnostics` when the report is unavailable.
+
+A report without rows or totals is `empty`, with null metrics; it is not
+proof of zero earnings. Amounts use exact decimal conversion to safe integer
+micros. Malformed, truncated or unrepresentable data makes only that report
+unavailable. One failed period cannot hide other periods or disconnect the
+verified account. Google defines `LAST_7_DAYS` as the seven completed days
+excluding today. Estimated earnings are not a payout or finalized balance,
+and reading a report does not activate site ads.
+
+Provider references: [report generation](https://developers.google.com/adsense/management/reference/rest/v2/accounts.reports/generate),
+[report result fields](https://developers.google.com/adsense/management/reference/rest/v2/ReportResult),
+[date ranges](https://developers.google.com/adsense/management/reference/rest/v2/ReportingDateRange),
+and [metric definitions](https://developers.google.com/adsense/management/reference/rest/v2/Metric).
 
 Site approval and Policy Center enforcement are separate. A `READY` account,
 enabled Auto Ads setting or empty policy list does not establish that the

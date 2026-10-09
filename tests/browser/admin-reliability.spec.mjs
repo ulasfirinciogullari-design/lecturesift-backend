@@ -691,6 +691,9 @@ test('admin advertising layout stays readable in each viewport and theme', async
   const unexpected = await openAdmin(page, {hash:'growth', theme});
   await expect(page.locator('#adminRefresh')).toBeEnabled();
   await expect(page.locator('#adminAdSenseSummary')).toBeVisible();
+  await expect(page.locator('#adminGrowthRefresh')).toBeEnabled();
+  await expect(page.locator('#adminGrowthStatus .admin-growth-group')).toHaveCount(3);
+  await expect(page.locator('#adminAdSenseSummary li')).toHaveCount(5);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   await assertTextContrast('#adminGrowthStatus article p, #adminGrowthStatus article header span');
   if (await page.locator('.admin-sidebar-label').isVisible()) await assertTextContrast('.admin-sidebar-label');

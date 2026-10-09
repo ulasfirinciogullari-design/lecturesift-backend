@@ -78,7 +78,10 @@ body[data-page="admin"] .admin-user-form h3 {font-size: 16px;}
 body[data-page="admin"] .admin-user-form :is(p, label, input, select) {font-size: 13px; line-height: 1.55;}
 body[data-page="admin"] .admin-user-form :is(input:not([type="checkbox"]), select) {min-height: 42px;}
 body[data-page="admin"] .admin-growth-grid {grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px;}
-body[data-page="admin"] .admin-growth-grid article {padding: 18px; border-radius: 12px;}
+body[data-page="admin"] .admin-growth-grid article {padding: 18px; border-radius: 12px; min-width: 0; overflow-wrap: anywhere;}
+.admin-growth-toolbar {display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px;}
+.admin-growth-toolbar p {font-size: 12px; line-height: 1.6; color: var(--ui-muted); max-width: 650px; margin: 0;}
+.admin-growth-toolbar button {flex: 0 0 auto; min-height: 44px;}
 body[data-page="admin"] .admin-growth-grid header {align-items: start; gap: 10px; flex-wrap: wrap;}
 body[data-page="admin"] .admin-growth-grid strong {font-size: 13px;}
 body[data-page="admin"] .admin-growth-grid :is(p, a) {font-size: 12px; line-height: 1.65; color: var(--ui-muted);}
@@ -91,7 +94,7 @@ body[data-page="admin"] .admin-growth-grid .ready header span {color: var(--ui-g
 .admin-adsense-summary-head h3 {font-size: 22px; line-height: 1.35; margin: 6px 0 12px;}
 .admin-adsense-summary-head p:not(.eyebrow) {font-size: 13px; line-height: 1.7; color: var(--ui-muted); max-width: 680px;}
 .admin-adsense-summary-head > a {flex: 0 0 auto; text-decoration: none;}
-.admin-adsense-steps {display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); list-style: none; padding: 0; margin: 22px 0 0; gap: 12px;}
+.admin-adsense-steps {display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); list-style: none; padding: 0; margin: 22px 0 0; gap: 12px;}
 .admin-adsense-steps li {display: flex; gap: 10px; align-items: start; min-width: 0; padding: 14px 10px; border: 1px solid var(--ui-line); background: var(--ui-surface-raised); border-radius: 10px;}
 .admin-adsense-steps li > span {display: grid; place-items: center; flex: 0 0 25px; height: 25px; border-radius: 50%; background: var(--ui-ochre-wash); color: var(--ui-ochre); font-size: 12px; font-weight: 700;}
 .admin-adsense-steps li.ready > span {color: var(--ui-green); background: var(--ui-green-wash);}
@@ -139,6 +142,7 @@ body[data-page="admin"] .admin-growth-grid .ready header span {color: var(--ui-g
   body[data-page="admin"] .admin-table td[colspan] {display: block;}
   body[data-page="admin"] .admin-detail-dialog {width: calc(100% - 16px); max-height: 94dvh;}
   .admin-adsense-summary-head {display: grid; gap: 14px;}
+  .admin-growth-toolbar {align-items: stretch; flex-direction: column;}
   .admin-adsense-summary-head > a {justify-self: start;}
   .admin-data-status {align-items: stretch; flex-direction: column; gap: 12px;}
 }

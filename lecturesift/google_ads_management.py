@@ -215,7 +215,9 @@ def _empty_summary(
         "cached": False,
         "account": None,
         "periods": None,
+        "period_errors": {},
         "campaigns": None,
+        "campaigns_error_code": None,
         "incentive": _incentive_empty(
             "unavailable" if error_code else "not_configured", error_code
         ),
@@ -668,6 +670,23 @@ def _incentive_failure(error: _GoogleAdsError) -> dict[str, Any]:
     return _incentive_empty("unavailable", code)
 
 
+def _report_error_code(error: Exception) -> str:
+    # Optional report failures must not hide a verified account or another
+    # successful period. Only fixed codes may reach the admin response.
+    allowed = {
+        "authentication_failed",
+        "scope_mismatch",
+        "permission_denied",
+        "account_not_found",
+        "rate_limited",
+        "provider_unavailable",
+        "invalid_response",
+    }
+    if isinstance(error, _GoogleAdsError) and error.code in allowed:
+        return error.code
+    return "provider_unavailable"
+
+
 def _live_summary(settings: _Settings) -> dict[str, Any]:
     if not settings.configured:
         raise _GoogleAdsError("configuration_invalid")
@@ -712,11 +731,20 @@ def _live_summary(settings: _Settings) -> dict[str, Any]:
                 incentive_request=True,
             )
             account = _account_summary(account_future.result(), settings)
-            periods = {
-                name: _metric_summary(future.result(), settings)
-                for name, future in metric_futures.items()
-            }
-            campaigns = _campaign_summary(campaigns_future.result(), settings)
+            periods: dict[str, Any] = {}
+            period_errors: dict[str, str] = {}
+            for name, future in metric_futures.items():
+                try:
+                    periods[name] = _metric_summary(future.result(), settings)
+                except Exception as exc:
+                    periods[name] = None
+                    period_errors[name] = _report_error_code(exc)
+            campaigns_error_code = None
+            try:
+                campaigns = _campaign_summary(campaigns_future.result(), settings)
+            except Exception as exc:
+                campaigns = None
+                campaigns_error_code = _report_error_code(exc)
             try:
                 incentive = _incentive_summary(incentive_future.result(), settings)
             except _GoogleAdsError as exc:
@@ -731,7 +759,9 @@ def _live_summary(settings: _Settings) -> dict[str, Any]:
         "cached": False,
         "account": account,
         "periods": periods,
+        "period_errors": period_errors,
         "campaigns": campaigns,
+        "campaigns_error_code": campaigns_error_code,
         "incentive": incentive,
         "error_code": None,
     }
@@ -790,9 +820,12 @@ def google_ads_management_readiness() -> dict[str, Any]:
 
     with _CACHE_CONDITION:
         try:
-            cache_seconds = settings.cache_seconds if result["connected"] else min(
-                60, settings.cache_seconds
+            complete = (
+                result["connected"]
+                and not result.get("period_errors")
+                and not result.get("campaigns_error_code")
             )
+            cache_seconds = settings.cache_seconds if complete else min(60, settings.cache_seconds)
             _CACHE = (fingerprint, time.monotonic() + cache_seconds, deepcopy(result))
         finally:
             _CACHE_IN_FLIGHT = None

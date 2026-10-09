@@ -152,9 +152,20 @@ returns only a reduced schema:
 
 Customer IDs, account names, campaign names/IDs, resource names, coupon codes,
 provider request IDs and raw error messages are omitted. Successful checks are
-cached for 300 seconds by default; failures for at most 60 seconds. A cold
+cached for 300 seconds by default; failed connections and unavailable
+performance/campaign sections for at most 60 seconds. A cold
 check uses a shared ten-second request-start deadline and a five-second HTTP
-inactivity timeout. Concurrent cold admin requests share one provider check.
+inactivity timeout, not a hard wall-clock cancellation guarantee. Concurrent
+cold admin requests within one process share one provider check. The admin
+route starts this reader and the independent AdSense reader in parallel.
+
+Account verification remains required. After it succeeds, a failed period
+is represented as `periods.<period>=null` with an allowlisted error code in
+`period_errors.<period>`; other periods remain available. A failed or
+incomplete campaign query produces `campaigns=null` and a fixed
+`campaigns_error_code`. These optional failures do not disconnect the
+verified account or invent zero cost, clicks, conversions or campaigns.
+Raw provider exceptions and response bodies remain excluded.
 
 Google marks its
 [Incentives feature as allowlist-only](https://developers.google.com/google-ads/api/docs/billing/incentives).

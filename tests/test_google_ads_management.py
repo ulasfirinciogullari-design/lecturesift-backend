@@ -228,7 +228,9 @@ def test_status_uses_signed_readonly_jwt_fixed_queries_and_safe_summary():
                 "conversions": 1.5,
             },
         },
+        "period_errors": {},
         "campaigns": {"total": 4, "enabled": 1, "paused": 1, "removed": 1, "other": 1},
+        "campaigns_error_code": None,
         "incentive": {
             "status": "available",
             "count": 2,
@@ -663,9 +665,75 @@ def test_partial_paginated_reports_are_never_presented_as_complete():
 
     result = google_ads.google_ads_management_readiness()
 
-    assert result["connected"] is False
-    assert result["error_code"] == "invalid_response"
+    assert result["connected"] is True
+    assert result["error_code"] is None
+    assert result["campaigns"] is None
+    assert result["campaigns_error_code"] == "invalid_response"
+    assert result["periods"]["today"]["cost_micros"] == 1_000_000
     assert "private-page-token" not in json.dumps(result)
+
+
+@pytest.mark.parametrize("period", list(google_ads._PERIODS))
+@pytest.mark.parametrize("status,expected", [(403, "permission_denied"), (429, "rate_limited"), (503, "provider_unavailable")])
+def test_one_failed_period_keeps_other_periods_and_verified_account(period, status, expected):
+    query = google_ads._METRICS_QUERY.format(period=google_ads._PERIODS[period])
+    FakeGoogleAdsClient.query_statuses[query] = status
+    FakeGoogleAdsClient.query_payloads[query] = {"error": {"message": "private-report-error"}}
+
+    result = google_ads.google_ads_management_readiness()
+
+    assert result["connected"] is True
+    assert result["account"]["currency_code"] == "TRY"
+    assert result["periods"][period] is None
+    assert result["period_errors"] == {period: expected}
+    assert all(result["periods"][name] is not None for name in google_ads._PERIODS if name != period)
+    assert result["campaigns"]["total"] == 4
+    assert result["campaigns_error_code"] is None
+    assert result["incentive"]["status"] == "available"
+    assert result["error_code"] is None
+    assert "private-report-error" not in json.dumps(result)
+
+
+def test_mismatched_optional_report_does_not_leak_or_become_zero():
+    query = google_ads._METRICS_QUERY.format(period="TODAY")
+    FakeGoogleAdsClient.query_payloads[query] = {
+        "results": [{"customer": {"id": "9999999999"}, "metrics": {"costMicros": "7000000"}}]
+    }
+    FakeGoogleAdsClient.query_statuses[google_ads._CAMPAIGNS_QUERY] = 503
+
+    result = google_ads.google_ads_management_readiness()
+
+    assert result["connected"] is True
+    assert result["periods"]["today"] is None
+    assert result["period_errors"] == {"today": "account_not_found"}
+    assert result["campaigns"] is None
+    assert result["campaigns_error_code"] == "provider_unavailable"
+    assert result["periods"]["last_7_days"]["clicks"] == 20
+    assert "9999999999" not in json.dumps(result)
+
+
+def test_unknown_optional_failure_is_opaque_and_retries_after_short_cache(monkeypatch, caplog):
+    clock = [100.0]
+    monkeypatch.setattr(google_ads.time, "monotonic", lambda: clock[0])
+    original = google_ads._search
+    failed_query = google_ads._METRICS_QUERY.format(period="THIS_MONTH")
+
+    def intermittent(*args, **kwargs):
+        if args[3] == failed_query and clock[0] < 160:
+            raise RuntimeError("private-report-token")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(google_ads, "_search", intermittent)
+    first = google_ads.google_ads_management_readiness()
+    assert first["connected"] is True
+    assert first["period_errors"] == {"this_month": "provider_unavailable"}
+    assert google_ads.google_ads_management_readiness()["cached"] is True
+    clock[0] = 161
+    recovered = google_ads.google_ads_management_readiness()
+    assert recovered["cached"] is False
+    assert recovered["period_errors"] == {}
+    assert recovered["periods"]["this_month"]["cost_micros"] == 3_000_000
+    assert "private-report-token" not in json.dumps(first) + caplog.text
 
 
 def test_concurrent_cold_checks_share_one_provider_call(monkeypatch):
