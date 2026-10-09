@@ -1,0 +1,208 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-09T13:38:38Z",
+  "observationStartedAtUtc": "2026-10-09T13:35:07Z",
+  "localDate": "2026-10-09",
+  "localTimeZone": "Europe/Istanbul",
+  "siteUrl": "sc-domain:lecturesift.com",
+  "indexing": {
+    "source": "GSC Wizard check_tracked_url_now",
+    "newIndexingRequests": 0,
+    "refreshedUrls": {
+      "siteUrl": "sc-domain:lecturesift.com",
+      "count": 4,
+      "results": [
+        {
+          "url": "https://lecturesift.com/pt/quiz-flashcards",
+          "currentStatus": "not_indexed",
+          "previousStatus": "not_indexed",
+          "verdict": "NEUTRAL",
+          "coverageState": "Alternate page with proper canonical tag",
+          "lastCrawlTime": "2026-08-30T06:07:56Z",
+          "warningType": null
+        },
+        {
+          "url": "https://lecturesift.com/en/lecture-video-summary",
+          "currentStatus": "not_indexed",
+          "previousStatus": "not_indexed",
+          "verdict": "NEUTRAL",
+          "coverageState": "URL is unknown to Google",
+          "lastCrawlTime": null,
+          "warningType": null
+        },
+        {
+          "url": "https://lecturesift.com/pdf-note-check",
+          "currentStatus": "not_indexed",
+          "previousStatus": "not_indexed",
+          "verdict": "NEUTRAL",
+          "coverageState": "URL is unknown to Google",
+          "lastCrawlTime": null,
+          "warningType": null
+        },
+        {
+          "url": "https://lecturesift.com/en/pdf-note-check",
+          "currentStatus": "not_indexed",
+          "previousStatus": "not_indexed",
+          "verdict": "NEUTRAL",
+          "coverageState": "URL is unknown to Google",
+          "lastCrawlTime": null,
+          "warningType": null
+        }
+      ]
+    },
+    "trackerAfterRefresh": {
+      "total": 31,
+      "indexed": 3,
+      "notIndexed": 28,
+      "pending": 0,
+      "errors": 0,
+      "warnings": 0,
+      "lastCheckAt": "2026-10-09T13:36:50.666+00:00"
+    },
+    "note": "Four pending priority URLs refreshed once. The three indexed URLs and other 24 cohort entries were not reinspected in this follow-up. No new canonical values were read."
+  },
+  "automaticTracking": {
+    "configuredActive": true,
+    "emailDigestEnabled": true,
+    "lastCheckBeforeManualRefresh": "2026-10-09T00:49:04.492Z",
+    "observedAtUtc": "2026-10-09T13:35:07Z",
+    "automaticExecutionVerified": false,
+    "note": "Before manual refresh the provider's most recent check remained the earlier manual check. Configuration alone is not evidence of successful background execution or email delivery; the cause was not established."
+  },
+  "sitemap": {
+    "path": "https://lecturesift.com/sitemap.xml",
+    "lastSubmitted": "2026-10-08T21:48:32.384Z",
+    "isPending": false,
+    "isSitemapsIndex": false,
+    "type": "sitemap",
+    "lastDownloaded": "2026-10-08T22:17:48.588Z",
+    "warnings": "0",
+    "errors": "0",
+    "contents": [
+      {
+        "type": "web",
+        "submitted": "183",
+        "indexed": "0"
+      }
+    ]
+  },
+  "sitemapIndexedFieldDeprecated": true,
+  "ga4": {
+    "source": "GSC Wizard query_ga4_custom_dimensions, GA4 Data API",
+    "query": {
+      "dimension": "customEvent:target_path",
+      "secondaryDimension": "customEvent:link_placement",
+      "filters": {
+        "event": ["content_action"],
+        "hostName": ["lecturesift.com"]
+      },
+      "startDate": "2026-10-09",
+      "endDate": "2026-10-09",
+      "limit": 25
+    },
+    "definitions": [
+      {
+        "apiName": "customEvent:link_placement",
+        "parameterName": "link_placement",
+        "displayName": "Content link placement",
+        "description": "Location of content_action links: header, footer or content. Fixed labels only.",
+        "scope": "EVENT",
+        "kind": "dimension",
+        "queryable": true
+      },
+      {
+        "apiName": "customEvent:target_path",
+        "parameterName": "target_path",
+        "displayName": "Content target path",
+        "description": "Allowlisted destination path for content_action; excludes query strings, fragments and user filenames.",
+        "scope": "EVENT",
+        "kind": "dimension",
+        "queryable": true
+      }
+    ],
+    "report": {
+      "siteUrl": "sc-domain:lecturesift.com",
+      "propertyId": "properties/552003870",
+      "siteScope": null,
+      "dataSource": "ga4-api",
+      "range": {
+        "startDate": "2026-10-09",
+        "endDate": "2026-10-09"
+      },
+      "comparisonRange": null,
+      "hasComparison": false,
+      "availableDimensions": [
+        "customEvent:link_placement",
+        "customEvent:target_path"
+      ],
+      "availableMetrics": [],
+      "timeZone": "Europe/Istanbul",
+      "dimension": "customEvent:target_path",
+      "secondaryDimension": "customEvent:link_placement",
+      "metrics": [
+        "eventCount",
+        "sessions",
+        "activeUsers",
+        "keyEvents"
+      ],
+      "summary": {
+        "eventCount": 2,
+        "sessions": 2,
+        "activeUsers": 2,
+        "totalUsers": 2,
+        "keyEvents": 0
+      },
+      "prevSummary": null,
+      "rowCount": 2,
+      "totalRows": 2,
+      "rows": [
+        {
+          "key": "",
+          "eventCount": 1,
+          "prevEventCount": 0,
+          "sessions": 1,
+          "prevSessions": 0,
+          "activeUsers": 1,
+          "prevActiveUsers": 0,
+          "keyEvents": 0,
+          "prevKeyEvents": 0,
+          "secondary": ""
+        },
+        {
+          "key": "/plans",
+          "eventCount": 1,
+          "prevEventCount": 0,
+          "sessions": 1,
+          "prevSessions": 0,
+          "activeUsers": 1,
+          "prevActiveUsers": 0,
+          "keyEvents": 0,
+          "prevKeyEvents": 0,
+          "secondary": "content"
+        }
+      ],
+      "truncated": false
+    },
+    "interpretation": [
+      "One content_action row contains target_path=/plans and link_placement=content, verifying populated custom dimensions.",
+      "One event row has both dimension values empty. Its cause is not established; no historical backfill or implementation defect is inferred.",
+      "This is the current, incomplete day in Europe/Istanbul; counts can change. Aggregate users are not classified as external customers.",
+      "These are content interaction events, not completed payments, conversions or sales."
+    ]
+  },
+  "sourceReview": {
+    "comparedTo": "aedd0ef",
+    "scope": "PR128 changes to public HTML, localization/build scripts, navigation and content_action measurement",
+    "newConfirmedSeoDefects": [],
+    "method": "Independent bounded read-only source diff review"
+  },
+  "boundaries": {
+    "localTestsOrBuildsRun": false,
+    "syntheticEventsSent": false,
+    "customerTransactionsRead": false,
+    "browserOpened": false,
+    "sourceCodeChanged": false,
+    "ga4SettingsChanged": false,
+    "sitemapResubmitted": false
+  }
+}
