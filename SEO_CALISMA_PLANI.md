@@ -5,6 +5,86 @@ takip edilir. Başlangıç varsayımı Türkiye'deki üniversite öğrencileri v
 Türkçe aramalardır. İlk rekabet geliştirmesi üç ana ürün sayfasının Türkçe
 ve İngilizce sürümlerine uygulanır; diğer diller mevcut içeriklerini korur.
 
+## 9 Ekim 2026 kalan işler ve güncel durum
+
+Öncelikli dört indeks dışı adresin canlı yanıtı ve keşif yolları yeniden
+incelendi: `/en/quiz-flashcards`, `/en/lecture-video-summary`,
+`/pdf-note-check`, `/en/pdf-note-check`. Dördü de 200, tek self-canonical
+ve noindex olmadan yanıt veriyor; 183 adreslik site haritasında ve ilgili
+dilde dahili bağlantılarda bulunuyor. Yeni bir kaynak kusuru saptanmadı.
+[Canlı yanıtlar ve bağlantı kanıtı](docs/seo/priority-discovery-2026-10-09.json).
+
+Google'ın kendi ekranında İngilizce quiz ve video sayfaları **keşfedilmiş,
+henüz indekslenmemiş** görünüyor. Son tarama ve iki canonical alanı `Yok`;
+bu değerler canlı HTML ile doldurulmadı. İki URL için birer indeksleme
+isteği kabul edildi. Önceki üç canonical hedefiyle birlikte **toplam beş
+kabul edilmiş istek** var; Google'ın yeniden taraması veya indekslemesi
+tamamlanmış sayılmıyor.
+
+Türkçe PDF not kontrol isteğinde Google reCAPTCHA gösterdi. İşlem burada
+durduruldu; İngilizce PDF rehberi için yeni istek başlatılmadı. Türkçe
+sayfanın son ekranı canlı testte erişilebilir/indekslenebilir olduğunu
+gösteriyor; bu ekran indekslenme, son Google taraması veya Google'ın seçtiği
+canonical kanıtı değildir. Tarayıcı aracının bunları indeks sonucu gibi
+yorumlayan özeti kabul edilmedi. [Alan bazında kayıt ve düzeltme](docs/seo/priority-indexing-2026-10-09.json).
+CAPTCHA aşılmadı; hesap değiştirme veya tekrar gönderim yapılmadı.
+
+**Gezinme yolu doğrulaması kapatıldı:** 03:01 TSİ'de üç canlı HTML okuması
+TR kütüphane, EN Cornell rehberi ve AR belge ürününde doğru dilde ana
+sayfa/ara basamak zincirlerini ve `WebPage.breadcrumb` bağlantılarını
+doğruladı. Kaynak düzeltmesi ve önceki uzak CI kanıtına bu canlı sonuçlar
+eklendi. [Tam JSON-LD zincirleri](docs/seo/breadcrumb-live-verification-2026-10-09.json).
+Google zengin sonuç uygunluğu bu okumayla doğrulanmış sayılmaz.
+
+**Ölçüm kısmen doğrulandı:** 8 Eylül–5 Ekim arasındaki 28 günde üretim
+alan adında 5 `content_action` olayı ve 2 kullanıcı görüldü; tamamı
+`open_workspace` (`/` üzerinden 4, `/en/` üzerinden 1). Diğer dört tür
+(`open_registration`, `view_plans`, `read_related`, `download_resource`)
+henüz gözlenmedi; yoklukları arıza kanıtı değildir. GSC 3 tıklama/133
+gösterim, GA4 `google / organic` 67 oturum/4 aktif kullanıcı bildirdi.
+Metrik ve rapor saat dilimi farkları nedeniyle bu sayılar eşdeğer değildir.
+İç kullanım, atıf ve gerçek işlem karşılaştırması açık kalır. [Toplu ölçüm
+kaydı ve sınırları](docs/seo/measurement-review-2026-10-09.json).
+Canlı veriye yapay olay gönderilmedi; hesap ayarları değiştirilmedi.
+
+**Mobil hız başlangıcı alındı:** PageSpeed API'sinin 429 kotası ve GSC
+Wizard'ın eksik CrUX yapılandırması ayrı kaydedildi. Google'ın resmî web
+formu üzerinden, sunucuda çalışan Lighthouse 13.5/Moto G Power/Slow 4G
+raporları alındı:
+
+| Sayfa | Performans | FCP | LCP | TBT | CLS |
+| --- | --- | --- | --- | --- | --- |
+| [Ana sayfa raporu](https://pagespeed.web.dev/analysis/https-lecturesift-com/bvz6reajb5?form_factor=mobile) | 71 | 1,6 sn | 8,5 sn | 110 ms | 0 |
+| [PDF ürün raporu](https://pagespeed.web.dev/analysis/https-lecturesift-com-document-summary/hesyg6ouky?form_factor=mobile) | 98 | 1,5 sn | 2,3 sn | 50 ms | 0 |
+
+İki raporda erişilebilirlik, iyi uygulamalar ve SEO 100. Bunlar tekil
+laboratuvar sonuçları; saha Core Web Vitals sonucu değil. CrUX iki URL
+için veri sunmadı; ana sayfa raporu origin düzeyinde de veri olmadığını
+gösterdi. [Ölçüm kaydı ve sınırları](docs/seo/mobile-performance-2026-10-09.json).
+
+Ana sayfanın raporu 1.730.450 baytlık çalışma masası PNG'sini işaret etti.
+Ekranda 400–480 px gösterilen bu görsel için responsive WebP düzeltmesi
+[PR121](https://github.com/ulasfirinciogullari-design/lecturesift-backend/pull/121)
+ile aynı çalışma sırasında ana dala alındı. Mevcut Netlify Image CDN
+400/480/800/960 px kaynakları sunuyor; PNG yedeği, oran, lazy yükleme ve
+dekoratif boş alt metni korunuyor. Bu uygulama korunur; aynı görsel için
+ikinci bir teslim yöntemi eklenmez. PR121'in kaynak commit'i `ece07d8`
+[uzak CI'da](https://github.com/ulasfirinciogullari-design/lecturesift-backend/actions/runs/37862556517)
+1.530 uygulama ve 239 tarayıcı kontrolünü geçti (3/5 atlandı).
+03:12 TSİ'de TR/EN ana sayfanın canlı HTML'inde yeni WebP kaynakları ve
+tek `assistant.css?v=4` bağlantısı görüldü. Gerçek 960 px/q80 görsel
+uç noktası 200 `image/webp`, 29.104 bayt döndürdü; kaynak PNG'den yaklaşık
+%98,3 küçük. Böylece görsel teslim düzeltmesinin canlı olduğu doğrulandı.
+Üstteki hız raporları bu değişikliğin öncesini ölçer; yeni hız puanı veya
+sıralama artışı iddia edilmez. PR121'in ayrı laboratuvar raporları farklı
+puanlar kaydetti; tekil ölçümlerdeki fark bir iyileşme oranı olarak
+kullanılmaz. Tema betiği ilk boyamadaki tema seçimini yaptığı için rastgele
+ertelenmedi; kalan CSS/JS önerileri bu değişiklikle çözülmüş sayılmaz.
+
+31 URL'lik GSC Wizard takibi etkin. Saklanan son toplu kontrol
+9 Ekim 01:46 TSİ'den; bu eski sayılar yeni isteklerin sonucu gibi
+sunulmaz. Yerel test veya derleme çalıştırılmadı.
+
 ## 9 Ekim 2026 Google'ın seçtiği canonical hedefleri doğrulandı
 
 Kullanıcının TinyFish profilinde Google oturumunu kaydetmesinin ardından,
@@ -681,16 +761,16 @@ aşamalardır. Yerel derleme veya test çalıştırılmaz. Bu dosyadaki canlı
 denetim, değişiklik öncesindeki durumu kaydeder; düzeltmenin yayına
 alındığını veya Google tarafından işlendiğini iddia etmez.
 
-## Öncelik sırası
+## Öncelik sırası — 9 Ekim 2026 değerlendirmesi
 
-| Öncelik | İş | Tamamlanma ölçütü |
+| Öncelik | İş | Durum ve kalan ölçüt |
 | --- | --- | --- |
-| P0 | Ölçümün güvenilirliğini doğrula | GA4 iç kullanım/atıf/etiket kapsamı açıklanır; purchase olayı ödeme kaydıyla özel olarak karşılaştırılır; kişisel veriler rapora eklenmez. |
-| P0 | Gezinme yolu düzeltmesini doğrula | Mevcut GitHub Actions SEO ve tarayıcı kontrolleri geçer; yayın sonrasında TR/EN ve bir başka dilde kamuya açık HTML tekrar okunur. |
-| P1 | Ana ürün sayfalarını sorgu niyetine göre geliştir | Aşağıdaki üç sayfada gerçek örnek, anlaşılır kullanım adımları, sınırlar ve ilgili rehber bağlantısı bulunur; mevcut içerik önce gözden geçirilir. |
-| P1 | Google'ın önemli sayfaları nasıl gördüğünü denetle | Ana sayfa ve üç ürün sayfası için güncel URL Inspection: indeks durumu, Google'ın seçtiği ana adres ve son tarama tarihi kaydedilir. |
-| P1 | Mobil hız başlangıcını ölç | Ana sayfa ve bir ürün sayfasında uzak PageSpeed raporu alınır; saha verisi yoksa bu açıkça belirtilir. Yerel tarayıcı matrisi çalıştırılmaz. |
-| P2 | İçerik kümelerini genişlet | Her yeni rehber özgün örnek, kontrol edilebilir cevaplar ve ilgili ürün/rehber bağlantıları içerir; yalnız gerçekten yazılmış dil sürümleri yayınlanır. |
+| P0 | Ölçümün güvenilirliğini doğrula | Kısmen doğrulandı: üretimde `content_action/open_workspace` alınıyor. Diğer dört tür, iç kullanım/atıf ve gerçek ödeme karşılaştırması açık; yapay olay veya müşteri kaydı kullanılmadı. |
+| P0 | Gezinme yolu düzeltmesini doğrula | Tamamlandı: kaynak/önceki uzak CI ve 9 Ekim TR/EN/AR canlı JSON-LD zincirleri doğrulandı. |
+| P1 | İlk üç ürün sayfasını geliştir | İlk paket tamamlandı: altı TR/EN sürümü PR107 ile yayımlandı; örnekler, adımlar, sınırlar ve ilgili rehberler canlı doğrulandı. Yeni gelişim ölçülmüş sorgulara göre seçilecek. |
+| P1 | Google URL Denetimi ve canonical | 183 URL'nin indeks durumu incelendi; üç alternatif sayfanın eski `.html` canonical seçimi native Google ekranında doğrulandı. Beş istek kabul edildi; iki PDF rehberinde CAPTCHA nedeniyle istek işi açık. Yeniden tarama/canonical değişimi Google'dan bekleniyor; tüm 183 adresin canonical alanı alınmış değildir. |
+| P1 | Mobil hız başlangıcını ölç | Tamamlandı: bu oturumun Google uzak mobil raporunda ana sayfa 71, PDF ürünü 98. Saha verisi yok. PR121'in responsive görsel düzeltmesi uzak CI'da ve 03:12 TSİ canlı TR/EN HTML/görsel yanıtında doğrulandı; yayın sonrası puan henüz ölçülmedi. |
+| P2 | İlk rehber kümesini genişlet | İlk paket tamamlandı: Cornell, aktif hatırlama ve PDF not kontrol rehberleri/ürün bağlantıları yayımlandı. Yeni konu seçimi sorgu verisiyle yapılacak; yalnız gerçekten yazılmış dil sürümleri yayımlanacak. |
 
 ### İlk içerik ve sorgu eşlemesi
 
@@ -719,8 +799,11 @@ Gizlenen sorguların payı bilinmiyorsa marka dışı oran kesinmiş gibi yazıl
 Başlıca ölçümler: ürün sayfalarının gösterimleri ve tıklamaları, sorgu
 kapsamı, önemli sayfaların indekslenmesi ve ölçümü doğrulanmış organik
 kayıt/ürün kullanımı. Düşük hacimde birkaç gösterim veya tıklamayla kesin
-başarı/başarısızlık hükmü verilmez. Sonraki veri inceleme hedefi 7 Ekim 2026;
-bu bir çalışma planıdır, zamanlanmış otomasyon oluşturulmamıştır.
+başarı/başarısızlık hükmü verilmez. 7 Ekim hedefinin veri incelemesi
+9 Ekim'de, tamamlanmış 8 Eylül–5 Ekim penceresiyle yapıldı. Sonraki tam
+28 günlük karşılaştırma penceresi 6 Ekim–2 Kasım; veri kesinleştikten sonra
+okunmalı. İndeks durumu mevcut 31 URL'lik GSC Wizard takibinden izlenir;
+bu belge yeni bir zamanlanmış Codex otomasyonu oluşturmaz.
 
 ## Başvuru kaynakları
 

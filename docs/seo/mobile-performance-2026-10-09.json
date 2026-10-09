@@ -1,0 +1,216 @@
+{
+  "schemaVersion": 1,
+  "localObservationDate": "2026-10-09",
+  "source": "Official Google PageSpeed Insights public webform via TinyFish; remotely executed Lighthouse lab reports, not local tests.",
+  "initialAccessAttempts": {
+    "gscWizardCrux": {
+      "notConfigured": true,
+      "reason": "No provider CrUX API key",
+      "fieldAvailabilityAtThatStage": "unknown"
+    },
+    "officialPsiApi": {
+      "requestedAtUtc": "2026-10-08T23:54:26.849375Z",
+      "targetUrl": "https://lecturesift.com/",
+      "strategy": "mobile",
+      "httpStatus": 429,
+      "status": "RESOURCE_EXHAUSTED",
+      "reason": "rateLimitExceeded",
+      "retried": false,
+      "performanceMeasured": false
+    }
+  },
+  "reports": [
+    {
+      "targetUrl": "https://lecturesift.com/",
+      "runId": "bd966f53-71a4-4a2c-950f-0fd4e646d24a",
+      "reportUrl": "https://pagespeed.web.dev/analysis/https-lecturesift-com/bvz6reajb5?form_factor=mobile",
+      "reportTimeRaw": "Oct 8, 2026, 8:05:05 PM EDT",
+      "reportTimeUtc": "2026-10-09T00:05:05Z",
+      "strategy": "mobile",
+      "lighthouseVersion": "13.5.0",
+      "device": "Emulated Moto G Power",
+      "network": "Slow 4G throttling",
+      "scores": {
+        "performance": 71,
+        "accessibility": 100,
+        "bestPractices": 100,
+        "seo": 100
+      },
+      "labMetrics": {
+        "fcpSeconds": 1.6,
+        "lcpSeconds": 8.5,
+        "speedIndexSeconds": 4.8,
+        "tbtMilliseconds": 110,
+        "cls": 0
+      },
+      "crux": {
+        "pageData": "No Data",
+        "originData": "No Data"
+      },
+      "opportunities": [
+        {
+          "name": "Render-blocking requests",
+          "estimatedSavingsMilliseconds": 1500,
+          "resources": [
+            "/theme.css?v=17",
+            "/theme.js?v=11",
+            "/styles.css?v=12"
+          ]
+        },
+        {
+          "name": "Improve image delivery",
+          "estimatedSavingsKiB": 1643,
+          "resources": [
+            "/assets/study/study-desk-v1.png"
+          ]
+        },
+        {
+          "name": "Use efficient cache lifetimes",
+          "estimatedSavingsKiB": 714,
+          "resources": [
+            "/assets/study/study-desk-v1.png",
+            "/assets/i18n/tr-44cdaf6788d2.js",
+            "https://pagead2.googlesyndication.com/pagead/js/rum.js?fcd=true"
+          ]
+        }
+      ],
+      "otherDiagnostics": [
+        {
+          "name": "Reduce unused JavaScript",
+          "estimatedSavingsKiB": 35
+        },
+        {
+          "name": "Minify CSS",
+          "estimatedSavingsKiB": 2
+        },
+        {
+          "name": "Avoid long main-thread tasks",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "targetUrl": "https://lecturesift.com/document-summary",
+      "runId": "41d619f7-7f20-4c8d-90d2-de535351c854",
+      "reportUrl": "https://pagespeed.web.dev/analysis/https-lecturesift-com-document-summary/hesyg6ouky?form_factor=mobile",
+      "reportTimeRaw": "Oct 8, 2026, 8:06:38 PM EDT",
+      "reportTimeUtc": "2026-10-09T00:06:38Z",
+      "strategy": "mobile",
+      "lighthouseVersion": "13.5.0",
+      "device": "Emulated Moto G Power",
+      "network": "Slow 4G throttling",
+      "scores": {
+        "performance": 98,
+        "accessibility": 100,
+        "bestPractices": 100,
+        "seo": 100
+      },
+      "labMetrics": {
+        "fcpSeconds": 1.5,
+        "lcpSeconds": 2.3,
+        "speedIndexSeconds": 2.6,
+        "tbtMilliseconds": 50,
+        "cls": 0
+      },
+      "crux": {
+        "pageData": "No Data",
+        "originData": null,
+        "note": "Product run did not separately report origin-level data; homepage run reports no origin data."
+      },
+      "opportunities": [
+        {
+          "name": "Render-blocking requests",
+          "estimatedSavingsMilliseconds": 1280,
+          "resources": [
+            "/styles.css?v=11",
+            "/landing-pages.css?v=1",
+            "/detail.css",
+            "/product-layout.css?v=4",
+            "/theme.css?v=17",
+            "/rollout.css?v=9",
+            "/theme.js?v=11"
+          ]
+        },
+        {
+          "name": "Reduce unused JavaScript",
+          "estimatedSavingsKiB": 35,
+          "resourceDescription": "Ad-related JavaScript; complete resource URL was not returned."
+        },
+        {
+          "name": "Use efficient cache lifetimes",
+          "estimatedSavingsKiB": 14,
+          "resources": [
+            "/assets/i18n/tr-44cdaf6788d2.js",
+            "https://pagead2.googlesyndication.com/pagead/osd.js?fcd=true"
+          ]
+        }
+      ]
+    }
+  ],
+  "interpretation": [
+    "These are single controlled mobile lab measurements, not real-user Core Web Vitals or guaranteed repeatable scores.",
+    "No field INP was available. TBT is a lab metric and is not INP.",
+    "Opportunity estimates overlap and must not be summed or presented as realized savings.",
+    "The image delivery finding justifies responsive WebP delivery. It does not prove the image accounts for all LCP delay.",
+    "Render-blocking theme initialization is intentional to apply stored/system theme before first paint; no blanket defer change was made."
+  ],
+  "documentation": [
+    "https://developer.chrome.com/docs/crux/guides/pagespeed-insights",
+    "https://docs.netlify.com/build/image-cdn/overview/"
+  ],
+  "localTestsOrBuildsRun": false,
+  "deliveredFix": {
+    "pullRequest": "https://github.com/ulasfirinciogullari-design/lecturesift-backend/pull/121",
+    "sourceCommit": "ece07d8de17cc01f4626999469de7760fe413e9b",
+    "mergeCommit": "88759945f35fe38cac1170aa088db50603c98328",
+    "remoteCi": {
+      "url": "https://github.com/ulasfirinciogullari-design/lecturesift-backend/actions/runs/37862556517",
+      "jobs": {
+        "pytest": "success",
+        "browser-smoke": "success"
+      }
+    },
+    "liveHtmlObservations": [
+      {
+        "url": "https://lecturesift.com/",
+        "observedAtUtc": "2026-10-09T00:12:35.567174+00:00",
+        "status": 200,
+        "bodyTruncated": false,
+        "pictureSource": [
+          "<source type=\"image/webp\" srcset=\"/.netlify/images?url=%2Fassets%2Fstudy%2Fstudy-desk-v1.png&amp;w=400&amp;fm=webp&amp;q=80 400w, /.netlify/images?url=%2Fassets%2Fstudy%2Fstudy-desk-v1.png&amp;w=480&amp;fm=webp&amp;q=80 480w, /.netlify/images?url=%2Fassets%2Fstudy%2Fstudy-desk-v1.png&amp;w=800&amp;fm=webp&amp;q=80 800w, /.netlify/images?url=%2Fassets%2Fstudy%2Fstudy-desk-v1.png&amp;w=960&amp;fm=webp&amp;q=80 960w\" sizes=\"(max-width: 600px) calc(100vw - 32px), (max-width: 860px) 480px, 400px\">"
+        ],
+        "assistantCssVersions": [
+          "/assistant.css?v=4"
+        ],
+        "canonical": [
+          "<link rel=\"canonical\" href=\"https://lecturesift.com/\">"
+        ]
+      },
+      {
+        "url": "https://lecturesift.com/en/",
+        "observedAtUtc": "2026-10-09T00:12:35.864144+00:00",
+        "status": 200,
+        "bodyTruncated": false,
+        "pictureSource": [
+          "<source type=\"image/webp\" srcset=\"/.netlify/images?url=%2Fassets%2Fstudy%2Fstudy-desk-v1.png&amp;w=400&amp;fm=webp&amp;q=80 400w, /.netlify/images?url=%2Fassets%2Fstudy%2Fstudy-desk-v1.png&amp;w=480&amp;fm=webp&amp;q=80 480w, /.netlify/images?url=%2Fassets%2Fstudy%2Fstudy-desk-v1.png&amp;w=800&amp;fm=webp&amp;q=80 800w, /.netlify/images?url=%2Fassets%2Fstudy%2Fstudy-desk-v1.png&amp;w=960&amp;fm=webp&amp;q=80 960w\" sizes=\"(max-width: 600px) calc(100vw - 32px), (max-width: 860px) 480px, 400px\">"
+        ],
+        "assistantCssVersions": [
+          "/assistant.css?v=4"
+        ],
+        "canonical": [
+          "<link rel=\"canonical\" href=\"https://lecturesift.com/en/\">"
+        ]
+      }
+    ],
+    "optimizedImageResponse": {
+      "url": "https://lecturesift.com/.netlify/images?url=%2Fassets%2Fstudy%2Fstudy-desk-v1.png&w=960&fm=webp&q=80",
+      "observedAtUtc": "2026-10-09T00:12:49.095456+00:00",
+      "status": 200,
+      "contentType": "image/webp",
+      "bytes": 29104,
+      "webpSignature": true,
+      "bodyTruncated": false
+    },
+    "postReleasePageSpeedMeasuredInThisFollowup": false
+  }
+}

@@ -1,0 +1,370 @@
+{
+  "source": "bounded live public HTTP reads; HTML canonicals are not Google-selected canonicals",
+  "pages": [
+    {
+      "url": "https://lecturesift.com/en/quiz-flashcards",
+      "requestedAtUtc": "2026-10-08T23:54:09.918067+00:00",
+      "status": 200,
+      "location": null,
+      "xRobotsTag": null,
+      "bodyTruncated": false,
+      "canonicals": [
+        "https://lecturesift.com/en/quiz-flashcards"
+      ],
+      "robots": [
+        {
+          "name": "robots",
+          "content": "max-image-preview:large,max-snippet:-1,max-video-preview:-1"
+        }
+      ],
+      "noindex": false,
+      "hreflangs": [
+        {
+          "language": "tr",
+          "href": "https://lecturesift.com/quiz-flashcards"
+        },
+        {
+          "language": "en",
+          "href": "https://lecturesift.com/en/quiz-flashcards"
+        },
+        {
+          "language": "de",
+          "href": "https://lecturesift.com/de/quiz-flashcards"
+        },
+        {
+          "language": "fr",
+          "href": "https://lecturesift.com/fr/quiz-flashcards"
+        },
+        {
+          "language": "es",
+          "href": "https://lecturesift.com/es/quiz-flashcards"
+        },
+        {
+          "language": "it",
+          "href": "https://lecturesift.com/it/quiz-flashcards"
+        },
+        {
+          "language": "pt",
+          "href": "https://lecturesift.com/pt/quiz-flashcards"
+        },
+        {
+          "language": "ru",
+          "href": "https://lecturesift.com/ru/quiz-flashcards"
+        },
+        {
+          "language": "ar",
+          "href": "https://lecturesift.com/ar/quiz-flashcards"
+        },
+        {
+          "language": "zh",
+          "href": "https://lecturesift.com/zh/quiz-flashcards"
+        },
+        {
+          "language": "ja",
+          "href": "https://lecturesift.com/ja/quiz-flashcards"
+        },
+        {
+          "language": "ko",
+          "href": "https://lecturesift.com/ko/quiz-flashcards"
+        },
+        {
+          "language": "hi",
+          "href": "https://lecturesift.com/hi/quiz-flashcards"
+        },
+        {
+          "language": "x-default",
+          "href": "https://lecturesift.com/quiz-flashcards"
+        }
+      ],
+      "internalLinks": [
+        "/en/",
+        "/en/about",
+        "/en/active-recall",
+        "/en/contact",
+        "/en/document-summary",
+        "/en/features",
+        "/en/login.html",
+        "/en/plans",
+        "/en/privacy",
+        "/en/study-guides",
+        "/en/study-pack-example",
+        "/en/terms",
+        "/en/workspace"
+      ],
+      "completedAtUtc": "2026-10-08T23:54:10.282696+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/lecture-video-summary",
+      "requestedAtUtc": "2026-10-08T23:54:10.282737+00:00",
+      "status": 200,
+      "location": null,
+      "xRobotsTag": null,
+      "bodyTruncated": false,
+      "canonicals": [
+        "https://lecturesift.com/en/lecture-video-summary"
+      ],
+      "robots": [
+        {
+          "name": "robots",
+          "content": "max-image-preview:large,max-snippet:-1,max-video-preview:-1"
+        }
+      ],
+      "noindex": false,
+      "hreflangs": [
+        {
+          "language": "tr",
+          "href": "https://lecturesift.com/lecture-video-summary"
+        },
+        {
+          "language": "en",
+          "href": "https://lecturesift.com/en/lecture-video-summary"
+        },
+        {
+          "language": "de",
+          "href": "https://lecturesift.com/de/lecture-video-summary"
+        },
+        {
+          "language": "fr",
+          "href": "https://lecturesift.com/fr/lecture-video-summary"
+        },
+        {
+          "language": "es",
+          "href": "https://lecturesift.com/es/lecture-video-summary"
+        },
+        {
+          "language": "it",
+          "href": "https://lecturesift.com/it/lecture-video-summary"
+        },
+        {
+          "language": "pt",
+          "href": "https://lecturesift.com/pt/lecture-video-summary"
+        },
+        {
+          "language": "ru",
+          "href": "https://lecturesift.com/ru/lecture-video-summary"
+        },
+        {
+          "language": "ar",
+          "href": "https://lecturesift.com/ar/lecture-video-summary"
+        },
+        {
+          "language": "zh",
+          "href": "https://lecturesift.com/zh/lecture-video-summary"
+        },
+        {
+          "language": "ja",
+          "href": "https://lecturesift.com/ja/lecture-video-summary"
+        },
+        {
+          "language": "ko",
+          "href": "https://lecturesift.com/ko/lecture-video-summary"
+        },
+        {
+          "language": "hi",
+          "href": "https://lecturesift.com/hi/lecture-video-summary"
+        },
+        {
+          "language": "x-default",
+          "href": "https://lecturesift.com/lecture-video-summary"
+        }
+      ],
+      "internalLinks": [
+        "/en/",
+        "/en/about",
+        "/en/check-ai-notes",
+        "/en/contact",
+        "/en/cornell-notes",
+        "/en/features",
+        "/en/login.html",
+        "/en/plans",
+        "/en/privacy",
+        "/en/quiz-flashcards",
+        "/en/study-guides",
+        "/en/terms",
+        "/en/workspace"
+      ],
+      "completedAtUtc": "2026-10-08T23:54:10.773651+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/pdf-note-check",
+      "requestedAtUtc": "2026-10-08T23:54:10.773684+00:00",
+      "status": 200,
+      "location": null,
+      "xRobotsTag": null,
+      "bodyTruncated": false,
+      "canonicals": [
+        "https://lecturesift.com/pdf-note-check"
+      ],
+      "robots": [
+        {
+          "name": "robots",
+          "content": "max-image-preview:large,max-snippet:-1,max-video-preview:-1"
+        }
+      ],
+      "noindex": false,
+      "hreflangs": [
+        {
+          "language": "tr",
+          "href": "https://lecturesift.com/pdf-note-check"
+        },
+        {
+          "language": "en",
+          "href": "https://lecturesift.com/en/pdf-note-check"
+        },
+        {
+          "language": "x-default",
+          "href": "https://lecturesift.com/pdf-note-check"
+        }
+      ],
+      "internalLinks": [
+        "/",
+        "/about",
+        "/about-study-guides",
+        "/active-recall",
+        "/assets/study/pdf-check-tr.txt",
+        "/check-ai-notes",
+        "/contact",
+        "/cornell-notes",
+        "/document-summary",
+        "/en/pdf-note-check",
+        "/privacy",
+        "/study-guides",
+        "/study-pack-example",
+        "/terms",
+        "/workspace"
+      ],
+      "completedAtUtc": "2026-10-08T23:54:11.166667+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/pdf-note-check",
+      "requestedAtUtc": "2026-10-08T23:54:11.166692+00:00",
+      "status": 200,
+      "location": null,
+      "xRobotsTag": null,
+      "bodyTruncated": false,
+      "canonicals": [
+        "https://lecturesift.com/en/pdf-note-check"
+      ],
+      "robots": [
+        {
+          "name": "robots",
+          "content": "max-image-preview:large,max-snippet:-1,max-video-preview:-1"
+        }
+      ],
+      "noindex": false,
+      "hreflangs": [
+        {
+          "language": "tr",
+          "href": "https://lecturesift.com/pdf-note-check"
+        },
+        {
+          "language": "en",
+          "href": "https://lecturesift.com/en/pdf-note-check"
+        },
+        {
+          "language": "x-default",
+          "href": "https://lecturesift.com/pdf-note-check"
+        }
+      ],
+      "internalLinks": [
+        "/assets/study/pdf-check-en.txt",
+        "/en/",
+        "/en/about",
+        "/en/about-study-guides",
+        "/en/active-recall",
+        "/en/check-ai-notes",
+        "/en/contact",
+        "/en/cornell-notes",
+        "/en/document-summary",
+        "/en/privacy",
+        "/en/study-guides",
+        "/en/study-pack-example",
+        "/en/terms",
+        "/en/workspace.html",
+        "/pdf-note-check"
+      ],
+      "completedAtUtc": "2026-10-08T23:54:11.600629+00:00"
+    }
+  ],
+  "sitemap": {
+    "url": "https://lecturesift.com/sitemap.xml",
+    "requestedAtUtc": "2026-10-08T23:54:11.600655+00:00",
+    "status": 200,
+    "location": null,
+    "xRobotsTag": null,
+    "bodyTruncated": false,
+    "urlCount": 183,
+    "uniqueUrlCount": 183,
+    "containsTargets": {
+      "/en/quiz-flashcards": true,
+      "/en/lecture-video-summary": true,
+      "/pdf-note-check": true,
+      "/en/pdf-note-check": true
+    },
+    "completedAtUtc": "2026-10-08T23:54:11.984218+00:00"
+  },
+  "requestCount": 5,
+  "localTestsOrBuildsRun": false,
+  "sourceDiscovery": {
+    "sourceCommit": "d74ef23",
+    "method": "read-only source inspection; build not executed",
+    "inboundLinks": [
+      {
+        "target": "/en/quiz-flashcards",
+        "sources": [
+          "/en/",
+          "/en/features",
+          "/en/study-guides",
+          "/en/active-recall"
+        ],
+        "evidence": [
+          "frontend/index.html:96",
+          "frontend/features.html:1",
+          "scripts/build_localized_site.mjs:140",
+          "scripts/build_localized_site.mjs:82",
+          "scripts/build_localized_site.mjs:394"
+        ]
+      },
+      {
+        "target": "/en/lecture-video-summary",
+        "sources": [
+          "/en/",
+          "/en/features",
+          "/en/study-guides",
+          "/en/cornell-notes"
+        ],
+        "evidence": [
+          "frontend/index.html:96",
+          "frontend/features.html:1",
+          "scripts/build_localized_site.mjs:140",
+          "scripts/build_localized_site.mjs:82",
+          "scripts/build_localized_site.mjs:394",
+          "frontend/study-resources.json (cornell-notes en body)"
+        ]
+      },
+      {
+        "target": "/pdf-note-check",
+        "sources": [
+          "/study-guides",
+          "other Turkish article guides"
+        ],
+        "evidence": [
+          "frontend/study-resources.json (study-guides tr body)",
+          "scripts/build_localized_site.mjs:399"
+        ]
+      },
+      {
+        "target": "/en/pdf-note-check",
+        "sources": [
+          "/en/study-guides",
+          "other English article guides"
+        ],
+        "evidence": [
+          "frontend/study-resources.json (study-guides en body)",
+          "scripts/build_localized_site.mjs:399"
+        ]
+      }
+    ],
+    "observedNewSourceDefect": false
+  }
+}

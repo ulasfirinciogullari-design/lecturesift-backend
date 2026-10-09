@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "source": "Three bounded live public HTTP reads; first-response HTML JSON-LD only",
+  "requestCount": 3,
+  "retries": 0,
+  "javascriptExecuted": false,
+  "localTestsOrBuildsRun": false,
+  "googleIndexingOrRichResultEligibilityVerified": false,
+  "observations": [
+    {
+      "url": "https://lecturesift.com/study-guides",
+      "requestedAtUtc": "2026-10-09T00:01:56.995964+00:00",
+      "expectedItemUrls": [
+        "https://lecturesift.com/",
+        "https://lecturesift.com/study-guides"
+      ],
+      "status": 200,
+      "location": null,
+      "bodyTruncated": false,
+      "breadcrumbLists": [
+        {
+          "id": "https://lecturesift.com/study-guides#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "LectureSift",
+              "item": "https://lecturesift.com/"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Çalışma rehberleri | LectureSift",
+              "item": "https://lecturesift.com/study-guides"
+            }
+          ]
+        }
+      ],
+      "webPages": [
+        {
+          "id": "https://lecturesift.com/study-guides#webpage",
+          "url": "https://lecturesift.com/study-guides",
+          "breadcrumb": {
+            "@id": "https://lecturesift.com/study-guides#breadcrumb"
+          }
+        }
+      ],
+      "sameLanguageChainMatches": true,
+      "positionsMatch": true,
+      "namesPresent": true,
+      "webPageBreadcrumbLinkMatches": true,
+      "completedAtUtc": "2026-10-09T00:01:57.479402+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/en/cornell-notes",
+      "requestedAtUtc": "2026-10-09T00:01:57.479459+00:00",
+      "expectedItemUrls": [
+        "https://lecturesift.com/en/",
+        "https://lecturesift.com/en/study-guides",
+        "https://lecturesift.com/en/cornell-notes"
+      ],
+      "status": 200,
+      "location": null,
+      "bodyTruncated": false,
+      "breadcrumbLists": [
+        {
+          "id": "https://lecturesift.com/en/cornell-notes#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "LectureSift",
+              "item": "https://lecturesift.com/en/"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Study guides",
+              "item": "https://lecturesift.com/en/study-guides"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Cornell notes: a worked example and free template | LectureSift",
+              "item": "https://lecturesift.com/en/cornell-notes"
+            }
+          ]
+        }
+      ],
+      "webPages": [
+        {
+          "id": "https://lecturesift.com/en/cornell-notes#webpage",
+          "url": "https://lecturesift.com/en/cornell-notes",
+          "breadcrumb": {
+            "@id": "https://lecturesift.com/en/cornell-notes#breadcrumb"
+          }
+        }
+      ],
+      "sameLanguageChainMatches": true,
+      "positionsMatch": true,
+      "namesPresent": true,
+      "webPageBreadcrumbLinkMatches": true,
+      "completedAtUtc": "2026-10-09T00:01:57.933946+00:00"
+    },
+    {
+      "url": "https://lecturesift.com/ar/document-summary",
+      "requestedAtUtc": "2026-10-09T00:01:57.933978+00:00",
+      "expectedItemUrls": [
+        "https://lecturesift.com/ar/",
+        "https://lecturesift.com/ar/document-summary"
+      ],
+      "status": 200,
+      "location": null,
+      "bodyTruncated": false,
+      "breadcrumbLists": [
+        {
+          "id": "https://lecturesift.com/ar/document-summary#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "LectureSift",
+              "item": "https://lecturesift.com/ar/"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "PDF وتلخيص المستندات | LectureSift",
+              "item": "https://lecturesift.com/ar/document-summary"
+            }
+          ]
+        }
+      ],
+      "webPages": [
+        {
+          "id": "https://lecturesift.com/ar/document-summary#webpage",
+          "url": "https://lecturesift.com/ar/document-summary",
+          "breadcrumb": {
+            "@id": "https://lecturesift.com/ar/document-summary#breadcrumb"
+          }
+        }
+      ],
+      "sameLanguageChainMatches": true,
+      "positionsMatch": true,
+      "namesPresent": true,
+      "webPageBreadcrumbLinkMatches": true,
+      "completedAtUtc": "2026-10-09T00:01:58.527656+00:00"
+    }
+  ]
+}
