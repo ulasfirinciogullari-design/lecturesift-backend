@@ -1,4 +1,5 @@
 import {test as base, expect} from '@playwright/test';
+import {fileURLToPath} from 'node:url';
 
 export const JOB_ID = 'ci-synthetic-quiz-0001';
 const LOCAL_ORIGIN = 'http://127.0.0.1:4173';
@@ -61,7 +62,17 @@ export const test = base.extend({
       // Query strings are part of the exact API contract, not ignored extras.
       const apiKey = url.pathname + url.search;
       if (url.origin === LOCAL_ORIGIN && ['GET', 'HEAD'].includes(request.method())) {
-        await route.continue();
+        if (url.pathname === '/.netlify/images'
+          && url.searchParams.get('url') === '/assets/study/study-desk-v1.png'
+          && ['400', '480', '800', '960'].includes(url.searchParams.get('w'))
+          && url.searchParams.get('fm') === 'webp' && url.searchParams.get('q') === '80'
+          && [...url.searchParams.keys()].length === 4) {
+          // Offline stand-in for the already verified Netlify endpoint. Serving
+          // the original tests browser source selection and layout only; it is
+          // deliberately not evidence of CDN resizing or compression in CI.
+          await route.fulfill({status: 200, contentType: 'image/png',
+            path: fileURLToPath(new URL('../../dist/assets/study/study-desk-v1.png', import.meta.url))});
+        } else await route.continue();
       } else if (url.origin === API_ORIGIN && request.method() === 'OPTIONS'
         && request.headers()['access-control-request-method'] === 'GET' && stubs.has(apiKey)) {
         await route.fulfill({status: 204, headers: {

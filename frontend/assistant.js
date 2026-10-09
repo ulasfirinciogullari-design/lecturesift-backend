@@ -7,7 +7,9 @@
   const token = () => localStorage.getItem('lecturesift-billing-token') || '';
   const path = value => window.LectureSiftI18n?.localizedPath?.(language(), value) || value;
   const format = (key, count) => t(key).replace('{count}', Number(count).toLocaleString(language()));
-  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/assistant.css?v=4'; document.head.append(css);
+  if (!document.querySelector('link[rel="stylesheet"][href="/assistant.css?v=4"]')) {
+    const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/assistant.css?v=4'; document.head.append(css);
+  }
   const spark = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 6.3L21 12l-6.3 2.7L12 21l-2.7-6.3L3 12l6.3-2.7Z"/></svg>';
   const launch = document.createElement('button'); launch.className = 'assistant-launch'; launch.innerHTML = spark; const launchLabel=document.createElement('span');launchLabel.textContent=t('nav');launch.append(launchLabel);launch.setAttribute('aria-label',t('title')); launch.type = 'button'; launch.setAttribute('aria-haspopup', 'dialog'); if(!pageRoot)document.body.append(launch);
   const positionLaunch = () => {

@@ -213,6 +213,14 @@ function plainText(value) {
   return String(value || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
+// The application is one shared entity. Its description comes from the product
+// homepage, while each WebPage and Article retains its own subject description.
+const productDescription = readHeadValue(
+  await readFile(path.join(SOURCE, "index.html"), "utf8"),
+  /<meta\s+name="description"\s+content="([^"]+)"\s*\/?\s*>/i,
+  "product description", "/",
+);
+
 function structuredData(html, language, publicPath, canonical, title, description, image) {
   const organizationId = `${ORIGIN}/#organization`;
   const websiteId = `${ORIGIN}/#website`;
@@ -235,7 +243,8 @@ function structuredData(html, language, publicPath, canonical, title, descriptio
     },
     {
       "@type": "SoftwareApplication", "@id": applicationId, name: "LectureSift", url: `${ORIGIN}/`,
-      applicationCategory: "EducationalApplication", operatingSystem: "Web", description, image,
+      applicationCategory: "EducationalApplication", operatingSystem: "Web",
+      description: translate(productDescription, language), image,
       isAccessibleForFree: true, availableLanguage: LANGUAGES,
       offers: {"@type": "Offer", price: "0", priceCurrency: "TRY"},
       publisher: {"@id": organizationId},

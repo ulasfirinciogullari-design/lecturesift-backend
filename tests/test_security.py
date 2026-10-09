@@ -61,6 +61,7 @@ def test_security_headers_harden_public_and_sensitive_responses():
         json={"email": f"headers-{uuid.uuid4()}@example.com", "password": "Wrong-password1"},
     )
     for response in (public, sensitive):
+        assert response.headers["x-robots-tag"] == "noindex"
         assert response.headers["x-content-type-options"] == "nosniff"
         assert response.headers["x-frame-options"] == "DENY"
         assert response.headers["referrer-policy"] == "no-referrer"
@@ -68,6 +69,29 @@ def test_security_headers_harden_public_and_sensitive_responses():
     assert "cache-control" not in public.headers
     assert sensitive.headers["cache-control"] == "no-store"
     assert sensitive.headers["pragma"] == "no-cache"
+
+
+@pytest.mark.parametrize(
+    ("path", "status", "content_type"),
+    [
+        ("/", 200, "application/json"),
+        ("/docs", 200, "text/html"),
+        ("/openapi.json", 200, "application/json"),
+        ("/billing/me", 401, "application/json"),
+        ("/not-a-public-content-page", 404, "application/json"),
+    ],
+)
+def test_api_noindex_preserves_normal_docs_data_and_error_responses(path, status, content_type):
+    response = TestClient(app).get(path)
+    assert response.status_code == status
+    assert response.headers["content-type"].startswith(content_type)
+    assert response.headers["x-robots-tag"] == "noindex"
+    if path == "/docs":
+        assert "SwaggerUIBundle" in response.text
+    elif path == "/openapi.json":
+        assert "/billing/me" in response.json()["paths"]
+    elif status >= 400:
+        assert "detail" in response.json()
 
 
 def test_owner_session_cannot_replace_dedicated_admin_token(monkeypatch):
