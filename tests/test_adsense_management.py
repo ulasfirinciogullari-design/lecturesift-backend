@@ -15,6 +15,30 @@ from main import app
 
 
 ACCOUNT = "accounts/pub-7608481350058806"
+REPORT_URL = f"https://adsense.googleapis.com/v2/{ACCOUNT}/reports:generate"
+
+
+def _report_payload(values: list[str | None] | None = None) -> dict:
+    payload = {
+        "headers": [
+            {"name": "ESTIMATED_EARNINGS", "type": "METRIC_CURRENCY", "currencyCode": "TRY"},
+            *({"name": name, "type": "METRIC_TALLY"} for name in ("PAGE_VIEWS", "IMPRESSIONS", "CLICKS")),
+        ],
+        "startDate": {"year": 2026, "month": 10, "day": 1},
+        "endDate": {"year": 2026, "month": 10, "day": 9},
+    }
+    if values is not None:
+        payload.update(totalMatchedRows="1", rows=[{"cells": [{"value": value} for value in values]}])
+    return payload
+
+
+def _expected_empty_report() -> dict:
+    return {
+        "status": "empty", "currency_code": "TRY",
+        "start_date": "2026-10-01", "end_date": "2026-10-09",
+        "estimated_earnings_micros": None, "page_views": None,
+        "impressions": None, "clicks": None, "error_code": None,
+    }
 
 
 def _response(status: int, payload: dict) -> httpx.Response:
@@ -52,6 +76,7 @@ class FakeGoogleClient:
         self.gets.append((url, params, headers, timeout))
         status = type(self).api_statuses.get(url, 200)
         payloads = {
+            REPORT_URL: _report_payload(),
             f"https://adsense.googleapis.com/v2/{ACCOUNT}": {
                 "name": ACCOUNT,
                 "displayName": "Must not leave the backend",
@@ -158,6 +183,7 @@ def test_readonly_status_is_reduced_to_safe_summary_and_cached():
             "ad_serving_disabled": 1,
             "ad_personalization_restricted": 1,
         },
+        "reports": {period: _expected_empty_report() for period in ("today", "last_7_days", "this_month")},
         "error_code": None,
     }
     assert second == {**first, "cached": True}
@@ -186,7 +212,17 @@ def test_readonly_status_is_reduced_to_safe_summary_and_cached():
         f"https://adsense.googleapis.com/v2/{ACCOUNT}/sites",
         f"https://adsense.googleapis.com/v2/{ACCOUNT}/alerts",
         f"https://adsense.googleapis.com/v2/{ACCOUNT}/policyIssues",
+        REPORT_URL,
     }
+    report_calls = [call for call in fake.gets if call[0] == REPORT_URL]
+    assert len(report_calls) == 3
+    assert {call[1]["dateRange"] for call in report_calls} == {"TODAY", "LAST_7_DAYS", "MONTH_TO_DATE"}
+    for call in report_calls:
+        assert call[1] == {
+            "metrics": ["ESTIMATED_EARNINGS", "PAGE_VIEWS", "IMPRESSIONS", "CLICKS"],
+            "dateRange": call[1]["dateRange"], "filters": "DOMAIN_NAME==lecturesift.com",
+            "reportingTimeZone": "ACCOUNT_TIME_ZONE", "languageCode": "en", "limit": 1,
+        }
     serialized = json.dumps(first)
     for private_value in (
         "client-secret-must-not-leak",
@@ -259,17 +295,17 @@ def test_failure_diagnostics_identify_the_operation_without_provider_details(mon
     monkeypatch.setattr(FakeGoogleClient, "post", post)
     monkeypatch.setattr(FakeGoogleClient, "get", get)
     result = adsense_management.adsense_management_readiness()
-    key = "policy_diagnostics" if stage == "policy" else "diagnostics"
+    key = f"{stage}_diagnostics" if stage in {"policy", "alerts"} else "diagnostics"
     diagnostic = result[key]
     assert set(diagnostic) == {"stage", "failure_type", "elapsed_ms"}
     assert diagnostic["stage"] == stage
     assert diagnostic["failure_type"] == failure_type
     assert type(diagnostic["elapsed_ms"]) is int and diagnostic["elapsed_ms"] >= 0
     expected_error = "invalid_response" if failure_type == "response" else "provider_unavailable"
-    if stage == "policy":
+    if stage in {"policy", "alerts"}:
         assert result["connected"] is True
         assert result["site"]["state"] == "GETTING_READY"
-        assert result["policy_error_code"] == expected_error
+        assert result[f"{stage}_error_code"] == expected_error
         assert result["error_code"] is None
     else:
         assert result["connected"] is False
@@ -641,3 +677,186 @@ def test_admin_authentication_happens_before_any_google_request(monkeypatch):
 
     assert response.status_code == 401
     assert FakeGoogleClient.created == []
+
+
+def test_admin_reads_independent_providers_concurrently(monkeypatch):
+    import lecturesift.rollout_routes as routes
+
+    monkeypatch.setattr(config, "ADMIN_ADMIN", "admin-secret")
+    entered = threading.Barrier(2)
+
+    def reader():
+        # A sequential route cannot cross this barrier. No timing assertion or
+        # real provider call is needed to verify the two reads overlap.
+        entered.wait(timeout=2)
+        return {"connected": False, "status": "not_configured"}
+
+    monkeypatch.setattr(routes, "adsense_management_readiness", reader)
+    monkeypatch.setattr(routes, "google_ads_management_readiness", reader)
+    response = TestClient(app).get(
+        "/billing/admin/advertising-readiness",
+        headers={"Authorization": "Bearer admin-secret"},
+    )
+    assert response.status_code == 200
+    assert response.json()["adsense"]["google_account_connected"] is False
+    assert response.json()["google_ads"]["google_account_connected"] is False
+
+
+def test_reports_share_the_bounded_downstream_pool_and_existing_request_budget(monkeypatch):
+    original = FakeGoogleClient.get
+    entered = threading.Barrier(6)
+    calls = []
+    lock = threading.Lock()
+
+    def get(self, url, **kwargs):
+        if url != f"https://adsense.googleapis.com/v2/{ACCOUNT}":
+            with lock:
+                calls.append((url, kwargs["timeout"]))
+            entered.wait(timeout=2)
+        return original(self, url, **kwargs)
+
+    monkeypatch.setattr(FakeGoogleClient, "get", get)
+    result = adsense_management.adsense_management_readiness()
+    assert result["connected"] is True
+    assert len(calls) == 6
+    assert all(report["status"] == "empty" for report in result["reports"].values())
+    assert all(timeout <= config.ADSENSE_API_TIMEOUT_SECONDS for url, timeout in calls if not url.endswith("/policyIssues"))
+
+
+def test_alert_failure_preserves_other_data_and_retries_after_short_cache(monkeypatch):
+    clock = {"now": 100.0}
+    monkeypatch.setattr(adsense_management.time, "monotonic", lambda: clock["now"])
+    FakeGoogleClient.api_statuses[f"https://adsense.googleapis.com/v2/{ACCOUNT}/alerts"] = 503
+    first = adsense_management.adsense_management_readiness()
+    assert first["connected"] is True and first["error_code"] is None
+    assert first["site"]["state"] == "GETTING_READY"
+    assert first["alerts"] is None
+    assert first["alerts_error_code"] == "provider_unavailable"
+    assert first["alerts_diagnostics"]["stage"] == "alerts"
+    assert first["policy_issues"]["total"] == 3
+    assert first["reports"]["today"]["status"] == "empty"
+    first["alerts_diagnostics"]["stage"] = "caller mutation"
+    cached = adsense_management.adsense_management_readiness()
+    assert cached["cached"] is True and cached["alerts_diagnostics"]["stage"] == "alerts"
+    FakeGoogleClient.api_statuses = {}
+    clock["now"] = 161.0
+    recovered = adsense_management.adsense_management_readiness()
+    assert recovered["cached"] is False and recovered["alerts"]["total"] == 3
+    assert "alerts_error_code" not in recovered
+
+
+@pytest.mark.parametrize("earnings, expected", [("0", 0), ("12.340005", 12340005), ("-0.25", -250000)])
+def test_reports_preserve_explicit_zero_decimal_precision_and_source_currency(earnings, expected):
+    payload = _report_payload([earnings, "150", "321", "0"])
+    payload["headers"][0]["currencyCode"] = "EUR"
+    payload["warnings"] = ["private warning https://private.example"]
+    FakeGoogleClient.payload_overrides[REPORT_URL] = payload
+    result = adsense_management.adsense_management_readiness()
+    for report in result["reports"].values():
+        assert report == {
+            "status": "available", "currency_code": "EUR",
+            "start_date": "2026-10-01", "end_date": "2026-10-09",
+            "estimated_earnings_micros": expected,
+            "page_views": 150, "impressions": 321, "clicks": 0,
+            "error_code": None,
+        }
+    assert "private warning" not in json.dumps(result)
+    assert "private.example" not in json.dumps(result)
+
+
+def test_missing_report_metric_stays_unknown_while_other_metrics_remain_available():
+    payload = _report_payload([None, "10", "0", ""])
+    FakeGoogleClient.payload_overrides[REPORT_URL] = payload
+    report = adsense_management.adsense_management_readiness()["reports"]["today"]
+    assert report["status"] == "available"
+    assert report["estimated_earnings_micros"] is None
+    assert report["page_views"] == 10 and report["impressions"] == 0
+    assert report["clicks"] is None
+
+
+def test_report_headers_are_mapped_by_name_and_omitted_metric_is_not_zero():
+    payload = _report_payload()
+    payload["headers"] = [{"name": "CLICKS", "type": "METRIC_TALLY"}, payload["headers"][0]]
+    payload["totals"] = {"cells": [{"value": "2"}, {"value": "1.25"}]}
+    FakeGoogleClient.payload_overrides[REPORT_URL] = payload
+    report = adsense_management.adsense_management_readiness()["reports"]["today"]
+    assert report["status"] == "available" and report["currency_code"] == "TRY"
+    assert report["estimated_earnings_micros"] == 1250000 and report["clicks"] == 2
+    assert report["page_views"] is None and report["impressions"] is None
+
+
+@pytest.mark.parametrize("kind", [
+    "currency", "header_type", "duplicate_header", "invalid_date", "reverse_dates",
+    "truncated", "row_width", "negative_count", "unsafe_integer", "nonfinite",
+    "excess_decimal_precision", "unsafe_earnings", "boolean_value",
+])
+def test_invalid_report_data_is_optional_and_never_becomes_zero(kind):
+    payload = _report_payload(["1.25", "20", "40", "1"])
+    if kind == "currency":
+        payload["headers"][0]["currencyCode"] = "<script>"
+    elif kind == "header_type":
+        payload["headers"][1]["type"] = "DIMENSION"
+    elif kind == "duplicate_header":
+        payload["headers"][2] = payload["headers"][1]
+    elif kind == "invalid_date":
+        payload["startDate"]["day"] = 32
+    elif kind == "reverse_dates":
+        payload["startDate"]["month"] = 11
+    elif kind == "truncated":
+        payload["totalMatchedRows"] = "2"
+    elif kind == "row_width":
+        payload["rows"][0]["cells"].pop()
+    elif kind == "negative_count":
+        payload["rows"][0]["cells"][1]["value"] = "-1"
+    elif kind == "unsafe_integer":
+        payload["rows"][0]["cells"][1]["value"] = "9007199254740992"
+    elif kind == "nonfinite":
+        payload["rows"][0]["cells"][0]["value"] = "NaN"
+    elif kind == "excess_decimal_precision":
+        payload["rows"][0]["cells"][0]["value"] = "0.0000001"
+    elif kind == "unsafe_earnings":
+        payload["rows"][0]["cells"][0]["value"] = "9007199254.740992"
+    elif kind == "boolean_value":
+        payload["rows"][0]["cells"][0]["value"] = True
+    FakeGoogleClient.payload_overrides[REPORT_URL] = payload
+    result = adsense_management.adsense_management_readiness()
+    assert result["connected"] is True and result["site"]["state"] == "GETTING_READY"
+    report = result["reports"]["today"]
+    assert report["status"] == "unavailable" and report["error_code"] == "invalid_response"
+    assert report["estimated_earnings_micros"] is None and report["page_views"] is None
+    assert report["diagnostics"]["stage"] == "reports_today"
+    assert report["diagnostics"]["failure_type"] == "response"
+
+
+@pytest.mark.parametrize("failure", ["timeout", "http", "unknown"])
+def test_each_report_failure_is_isolated_and_uses_existing_deadline(monkeypatch, failure):
+    original = FakeGoogleClient.get
+    clock = {"now": 100.0}
+    monkeypatch.setattr(adsense_management.time, "monotonic", lambda: clock["now"])
+
+    def get(self, url, **kwargs):
+        if url == REPORT_URL and kwargs["params"]["dateRange"] == "TODAY":
+            assert kwargs["timeout"] <= config.ADSENSE_API_TIMEOUT_SECONDS
+            if failure == "timeout":
+                raise httpx.ReadTimeout("private report details")
+            if failure == "unknown":
+                raise RuntimeError("private report details")
+            return _response(503, {"error": {"message": "private report details"}})
+        return original(self, url, **kwargs)
+
+    monkeypatch.setattr(FakeGoogleClient, "get", get)
+    first = adsense_management.adsense_management_readiness()
+    assert first["connected"] is True and first["error_code"] is None
+    assert first["alerts"]["total"] == 3 and first["site"]["state"] == "GETTING_READY"
+    report = first["reports"]["today"]
+    assert report["status"] == "unavailable" and report["error_code"] == "provider_unavailable"
+    assert report["diagnostics"]["failure_type"] == failure
+    assert first["reports"]["last_7_days"]["status"] == "empty"
+    assert first["reports"]["this_month"]["status"] == "empty"
+    assert "private report details" not in json.dumps(first)
+    report["diagnostics"]["stage"] = "caller mutation"
+    assert adsense_management.adsense_management_readiness()["reports"]["today"]["diagnostics"]["stage"] == "reports_today"
+    clock["now"] = 161.0
+    monkeypatch.setattr(FakeGoogleClient, "get", original)
+    recovered = adsense_management.adsense_management_readiness()
+    assert recovered["cached"] is False and recovered["reports"]["today"]["status"] == "empty"

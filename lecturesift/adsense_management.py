@@ -10,7 +10,8 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from decimal import Decimal
 import hashlib
 import re
 import threading
@@ -57,7 +58,16 @@ _POLICY_ACTIONS = frozenset(
         "AD_PERSONALIZATION_RESTRICTED",
     }
 )
-_DIAGNOSTIC_STAGES = frozenset({"oauth", "account", "sites", "alerts", "policy", "cache_wait", "internal"})
+_REPORT_PERIODS = {"today": "TODAY", "last_7_days": "LAST_7_DAYS", "this_month": "MONTH_TO_DATE"}
+_REPORT_METRICS = {
+    "ESTIMATED_EARNINGS": "estimated_earnings_micros",
+    "PAGE_VIEWS": "page_views", "IMPRESSIONS": "impressions", "CLICKS": "clicks",
+}
+_MAX_SAFE_INTEGER = 2**53 - 1
+_DIAGNOSTIC_STAGES = frozenset({
+    "oauth", "account", "sites", "alerts", "policy", "cache_wait", "internal",
+    *(f"reports_{period}" for period in _REPORT_PERIODS),
+})
 _FAILURE_TYPES = frozenset({"timeout", "network", "http", "response", "unknown"})
 _HTTP_CLIENT_FACTORY = httpx.Client
 
@@ -194,6 +204,7 @@ def _empty_summary(
         "site": None,
         "alerts": None,
         "policy_issues": None,
+        "reports": {period: _empty_report(error_code=error_code) for period in _REPORT_PERIODS},
         "error_code": error_code,
         **({"diagnostics": diagnostics} if diagnostics is not None else {}),
     }
@@ -395,6 +406,104 @@ def _policy_summary(issues: list[dict[str, Any]]) -> dict[str, Any]:
     return {"total": len(issues), **counts}
 
 
+def _empty_report(*, error_code: str | None = None) -> dict[str, Any]:
+    return {
+        "status": "unavailable", "currency_code": None,
+        "start_date": None, "end_date": None,
+        **{name: None for name in _REPORT_METRICS.values()},
+        "error_code": error_code,
+    }
+
+
+def _report_date(value: Any) -> str:
+    if not isinstance(value, dict) or any(type(value.get(key)) is not int for key in ("year", "month", "day")):
+        raise _AdSenseError("invalid_response")
+    try:
+        return date(value["year"], value["month"], value["day"]).isoformat()
+    except (ValueError, OverflowError) as exc:
+        raise _AdSenseError("invalid_response") from exc
+
+
+def _report_integer(value: Any) -> int:
+    if not isinstance(value, str) or re.fullmatch(r"[0-9]{1,16}", value) is None:
+        raise _AdSenseError("invalid_response")
+    parsed = int(value)
+    if parsed > _MAX_SAFE_INTEGER:
+        raise _AdSenseError("invalid_response")
+    return parsed
+
+
+def _report_earnings(value: Any) -> int:
+    # Decimal avoids binary rounding; unrepresentable or unsafe values remain
+    # unavailable instead of quietly rounding a provider's financial data.
+    if not isinstance(value, str) or re.fullmatch(r"-?[0-9]{1,16}(?:\.[0-9]{1,12})?", value) is None:
+        raise _AdSenseError("invalid_response")
+    micros = Decimal(value) * 1_000_000
+    if micros != micros.to_integral_value() or abs(micros) > _MAX_SAFE_INTEGER:
+        raise _AdSenseError("invalid_response")
+    return int(micros)
+
+
+def _report_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    summary = _empty_report()
+    summary.update(start_date=_report_date(payload.get("startDate")), end_date=_report_date(payload.get("endDate")))
+    if summary["start_date"] > summary["end_date"]:
+        raise _AdSenseError("invalid_response")
+    headers = payload.get("headers")
+    if not isinstance(headers, list) or not headers or len(headers) > len(_REPORT_METRICS):
+        raise _AdSenseError("invalid_response")
+    names: list[str] = []
+    for header in headers:
+        if not isinstance(header, dict):
+            raise _AdSenseError("invalid_response")
+        name = header.get("name")
+        if not isinstance(name, str) or name not in _REPORT_METRICS or name in names:
+            raise _AdSenseError("invalid_response")
+        expected_type = "METRIC_CURRENCY" if name == "ESTIMATED_EARNINGS" else "METRIC_TALLY"
+        if header.get("type") != expected_type:
+            raise _AdSenseError("invalid_response")
+        if name == "ESTIMATED_EARNINGS":
+            currency = header.get("currencyCode")
+            if not isinstance(currency, str) or re.fullmatch(r"[A-Z]{3}", currency) is None:
+                raise _AdSenseError("invalid_response")
+            summary["currency_code"] = currency
+        names.append(name)
+    rows = payload.get("rows", [])
+    if not isinstance(rows, list) or len(rows) > 1:
+        raise _AdSenseError("invalid_response")
+    total_matched = payload.get("totalMatchedRows")
+    if total_matched is not None and _report_integer(total_matched) != len(rows):
+        raise _AdSenseError("invalid_response")
+    row = payload.get("totals") if payload.get("totals") is not None else (rows[0] if rows else None)
+    if row is None:
+        summary["status"] = "empty"
+        return summary
+    if not isinstance(row, dict) or not isinstance(row.get("cells"), list) or len(row["cells"]) != len(names):
+        raise _AdSenseError("invalid_response")
+    for name, cell in zip(names, row["cells"]):
+        if not isinstance(cell, dict):
+            raise _AdSenseError("invalid_response")
+        value = cell.get("value")
+        if value in (None, ""):
+            continue
+        summary[_REPORT_METRICS[name]] = _report_earnings(value) if name == "ESTIMATED_EARNINGS" else _report_integer(value)
+    if all(summary[name] is None for name in _REPORT_METRICS.values()):
+        raise _AdSenseError("invalid_response")
+    summary["status"] = "available"
+    return summary
+
+
+def _optional_summary(future: Any, stage: str, parser: Any, started_at: float) -> tuple[Any, str | None, dict | None]:
+    try:
+        return _at_stage(stage, parser, future.result()), None, None
+    except _AdSenseError as exc:
+        return None, exc.code, _error_diagnostics(exc, started_at)
+    except Exception:
+        # Optional provider collections never hide an independently verified
+        # account/site. Unexpected failures remain opaque, with no raw details.
+        return None, "provider_unavailable", _diagnostics(stage, "unknown", _elapsed_ms(started_at))
+
+
 def _live_summary(settings: _Settings) -> dict[str, Any]:
     started_at = time.monotonic()
     deadline = started_at + settings.timeout_seconds
@@ -417,9 +526,9 @@ def _live_summary(settings: _Settings) -> dict[str, Any]:
         )
         account = _at_stage("account", _account_summary, account_payload, settings)
         # These read-only collections are independent. Fetching them together
-        # bounds a cold admin check to one downstream timeout window instead of
-        # three consecutive windows.
-        with ThreadPoolExecutor(max_workers=3, thread_name_prefix="adsense-readonly") as pool:
+        # avoids serial timeout windows. Reports retain the existing short
+        # deadline; only Policy Center uses the established longer budget.
+        with ThreadPoolExecutor(max_workers=6, thread_name_prefix="adsense-readonly") as pool:
             sites_future = pool.submit(
                 _at_stage, "sites", _get,
                 client,
@@ -446,21 +555,37 @@ def _live_summary(settings: _Settings) -> dict[str, Any]:
                 max_timeout=_MAX_POLICY_TIMEOUT_SECONDS,
                 parent=settings.account_name,
             )
+            report_futures = {
+                period: pool.submit(
+                    _at_stage, f"reports_{period}", _get,
+                    client, f"{resource_path}/reports:generate", token,
+                    {
+                        "metrics": list(_REPORT_METRICS),
+                        "dateRange": date_range,
+                        "filters": f"DOMAIN_NAME=={settings.site_domain}",
+                        "reportingTimeZone": "ACCOUNT_TIME_ZONE",
+                        "languageCode": "en", "limit": 1,
+                    },
+                    deadline=deadline,
+                )
+                for period, date_range in _REPORT_PERIODS.items()
+            }
             sites = _at_stage("sites", _objects, sites_future.result(), "sites")
-            alerts = _at_stage("alerts", _objects, alerts_future.result(), "alerts")
-            # Site approval is independent of the Policy Center collection.
-            # Its live endpoint can be much slower than accounts/sites. Keep
-            # verified status visible, but never turn an unread policy list
-            # into an empty (apparently healthy) list.
-            policy_error = None
-            policy_diagnostics = None
-            try:
-                policy_objects = _at_stage("policy", _objects, policy_future.result(), "policyIssues")
-                policy_issues = _at_stage("policy", _policy_summary, policy_objects)
-            except _AdSenseError as exc:
-                policy_issues = None
-                policy_error = exc.code
-                policy_diagnostics = _error_diagnostics(exc, started_at)
+            site = _at_stage("sites", _site_summary, sites, settings)
+            # These optional reports cannot disconnect a verified account/site.
+            # Missing data is explicit, never an apparently healthy empty list.
+            alerts, alerts_error, alerts_diagnostics = _optional_summary(
+                alerts_future, "alerts", lambda payload: _alert_summary(_objects(payload, "alerts")), started_at,
+            )
+            policy_issues, policy_error, policy_diagnostics = _optional_summary(
+                policy_future, "policy", lambda payload: _policy_summary(_objects(payload, "policyIssues")), started_at,
+            )
+            reports = {}
+            for period, future in report_futures.items():
+                report, error, diagnostics = _optional_summary(future, f"reports_{period}", _report_summary, started_at)
+                reports[period] = report if report is not None else {
+                    **_empty_report(error_code=error), "diagnostics": diagnostics,
+                }
 
     return {
         "enabled": True,
@@ -470,9 +595,11 @@ def _live_summary(settings: _Settings) -> dict[str, Any]:
         "checked_at": _checked_at(),
         "cached": False,
         "account": account,
-        "site": _at_stage("sites", _site_summary, sites, settings),
-        "alerts": _at_stage("alerts", _alert_summary, alerts),
+        "site": site,
+        "alerts": alerts,
+        **({"alerts_error_code": alerts_error, "alerts_diagnostics": alerts_diagnostics} if alerts_error else {}),
         "policy_issues": policy_issues,
+        "reports": reports,
         **({"policy_error_code": policy_error} if policy_error else {}),
         **({"policy_diagnostics": policy_diagnostics} if policy_diagnostics is not None else {}),
         "error_code": None,
@@ -544,7 +671,11 @@ def adsense_management_readiness() -> dict[str, Any]:
 
     with _CACHE_CONDITION:
         try:
-            complete = result["connected"] and not result.get("policy_error_code")
+            complete = (
+                result["connected"] and not result.get("policy_error_code")
+                and not result.get("alerts_error_code")
+                and all(report.get("status") != "unavailable" for report in result.get("reports", {}).values())
+            )
             cache_seconds = settings.cache_seconds if complete else min(
                 60, settings.cache_seconds
             )
