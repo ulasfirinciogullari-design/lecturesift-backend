@@ -672,6 +672,8 @@ def _process_job(
                     worker_state="rejected",
                     error_code="LS-BILL-10",
                     error=str(exc),
+                    notify_failure=True,
+                    notification_context=getattr(exc, "notification_context", None),
                 )
                 return
             JOBS.update(job_id, percent=62, stage="study_pack")
@@ -938,6 +940,7 @@ def _process_job(
             error=normalized.user_message,
             technical_error=normalized.technical_message,
             elapsed_seconds=round(time.time() - started, 1),
+            notify_failure=not options.get("_worker_managed") or normalized.code not in {"LS-AI-02", "LS-SYSTEM-01"},
         )
     finally:
         # The package copy and ZIP are durable outputs; the conversion

@@ -152,6 +152,7 @@ test('user detail filters lessons on the server and actual error state remains s
 test('quota rejection explains the limit without presenting required minutes as spent', async ({page}) => {
   const rejected = {...lesson, status:'error', percent:0, stage:'error', source_type:'document',
     error_code:'LS-BILL-10', billable_minutes:561, document_words:112035,
+    failure_notification:{state:'sent', attempts:1, sent_at:1791410460},
     public_error:'Bu belge için 561 dakika kullanım hakkı gerekiyor; hesabında 60 dakika kaldı. <img src=x onerror="alert(1)">'};
   const unexpected = await openAdmin(page, {hash:'jobs', override:async (route, url) => {
     if (url.pathname === '/billing/admin/jobs') {
@@ -174,6 +175,8 @@ test('quota rejection explains the limit without presenting required minutes as 
   await expect(dialog).toContainText('561 dakika');
   await expect(dialog).toContainText('Hesaptan düşülen miktarı göstermez.');
   await expect(dialog).toContainText('Belge uzunluğu');
+  await expect(dialog).toContainText('E-posta sağlayıcısına gönderildi');
+  await expect(dialog).not.toContainText('Teslim edildi');
   await expect(dialog).not.toContainText('Kullanılan dakika');
   await expect(dialog).toContainText('hesabında 60 dakika kaldı');
   await expect(dialog.locator('img')).toHaveCount(0);

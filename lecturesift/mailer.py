@@ -7,6 +7,7 @@ recipient addresses are never logged.
 from __future__ import annotations
 
 import json
+import re
 import smtplib
 import ssl
 import urllib.error
@@ -37,28 +38,36 @@ def send_transactional_email(
     text: str,
     *,
     reply_to: str = "",
+    idempotency_key: str = "",
 ) -> str:
+    if idempotency_key and not re.fullmatch(r"[A-Za-z0-9_./:-]{1,256}", idempotency_key):
+        raise EmailDeliveryError("Geçersiz e-posta işlem anahtarı.")
     if not email_delivery_configured():
         raise EmailDeliveryError("E-posta doğrulama hizmeti henüz yapılandırılmamış.")
     if config.EMAIL_PROVIDER == "resend":
-        return _send_resend(to, subject, html, text, reply_to=reply_to)
+        return _send_resend(to, subject, html, text, reply_to=reply_to, idempotency_key=idempotency_key)
     return _send_smtp(to, subject, html, text, reply_to=reply_to)
 
 
-def _send_resend(to: str, subject: str, html: str, text: str, *, reply_to: str = "") -> str:
+def _send_resend(
+    to: str, subject: str, html: str, text: str, *, reply_to: str = "", idempotency_key: str = "",
+) -> str:
     message = {"from": config.EMAIL_FROM, "to": [to], "subject": subject, "html": html, "text": text}
     if reply_to:
         message["reply_to"] = reply_to
     payload = json.dumps(message).encode("utf-8")
+    headers = {
+        "Authorization": f"Bearer {config.RESEND_API_KEY}",
+        "Content-Type": "application/json",
+        "User-Agent": "LectureSift/1.0",
+    }
+    if idempotency_key:
+        headers["Idempotency-Key"] = idempotency_key
     request = urllib.request.Request(
         "https://api.resend.com/emails",
         data=payload,
         method="POST",
-        headers={
-            "Authorization": f"Bearer {config.RESEND_API_KEY}",
-            "Content-Type": "application/json",
-            "User-Agent": "LectureSift/1.0",
-        },
+        headers=headers,
     )
     try:
         with urllib.request.urlopen(request, timeout=15) as response:
@@ -68,7 +77,10 @@ def _send_resend(to: str, subject: str, html: str, text: str, *, reply_to: str =
                 response_payload = json.loads(response.read().decode("utf-8"))
             except (ValueError, UnicodeDecodeError):
                 response_payload = {}
-            return str(response_payload.get("id") or "")
+            provider_id = str(response_payload.get("id") or "") if isinstance(response_payload, dict) else ""
+            if idempotency_key and not provider_id:
+                raise EmailDeliveryError("E-posta gönderim sonucu doğrulanamadı.")
+            return provider_id
     except (OSError, urllib.error.URLError, urllib.error.HTTPError) as exc:
         raise EmailDeliveryError("Doğrulama e-postası gönderilemedi.") from exc
 

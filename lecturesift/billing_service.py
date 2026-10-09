@@ -41,7 +41,9 @@ from .billing import LEGACY_PLAN_BY_CODE, PLAN_BY_CODE, REGIONAL_PRICES, Plan
 
 
 class BillingError(Exception):
-    pass
+    def __init__(self, *args, notification_context: dict | None = None):
+        super().__init__(*args)
+        self.notification_context = notification_context or {}
 
 
 class BillingAuthenticationError(BillingError):
@@ -1520,27 +1522,35 @@ def require_duration_entitlement(
     plan = _effective_job_plan(status)
     required_minutes = max(1, int(math.ceil(max(0.0, duration_seconds) / 60)))
     remaining = status["remaining_minutes"]
+    notification_context = {
+        "required_minutes": required_minutes, "remaining_minutes": remaining,
+        "max_minutes_per_job": plan.max_minutes_per_job,
+    }
     if remaining is not None and required_minutes > int(remaining):
         if document_mode:
             raise BillingError(
                 f"Bu belge için {required_minutes} dakika kullanım hakkı gerekiyor; "
                 f"hesabında {int(remaining)} dakika kaldı. "
-                "Daha kısa bir belge yükle veya dakika hakkını artır."
+                "Daha kısa bir belge yükle veya dakika hakkını artır.",
+                notification_context=notification_context,
             )
         raise BillingError(
             f"Bu kaynak yaklaşık {required_minutes} dakika; hesabında {int(remaining)} dakika kaldı. "
-            "Daha kısa bir kaynak yükle veya dakika hakkını artır."
+            "Daha kısa bir kaynak yükle veya dakika hakkını artır.",
+            notification_context=notification_context,
         )
     if required_minutes > plan.max_minutes_per_job:
         if document_mode:
             raise BillingError(
                 f"Bu belge için {required_minutes} dakika kullanım hakkı gerekiyor; "
                 f"{plan.code} planında tek iş sınırı {plan.max_minutes_per_job} dakikadır. "
-                "Belgeyi böl veya planını yükselt."
+                "Belgeyi böl veya planını yükselt.",
+                notification_context=notification_context,
             )
         raise BillingError(
             f"Bu iş yaklaşık {required_minutes} dakika; {plan.code} planında tek iş sınırı "
-            f"{plan.max_minutes_per_job} dakikadır. Kaynağı böl veya planını yükselt."
+            f"{plan.max_minutes_per_job} dakikadır. Kaynağı böl veya planını yükselt.",
+            notification_context=notification_context,
         )
     if source_file_count > plan.max_files_per_job:
         raise BillingError(

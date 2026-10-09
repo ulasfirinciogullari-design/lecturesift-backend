@@ -70,6 +70,15 @@ function adminWorkStatusLabel(job) {
   return adminStatusLabel(job.status);
 }
 
+function adminWorkEmailLabel(state) {
+  return ({pending:'Gönderim bekliyor', retry:'Gönderim yeniden denenecek', sending:'Gönderiliyor',
+    sent:'E-posta sağlayıcısına gönderildi', cancelled:'İşlem durumu değişti; bildirim iptal edildi',
+    exhausted:'Gönderilemedi', ineligible:'Doğrulanmış alıcı adresi yok',
+    recipient_changed:'Alıcı adresi değişti; gönderim durduruldu',
+    envelope_changed:'E-posta ayarları değişti; gönderim durduruldu',
+    delivery_unknown:'Gönderim sonucu doğrulanamadı'})[state] || 'Durum doğrulanamadı';
+}
+
 function adminWorkList(jobs) {
   if (adminWorkState.loading || adminWorkState.error) {
     const target = admin$('adminJobs');
@@ -123,6 +132,15 @@ async function openAdminJob(jobId) {
     const result = body.result;
     admin$('adminJobDialogTitle').textContent = result?.title || job.title || 'Ders ayrıntısı';
     root.innerHTML = `<div class="admin-detail-summary"><article><small>Kullanıcı</small><strong>${adminEscape(job.owner_email || job.owner_id || 'Misafir/hesapsız')}</strong></article><article><small>Durum</small><strong>${adminEscape(adminWorkStatusLabel(job))} · %${Number(job.percent || 0)}</strong></article><article><small>Başlangıç</small><strong>${adminEscape(adminDate(job.created))}</strong></article><article><small>Kaynak</small><strong>${Number(job.source_file_count || 0)} dosya · ${(Number(job.file_size_bytes || 0) / 1048576).toLocaleString(adminLocale(), {maximumFractionDigits:1})} MB</strong></article><article><small>Gereken kullanım hakkı</small><strong>${job.billable_minutes == null ? 'Henüz hesaplanmadı' : `${adminEscape(job.billable_minutes)} dakika`}</strong><small>Hesaptan düşülen miktarı göstermez.</small></article>${job.document_words != null ? `<article><small>Belge uzunluğu</small><strong>${Number(job.document_words).toLocaleString(adminLocale())} kelime</strong></article>` : ''}<article><small>Çıktı dili</small><strong>${adminEscape(job.options?.output_language || '—')}</strong></article></div>`;
+    if (job.failure_notification) {
+      const article = document.createElement('article');
+      const label = document.createElement('small');
+      label.textContent = 'E-posta bildirimi';
+      const status = document.createElement('strong');
+      status.textContent = adminWorkEmailLabel(job.failure_notification.state);
+      article.append(label, status);
+      root.querySelector('.admin-detail-summary').append(article);
+    }
     const note = document.createElement('p');
     note.className = 'empty-copy';
     note.textContent = 'Saklanan ders çıktıları gösterilir. Kaynak dosyalar işlem sonunda temizlenebilir; silinmiş veya süresi dolmuş dersler burada bulunmaz. İçerik incelemeleri yönetici işlem kaydına eklenir.';

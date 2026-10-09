@@ -27,6 +27,9 @@ def test_document_limit_explains_usage_units_without_changing_media_limits_or_ba
             document_mode=document_mode)
 
     explanation = str(caught.value)
+    assert caught.value.notification_context == {
+        'required_minutes': required_minutes, 'remaining_minutes': 60, 'max_minutes_per_job': 30,
+    }
     if document_mode:
         assert f'Bu belge için {required_minutes} dakika kullanım hakkı gerekiyor' in explanation
         assert ('Daha kısa bir belge yükle' if required_minutes == 561 else 'Belgeyi böl') in explanation

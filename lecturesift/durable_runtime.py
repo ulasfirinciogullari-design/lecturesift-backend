@@ -49,6 +49,7 @@ def _durability_unavailable(job_id: str, diagnostic: str = "durable_runtime_unav
         error_code="LS-SYSTEM-01",
         error="Güvenli işleme altyapısı geçici olarak kullanılamıyor. Lütfen biraz sonra yeniden dene.",
         infrastructure_diagnostic=diagnostic,
+        notify_failure=True,
     )
 
 
@@ -136,6 +137,7 @@ def _preflight_documents(job_id: str, paths: list[Path], options: dict) -> float
             error_code=normalized.code,
             error=normalized.user_message,
             technical_error=normalized.technical_message,
+            notify_failure=True,
         )
         return None
 
@@ -238,6 +240,8 @@ def install_durable_runtime() -> None:
                 stage="error",
                 error_code="LS-GUEST-04" if guest_user else "LS-BILL-10",
                 error=str(exc),
+                notify_failure=True,
+                notification_context=getattr(exc, "notification_context", None),
             )
             return
 
