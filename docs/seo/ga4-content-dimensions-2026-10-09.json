@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "recordType": "ga4_custom_dimension_registration",
+  "siteUrl": "sc-domain:lecturesift.com",
+  "propertyId": "properties/552003870",
+  "propertyDisplayName": "LectureSift",
+  "observedAtUtc": "2026-10-09T00:51:10.471441Z",
+  "before": {
+    "source": "GSC Wizard list_ga4_custom_dimensions, GA4 Admin API",
+    "count": 0
+  },
+  "action": {
+    "method": "Native Google Analytics Admin UI in owner's existing Chrome session",
+    "pageUrl": "https://analytics.google.com/analytics/web/#/a115773814p552003870/admin/customdefinitions/hub",
+    "createdDefinitions": [
+      {
+        "displayName": "Content target path",
+        "parameterName": "target_path",
+        "apiName": "customEvent:target_path",
+        "scope": "EVENT",
+        "description": "Allowlisted destination path for content_action; excludes query strings, fragments and user filenames."
+      },
+      {
+        "displayName": "Content link placement",
+        "parameterName": "link_placement",
+        "apiName": "customEvent:link_placement",
+        "scope": "EVENT",
+        "description": "Location of content_action links: header, footer or content. Fixed labels only."
+      }
+    ]
+  },
+  "after": {
+    "verifiedBy": [
+      "Native Google Analytics table showing two saved event-scoped definitions",
+      "Independent GSC Wizard list_ga4_custom_dimensions response from GA4 Admin API"
+    ],
+    "count": 2,
+    "queryableApiNames": [
+      "customEvent:link_placement",
+      "customEvent:target_path"
+    ]
+  },
+  "sourceReview": {
+    "files": [
+      "frontend/analytics.js",
+      "frontend/i18n.js",
+      "scripts/build_localized_site.mjs"
+    ],
+    "fiveContentActionTypesWired": true,
+    "consentCheckedBeforeAndAfterConfigAwait": true,
+    "productionHostGuardPresent": true,
+    "targetPathValues": "At most 20 fixed public route or allowlisted resource paths; no query, fragment, user filename or free-form text.",
+    "linkPlacementValues": [
+      "header",
+      "footer",
+      "content"
+    ],
+    "confirmedSourceDefects": []
+  },
+  "effect": "Registers parameters already emitted by content_action for future reports. Does not add tracking events, collect new values, or prove real visitor interactions.",
+  "reportingLimits": [
+    "No historical backfill is claimed; registration applies prospectively.",
+    "Google documents a 24-48 hour reporting delay. Populated reports were not verified in this follow-up.",
+    "Real visitor consent and interactions are still needed. Four previously unobserved action types, internal traffic effects, attribution and payment reconciliation remain unresolved."
+  ],
+  "reference": "https://support.google.com/analytics/answer/14240153",
+  "priorEvidence": "measurement-review-2026-10-09.json",
+  "boundaries": {
+    "sourceCodeChanged": false,
+    "syntheticEventsSent": false,
+    "customerTransactionsRead": false,
+    "consentSettingsChanged": false,
+    "conversionSettingsChanged": false,
+    "localTestsOrBuildsRun": false
+  }
+}

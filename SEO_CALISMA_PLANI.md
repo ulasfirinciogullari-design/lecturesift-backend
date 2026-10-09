@@ -5,6 +5,59 @@ takip edilir. Başlangıç varsayımı Türkiye'deki üniversite öğrencileri v
 Türkçe aramalardır. İlk rekabet geliştirmesi üç ana ürün sayfasının Türkçe
 ve İngilizce sürümlerine uygulanır; diğer diller mevcut içeriklerini korur.
 
+## 9 Ekim 2026 üç öncelikli URL indekslendi; ölçüm tanımları tamamlandı
+
+**03:49 TSİ takip yenilemesi:** Kabul edilmiş yedi isteğin hedefleri bir kez
+yeniden denetlendi. Bu işlem yeni indeksleme isteği değildir. Üç URL artık
+indeksli; aynı sonuçlar **03:52–03:54 TSİ** arasında Google'ın kendi indeks
+kayıtlarında da doğrulandı:
+
+| URL | Güncel indeks durumu | Google'ın seçtiği canonical |
+| --- | --- | --- |
+| `/quiz-flashcards` | İndeksli | `https://lecturesift.com/quiz-flashcards` |
+| `/pt/contact` | İndeksli | `https://lecturesift.com/pt/contact` |
+| `/en/quiz-flashcards` | İndeksli | `https://lecturesift.com/en/quiz-flashcards` |
+
+Üç kayıtta kullanıcı canonical'ı da aynı temiz adres; Google'ın seçimi
+“İncelenen URL”. Böylece Türkçe quiz ve Portekizce iletişim için eski
+`.html` seçiminin güncellendiği doğrulandı. Üçünde de Google bir geçerli
+BreadcrumbList öğesi gösteriyor. Eski denetim bağlantısı Türkçe quiz'in
+Ağustos kaydını göstermeye devam ettiğinden güncel sonuç yeni URL Denetimi
+başlatılarak alındı; eski raporlar güncel sonuç yerine kullanılmadı.
+
+Kalan `/pt/quiz-flashcards` eski taramaya dayanan alternatif sayfa;
+`/pdf-note-check` keşfedilmiş; `/en/lecture-video-summary` ve
+`/en/pdf-note-check` son sağlayıcı yanıtında Google tarafından bilinmiyor.
+Önceki keşfedildi/bilinmiyor kayıtları korunur;
+bu dalgalanma kabul edilmiş istekleri geçersiz kılmaz veya yeni bir kaynak
+kusurunu kanıtlamaz. Dört adrese tekrar istek gönderilmedi.
+
+31 URL'lik takip grubunda artık **3 indeksli / 28 indeks dışı** kayıt var;
+yalnız yedi öncelikli URL bu oturumda yenilendi. Kalan 24 kaydın zamanı
+eski, bu sayılar tüm sitenin indeks sayısı değildir. Takip ve e-posta
+özeti etkin. Sitemap `isPending=false`, 183 adres, 0 hata/0 uyarı;
+son indirme `2026-10-08T22:17:48.588Z`. `contents[].indexed=0` değeri,
+Google'ın [kullanımdan kaldırdığı alan](https://developers.google.com/webmaster-tools/v1/sitemaps)
+olduğu için indeks sayısı olarak yorumlanmadı. Harita tekrar gönderilmedi.
+[Takip sonuçları ve native canonical kanıtları](docs/seo/indexing-followup-2026-10-09.json).
+
+**Ölçümde uygulanabilir eksik kapatıldı:** LectureSift GA4 mülkünde mevcut
+`content_action` parametreleri için `target_path` ve `link_placement`
+olay kapsamlı özel boyutları oluşturuldu. Google panelindeki kayıtlar,
+ayrı GA4 Admin API okumasıyla doğrulandı. İlki yalnız izinli sabit hedef
+yollarını, ikincisi `header/footer/content` değerlerini raporlar. Yeni olay,
+kişisel veri veya izleme kodu eklenmedi; izin/dönüşüm ayarları değiştirilmedi.
+Geçmiş veri geriye dönük dolmaz; [Google'ın belirttiği 24–48 saatlik](https://support.google.com/analytics/answer/14240153)
+raporlama süresi ve gerçek ziyaretçi etkileşimleri beklenir. İç kullanım,
+atıf, gözlenmeyen dört eylem türü ve ödeme karşılaştırması hâlâ açık.
+[Tanımlar ve doğrulama kaydı](docs/seo/ga4-content-dimensions-2026-10-09.json).
+
+Canonical, dil alternatifleri, rehber keşfi ve beş olay türünün kaynak
+bağlantıları ayrıca incelendi; kesin bir yeni kaynak kusuru saptanmadı.
+Yerel test/derleme veya sentetik Analytics olayı çalıştırılmadı. Göreve ait
+Chrome sekmesi kapatıldı; diğer sohbetin sekmesi korundu. Aşağıdaki
+bekleme/kabul sayıları önceki oturumların tarihsel kayıtlarıdır.
+
 ## 9 Ekim 2026 PDF rehberlerinin indeksleme istekleri tamamlandı
 
 Kullanıcının Google doğrulamasını tamamladığını bildirmesinin ardından,
@@ -835,10 +888,10 @@ alındığını veya Google tarafından işlendiğini iddia etmez.
 
 | Öncelik | İş | Durum ve kalan ölçüt |
 | --- | --- | --- |
-| P0 | Ölçümün güvenilirliğini doğrula | Kısmen doğrulandı: üretimde `content_action/open_workspace` alınıyor. Diğer dört tür, iç kullanım/atıf ve gerçek ödeme karşılaştırması açık; yapay olay veya müşteri kaydı kullanılmadı. |
+| P0 | Ölçümün güvenilirliğini doğrula | Üretimde `content_action/open_workspace` alınıyor. `target_path` ve `link_placement` özel boyutları oluşturulup UI/API ile doğrulandı; yeni verinin raporlanması bekleniyor. Diğer dört tür, iç kullanım/atıf ve gerçek ödeme karşılaştırması açık; yapay olay veya müşteri kaydı kullanılmadı. |
 | P0 | Gezinme yolu düzeltmesini doğrula | Tamamlandı: kaynak/önceki uzak CI ve 9 Ekim TR/EN/AR canlı JSON-LD zincirleri doğrulandı. |
 | P1 | İlk üç ürün sayfasını geliştir | İlk paket tamamlandı: altı TR/EN sürümü PR107 ile yayımlandı; örnekler, adımlar, sınırlar ve ilgili rehberler canlı doğrulandı. Yeni gelişim ölçülmüş sorgulara göre seçilecek. |
-| P1 | Google URL Denetimi ve canonical | 183 URL'nin indeks durumu incelendi; ana sayfa/üç ürün ve sorunlu alternatiflerin native canonical alanları okundu. PDF rehberleri dahil yedi öncelikli URL'nin istekleri kabul edildi. İngilizce PDF rehberi keşfedildi; iki rehberde de tarama/canonical `Yok`. İstek gönderme işi tamam; yeniden tarama/indekslenme/canonical değişimi Google'dan bekleniyor. Tüm 183 adresin canonical alanı alınmış değildir. |
+| P1 | Google URL Denetimi ve canonical | 183 URL'nin ilk indeks denetimi ve yedi öncelikli istek tamam. Son kontrolde TR/EN quiz ile PT iletişim indeksli ve temiz canonical; native Google UI ile doğrulandı. Dört öncelikli adres bekliyor. Sitemap işlendi, 0 hata/uyarı. 31 URL'lik takipte 3 indeksli/28 indeks dışı; yalnız yedi kayıt yeni. Tüm 183 adresin canonical alanı alınmış değildir. |
 | P1 | Mobil hız başlangıcını ölç | Tamamlandı: başlangıçta ana sayfa 71, PDF ürünü 98; 03:23 TSİ yayın sonrası tekil ana sayfa ölçümü 99/LCP 1,6 sn. Saha verisi yok. PR121'in responsive görsel düzeltmesi uzak CI'da ve 03:12 TSİ canlı TR/EN HTML/görsel yanıtında doğrulandı. |
 | P2 | İlk rehber kümesini genişlet | İlk paket tamamlandı: Cornell, aktif hatırlama ve PDF not kontrol rehberleri/ürün bağlantıları yayımlandı. Yeni konu seçimi sorgu verisiyle yapılacak; yalnız gerçekten yazılmış dil sürümleri yayımlanacak. |
 
