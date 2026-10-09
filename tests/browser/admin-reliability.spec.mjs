@@ -323,7 +323,7 @@ test('advertising gets a longer bounded timeout while the panel remains usable',
     await expect(page.locator('#adminUserList')).toContainText(user.email);
     await page.clock.runFor(25_000);
     await expect(page.locator('#adminRefresh')).toBeEnabled();
-    await expect(page.locator('#adminDataStatus')).toContainText('AdSense ve Google Ads');
+    await expect(page.locator('#adminDataStatus')).toContainText('AdSense / Google Ads');
     await expect(page.locator('#adminPanel')).toBeVisible();
     expect(await page.evaluate(() => sessionStorage.getItem('lecturesift-admin-session-token'))).toBe('synthetic-admin-token');
   } finally { release(); }
@@ -693,7 +693,7 @@ test('admin advertising layout stays readable in each viewport and theme', async
   await expect(page.locator('#adminAdSenseSummary')).toBeVisible();
   await expect(page.locator('#adminGrowthRefresh')).toBeEnabled();
   await expect(page.locator('#adminGrowthStatus .admin-growth-group')).toHaveCount(3);
-  await expect(page.locator('#adminAdSenseSummary li')).toHaveCount(5);
+  await expect(page.locator('#adminAdSenseSummary .admin-adsense-steps > li')).toHaveCount(5);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   await assertTextContrast('#adminGrowthStatus article p, #adminGrowthStatus article header span');
   if (await page.locator('.admin-sidebar-label').isVisible()) await assertTextContrast('.admin-sidebar-label');
