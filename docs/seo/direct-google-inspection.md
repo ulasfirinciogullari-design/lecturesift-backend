@@ -38,6 +38,15 @@ Google CAPTCHA isterse istek otomatik tekrarlanmaz veya başka oturumla
 aşılmaya çalışılmaz. Chrome'a geçiş kullanıcının TinyFish bağımlılığını
 kaldırma talebiyle yapıldı; bu geçişte yeni indeksleme isteği gönderilmedi.
 
+Kullanıcı daha sonra doğrulamayı tamamladığını bildirdiğinde, önce mevcut
+isteğin kabul ekranını oku. “Dizine eklenmesi istendi”/“TEKRAR İSTEK GÖNDER”
+görünüyorsa aynı URL için tekrar gönderme. 9 Ekim 03:33 TSİ'de Türkçe PDF
+rehberindeki manuel isteğin kabulü bu şekilde doğrulandı; ardından henüz
+gönderilmemiş İngilizce rehberin tek isteği 03:35 TSİ'de kabul edildi.
+[Bu oturumun sonuçları](pdf-indexing-requests-2026-10-09.json) önceki salt
+okuma oturumundan ayrıdır. İnsan doğrulaması otomatikleştirilmez; yeni bir
+CAPTCHA çıkarsa kullanıcıya bırakılır.
+
 ### Alternatif: kayıtlı TinyFish profili
 
 9 Ekim 2026'da kullanıcının kaydettiği TinyFish tarayıcı profiliyle Search

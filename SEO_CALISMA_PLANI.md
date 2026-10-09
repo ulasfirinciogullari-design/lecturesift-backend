@@ -5,6 +5,31 @@ takip edilir. Başlangıç varsayımı Türkiye'deki üniversite öğrencileri v
 Türkçe aramalardır. İlk rekabet geliştirmesi üç ana ürün sayfasının Türkçe
 ve İngilizce sürümlerine uygulanır; diğer diller mevcut içeriklerini korur.
 
+## 9 Ekim 2026 PDF rehberlerinin indeksleme istekleri tamamlandı
+
+Kullanıcının Google doğrulamasını tamamladığını bildirmesinin ardından,
+**03:33 TSİ'de** Türkçe `/pdf-note-check` kaydında “Dizine eklenmesi
+istendi” onayı ve “TEKRAR İSTEK GÖNDER” düğmesi görüldü. Bu manuel isteği
+kullanıcı tamamladı; ajan sonucu doğruladı ve tekrar göndermedi.
+
+Kalan `/en/pdf-note-check` için aynı Chrome oturumunda ilk kez tek istek
+gönderildi. Google uygunluk kontrolünden sonra **03:35 TSİ'de** “Dizine
+eklenmesi istendi” onayı ve öncelikli tarama sırasına eklenme mesajı
+gösterdi. Böylece önceki beş URL ile birlikte **yedi öncelikli URL'nin
+tamamı için kabul edilmiş indeksleme isteği** var. PDF rehberlerinin
+istek gönderme işi kapandı; CAPTCHA otomatik çözülmedi veya aşılmadı.
+
+İngilizce rehberin güncel indeks kaydı artık “Keşfedildi - şu anda dizine
+eklenmiş değil” ve sitemap kaydı mevcut. Türkçe rehber onay anında hâlâ
+Google tarafından bilinmiyor. İkisinde de son tarama ve canonical alanları
+`Yok`. İsteklerin kabulü indekslenme, tarama veya canonical seçiminin
+tamamlandığı anlamına gelmez; Google'ın işlemesi bekleniyor.
+
+[İsteklerin göndericileri, zamanları ve kabul kanıtları](docs/seo/pdf-indexing-requests-2026-10-09.json)
+ayrı kaydedildi. Aşağıdaki beş istek/sıfır yeni istek/CAPTCHA engeli
+bölümleri önceki oturumların tarihsel kayıtlarıdır; güncel toplam yedidir.
+Yerel test veya derleme çalıştırılmadı.
+
 ## 9 Ekim 2026 TinyFish olmadan Chrome erişimi doğrulandı
 
 Kullanıcının isteğiyle mevcut Windows Chrome/SSH köprüsü bu sohbetten
@@ -813,7 +838,7 @@ alındığını veya Google tarafından işlendiğini iddia etmez.
 | P0 | Ölçümün güvenilirliğini doğrula | Kısmen doğrulandı: üretimde `content_action/open_workspace` alınıyor. Diğer dört tür, iç kullanım/atıf ve gerçek ödeme karşılaştırması açık; yapay olay veya müşteri kaydı kullanılmadı. |
 | P0 | Gezinme yolu düzeltmesini doğrula | Tamamlandı: kaynak/önceki uzak CI ve 9 Ekim TR/EN/AR canlı JSON-LD zincirleri doğrulandı. |
 | P1 | İlk üç ürün sayfasını geliştir | İlk paket tamamlandı: altı TR/EN sürümü PR107 ile yayımlandı; örnekler, adımlar, sınırlar ve ilgili rehberler canlı doğrulandı. Yeni gelişim ölçülmüş sorgulara göre seçilecek. |
-| P1 | Google URL Denetimi ve canonical | 183 URL'nin indeks durumu incelendi; ana sayfa/üç ürün ve sorunlu alternatiflerin native canonical alanları okundu. İki PDF rehberinde Google'ın kendi kaydı da bilinmiyor/`Yok`. Beş istek kabul edildi; PDF rehberlerinin istek işi CAPTCHA nedeniyle açık. Yeniden tarama/canonical değişimi Google'dan bekleniyor; tüm 183 adresin canonical alanı alınmış değildir. |
+| P1 | Google URL Denetimi ve canonical | 183 URL'nin indeks durumu incelendi; ana sayfa/üç ürün ve sorunlu alternatiflerin native canonical alanları okundu. PDF rehberleri dahil yedi öncelikli URL'nin istekleri kabul edildi. İngilizce PDF rehberi keşfedildi; iki rehberde de tarama/canonical `Yok`. İstek gönderme işi tamam; yeniden tarama/indekslenme/canonical değişimi Google'dan bekleniyor. Tüm 183 adresin canonical alanı alınmış değildir. |
 | P1 | Mobil hız başlangıcını ölç | Tamamlandı: başlangıçta ana sayfa 71, PDF ürünü 98; 03:23 TSİ yayın sonrası tekil ana sayfa ölçümü 99/LCP 1,6 sn. Saha verisi yok. PR121'in responsive görsel düzeltmesi uzak CI'da ve 03:12 TSİ canlı TR/EN HTML/görsel yanıtında doğrulandı. |
 | P2 | İlk rehber kümesini genişlet | İlk paket tamamlandı: Cornell, aktif hatırlama ve PDF not kontrol rehberleri/ürün bağlantıları yayımlandı. Yeni konu seçimi sorgu verisiyle yapılacak; yalnız gerçekten yazılmış dil sürümleri yayımlanacak. |
 
