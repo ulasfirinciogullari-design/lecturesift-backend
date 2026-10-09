@@ -1,0 +1,161 @@
+{
+  "schemaVersion": 1,
+  "observedOnUtcDates": [
+    "2026-10-08",
+    "2026-10-09"
+  ],
+  "localObservationDate": "2026-10-09",
+  "localTimeZone": "Europe/Istanbul",
+  "siteUrl": "sc-domain:lecturesift.com",
+  "source": "Native Google Search Console UI via authorized saved TinyFish profile; not a raw Google URL Inspection API export.",
+  "outcomeLimit": "Request acceptance means queued for crawling, not indexed or canonical changed. Missing indexed-record canonical fields are never filled from current HTML or live-test views.",
+  "inspections": [
+    {
+      "url": "https://lecturesift.com/en/quiz-flashcards",
+      "runId": "8e15ff78-1bfe-4105-a8e6-3f5d5040641e",
+      "inspectionPageUrl": "https://search.google.com/search-console/inspect?resource_id=sc-domain%3Alecturesift.com&id=0Db2bGmgEef7g_ANcJ2D-w",
+      "recordView": "indexed_record",
+      "indexingState": "not_indexed",
+      "coverageState": "Keşfedildi - şu anda dizine eklenmiş değil",
+      "lastCrawl": {
+        "raw": "Yok",
+        "value": null
+      },
+      "userCanonical": {
+        "raw": "Yok",
+        "value": null
+      },
+      "googleCanonical": {
+        "raw": "Yok",
+        "value": null
+      },
+      "crawlAllowed": {
+        "raw": "Yok",
+        "value": null
+      },
+      "fetchState": {
+        "raw": "Yok",
+        "value": null
+      },
+      "indexingAllowed": {
+        "raw": "Yok",
+        "value": null
+      },
+      "sitemaps": [
+        "https://lecturesift.com/sitemap.xml"
+      ],
+      "referringPages": [
+        "https://lecturesift.com/quiz-flashcards",
+        "https://lecturesift.com/ko/quiz-flashcards",
+        "https://lecturesift.com/hi/quiz-flashcards",
+        "https://lecturesift.com/en/workspace"
+      ],
+      "indexingRequest": {
+        "attempted": true,
+        "accepted": true,
+        "confirmationTitle": "Dizine eklenmesi istendi",
+        "buttonAfter": "Tekrar İstek Gönder",
+        "actualIndexingCompleted": null,
+        "indexingCompletionVerified": false
+      }
+    },
+    {
+      "url": "https://lecturesift.com/en/lecture-video-summary",
+      "runId": "1720f4b2-3cf6-4b5d-99be-072e2be6ae7f",
+      "inspectionPageUrl": null,
+      "recordView": "indexed_record",
+      "indexingState": "not_indexed",
+      "coverageState": "Keşfedildi - şu anda dizine eklenmiş değil",
+      "lastCrawl": {
+        "raw": "Yok",
+        "value": null
+      },
+      "userCanonical": {
+        "raw": "Yok",
+        "value": null
+      },
+      "googleCanonical": {
+        "raw": "Yok",
+        "value": null
+      },
+      "crawlAllowed": {
+        "raw": "Yok",
+        "value": null
+      },
+      "fetchState": {
+        "raw": "Yok",
+        "value": null
+      },
+      "indexingAllowed": {
+        "raw": "Yok",
+        "value": null
+      },
+      "sitemaps": [
+        "https://lecturesift.com/sitemap.xml"
+      ],
+      "referringPages": [
+        "https://lecturesift.com/ja/lecture-video-summary",
+        "https://lecturesift.com/de/lecture-video-summary",
+        "https://lecturesift.com/en/workspace"
+      ],
+      "indexingRequest": {
+        "attempted": true,
+        "accepted": true,
+        "confirmationTitle": null,
+        "confirmationMeaning": "URL added to priority crawl queue",
+        "buttonAfter": "TEKRAR İSTEK GÖNDER",
+        "actualIndexingCompleted": null,
+        "indexingCompletionVerified": false
+      }
+    },
+    {
+      "url": "https://lecturesift.com/pdf-note-check",
+      "runId": "072e656b-e1f3-49e1-a3ce-cc5ec2399f6f",
+      "inspectionPageUrl": "https://search.google.com/search-console/inspect?resource_id=sc-domain%3Alecturesift.com&id=Fbv93kC7S2zpUvu039rj3w&alt_id=WWYH8ckJkq6AQWEe8sXRww",
+      "recordView": "live_test_only_reported",
+      "indexingState": null,
+      "coverageState": null,
+      "lastCrawl": null,
+      "userCanonical": null,
+      "googleCanonical": null,
+      "liveView": {
+        "availabilityRaw": "URL, Google tarafından kullanılabilir",
+        "indexabilityRaw": "Sayfa dizine eklenebilir",
+        "testTimeRaw": "8 Eki 2026, 20:02",
+        "testTimeZone": null
+      },
+      "indexingRequest": {
+        "attempted": true,
+        "accepted": null,
+        "outcome": "blocked_by_CAPTCHA",
+        "retried": false
+      },
+      "interpretationCorrection": "The browser agent incorrectly called live-test availability 'indexed' and its test timestamp 'last crawl'. These conclusions are not accepted. This run did not establish the indexed record, Google-selected canonical, last crawl, or an accepted indexing request."
+    },
+    {
+      "url": "https://lecturesift.com/en/pdf-note-check",
+      "recordView": null,
+      "indexingState": null,
+      "indexingRequest": {
+        "attempted": false,
+        "accepted": null,
+        "outcome": "not_attempted_after_CAPTCHA_on_previous_URL"
+      }
+    }
+  ],
+  "acceptedThisFollowup": 2,
+  "acceptedPreviously": 3,
+  "acceptedTotalAcrossBothDocumentedSessions": 5,
+  "priorEvidence": "google-selected-canonicals-2026-10-09.json",
+  "furtherRequestsStopped": true,
+  "stopReason": "Google reCAPTCHA; no attempt to bypass, solve automatically, change accounts, or resubmit.",
+  "tracker": {
+    "isActive": true,
+    "trackedUrls": 31,
+    "lastStoredCheckAtUtc": "2026-10-08T22:46:05.856+00:00",
+    "postRequestRefreshPerformed": false,
+    "note": "Existing tracker snapshot predates these native UI observations. Its counts are not post-request outcomes."
+  },
+  "liveAuditEvidence": "priority-discovery-2026-10-09.json",
+  "localTestsOrBuildsRun": false
+}

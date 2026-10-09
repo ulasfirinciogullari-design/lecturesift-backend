@@ -1,0 +1,162 @@
+{
+  "schemaVersion": 1,
+  "observedAtUtc": "2026-10-08T23:55:41Z",
+  "localObservationDate": "2026-10-09",
+  "siteUrl": "sc-domain:lecturesift.com",
+  "scope": "Read-only aggregate GA4 content interaction and Search Console measurement review; no payments or customer transaction records.",
+  "range": {
+    "startDate": "2026-09-08",
+    "endDate": "2026-10-05",
+    "days": 28
+  },
+  "sources": {
+    "ga4": {
+      "provider": "GSC Wizard",
+      "dataSource": "ga4-api",
+      "timeZone": "Europe/Istanbul",
+      "linkedPropertyDisplayName": "LectureSift",
+      "siteScope": null,
+      "hostnameReportTruncated": false,
+      "tools": [
+        "list_ga4_properties",
+        "query_ga4_report"
+      ]
+    },
+    "contentParameters": {
+      "provider": "Windsor.ai",
+      "connector": "googleanalytics4",
+      "fieldsDiscoveredBeforeQuery": true,
+      "fields": [
+        "event_name",
+        "hostname",
+        "content_type",
+        "content_id",
+        "page_path",
+        "event_count"
+      ],
+      "filters": {
+        "event_name": "content_action",
+        "hostname": "lecturesift.com"
+      },
+      "tool": "get_data"
+    },
+    "searchConsole": {
+      "provider": "GSC Wizard",
+      "dataSource": "api",
+      "searchType": "web",
+      "dimension": "date",
+      "rows": 28,
+      "truncated": false,
+      "timeZone": "America/Los_Angeles",
+      "settledThrough": "2026-10-06",
+      "firstIncompleteDate": "2026-10-07",
+      "tool": "query_search_analytics"
+    }
+  },
+  "hostnameTotals": [
+    {
+      "hostname": "lecturesift.com",
+      "sessions": 89,
+      "activeUsers": 7,
+      "pageViews": 216
+    }
+  ],
+  "organicSearch": {
+    "hostname": "lecturesift.com",
+    "sourceMedium": "google / organic",
+    "sessions": 67,
+    "activeUsers": 4
+  },
+  "searchConsoleTotals": {
+    "clicks": 3,
+    "impressions": 133
+  },
+  "contentAction": {
+    "eventCount": 5,
+    "totalUsers": 2,
+    "hostname": "lecturesift.com",
+    "observedDates": [
+      {
+        "date": "2026-09-25",
+        "eventCount": 1
+      },
+      {
+        "date": "2026-09-27",
+        "eventCount": 3
+      },
+      {
+        "date": "2026-09-28",
+        "eventCount": 1
+      }
+    ],
+    "expectedContentTypes": [
+      "open_workspace",
+      "open_registration",
+      "view_plans",
+      "read_related",
+      "download_resource"
+    ],
+    "observedContentTypes": [
+      {
+        "contentType": "open_workspace",
+        "eventCount": 5
+      }
+    ],
+    "pageBreakdown": [
+      {
+        "pagePath": "/",
+        "contentId": "/",
+        "contentType": "open_workspace",
+        "eventCount": 4
+      },
+      {
+        "pagePath": "/en/",
+        "contentId": "/",
+        "contentType": "open_workspace",
+        "eventCount": 1
+      }
+    ],
+    "unobservedExpectedContentTypes": [
+      "open_registration",
+      "view_plans",
+      "read_related",
+      "download_resource"
+    ],
+    "providerEventTotalsAgree": true,
+    "noMissingContentTypeRowReturned": true,
+    "interpretation": "The event and open_workspace parameter were received on the production hostname. These are click-intent observations, not proof of completed uploads, registrations, downloads or sales. No unobserved action type is declared broken."
+  },
+  "customDefinitions": {
+    "registeredCount": 0,
+    "contentTypeAndContentIdAreStandardDimensions": true,
+    "extraParametersNotSeparatelyReportable": [
+      "target_path",
+      "link_placement"
+    ],
+    "settingsChanged": false,
+    "source": {
+      "provider": "GSC Wizard",
+      "tool": "list_ga4_custom_dimensions",
+      "dataSource": "ga4-admin-api"
+    }
+  },
+  "remainingGaps": [
+    "The four other intended action types have not been observed in this report window; absence does not establish whether no qualifying interactions occurred or tracking failed.",
+    "Attribution and internal-use effects remain unresolved. Aggregate data cannot classify the observed users as external customers.",
+    "Only lecturesift.com was returned in the hostname breakdown; this does not prove the absence of all historical internal, test or preview traffic.",
+    "The same calendar labels use different reporting time zones in GSC and GA4. GSC web clicks and GA4 organic sessions are different measurements, so 3 versus 67 is not a conversion rate or evidence of a particular defect.",
+    "The window predates the Google Ads/consent changes merged on 2026-10-09; their live impact cannot be evaluated from this window."
+  ],
+  "documentation": [
+    "https://developers.google.com/analytics/devguides/reporting/data/v1/api-schema",
+    "https://support.google.com/webmasters/answer/17010575?hl=en"
+  ],
+  "boundaries": {
+    "paymentsOrCustomerTransactionsAccessed": false,
+    "ga4SettingsChanged": false,
+    "consentOrConversionSettingsChanged": false,
+    "syntheticEventsTriggered": false,
+    "localTestsOrBuildsRun": false
+  },
+  "recordType": "aggregated_measurement_review"
+}
