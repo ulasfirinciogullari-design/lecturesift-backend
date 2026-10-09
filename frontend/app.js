@@ -188,6 +188,11 @@ let billingAccount = null, billingCatalog = null;
 let billingCurrency = localStorage.getItem("lecturesift-currency") || "";
 let requestedJobLoaded = false;
 let activeProgressProfile = "";
+let jobBusy = false;
+window.addEventListener("storage", event => {
+  if ((event.key === "lecturesift-billing-token" || event.key === null)
+    && localStorage.getItem("lecturesift-billing-token") !== billingToken) location.reload();
+});
 
 function stringsFor(language) {
   if (language === "tr") return TR;
@@ -381,7 +386,7 @@ async function billingRequest(path, options = {}) {
   const response = await fetch(`${API}${path}`, {...options, headers});
   if (!response.ok) {
     const error = await responseError(response);
-    throw Object.assign(new Error(error.message), {code: error.code});
+    throw Object.assign(new Error(error.message), {code: error.code, status:response.status});
   }
   return response.json();
 }
@@ -406,16 +411,26 @@ async function downloadProtected(path, filename) {
     anchor.href = objectUrl; anchor.download = filename || "LectureSift";
     document.body.appendChild(anchor); anchor.click(); anchor.remove();
     setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-  } catch (error) { showError(error.message, error.code || "LS-NETWORK-01"); }
+  } catch (error) { showError(error.message, error.code || "LS-NETWORK-01", {stopProcessing:false}); }
 }
 
 async function refreshBillingAccount() {
   if (!billingToken) { billingAccount = null; renderBillingAccount(); renderPlans(); return; }
+  const requestedToken = billingToken;
+  const storedToken = localStorage.getItem("lecturesift-billing-token");
+  if (storedToken && storedToken !== requestedToken) return;
+  const sameSession = () => requestedToken === billingToken && localStorage.getItem("lecturesift-billing-token") === storedToken;
   try {
     const body = await billingRequest("/billing/me");
+    if (!sameSession()) return;
+    if (!body?.account?.user || typeof body.account.user !== "object" || Array.isArray(body.account.user)
+      || typeof body.account.plan?.code !== "string" || !body.account.plan.code) throw new Error(t("errorFallback"));
     billingAccount = body.account;
-  } catch {
-    billingToken = ""; billingAccount = null; localStorage.removeItem("lecturesift-billing-token");
+  } catch (error) {
+    if (!sameSession()) return;
+    if (error.status === 401) {
+      billingToken = ""; billingAccount = null; localStorage.removeItem("lecturesift-billing-token");
+    } else showError(error.message, error.code || "LS-NETWORK-01", {stopProcessing:false});
   }
   renderBillingAccount(); renderPlans();
 }
@@ -476,12 +491,12 @@ async function loadBilling() {
 }
 
 async function restoreRequestedJob() {
-  if (requestedJobLoaded || !billingToken || !billingAccount) return;
+  if (requestedJobLoaded || jobBusy || !billingToken || !billingAccount) return;
   const requested = new URLSearchParams(location.search).get("job") || "";
   if (!/^[A-Za-z0-9-]{8,80}$/.test(requested)) return;
   requestedJobLoaded = true;
   jobId = requested;
-  $("analyzeButton").disabled = true;
+  setJobBusy(true);
   try {
     const response = await fetch(`${API}/jobs/${encodeURIComponent(jobId)}`, {cache:"no-store", headers:{Authorization:`Bearer ${billingToken}`}});
     if (!response.ok) { const error = await responseError(response); showError(error.message, error.code); return; }
@@ -562,6 +577,7 @@ function configureProgressProfile(job = null, force = false) {
   return profile;
 }
 function addFiles(role, incoming) {
+  if (jobBusy) return;
   const current = filesFor(role), known = new Set(current.map(file => `${file.name}:${file.size}:${file.lastModified}`));
   for (const file of incoming) {
     const extension = fileExtension(file);
@@ -601,12 +617,12 @@ function renderFileList(role) {
     const readyLabel = documentFile ? "Belge analizi hazır" : "Medya kaynağı hazır";
     const localizedReadyLabel = window.LectureSiftI18n?.exact?.(readyLabel) || readyLabel;
     return `
-    <div class="source-file-row ${documentFile ? "document-file" : ""}" draggable="true" data-role="${role}" data-index="${index}">
+    <div class="source-file-row ${documentFile ? "document-file" : ""}" draggable="${!jobBusy}" data-role="${role}" data-index="${index}">
       <b>${index + 1}</b><div><strong>${escapeHtml(file.name)}${documentFile ? `<span class="file-kind">${escapeHtml(kind)}</span>` : ""}</strong><small>${formatBytes(file.size)} · ${escapeHtml(localizedReadyLabel)}</small></div>
       <span class="file-order-actions">
-        <button type="button" data-action="up" title="${escapeHtml(t("moveUp"))}" ${index === 0 ? "disabled" : ""}>↑</button>
-        <button type="button" data-action="down" title="${escapeHtml(t("moveDown"))}" ${index === files.length - 1 ? "disabled" : ""}>↓</button>
-        <button type="button" data-action="remove" title="${escapeHtml(t("remove"))}">×</button>
+        <button type="button" data-action="up" title="${escapeHtml(t("moveUp"))}" ${jobBusy || index === 0 ? "disabled" : ""}>↑</button>
+        <button type="button" data-action="down" title="${escapeHtml(t("moveDown"))}" ${jobBusy || index === files.length - 1 ? "disabled" : ""}>↓</button>
+        <button type="button" data-action="remove" title="${escapeHtml(t("remove"))}" ${jobBusy ? "disabled" : ""}>×</button>
       </span>
     </div>`;
   }).join("");
@@ -615,7 +631,7 @@ function renderFileList(role) {
     row.addEventListener("dragover", event => event.preventDefault());
     row.addEventListener("drop", event => {
       event.preventDefault(); const [dragRole, dragIndex] = event.dataTransfer.getData("text/plain").split(":");
-      if (dragRole !== role) return;
+      if (jobBusy || dragRole !== role) return;
       const reordered = filesFor(role), [moved] = reordered.splice(Number(dragIndex), 1);
       reordered.splice(Number(row.dataset.index), 0, moved); renderFileList(role);
     });
@@ -623,6 +639,7 @@ function renderFileList(role) {
 }
 document.addEventListener("click", event => {
   const button = event.target.closest(".file-order-actions button"); if (!button) return;
+  if (jobBusy) return;
   const row = button.closest(".source-file-row"), role = row.dataset.role, index = Number(row.dataset.index), files = filesFor(role);
   if (button.dataset.action === "remove") files.splice(index, 1);
   if (button.dataset.action === "up" && index > 0) [files[index - 1], files[index]] = [files[index], files[index - 1]];
@@ -803,7 +820,15 @@ function updateJobView(job) {
   if (job.status === "done") document.querySelectorAll(".stage-list li").forEach(item => { item.className = "done"; item.querySelector("b").textContent = "OK"; });
 }
 
-function showError(message, code = "LS-SYSTEM-01") {
+function setJobBusy(busy) {
+  jobBusy = busy;
+  $("analyzeButton").disabled = busy;
+  $("classicFiles").disabled = busy;
+  $("classicDropZone").setAttribute("aria-disabled", String(busy));
+  renderFileList("classic");
+}
+
+function showError(message, code = "LS-SYSTEM-01", {stopProcessing = true} = {}) {
   const known = ERRORS.tr[code];
   const centralKey = ({"LS-URL-02":"error.url02","LS-URL-03":"error.url03","LS-URL-05":"error.url05","LS-URL-06":"error.url05","LS-AI-03":"error.ai03","LS-AI-04":"error.ai04","LS-AI-05":"error.ai05","LS-AI-06":"error.ai06","LS-AI-07":"error.ai07","LS-AI-08":"error.ai08"})[code];
   const translated = code === "LS-UPLOAD-02" && message
@@ -815,7 +840,7 @@ function showError(message, code = "LS-SYSTEM-01") {
     : message || t("errorFallback");
   $("errorMessage").textContent = translated || message || t("errorFallback");
   $("errorCode").textContent = `${window.LectureSiftI18n?.exact("Hata kodu") || "Hata kodu"}: ${code}`; $("errorBox").hidden = false;
-  $("analyzeButton").disabled = false; clearTimeout(pollHandle); clearInterval(timerHandle);
+  if (stopProcessing) { setJobBusy(false); clearTimeout(pollHandle); clearInterval(timerHandle); }
 }
 $("closeError").onclick = () => { $("errorBox").hidden = true; };
 async function responseError(response) {
@@ -844,11 +869,13 @@ function formData() {
 }
 
 $("analyzeButton").onclick = async () => {
+  if (jobBusy) return;
   $("errorBox").hidden = true;
   if (![$("includeSummary"), $("includeTranscript"), $("includeQuiz"), $("includeCards")].some(input => input.checked)) {
     showError(t("outputSelectionRequired"), "LS-OUTPUT-01");
     return;
   }
+  setJobBusy(true);
   if (!billingToken || !billingAccount) {
     try {
       const access = await window.LectureSiftGuestTrial?.ensureAccess?.();
@@ -867,14 +894,15 @@ $("analyzeButton").onclick = async () => {
     return;
   }
   const uploadFiles = classicVideos;
-  if (!uploadFiles.length) { $("classicFiles").click(); return; }
+  if (!uploadFiles.length) { setJobBusy(false); $("classicFiles").click(); return; }
   const documentUpload = uploadFiles.every(isDocumentFile);
   const sourceLimits = activeSourceLimits();
   const uploadLimitMb = Number(documentUpload ? sourceLimits.max_document_upload_mb : sourceLimits.max_media_upload_mb);
   if (uploadFiles.reduce((total, file) => total + file.size, 0) > uploadLimitMb * 1024 ** 2) {
     showError(uploadLimitMessage(documentUpload, uploadLimitMb), "LS-UPLOAD-02"); return;
   }
-  $("analyzeButton").disabled = true; $("results").hidden = true; latestResult = null; jobId = null; configureProgressProfile(null, true); resetStages(); startTimer();
+  requestedJobLoaded = true;
+  $("results").hidden = true; latestResult = null; jobId = null; configureProgressProfile(null, true); resetStages(); startTimer();
   $("openReadyResult").hidden = true;
   $("uploadFilesProgress").replaceChildren();
   window.__lecturesiftUploadBps = 0;
@@ -966,7 +994,7 @@ async function loadResult({open = true} = {}) {
     if (!response.ok) { const error = await responseError(response); showError(error.message, error.code); return; }
     latestResult = await response.json();
     renderResult(latestResult, {open});
-    $("analyzeButton").disabled = false;
+    setJobBusy(false);
     window.LectureSiftGuestTrial?.markUsed?.(jobId);
   } catch (error) { showError(error.message, "LS-NETWORK-01"); }
 }
@@ -1247,6 +1275,8 @@ $("lessonQuestionForm").addEventListener("submit", async event => {
   if (!jobId || !latestResult) return;
   const question = $("lessonQuestion").value.trim();
   if (question.length < 3) return;
+  const requestedJob = jobId;
+  const requestedResult = latestResult;
   const button = $("lessonQuestionButton");
   const original = button.textContent;
   button.disabled = true;
@@ -1255,11 +1285,12 @@ $("lessonQuestionForm").addEventListener("submit", async event => {
     const body = await billingRequest(`/jobs/${encodeURIComponent(jobId)}/ask`, {
       method:"POST", body:JSON.stringify({question}),
     });
+    if (jobId !== requestedJob || latestResult !== requestedResult) return;
     const citations = (body.citations || []).map(item => `<li><strong>${escapeHtml(item.timestamp || "00:00:00")}</strong>${item.speaker ? ` · ${escapeHtml(item.speaker)}` : ""}<span>${escapeHtml(item.excerpt || "")}</span></li>`).join("");
     $("lessonAnswer").innerHTML = `<h4>${escapeHtml(window.LectureSiftI18n?.t("ask.answer", "Yanıt") || "Yanıt")}</h4><p>${escapeHtml(body.answer)}</p>${citations ? `<h4>${escapeHtml(window.LectureSiftI18n?.t("ask.sources", "Ders içindeki dayanaklar") || "Ders içindeki dayanaklar")}</h4><ol>${citations}</ol>` : ""}`;
     $("lessonAnswer").hidden = false;
   } catch (error) {
-    showError(error.message, error.code || "LS-AI-07");
+    if (jobId === requestedJob && latestResult === requestedResult) showError(error.message, error.code || "LS-AI-07", {stopProcessing:false});
   } finally {
     button.disabled = false; button.textContent = original;
   }

@@ -5,6 +5,7 @@
   const DEVICE_KEY = "lecturesift-guest-device";
   const ZERO_DECIMAL = new Set(["JPY", "KRW"]);
   let guestTrialState = null;
+  let guestIdentityRequest = null;
   const $ = id => document.getElementById(id);
   const rt = (key, fallback) => window.LectureSiftI18n?.t(key) || fallback || key;
   const rolloutLocale = () => window.LectureSiftI18n?.locale || navigator.language || "tr-TR";
@@ -59,12 +60,22 @@
 
   async function ensureGuestIdentity() {
     if (activeToken()) return activeToken();
-    const body = await api("/billing/guest-session", {
-      method: "POST",
-      body: JSON.stringify({device_id: deviceId()}),
-    }, "");
-    setWorkspaceIdentity(body.token, body.account, true, body.trial || null);
-    return body.token;
+    if (guestIdentityRequest) return guestIdentityRequest;
+    const pending = (async () => {
+      const body = await api("/billing/guest-session", {
+        method: "POST",
+        body: JSON.stringify({device_id: deviceId()}),
+      }, "");
+      if (activeToken()) return activeToken();
+      if (typeof body?.token !== "string" || !body.token || !body.account || typeof body.account !== "object" || Array.isArray(body.account)) {
+        throw new Error(rt("error.request", "İşlem tamamlanamadı."));
+      }
+      setWorkspaceIdentity(body.token, body.account, true, body.trial || null);
+      return body.token;
+    })();
+    guestIdentityRequest = pending;
+    try { return await pending; }
+    finally { if (guestIdentityRequest === pending) guestIdentityRequest = null; }
   }
 
   async function restoreGuestIdentity() {

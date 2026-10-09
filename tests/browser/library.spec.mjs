@@ -109,3 +109,79 @@ test('opening library lessons and creating new ones preserves the current langua
     await expect(page.locator('#classicDropZone')).toBeVisible();
   }
 });
+
+test('confirmed library changes remain visible when the follow-up list read fails', async ({page}) => {
+  const headers = {'Access-Control-Allow-Origin':'http://127.0.0.1:4173', 'Access-Control-Allow-Methods':'GET,PATCH,DELETE,OPTIONS', 'Access-Control-Allow-Headers':'authorization,content-type'};
+  const state = {folders:[{id:'revision-folder', name:'Revision'}], jobs:[{job_id:'revision-lesson', title:'Saved revision notes', status:'done', created:1788868800, expires_at:1791460800, can_delete:true, folder_id:null}]};
+  const writes = [];
+  let failList = false;
+  await page.addInitScript(() => localStorage.setItem('lecturesift-billing-token', 'synthetic-library-owner'));
+  await page.route('https://api.lecturesift.com/library**', async route => {
+    const request = route.request(), path = new URL(request.url()).pathname, method = request.method();
+    if (method === 'OPTIONS') { await route.fulfill({status:204, headers}); return; }
+    if (path === '/library' && method === 'GET') {
+      await route.fulfill({status:failList ? 503 : 200, headers, json:failList ? {detail:{message:'Synthetic refresh failure'}} : state});
+      return;
+    }
+    if (path === '/library/lessons/revision-lesson' && method === 'PATCH') {
+      state.jobs[0].folder_id = request.postDataJSON().folder_id;
+      writes.push('move');
+    } else if (path === '/library/folders/revision-folder' && method === 'DELETE') {
+      state.folders = [];
+      state.jobs[0].folder_id = null;
+      writes.push('delete-folder');
+    } else if (path === '/library/lessons/revision-lesson' && method === 'DELETE') {
+      state.jobs = [];
+      writes.push('delete-lesson');
+    } else throw new Error(`Unexpected library request ${method} ${path}`);
+    failList = true;
+    await route.fulfill({headers, json:{ok:true}});
+  });
+  await page.goto('/en/workspace.html#library');
+  await page.locator('[data-consent="essential"]').click();
+  await expect(page.locator('.library-lesson')).toHaveCount(1);
+  await page.locator('[data-library-move]').selectOption('revision-folder');
+  await expect(page.locator('#libraryNotice')).toContainText('Your change was saved, but the list could not refresh.');
+  await expect(page.locator('[data-library-move]')).toHaveValue('revision-folder');
+  await page.locator('[data-library-folder="revision-folder"]').click();
+  page.once('dialog', dialog => dialog.accept());
+  await page.locator('#libraryDeleteFolder').click();
+  await expect(page.locator('[data-library-folder="revision-folder"]')).toHaveCount(0);
+  await expect(page.locator('[data-library-move]')).toHaveValue('');
+  await expect(page.locator('#libraryNotice')).toContainText('Your change was saved, but the list could not refresh.');
+  page.once('dialog', dialog => dialog.accept());
+  await page.locator('[data-library-delete]').click();
+  await expect(page.locator('.library-lesson')).toHaveCount(0);
+  await expect(page.locator('#libraryNotice')).toContainText('Your change was saved, but the list could not refresh.');
+  failList = false;
+  await page.locator('#libraryRefresh').click();
+  await expect(page.locator('#libraryNotice')).toBeHidden();
+  await expect(page.locator('.library-lesson')).toHaveCount(0);
+  expect(writes).toEqual(['move', 'delete-folder', 'delete-lesson']);
+});
+
+test('a malformed library refresh keeps the last valid list searchable and recoverable', async ({page}) => {
+  let malformed = null;
+  const validJob = {job_id:'saved-lesson', title:'Saved revision notes', status:'done', created:1788868800, expires_at:1791460800, can_delete:true, folder_id:null};
+  const headers = {'Access-Control-Allow-Origin':'http://127.0.0.1:4173', 'Access-Control-Allow-Methods':'GET,OPTIONS', 'Access-Control-Allow-Headers':'authorization,content-type'};
+  await page.addInitScript(() => localStorage.setItem('lecturesift-billing-token', 'synthetic-library-owner'));
+  await page.route('https://api.lecturesift.com/library', async route => {
+    if (route.request().method() === 'OPTIONS') { await route.fulfill({status:204, headers}); return; }
+    await route.fulfill({headers, json:malformed || {folders:[], jobs:[validJob]}});
+  });
+  await page.goto('/en/workspace.html#library');
+  await page.locator('[data-consent="essential"]').click();
+  await expect(page.locator('.library-lesson')).toHaveCount(1);
+  for (const invalid of [{}, {folders:[], jobs:[null]}, {folders:[], jobs:[{...validJob, title:3}]}, {folders:[], jobs:[{...validJob, created:'bad'}]}, {folders:[null], jobs:[validJob]}]) {
+    malformed = invalid;
+    await page.locator('#libraryRefresh').click();
+    await expect(page.locator('#libraryNotice')).toBeVisible();
+    await page.locator('#librarySearch').fill('');
+    await page.locator('#librarySearch').fill('revision');
+    await expect(page.locator('.library-lesson')).toHaveCount(1);
+  }
+  malformed = null;
+  await page.locator('#libraryRefresh').click();
+  await expect(page.locator('#libraryNotice')).toBeHidden();
+  await expect(page.locator('.library-lesson')).toHaveCount(1);
+});
