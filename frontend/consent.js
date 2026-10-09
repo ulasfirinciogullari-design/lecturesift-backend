@@ -20,7 +20,6 @@
   let cmpUiShown = false;
   let cmpNeedsFreshPage = false;
   let cmpReloading = false;
-  let cmpEnabled = false;
   let cmpValues = null;
   let cmpTimer;
   let cmpStorageRecord = null;
@@ -197,9 +196,10 @@
     clearTimeout(cmpTimer);
     cmpState = "unavailable";
     cmpValues = null;
-    // A config fetch error does not establish that the provider was enabled or
-    // that the user revoked consent. Preserve choices for an explicit rollback.
-    providerPending(cmpEnabled);
+    // A network/API failure is uncertainty, not a new user refusal. The pending
+    // mask denies Google across navigation until applicability is confirmed;
+    // keep real provider/local decisions intact for that eventual recovery.
+    providerPending();
     // Keep local preferences usable, while Google technologies stay denied.
     banner.hidden = hasSavedChoice(read());
     notify();
@@ -285,7 +285,6 @@
         return;
       }
       if (consent.google_cmp_enabled !== true || !/^pub-[0-9]{16}$/.test(consent.publisher_id || "")) throw new Error("invalid-consent-config");
-      cmpEnabled = true;
       cmpState = "loading";
       providerPending();
       window.dataLayer = window.dataLayer || [];

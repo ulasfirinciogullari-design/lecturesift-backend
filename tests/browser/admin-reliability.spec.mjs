@@ -171,6 +171,67 @@ test('lesson inspection can recover from failure and clears content on logout', 
   expect(unexpected).toEqual([]);
 });
 
+test('refresh updates scoped lessons without dropping filters and recovers from scoped failures', async ({page}) => {
+  let scopedReads = 0;
+  let failScoped = false;
+  const unexpected = await openAdmin(page, {hash:'users', override:async (route, url) => {
+    if (url.pathname !== '/billing/admin/jobs' || !url.searchParams.has('owner_id')) return false;
+    expect(url.searchParams.get('owner_id')).toBe(user.id);
+    scopedReads += 1;
+    await route.fulfill({status:failScoped ? 503 : 200, headers:CORS,
+      json:failScoped ? {detail:{message:'Kullanıcının dersleri güncellenemedi'}}
+        : {jobs:[{...lesson, title:`Ders durumu ${scopedReads}`, status:'error', percent:scopedReads * 10}]}});
+    return true;
+  }});
+  await expect(page.locator('#adminRefresh')).toBeEnabled();
+  await page.getByRole('button', {name:'Aç ve düzenle', exact:true}).click();
+  await page.getByRole('button', {name:'Derslerini görüntüle', exact:true}).click();
+  await expect(page.locator('#adminJobs')).toContainText('Ders durumu 1');
+  await page.locator('#adminJobSearch').fill(user.email);
+  await page.locator('#adminJobStatus').selectOption('error');
+  await page.locator('#adminRefresh').click();
+  await expect(page.locator('#adminJobs')).toContainText('Ders durumu 2');
+  await expect(page.locator('#adminJobSearch')).toHaveValue(user.email);
+  await expect(page.locator('#adminJobStatus')).toHaveValue('error');
+  await expect(page.locator('#adminJobScope')).toContainText(user.name);
+  await expect(page.locator('#adminRefresh')).toBeEnabled();
+  failScoped = true;
+  await page.locator('#adminRefresh').click();
+  await expect(page.locator('#adminJobs')).toContainText('Kullanıcının dersleri güncellenemedi');
+  await expect(page.locator('#adminJobs')).not.toContainText('Ders durumu 2');
+  await expect(page.locator('#adminRefresh')).toBeEnabled();
+  failScoped = false;
+  await page.locator('#adminRefresh').click();
+  await expect(page.locator('#adminJobs')).toContainText('Ders durumu 4');
+  await expect(page.locator('#adminJobSearch')).toHaveValue(user.email);
+  await expect(page.locator('#adminJobStatus')).toHaveValue('error');
+  expect(unexpected).toEqual([]);
+});
+
+test('global refresh clears a failed return from user lessons to all lessons', async ({page}) => {
+  let failGlobal = false;
+  const unexpected = await openAdmin(page, {hash:'users', override:async (route, url) => {
+    if (url.pathname !== '/billing/admin/jobs') return false;
+    const failed = failGlobal && !url.searchParams.has('owner_id');
+    await route.fulfill({status:failed ? 503 : 200, headers:CORS,
+      json:failed ? {detail:{message:'Tüm dersler alınamadı'}} : {jobs:[lesson]}});
+    return true;
+  }});
+  await expect(page.locator('#adminRefresh')).toBeEnabled();
+  await page.getByRole('button', {name:'Aç ve düzenle', exact:true}).click();
+  await page.getByRole('button', {name:'Derslerini görüntüle', exact:true}).click();
+  await expect(page.locator('#adminJobs')).toContainText(lesson.title);
+  failGlobal = true;
+  await page.getByRole('button', {name:'Tüm kullanıcılar', exact:true}).click();
+  await expect(page.locator('#adminJobs')).toContainText('Tüm dersler alınamadı');
+  failGlobal = false;
+  await page.locator('#adminRefresh').click();
+  await expect(page.locator('#adminJobs')).toContainText(lesson.title);
+  await expect(page.locator('#adminJobs')).not.toContainText('Tüm dersler alınamadı');
+  await expect(page.locator('#adminJobScope')).toBeEmpty();
+  expect(unexpected).toEqual([]);
+});
+
 test('a pending advertising provider does not block the panel or user records', async ({page}) => {
   let release;
   const pending = new Promise(resolve => { release = resolve; });
@@ -465,6 +526,145 @@ test('bulk closure keeps failed accounts selected, shows their errors and retrie
   await expect(page.locator('#adminOperationNotice')).toContainText('0 işlem uygulanamadı');
   expect(requests.map(request => request.user_ids)).toEqual([[user.id, second.id], [second.id]]);
   expect(nativeDialogs).toEqual([]);
+  expect(unexpected).toEqual([]);
+});
+
+test('late account closure keeps a different user editing dialog and its draft open', async ({page}) => {
+  const second = {...user, id:'22222222-2222-4222-8222-222222222222', email:'second@example.invalid'};
+  let users = [user, second];
+  let deletionStarted = false;
+  let releaseDelete;
+  const pendingDelete = new Promise(resolve => { releaseDelete = resolve; });
+  const unexpected = await openAdmin(page, {hash:'users', override:async (route, url) => {
+    if (url.pathname === '/billing/admin/users') {
+      await route.fulfill({headers:CORS, json:{users, pagination:{...pagination, total:users.length}}});
+    } else if (url.pathname === `/billing/admin/users/${user.id}` && route.request().method() === 'DELETE') {
+      deletionStarted = true;
+      await pendingDelete;
+      users = [second];
+      await route.fulfill({headers:CORS, json:{ok:true, message:'İlk hesap kapatıldı.'}});
+    } else if (url.pathname === `/billing/admin/users/${second.id}/entitlements`) {
+      await route.fulfill({headers:CORS, json:{registered:true, assistant_credits:0, assistant_available:true}});
+    } else if (url.pathname === `/billing/admin/users/${second.id}/activity`) {
+      await route.fulfill({headers:CORS, json:{activity:[]}});
+    } else return false;
+    return true;
+  }});
+  try {
+    await expect(page.locator('#adminRefresh')).toBeEnabled();
+    await page.locator(`[data-user-open="${user.id}"]`).first().click();
+    const closing = page.locator('[data-user-close-form]');
+    await closing.locator('[name="reason"]').fill('Test hesabını kapat');
+    await closing.locator('[name="confirmation_word"]').fill('SİL');
+    await closing.locator('button[type="submit"]').click();
+    await expect.poll(() => deletionStarted).toBe(true);
+    await page.locator('#adminUserDialog .admin-dialog-close').click();
+    await page.locator(`[data-user-open="${second.id}"]`).first().click();
+    const draft = page.locator('[data-user-profile-form] [name="first_name"]');
+    await draft.fill('İkinci kullanıcının taslağı');
+    releaseDelete();
+    await expect(page.locator('#adminUserList')).not.toContainText(user.email);
+    await expect(page.locator('#adminUserDialog')).toBeVisible();
+    await expect(page.locator('[data-user-profile-form]')).toHaveAttribute('data-user-profile-form', second.id);
+    await expect(draft).toHaveValue('İkinci kullanıcının taslağı');
+  } finally { releaseDelete(); }
+  expect(unexpected).toEqual([]);
+});
+
+for (const mutation of [
+  {name:'profile save', method:'PATCH', suffix:'', form:'data-user-profile-form'},
+  {name:'minute adjustment', method:'POST', suffix:'/credit-adjustment', form:'data-user-credit-form'},
+  {name:'subscription update', method:'POST', suffix:'/subscription', form:'data-user-subscription-form'},
+  {name:'session revocation', method:'POST', suffix:'/revoke-sessions'},
+]) {
+  test(`late ${mutation.name} preserves reopened and different user drafts`, async ({page}) => {
+    const second = {...user, id:'22222222-2222-4222-8222-222222222222', email:'second@example.invalid'};
+    const mutationPath = `/billing/admin/users/${user.id}${mutation.suffix}`;
+    let mutationCount = 0;
+    let pendingMutation, releaseMutation;
+    page.on('dialog', dialog => dialog.accept());
+    const unexpected = await openAdmin(page, {hash:'users', override:async (route, url) => {
+      if (url.pathname === mutationPath && route.request().method() === mutation.method) {
+        mutationCount += 1;
+        await pendingMutation;
+        await route.fulfill({headers:CORS, json:{ok:true, message:`Kayıt güncellendi ${mutationCount}`}});
+      } else if (url.pathname === '/billing/admin/users') {
+        await route.fulfill({headers:CORS, json:{users:[user, second], pagination:{...pagination, total:2}}});
+      } else if (url.pathname === `/billing/admin/users/${second.id}/entitlements`) {
+        await route.fulfill({headers:CORS, json:{registered:true, assistant_credits:0, assistant_available:true}});
+      } else if (url.pathname === `/billing/admin/users/${second.id}/activity`) {
+        await route.fulfill({headers:CORS, json:{activity:[]}});
+      } else return false;
+      return true;
+    }});
+    for (const [index, target] of [user, second].entries()) {
+      pendingMutation = new Promise(resolve => { releaseMutation = resolve; });
+      try {
+        await expect(page.locator('#adminRefresh')).toBeEnabled();
+        await page.locator(`[data-user-open="${user.id}"]`).first().click();
+        if (mutation.form) {
+          const form = page.locator(`[${mutation.form}]`);
+          if (mutation.suffix === '/credit-adjustment') {
+            await form.locator('[name="minutes_delta"]').fill('10');
+            await form.locator('[name="reason"]').fill('Sentetik test düzeltmesi');
+          }
+          await form.locator('button[type="submit"]').click();
+        } else await page.locator('[data-user-revoke]').click();
+        await expect.poll(() => mutationCount).toBe(index + 1);
+        await page.locator('#adminUserDialog .admin-dialog-close').click();
+        await page.locator(`[data-user-open="${target.id}"]`).first().click();
+        const draft = page.locator('[data-user-profile-form] [name="first_name"]');
+        await draft.fill(`Yeni taslak ${index + 1}`);
+        releaseMutation();
+        await expect(page.locator('#adminOperationNotice')).toContainText(`Kayıt güncellendi ${index + 1}`);
+        await expect(page.locator('#adminRefresh')).toBeEnabled();
+        await expect(page.locator('#adminUserDialog')).toBeVisible();
+        await expect(page.locator('[data-user-profile-form]')).toHaveAttribute('data-user-profile-form', target.id);
+        await expect(draft).toHaveValue(`Yeni taslak ${index + 1}`);
+        await page.locator('#adminUserDialog .admin-dialog-close').click();
+      } finally { releaseMutation(); }
+    }
+    expect(unexpected).toEqual([]);
+  });
+}
+
+test('late support deletion preserves a different conversation and its unsent reply', async ({page}) => {
+  const first = {id:'support-first', name:user.name, email:user.email, topic:'İlk konuşma', message:'İlk destek mesajı', status:'new'};
+  const second = {...first, id:'support-second', topic:'İkinci konuşma', message:'İkinci destek mesajı'};
+  let messages = [first, second];
+  let deletionStarted = false;
+  let releaseDelete;
+  const pendingDelete = new Promise(resolve => { releaseDelete = resolve; });
+  const base = '/billing/admin/contact-messages';
+  page.on('dialog', dialog => dialog.accept());
+  const unexpected = await openAdmin(page, {hash:'support', override:async (route, url) => {
+    if (url.pathname === base) {
+      await route.fulfill({headers:CORS, json:{messages}});
+    } else if (url.pathname === `${base}/${first.id}` && route.request().method() === 'DELETE') {
+      deletionStarted = true;
+      await pendingDelete;
+      messages = [second];
+      await route.fulfill({headers:CORS, json:{ok:true}});
+    } else if ([`${base}/${first.id}`, `${base}/${second.id}`].includes(url.pathname)) {
+      await route.fulfill({headers:CORS, json:{message:url.pathname.endsWith(first.id) ? first : second, replies:[]}});
+    } else return false;
+    return true;
+  }});
+  try {
+    await expect(page.locator('#adminRefresh')).toBeEnabled();
+    await page.locator(`[data-contact-open="${first.id}"]`).click();
+    await page.locator('#adminContactDialog [data-contact-delete]').click();
+    await expect.poll(() => deletionStarted).toBe(true);
+    await page.locator('#adminContactDialog .admin-dialog-close').click();
+    await page.locator(`[data-contact-open="${second.id}"]`).click();
+    const draft = page.locator('[data-contact-reply-form] textarea');
+    await draft.fill('İkinci konuşmaya henüz gönderilmemiş yanıt');
+    releaseDelete();
+    await expect(page.locator('#adminContactMessages')).not.toContainText(first.topic);
+    await expect(page.locator('#adminContactDialog')).toBeVisible();
+    await expect(page.locator('[data-contact-reply-form]')).toHaveAttribute('data-contact-reply-form', second.id);
+    await expect(draft).toHaveValue('İkinci konuşmaya henüz gönderilmemiş yanıt');
+  } finally { releaseDelete(); }
   expect(unexpected).toEqual([]);
 });
 

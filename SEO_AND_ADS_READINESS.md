@@ -1,5 +1,42 @@
 # LectureSift search and advertising readiness
 
+## Current verified state (9 October 2026)
+
+This section supersedes the historical snapshots below. Public SEO release
+PR121 is live. The current sitemap contains **183 URLs**, not an indexed-page
+count. Google Search Console reports 212 indexed and 142 excluded addresses
+across all known URLs, including old and private routes, in its 4 October
+snapshot. All 31 inspected legacy duplicate addresses now redirect to clean,
+self-canonical pages. Validation was started for the four-address group on
+9 October; the other group's existing validation was preserved. The follow-up
+record and measured mobile baselines are in [SEO_CALISMA_PLANI.md](SEO_CALISMA_PLANI.md).
+
+Both Google account integrations have been verified with authenticated reads.
+Google Ads uses a separate user OAuth grant on the API role; signup and purchase
+conversion goals are configured. No campaign or budget was activated. These
+checks do not prove that a real signup or paid conversion reached Google.
+AdSense can still return temporary provider errors: a failed status read must
+not be presented as a revoked credential or as proof of site approval.
+
+The authenticated AdSense panel and a fresh direct API read both report
+**GETTING_READY / Hazırlanıyor**, with review already requested. The panel still
+shows ads.txt as not found, while bounded live checks of HTTP, HTTPS and the www
+alias all resolve to the correct plain-text publisher record with HTTP 200.
+The public robots file permits crawling. Do not replace the correct publisher
+record or repeatedly request site review to try to clear a pending crawl.
+
+The European message is published and its Consent Mode options are enabled.
+Actual on-site European message display and revocation remain unverified.
+`LECTURESIFT_ADSENSE_ENABLED` and `LECTURESIFT_ADSENSE_CMP_READY` therefore remain
+false; the CMP loader being configured is not evidence of an active, verified
+consent flow. There is no verified AdSense ad revenue.
+
+The durable queue, private storage, worker and billing database were reachable
+in this check. iyzico is configured, but that does not prove a new card charge
+succeeded. No customer account, payment or stored lesson was modified for this
+inspection. Existing synthetic tests run on GitHub Actions, not on the owner's
+computer or a production test runner.
+
 ## SEO workstream (23 September 2026)
 
 The current organic-search baseline, public-site observations and prioritized

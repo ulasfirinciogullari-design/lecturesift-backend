@@ -218,6 +218,120 @@ def test_disabled_or_invalid_configuration_never_contacts_google(monkeypatch):
     assert FakeGoogleClient.created == []
 
 
+def test_missing_oauth_secret_has_only_fixed_internal_diagnostics(monkeypatch):
+    monkeypatch.setattr(config, "ADSENSE_API_CLIENT_SECRET", "")
+    result = adsense_management.adsense_management_readiness()
+    assert result["error_code"] == "configuration_invalid"
+    assert result["diagnostics"] == {"stage": "internal", "failure_type": "unknown", "elapsed_ms": 0}
+    assert FakeGoogleClient.created == []
+    assert "refresh-token-must-not-leak" not in json.dumps(result)
+
+
+@pytest.mark.parametrize("stage", ["oauth", "account", "sites", "alerts", "policy"])
+@pytest.mark.parametrize("failure_type", ["timeout", "network", "http", "response"])
+def test_failure_diagnostics_identify_the_operation_without_provider_details(monkeypatch, stage, failure_type):
+    original_post = FakeGoogleClient.post
+    original_get = FakeGoogleClient.get
+    private_detail = "client-secret-must-not-leak refresh-token-must-not-leak short-lived-access private-provider-detail"
+    target = {
+        "oauth": "https://oauth2.googleapis.com/token",
+        "account": f"https://adsense.googleapis.com/v2/{ACCOUNT}",
+        "sites": f"https://adsense.googleapis.com/v2/{ACCOUNT}/sites",
+        "alerts": f"https://adsense.googleapis.com/v2/{ACCOUNT}/alerts",
+        "policy": f"https://adsense.googleapis.com/v2/{ACCOUNT}/policyIssues",
+    }[stage]
+
+    def fail():
+        if failure_type == "timeout":
+            raise httpx.ReadTimeout(private_detail)
+        if failure_type == "network":
+            raise httpx.ConnectError(private_detail)
+        if failure_type == "http":
+            return _response(503, {"error": {"message": private_detail}})
+        return httpx.Response(200, text=private_detail, headers={"Content-Type": "text/html"})
+
+    def post(self, url, **kwargs):
+        return fail() if url == target else original_post(self, url, **kwargs)
+
+    def get(self, url, **kwargs):
+        return fail() if url == target else original_get(self, url, **kwargs)
+
+    monkeypatch.setattr(FakeGoogleClient, "post", post)
+    monkeypatch.setattr(FakeGoogleClient, "get", get)
+    result = adsense_management.adsense_management_readiness()
+    key = "policy_diagnostics" if stage == "policy" else "diagnostics"
+    diagnostic = result[key]
+    assert set(diagnostic) == {"stage", "failure_type", "elapsed_ms"}
+    assert diagnostic["stage"] == stage
+    assert diagnostic["failure_type"] == failure_type
+    assert type(diagnostic["elapsed_ms"]) is int and diagnostic["elapsed_ms"] >= 0
+    expected_error = "invalid_response" if failure_type == "response" else "provider_unavailable"
+    if stage == "policy":
+        assert result["connected"] is True
+        assert result["site"]["state"] == "GETTING_READY"
+        assert result["policy_error_code"] == expected_error
+        assert result["error_code"] is None
+    else:
+        assert result["connected"] is False
+        assert result["error_code"] == expected_error
+    serialized = json.dumps(result)
+    for secret in private_detail.split():
+        assert secret not in serialized
+    assert target not in serialized and ACCOUNT not in serialized
+
+
+def test_stage_elapsed_time_and_cached_diagnostics_are_not_recomputed_or_shared(monkeypatch):
+    clock = {"now": 100.0}
+    monkeypatch.setattr(adsense_management.time, "monotonic", lambda: clock["now"])
+
+    def timed_post(self, url, **kwargs):
+        clock["now"] += 1.25
+        raise httpx.ReadTimeout("private-request-details")
+
+    monkeypatch.setattr(FakeGoogleClient, "post", timed_post)
+    first = adsense_management.adsense_management_readiness()
+    expected = {"stage": "oauth", "failure_type": "timeout", "elapsed_ms": 1250}
+    assert first["diagnostics"] == expected
+    first["diagnostics"]["stage"] = "caller-mutation"
+    clock["now"] = 120.0
+    cached = adsense_management.adsense_management_readiness()
+    assert cached["cached"] is True and cached["diagnostics"] == expected
+    assert len(FakeGoogleClient.created) == 1
+
+
+def test_cache_wait_timeout_does_not_replace_the_check_already_in_flight(monkeypatch):
+    clock = {"now": 100.0}
+    monkeypatch.setattr(adsense_management.time, "monotonic", lambda: clock["now"])
+    fingerprint = adsense_management._settings().fingerprint
+    monkeypatch.setattr(adsense_management, "_CACHE_IN_FLIGHT", fingerprint)
+
+    def finish_wait(*, timeout):
+        clock["now"] += timeout
+
+    monkeypatch.setattr(adsense_management._CACHE_CONDITION, "wait", finish_wait)
+    result = adsense_management.adsense_management_readiness()
+    assert result["error_code"] == "provider_unavailable"
+    assert result["diagnostics"] == {
+        "stage": "cache_wait", "failure_type": "timeout",
+        "elapsed_ms": round(adsense_management._CHECK_TIMEOUT_SECONDS * 1000),
+    }
+    assert adsense_management._CACHE_IN_FLIGHT == fingerprint
+    assert adsense_management._CACHE is None
+    assert FakeGoogleClient.created == []
+
+
+def test_unexpected_internal_failure_remains_opaque(monkeypatch):
+    def broken_factory(**kwargs):
+        raise RuntimeError("private-internal-secret")
+
+    monkeypatch.setattr(adsense_management, "_HTTP_CLIENT_FACTORY", broken_factory)
+    result = adsense_management.adsense_management_readiness()
+    assert result["error_code"] == "provider_unavailable"
+    assert result["diagnostics"]["stage"] == "internal"
+    assert result["diagnostics"]["failure_type"] == "unknown"
+    assert "private-internal-secret" not in json.dumps(result)
+
+
 @pytest.mark.parametrize(
     ("token_status", "api_status", "expected"),
     [

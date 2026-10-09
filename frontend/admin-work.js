@@ -22,9 +22,6 @@ function adminJobsPath() {
 async function showAdminUserWork(user = null) {
   adminWorkOwner = user;
   adminWorkScopedJobs = [];
-  adminWorkState = {loading:true, error:''};
-  const version = ++adminWorkListVersion;
-  const path = adminJobsPath();
   admin$('adminUserDialog')?.close();
   admin$('adminJobStatus').value = 'all';
   admin$('adminJobSearch').value = '';
@@ -41,13 +38,22 @@ async function showAdminUserWork(user = null) {
     scope.append(label, clear);
   }
   activateAdminView('jobs', {focus:true});
-  admin$('adminJobs').innerHTML = '<p role="status">Dersler yükleniyor…</p>';
+  return refreshAdminWorkList();
+}
+
+async function refreshAdminWorkList() {
+  const user = adminWorkOwner;
+  const version = ++adminWorkListVersion;
+  const path = adminJobsPath();
+  adminWorkState = {loading:true, error:''};
+  adminWorkList([]);
   try {
     const body = await adminRequest(path);
     if (version !== adminWorkListVersion || path !== adminJobsPath()) return;
+    if (!Array.isArray(body.jobs)) throw new Error('Ders listesi doğrulanamadı.');
     adminWorkState = {loading:false, error:''};
-    if (user) adminWorkScopedJobs = body.jobs || [];
-    else adminState.jobs = body.jobs || [];
+    if (user) adminWorkScopedJobs = body.jobs;
+    else adminState.jobs = body.jobs;
     adminLoadedSections.add('jobs');
     adminLoadErrors.delete('jobs');
     applyAdminFilters();

@@ -1,4 +1,4 @@
-import {test, expect} from './fixtures.mjs';
+import {test, expect, JOB_ID} from './fixtures.mjs';
 
 test.beforeEach(async ({page}) => {
   await page.addInitScript(() => localStorage.setItem('lecturesift-currency', 'TRY'));
@@ -72,4 +72,40 @@ test('workspace help opens the support form and a bare conversation URL redirect
   await expect(page.locator('#supportStatus')).toHaveCount(0);
   await page.goto('/support.html');
   await expect(page.locator('#contactForm')).toBeVisible();
+});
+
+test('opening library lessons and creating new ones preserves the current language', async ({page}) => {
+  let empty = false;
+  await page.route('https://api.lecturesift.com/library', async route => {
+    const headers = {'Access-Control-Allow-Origin':'http://127.0.0.1:4173', 'Access-Control-Allow-Methods':'GET,OPTIONS', 'Access-Control-Allow-Headers':'authorization,content-type'};
+    if (route.request().method() === 'OPTIONS') {
+      await route.fulfill({status:204, headers});
+      return;
+    }
+    await route.fulfill({status:200, headers, json:{folders:[], jobs:empty ? [] : [{job_id:JOB_ID, title:'Synthetic revision notes', status:'done', created:1788868800, expires_at:1791460800, can_delete:true, stored_bytes:1024, folder_id:null}]}});
+  });
+  await page.addInitScript(() => {
+    localStorage.setItem('lecturesift-billing-token', 'synthetic-library-owner');
+    // The current URL language must win even if an older saved preference differs.
+    localStorage.setItem('lecturesift-ui', 'tr');
+  });
+  for (const language of ['en', 'ar']) {
+    empty = false;
+    await page.goto(`/${language}/workspace.html#library`);
+    if (language === 'en') await page.locator('[data-consent="essential"]').click();
+    await expect(page.locator('.library-open')).toHaveAttribute('href', `/${language}/workspace.html?job=${JOB_ID}#study`);
+    await page.locator('.library-open').click();
+    await expect(page).toHaveURL(`/${language}/workspace.html?job=${JOB_ID}#study`);
+    await expect(page.locator('html')).toHaveAttribute('lang', language);
+    await expect(page.locator('#results')).toBeVisible();
+
+    empty = true;
+    await page.locator('#workspaceLibraryTab').click();
+    const create = page.locator('.library-empty a');
+    await expect(create).toHaveAttribute('href', `/${language}/workspace.html?source=upload`);
+    await create.click();
+    await expect(page).toHaveURL(`/${language}/workspace.html?source=upload`);
+    await expect(page.locator('html')).toHaveAttribute('lang', language);
+    await expect(page.locator('#classicDropZone')).toBeVisible();
+  }
 });

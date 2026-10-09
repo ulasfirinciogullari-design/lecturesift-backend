@@ -605,7 +605,8 @@ async function deleteAdminContact(messageId) {
   if (!confirm('Bu destek konuşması ve tüm yanıtları kalıcı olarak silinsin mi? İşlem geri alınamaz.')) return;
   try {
     await adminRequest(`/billing/admin/contact-messages/${encodeURIComponent(messageId)}`, {method:'DELETE'});
-    admin$("adminContactDialog")?.close();
+    const dialog = admin$("adminContactDialog");
+    if (dialog?.open && dialog.querySelector('[data-contact-reply-form]')?.dataset.contactReplyForm === messageId) dialog.close();
     adminNotice('Destek konuşması ve yanıtları silindi.');
     await loadAdmin({silent:true});
   } catch (error) { adminNotice(error.message, true); }
@@ -1398,12 +1399,25 @@ async function loadAdmin({silent = false} = {}) {
       }, render);
     const object = (key, label, path, render, publicRequest = false) => loadAdminSection(key, label,
       () => publicRequest ? adminPublicRequest(path) : adminRequest(path, key === "advertisingReadiness" ? {timeoutMs:45000} : {}), body => { adminState[key] = body; }, render);
+    const refreshJobs = async () => {
+      const workVersion = adminWorkListVersion;
+      await collection("jobs", "İşleme işleri", "/billing/admin/jobs?limit=250", "jobs", refreshActivity);
+      if (session !== adminSessionVersion || adminLoadErrors.has("jobs")) return;
+      if (adminWorkOwner) await refreshAdminWorkList();
+      else if (workVersion === adminWorkListVersion) {
+        // This successful global read also recovers a failed scope-clear read.
+        // Invalidate any older unscoped request before accepting its replacement.
+        adminWorkListVersion += 1;
+        adminWorkState = {loading:false, error:""};
+        refreshActivity();
+      }
+    };
     await Promise.all([
       collection("rewards", "Bonus talepleri", "/admin/instagram-rewards?status=", "rewards", () => renderAdminRewards(adminState.rewards.filter(item => item.status === "pending_verification"))),
       collection("refunds", "İade talepleri", "/billing/admin/refund-requests", "requests", () => renderAdminRefunds(adminState.refunds)),
       collection("credits", "Dakika hareketleri", "/billing/admin/credit-events?limit=250", "events", () => renderAdminCreditEvents(adminState.credits)),
       collection("contacts", "Destek mesajları", "/billing/admin/contact-messages?limit=250", "messages", refreshActivity),
-      collection("jobs", "İşleme işleri", "/billing/admin/jobs?limit=250", "jobs", refreshActivity),
+      refreshJobs(),
       collection("accountEvents", "Yönetici kayıtları", "/billing/admin/account-events?limit=250", "events", () => renderAdminAccountEvents(adminState.accountEvents)),
       object("billing", "Ödeme altyapısı", "/billing/health", refreshReadiness, true),
       object("runtime", "Sistem sağlığı", "/rollout/health", refreshReadiness, true),
@@ -1598,6 +1612,12 @@ async function adjustCredit(button) {
   catch (error) { adminNotice(error.message, true); button.disabled = false; }
 }
 
+function closeAdminUserEditor(source) {
+  const dialog = admin$("adminUserDialog");
+  // Opening another record (or reopening this one) replaces the form nodes.
+  if (dialog?.open && source.isConnected && dialog.contains(source)) dialog.close();
+}
+
 async function saveAdminUser(event, form) {
   event.preventDefault();
   const userId = form.dataset.userProfileForm;
@@ -1618,7 +1638,7 @@ async function saveAdminUser(event, form) {
       }),
     });
     adminNotice(body.message);
-    admin$("adminUserDialog")?.close();
+    closeAdminUserEditor(form);
     await loadAdmin({silent:true});
   } catch (error) { adminNotice(error.message, true); submit.disabled = false; }
 }
@@ -1635,7 +1655,7 @@ async function adjustAdminUserCredit(event, form) {
       body:JSON.stringify({minutes_delta:Number(data.get("minutes_delta") || 0), reason:String(data.get("reason") || "").trim()}),
     });
     adminNotice(body.message);
-    admin$("adminUserDialog")?.close();
+    closeAdminUserEditor(form);
     await loadAdmin({silent:true});
   } catch (error) { adminNotice(error.message, true); submit.disabled = false; }
 }
@@ -1657,7 +1677,7 @@ async function saveAdminSubscription(event, form) {
       body:JSON.stringify({plan_code:planCode, interval:String(data.get("interval") || "monthly"), duration_days:Number(data.get("duration_days") || 30)}),
     });
     adminNotice(body.message);
-    admin$("adminUserDialog")?.close();
+    closeAdminUserEditor(form);
     await loadAdmin({silent:true});
   } catch (error) { adminNotice(error.message, true); submit.disabled = false; }
 }
@@ -1668,7 +1688,7 @@ async function revokeAdminSessions(button) {
   try {
     const body = await adminRequest(`/billing/admin/users/${encodeURIComponent(button.dataset.userRevoke)}/revoke-sessions`, {method:"POST", body:"{}"});
     adminNotice(body.message);
-    admin$("adminUserDialog")?.close();
+    closeAdminUserEditor(button);
     await loadAdmin({silent:true});
   } catch (error) { adminNotice(error.message, true); button.disabled = false; }
 }
@@ -1703,7 +1723,8 @@ async function closeAdminUser(event, form) {
       body:JSON.stringify({confirmation_email:email, reason:String(data.get("reason") || "").trim()}),
     });
     selectedAdminUsers.delete(userId);
-    admin$("adminUserDialog")?.close();
+    const dialog = admin$("adminUserDialog");
+    if (dialog?.open && dialog.querySelector('[data-user-close-form]')?.dataset.userCloseForm === userId) dialog.close();
     adminNotice(body.message);
     await refreshAdminUsersAfterMutation(body.message);
   } catch (error) { adminNotice(error.message, true); }
