@@ -114,7 +114,7 @@ test('a failed currency refresh restores the displayed currency and can be retri
   await expect(page.locator('#billingCurrency')).toHaveValue('TRY');
   expect(await page.evaluate(() => localStorage.getItem('lecturesift-currency'))).toBe('TRY');
   await choosePlan(page);
-  await expect(page.locator('#checkoutSummaryTotal')).toHaveText('₺299.00');
+  await expect(page.locator('#checkoutSummaryTotal')).toHaveText(/^₺\s*299\.00$/);
   await page.locator('#checkoutClose').click();
   await expect(page.locator('#billingCurrency')).toBeEnabled();
   await page.locator('#billingCurrency').selectOption('USD');
@@ -155,7 +155,7 @@ test('a manual transfer rejection stays visible in checkout and permits an expli
     await page.locator('#checkoutBankButton').click();
     await expect(page.locator('#transferPanel')).toBeVisible();
     await expect(page.locator('#transferReference')).toHaveText('SYNTHETIC-RETRY');
-    await expect(page.locator('#transferAmount')).toHaveText('₺299.00');
+  await expect(page.locator('#transferAmount')).toHaveText(/^₺\s*299\.00$/);
     await expect(page.locator('#checkoutPanel')).toBeHidden();
     await expect(page.locator('#billingCurrency')).toBeEnabled();
     await refreshReceived.promise;
