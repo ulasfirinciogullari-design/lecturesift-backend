@@ -1,0 +1,193 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-09T13:44:54Z",
+  "siteUrl": "sc-domain:lecturesift.com",
+  "purpose": "Track loss of indexing for core entry and product pages in addition to the original non-indexed cohort.",
+  "before": {
+    "total": 31,
+    "indexed": 3,
+    "notIndexed": 28,
+    "scope": "Original 31 URLs that were non-indexed at the first full sitemap audit."
+  },
+  "addition": {
+    "siteUrl": "sc-domain:lecturesift.com",
+    "trackerId": "da60cc78-8f2d-4b44-b0ec-9d80874aecf8",
+    "requested": 5,
+    "added": 5,
+    "skippedOverCap": 0,
+    "alreadyTracked": 0,
+    "capacityRemaining": 1764
+  },
+  "newlyAddedUrls": [
+    "https://lecturesift.com/",
+    "https://lecturesift.com/en/",
+    "https://lecturesift.com/document-summary",
+    "https://lecturesift.com/en/document-summary",
+    "https://lecturesift.com/lecture-video-summary"
+  ],
+  "initialInspections": {
+    "siteUrl": "sc-domain:lecturesift.com",
+    "count": 5,
+    "results": [
+      {
+        "url": "https://lecturesift.com/",
+        "currentStatus": "indexed",
+        "previousStatus": "pending",
+        "verdict": "PASS",
+        "coverageState": "Submitted and indexed",
+        "lastCrawlTime": "2026-10-01T18:09:40Z",
+        "warningType": null
+      },
+      {
+        "url": "https://lecturesift.com/en/",
+        "currentStatus": "indexed",
+        "previousStatus": "pending",
+        "verdict": "PASS",
+        "coverageState": "Submitted and indexed",
+        "lastCrawlTime": "2026-09-07T05:18:31Z",
+        "warningType": null
+      },
+      {
+        "url": "https://lecturesift.com/document-summary",
+        "currentStatus": "indexed",
+        "previousStatus": "pending",
+        "verdict": "PASS",
+        "coverageState": "Submitted and indexed",
+        "lastCrawlTime": "2026-10-05T12:38:26Z",
+        "warningType": null
+      },
+      {
+        "url": "https://lecturesift.com/en/document-summary",
+        "currentStatus": "indexed",
+        "previousStatus": "pending",
+        "verdict": "PASS",
+        "coverageState": "Submitted and indexed",
+        "lastCrawlTime": "2026-09-28T04:57:51Z",
+        "warningType": null
+      },
+      {
+        "url": "https://lecturesift.com/lecture-video-summary",
+        "currentStatus": "indexed",
+        "previousStatus": "pending",
+        "verdict": "PASS",
+        "coverageState": "Submitted and indexed",
+        "lastCrawlTime": "2026-10-01T09:19:39Z",
+        "warningType": null
+      }
+    ]
+  },
+  "after": {
+    "stats": {
+      "total": 36,
+      "indexed": 8,
+      "notIndexed": 28,
+      "pending": 0,
+      "errors": 0,
+      "warnings": 0,
+      "lastCheckAt": "2026-10-09T13:44:29.127+00:00"
+    },
+    "settings": {
+      "id": "da60cc78-8f2d-4b44-b0ec-9d80874aecf8",
+      "isActive": true,
+      "staleCrawlThresholdDays": 120,
+      "emailDigestEnabled": true,
+      "createdAt": "2026-10-08T22:41:37.34623+00:00"
+    },
+    "coreUrls": [
+      {
+        "url": "https://lecturesift.com/",
+        "status": "indexed",
+        "lastCheckAt": "2026-10-09T13:44:00.611+00:00",
+        "checkCount": 1
+      },
+      {
+        "url": "https://lecturesift.com/en/",
+        "status": "indexed",
+        "lastCheckAt": "2026-10-09T13:44:08.144+00:00",
+        "checkCount": 1
+      },
+      {
+        "url": "https://lecturesift.com/document-summary",
+        "status": "indexed",
+        "lastCheckAt": "2026-10-09T13:44:15.379+00:00",
+        "checkCount": 1
+      },
+      {
+        "url": "https://lecturesift.com/en/document-summary",
+        "status": "indexed",
+        "lastCheckAt": "2026-10-09T13:44:22.229+00:00",
+        "checkCount": 1
+      },
+      {
+        "url": "https://lecturesift.com/lecture-video-summary",
+        "status": "indexed",
+        "lastCheckAt": "2026-10-09T13:44:29.127+00:00",
+        "checkCount": 1
+      },
+      {
+        "url": "https://lecturesift.com/en/lecture-video-summary",
+        "status": "not_indexed",
+        "lastCheckAt": "2026-10-09T13:36:37.118+00:00",
+        "checkCount": 3
+      },
+      {
+        "url": "https://lecturesift.com/quiz-flashcards",
+        "status": "indexed",
+        "lastCheckAt": "2026-10-09T00:48:24.221+00:00",
+        "checkCount": 2
+      },
+      {
+        "url": "https://lecturesift.com/en/quiz-flashcards",
+        "status": "indexed",
+        "lastCheckAt": "2026-10-09T00:48:44.479+00:00",
+        "checkCount": 2
+      }
+    ]
+  },
+  "interpretation": [
+    "Five URLs were added to monitoring, not newly indexed by this action. Their baseline inspections all returned indexed.",
+    "The tracked cohort is now 36 URLs: 8 indexed and 28 not indexed. This is not the site's complete index count and is not comparable with the earlier 31-URL percentage without accounting for the new cohort.",
+    "All eight TR/EN home and main-product URLs are included. EN video remains one of the four pending priority URLs.",
+    "No original tracked URL was removed; no indexing request was submitted; canonical fields were not reread in this follow-up."
+  ],
+  "cadence": {
+    "documentedPerUrl": "daily, distributed over 24 hours",
+    "workerInvocation": "hourly cron as described by the MCP add_tracked_urls tool; not every URL every hour",
+    "staleCrawlThresholdDaysMeaning": "Age of Google's last crawl, not monitoring interval",
+    "backgroundExecutionObserved": false,
+    "emailDeliveryObserved": false,
+    "existingEmailDigestEnabled": true,
+    "assessment": "The preceding 12-13 hour observation window is shorter than the documented daily interval. No scheduler defect or account-selection cause has been established.",
+    "nextMeaningfulReadAfter": "2026-10-10T13:45:00Z",
+    "nextReadLocal": "10 Ekim 2026 16:45 Europe/Istanbul",
+    "nextReadMethod": "Read stored per-URL lastCheckAt/checkCount before manual refresh. Compare with the documented baselines; do not refresh merely to make the tracker appear current.",
+    "sources": [
+      "https://www.gscwizard.com/indexing-monitor.html",
+      "https://www.gscwizard.com/docs/indexing/index-tracker.html",
+      "https://mcp.gscwizard.com/docs"
+    ]
+  },
+  "access": {
+    "reportedLevel": "paid",
+    "subscription": null,
+    "trialEndsAtUtc": "2026-10-15T21:29:37.736Z",
+    "trialEndsAtLocal": "16 Ekim 2026 00:29:37 Europe/Istanbul",
+    "purchaseMade": false,
+    "note": "Current trial access does not establish continued provider service after expiry. Native Google inspection through the existing owner Chrome is a separate access path."
+  },
+  "priorEvidence": [
+    "indexing-tracker-2026-10-09.json",
+    "indexing-followup-2026-10-09.json",
+    "afternoon-followup-2026-10-09.json"
+  ],
+  "boundaries": {
+    "localTestsOrBuildsRun": false,
+    "sourceCodeChanged": false,
+    "existingGoogleAccountsChanged": false,
+    "newIndexingRequests": 0,
+    "originalUrlsReinspectedThisFollowup": 0,
+    "newCodexAutomationCreated": false,
+    "newServicePurchased": false,
+    "browserOpened": false
+  }
+}
