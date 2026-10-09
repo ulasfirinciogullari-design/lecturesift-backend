@@ -5,6 +5,30 @@ takip edilir. Başlangıç varsayımı Türkiye'deki üniversite öğrencileri v
 Türkçe aramalardır. İlk rekabet geliştirmesi üç ana ürün sayfasının Türkçe
 ve İngilizce sürümlerine uygulanır; diğer diller mevcut içeriklerini korur.
 
+## 9 Ekim 2026 öğleden sonra takip kontrolü
+
+Bekleyen dört öncelikli URL bir kez yeniden denetlendi; yeni indeksleme
+isteği gönderilmedi. `/pt/quiz-flashcards` eski taramaya dayanan alternatif
+sayfa; İngilizce video ve TR/EN PDF rehberleri bu sağlayıcı yanıtında
+Google tarafından bilinmiyor. Üç indeksli adres bu oturumda tekrar
+denetlenmedi; 31 URL'lik takip grubunun saklanan toplamı 3 indeksli/28
+indeks dışı. Sitemap işlenmiş durumda, 183 adres ve 0 hata/uyarı.
+
+**Yeni ölçüm kanıtı:** İki özel boyut kayıtlı ve 9 Ekim'in henüz
+tamamlanmamış GA4 raporunda ilk dolu satır görüldü: `target_path=/plans`,
+`link_placement=content`, 1 `content_action` olayı. İkinci olayda iki alan
+da boş; nedeni doğrulanmadı. Böylece tanımların oluşturulmasına ek olarak
+verinin rapora ulaşması da doğrulandı. Bu, gerçek dış müşteri, ödeme veya
+dört eylem türünün tamamının çalıştığı kanıtı değildir; gün içi sayılar
+değişebilir. Sentetik olay gönderilmedi.
+
+Takip ayarı etkin olsa da 16:35 TSİ okumasında son kontrol hâlâ geceki
+manuel yenilemeydi. Bu nedenle otomatik çalışma ve e-posta teslimi
+doğrulanmış sayılmaz; neden saptanmadı. Bu oturumdaki manuel yenileme
+16:36:50 TSİ'de tamamlandı. Son PR128 kaynak farkında yeni canonical,
+dil alternatifi, keşif veya ölçüm kusuru bulunmadı. Yerel test/derleme yok.
+[Sağlayıcı sonuçları, ölçüm satırları ve sınırlar](docs/seo/afternoon-followup-2026-10-09.json).
+
 ## 9 Ekim 2026 üç öncelikli URL indekslendi; ölçüm tanımları tamamlandı
 
 **03:49 TSİ takip yenilemesi:** Kabul edilmiş yedi isteğin hedefleri bir kez
@@ -888,7 +912,7 @@ alındığını veya Google tarafından işlendiğini iddia etmez.
 
 | Öncelik | İş | Durum ve kalan ölçüt |
 | --- | --- | --- |
-| P0 | Ölçümün güvenilirliğini doğrula | Üretimde `content_action/open_workspace` alınıyor. `target_path` ve `link_placement` özel boyutları oluşturulup UI/API ile doğrulandı; yeni verinin raporlanması bekleniyor. Diğer dört tür, iç kullanım/atıf ve gerçek ödeme karşılaştırması açık; yapay olay veya müşteri kaydı kullanılmadı. |
+| P0 | Ölçümün güvenilirliğini doğrula | Üretimde `content_action/open_workspace` alınıyor. `target_path` ve `link_placement` tanımları UI/API ile doğrulandı; 9 Ekim gün içi raporunda `/plans`/`content` alanlarıyla ilk olay görüldü. Tüm eylem türlerinin doğrulanması, iç kullanım/atıf ve gerçek ödeme karşılaştırması açık; yapay olay veya müşteri kaydı kullanılmadı. |
 | P0 | Gezinme yolu düzeltmesini doğrula | Tamamlandı: kaynak/önceki uzak CI ve 9 Ekim TR/EN/AR canlı JSON-LD zincirleri doğrulandı. |
 | P1 | İlk üç ürün sayfasını geliştir | İlk paket tamamlandı: altı TR/EN sürümü PR107 ile yayımlandı; örnekler, adımlar, sınırlar ve ilgili rehberler canlı doğrulandı. Yeni gelişim ölçülmüş sorgulara göre seçilecek. |
 | P1 | Google URL Denetimi ve canonical | 183 URL'nin ilk indeks denetimi ve yedi öncelikli istek tamam. Son kontrolde TR/EN quiz ile PT iletişim indeksli ve temiz canonical; native Google UI ile doğrulandı. Dört öncelikli adres bekliyor. Sitemap işlendi, 0 hata/uyarı. 31 URL'lik takipte 3 indeksli/28 indeks dışı; yalnız yedi kayıt yeni. Tüm 183 adresin canonical alanı alınmış değildir. |
