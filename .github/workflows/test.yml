@@ -56,47 +56,6 @@ jobs:
         run: bash deploy/check_shell_syntax.sh
       - name: Validate locked image inputs before building
         run: python3 deploy/supply_chain_lock.py --root .
-      - name: Cache the canonical PostgreSQL image through the registry mirror
-        timeout-minutes: 3
-        # Reload mirror settings without restarting Docker or its PostgreSQL service.
-        run: |
-          sudo python3 - <<'PY'
-          import json
-          from pathlib import Path
-          path = Path('/etc/docker/daemon.json')
-          settings = json.loads(path.read_text()) if path.exists() else {}
-          mirrors = settings.get('registry-mirrors', [])
-          if not isinstance(mirrors, list) or not all(isinstance(item, str) for item in mirrors):
-              raise SystemExit('Unexpected Docker registry mirror configuration')
-          settings['registry-mirrors'] = list(dict.fromkeys(['https://mirror.gcr.io', *mirrors]))
-          path.write_text(json.dumps(settings))
-          PY
-          sudo dockerd --validate --config-file=/etc/docker/daemon.json
-          ci_docker_pid="$(systemctl show --property=MainPID --value docker.service)"
-          test "$ci_docker_pid" -gt 1
-          sudo kill -HUP "$ci_docker_pid"
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-          import re
-          import subprocess
-          import time
-          for attempt in range(10):
-              info = subprocess.run(['docker', 'info', '--format', '{{json .RegistryConfig.Mirrors}}'],
-                  check=True, capture_output=True, text=True, timeout=10)
-              if 'https://mirror.gcr.io' in [item.rstrip('/') for item in (json.loads(info.stdout) or [])]:
-                  break
-              time.sleep(1)
-          else:
-              raise SystemExit('Docker did not activate the registry mirror')
-          locked = dict(line.split('=', 1) for line in Path('deploy/supply_chain.lock').read_text().splitlines())
-          image = locked['postgres_image']
-          if not re.fullmatch(r'postgres:18-bookworm@sha256:[0-9a-f]{64}', image):
-              raise SystemExit('Unexpected canonical PostgreSQL image')
-          subprocess.run(['docker', 'pull', '--platform', 'linux/amd64', image], check=True, timeout=90)
-          subprocess.run(['docker', 'image', 'inspect', image, '--format', '{{json .RepoDigests}}'],
-              check=True, timeout=10)
-          PY
       - name: Prepare CI registry mirrors for the locked Dockerfiles
         # Only registry addresses change; source Dockerfiles and digests stay intact.
         run: |
