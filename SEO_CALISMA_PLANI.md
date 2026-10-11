@@ -5,6 +5,46 @@ takip edilir. Başlangıç varsayımı Türkiye'deki üniversite öğrencileri v
 Türkçe aramalardır. İlk rekabet geliştirmesi üç ana ürün sayfasının Türkçe
 ve İngilizce sürümlerine uygulanır; diğer diller mevcut içeriklerini korur.
 
+## 11 Ekim 2026 otomatik takip ve canonical alanları doğrulandı
+
+**22:28 TSİ:** Manuel URL Denetimi başlatmadan saklanan 36 kayıt okundu.
+Tüm adreslerde kontrol sayısı önceki başlangıca göre iki artmış; son
+kontroller 11 Ekim 01:50–17:36 TSİ arasında. Böylece önceki kontrolde
+açık kalan arka plan yenilenmesi gözlendi; zamanlar günlük takiple uyumlu.
+Sağlayıcının görev günlükleri okunmadı. E-posta özeti etkin, ancak
+teslimi hâlâ doğrulanmadı; ilgili Gmail aramasının boş dönmesi tek başına
+teslim hatası kanıtı değildir.
+
+**Canonical alanı artık araçtan okunabiliyor:** GSC Wizard yanıtları
+`googleCanonical`, `userCanonical` ve Google denetim bağlantısını içeriyor.
+İndeksli sekiz URL'nin tamamında Google'ın seçimi temiz URL ile aynı.
+`/pt/quiz-flashcards` için seçim hâlâ `.html`; Google'ın son taraması
+30 Ağustos. Canlı temiz sayfa 200 ve self-canonical, eski `.html` adresi
+301 olduğundan yeni bir kaynak kusuru saptanmadı. Diğer 27 kayıtta
+Google canonical bildirmiyor; `null` değerler canlı HTML ile doldurulmadı.
+Sağlayıcının kodu bu görevde değiştirilmedi; yeni araç desteği gözlendi.
+
+Takip grubu değişmedi: **36 URL, 8 indeksli / 28 indeks dışı**, sıfır
+hata/uyarı. İndeks dışı dağılımı 11 keşfedilmiş, 16 Google tarafından
+bilinmeyen, 1 uygun canonical nedeniyle alternatif sayfa. Öncelikli
+Portekizce quiz, İngilizce video ve TR/EN PDF adresleri hâlâ bekliyor;
+kabul edilmiş isteklere tekrar gönderim yapılmadı. İngilizce PDF artık
+keşfedilmiş; bu değişiklik indekslenme sayılmadı.
+
+Altı önemli canlı sayfada 200, tek self-canonical, dolu title/H1 ve
+`noindex` bulunmaması doğrulandı. Sitemap işlenmiş, 183 adres ve sıfır
+hata/uyarı; tekrar gönderilmedi. GA4 özel boyutları kayıtlı; tamamlanmış
+9 Ekim raporunda `/plans` + `content` için 1 olay, iki alanı boş 1 olay
+var. Tüm eylem türleri, dış müşteri atfı ve ödeme doğrulanmış sayılmaz.
+
+Hesapta ücretli abonelik kaydı yok; deneme bitişi yeniden
+**16 Ekim 00:29 TSİ** olarak okundu. Deneme sonrası sağlayıcı takibinin
+sürekliliği doğrulanmadı, satın alma yapılmadı.
+
+[Güncel kayıtlar ve karşılaştırma kanıtı](docs/seo/monitor-verification-2026-10-11.json).
+Bu oturumda uygulama kodu, yerel test/derleme, tarayıcı işlemi veya yeni
+indeksleme isteği yok. Aşağıdaki bölümler önceki tarihlerin kayıtlarıdır.
+
 ## 9 Ekim 2026 ana sayfa ve ürünlerin indeks kaybı takibi
 
 **16:44 TSİ:** Önceki takip yalnız ilk denetimde indeks dışında olan
