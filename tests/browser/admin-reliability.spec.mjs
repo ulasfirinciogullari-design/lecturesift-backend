@@ -78,6 +78,28 @@ async function openAdmin(page, {override, saved = false, hash = 'overview', them
   return unexpected;
 }
 
+test('overview separates guest trials from verified registrations and paid subscribers', async ({page}) => {
+  const unexpected = await openAdmin(page, {override:async (route, url) => {
+    if (url.pathname !== '/billing/admin/overview') return false;
+    await route.fulfill({headers:CORS, json:{
+      counts:{users:8, verified_users:8, active_subscriptions:4, users_24h:1,
+        registered_users:5, guest_users:3, verified_registered_users:5,
+        registered_users_24h:0, active_registered_subscriptions:1},
+      verification_rate:100, registered_verification_rate:100,
+      users:[user], orders:[], plan_distribution:{business:1, free:4, guest:3},
+      revenue_by_currency:{},
+    }});
+    return true;
+  }});
+  await expect(page.locator('#adminUsers')).toHaveText('8');
+  await expect(page.locator('#adminUsersBreakdown')).toHaveText('Kayıtlı hesap: 5 · Misafir denemesi: 3');
+  await expect(page.locator('#adminVerified')).toHaveText('5');
+  await expect(page.locator('#adminVerificationRate')).toContainText('%100');
+  await expect(page.locator('#adminSubscriptions')).toHaveText('1');
+  await expect(page.locator('#adminUsers24h')).toHaveText('0');
+  expect(unexpected).toEqual([]);
+});
+
 test('administrator can find a lesson, inspect escaped outputs and download with authorization', async ({page}, testInfo) => {
   const unexpected = await openAdmin(page, {hash:'jobs', override:async (route, url) => {
     if (url.pathname === '/billing/admin/jobs') {
