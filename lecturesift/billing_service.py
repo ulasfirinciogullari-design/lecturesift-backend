@@ -28,6 +28,7 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    case,
     create_engine,
     func,
     select,
@@ -2223,6 +2224,8 @@ def admin_billing_overview(limit: int = 100) -> dict:
     safe_limit = max(1, min(int(limit), 250))
     now = utcnow()
     active_user = USERS.c.email.not_like("deleted+%@users.invalid")
+    guest_user = func.lower(USERS.c.email).like("%@guest.lecturesift.invalid")
+    registered_user = active_user & ~guest_user
     with ENGINE.connect() as connection:
         from .workspace_state import ORDER_ARCHIVES, visible_order_condition
         from sqlalchemy import inspect
@@ -2266,6 +2269,28 @@ def admin_billing_overview(limit: int = 100) -> dict:
                 )
             ).scalar_one()
         )
+        registered_metrics = connection.execute(
+            select(
+                func.count().label("users"),
+                func.count(case((USER_PROFILES.c.email_verified_at.is_not(None), 1))).label(
+                    "verified_users"
+                ),
+                func.count(case((USERS.c.created_at >= now - timedelta(hours=24), 1))).label(
+                    "users_24h"
+                ),
+                func.count(case((USERS.c.created_at >= now - timedelta(days=7), 1))).label(
+                    "users_7d"
+                ),
+                func.count(case((USERS.c.created_at >= now - timedelta(days=30), 1))).label(
+                    "users_30d"
+                ),
+            )
+            .select_from(USERS)
+            .outerjoin(USER_PROFILES, USER_PROFILES.c.user_id == USERS.c.id)
+            .where(registered_user)
+        ).one()
+        registered_count = int(registered_metrics.users)
+        verified_registered_count = int(registered_metrics.verified_users)
         pending_count = int(
             connection.execute(
                 select(func.count()).select_from(MANUAL_ORDERS).where(
@@ -2288,6 +2313,18 @@ def admin_billing_overview(limit: int = 100) -> dict:
                     SUBSCRIPTIONS
                 ).join(USERS, USERS.c.id == SUBSCRIPTIONS.c.user_id).where(
                     active_user,
+                    SUBSCRIPTIONS.c.status.in_(("active", "cancel_at_end")),
+                    SUBSCRIPTIONS.c.ends_at > now,
+                )
+            ).scalar_one()
+        )
+        active_registered_subscription_count = int(
+            connection.execute(
+                select(func.count(func.distinct(SUBSCRIPTIONS.c.user_id))).select_from(
+                    SUBSCRIPTIONS
+                ).join(USERS, USERS.c.id == SUBSCRIPTIONS.c.user_id).where(
+                    registered_user,
+                    SUBSCRIPTIONS.c.plan_code.not_in(("guest", "free")),
                     SUBSCRIPTIONS.c.status.in_(("active", "cancel_at_end")),
                     SUBSCRIPTIONS.c.ends_at > now,
                 )
@@ -2411,12 +2448,22 @@ def admin_billing_overview(limit: int = 100) -> dict:
             "users_24h": users_24h,
             "users_7d": users_7d,
             "users_30d": users_30d,
+            "registered_users": registered_count,
+            "guest_users": user_count - registered_count,
+            "verified_registered_users": verified_registered_count,
+            "registered_users_24h": int(registered_metrics.users_24h),
+            "registered_users_7d": int(registered_metrics.users_7d),
+            "registered_users_30d": int(registered_metrics.users_30d),
             "pending_orders": pending_count,
             "paid_orders": manual_paid_count + card_paid_count,
             "failed_orders": failed_order_count,
             "active_subscriptions": active_subscription_count,
+            "active_registered_subscriptions": active_registered_subscription_count,
         },
         "verification_rate": round((verified_count / user_count * 100) if user_count else 0, 1),
+        "registered_verification_rate": round(
+            (verified_registered_count / registered_count * 100) if registered_count else 0, 1
+        ),
         "revenue_by_currency": dict(sorted(revenue_by_currency.items())),
         "plan_distribution": dict(sorted(plan_distribution.items())),
         "orders": sorted([
