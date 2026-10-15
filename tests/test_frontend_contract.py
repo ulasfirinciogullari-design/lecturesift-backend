@@ -1401,7 +1401,7 @@ def test_optional_analytics_and_advertising_are_consent_gated():
     assert ".consent-manage{position:fixed" not in consent_css
     assert 'analytics: false, advertising: false' in consent
     assert 'category === "necessary"' in consent
-    assert 'analyticsScript.src = document.body.dataset.page === "workspace" ? "/analytics.js?v=10" : "/analytics.js?v=9"' in i18n
+    assert 'analyticsScript.src = "/analytics.js?v=9"' in i18n
     assert 'window.LectureSiftConsent?.get?.()' in analytics
     assert "/analytics/config" in analytics
     assert "googletagmanager.com/gtag/js" in analytics

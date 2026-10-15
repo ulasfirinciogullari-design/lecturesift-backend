@@ -15,13 +15,6 @@ async function prepare(page, {remaining = 2.7, locale = 'en', job = null, jobRes
     if (registered) localStorage.setItem('lecturesift-billing-token', 'synthetic-pdf-owner');
     localStorage.setItem('lecturesift-ui', locale);
     localStorage.setItem('lecturesift-currency', 'TRY');
-    window.studyEvents = [];
-    // Observe app integration separately from the analytics consent/privacy
-    // contract, which is covered by the analytics module's own tests.
-    const recorder = {trackStudy:async (action, parameters) => {
-      window.studyEvents.push({action, parameters}); return true;
-    }};
-    Object.defineProperty(window, 'LectureSiftAnalytics', {configurable:true, get:()=>recorder, set:()=>{}});
     const open = XMLHttpRequest.prototype.open, send = XMLHttpRequest.prototype.send, header = XMLHttpRequest.prototype.setRequestHeader;
     XMLHttpRequest.prototype.open = function(method, url, ...rest) {
       this.syntheticPdfUpload = method === 'POST' && url === 'https://api.lecturesift.com/jobs';
@@ -92,7 +85,6 @@ test('full PDF processing stays the default and the original multipart source is
   await page.locator('#analyzeButton').click();
   await page.waitForFunction(() => Boolean(window.syntheticPdfUpload));
   expect(await multipart(page)).toEqual({sample:null, start:null, names:[file.name], source:file.buffer.toString(), jobType:'study_pack'});
-  expect(await page.evaluate(() => window.studyEvents)).toEqual([{action:'upload_started', parameters:{sample_mode:false, source_type:'document'}}]);
 });
 
 for (const capability of [null, false]) {
@@ -142,7 +134,6 @@ for (const interruption of ['catalog disabled', 'source changed']) {
     releaseGuest();
     await expect(page.locator('#errorCode')).toContainText('LS-DOC-17');
     expect(await page.evaluate(() => window.syntheticPdfUploadCount || 0)).toBe(0);
-    expect(await page.evaluate(() => window.studyEvents)).toEqual([]);
   });
 }
 
@@ -168,10 +159,6 @@ test('an opted-in PDF sample sends its start page and explains whole-minute quot
   await expect(page.locator('#documentSample')).toBeChecked();
   await expect(page.locator('#results')).toBeHidden();
   expect(await page.evaluate(() => window.syntheticPdfUploadCount)).toBe(1);
-  expect(await page.evaluate(() => window.studyEvents)).toEqual([
-    {action:'upload_started', parameters:{sample_mode:true, source_type:'document'}},
-    {action:'job_failed', parameters:{sample_mode:true, source_type:'document', error_code:'LS-DOC-14'}},
-  ]);
 });
 
 test('changing sources clears sample choices and only a single PDF exposes them', async ({page}) => {
@@ -209,7 +196,6 @@ test('an invalid sample start page is rejected before any upload', async ({page}
     await page.locator('#closeError').click();
   }
   expect(await page.evaluate(() => window.syntheticPdfUploadCount || 0)).toBe(0);
-  expect(await page.evaluate(() => window.studyEvents)).toEqual([]);
 });
 
 test('sample results and saved lessons clearly disclose scope, with no invented full-document requirement', async ({page}, testInfo) => {
@@ -229,7 +215,6 @@ test('sample results and saved lessons clearly disclose scope, with no invented 
   await finishUpload(page, {job_id:JOB_ID});
   await expect(page.locator('#openReadyResult')).toBeVisible();
   await expect(page.locator('#results')).toBeHidden();
-  expect(await page.evaluate(() => window.studyEvents.filter(event => event.action === 'result_ready'))).toEqual([]);
   await page.locator('#openReadyResult').click();
   await expect(page.locator('#documentSampleResult')).toBeVisible();
   await expect(page.locator('#documentSampleResultRange')).toContainText('7–11');
@@ -241,16 +226,13 @@ test('sample results and saved lessons clearly disclose scope, with no invented 
   const full = new URL(await page.locator('#documentSampleFull').getAttribute('href'), page.url());
   expect(full.pathname).toBe('/en/workspace.html'); expect([...full.searchParams.entries()]).toEqual([['source','upload']]);
   await page.locator('#openReadyResult').click();
-  await expect.poll(() => page.evaluate(() => window.studyEvents.filter(event => event.action === 'result_ready').length)).toBe(1);
-  const events = await page.evaluate(() => window.studyEvents);
-  expect(events.map(event => event.action)).toEqual(['upload_started','upload_accepted','result_ready']);
-  for (const event of events) expect(event.parameters).toEqual({sample_mode:true, source_type:'document'});
+  await expect(page.locator('#documentSampleResult')).toBeVisible();
   await page.locator('#workspaceLibraryTab').click();
   await expect(page.locator('.document-sample-badge')).toHaveCount(1);
   await expect(page.locator('.library-lesson').filter({hasText:'Full source'}).locator('.document-sample-badge')).toHaveCount(0);
   await page.locator('.library-lesson').filter({hasText:'Sample chapter'}).locator('.library-open').click();
   await expect(page.locator('#documentSampleResult')).toBeVisible();
-  expect(await page.evaluate(() => window.studyEvents.filter(event => event.action === 'result_ready'))).toEqual([]);
+  expect(await page.evaluate(() => localStorage.getItem('lecturesift-shown-study-results-v1'))).toBeNull();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });
 

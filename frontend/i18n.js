@@ -1059,7 +1059,7 @@
   consentScript.defer = true;
   document.head.append(consentScript);
   const analyticsScript = document.createElement("script");
-  analyticsScript.src = document.body.dataset.page === "workspace" ? "/analytics.js?v=10" : "/analytics.js?v=9";
+  analyticsScript.src = "/analytics.js?v=9";
   analyticsScript.defer = true;
   document.head.append(analyticsScript);
   const rewardedAdsScript = document.createElement("script");

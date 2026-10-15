@@ -190,10 +190,7 @@ let requestedJobLoaded = false;
 let activeProgressProfile = "";
 let jobBusy = false;
 let sampleSourceFile = null;
-let studyUploadActive = false;
-let currentStudyContext = {sample_mode:false, source_type:"media"};
 let currentFullDocumentNeeds = null;
-const shownStudyResults = new Set();
 window.addEventListener("storage", event => {
   if ((event.key === "lecturesift-billing-token" || event.key === null)
     && localStorage.getItem("lecturesift-billing-token") !== billingToken) location.reload();
@@ -593,27 +590,6 @@ function updateDocumentSample() {
     });
   }
 }
-function trackStudy(action, extra = {}) {
-  try { return Promise.resolve(window.LectureSiftAnalytics?.trackStudy?.(action, {...currentStudyContext, ...extra})).catch(() => false); }
-  catch (_) { return Promise.resolve(false); }
-}
-async function recordResultShown(data) {
-  if (!jobId || !/^[A-Za-z0-9-]{8,80}$/.test(jobId) || typeof window.LectureSiftAnalytics?.trackStudy !== "function") return;
-  const key = "lecturesift-shown-study-results-v1";
-  let previous = [];
-  try {
-    const saved = JSON.parse(localStorage.getItem(key) || "[]");
-    if (Array.isArray(saved)) previous = saved.filter(value => typeof value === "string" && /^[A-Za-z0-9-]{8,80}$/.test(value)).slice(-200);
-  } catch (_) {}
-  if (shownStudyResults.has(jobId) || previous.includes(jobId)) return;
-  const shownId = jobId;
-  shownStudyResults.add(shownId);
-  // Job IDs stay on this device; only the two coarse source flags are sent.
-  const sent = await trackStudy("result_ready", data.partial_source === true ? {sample_mode:true, source_type:"document"} : {});
-  if (sent === true) {
-    try { localStorage.setItem(key, JSON.stringify([...previous, shownId].slice(-200))); } catch (_) {}
-  } else shownStudyResults.delete(shownId);
-}
 function updateDocumentQuotaHelp() {
   updateDocumentSample();
   const limitHelp = $("sourceLimitHelp");
@@ -902,7 +878,6 @@ $("autoOpenResult").addEventListener("change", () => {
 $("openReadyResult").onclick = () => {
   if (!latestResult) return;
   $("results").hidden = false;
-  recordResultShown(latestResult);
   $("results").scrollIntoView({behavior:"smooth", block:"start"});
 };
 function jobPhaseLabel(job, profile) {
@@ -919,10 +894,9 @@ function profileDetail(profile) {
 }
 function updateJobView(job) {
   const profile = configureProgressProfile(job);
-  currentStudyContext = {source_type:profile === "document" ? "document" : "media",
-    sample_mode:job.partial_source === true || Boolean(job.options?.pdf_sample)};
+  const sampleJob = job.partial_source === true || Boolean(job.options?.pdf_sample);
   currentFullDocumentNeeds = null;
-  if (profile === "document" && !currentStudyContext.sample_mode) {
+  if (profile === "document" && !sampleJob) {
     const fields = {need_minutes:"billable_minutes", need_pages:"document_pages", need_ocr:"document_ocr_pages", need_bytes:"file_size_bytes", need_files:"source_file_count"};
     currentFullDocumentNeeds = Object.fromEntries(Object.entries(fields)
       .filter(([, field]) => typeof job[field] === "number" && Number.isFinite(job[field])
@@ -982,11 +956,7 @@ function showError(message, code = "LS-SYSTEM-01", {stopProcessing = true} = {})
     : message || t("errorFallback");
   $("errorMessage").textContent = translated || message || t("errorFallback");
   $("errorCode").textContent = `${window.LectureSiftI18n?.exact("Hata kodu") || "Hata kodu"}: ${code}`; $("errorBox").hidden = false;
-  if (stopProcessing) {
-    if (studyUploadActive) trackStudy("job_failed", /^[A-Z]+-[A-Z]+-\d{2}$/.test(code) ? {error_code:code} : {});
-    studyUploadActive = false;
-    setJobBusy(false); clearTimeout(pollHandle); clearInterval(timerHandle);
-  }
+  if (stopProcessing) { setJobBusy(false); clearTimeout(pollHandle); clearInterval(timerHandle); }
   $("quotaRecoveryActions")?.remove();
   if (code === "LS-BILL-10") {
     const actions = document.createElement("div");
@@ -1011,7 +981,6 @@ function showError(message, code = "LS-SYSTEM-01", {stopProcessing = true} = {})
     if (guest) link.search = new URLSearchParams({next:window.LectureSiftI18n?.localizedPath?.(currentLanguage, "/workspace.html") || "/workspace"}).toString();
     else if (currentFullDocumentNeeds) link.search = new URLSearchParams(currentFullDocumentNeeds).toString();
     link.textContent = t(guest ? "register" : "plansNav");
-    if (!guest) link.addEventListener("click", () => trackStudy("view_plans"));
     actions.append(link);
     $("errorCode").insertAdjacentElement("afterend", actions);
   }
@@ -1146,7 +1115,6 @@ $("analyzeButton").onclick = async () => {
         return;
       }
       jobId = created.job_id;
-      trackStudy("upload_accepted");
       if (created.ocr_required) {
         const pageCount = Number(created.ocr_pages || 0);
         updateProgress(8, t("stageDocument"), `${pageCount} ${window.LectureSiftI18n?.exact?.("taranmış sayfa") || "taranmış sayfa"}`);
@@ -1163,11 +1131,7 @@ $("analyzeButton").onclick = async () => {
       }
     }
   };
-  request.onerror = () => showError("", "LS-NETWORK-01");
-  currentStudyContext = {sample_mode:sampleSelected(), source_type:documentUpload ? "document" : "media"};
-  studyUploadActive = true;
-  trackStudy("upload_started");
-  request.send(upload.body);
+  request.onerror = () => showError("", "LS-NETWORK-01"); request.send(upload.body);
 };
 
 async function pollJob() {
@@ -1191,7 +1155,6 @@ async function loadResult({open = true} = {}) {
     if (!response.ok) { const error = await responseError(response); showError(error.message, error.code); return; }
     latestResult = await response.json();
     renderResult(latestResult, {open});
-    studyUploadActive = false;
     setJobBusy(false);
     window.LectureSiftGuestTrial?.markUsed?.(jobId);
   } catch (error) { showError(error.message, "LS-NETWORK-01"); }
@@ -1253,7 +1216,6 @@ function renderDocumentSampleResult(data) {
   const localized = path => window.LectureSiftI18n?.localizedPath?.(currentLanguage, path) || path;
   $("documentSampleFull").href = `${localized("/workspace.html")}?source=upload`;
   $("documentSamplePlans").href = localized("/plans.html");
-  $("documentSamplePlans").onclick = () => { trackStudy("view_plans", {sample_mode:true, source_type:"document"}); };
 }
 
 function renderResult(data, {open = true} = {}) {
@@ -1289,7 +1251,7 @@ function renderResult(data, {open = true} = {}) {
   $("downloadAll").hidden = !selected.files;
   $("downloadAll").href = canDownload ? "#" : (window.LectureSiftI18n?.localizedPath?.(currentLanguage, "/plans.html") || "/plans.html");
   $("downloadAll").textContent = canDownload ? t("downloadAll") : unlockText;
-  $("downloadAll").onclick = canDownload ? (event => { event.preventDefault(); downloadProtected(`/jobs/${jobId}/download`, "LectureSift_Paketi.zip"); }) : () => { trackStudy("view_plans"); };
+  $("downloadAll").onclick = canDownload ? (event => { event.preventDefault(); downloadProtected(`/jobs/${jobId}/download`, "LectureSift_Paketi.zip"); }) : null;
   $("summaryContent").textContent = data.summary || t("noContent");
   $("keyPoints").innerHTML = (data.key_points || []).map(point => `<div class="key-item"><i>✦</i><span>${escapeHtml(point)}</span></div>`).join("");
   const terms = (data.important_terms || []).map(item => `<div class="note-item"><h3>${escapeHtml(item.term)}</h3><p>${escapeHtml(item.definition)}</p></div>`).join("");
@@ -1319,10 +1281,7 @@ function renderResult(data, {open = true} = {}) {
   activateResultPane(utilityResult ? "files" : Object.keys(visiblePanes).find(name => visiblePanes[name]));
   $("openReadyResult").hidden = false;
   $("results").hidden = !open;
-  if (open) {
-    recordResultShown(data);
-    $("results").scrollIntoView({behavior: "smooth", block: "start"});
-  }
+  if (open) $("results").scrollIntoView({behavior: "smooth", block: "start"});
 }
 
 function transcriptUiText(key, fallback) {
@@ -1637,9 +1596,6 @@ function renderFiles(files, canDownload = true) {
   document.querySelectorAll("a[data-artifact]").forEach(anchor => anchor.onclick = event => {
     event.preventDefault();
     downloadProtected(`/jobs/${jobId}/artifact/${anchor.dataset.artifact}`, anchor.dataset.filename);
-  });
-  if (!canDownload) $("filesContent").querySelectorAll("a").forEach(link => {
-    link.onclick = () => { trackStudy("view_plans"); };
   });
 }
 

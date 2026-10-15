@@ -98,18 +98,9 @@ async function run(pathname) {
 """
 
 
-STUDY_HARNESS = HARNESS.replace(
-    "const eventPromise = context.LectureSiftAnalytics.track",
-    "const studyPromise = context.LectureSiftAnalytics.trackStudy('job_failed', "
-    "{sample_mode:true,source_type:'document',error_code:'LS-BILL-10', "
-    "file_name:'PRIVATE-FILE',job_id:'PRIVATE-JOB',text:'PRIVATE-SOURCE'});\n"
-    "  const eventPromise = context.LectureSiftAnalytics.track",
-).replace("return {pathname, scripts:", "return {pathname, study: await studyPromise, scripts:")
-
-
-def observe(paths, scenario="allowed", origin="https://lecturesift.com", links=(), referrer="", study=False):
+def observe(paths, scenario="allowed", origin="https://lecturesift.com", links=(), referrer=""):
     result = subprocess.run(
-        [NODE, "-e", STUDY_HARNESS if study else HARNESS, json.dumps(paths), scenario, str(ROOT / "frontend/analytics.js"), origin, json.dumps(links), referrer],
+        [NODE, "-e", HARNESS, json.dumps(paths), scenario, str(ROOT / "frontend/analytics.js"), origin, json.dumps(links), referrer],
         check=True, capture_output=True, text=True, timeout=8,
     )
     return json.loads(result.stdout)
@@ -317,42 +308,3 @@ def test_revoking_consent_cancels_pending_events(configuration, revoked, analyti
     assert len(row["requests"]) == 1
     if configuration == "cold" and revoked == "both":
         assert row["scripts"] == []
-
-
-def test_explicit_workspace_funnel_is_sanitized_analytics_only():
-    row, = observe(['/en/workspace.html'], study=True,
-                   referrer='https://lecturesift.com/verify?token=PRIVATE-TOKEN')
-    assert row['study'] is True
-    configs = configurations(row)
-    assert set(configs) == {'G-SYNTHETIC'}
-    assert configs['G-SYNTHETIC']['send_page_view'] is False
-    events = [call for call in row['calls'] if call[0] == 'event']
-    assert len(events) == 1
-    assert events[0][1] == 'study_action'
-    assert events[0][2] == {
-        'action': 'job_failed', 'sample_mode': True, 'source_type': 'document',
-        'error_code': 'LS-BILL-10', 'send_to': 'G-SYNTHETIC',
-        'page_location': 'https://lecturesift.com/en/workspace.html',
-        'page_referrer': 'https://lecturesift.com',
-    }
-    assert 'PRIVATE-' not in json.dumps(row['calls'])
-    assert row['conversion'] is False
-
-
-@pytest.mark.parametrize('scenario', ['denied', 'ads_only', 'pending_cold_analytics', 'pending_cold_both'])
-def test_workspace_funnel_requires_analytics_consent_through_config_load(scenario):
-    row, = observe(['/workspace'], scenario=scenario, study=True)
-    assert row['study'] is False
-    assert not any(call[0] == 'event' for call in row['calls'])
-    assert not any(call[0] == 'config' and call[1].startswith('AW-') for call in row['calls'])
-
-
-@pytest.mark.parametrize('path,origin', [
-    ('/workspace', 'https://preview.example.invalid'),
-    ('/admin', 'https://lecturesift.com'),
-    ('/support', 'https://lecturesift.com'),
-])
-def test_workspace_funnel_cannot_escape_its_page_or_production_origin(path, origin):
-    row, = observe([path], origin=origin, study=True)
-    assert row['study'] is False
-    assert not row['calls']

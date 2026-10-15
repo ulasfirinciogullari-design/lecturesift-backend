@@ -117,7 +117,7 @@
     const gaId = String(config?.measurement_id || "").toUpperCase();
     const adsId = String(config?.google_ads?.id || "").toUpperCase();
     const gaReady = consent.analytics && config?.enabled && /^G-[A-Z0-9]+$/.test(gaId);
-    const adsReady = unlocalizedPath() !== "/workspace" && consent.advertising && config?.google_ads?.enabled && /^AW-[0-9]+$/.test(adsId);
+    const adsReady = consent.advertising && config?.google_ads?.enabled && /^AW-[0-9]+$/.test(adsId);
     if (!gaReady && !adsReady) return;
     prepareGtag();
     updateConsent();
@@ -172,24 +172,6 @@
     return true;
   }
 
-  // Workspace measurement is explicit and consented, never an automatic page
-  // view or Ads conversion. No filenames, source text, job/user IDs or raw errors.
-  async function trackStudy(action, parameters = {}) {
-    const actions = new Set(["upload_started", "upload_accepted", "result_ready", "job_failed", "view_plans"]);
-    if (!PRODUCTION_ORIGIN || unlocalizedPath() !== "/workspace" || !actions.has(action) || !choices().analytics) return false;
-    const config = await getConfig();
-    if (!choices().analytics) return false;
-    configureDestinations(config);
-    const measurementId = String(config?.measurement_id || "").toUpperCase();
-    if (!config?.enabled || !configuredIds.has(measurementId) || typeof window.gtag !== "function") return false;
-    const safe = {action, sample_mode: parameters.sample_mode === true,
-      source_type: parameters.source_type === "document" ? "document" : "media"};
-    const errorCode = String(parameters.error_code || "");
-    if (action === "job_failed" && /^LS-[A-Z]{2,12}-\d{2}$/.test(errorCode)) safe.error_code = errorCode;
-    window.gtag("event", "study_action", {...safe, ...pageContext(), send_to: measurementId});
-    return true;
-  }
-
   // These are content interactions, never completed uploads, signups or sales.
   // Send only known routes and fixed labels; never link text, user files or URL parameters.
   function contentAction(event) {
@@ -219,7 +201,7 @@
 
   document.addEventListener("click", contentAction);
 
-  window.LectureSiftAnalytics = Object.freeze({track, trackStudy, trackConversion, refresh: start});
+  window.LectureSiftAnalytics = Object.freeze({track, trackConversion, refresh: start});
   const queued = Array.isArray(window.__lecturesiftAnalyticsQueue) ? window.__lecturesiftAnalyticsQueue.splice(0) : [];
   queued.forEach(item => {
     const result = item?.type === "conversion" ? trackConversion(item.name, item.parameters)
