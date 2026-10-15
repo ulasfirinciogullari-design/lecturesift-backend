@@ -207,17 +207,74 @@ function populateCountrySelect(select, selected = "") {
   select.value = LOCALE_DATA.countries.includes(selected) ? selected : "TR";
 }
 
-function safeNext() {
-  const fallback = I18N.localizedPath ? I18N.localizedPath(I18N.language, "/account.html") : "/account.html";
-  const value = new URLSearchParams(location.search).get("next") || fallback;
-  if (!value.startsWith("/") || value.startsWith("//") || /[\\\u0000-\u0020]/.test(value)) return fallback;
+const SIGNUP_CONTINUATION_KEY = "lecturesift-signup-continuation-v1";
+const SIGNUP_CONTINUATION_TTL = 24 * 60 * 60 * 1000;
+const localizedAuthPath = path => I18N.localizedPath ? I18N.localizedPath(I18N.language, path) : path;
+const normalizedEmail = value => typeof value === "string" ? value.trim().toLowerCase() : "";
+
+function validatedNext(value, fallback = "") {
+  if (typeof value !== "string" || value.length > 2048 || !value.startsWith("/")
+    || value.startsWith("//") || /[\\\u0000-\u0020]/.test(value)) return fallback;
   try {
+    // Reject malformed escapes and paths that become an authority or contain a
+    // backslash after URL normalization/decoding, before returning a relative URL.
+    decodeURI(value);
     const url = new URL(value, location.origin);
-    return url.origin === location.origin ? `${url.pathname}${url.search}${url.hash}` : fallback;
+    const path = decodeURIComponent(url.pathname);
+    return url.origin === location.origin && !path.startsWith("//") && !/[\\\u0000-\u0020]/.test(path)
+      ? `${url.pathname}${url.search}${url.hash}` : fallback;
   } catch (_) { return fallback; }
 }
 
+function safeNext(fallback = "/account.html") {
+  return validatedNext(new URLSearchParams(location.search).get("next"), localizedAuthPath(fallback));
+}
+
+function preserveAuthLinks() {
+  const next = validatedNext(new URLSearchParams(location.search).get("next"));
+  document.querySelectorAll("a[data-auth-route]").forEach(link => {
+    const route = localizedAuthPath(link.dataset.authRoute);
+    link.href = next ? `${route}?next=${encodeURIComponent(next)}` : route;
+  });
+}
+
+function rememberSignupContinuation(user, next) {
+  // Email links can open a new tab. Store only a short-lived, account-bound
+  // destination here; no verification token or session credential belongs in it.
+  try {
+    localStorage.removeItem(SIGNUP_CONTINUATION_KEY);
+    if (typeof user?.id !== "string" || !user.id || !normalizedEmail(user.email)) return;
+    localStorage.setItem(SIGNUP_CONTINUATION_KEY, JSON.stringify({
+      userId:user.id, email:normalizedEmail(user.email), next, createdAt:Date.now(),
+    }));
+  } catch (_) { /* A code link still carries its explicit destination. */ }
+}
+
+function verificationNext(user) {
+  let saved;
+  try {
+    const raw = localStorage.getItem(SIGNUP_CONTINUATION_KEY);
+    localStorage.removeItem(SIGNUP_CONTINUATION_KEY);
+    saved = JSON.parse(raw || "null");
+  } catch (_) { saved = null; }
+  const fallback = localizedAuthPath("/workspace.html");
+  const params = new URLSearchParams(location.search);
+  const email = normalizedEmail(user?.email);
+  // A changed email in the code form must not inherit the previous account's
+  // destination. Explicit continuation is bound to the verified response too.
+  if (email && email === normalizedEmail(params.get("email")) && params.has("next")) {
+    return safeNext("/workspace.html");
+  }
+  const age = Date.now() - saved?.createdAt;
+  if (user?.id && saved?.userId === user.id && email && saved.email === email
+    && Number.isFinite(saved.createdAt) && age >= 0 && age <= SIGNUP_CONTINUATION_TTL) {
+    return validatedNext(saved.next, fallback);
+  }
+  return fallback;
+}
+
 async function initRegister() {
+  preserveAuthLinks();
   populateCountrySelect($("countryCode"), selectedCountry());
   const referralInput = $("referralCode");
   const queryReferral = new URLSearchParams(location.search).get("ref");
@@ -260,7 +317,9 @@ async function initRegister() {
       $("registerForm").hidden = true;
       $("successBox").hidden = false;
       $("successEmail").textContent = body.user.email;
-      $("enterCodeLink").href = `/verify.html?email=${encodeURIComponent(body.user.email)}`;
+      const next = safeNext("/workspace.html");
+      rememberSignupContinuation(body.user, next);
+      $("enterCodeLink").href = `${localizedAuthPath("/verify.html")}?email=${encodeURIComponent(body.user.email)}&next=${encodeURIComponent(next)}`;
       const referralResult = $("registerReferralStatus");
       referralResult.hidden = !normalizedReferral;
       referralResult.textContent = "";
@@ -281,6 +340,7 @@ async function initRegister() {
 }
 
 async function initLogin() {
+  preserveAuthLinks();
   if (localStorage.getItem(TOKEN_KEY)) return location.replace(safeNext());
   $("loginForm").addEventListener("submit", async event => {
     event.preventDefault();
@@ -314,8 +374,10 @@ async function initVerify() {
   const complete = body => {
     localStorage.setItem(TOKEN_KEY, sessionTokenFrom(body));
     $("verifyTitle").textContent = t("auth.emailVerified", "E-posta doğrulandı");
-    $("verifyText").textContent = t("auth.accountActive", "Hesabın etkin. LectureSift çalışma alanına geçebilirsin.");
+    $("verifyText").textContent = t("auth.accountActive", "Hesabın etkin. Kaldığın yerden devam edebilirsin.");
     $("verifyCodeForm").hidden = true;
+    $("verifyAction").href = verificationNext(body.user);
+    $("verifyAction").textContent = t("auth.continue", "Devam et");
     $("verifyAction").hidden = false;
   };
   if (token) {
@@ -340,6 +402,7 @@ async function initVerify() {
 }
 
 async function initForgot() {
+  preserveAuthLinks();
   $("forgotForm").addEventListener("submit", async event => {
     event.preventDefault();
     const button = $("forgotSubmit");
@@ -353,6 +416,7 @@ async function initForgot() {
 }
 
 async function initReset() {
+  preserveAuthLinks();
   const token = new URLSearchParams(location.search).get("token") || "";
   if (!token) showNotice(t("auth.resetMissing", "Şifre yenileme bağlantısı eksik."), true);
   $("resetForm").addEventListener("submit", async event => {
