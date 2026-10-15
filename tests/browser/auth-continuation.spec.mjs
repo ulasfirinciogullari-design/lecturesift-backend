@@ -11,6 +11,8 @@ const CORS = {
 
 async function prepare(context, verifiedUser = user) {
   await context.addInitScript(() => {
+    // A newly opened tab starts at about:blank, which has no storage origin.
+    if (location.origin !== 'http://127.0.0.1:4173') return;
     localStorage.setItem('lecturesift-consent-v1', JSON.stringify({
       version:1, analytics:false, advertising:false, updated_at:new Date().toISOString(),
     }));
