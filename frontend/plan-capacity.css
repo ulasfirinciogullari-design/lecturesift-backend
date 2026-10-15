@@ -22,6 +22,15 @@
   overflow-wrap: anywhere;
 }
 .plan-card .plan-capacity-status[data-plan-capacity="insufficient"] { border-inline-start-color: #b36223; }
+/* Keep pricing details and purchase controls clear while browsing plans. */
+.plans-page > .assistant-launch {
+  position: static;
+  display: flex;
+  width: fit-content;
+  max-width: calc(100% - 44px);
+  margin-block: 16px 22px;
+  margin-inline: auto 22px;
+}
 @media (max-width: 480px) {
   .plan-capacity-context { padding: 16px; }
 }

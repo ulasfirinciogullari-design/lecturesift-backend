@@ -39,6 +39,15 @@ test('measured document compares both per-job and total minutes without choosing
   await expect(page.locator('#checkoutPanel')).toBeHidden();
   expect(isolatedNetwork.apiCalls.filter(call => call.includes('/billing/checkout'))).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await expect(page.locator('body > .assistant-launch')).toHaveCSS('position', 'static');
+  expect(await page.evaluate(() => {
+    const launcher = document.querySelector('body > .assistant-launch').getBoundingClientRect();
+    return ['#planCapacityContext', '[data-plan-card="plus"]'].map(selector => {
+      const content = document.querySelector(selector).getBoundingClientRect();
+      return Math.min(launcher.right, content.right) > Math.max(launcher.left, content.left)
+        && Math.min(launcher.bottom, content.bottom) > Math.max(launcher.top, content.top);
+    });
+  })).toEqual([false, false]);
   if (testInfo.project.name.endsWith('light')) {
     await page.locator('#planCapacityContext').screenshot({path:testInfo.outputPath('plan-requirements-layout.jpg'), type:'jpeg', quality:75});
     await page.locator('[data-plan-card="plus"]').screenshot({path:testInfo.outputPath('plan-capacity-layout.jpg'), type:'jpeg', quality:75});
