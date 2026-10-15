@@ -486,7 +486,7 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         expected_theme_version = "17"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
         assert "/theme.js?v=12" in content, page.name
-        expected_i18n_version = {"admin.html":"52", "contact.html":"52", "workspace.html":"50"}.get(page.name, "47")
+        expected_i18n_version = {"admin.html":"52", "contact.html":"52", "workspace.html":"53", "document-summary.html":"53", "verify.html":"53"}.get(page.name, "47")
         assert f"i18n.js?v={expected_i18n_version}" in content, page.name
         assert "page-i18n.js?v=10" in content, page.name
 
@@ -773,11 +773,11 @@ def test_payment_routes_are_distinct_localized_and_account_history_is_auditable(
         assert len(values) == 13, key
         assert all(str(value).strip() for value in values), key
 
-    assert 'src="/plans.js?v=28"' in plans_html
+    assert 'src="/plans.js?v=29"' in plans_html
     assert 'manualTransfer = {available:Boolean(transferBody?.available), bank:null};' in plans_js
     assert 'order.bank?.iban' in plans_js
     assert 'transferBody?.bank' not in plans_js
-    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=20"', 'href="./auth.css?v=4"'))
+    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=21"', 'href="./auth.css?v=4"'))
     assert all(value in auth_js for value in ("paymentMethodLabel", "paymentMoney", "paymentDateTime", "payment-order-meta"))
     assert all(value in admin_html for value in ('value="iyzico_card"', 'value="iyzico_bank_transfer"', 'value="manual_bank_transfer"', 'value="iyzico_legacy"'))
     assert "provider:selectedProvider" in admin_js
@@ -1572,7 +1572,7 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=37"' in index
+    assert 'src="./app.js?v=38"' in index
     assert 'src="/rollout.js?v=12"' in index
     assert '$("plans").scrollIntoView' not in app
 

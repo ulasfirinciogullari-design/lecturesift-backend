@@ -331,9 +331,13 @@ function renderPlans() {
       : `${Number(minutes).toLocaleString(PLANS_I18N.locale)} ${plan.kind === "subscription" || plan.kind === "free" ? pt("plans.minutesPerMonth", "dk / ay") : pt("plans.minuteUnit", "dakika")}`;
     const monthlyAction = current ? pt("plans.newMonthlyTerm", "Yeni aylık dönem") : pt("rollout.chooseMonthly", "Aylık seç");
     const annualAction = current ? pt("plans.newAnnualTerm", "Yeni yıllık dönem") : pt("rollout.annual", "Yıllık");
-    const actions = plan.kind === "subscription"
+    const registered = Boolean(localStorage.getItem(TOKEN_KEY)) && account?.plan?.code !== "guest";
+    const freeAction = registered ? pt("nav.workspace", "Çalışma alanına dön") : pt("auth.freeCreate", "Ücretsiz hesap oluştur");
+    const actions = code === "free" || code === "business"
+      ? `<button type="button" class="plan-action" data-plan="${esc(code)}">${esc(code === "free" ? freeAction : pt("plans.contact", "Bize ulaş"))}</button>`
+      : plan.kind === "subscription"
       ? `<div class="plan-card-actions"><button class="plan-action" data-plan="${esc(code)}" data-interval="monthly">${esc(monthlyAction)}</button><button class="plan-action" data-plan="${esc(code)}" data-interval="annual">${esc(annualAction)} · ${esc(price ? format(price.amount_minor * 10, price.currency || currency) : "")}</button></div>`
-      : `<button class="plan-action" data-plan="${esc(code)}" data-interval="${plan.kind === "one_time" ? "one_time" : "monthly"}" ${current || code === "free" || code === "business" ? "disabled" : ""}>${esc(current ? pt("plans.current", "Mevcut plan") : (code === "business" ? pt("plans.contact", "Bize ulaş") : pt("plans.select", "Planı seç")))}</button>`;
+      : `<button class="plan-action" data-plan="${esc(code)}" data-interval="${plan.kind === "one_time" ? "one_time" : "monthly"}" ${current ? "disabled" : ""}>${esc(current ? pt("plans.current", "Mevcut plan") : pt("plans.select", "Planı seç"))}</button>`;
     return `<article class="plan-card ${plan.featured ? "featured" : ""}">
       ${plan.featured ? `<span class="plan-badge">${esc(pt("plans.popular", "Popüler"))}</span>` : ""}
       <h3>${esc(planLabel(code))}</h3><p>${esc(pt(`plan.${code}.description`, COPY[code][1]))}</p>
@@ -413,11 +417,22 @@ function renderAssistantOffers() {
 }
 
 async function buy(planCode, interval = "monthly") {
+  const localized = path => PLANS_I18N.localizedPath?.(PLANS_I18N.language, path) || path;
+  if (planCode === "business") {
+    location.href = localized("/contact.html");
+    return;
+  }
+  if (planCode === "free") {
+    const workspace = localized("/workspace.html");
+    location.href = localStorage.getItem(TOKEN_KEY) && account?.plan?.code !== "guest"
+      ? workspace : `${localized("/register.html")}?next=${encodeURIComponent(workspace)}`;
+    return;
+  }
   if (catalogLoading || catalog?.selected_currency !== currency) return;
   if (planCode === 'test' || (planCode === 'ad_free' && (!catalog?.ad_free || account?.permanent_ad_free))) return;
   if (planCode.startsWith('ai_') && !catalog?.assistant?.available) {showError(at('unavailable'));return;}
   if (!localStorage.getItem(TOKEN_KEY)) {
-    const next = `/plans.html?plan=${encodeURIComponent(planCode)}&interval=${encodeURIComponent(interval)}`;
+    const next = `${localized("/plans.html")}?plan=${encodeURIComponent(planCode)}&interval=${encodeURIComponent(interval)}`;
     const loginPath = PLANS_I18N.localizedPath?.(PLANS_I18N.language, '/login.html') || '/login.html';
     location.href = `${loginPath}?next=${encodeURIComponent(next)}`;
     return;

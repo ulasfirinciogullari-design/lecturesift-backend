@@ -725,7 +725,11 @@ def health() -> dict:
 
 @app.get("/billing/plans")
 def billing_plans(currency: str = "TRY") -> dict:
-    return public_catalog(currency)
+    return {
+        **public_catalog(currency),
+        "document_words_per_credit_minute": config.DOCUMENT_WORDS_PER_CREDIT_MINUTE,
+        "guest_trial_minutes": config.GUEST_TRIAL_MAX_MINUTES,
+    }
 
 
 @app.get("/billing/providers")

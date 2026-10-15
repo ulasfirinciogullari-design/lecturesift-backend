@@ -119,8 +119,14 @@ function enrichLandingPage(html, language, publicPath) {
     day: "numeric", month: "long", year: "numeric", timeZone: "UTC",
   }).format(new Date(`${LANDING_PAGES.updated}T00:00:00Z`));
   const actions = `<div class="detail-actions"><a class="primary" href="${link("/workspace.html")}">${e(copy.action)}</a><a class="secondary" href="${link("/plans.html")}">${tr ? "Planları ve kullanım haklarını gör" : "See plans and allowances"}</a></div>`;
+  let trialTip = "";
+  if (publicPath === "/document-summary.html") {
+    const trialCopy = keyCatalog["document.shortTrialTip"]?.[LANGUAGES.indexOf(language)];
+    if (!trialCopy) throw new Error(`Missing document trial tip: ${language}`);
+    trialTip = `<p data-document-trial-tip><small data-i18n="document.shortTrialTip">${e(trialCopy)}</small></p>`;
+  }
   const main = `<main class="detail-main landing-page" data-landing-page>
-    <section class="detail-hero landing-hero"><p class="eyebrow">${e(copy.eyebrow)}</p><h1>${e(copy.heading)}</h1><p>${e(copy.lead)}</p>${actions}<a class="landing-example-link" href="#example">${tr ? "Önce örneği incele ↓" : "Explore the example first ↓"}</a></section>
+    <section class="detail-hero landing-hero"><p class="eyebrow">${e(copy.eyebrow)}</p><h1>${e(copy.heading)}</h1><p>${e(copy.lead)}</p>${actions}${trialTip}<a class="landing-example-link" href="#example">${tr ? "Önce örneği incele ↓" : "Explore the example first ↓"}</a></section>
     <section class="detail-section landing-example" id="example" aria-labelledby="example-title"><p class="eyebrow">${tr ? "KAYNAKTAN ÇALIŞMA NOTUNA" : "FROM SOURCE TO STUDY NOTE"}</p><h2 id="example-title">${e(copy.example.title)}</h2><p class="intro">${tr ? "Aşağıdaki metin ve cevaplar öğretim amacıyla hazırlanmış örneklerdir; canlı işlem sonucu değildir." : "The text and answers below are teaching examples, not the result of a live processing job."}</p><div class="landing-example-grid"><div class="landing-source"><h3>${e(copy.example.sourceTitle)}</h3><blockquote>${e(copy.example.source)}</blockquote></div><div class="landing-outputs">${copy.example.outputs.map(item => `<article><h3>${e(item.title)}</h3><p>${e(item.text)}</p></article>`).join("")}</div></div><details class="landing-answer"><summary>${e(copy.example.question)}</summary><p>${e(copy.example.answer)}</p></details></section>
     <section class="detail-section"><h2>${e(copy.stepsTitle)}</h2><ol class="landing-steps">${copy.steps.map(item => `<li><h3>${e(item.title)}</h3><p>${e(item.text)}</p></li>`).join("")}</ol></section>
     <div class="landing-explain">${copy.sections.map(item => `<section class="detail-section"><h2>${e(item.title)}</h2><p>${e(item.text)}</p></section>`).join("")}</div>

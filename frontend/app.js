@@ -540,6 +540,73 @@ function updateSourceLimitHelp() {
   const documentLabel = central?.t("plans.documentShort", "belge") || "belge";
   const sources = central?.t("plans.filesPerJobShort", "kaynak / iş") || "kaynak / iş";
   node.textContent = `${prefix}: ${number(limits.max_media_upload_mb)} MB ${media} · ${number(limits.max_document_upload_mb)} MB ${documentLabel} · ${number(limits.max_files_per_job)} ${sources}`;
+  updateDocumentQuotaHelp();
+}
+function documentQuotaText(key, fallback, values = {}) {
+  let text = window.LectureSiftI18n?.t(key, fallback) || fallback;
+  for (const [name, value] of Object.entries(values)) text = text.replaceAll(`{${name}}`, value);
+  return text;
+}
+function updateDocumentQuotaHelp() {
+  const limitHelp = $("sourceLimitHelp");
+  if (!limitHelp) return;
+  let help = $("documentQuotaHelp");
+  if (!help) {
+    help = document.createElement("aside");
+    help.id = "documentQuotaHelp";
+    help.className = "document-quota-help";
+    help.setAttribute("aria-labelledby", "documentQuotaTitle");
+    limitHelp.insertAdjacentElement("afterend", help);
+  }
+  help.hidden = classicVideos.length > 0 && !selectedDocumentJob();
+  if (help.hidden) return;
+  const locale = window.LectureSiftI18n?.locale || currentLanguage;
+  const number = value => Number(value).toLocaleString(locale);
+  const nonnegative = value => value != null && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
+  const rate = nonnegative(billingCatalog?.document_words_per_credit_minute);
+  const guestMinutes = nonnegative(billingCatalog?.guest_trial_minutes);
+  const limit = billingAccount ? nonnegative(activeSourceLimits().max_minutes_per_job) : guestMinutes;
+  const remaining = billingAccount ? nonnegative(billingAccount.remaining_minutes) : guestMinutes;
+  // The current account's effective job entitlement can differ from its base
+  // subscription (for example after purchasing extra minutes).
+  const remainingKnown = !billingAccount || billingAccount.remaining_minutes === null || remaining != null;
+  const available = limit == null || !remainingKnown ? null : remaining == null ? limit : Math.min(limit, remaining);
+  const content = [];
+  const information = [];
+  const append = (tag, text, id, target = content) => {
+    const node = document.createElement(tag);
+    if (id) node.id = id;
+    node.textContent = text;
+    target.push(node);
+  };
+  append("strong", documentQuotaText("document.quotaTitle", "Belgeyi yüklemeden önce"), "documentQuotaTitle");
+  if (available != null) {
+    const values = {minutes:number(available), words:number(Math.floor(available) * (rate || 0))};
+    append("p", rate > 0
+      ? documentQuotaText("document.quotaWords", "Bu iş için kullanım sınırın {minutes} dakika: yaklaşık {words} kelime.", values)
+      : documentQuotaText("document.quotaMinutes", "Bu iş için kullanım sınırın {minutes} dakika.", values), "documentQuotaAllowance");
+  } else {
+    append("p", documentQuotaText("document.quotaPending", "Belge kullanım sınırı, hesabının kalan hakkına ve tek iş sınırına göre belirlenir."), "documentQuotaAllowance");
+  }
+  if (billingAccount && remaining != null && limit != null) {
+    append("p", documentQuotaText("document.quotaBalance", "Kalan hakkın: {remaining} dakika · Tek iş sınırı: {limit} dakika.", {remaining:number(remaining), limit:number(limit)}), null, information);
+  }
+  if (rate > 0) {
+    append("p", documentQuotaText("document.quotaRule", "Yaklaşık {rate} kelime 1 dakika kullanım hakkına karşılık gelir. Kesin kullanım metin okunduktan sonra hesaplanır; sayfa, tarama ve dosya boyutu sınırları da geçerlidir.", {rate:number(rate)}), null, information);
+  }
+  append("p", documentQuotaText("document.shortTrialTip", "İlk deneme için kitabın tamamı yerine kısa bir bölüm yükle. Kullanım sınırlarını yüklemeden önce görebilirsin."));
+  const downloadEnabled = billingAccount?.download_enabled ?? billingAccount?.job_entitlements?.download_enabled ?? billingAccount?.plan?.entitlements?.download_enabled;
+  if (downloadEnabled === false) {
+    append("p", documentQuotaText("document.previewOnly", "Bu kullanım hakkıyla sonuçları sitede görüntüleyebilirsin; dosya indirme dahil değildir."), null, information);
+  }
+  if (information.length) {
+    const details = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.textContent = documentQuotaText("document.quotaDetails", "Kullanım nasıl hesaplanır?");
+    details.append(summary, ...information);
+    content.push(details);
+  }
+  help.replaceChildren(...content);
 }
 function uploadLimitMessage(documentMode, limitMb) {
   const central = window.LectureSiftI18n;
@@ -611,6 +678,7 @@ function addFiles(role, incoming) {
 }
 function renderFileList(role) {
   const files = filesFor(role), list = $(`${role}FileList`);
+  updateDocumentQuotaHelp();
   list.innerHTML = files.map((file, index) => {
     const documentFile = isDocumentFile(file);
     const kind = fileExtension(file).toUpperCase();
@@ -841,6 +909,32 @@ function showError(message, code = "LS-SYSTEM-01", {stopProcessing = true} = {})
   $("errorMessage").textContent = translated || message || t("errorFallback");
   $("errorCode").textContent = `${window.LectureSiftI18n?.exact("Hata kodu") || "Hata kodu"}: ${code}`; $("errorBox").hidden = false;
   if (stopProcessing) { setJobBusy(false); clearTimeout(pollHandle); clearInterval(timerHandle); }
+  $("quotaRecoveryActions")?.remove();
+  if (code === "LS-BILL-10") {
+    const actions = document.createElement("div");
+    actions.id = "quotaRecoveryActions";
+    actions.className = "quota-recovery-actions";
+    const shorter = document.createElement("button");
+    shorter.type = "button";
+    shorter.textContent = documentQuotaText("document.shorterSource", "Daha kısa dosya seç");
+    shorter.onclick = () => {
+      if (jobBusy) return;
+      classicVideos.splice(0);
+      renderFileList("classic");
+      $("errorBox").hidden = true;
+      $("classicDropZone").scrollIntoView({block:"center", behavior:"smooth"});
+      $("classicFiles").click();
+    };
+    actions.append(shorter);
+    const link = document.createElement("a");
+    const guest = !billingAccount || billingAccount.plan?.code === "guest";
+    const path = guest ? "/register.html" : "/plans.html";
+    link.href = window.LectureSiftI18n?.localizedPath?.(currentLanguage, path) || path;
+    if (guest) link.search = new URLSearchParams({next:window.LectureSiftI18n?.localizedPath?.(currentLanguage, "/workspace.html") || "/workspace"}).toString();
+    link.textContent = t(guest ? "register" : "plansNav");
+    actions.append(link);
+    $("errorCode").insertAdjacentElement("afterend", actions);
+  }
 }
 $("closeError").onclick = () => { $("errorBox").hidden = true; };
 async function responseError(response) {

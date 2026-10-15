@@ -20,6 +20,15 @@ from lecturesift.billing_service import (
 from lecturesift.jobs import JOBS
 
 
+def test_billing_catalog_reports_configured_document_trial_limits(monkeypatch):
+    monkeypatch.setattr(config, "DOCUMENT_WORDS_PER_CREDIT_MINUTE", 350)
+    monkeypatch.setattr(config, "GUEST_TRIAL_MAX_MINUTES", 7)
+    response = TestClient(app).get("/billing/plans?currency=USD")
+    assert response.status_code == 200
+    assert response.json()["document_words_per_credit_minute"] == 350
+    assert response.json()["guest_trial_minutes"] == 7
+
+
 def test_billing_catalog_has_hybrid_plans_and_translation_keys():
     response = TestClient(app).get("/billing/plans")
     assert response.status_code == 200
