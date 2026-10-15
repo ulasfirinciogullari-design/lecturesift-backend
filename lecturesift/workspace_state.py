@@ -200,6 +200,7 @@ def library(user_id):
     jobs = JOBS.list_for_user(user_id, limit=None)
     safe_jobs = [{"job_id": row["job_id"], "title": row.get("title") or "", "created": row.get("created"),
                   "status": row.get("status"), "stage": row.get("stage"), "folder_id": placements.get(row["job_id"]),
+                  "partial_source": bool(row.get("partial_source")), "document_sample": row.get("document_sample"),
                   "stored_bytes": row.get("stored_bytes"), "job_type": row.get("options", {}).get("job_type", "study_pack"),
                   "expires_at": float(row.get("updated", row.get("created", 0))) + max(60, int(row.get("retention_seconds", 86400))),
                   "can_delete": is_job_deletable(row)}

@@ -55,6 +55,9 @@ def _maintenance_mode(value: str) -> str:
 
 
 MAINTENANCE_MODE = _maintenance_mode(os.getenv("LECTURESIFT_MAINTENANCE_MODE", "off"))
+# Enable only after both API and worker support bounded PDF samples. A rolling
+# deployment must never send a sample to an older full-document worker.
+DOCUMENT_SAMPLE_ENABLED = os.getenv("LECTURESIFT_DOCUMENT_SAMPLE_ENABLED", "false").lower() == "true"
 MAINTENANCE_STATE_FILE = WORK_DIR / ".runtime-maintenance.json"
 INGRESS_CUTOVER_STATE_FILE = os.getenv("LECTURESIFT_INGRESS_CUTOVER_STATE_FILE", "").strip()
 _BOOT_ID_FILE = Path("/proc/sys/kernel/random/boot_id")

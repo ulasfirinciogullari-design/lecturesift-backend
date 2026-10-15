@@ -77,7 +77,7 @@ function sampleDocument(markup) {
   host.contains = node => { for (; node; node = node.parentElement) if (node === host) return true; return false; };
   host.addEventListener = (type, callback) => { assert.equal(listeners[type], undefined); listeners[type] = callback; };
   const document = {
-    documentElement:{lang:'tr', dir:'ltr'}, body:{}, head:{append() {}}, title:'LectureSift',
+    documentElement:{lang:'tr', dir:'ltr'}, body:{dataset:{}}, head:{append() {}}, title:'LectureSift',
     querySelector: selector => selector === '.home-page [data-study-demo]' ? host : null,
     querySelectorAll: selector => host.querySelectorAll(selector),
     getElementById: id => nodes.find(node => node.attributes.id === id) || null,
@@ -192,12 +192,13 @@ def test_home_sample_is_localized_prerendered_interactive_and_isolated() -> None
     completed = subprocess.run(
         [NODE, "-e", NODE_HARNESS, str(ROOT)],
         cwd=ROOT,
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
         encoding="utf-8",
         timeout=10,
     )
+    assert completed.returncode == 0, completed.stderr
     result = json.loads(completed.stdout.strip())
     assert result == {
         "languages": ["tr", "en", "de", "fr", "es", "it", "pt", "ru", "ar", "zh", "ja", "ko", "hi"],

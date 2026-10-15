@@ -354,6 +354,20 @@ iframe#nl-hud-frame,iframe[src^="https://app.netlify.com/cdp/"]{display:none!imp
 .document-quota-help #documentQuotaAllowance{color:var(--text);font-weight:700}
 .document-quota-help details{margin-top:9px}
 .document-quota-help summary{padding-block:4px;color:var(--text);font-size:12px;line-height:1.5;cursor:pointer}
+.document-sample-option,.document-sample-result{padding:16px;margin-top:14px;border:1px solid var(--line-strong);border-radius:12px;background:var(--panel);color:var(--text);text-align:start;overflow-wrap:anywhere;scroll-margin-top:100px}
+.document-sample-toggle{display:flex;align-items:center;gap:10px;min-height:44px;font-size:14px;font-weight:750;cursor:pointer}
+.document-sample-toggle input{width:20px;height:20px;flex:0 0 auto;accent-color:var(--blue)}
+.document-sample-option p,.document-sample-result p{margin:8px 0 0;color:var(--muted);font-size:12px;line-height:1.65}
+.document-sample-settings:not([hidden]){display:grid;grid-template-columns:minmax(0,1fr) minmax(80px,110px);gap:8px 12px;align-items:center;margin-top:12px;font-size:12px}
+.document-sample-settings input{width:100%;min-width:0;min-height:44px;padding:8px 10px;border:1px solid var(--line-strong);border-radius:8px;background:var(--panel);color:var(--text);font:inherit}
+.document-sample-settings #documentSampleAllowance{grid-column:1/-1;margin:0;color:var(--text);font-weight:650}
+.document-sample-result{margin:0 0 16px}
+.document-sample-result strong{font-size:14px}
+.document-sample-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.document-sample-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;max-width:100%;padding:9px 12px;border:1px solid var(--line-strong);border-radius:9px;color:var(--text);font-size:12px;font-weight:700;line-height:1.5;text-align:center}
+.document-sample-actions a:hover{background:var(--panel-soft,var(--panel))}
+.document-sample-option :is(input,a):focus-visible,.document-sample-actions a:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
+.library-lesson-copy .document-sample-badge{display:inline-block;margin:6px 0;padding:4px 8px;border:1px solid var(--line-strong);border-radius:6px;color:var(--text);font-size:11px;font-weight:700;line-height:1.5}
 .error-box .quota-recovery-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .error-box .quota-recovery-actions :is(button,a){position:static;display:inline-flex;align-items:center;justify-content:center;min-height:40px;max-width:100%;padding:8px 10px;border:1px solid #e6bac7;border-radius:8px;background:#fff5f7;color:#522031;font-size:12px;font-weight:700;line-height:1.4;text-align:center;overflow-wrap:anywhere;cursor:pointer}
 .error-box .quota-recovery-actions :is(button,a):focus-visible{outline:3px solid #fff;outline-offset:2px}

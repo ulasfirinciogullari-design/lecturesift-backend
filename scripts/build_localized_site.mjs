@@ -108,10 +108,40 @@ function escapeAttribute(value) {
   return String(value).replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
+function documentTrialHero(language) {
+  const index = LANGUAGES.indexOf(language);
+  const text = key => {
+    const value = keyCatalog[`document.${key}`]?.[index];
+    if (!value) throw new Error(`Missing document trial copy: ${language}/${key}`);
+    return escapeAttribute(value);
+  };
+  const keyed = (tag, key, attributes = "") => `<${tag}${attributes} data-i18n="document.${key}">${text(key)}</${tag}>`;
+  const link = route => localizedPath(language, route);
+  const fullExample = ["tr", "en"].includes(language)
+    ? `<a class="pdf-trial-detail-link" href="#example">${language === "tr" ? "Tam örneği ve çözümlü soruyu incele" : "Explore the full example and worked question"}</a>` : "";
+  return `<section class="detail-hero pdf-trial-hero" data-document-trial-hero aria-labelledby="document-trial-title">
+    <div class="pdf-trial-intro"><p class="eyebrow">${escapeAttribute(translate("PDF VE BELGE ÖZETLEME", language))}</p>
+      ${keyed("h1", "sampleHeading", ' id="document-trial-title"')}
+      ${keyed("p", "sampleLead", ' class="pdf-trial-lead"')}
+      <div class="detail-actions"><a class="primary" data-i18n="document.sampleAction" href="${link("/workspace.html")}#classicDropZone">${text("sampleAction")}</a><a class="secondary" data-i18n="document.sampleExampleAction" href="#document-example">${text("sampleExampleAction")}</a></div>
+      ${keyed("p", "sampleLimitSummary", ' class="pdf-trial-limits" data-document-trial-tip')}
+      <a class="pdf-trial-plans" data-i18n="document.samplePlans" href="${link("/plans.html")}">${text("samplePlans")}</a>
+    </div>
+    <aside class="pdf-trial-example" id="document-example" aria-labelledby="document-example-title">
+      ${keyed("h2", "sampleExampleTitle", ' id="document-example-title"')}
+      ${keyed("p", "sampleExampleSource", ' class="pdf-trial-source-label"')}
+      <p class="pdf-trial-numbers" dir="ltr">18, 20, 20, 22, 70</p>
+      <div class="pdf-trial-example-notes">${keyed("p", "sampleExampleMean")}${keyed("p", "sampleExampleMedian")}</div>
+      ${keyed("p", "sampleExampleNotice", ' class="pdf-trial-example-notice"')}${fullExample}
+    </aside>
+  </section>`;
+}
+
 function enrichLandingPage(html, language, publicPath) {
   const copy = LANDING_PAGES.pages[publicPath]?.[language];
   // Publish richer editions only where the editorial copy actually exists.
-  if (!copy) return html;
+  if (!copy) return publicPath === "/document-summary.html"
+    ? html.replace(/<section\b[^>]*data-document-trial-hero[^>]*>[\s\S]*?<\/section>/i, () => documentTrialHero(language)) : html;
   const e = escapeAttribute;
   const link = route => localizedPath(language, route);
   const tr = language === "tr";
@@ -119,14 +149,10 @@ function enrichLandingPage(html, language, publicPath) {
     day: "numeric", month: "long", year: "numeric", timeZone: "UTC",
   }).format(new Date(`${LANDING_PAGES.updated}T00:00:00Z`));
   const actions = `<div class="detail-actions"><a class="primary" href="${link("/workspace.html")}">${e(copy.action)}</a><a class="secondary" href="${link("/plans.html")}">${tr ? "Planları ve kullanım haklarını gör" : "See plans and allowances"}</a></div>`;
-  let trialTip = "";
-  if (publicPath === "/document-summary.html") {
-    const trialCopy = keyCatalog["document.shortTrialTip"]?.[LANGUAGES.indexOf(language)];
-    if (!trialCopy) throw new Error(`Missing document trial tip: ${language}`);
-    trialTip = `<p data-document-trial-tip><small data-i18n="document.shortTrialTip">${e(trialCopy)}</small></p>`;
-  }
+  const hero = publicPath === "/document-summary.html" ? documentTrialHero(language)
+    : `<section class="detail-hero landing-hero"><p class="eyebrow">${e(copy.eyebrow)}</p><h1>${e(copy.heading)}</h1><p>${e(copy.lead)}</p>${actions}<a class="landing-example-link" href="#example">${tr ? "Önce örneği incele ↓" : "Explore the example first ↓"}</a></section>`;
   const main = `<main class="detail-main landing-page" data-landing-page>
-    <section class="detail-hero landing-hero"><p class="eyebrow">${e(copy.eyebrow)}</p><h1>${e(copy.heading)}</h1><p>${e(copy.lead)}</p>${actions}${trialTip}<a class="landing-example-link" href="#example">${tr ? "Önce örneği incele ↓" : "Explore the example first ↓"}</a></section>
+    ${hero}
     <section class="detail-section landing-example" id="example" aria-labelledby="example-title"><p class="eyebrow">${tr ? "KAYNAKTAN ÇALIŞMA NOTUNA" : "FROM SOURCE TO STUDY NOTE"}</p><h2 id="example-title">${e(copy.example.title)}</h2><p class="intro">${tr ? "Aşağıdaki metin ve cevaplar öğretim amacıyla hazırlanmış örneklerdir; canlı işlem sonucu değildir." : "The text and answers below are teaching examples, not the result of a live processing job."}</p><div class="landing-example-grid"><div class="landing-source"><h3>${e(copy.example.sourceTitle)}</h3><blockquote>${e(copy.example.source)}</blockquote></div><div class="landing-outputs">${copy.example.outputs.map(item => `<article><h3>${e(item.title)}</h3><p>${e(item.text)}</p></article>`).join("")}</div></div><details class="landing-answer"><summary>${e(copy.example.question)}</summary><p>${e(copy.example.answer)}</p></details></section>
     <section class="detail-section"><h2>${e(copy.stepsTitle)}</h2><ol class="landing-steps">${copy.steps.map(item => `<li><h3>${e(item.title)}</h3><p>${e(item.text)}</p></li>`).join("")}</ol></section>
     <div class="landing-explain">${copy.sections.map(item => `<section class="detail-section"><h2>${e(item.title)}</h2><p>${e(item.text)}</p></section>`).join("")}</div>

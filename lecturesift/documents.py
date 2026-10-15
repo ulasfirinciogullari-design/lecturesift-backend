@@ -67,6 +67,11 @@ _MAX_IMAGE_PIXELS = 40_000_000
 _ONE_GIB = 1024 * 1024 * 1024
 _PPTX_MIN_PANEL_COVERAGE = 0.05
 _PPTX_MIN_SCANNED_SLIDE_COVERAGE = 0.30
+_PDF_SAMPLE_MAX_PAGES = 5
+_PDF_SAMPLE_MAX_WORDS = 1000
+_PDF_SAMPLE_CHUNK_CHARACTERS = 1024
+_PDF_SAMPLE_MAX_CHARACTERS = 100_000
+_DOCUMENT_WORD_PATTERN = re.compile(r"[^\W_]+", flags=re.UNICODE)
 
 
 def _container_memory_limit_bytes() -> int | None:
@@ -381,6 +386,189 @@ def _extract_pdf_native_pages(path: Path, page_count: int) -> tuple[list[str], s
     except Exception:
         reader = PdfReader(str(path), strict=False)
         return [_normalize_text(page.extract_text() or "") for page in reader.pages], "pypdf"
+
+
+def _pdf_sample_error() -> LectureSiftError:
+    return LectureSiftError(
+        "LS-DOC-14",
+        "Seçilen bölümde kısa deneme için okunabilir PDF metni bulunamadı. "
+        "Metin içeren başka bir başlangıç sayfası veya PDF seç. Bu denemede taranmış sayfalara OCR uygulanmaz.",
+        "Selected PDF sample has insufficient readable native text",
+        422,
+    )
+
+
+def _pdf_sample_header(start_page: int, end_page: int, original_pages: int) -> str:
+    return (
+        f"PARTIAL PDF SAMPLE: pages {start_page}–{end_page} of {original_pages}. "
+        "Results cover this sample only and may omit content from the source. "
+        "The last page may be incomplete."
+    )
+
+
+def _read_pdf_sample_page(
+    text_page: Any, *, word_limit: int, character_budget: int
+) -> tuple[str, bool, int, int]:
+    """Read a bounded prefix; never request the complete native text implicitly.
+
+    PDFium's character indexes refer to its internal character list, whose
+    length can differ from the returned string. Advance by the requested count,
+    and bound both requested characters and the accumulated string separately.
+    A final word crossing a chunk boundary is kept only once it is complete.
+    """
+    char_count = text_page.count_chars()
+    offset = 0
+    raw = ""
+    text = ""
+    trailing_word_open = False
+    matches: list[re.Match[str]] = []
+    while offset < char_count and offset < character_budget:
+        count = min(_PDF_SAMPLE_CHUNK_CHARACTERS, char_count - offset, character_budget - offset)
+        raw += text_page.get_text_range(index=offset, count=count) or ""
+        offset += count
+        buffer_clipped = len(raw) > character_budget
+        raw = raw[:character_budget]
+        text = _normalize_text(raw)
+        matches = list(_DOCUMENT_WORD_PATTERN.finditer(text))
+        unread = offset < char_count or buffer_clipped
+        # Normalization strips trailing whitespace, so inspect the raw boundary
+        # to distinguish a complete final word from one split across chunks.
+        trailing_word_open = bool(_DOCUMENT_WORD_PATTERN.fullmatch(raw.rstrip("\x00")[-1:]))
+        complete_words = len(matches) - int(bool(unread and matches and trailing_word_open))
+        if complete_words >= word_limit:
+            truncated = unread or len(matches) > word_limit
+            selected = text[:matches[word_limit - 1].end()] if truncated else text
+            return selected, truncated, offset, len(text)
+        if not unread:
+            return text, False, offset, len(text)
+        if buffer_clipped:
+            break
+    # The character cap also applies to pathological PDFs with enormous words
+    # or whitespace. Never return a word cut halfway through that cap.
+    if matches and trailing_word_open:
+        matches = matches[:-1]
+    selected = text[:matches[-1].end()] if matches else ""
+    return selected, True, offset, len(text)
+
+
+def _extract_pdf_sample(path: Path, sample_options: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    start_page = sample_options.get("start_page", 1)
+    if type(start_page) is not int or start_page < 1:
+        raise LectureSiftError(
+            "LS-DOC-15", "PDF içindeki geçerli bir başlangıç sayfası seç.", "Invalid PDF sample start page", 400
+        )
+    word_limit = sample_options.get("max_words")
+    max_pages = sample_options.get("max_pages", _PDF_SAMPLE_MAX_PAGES)
+    if type(word_limit) is not int or word_limit < 1 or type(max_pages) is not int or max_pages < 1:
+        raise LectureSiftError(
+            "LS-DOC-16", "Kısa PDF denemesi ayarları geçersiz. Dosyayı yeniden seçerek dene.",
+            "Invalid PDF sample bounds", 400,
+        )
+    max_pages = min(max_pages, _PDF_SAMPLE_MAX_PAGES)
+    word_limit = min(word_limit, _PDF_SAMPLE_MAX_WORDS)
+    with path.open("rb") as stream:
+        if stream.read(5) != b"%PDF-":
+            raise LectureSiftError("LS-DOC-04", "PDF dosyası geçerli görünmüyor.", "Invalid PDF signature", 400)
+    try:
+        # Reading the page tree preserves original-file safety checks without
+        # extracting any page's text or rasterizing images.
+        reader = PdfReader(str(path), strict=False)
+        if reader.is_encrypted:
+            raise LectureSiftError("LS-DOC-05", "Şifreli PDF dosyaları desteklenmiyor.", "Encrypted PDF", 400)
+        original_pages = len(reader.pages)
+        if original_pages > MAX_DOCUMENT_PAGES:
+            raise LectureSiftError(
+                "LS-DOC-06", f"PDF en fazla {MAX_DOCUMENT_PAGES} sayfa olabilir.",
+                f"PDF page limit exceeded: {original_pages}", 413,
+            )
+    except LectureSiftError:
+        raise
+    except Exception as exc:
+        raise LectureSiftError("LS-DOC-04", "PDF güvenli biçimde okunamadı.", type(exc).__name__, 400) from exc
+    if start_page > original_pages:
+        raise LectureSiftError(
+            "LS-DOC-15", f"Başlangıç sayfası 1 ile {original_pages} arasında olmalı.",
+            "PDF sample start page exceeds original page count", 400,
+        )
+    last_allowed_page = min(original_pages, start_page + max_pages - 1)
+    header = _pdf_sample_header(start_page, last_allowed_page, original_pages)
+    # Numeric page ranges always use the same number of billing tokens, so the
+    # actual final page can replace this reserved header without changing cost.
+    remaining_words = word_limit - len(_DOCUMENT_WORD_PATTERN.findall(header))
+    if remaining_words < 1:
+        raise LectureSiftError(
+            "LS-DOC-16", "Kısa PDF denemesi için kullanılabilir kelime sınırı yetersiz.",
+            "PDF sample word limit cannot cover scope header and source text", 400,
+        )
+    remaining_characters = min(_PDF_SAMPLE_MAX_CHARACTERS, MAX_DOCUMENT_CHARACTERS - len(header) - 2)
+    if remaining_characters < 1:
+        raise LectureSiftError("LS-DOC-13", "Belge metni güvenli işleme sınırını aşıyor.", "PDF sample character limit", 413)
+    parts: list[str] = []
+    clipped_page = False
+    try:
+        import pypdfium2 as pdfium
+
+        document = pdfium.PdfDocument(str(path))
+        try:
+            if len(document) != original_pages:
+                raise _pdf_sample_error()
+            for page_index in range(start_page - 1, last_allowed_page):
+                page = document[page_index]
+                try:
+                    text_page = page.get_textpage()
+                    try:
+                        text, clipped_page, read_characters, _native_characters = _read_pdf_sample_page(
+                            text_page, word_limit=remaining_words, character_budget=remaining_characters
+                        )
+                    finally:
+                        text_page.close()
+                finally:
+                    page.close()
+                # A native title page belongs to the selected scope even if it
+                # is short. A blank/scanned page still fails closed: never skip
+                # it or silently move outside the selected page window.
+                if not _DOCUMENT_WORD_PATTERN.search(text):
+                    raise _pdf_sample_error()
+                parts.append(text)
+                remaining_words -= len(_DOCUMENT_WORD_PATTERN.findall(text))
+                # Reserve separators as well as PDFium reads, including readers
+                # that return more characters than their internal count.
+                remaining_characters -= max(read_characters, len(text)) + 2
+                if clipped_page or remaining_words <= 0 or remaining_characters <= 0:
+                    break
+        finally:
+            document.close()
+    except LectureSiftError:
+        raise
+    except Exception as exc:
+        # In particular, do not fall back to unbounded pypdf extraction or OCR.
+        raise _pdf_sample_error() from exc
+    # Judge readability across the extracted source, without counting the scope
+    # header or separators as evidence that a sparse document is usable.
+    if sum(len(part) for part in parts) < OCR_MIN_NATIVE_CHARACTERS:
+        raise _pdf_sample_error()
+    end_page = start_page + len(parts) - 1
+    sample = {
+        "start_page": start_page,
+        "end_page": end_page,
+        "original_pages": original_pages,
+        "processed_pages": len(parts),
+        "word_limit": word_limit,
+        "truncated": clipped_page or start_page > 1 or end_page < original_pages,
+    }
+    combined = _pdf_sample_header(start_page, end_page, original_pages) + "\n\n" + "\n\n".join(parts)
+    return combined, {
+        "pages": len(parts),
+        "original_pages": original_pages,
+        "native_text_pages": len(parts),
+        "ocr_pages": 0,
+        "ocr_used": False,
+        "ocr_required": False,
+        "ocr_language": "",
+        "text_engine": "pdfium",
+        "partial_source": True,
+        "sample": sample,
+    }
 
 
 def _extract_pdf(
@@ -829,9 +1017,17 @@ def extract_documents(
     enable_ocr: bool = True,
     allow_ocr_pending: bool = False,
     progress_callback: Callable[[int, int], None] | None = None,
+    pdf_sample: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not paths:
         raise LectureSiftError("LS-DOC-10", "En az bir belge ekle.", "No document paths", 400)
+    if pdf_sample is not None and (
+        not isinstance(pdf_sample, dict) or len(paths) != 1 or paths[0].suffix.casefold() != ".pdf"
+    ):
+        raise LectureSiftError(
+            "LS-DOC-16", "Kısa deneme için yalnızca bir metin PDF dosyası seç.",
+            "PDF sample requires one PDF and explicit sample options", 400,
+        )
     sections: list[str] = []
     metadata: list[dict[str, Any]] = []
     completed_ocr_units = 0
@@ -840,7 +1036,9 @@ def extract_documents(
         suffix = path.suffix.casefold()
         if suffix not in DOCUMENT_EXTENSIONS:
             raise LectureSiftError("LS-DOC-11", "Bu belge biçimi desteklenmiyor.", f"Unsupported document: {suffix}", 400)
-        if suffix == ".pdf":
+        if pdf_sample is not None:
+            text, details = _extract_pdf_sample(path, pdf_sample)
+        elif suffix == ".pdf":
             progress_offset = completed_ocr_units
             text, details = _extract_pdf(
                 path,
@@ -889,7 +1087,9 @@ def extract_documents(
                 422,
             )
         if text.strip():
-            sections.append(f"DOCUMENT {index}: {path.name}\n{text}")
+            # The sample's own scope header is already included in its budget.
+            # Keep arbitrary file-name words in metadata rather than billing.
+            sections.append(text if pdf_sample is not None else f"DOCUMENT {index}: {path.name}\n{text}")
         metadata.append({"name": path.name, "type": suffix.lstrip("."), **details, "characters": len(text)})
         completed_ocr_units += int(details.get("ocr_units") or details.get("ocr_pages") or 0)
     combined = "\n\n".join(sections)
@@ -907,7 +1107,7 @@ def extract_documents(
     estimated_ocr_words = pending_ocr_pages * OCR_ESTIMATED_WORDS_PER_PAGE
     words = extracted_words + estimated_ocr_words
     credit_minutes = max(1, math.ceil(words / DOCUMENT_WORDS_PER_CREDIT_MINUTE))
-    return {
+    result = {
         "text": combined,
         "documents": metadata,
         "characters": len(combined),
@@ -921,3 +1121,10 @@ def extract_documents(
         "credit_minutes": credit_minutes,
         "credit_seconds": credit_minutes * 60,
     }
+    if pdf_sample is not None:
+        result.update({
+            "partial_source": True,
+            "sample": dict(metadata[0]["sample"]),
+            "original_pages": metadata[0]["original_pages"],
+        })
+    return result

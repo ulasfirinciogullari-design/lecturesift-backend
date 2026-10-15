@@ -17,6 +17,7 @@ from .config import (
 )
 from .costs import cost_context
 from .documents import extract_documents
+from .document_samples import extraction_options, sample_metadata, scope_notice
 from .duration import media_duration_seconds, media_duration_values
 from .errors import LectureSiftError, normalize_error
 from .exports import build_artifacts, build_binary_artifact
@@ -163,10 +164,6 @@ def _enforce_actual_document_entitlement(
     if not user_id:
         return
     duration_seconds = max(0.0, float(document_data.get("credit_seconds") or 0))
-    if is_guest_user(user_id):
-        # Anonymous trials are consumed only after the document is readable and
-        # its real OCR-derived duration is known.
-        reserve_guest_job(user_id, job_id, max(0.1, duration_seconds / 60.0))
     require_duration_entitlement(
         user_id,
         duration_seconds,
@@ -178,6 +175,10 @@ def _enforce_actual_document_entitlement(
         document_pages=int(document_data.get("pages") or 0),
         ocr_pages=int(document_data.get("ocr_pages") or 0),
     )
+    if is_guest_user(user_id):
+        # A readable but over-limit file must not consume the single-use trial.
+        # Reservation remains atomic and happens before any paid AI request.
+        reserve_guest_job(user_id, job_id, max(0.1, duration_seconds / 60.0))
 
 
 def _transcript_timestamp(second: float) -> str:
@@ -637,6 +638,7 @@ def _process_job(
                 document_sources,
                 source_language=options.get("source_language", "auto"),
                 progress_callback=update_ocr_progress,
+                **extraction_options(options),
             )
             options.update(
                 document_credit_seconds=float(document_data["credit_seconds"]),
@@ -655,6 +657,7 @@ def _process_job(
                 document_pages=int(document_data["pages"]),
                 document_ocr_pages=int(document_data["ocr_pages"]),
                 usage_estimated=False,
+                **sample_metadata(document_data),
             )
             try:
                 _enforce_actual_document_entitlement(
@@ -684,12 +687,14 @@ def _process_job(
                 "version": APP_VERSION,
                 "job_id": job_id,
                 "options": _public_options(options),
+                **sample_metadata(document_data),
                 "sources": {
                     "mode": "documents",
                     "documents": document_data["documents"],
                     "source_files": [path.name for path in document_sources],
                     "words": document_data["words"],
                     "credit_minutes": document_data["credit_minutes"],
+                    **sample_metadata(document_data),
                 },
                 "slides": [],
                 "diagnostics": {
@@ -708,7 +713,12 @@ def _process_job(
                 "transcript_speaker_metadata": _transcript_speaker_metadata([], "none"),
                 "timeline": [],
                 **study_pack,
+                **sample_metadata(document_data),
             }
+            if document_data.get("partial_source"):
+                result["source_scope_notice"] = scope_notice(
+                    options.get("output_language", "en"), document_data["sample"],
+                )
             artifacts, zip_path = build_artifacts(job_dir, result, slides_dir)
             result["artifacts"] = artifacts
             elapsed = round(time.time() - started, 1)

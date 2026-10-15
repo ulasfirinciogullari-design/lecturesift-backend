@@ -317,6 +317,7 @@
     if (button?.onclick && !button.dataset.guestWrapped) {
       const original = button.onclick;
       button.onclick = async function(event) {
+        const requestedSample = typeof sampleSelected === "function" && sampleSelected();
         // Invalid sources must reach the existing field error before any
         // guest identity request or trial-limit handling.
         if (typeof billingAccount !== "undefined" && billingAccount?.plan?.code === "guest" && guestTrialState?.used) {
@@ -330,6 +331,10 @@
         if (!activeToken()) {
           try { await ensureGuestIdentity(); }
           catch (error) { showInlineMessage(error.message, true); return; }
+        }
+        if (requestedSample && !sampleSelected()) {
+          showError("", "LS-DOC-17");
+          return;
         }
         return original.call(this, event);
       };
