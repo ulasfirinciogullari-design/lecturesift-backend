@@ -486,7 +486,7 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         expected_theme_version = "17"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
         assert "/theme.js?v=12" in content, page.name
-        expected_i18n_version = {"admin.html":"52", "contact.html":"52", "workspace.html":"53", "document-summary.html":"53", "verify.html":"53"}.get(page.name, "47")
+        expected_i18n_version = {"admin.html":"52", "contact.html":"52", "workspace.html":"54", "document-summary.html":"53", "verify.html":"53"}.get(page.name, "47")
         assert f"i18n.js?v={expected_i18n_version}" in content, page.name
         assert "page-i18n.js?v=10" in content, page.name
 
@@ -1573,7 +1573,7 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
     assert 'src="./app.js?v=39"' in index
-    assert 'src="/rollout.js?v=12"' in index
+    assert 'src="/rollout.js?v=13"' in index
     assert '$("plans").scrollIntoView' not in app
 
 

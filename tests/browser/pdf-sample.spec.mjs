@@ -146,7 +146,7 @@ for (const interruption of ['catalog disabled', 'source changed']) {
   });
 }
 
-test('an opted-in PDF sample sends its start page and explains whole-minute quota without automatic retry', async ({page}) => {
+test('an opted-in PDF sample sends its start page and explains whole-minute quota without automatic retry', async ({page}, testInfo) => {
   await prepare(page);
   await openWorkspace(page);
   await page.locator('#classicFiles').setInputFiles(pdf('sample-source.pdf'));
@@ -154,6 +154,7 @@ test('an opted-in PDF sample sends its start page and explains whole-minute quot
   await page.locator('#documentStartPage').fill('7');
   await expect(page.locator('#documentSampleAllowance')).toHaveText('This sample can process up to 400 words.');
   await expect(page.locator('#documentSampleHelp')).toContainText('does not use OCR');
+  if (testInfo.project.name.endsWith('light')) await page.locator('#documentSampleOption').screenshot({path:testInfo.outputPath('pdf-sample-controls-layout.jpg'), type:'jpeg', quality:75});
   await page.locator('#analyzeButton').click();
   await page.waitForFunction(() => Boolean(window.syntheticPdfUpload));
   const body = await multipart(page);
@@ -211,7 +212,7 @@ test('an invalid sample start page is rejected before any upload', async ({page}
   expect(await page.evaluate(() => window.studyEvents)).toEqual([]);
 });
 
-test('sample results and saved lessons clearly disclose scope, with no invented full-document requirement', async ({page}) => {
+test('sample results and saved lessons clearly disclose scope, with no invented full-document requirement', async ({page}, testInfo) => {
   await prepare(page);
   await page.route(`${API}/library`, route => route.fulfill(route.request().method() === 'OPTIONS'
     ? {status:204, headers:cors} : {headers:cors, json:{folders:[], jobs:[
@@ -234,6 +235,7 @@ test('sample results and saved lessons clearly disclose scope, with no invented 
   await expect(page.locator('#documentSampleResultRange')).toContainText('7–11');
   await expect(page.locator('#documentSampleResultRange')).toContainText('100');
   await expect(page.locator('#documentSampleResultRange')).toContainText('400');
+  if (testInfo.project.name.endsWith('light')) await page.locator('#documentSampleResult').screenshot({path:testInfo.outputPath('pdf-sample-result-layout.jpg'), type:'jpeg', quality:75});
   const plans = new URL(await page.locator('#documentSamplePlans').getAttribute('href'), page.url());
   expect(plans.pathname).toBe('/en/plans'); expect(plans.search).toBe('');
   const full = new URL(await page.locator('#documentSampleFull').getAttribute('href'), page.url());

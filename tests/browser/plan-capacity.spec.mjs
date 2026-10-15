@@ -27,7 +27,7 @@ async function openPlans(page, need = requirement) {
   await expect(page.locator('#plansGrid')).toHaveAttribute('aria-busy', 'false');
 }
 
-test('measured document compares both per-job and total minutes without choosing a purchase', async ({page, isolatedNetwork}) => {
+test('measured document compares both per-job and total minutes without choosing a purchase', async ({page, isolatedNetwork}, testInfo) => {
   await installCatalog(page);
   await openPlans(page);
   await expect(page.locator('#planCapacityContext')).toContainText('198 minutes');
@@ -39,6 +39,10 @@ test('measured document compares both per-job and total minutes without choosing
   await expect(page.locator('#checkoutPanel')).toBeHidden();
   expect(isolatedNetwork.apiCalls.filter(call => call.includes('/billing/checkout'))).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  if (testInfo.project.name.endsWith('light')) {
+    await page.locator('#planCapacityContext').screenshot({path:testInfo.outputPath('plan-requirements-layout.jpg'), type:'jpeg', quality:75});
+    await page.locator('[data-plan-card="plus"]').screenshot({path:testInfo.outputPath('plan-capacity-layout.jpg'), type:'jpeg', quality:75});
+  }
   await page.locator('[data-plan="plus"][data-interval="monthly"]').click();
   await expect(page).toHaveURL(/\/en\/login(?:\.html)?\?next=/);
   const next = new URL(new URL(page.url()).searchParams.get('next'), page.url());
