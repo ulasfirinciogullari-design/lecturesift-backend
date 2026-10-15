@@ -189,6 +189,11 @@ let billingCurrency = localStorage.getItem("lecturesift-currency") || "";
 let requestedJobLoaded = false;
 let activeProgressProfile = "";
 let jobBusy = false;
+let sampleSourceFile = null;
+let studyUploadActive = false;
+let currentStudyContext = {sample_mode:false, source_type:"media"};
+let currentFullDocumentNeeds = null;
+const shownStudyResults = new Set();
 window.addEventListener("storage", event => {
   if ((event.key === "lecturesift-billing-token" || event.key === null)
     && localStorage.getItem("lecturesift-billing-token") !== billingToken) location.reload();
@@ -547,7 +552,70 @@ function documentQuotaText(key, fallback, values = {}) {
   for (const [name, value] of Object.entries(values)) text = text.replaceAll(`{${name}}`, value);
   return text;
 }
+function documentQuotaContext() {
+  const nonnegative = value => value != null && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
+  const rate = nonnegative(billingCatalog?.document_words_per_credit_minute);
+  const guestMinutes = nonnegative(billingCatalog?.guest_trial_minutes);
+  const limit = billingAccount ? nonnegative(activeSourceLimits().max_minutes_per_job) : guestMinutes;
+  const remaining = billingAccount ? nonnegative(billingAccount.remaining_minutes) : guestMinutes;
+  const remainingKnown = !billingAccount || billingAccount.remaining_minutes === null || remaining != null;
+  const available = limit == null || !remainingKnown ? null : remaining == null ? limit : Math.min(limit, remaining);
+  return {rate, limit, remaining, available};
+}
+function sampleEligibleFile() {
+  return billingCatalog?.document_sample?.enabled === true && DEFAULT_JOB_TYPE === "study_pack"
+    && classicVideos.length === 1 && fileExtension(classicVideos[0]) === "pdf" ? classicVideos[0] : null;
+}
+function sampleSelected() {
+  return Boolean(sampleEligibleFile() && $("documentSample")?.checked);
+}
+function updateDocumentSample() {
+  const option = $("documentSampleOption"), checkbox = $("documentSample"), start = $("documentStartPage");
+  if (!option || !checkbox || !start) return;
+  const file = sampleEligibleFile();
+  if (file !== sampleSourceFile) {
+    checkbox.checked = false;
+    start.value = "1";
+    sampleSourceFile = file;
+  }
+  option.hidden = !file;
+  checkbox.disabled = jobBusy || !file;
+  const selected = Boolean(file && checkbox.checked);
+  $("documentSampleSettings").hidden = !selected;
+  start.disabled = jobBusy || !selected;
+  const {rate, available} = documentQuotaContext();
+  const allowance = $("documentSampleAllowance");
+  allowance.hidden = !selected || !(rate > 0) || available == null;
+  if (!allowance.hidden) {
+    const words = Math.min(1000, Math.floor(available) * rate);
+    allowance.textContent = documentQuotaText("document.sampleAllowance", "Bu örnekte en fazla {words} kelime işlenebilir.", {
+      words:Math.floor(words).toLocaleString(window.LectureSiftI18n?.locale || currentLanguage),
+    });
+  }
+}
+function trackStudy(action, extra = {}) {
+  try { return Promise.resolve(window.LectureSiftAnalytics?.trackStudy?.(action, {...currentStudyContext, ...extra})).catch(() => false); }
+  catch (_) { return Promise.resolve(false); }
+}
+async function recordResultShown(data) {
+  if (!jobId || !/^[A-Za-z0-9-]{8,80}$/.test(jobId) || typeof window.LectureSiftAnalytics?.trackStudy !== "function") return;
+  const key = "lecturesift-shown-study-results-v1";
+  let previous = [];
+  try {
+    const saved = JSON.parse(localStorage.getItem(key) || "[]");
+    if (Array.isArray(saved)) previous = saved.filter(value => typeof value === "string" && /^[A-Za-z0-9-]{8,80}$/.test(value)).slice(-200);
+  } catch (_) {}
+  if (shownStudyResults.has(jobId) || previous.includes(jobId)) return;
+  const shownId = jobId;
+  shownStudyResults.add(shownId);
+  // Job IDs stay on this device; only the two coarse source flags are sent.
+  const sent = await trackStudy("result_ready", data.partial_source === true ? {sample_mode:true, source_type:"document"} : {});
+  if (sent === true) {
+    try { localStorage.setItem(key, JSON.stringify([...previous, shownId].slice(-200))); } catch (_) {}
+  } else shownStudyResults.delete(shownId);
+}
 function updateDocumentQuotaHelp() {
+  updateDocumentSample();
   const limitHelp = $("sourceLimitHelp");
   if (!limitHelp) return;
   let help = $("documentQuotaHelp");
@@ -562,15 +630,9 @@ function updateDocumentQuotaHelp() {
   if (help.hidden) return;
   const locale = window.LectureSiftI18n?.locale || currentLanguage;
   const number = value => Number(value).toLocaleString(locale);
-  const nonnegative = value => value != null && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
-  const rate = nonnegative(billingCatalog?.document_words_per_credit_minute);
-  const guestMinutes = nonnegative(billingCatalog?.guest_trial_minutes);
-  const limit = billingAccount ? nonnegative(activeSourceLimits().max_minutes_per_job) : guestMinutes;
-  const remaining = billingAccount ? nonnegative(billingAccount.remaining_minutes) : guestMinutes;
   // The current account's effective job entitlement can differ from its base
   // subscription (for example after purchasing extra minutes).
-  const remainingKnown = !billingAccount || billingAccount.remaining_minutes === null || remaining != null;
-  const available = limit == null || !remainingKnown ? null : remaining == null ? limit : Math.min(limit, remaining);
+  const {rate, limit, remaining, available} = documentQuotaContext();
   const content = [];
   const information = [];
   const append = (tag, text, id, target = content) => {
@@ -723,6 +785,7 @@ function setupPicker(inputId, zoneId, role) {
   zone.addEventListener("drop", event => addFiles(role, Array.from(event.dataTransfer.files || [])));
 }
 setupPicker("classicFiles", "classicDropZone", "classic");
+$("documentSample")?.addEventListener("change", updateDocumentSample);
 const PACK_PRESETS = {
   fast: {summary:true, transcript:true, slides:false, quiz:false, cards:false, timestamps:false, speakers:false, quizCount:"5", cardCount:"10", formats:["pdf"]},
   balanced: {summary:true, transcript:true, slides:true, quiz:true, cards:true, timestamps:false, speakers:false, quizCount:"10", cardCount:"20", formats:["pdf"]},
@@ -839,6 +902,7 @@ $("autoOpenResult").addEventListener("change", () => {
 $("openReadyResult").onclick = () => {
   if (!latestResult) return;
   $("results").hidden = false;
+  recordResultShown(latestResult);
   $("results").scrollIntoView({behavior:"smooth", block:"start"});
 };
 function jobPhaseLabel(job, profile) {
@@ -855,6 +919,16 @@ function profileDetail(profile) {
 }
 function updateJobView(job) {
   const profile = configureProgressProfile(job);
+  currentStudyContext = {source_type:profile === "document" ? "document" : "media",
+    sample_mode:job.partial_source === true || Boolean(job.options?.pdf_sample)};
+  currentFullDocumentNeeds = null;
+  if (profile === "document" && !currentStudyContext.sample_mode) {
+    const fields = {need_minutes:"billable_minutes", need_pages:"document_pages", need_ocr:"document_ocr_pages", need_bytes:"file_size_bytes", need_files:"source_file_count"};
+    currentFullDocumentNeeds = Object.fromEntries(Object.entries(fields)
+      .filter(([, field]) => typeof job[field] === "number" && Number.isFinite(job[field])
+        && (job[field] > 0 || (field === "document_ocr_pages" && job[field] === 0)))
+      .map(([parameter, field]) => [parameter, String(job[field])]));
+  }
   $("processTitle").textContent = job.status === "done" ? t("done") : t("processing");
   $("progressRing").textContent = job.status === "done" ? "✓" : "•••";
   $("progressRing").dataset.state = job.status === "done" ? "done" : "processing";
@@ -898,7 +972,7 @@ function setJobBusy(busy) {
 
 function showError(message, code = "LS-SYSTEM-01", {stopProcessing = true} = {}) {
   const known = ERRORS.tr[code];
-  const centralKey = ({"LS-URL-02":"error.url02","LS-URL-03":"error.url03","LS-URL-05":"error.url05","LS-URL-06":"error.url05","LS-AI-03":"error.ai03","LS-AI-04":"error.ai04","LS-AI-05":"error.ai05","LS-AI-06":"error.ai06","LS-AI-07":"error.ai07","LS-AI-08":"error.ai08"})[code];
+  const centralKey = ({"LS-URL-02":"error.url02","LS-URL-03":"error.url03","LS-URL-05":"error.url05","LS-URL-06":"error.url05","LS-AI-03":"error.ai03","LS-AI-04":"error.ai04","LS-AI-05":"error.ai05","LS-AI-06":"error.ai06","LS-AI-07":"error.ai07","LS-AI-08":"error.ai08","LS-DOC-14":"error.doc14","LS-DOC-15":"error.doc15","LS-DOC-16":"error.doc16","LS-DOC-17":"error.doc17"})[code];
   const translated = code === "LS-UPLOAD-02" && message
     ? message
     : centralKey
@@ -908,7 +982,11 @@ function showError(message, code = "LS-SYSTEM-01", {stopProcessing = true} = {})
     : message || t("errorFallback");
   $("errorMessage").textContent = translated || message || t("errorFallback");
   $("errorCode").textContent = `${window.LectureSiftI18n?.exact("Hata kodu") || "Hata kodu"}: ${code}`; $("errorBox").hidden = false;
-  if (stopProcessing) { setJobBusy(false); clearTimeout(pollHandle); clearInterval(timerHandle); }
+  if (stopProcessing) {
+    if (studyUploadActive) trackStudy("job_failed", /^[A-Z]+-[A-Z]+-\d{2}$/.test(code) ? {error_code:code} : {});
+    studyUploadActive = false;
+    setJobBusy(false); clearTimeout(pollHandle); clearInterval(timerHandle);
+  }
   $("quotaRecoveryActions")?.remove();
   if (code === "LS-BILL-10") {
     const actions = document.createElement("div");
@@ -931,7 +1009,9 @@ function showError(message, code = "LS-SYSTEM-01", {stopProcessing = true} = {})
     const path = guest ? "/register.html" : "/plans.html";
     link.href = window.LectureSiftI18n?.localizedPath?.(currentLanguage, path) || path;
     if (guest) link.search = new URLSearchParams({next:window.LectureSiftI18n?.localizedPath?.(currentLanguage, "/workspace.html") || "/workspace"}).toString();
+    else if (currentFullDocumentNeeds) link.search = new URLSearchParams(currentFullDocumentNeeds).toString();
     link.textContent = t(guest ? "register" : "plansNav");
+    if (!guest) link.addEventListener("click", () => trackStudy("view_plans"));
     actions.append(link);
     $("errorCode").insertAdjacentElement("afterend", actions);
   }
@@ -959,16 +1039,28 @@ function formData() {
   data.append("slides_offset_seconds", "0");
   data.append("source_layout", "classic"); data.append("job_type", DEFAULT_JOB_TYPE);
   data.append("output_formats", selectedFormats().join(",") || "none");
+  if (sampleSelected()) {
+    data.append("document_sample", "true");
+    data.append("document_start_page", $("documentStartPage").value);
+  }
   return data;
 }
 
 $("analyzeButton").onclick = async () => {
   if (jobBusy) return;
+  const requestedSample = sampleSelected();
   $("errorBox").hidden = true;
   if (![$("includeSummary"), $("includeTranscript"), $("includeQuiz"), $("includeCards")].some(input => input.checked)) {
     showError(t("outputSelectionRequired"), "LS-OUTPUT-01");
     return;
   }
+  if (requestedSample && (!/^[1-9]\d*$/.test($("documentStartPage").value)
+    || !Number.isSafeInteger(Number($("documentStartPage").value)))) {
+    showError(documentQuotaText("document.sampleInvalidPage", "Başlangıç sayfası 1 veya daha büyük bir tam sayı olmalı."), "LS-DOC-15");
+    $("documentStartPage").focus();
+    return;
+  }
+  currentFullDocumentNeeds = null;
   setJobBusy(true);
   if (!billingToken || !billingAccount) {
     try {
@@ -985,6 +1077,12 @@ $("analyzeButton").onclick = async () => {
   }
   if (!billingToken || !billingAccount) {
     showError(t("loginRequired"), "LS-BILL-01");
+    return;
+  }
+  // An explicitly requested sample must never become a full upload if the
+  // capability or selection changed while guest access was being prepared.
+  if (requestedSample && !sampleSelected()) {
+    showError("", "LS-DOC-17");
     return;
   }
   const uploadFiles = classicVideos;
@@ -1048,6 +1146,7 @@ $("analyzeButton").onclick = async () => {
         return;
       }
       jobId = created.job_id;
+      trackStudy("upload_accepted");
       if (created.ocr_required) {
         const pageCount = Number(created.ocr_pages || 0);
         updateProgress(8, t("stageDocument"), `${pageCount} ${window.LectureSiftI18n?.exact?.("taranmış sayfa") || "taranmış sayfa"}`);
@@ -1064,7 +1163,11 @@ $("analyzeButton").onclick = async () => {
       }
     }
   };
-  request.onerror = () => showError("", "LS-NETWORK-01"); request.send(upload.body);
+  request.onerror = () => showError("", "LS-NETWORK-01");
+  currentStudyContext = {sample_mode:sampleSelected(), source_type:documentUpload ? "document" : "media"};
+  studyUploadActive = true;
+  trackStudy("upload_started");
+  request.send(upload.body);
 };
 
 async function pollJob() {
@@ -1088,6 +1191,7 @@ async function loadResult({open = true} = {}) {
     if (!response.ok) { const error = await responseError(response); showError(error.message, error.code); return; }
     latestResult = await response.json();
     renderResult(latestResult, {open});
+    studyUploadActive = false;
     setJobBusy(false);
     window.LectureSiftGuestTrial?.markUsed?.(jobId);
   } catch (error) { showError(error.message, "LS-NETWORK-01"); }
@@ -1130,8 +1234,31 @@ function setupResultTabs() {
   });
 }
 
+function renderDocumentSampleResult(data) {
+  const notice = $("documentSampleResult");
+  if (!notice) return;
+  notice.hidden = data.partial_source !== true;
+  $("documentSampleResultRange").textContent = "";
+  if (notice.hidden) return;
+  const sample = data.document_sample;
+  if (sample && [sample.start_page, sample.end_page, sample.original_pages, sample.processed_pages, sample.word_limit]
+    .every(value => Number.isSafeInteger(value) && value > 0)
+    && sample.end_page >= sample.start_page && sample.end_page <= sample.original_pages
+    && sample.processed_pages <= 5 && sample.word_limit <= 1000) {
+    const number = value => value.toLocaleString(window.LectureSiftI18n?.locale || currentLanguage);
+    $("documentSampleResultRange").textContent = documentQuotaText("document.sampleResultRange", "{total} sayfalık belgenin {start}–{end}. sayfaları · en fazla {words} kelime.", {
+      total:number(sample.original_pages), start:number(sample.start_page), end:number(sample.end_page), words:number(sample.word_limit),
+    });
+  }
+  const localized = path => window.LectureSiftI18n?.localizedPath?.(currentLanguage, path) || path;
+  $("documentSampleFull").href = `${localized("/workspace.html")}?source=upload`;
+  $("documentSamplePlans").href = localized("/plans.html");
+  $("documentSamplePlans").onclick = () => { trackStudy("view_plans", {sample_mode:true, source_type:"document"}); };
+}
+
 function renderResult(data, {open = true} = {}) {
   $("resultHeading").textContent = data.title || "LectureSift";
+  renderDocumentSampleResult(data);
   const utilityResult = data.job_type && data.job_type !== "study_pack";
   const options = data.options || {};
   const selected = {
@@ -1162,7 +1289,7 @@ function renderResult(data, {open = true} = {}) {
   $("downloadAll").hidden = !selected.files;
   $("downloadAll").href = canDownload ? "#" : (window.LectureSiftI18n?.localizedPath?.(currentLanguage, "/plans.html") || "/plans.html");
   $("downloadAll").textContent = canDownload ? t("downloadAll") : unlockText;
-  $("downloadAll").onclick = canDownload ? (event => { event.preventDefault(); downloadProtected(`/jobs/${jobId}/download`, "LectureSift_Paketi.zip"); }) : null;
+  $("downloadAll").onclick = canDownload ? (event => { event.preventDefault(); downloadProtected(`/jobs/${jobId}/download`, "LectureSift_Paketi.zip"); }) : () => { trackStudy("view_plans"); };
   $("summaryContent").textContent = data.summary || t("noContent");
   $("keyPoints").innerHTML = (data.key_points || []).map(point => `<div class="key-item"><i>✦</i><span>${escapeHtml(point)}</span></div>`).join("");
   const terms = (data.important_terms || []).map(item => `<div class="note-item"><h3>${escapeHtml(item.term)}</h3><p>${escapeHtml(item.definition)}</p></div>`).join("");
@@ -1192,7 +1319,10 @@ function renderResult(data, {open = true} = {}) {
   activateResultPane(utilityResult ? "files" : Object.keys(visiblePanes).find(name => visiblePanes[name]));
   $("openReadyResult").hidden = false;
   $("results").hidden = !open;
-  if (open) $("results").scrollIntoView({behavior: "smooth", block: "start"});
+  if (open) {
+    recordResultShown(data);
+    $("results").scrollIntoView({behavior: "smooth", block: "start"});
+  }
 }
 
 function transcriptUiText(key, fallback) {
@@ -1507,6 +1637,9 @@ function renderFiles(files, canDownload = true) {
   document.querySelectorAll("a[data-artifact]").forEach(anchor => anchor.onclick = event => {
     event.preventDefault();
     downloadProtected(`/jobs/${jobId}/artifact/${anchor.dataset.artifact}`, anchor.dataset.filename);
+  });
+  if (!canDownload) $("filesContent").querySelectorAll("a").forEach(link => {
+    link.onclick = () => { trackStudy("view_plans"); };
   });
 }
 

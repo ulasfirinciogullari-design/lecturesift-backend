@@ -90,12 +90,75 @@ let manualTransfer = {available: false, bank: null};
 let currency = "TRY";
 let catalogLoadVersion = 0;
 let catalogLoading = false;
+let catalogCapacityFresh = false;
 let checkoutSelection = null;
 let checkoutRequest = null;
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 })[char]);
+
+// These values describe one measured full-document job. They are hints for
+// comparison only; checkout and the server's quota checks remain independent.
+function measuredDocumentNeed() {
+  const params = new URLSearchParams(location.search);
+  const read = (key, maximum) => {
+    if (params.getAll(key).length !== 1) return null;
+    const text = params.get(key);
+    if (!/^\d{1,13}$/.test(text || "")) return null;
+    const value = Number(text);
+    return Number.isSafeInteger(value) && value >= 0 && value <= maximum ? value : null;
+  };
+  const minutes = read("need_minutes", 1000000);
+  if (!(minutes > 0)) return null;
+  return {
+    minutes,
+    pages: read("need_pages", 1000000),
+    ocr: read("need_ocr", 1000000),
+    bytes: read("need_bytes", 1099511627776),
+    files: read("need_files", 10000),
+  };
+}
+const documentNeed = measuredDocumentNeed();
+
+function documentPlanCapacity(plan) {
+  if (!documentNeed) return null;
+  // Never confirm capacity using static fallback limits or a failed refresh.
+  const entitlements = catalogCapacityFresh ? plan.capacity_entitlements : null;
+  const limits = entitlements?.limits || {};
+  const comparisons = [
+    [documentNeed.minutes, entitlements?.minutes],
+    [documentNeed.minutes, limits.max_minutes_per_job],
+    [documentNeed.pages, limits.max_document_pages],
+    [documentNeed.ocr, limits.max_ocr_pages],
+    [documentNeed.bytes == null ? null : documentNeed.bytes / (1024 * 1024), limits.max_document_upload_mb],
+    [documentNeed.files, limits.max_files_per_job],
+  ];
+  const known = value => typeof value === "number" && Number.isFinite(value) && value >= 0;
+  if (comparisons.some(([need, limit]) => known(need) && known(limit) && need > limit)) return "insufficient";
+  return comparisons.every(([need, limit]) => known(need) && known(limit)) ? "fits" : "check";
+}
+
+function renderDocumentNeed() {
+  let panel = $("planCapacityContext");
+  if (!documentNeed) { if (panel) panel.hidden = true; return; }
+  if (!panel) {
+    panel = document.createElement("section");
+    panel.id = "planCapacityContext";
+    panel.className = "plan-capacity-context";
+    panel.setAttribute("aria-labelledby", "planCapacityTitle");
+    $("plansGrid").before(panel);
+  }
+  panel.hidden = false;
+  panel.innerHTML = `<h3 id="planCapacityTitle">${esc(pt("plans.capacityTitle", "Bu belge için hesaplanan kullanım"))}</h3><p class="plan-capacity-minutes">${esc(pt("plans.capacityMinutes", "{minutes} dakika").replace("{minutes}", documentNeed.minutes.toLocaleString(PLANS_I18N.locale)))}</p><p>${esc(pt("plans.capacityHelp", "Bu değer yüklediğin belgenin ölçülen ihtiyacıdır; kısa örnekten hesaplanmaz. Kartlar belirtilen iş sınırlarını karşılaştırır. Kalan kullanım hakkın ve diğer işleme kontrolleri ayrıca doğrulanır."))}</p>`;
+}
+
+function capacityNotice(plan) {
+  const status = documentPlanCapacity(plan);
+  if (!status) return "";
+  const key = status === "insufficient" ? "plans.capacityInsufficient" : status === "fits" ? "plans.capacityFits" : "plans.capacityCheck";
+  return `<p class="plan-capacity-status" data-plan-capacity="${status}">${esc(pt(key))}</p>`;
+}
 
 function regionCode() {
   const saved = localStorage.getItem("lecturesift-country");
@@ -242,6 +305,7 @@ function normalizeCatalog(remote, selected) {
       const plan = {
         code, ...fallbackPlan, ...remotePlan,
         entitlements: {...fallbackPlan.entitlements, ...(remotePlan.entitlements || {}), summary_profiles: ALL_SUMMARIES},
+        capacity_entitlements: remotePlan.entitlements || null,
       };
       const fallbackAmount = amounts[index];
       const remotePrice = plan.display_price;
@@ -313,6 +377,7 @@ function renderPaymentStatus() {
 }
 
 function renderPlans() {
+  renderDocumentNeed();
   const map = new Map((catalog?.plans || []).map(plan => [plan.code, plan]));
   $("plansGrid").innerHTML = visibleOrder().map(code => {
     const plan = map.get(code);
@@ -338,10 +403,11 @@ function renderPlans() {
       : plan.kind === "subscription"
       ? `<div class="plan-card-actions"><button class="plan-action" data-plan="${esc(code)}" data-interval="monthly">${esc(monthlyAction)}</button><button class="plan-action" data-plan="${esc(code)}" data-interval="annual">${esc(annualAction)} · ${esc(price ? format(price.amount_minor * 10, price.currency || currency) : "")}</button></div>`
       : `<button class="plan-action" data-plan="${esc(code)}" data-interval="${plan.kind === "one_time" ? "one_time" : "monthly"}" ${current ? "disabled" : ""}>${esc(current ? pt("plans.current", "Mevcut plan") : pt("plans.select", "Planı seç"))}</button>`;
-    return `<article class="plan-card ${plan.featured ? "featured" : ""}">
+    return `<article class="plan-card ${plan.featured ? "featured" : ""}" data-plan-card="${esc(code)}">
       ${plan.featured ? `<span class="plan-badge">${esc(pt("plans.popular", "Popüler"))}</span>` : ""}
       <h3>${esc(planLabel(code))}</h3><p>${esc(pt(`plan.${code}.description`, COPY[code][1]))}</p>
       <div class="plan-price">${esc(priceText)} <small>${suffix}</small></div>
+      ${capacityNotice(plan)}
       <ul class="plan-features">
         <li>${esc(minutesText)}</li>
         ${catalog?.assistant?.available && entitlements.assistant_credits ? `<li>${Number(entitlements.assistant_credits).toLocaleString(PLANS_I18N.locale)} ${esc(at('credits'))}</li>` : ''}
@@ -432,7 +498,11 @@ async function buy(planCode, interval = "monthly") {
   if (planCode === 'test' || (planCode === 'ad_free' && (!catalog?.ad_free || account?.permanent_ad_free))) return;
   if (planCode.startsWith('ai_') && !catalog?.assistant?.available) {showError(at('unavailable'));return;}
   if (!localStorage.getItem(TOKEN_KEY)) {
-    const next = `${localized("/plans.html")}?plan=${encodeURIComponent(planCode)}&interval=${encodeURIComponent(interval)}`;
+    const nextParams = new URLSearchParams({plan:planCode, interval});
+    if (documentNeed) Object.entries(documentNeed).forEach(([key, value]) => {
+      if (value != null) nextParams.set(`need_${key}`, String(value));
+    });
+    const next = `${localized("/plans.html")}?${nextParams}`;
     const loginPath = PLANS_I18N.localizedPath?.(PLANS_I18N.language, '/login.html') || '/login.html';
     location.href = `${loginPath}?next=${encodeURIComponent(next)}`;
     return;
@@ -700,6 +770,7 @@ async function createTransfer() {
 async function load() {
   const version = ++catalogLoadVersion;
   catalogLoading = true;
+  catalogCapacityFresh = false;
   $("plansGrid").setAttribute("aria-busy", "true");
   document.querySelectorAll(".plan-action").forEach(button => { button.disabled = true; });
   const selected = currency || detectedCurrency();
@@ -722,6 +793,7 @@ async function load() {
     // Bank details are read exclusively from the authenticated, order-specific response.
     manualTransfer = {available:Boolean(transferBody?.available), bank:null};
     catalog = normalizeCatalog(remote, selected);
+    catalogCapacityFresh = true;
     account = updatedAccount;
     catalogLoading = false;
     renderAccount();

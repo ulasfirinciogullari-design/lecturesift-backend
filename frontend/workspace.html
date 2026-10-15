@@ -8,7 +8,7 @@
   <meta name="description" content="LectureSift çalışma alanında video, ses, PDF, Word ve PowerPoint kaynaklarından özet, transkript, quiz ve bilgi kartı oluştur.">
   <title>Çalışma Alanı | LectureSift</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=16">
+  <link rel="stylesheet" href="./styles.css?v=17">
 <link rel="stylesheet" href="/rollout.css?v=9"><link rel="stylesheet" href="/theme.css?v=17"><script src="/theme.js?v=12"></script><link rel="stylesheet" href="/product-layout.css?v=4"><link rel="stylesheet" href="/library.css?v=1"></head>
 <body class="workspace-page" data-page="workspace">
   <div class="ambient ambient-one"></div>
@@ -98,6 +98,12 @@
               <span data-i18n="sortHelp">PDF, görsel, Word, PowerPoint, TXT ve Markdown; taranmış sayfalarda otomatik OCR</span>
             </label>
             <div id="classicFileList" class="source-file-list"></div>
+            <aside id="documentSampleOption" class="document-sample-option" aria-labelledby="documentSampleLabel" hidden>
+              <label class="document-sample-toggle"><input id="documentSample" type="checkbox" aria-describedby="documentSampleHelp documentSampleDefault"><span id="documentSampleLabel" data-i18n="document.sampleLabel">Kısa örnek oluştur</span></label>
+              <p id="documentSampleHelp" data-i18n="document.sampleHelp">Seçtiğin sayfadan başlayarak en fazla 5 sayfa ve 1.000 kelime işlenir. Kalan kullanım hakkın daha azsa örnek buna göre kısalır. Yalnızca seçilebilir metin içeren PDF’ler desteklenir; örnekte OCR kullanılmaz.</p>
+              <div id="documentSampleSettings" class="document-sample-settings" hidden><label for="documentStartPage" data-i18n="document.sampleStartPage">Başlangıç sayfası</label><input id="documentStartPage" type="number" min="1" step="1" value="1" inputmode="numeric" aria-describedby="documentSampleAllowance" disabled><p id="documentSampleAllowance" hidden></p></div>
+              <p id="documentSampleDefault" data-i18n="document.sampleFullDefault">Bu seçeneği açmazsan belgenin tamamı mevcut kullanım sınırlarınla işlenir.</p>
+            </aside>
           </div>
 
           <p id="sourceLimitHelp" class="combined-limit" data-i18n="fileHelp">Tek iş yükleme sınırların aktif planından yükleniyor.</p>
@@ -242,6 +248,13 @@
         <div><p class="eyebrow" data-i18n="resultEyebrow">Ders paketi hazır</p><h2 id="resultHeading">LectureSift</h2><p id="resultMeta"></p></div>
         <a id="downloadAll" class="download-button" href="#"><span data-i18n="downloadAll">Tüm paketi indir</span><b>ZIP</b></a>
       </div>
+      <aside id="documentSampleResult" class="document-sample-result" aria-labelledby="documentSampleResultTitle" hidden>
+        <strong id="documentSampleResultTitle" data-i18n="document.sampleResultTitle">Yalnızca bu bölüm işlendi</strong>
+        <p id="documentSampleResultRange"></p>
+        <p data-i18n="document.sampleResultHelp">Bu çıktı yalnızca belirtilen örnek bölümden hazırlanmıştır. Kelime sınırına ulaşıldığında son sayfanın bir kısmı işlenmiş olabilir.</p>
+        <p data-i18n="document.sampleFullAllowance">Belgenin tamamı için gereken kullanım hakkı ayrıca hesaplanır.</p>
+        <div class="document-sample-actions"><a id="documentSampleFull" href="/workspace.html?source=upload" data-i18n="document.sampleCreateFull">Tam belge için yeni çalışma</a><a id="documentSamplePlans" href="/plans.html" data-i18n="document.samplePlans">Kullanım haklarını ve planları incele</a></div>
+      </aside>
       <div class="result-tabs" role="tablist" aria-label="Ders paketi bölümleri" data-i18n-aria-label="result.sectionsLabel">
         <button id="resultTab-summary" type="button" role="tab" aria-selected="true" aria-controls="pane-summary" class="result-tab active" data-pane="summary" data-i18n="tabSummary">Özet</button>
         <button id="resultTab-notes" type="button" role="tab" aria-selected="false" aria-controls="pane-notes" tabindex="-1" class="result-tab" data-pane="notes" data-i18n="tabNotes">Akıllı notlar</button>
@@ -308,9 +321,9 @@
   </div>
 
   <script src="./locale-data.js?v=4"></script>
-  <script src="./page-i18n.js?v=10"></script><script src="/i18n.js?v=53"></script><script src="/site-shell.js?v=7"></script>
+  <script src="./page-i18n.js?v=10"></script><script src="/i18n.js?v=54"></script><script src="/site-shell.js?v=7"></script>
   <script src="/upload-progress.js?v=1"></script>
-  <script src="./app.js?v=38"></script>
-  <script src="/rollout.js?v=12"></script>
-<script src="/product-layout.js?v=2"></script><script src="/library.js?v=3"></script></body>
+  <script src="./app.js?v=39"></script>
+  <script src="/rollout.js?v=13"></script>
+<script src="/product-layout.js?v=2"></script><script src="/library.js?v=4"></script></body>
 </html>

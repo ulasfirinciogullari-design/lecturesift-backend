@@ -448,7 +448,8 @@ class JobStore:
         fields = ("job_id", "title", "status", "percent", "stage", "created", "updated",
                   "source_type", "source_layout", "source_file_count", "file_size_bytes",
                   "stored_bytes", "duration_seconds", "billable_minutes", "document_words",
-                  "retention_seconds", "error_code", "public_error")
+                  "retention_seconds", "error_code", "public_error",
+                  "partial_source", "document_sample")
         item = {key: data.get(key) for key in fields}
         options = data.get("options") or {}
         item["owner_id"] = owner_id or options.get("billing_user_id") or None

@@ -1,0 +1,41 @@
+{
+  "tr": {
+    "scope": "Kısa örnek: {total} sayfalık belgenin {start}–{end}. sayfalarından en fazla {limit} kelime. Bu çıktı yalnızca belirtilen örnek bölümden hazırlanmıştır."
+  },
+  "en": {
+    "scope": "Short sample: up to {limit} words from pages {start}–{end} of a {total}-page document. This output is based only on the indicated sample section."
+  },
+  "de": {
+    "scope": "Kurze Probe: höchstens {limit} Wörter aus den Seiten {start}–{end} eines Dokuments mit {total} Seiten. Diese Ausgabe basiert ausschließlich auf dem angegebenen Probenausschnitt."
+  },
+  "fr": {
+    "scope": "Court extrait : jusqu’à {limit} mots des pages {start}–{end} d’un document de {total} pages. Ce résultat repose uniquement sur l’extrait indiqué."
+  },
+  "es": {
+    "scope": "Muestra breve: hasta {limit} palabras de las páginas {start}–{end} de un documento de {total} páginas. Este resultado se basa únicamente en la sección de muestra indicada."
+  },
+  "it": {
+    "scope": "Breve campione: fino a {limit} parole dalle pagine {start}–{end} di un documento di {total} pagine. Questo risultato si basa solo sulla sezione campione indicata."
+  },
+  "pt": {
+    "scope": "Amostra curta: até {limit} palavras das páginas {start}–{end} de um documento com {total} páginas. Este resultado se baseia apenas no trecho de amostra indicado."
+  },
+  "ru": {
+    "scope": "Короткий образец: до {limit} слов со страниц {start}–{end} документа из {total} страниц. Этот результат подготовлен только по указанному фрагменту образца."
+  },
+  "ar": {
+    "scope": "عينة قصيرة: حتى {limit} كلمة من الصفحات {start}–{end} لوثيقة تضم {total} صفحة. أُعدّ هذا الناتج من جزء العينة المحدد فقط."
+  },
+  "zh": {
+    "scope": "简短示例：来自共 {total} 页文档中第 {start}–{end} 页，最多 {limit} 个字词。 此输出仅根据所注明的示例部分生成。"
+  },
+  "ja": {
+    "scope": "短いサンプル：全{total}ページの文書の{start}～{end}ページから最大{limit}語。 この出力は、表示されたサンプル範囲のみをもとに作成されています。"
+  },
+  "ko": {
+    "scope": "짧은 샘플: 총 {total}페이지 문서의 {start}–{end}페이지에서 최대 {limit}단어. 이 출력은 표시된 샘플 구간만을 바탕으로 생성되었습니다."
+  },
+  "hi": {
+    "scope": "छोटा नमूना: {total} पृष्ठों के दस्तावेज़ के पृष्ठ {start}–{end} से अधिकतम {limit} शब्द। यह आउटपुट केवल बताए गए नमूना हिस्से पर आधारित है।"
+  }
+}

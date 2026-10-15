@@ -11,6 +11,7 @@ from .billing_service import BillingError, require_duration_entitlement
 from .config import MEDIA_EXTENSIONS, SOURCE_DOWNLOAD_PARALLELISM, WORK_DIR
 from .duration import media_duration_seconds
 from .documents import extract_documents
+from .document_samples import extraction_options, sample_metadata
 from .errors import normalize_error
 from .jobs import JOBS
 from .pipeline_enhancements import install_pipeline_enhancements
@@ -108,6 +109,7 @@ def _preflight_worker_documents(job_id: str, paths: list[Path], options: dict) -
         source_language=str(options.get("source_language") or "auto"),
         enable_ocr=False,
         allow_ocr_pending=True,
+        **extraction_options(options),
     )
     options.update(
         document_credit_seconds=float(document_data["credit_seconds"]),
@@ -128,6 +130,7 @@ def _preflight_worker_documents(job_id: str, paths: list[Path], options: dict) -
         usage_estimated=bool(document_data["estimated"]),
         stage="document_preflight",
         worker_state="preflighting",
+        **sample_metadata(document_data),
     )
     return float(document_data["credit_seconds"])
 

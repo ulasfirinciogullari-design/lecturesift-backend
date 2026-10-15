@@ -1,0 +1,27 @@
+.plan-capacity-context {
+  margin: 20px 0;
+  padding: 20px;
+  border: 1px solid var(--ui-line);
+  border-radius: 16px;
+  background: var(--ui-surface-raised);
+}
+.plan-capacity-context[hidden] { display: none; }
+.plan-capacity-context h3 { margin: 0; font-size: 18px; }
+.plan-capacity-context p { margin: 10px 0 0; color: var(--ui-muted); font-size: 13px; line-height: 1.6; }
+.plan-capacity-context .plan-capacity-minutes { color: var(--ui-ink); font-size: 22px; font-weight: 750; }
+.plan-card .plan-capacity-status {
+  margin: 0 0 14px;
+  padding: 12px;
+  border: 1px solid var(--ui-line);
+  border-inline-start: 3px solid var(--ui-action);
+  border-radius: 9px;
+  background: var(--ui-surface-raised);
+  color: var(--ui-ink);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.plan-card .plan-capacity-status[data-plan-capacity="insufficient"] { border-inline-start-color: #b36223; }
+@media (max-width: 480px) {
+  .plan-capacity-context { padding: 16px; }
+}

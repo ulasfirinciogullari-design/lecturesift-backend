@@ -289,6 +289,10 @@ def build_artifacts(
 
     export_jobs: list[tuple[Path, str, object, tuple]] = []
     for stem, label, document_title, sections, plain_text in documents:
+        scope = result.get("source_scope_notice") if result.get("partial_source") else None
+        if scope:
+            sections = [("", [scope]), *sections]
+            plain_text = f"{scope}\n\n{plain_text}"
         if "pdf" in formats:
             path = package_dir / f"{stem}.pdf"
             export_jobs.append((path, f"{label} (PDF)", _write_pdf, (path, document_title, sections)))

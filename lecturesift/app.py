@@ -729,6 +729,8 @@ def billing_plans(currency: str = "TRY") -> dict:
         **public_catalog(currency),
         "document_words_per_credit_minute": config.DOCUMENT_WORDS_PER_CREDIT_MINUTE,
         "guest_trial_minutes": config.GUEST_TRIAL_MAX_MINUTES,
+        "document_sample": {"enabled": config.DOCUMENT_SAMPLE_ENABLED, "max_words": 1000,
+                            "max_pages": 5, "formats": ["pdf"], "native_text_only": True},
     }
 
 
@@ -1629,6 +1631,8 @@ async def create_job(
     include_slides: bool = Form(True),
     transcript_timestamps: bool = Form(False),
     speaker_detection: bool = Form(False),
+    document_sample: bool = Form(False),
+    document_start_page: int = Form(1),
     billing_user: dict = Depends(_billing_user),
 ) -> dict:
     # The browser uses only ordered `files`. The paired fields remain as a
@@ -1764,6 +1768,32 @@ async def create_job(
         _validate_document_job_type(options, document_mode=document_mode)
     except LectureSiftError as exc:
         _raise_public(exc)
+
+    if document_sample:
+        from .document_samples import sample_request
+        from .rollout_service import guest_trial_status
+
+        if not config.DOCUMENT_SAMPLE_ENABLED:
+            _raise_public(LectureSiftError(
+                "LS-DOC-17", "Kısa PDF örneği geçici olarak kullanılamıyor. Daha sonra tekrar dene.",
+                status_code=503,
+            ))
+        if (not document_mode or layout != "classic" or
+                len(classic_extensions) != 1 or classic_extensions[0] != ".pdf" or
+                options["job_type"] != "study_pack"):
+            _raise_public(LectureSiftError(
+                "LS-DOC-16", "Kısa örnek yalnız tek PDF'den çalışma paketi oluştururken kullanılabilir.",
+                status_code=400,
+            ))
+        try:
+            options["pdf_sample"] = sample_request(
+                entitlement, document_start_page, config.DOCUMENT_WORDS_PER_CREDIT_MINUTE,
+                guest_trial_status(billing_user["id"]),
+            )
+        except LectureSiftError as exc:
+            _raise_public(exc)
+        except BillingError as exc:
+            raise HTTPException(402, detail={"code": "LS-BILL-10", "message": str(exc)}) from exc
 
     # Refuse a known provider billing/authentication outage before reading the
     # request body into local or remote storage. Local-only MP3 export and
