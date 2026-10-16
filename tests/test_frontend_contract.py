@@ -193,7 +193,7 @@ def test_homepage_promotes_campaigns_without_duplicating_plan_checkout():
     homepage = (FRONTEND / "index.html").read_text(encoding="utf-8")
     workspace = (FRONTEND / "workspace.html").read_text(encoding="utf-8")
     assert 'id="campaigns"' in homepage
-    assert "Hesapsız 5 dakika deneme" in homepage
+    assert "Hesapsız 20 dakika deneme" in homepage
     assert 'id="plansGrid"' not in homepage
     assert 'id="workspace"' not in homepage
     assert 'id="workspace"' in workspace
