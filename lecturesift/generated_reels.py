@@ -47,6 +47,7 @@ _BRIEFS = (
         "question": "Mitozda kromozomlar hücrenin ortasında hangi evrede dizilir?",
         "answer": "Metafaz",
         "keyword": "ders notlarından test oluşturma",
+        "topic_hashtag": "#Biyoloji",
     },
     {
         "series": "lecture-to-flashcards",
@@ -55,6 +56,7 @@ _BRIEFS = (
         "question": "Nötr uyarıcı öğrenmeden sonra neye dönüşür?",
         "answer": "Koşullu uyarıcı",
         "keyword": "ders notlarından flashcard hazırlama",
+        "topic_hashtag": "#Psikoloji",
     },
     {
         "series": "three-second-quiz",
@@ -63,6 +65,7 @@ _BRIEFS = (
         "question": "Talep artarken arz sabitse fiyat genelde ne olur?",
         "answer": "Artar",
         "keyword": "aktif hatırlama mini test",
+        "topic_hashtag": "#Ekonomi",
     },
     {
         "series": "transcript-search",
@@ -71,6 +74,7 @@ _BRIEFS = (
         "question": "Birincil kaynak nedir?",
         "answer": "Döneme doğrudan ait kaynak",
         "keyword": "ders kaydında konu arama",
+        "topic_hashtag": "#Tarih",
     },
     {
         "series": "lecture-to-quiz",
@@ -79,6 +83,7 @@ _BRIEFS = (
         "question": "pH 7'nin altı neyi gösterir?",
         "answer": "Asidik çözelti",
         "keyword": "sınava hazırlanmak için quiz",
+        "topic_hashtag": "#Kimya",
     },
     {
         "series": "one-gap-review",
@@ -87,6 +92,7 @@ _BRIEFS = (
         "question": "Uç değerler medyanı neden az etkiler?",
         "answer": "Sıradaki konuma dayanır",
         "keyword": "eksik konu bulma yöntemi",
+        "topic_hashtag": "#İstatistik",
     },
     {
         "series": "three-second-quiz",
@@ -95,6 +101,7 @@ _BRIEFS = (
         "question": "Oksijenli kanı vücuda hangi odacık pompalar?",
         "answer": "Sol karıncık",
         "keyword": "anatomi aktif hatırlama sorusu",
+        "topic_hashtag": "#Anatomi",
     },
     {
         "series": "lecture-to-flashcards",
@@ -103,6 +110,7 @@ _BRIEFS = (
         "question": "Binary search için hangi koşul gerekir?",
         "answer": "Sıralı veri",
         "keyword": "bilgisayar bilimi flashcard",
+        "topic_hashtag": "#BilgisayarBilimi",
     },
 )
 
@@ -451,7 +459,10 @@ def _ensure_post(day: date):
     data = _generate_concept(day, recent_hooks)
     voice, seconds = _speech(data)
     marker = f"LectureSift · reel · {day.isoformat()}"
-    hashtags = "#DersÇalışma #Üniversite #SınavHazırlığı #AktifHatırlama #Öğrenci #LectureSift"
+    # Instagram currently accepts five hashtags per Reel. The topic tag changes
+    # with the lesson while the caption, spoken words and on-screen copy carry
+    # the more specific search phrase in ``keyword``.
+    hashtags = f"{data['topic_hashtag']} #DersÇalışma #AktifHatırlama #Öğrenci #LectureSift"
     caption = (
         f"{data['hook_tr']}\n\n{data['caption_tr']}\n\n"
         "Yarınki mini test için @lecturesift'i takip et.\n\n"
