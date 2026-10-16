@@ -3,7 +3,24 @@ import json
 import subprocess
 
 import lecturesift.generated_reels as reels
-from lecturesift.daily_social import _reel_audio, daily_tip, render_tip_reel
+from lecturesift.daily_social import _reel_audio
+
+
+def _growth_concept():
+    return {
+        "format_version": 2,
+        "series": "lecture-to-quiz",
+        "student_problem": "rereading notes",
+        "source": "52 sayfalık biyoloji dersi",
+        "question": "Mitozda kromozomlar hangi evrede ortada dizilir?",
+        "answer": "Metafaz",
+        "keyword": "ders notlarından test oluşturma",
+        "hook_tr": "52 sayfayı tekrar okuma",
+        "hook_en": "Turn lecture notes into a recall test",
+        "payoff_tr": "Dersi çalışma paketine çevir ve sadece unuttuğun yere dön.",
+        "voice_tr": "Notları baştan okuma. LectureSift ile dersi çalışma paketine çevir, testi çöz ve sadece unuttuğun yere dön.",
+        "caption_tr": "Ders notlarından test oluşturma yöntemiyle önce hafızanı kontrol et, sonra yalnızca eksik olduğun bölümü yeniden çalış.",
+    }
 
 
 def test_generated_reel_is_persisted_with_original_narration(monkeypatch):
@@ -12,32 +29,23 @@ def test_generated_reel_is_persisted_with_original_narration(monkeypatch):
     monkeypatch.setattr(reels, "write_json", lambda key, value: objects.__setitem__(key, value))
     monkeypatch.setattr(reels, "write_bytes", lambda key, value, _type: objects.__setitem__(key, value))
     monkeypatch.setattr(reels, "read_bytes", lambda key: objects.get(key))
-    monkeypatch.setattr(reels, "_recent_reel_titles", lambda: [])
+    monkeypatch.setattr(reels, "_recent_reel_hooks", lambda: [])
     monkeypatch.setattr(reels, "_recent_titles", lambda: [])
     calls = []
 
-    def generate(day, recent, *, pillar_offset=0):
-        calls.append((day, pillar_offset))
-        return {
-            "title": "Test yourself after class",
-            "body": "A short check reveals exactly what you need to revisit.",
-            "title_tr": "Dersten sonra kendini sına",
-            "body_tr": "Kısa bir kontrol hangi konuya dönmen gerektiğini gösterir.",
-            "keyword": "review after a lecture",
-            "steps": [
-                "Close the notes and name three key ideas.",
-                "Write one question you still cannot answer.",
-                "Revisit that explanation and answer from memory.",
-            ],
-        }
+    def generate(day, recent):
+        calls.append((day, recent))
+        return _growth_concept()
 
-    monkeypatch.setattr(reels, "_generate", generate)
-    monkeypatch.setattr(reels, "_speech", lambda _data: (b"original-mp3-audio", 14.2))
+    monkeypatch.setattr(reels, "_generate_concept", generate)
+    monkeypatch.setattr(reels, "_speech", lambda _data: (b"original-mp3-audio", 9.2))
     day = date(2026, 10, 15)
     first = reels._ensure_post(day)
     second = reels._ensure_post(day)
     assert first["caption"] == second["caption"]
-    assert calls == [(day, 3)]
+    assert len(calls) == 1 and calls[0][0] == day
+    assert first["format_version"] == 2
+    assert first["hook_tr"] == "52 sayfayı tekrar okuma"
     assert "Voice: AI-generated" in first["caption"]
     assert "LectureSift · reel · 2026-10-15" in first["caption"]
     assert reels.cover_for_day(day).startswith(b"\xff\xd8\xff")
@@ -73,7 +81,7 @@ def test_reel_prepare_command_never_publishes(monkeypatch):
 def test_generated_reel_renderer_outputs_video_with_narration(tmp_path):
     day = date(2026, 9, 21)
     voice, seconds, _music = _reel_audio(day)
-    video = render_tip_reel(daily_tip(day), voice.read_bytes(), seconds)
+    video = reels.render_growth_reel(_growth_concept(), voice.read_bytes(), seconds)
     path = tmp_path / "reel.mp4"
     path.write_bytes(video)
     result = subprocess.run(
