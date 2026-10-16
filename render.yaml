@@ -165,7 +165,7 @@ services:
       - key: INSTAGRAM_DAILY_AUTOMATION_ENABLED
         value: "false"
       - key: INSTAGRAM_DAILY_MEDIA_TYPE
-        value: MIXED
+        value: REELS
       - key: PUBLIC_BASE_URL
         value: https://api.lecturesift.com
       - key: LECTURESIFT_GUEST_TRIAL_MINUTES
@@ -367,7 +367,7 @@ services:
     name: lecturesift-instagram-daily
     runtime: docker
     plan: starter
-    schedule: "0 8,17 * * *"
+    schedule: "0 17 * * *"
     dockerCommand: python -m lecturesift.daily_social
     envVars:
       - key: INSTAGRAM_ACCESS_TOKEN
@@ -391,6 +391,6 @@ services:
       - key: INSTAGRAM_DAILY_AUTOMATION_ENABLED
         value: "true"
       - key: INSTAGRAM_DAILY_MEDIA_TYPE
-        value: MIXED
+        value: REELS
       - key: PUBLIC_BASE_URL
         value: https://api.lecturesift.com
