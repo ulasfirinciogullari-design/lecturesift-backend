@@ -217,10 +217,6 @@ def install_durable_runtime() -> None:
         try:
             if user_id:
                 guest_user = is_guest_user(user_id)
-                # A document trial is consumed only after full extraction/OCR
-                # proves that the source is valid and reveals its real minutes.
-                if guest_user and not document_mode:
-                    reserve_guest_job(user_id, job_id, media_minutes)
                 entitlement_duration = (
                     0.0
                     if document_mode and bool(options.get("document_estimated"))
@@ -235,6 +231,11 @@ def install_durable_runtime() -> None:
                     document_pages=int(options.get("document_pages") or 0),
                     ocr_pages=int(options.get("document_ocr_pages") or 0),
                 )
+                # Reject all media limits before consuming the single-use trial.
+                # Documents wait for final extraction/OCR in the pipeline; media
+                # reserves atomically here before upload/worker dispatch.
+                if guest_user and not document_mode:
+                    reserve_guest_job(user_id, job_id, media_minutes)
         except BillingError as exc:
             JOBS.update(
                 job_id,

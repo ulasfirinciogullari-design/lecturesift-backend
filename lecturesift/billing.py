@@ -135,7 +135,7 @@ LEGACY_PLAN_BY_CODE = {plan.code: plan for plan in LEGACY_PLANS}
 # durable purchase-terms snapshot continue to resolve through
 # LEGACY_PLAN_BY_CODE in billing_service.py.
 PLANS = (
-    Plan("free", "free", 60, ("pdf",), "standard", 1, 10, 20, DETAILED_SUMMARY_PROFILE, 7, 3, 100, 25, 30, 50, 20),
+    Plan("free", "free", 120, ("pdf",), "standard", 1, 10, 20, DETAILED_SUMMARY_PROFILE, 7, 3, 250, 50, 60, 100, 30),
     Plan("test", "one_time", 1, ("pdf",), "standard", 1, 1, 1, DETAILED_SUMMARY_PROFILE, 1, 1, 25, 10, 1, 10, 5),
     Plan("credit", "one_time", 180, ("pdf", "docx", "txt"), "standard", 1, 20, 40, ALL_SUMMARY_PROFILES, 30, 8, 500, 50, 180, 150, 50, 19900),
     Plan("lite", "subscription", 400, ("pdf", "docx", "txt"), "standard", 1, 10, 20, ALL_SUMMARY_PROFILES, 30, 12, 750, 75, 120, 250, 75, 29900),

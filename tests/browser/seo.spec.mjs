@@ -21,6 +21,9 @@ test('public runtime bundles preserve every language and picker navigation', asy
     await expect(page.locator('html')).toHaveAttribute('lang', language);
     await expect(page.locator('.language-switcher, #uiLanguage')).toHaveValue(language);
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', `https://lecturesift.com${prefix}/document-summary`);
+    await expect(page.locator('[data-document-trial-tip]')).toContainText('10');
+    await expect(page.locator('[data-document-trial-tip]')).toContainText(/2[,. ]000/);
+    await expect(page.locator('[data-document-trial-tip]')).not.toContainText('{');
     expect(await page.evaluate(() => window.LectureSiftI18n.t('language.label'))).not.toBe('language.label');
   }
   await page.locator('.language-switcher, #uiLanguage').selectOption('en');

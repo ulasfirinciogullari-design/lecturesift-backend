@@ -105,7 +105,7 @@
     if (note && used) {
       note.textContent = rt(
         "rollout.guestUsed",
-        "Tek seferlik 5 dakikalık denemen kullanıldı. Devam etmek için ücretsiz hesap oluştur.",
+        "Tek seferlik 20 dakikalık denemen kullanıldı. Devam etmek için ücretsiz hesap oluştur.",
       );
     }
     let signup = $("guestTrialSignup");
@@ -323,7 +323,7 @@
         if (typeof billingAccount !== "undefined" && billingAccount?.plan?.code === "guest" && guestTrialState?.used) {
           updateGuestTrialUi();
           showInlineMessage(
-            rt("rollout.guestUsed", "Tek seferlik 5 dakikalık denemen kullanıldı. Devam etmek için ücretsiz hesap oluştur."),
+            rt("rollout.guestUsed", "Tek seferlik 20 dakikalık denemen kullanıldı. Devam etmek için ücretsiz hesap oluştur."),
             true,
           );
           return;
@@ -341,7 +341,7 @@
       button.dataset.guestWrapped = "1";
       const note = document.createElement("p");
       note.className = "rollout-guest-note";
-      note.textContent = rt("rollout.guestNote", "Hesapsız kullanım: bu cihazda tek seferlik, en fazla 5 dakikalık kaynak. Daha uzun işlemler için ücretsiz hesap oluştur.");
+      note.textContent = rt("rollout.guestNote", "Hesapsız kullanım: bu cihazda tek seferlik, en fazla 20 dakikalık kaynak. Daha uzun işlemler için ücretsiz hesap oluştur.");
       button.insertAdjacentElement("afterend", note);
       updateGuestTrialUi();
     }
@@ -352,7 +352,7 @@
         if (typeof billingAccount !== "undefined" && billingAccount?.plan?.code === "guest") {
           if ($("accountButton")) $("accountButton").textContent = rt("rollout.guestTrial", "Misafir deneme");
           if ($("accountEmail")) $("accountEmail").textContent = rt("rollout.noAccountTrial", "Hesapsız deneme");
-          if ($("accountPlan")) $("accountPlan").textContent = rt("rollout.singleUse", "Tek kullanımlık 5 dakika");
+          if ($("accountPlan")) $("accountPlan").textContent = rt("rollout.singleUse", "Tek kullanımlık 20 dakika");
         } else if ($("accountStatus") && !$("rolloutAccountLink")) {
           const link = document.createElement("a");
           link.id = "rolloutAccountLink";

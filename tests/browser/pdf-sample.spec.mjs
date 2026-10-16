@@ -9,7 +9,8 @@ const result = {title:'Synthetic short sample', job_type:'study_pack', summary:'
   options:{include_summary:true, include_transcript:false, include_slides:false, quiz_count:0, flashcard_count:0},
   quiz:[], artifacts:[], flashcards:[], slides:[], transcript_segments:[], download_enabled:false, ...sampleMetadata};
 
-async function prepare(page, {remaining = 2.7, locale = 'en', job = null, jobResult = result, capability = true, registered = true} = {}) {
+async function prepare(page, {remaining = 2.7, locale = 'en', job = null, jobResult = result, capability = true, registered = true,
+  sampleWords = 1000, samplePages = 5, guestMinutes = 5, maxJobMinutes = 30} = {}) {
   await page.addInitScript(({locale,registered}) => {
     if (location.origin !== 'http://127.0.0.1:4173') return;
     if (registered) localStorage.setItem('lecturesift-billing-token', 'synthetic-pdf-owner');
@@ -31,13 +32,13 @@ async function prepare(page, {remaining = 2.7, locale = 'en', job = null, jobRes
     };
   }, {locale,registered});
   await page.route(`${API}/billing/plans?currency=TRY`, route => route.fulfill({headers:cors, json:{
-    plans:[], selected_currency:'TRY', guest_trial_minutes:5, document_words_per_credit_minute:200,
-    ...(capability == null ? {} : {document_sample:{enabled:capability, max_words:1000, max_pages:5, native_text_only:true, formats:['pdf']}}),
+    plans:[], selected_currency:'TRY', guest_trial_minutes:guestMinutes, document_words_per_credit_minute:200,
+    ...(capability == null ? {} : {document_sample:{enabled:capability, max_words:sampleWords, max_pages:samplePages, native_text_only:true, formats:['pdf']}}),
   }}));
   await page.route(`${API}/billing/me`, route => route.fulfill(route.request().method() === 'OPTIONS'
     ? {status:204, headers:cors} : {headers:cors, json:{account:{
       user:{id:'synthetic-pdf-user', email:'pdf@example.invalid'}, remaining_minutes:remaining,
-      plan:{code:'free', entitlements:{limits:{max_minutes_per_job:30, max_files_per_job:3, max_document_upload_mb:25, max_media_upload_mb:100}, download_enabled:false}},
+      plan:{code:'free', entitlements:{limits:{max_minutes_per_job:maxJobMinutes, max_files_per_job:3, max_document_upload_mb:25, max_media_upload_mb:100}, download_enabled:false}},
     }}}));
   await page.route(`${API}/jobs/${JOB_ID}`, route => route.fulfill(route.request().method() === 'OPTIONS'
     ? {status:204, headers:cors} : {headers:cors, json:job || {job_id:JOB_ID, status:'done', stage:'done', percent:100,
@@ -85,6 +86,35 @@ test('full PDF processing stays the default and the original multipart source is
   await page.locator('#analyzeButton').click();
   await page.waitForFunction(() => Boolean(window.syntheticPdfUpload));
   expect(await multipart(page)).toEqual({sample:null, start:null, names:[file.name], source:file.buffer.toString(), jobType:'study_pack'});
+});
+
+for (const allowance of [
+  {name:'expanded guest trial', registered:false, guestMinutes:20, sampleWords:2000, samplePages:10, words:'2,000', minutes:20, fullWords:'4,000'},
+  {name:'expanded free account', registered:true, remaining:120, maxJobMinutes:60, sampleWords:2000, samplePages:10, words:'2,000', minutes:60, fullWords:'12,000'},
+  {name:'smaller advertised sample', registered:true, remaining:120, maxJobMinutes:60, sampleWords:700, samplePages:3, words:'700', minutes:60, fullWords:'12,000'},
+]) {
+  test(`PDF guidance uses live catalog limits for ${allowance.name}`, async ({page}) => {
+    await prepare(page, allowance);
+    await openWorkspace(page);
+    await expect(page.locator('#documentQuotaAllowance')).toHaveText(`Your allowance for this job is ${allowance.minutes} minutes: about ${allowance.fullWords} words.`);
+    await page.locator('#classicFiles').setInputFiles(pdf('trial-chapter.pdf'));
+    await page.locator('#documentSample').check();
+    await expect(page.locator('#documentSampleAllowance')).toHaveText(`This sample can process up to ${allowance.words} words.`);
+    await expect(page.locator('#documentSampleHelp')).toContainText(`Up to ${allowance.samplePages} pages and ${allowance.words} words`);
+    await expect(page.locator('#documentSampleHelp')).not.toContainText('{');
+    expect(await page.evaluate(() => window.syntheticPdfUploadCount || 0)).toBe(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  });
+}
+
+test('saved expanded sample results retain the 10-page and 2,000-word disclosure', async ({page}) => {
+  const expanded = {...sampleMetadata, document_sample:{...sample, end_page:16, processed_pages:10, word_limit:2000}};
+  await prepare(page, {sampleWords:2000, samplePages:10, jobResult:{...result, ...expanded},
+    job:{job_id:JOB_ID, status:'done', stage:'done', percent:100, source_type:'document', options:{job_type:'study_pack'}, ...expanded}});
+  await openWorkspace(page, `/en/workspace.html?job=${JOB_ID}`);
+  await expect(page.locator('#documentSampleResult')).toBeVisible();
+  await expect(page.locator('#documentSampleResultRange')).toContainText('7–16');
+  await expect(page.locator('#documentSampleResultRange')).toContainText('2,000');
 });
 
 for (const capability of [null, false]) {

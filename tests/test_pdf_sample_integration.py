@@ -25,15 +25,15 @@ def entitlement(remaining=60, per_job=30, pages=50):
 
 
 @pytest.mark.parametrize("remaining,per_job,trial,rate,expected", [
-    (60, 30, None, 200, 1000),
+    (60, 30, None, 200, 2000),
     (2.9, 30, None, 200, 400),
-    (None, 2000, None, 200, 1000),
+    (None, 2000, None, 200, 2000),
     (60, 30, {"remaining_minutes": 1}, 200, 200),
     (60, 1, None, 100, 100),
 ])
 def test_budget_comes_from_real_remaining_and_whole_minute_billing(remaining, per_job, trial, rate, expected):
     assert samples.sample_request(entitlement(remaining, per_job), 3, rate, trial) == {
-        "start_page": 3, "max_words": expected, "max_pages": 5,
+        "start_page": 3, "max_words": expected, "max_pages": 10,
     }
 
 
@@ -77,8 +77,11 @@ def test_api_captures_only_server_budget_and_explicit_selection(sample_client):
         "max_words": "999999", "quiz_count": "0", "flashcard_count": "0"},
         files={"files": ("book.pdf", b"%PDF-synthetic-upload", "application/pdf")})
     assert response.status_code == 200, response.text
+    advertised = client.get("/billing/plans").json()["document_sample"]
+    assert advertised["max_words"] == 2000 and advertised["max_pages"] == 10
     assert captured[0][2]["pdf_sample"] == {"start_page": 3,
-        "max_words": min(1000, 2 * config.DOCUMENT_WORDS_PER_CREDIT_MINUTE), "max_pages": 5}
+        "max_words": min(advertised["max_words"], 2 * config.DOCUMENT_WORDS_PER_CREDIT_MINUTE),
+        "max_pages": advertised["max_pages"]}
 
 
 @pytest.mark.parametrize("filename,start,code", [

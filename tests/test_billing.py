@@ -27,6 +27,8 @@ def test_billing_catalog_reports_configured_document_trial_limits(monkeypatch):
     assert response.status_code == 200
     assert response.json()["document_words_per_credit_minute"] == 350
     assert response.json()["guest_trial_minutes"] == 7
+    assert response.json()["document_sample"]["max_words"] == 2000
+    assert response.json()["document_sample"]["max_pages"] == 10
 
 
 def test_billing_catalog_has_hybrid_plans_and_translation_keys():
@@ -57,18 +59,18 @@ def test_billing_catalog_has_hybrid_plans_and_translation_keys():
     assert plans["lite"]["entitlements"]["ad_mode"] == "standard"
     assert plans["pro"]["entitlements"]["ad_free"] is True
     assert plans["plus"]["entitlements"]["rewarded_minutes_eligible"] is False
-    assert plans["free"]["minutes"] == 60
+    assert plans["free"]["minutes"] == 120
     assert plans["lite"]["minutes"] == 400
     assert plans["plus"]["minutes"] == 900
     assert plans["pro"]["minutes"] == 2000
     assert plans["max"]["minutes"] == 4000
     assert plans["free"]["entitlements"]["limits"] == {
         "max_files_per_job": 3,
-        "max_media_upload_mb": 100,
-        "max_document_upload_mb": 25,
-        "max_minutes_per_job": 30,
-        "max_document_pages": 50,
-        "max_ocr_pages": 20,
+        "max_media_upload_mb": 250,
+        "max_document_upload_mb": 50,
+        "max_minutes_per_job": 60,
+        "max_document_pages": 100,
+        "max_ocr_pages": 30,
         "max_document_characters": 1_500_000,
     }
     assert plans["plus"]["entitlements"]["limits"] == {
@@ -84,7 +86,7 @@ def test_billing_catalog_has_hybrid_plans_and_translation_keys():
         code: plans[code]["entitlements"]["limits"]["max_document_upload_mb"]
         for code in ("free", "credit", "lite", "plus", "pro", "max", "business")
     } == {
-        "free": 25,
+        "free": 50,
         "credit": 50,
         "lite": 75,
         "plus": 100,
@@ -380,7 +382,7 @@ def test_account_session_starts_on_free_plan():
     account = response.json()["account"]
     assert account["user"]["email"] == email
     assert account["plan"]["code"] == "free"
-    assert account["remaining_minutes"] == 60
+    assert account["remaining_minutes"] == 120
 
 
 def test_account_country_and_language_preferences_are_saved():

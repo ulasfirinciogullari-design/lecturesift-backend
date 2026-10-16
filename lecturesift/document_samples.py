@@ -6,6 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from .billing_service import BillingError
+from .config import PDF_SAMPLE_MAX_PAGES, PDF_SAMPLE_MAX_WORDS
 from .errors import LectureSiftError
 
 
@@ -21,8 +22,8 @@ def sample_request(entitlement: dict, start_page: int, words_per_minute: int,
     if guest_trial is not None:
         minutes = min(minutes, float(guest_trial.get("remaining_minutes") or 0))
     # Billing rounds UP to whole minutes; never promise a fractional allowance.
-    word_limit = min(1000, math.floor(minutes) * int(words_per_minute))
-    pages = min(5, int(limits["max_document_pages"]))
+    word_limit = min(PDF_SAMPLE_MAX_WORDS, math.floor(minutes) * int(words_per_minute))
+    pages = min(PDF_SAMPLE_MAX_PAGES, int(limits["max_document_pages"]))
     if word_limit < 1 or pages < 1:
         raise BillingError("Kısa örnek için kullanım hakkın kalmadı. Hesabını veya planını kontrol et.")
     return {"start_page": start_page, "max_words": word_limit, "max_pages": pages}

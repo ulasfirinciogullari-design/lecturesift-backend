@@ -290,7 +290,7 @@ def test_chat_uses_owned_context_actual_tokens_and_safe_action_schema(state, mon
     assert set(captured["text"]["format"]["schema"]["properties"]["action"]["enum"]) == {"none", *assistant.ACTIONS}
     assert user_id in captured["input"][0]["content"][0]["text"]
     assert answer["account_summary"]["plan_code"] == "free"
-    assert answer["account_summary"]["remaining_minutes"] == 60
+    assert answer["account_summary"]["remaining_minutes"] == 120
     assert answer["account_summary"]["assistant_credits"] == 48
     assert "user" not in answer["account_summary"] and "payment_orders" not in answer["account_summary"]
     assert assistant.chat(user_id, payload)["balance"] == 48

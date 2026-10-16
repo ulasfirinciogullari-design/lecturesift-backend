@@ -38,7 +38,7 @@ const COPY = {
 };
 const ALL_SUMMARIES = ["detailed"];
 const PLAN_LIMITS = {
-  free: {max_files_per_job:3, max_media_upload_mb:100, max_document_upload_mb:25, max_minutes_per_job:30, max_document_pages:50, max_ocr_pages:20, max_document_characters:1500000},
+  free: {max_files_per_job:3, max_media_upload_mb:250, max_document_upload_mb:50, max_minutes_per_job:60, max_document_pages:100, max_ocr_pages:30, max_document_characters:1500000},
   test: {max_files_per_job:1, max_media_upload_mb:25, max_document_upload_mb:10, max_minutes_per_job:1, max_document_pages:10, max_ocr_pages:5, max_document_characters:1500000},
   credit: {max_files_per_job:8, max_media_upload_mb:500, max_document_upload_mb:50, max_minutes_per_job:180, max_document_pages:150, max_ocr_pages:50, max_document_characters:1500000},
   lite: {max_files_per_job:12, max_media_upload_mb:750, max_document_upload_mb:75, max_minutes_per_job:120, max_document_pages:250, max_ocr_pages:75, max_document_characters:1500000},
@@ -48,7 +48,7 @@ const PLAN_LIMITS = {
   business: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:1440, max_document_pages:500, max_ocr_pages:150, max_document_characters:1500000},
 };
 const FALLBACK_META = {
-  free: {kind: "free", minutes: 60, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 60, quiz_questions: 10, flashcards: 20, export_formats: ["pdf"], summary_profiles: ALL_SUMMARIES, history_days: 7, limits: PLAN_LIMITS.free, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: false}},
+  free: {kind: "free", minutes: 120, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 120, quiz_questions: 10, flashcards: 20, export_formats: ["pdf"], summary_profiles: ALL_SUMMARIES, history_days: 7, limits: PLAN_LIMITS.free, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: false}},
   test: {kind: "one_time", minutes: 1, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 1, quiz_questions: 1, flashcards: 1, export_formats: ["pdf"], summary_profiles: ALL_SUMMARIES, history_days: 1, limits: PLAN_LIMITS.test, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: true}},
   credit: {kind: "one_time", minutes: 180, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 180, quiz_questions: 20, flashcards: 40, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, history_days: 30, limits: PLAN_LIMITS.credit, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: true}},
   lite: {kind: "subscription", minutes: 400, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 400, quiz_questions: 10, flashcards: 20, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, history_days: 30, limits: PLAN_LIMITS.lite, team_seats: 1, ad_free: false, ad_mode: "standard", rewarded_minutes_eligible: false, download_enabled: true}},
