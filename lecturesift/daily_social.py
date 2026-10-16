@@ -653,11 +653,7 @@ def publish_daily_post(day: date | None = None) -> dict:
 
 def main() -> int:
     try:
-        if datetime.now(ZoneInfo("Europe/Istanbul")).hour < 16:
-            from .evergreen_social import publish_evergreen_post
-            result = publish_evergreen_post()
-        else:
-            result = publish_daily_post()
+        result = publish_daily_post()
     except (InstagramAPIError, InstagramConfigurationError, RuntimeError, KeyError) as exc:
         print(f"Instagram scheduled post failed: {exc}", file=sys.stderr)
         return 1
