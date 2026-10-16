@@ -15,6 +15,7 @@ def _growth_concept():
         "question": "Mitozda kromozomlar hangi evrede ortada dizilir?",
         "answer": "Metafaz",
         "keyword": "ders notlarından test oluşturma",
+        "topic_hashtag": "#Biyoloji",
         "hook_tr": "52 sayfayı tekrar okuma",
         "hook_en": "Turn lecture notes into a recall test",
         "payoff_tr": "Dersi çalışma paketine çevir ve sadece unuttuğun yere dön.",
@@ -46,6 +47,8 @@ def test_generated_reel_is_persisted_with_original_narration(monkeypatch):
     assert len(calls) == 1 and calls[0][0] == day
     assert first["format_version"] == 2
     assert first["hook_tr"] == "52 sayfayı tekrar okuma"
+    assert first["caption"].count("#") == 5
+    assert "#Biyoloji" in first["caption"]
     assert "Voice: AI-generated" in first["caption"]
     assert "LectureSift · reel · 2026-10-15" in first["caption"]
     assert reels.cover_for_day(day).startswith(b"\xff\xd8\xff")
