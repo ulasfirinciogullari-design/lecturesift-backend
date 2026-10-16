@@ -69,10 +69,9 @@ def _download_job_sources(
 def _enforce_minutes(user_id: str, job_id: str, duration: float) -> None:
     if not user_id:
         return
+    require_duration_entitlement(user_id, duration)
     if is_guest_user(user_id):
         reserve_guest_job(user_id, job_id, max(0.1, duration / 60.0))
-    else:
-        require_duration_entitlement(user_id, duration)
 
 
 def _measure_source_durations(
@@ -153,8 +152,6 @@ def _enforce_uploaded_job_quota(
     here would otherwise commit it using an estimate rather than the real result.
     """
     guest_user = bool(user_id and is_guest_user(user_id))
-    if guest_user and not document_mode:
-        reserve_guest_job(user_id, job_id, max(0.1, duration / 60.0))
     require_duration_entitlement(
         user_id,
         duration,
@@ -164,6 +161,10 @@ def _enforce_uploaded_job_quota(
         document_pages=document_pages,
         ocr_pages=ocr_pages,
     )
+    # A rejected source must leave the anonymous trial available. Reservation
+    # remains atomic and happens before the worker starts paid processing.
+    if guest_user and not document_mode:
+        reserve_guest_job(user_id, job_id, max(0.1, duration / 60.0))
 
 
 def _source_keys(

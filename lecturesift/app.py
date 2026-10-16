@@ -729,8 +729,10 @@ def billing_plans(currency: str = "TRY") -> dict:
         **public_catalog(currency),
         "document_words_per_credit_minute": config.DOCUMENT_WORDS_PER_CREDIT_MINUTE,
         "guest_trial_minutes": config.GUEST_TRIAL_MAX_MINUTES,
-        "document_sample": {"enabled": config.DOCUMENT_SAMPLE_ENABLED, "max_words": 1000,
-                            "max_pages": 5, "formats": ["pdf"], "native_text_only": True},
+        "document_sample": {"enabled": config.DOCUMENT_SAMPLE_ENABLED,
+                            "max_words": config.PDF_SAMPLE_MAX_WORDS,
+                            "max_pages": config.PDF_SAMPLE_MAX_PAGES,
+                            "formats": ["pdf"], "native_text_only": True},
     }
 
 

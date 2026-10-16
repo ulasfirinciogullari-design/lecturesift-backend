@@ -182,26 +182,26 @@ def test_free_plan_source_limits_are_enforced_server_side():
     )
     user_id = verify_email(created["verification_token"])["user"]["id"]
 
-    with pytest.raises(BillingError, match="tek iş sınırı 30 dakikadır"):
-        require_duration_entitlement(user_id, 31 * 60)
+    with pytest.raises(BillingError, match="tek iş sınırı 60 dakikadır"):
+        require_duration_entitlement(user_id, 61 * 60)
     with pytest.raises(BillingError, match="en fazla 3 kaynak"):
         require_duration_entitlement(user_id, 60, source_file_count=4)
-    with pytest.raises(BillingError, match="en fazla 50 belge sayfası"):
-        require_duration_entitlement(user_id, 60, document_mode=True, document_pages=51)
-    with pytest.raises(BillingError, match="en fazla 20 taranmış sayfaya OCR"):
-        require_duration_entitlement(user_id, 60, document_mode=True, ocr_pages=21)
+    with pytest.raises(BillingError, match="en fazla 100 belge sayfası"):
+        require_duration_entitlement(user_id, 60, document_mode=True, document_pages=101)
+    with pytest.raises(BillingError, match="en fazla 30 taranmış sayfaya OCR"):
+        require_duration_entitlement(user_id, 60, document_mode=True, ocr_pages=31)
     require_duration_entitlement(
         user_id,
         60,
         document_mode=True,
-        source_size_bytes=25 * 1024 * 1024,
+        source_size_bytes=50 * 1024 * 1024,
     )
-    with pytest.raises(BillingError, match="yükleme sınırı 25 MB"):
+    with pytest.raises(BillingError, match="yükleme sınırı 50 MB"):
         require_duration_entitlement(
             user_id,
             60,
             document_mode=True,
-            source_size_bytes=25 * 1024 * 1024 + 1,
+            source_size_bytes=50 * 1024 * 1024 + 1,
         )
 
 

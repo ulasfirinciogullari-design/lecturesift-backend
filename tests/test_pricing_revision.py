@@ -1,5 +1,6 @@
 import json
 import uuid
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -187,7 +188,7 @@ def test_manual_order_snapshot_default_free_and_cross_user_activation_are_safe(m
     owner_id = new_user()
     other_id = new_user()
     assert billing_service.account_status(other_id)["plan"]["code"] == "free"
-    assert billing_service.account_status(other_id)["remaining_minutes"] == 60
+    assert billing_service.account_status(other_id)["remaining_minutes"] == 120
 
     manual = billing_service.create_manual_order(owner_id, "lite", "annual")
     assert manual["amount_minor"] == 299000
@@ -320,3 +321,30 @@ def test_purchase_terms_reference_is_standalone_64_character_key() -> None:
     assert table.c.reference.type.length == 64
     assert list(table.primary_key.columns) == [table.c.reference]
     assert not table.foreign_keys
+
+
+def test_free_allowance_increase_preserves_existing_usage_and_credit_balance(monkeypatch) -> None:
+    current_free = PLAN_BY_CODE["free"]
+    # Model an account that already used 27 minutes under the previous offer.
+    monkeypatch.setitem(PLAN_BY_CODE, "free", replace(current_free, minutes=60, max_minutes_per_job=30))
+    user_id = new_user()
+    job_id = f"pre-increase-{uuid.uuid4()}"
+    billing_service.record_usage(user_id, job_id, 27 * 60)
+    previous = billing_service.account_status(user_id)
+    assert previous["used_minutes"] == 27
+    assert previous["remaining_minutes"] == 33
+
+    monkeypatch.setitem(PLAN_BY_CODE, "free", current_free)
+    increased = billing_service.account_status(user_id)
+    assert increased["plan"]["minutes"] == 120
+    assert increased["used_minutes"] == 27
+    assert increased["remaining_minutes"] == 93
+    assert increased["credit_minutes"] == previous["credit_minutes"] == 0
+    with billing_service.ENGINE.connect() as connection:
+        recorded = connection.execute(
+            select(billing_service.USAGE_EVENTS.c.minutes).where(
+                billing_service.USAGE_EVENTS.c.user_id == user_id,
+                billing_service.USAGE_EVENTS.c.job_id == job_id,
+            )
+        ).scalars().all()
+    assert recorded == [27]

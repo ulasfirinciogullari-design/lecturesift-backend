@@ -100,7 +100,7 @@ const TR = {
 
 const PLAN_COPY = {
   tr: {
-    free: ["Ücretsiz", "LectureSift'i denemek ve kısa dersleri işlemek için.", "60 dk / ay"],
+    free: ["Ücretsiz", "LectureSift'i denemek ve kısa dersleri işlemek için.", "120 dk / ay"],
     credit: ["Dakika Paketi", "Abonelik olmadan ek işlem hakkı.", "180 dakika"],
     lite: ["Lite", "Düzenli bireysel ders çalışması için.", "400 dk / ay"],
     plus: ["Plus", "Yoğun ders dönemi ve çoklu kaynaklar için.", "900 dk / ay"],
@@ -109,7 +109,7 @@ const PLAN_COPY = {
     business: ["Business", "Ekipler, kurumlar ve özel kapasite için.", "10 kullanıcı"]
   },
   en: {
-    free: ["Free", "Try LectureSift and process short lectures.", "60 min / month"],
+    free: ["Free", "Try LectureSift and process short lectures.", "120 min / month"],
     credit: ["Minute Pack", "Extra processing without a subscription.", "180 minutes"],
     lite: ["Lite", "For regular individual study.", "400 min / month"],
     plus: ["Plus", "For intensive study and multiple sources.", "900 min / month"],
@@ -256,7 +256,7 @@ uiLanguage.addEventListener("change", () => {
 });
 const PLAN_ORDER = ["free", "credit", "lite", "plus", "pro", "max", "business"];
 const PLAN_FALLBACK = {
-  free: ["free", 60, 10, 20, ["pdf"], ["detailed"], "standard", false],
+  free: ["free", 120, 10, 20, ["pdf"], ["detailed"], "standard", false],
   credit: ["one_time", 180, 20, 40, ["pdf", "docx", "txt"], ["detailed"], "standard", false],
   lite: ["subscription", 400, 10, 20, ["pdf", "docx", "txt"], ["detailed"], "standard", false],
   plus: ["subscription", 900, 20, 40, ["pdf", "docx", "txt"], ["detailed"], "standard", true],
@@ -289,7 +289,7 @@ const FALLBACK_PRICES = {
   HKD: [0, 3899, 5893, 10404, 23403, 44852, null],
 };
 const PLAN_SOURCE_LIMITS = {
-  free: {max_files_per_job:3, max_media_upload_mb:100, max_document_upload_mb:25, max_minutes_per_job:30, max_document_pages:50, max_ocr_pages:20},
+  free: {max_files_per_job:3, max_media_upload_mb:250, max_document_upload_mb:50, max_minutes_per_job:60, max_document_pages:100, max_ocr_pages:30},
   credit: {max_files_per_job:8, max_media_upload_mb:500, max_document_upload_mb:50, max_minutes_per_job:180, max_document_pages:150, max_ocr_pages:50},
   lite: {max_files_per_job:12, max_media_upload_mb:750, max_document_upload_mb:75, max_minutes_per_job:120, max_document_pages:250, max_ocr_pages:75},
   plus: {max_files_per_job:16, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:240, max_document_pages:350, max_ocr_pages:100},
@@ -559,8 +559,13 @@ function documentQuotaContext() {
   const available = limit == null || !remainingKnown ? null : remaining == null ? limit : Math.min(limit, remaining);
   return {rate, limit, remaining, available};
 }
+function documentSampleLimits() {
+  const limits = billingCatalog?.document_sample;
+  return limits?.enabled === true && [limits.max_words, limits.max_pages].every(value => Number.isSafeInteger(value) && value > 0)
+    ? limits : null;
+}
 function sampleEligibleFile() {
-  return billingCatalog?.document_sample?.enabled === true && DEFAULT_JOB_TYPE === "study_pack"
+  return documentSampleLimits() && DEFAULT_JOB_TYPE === "study_pack"
     && classicVideos.length === 1 && fileExtension(classicVideos[0]) === "pdf" ? classicVideos[0] : null;
 }
 function sampleSelected() {
@@ -580,11 +585,18 @@ function updateDocumentSample() {
   const selected = Boolean(file && checkbox.checked);
   $("documentSampleSettings").hidden = !selected;
   start.disabled = jobBusy || !selected;
+  const limits = documentSampleLimits();
+  if (file && limits) {
+    const number = value => value.toLocaleString(window.LectureSiftI18n?.locale || currentLanguage);
+    $("documentSampleHelp").textContent = documentQuotaText("document.sampleHelp", "Seçtiğin sayfadan başlayarak en fazla {pages} sayfa ve {words} kelime işlenir. Kalan kullanım hakkın daha azsa örnek buna göre kısalır. Yalnızca seçilebilir metin içeren PDF’ler desteklenir; örnekte OCR kullanılmaz.", {
+      pages:number(limits.max_pages), words:number(limits.max_words),
+    });
+  }
   const {rate, available} = documentQuotaContext();
   const allowance = $("documentSampleAllowance");
-  allowance.hidden = !selected || !(rate > 0) || available == null;
+  allowance.hidden = !selected || !limits || !(rate > 0) || available == null;
   if (!allowance.hidden) {
-    const words = Math.min(1000, Math.floor(available) * rate);
+    const words = Math.min(limits.max_words, Math.floor(available) * rate);
     allowance.textContent = documentQuotaText("document.sampleAllowance", "Bu örnekte en fazla {words} kelime işlenebilir.", {
       words:Math.floor(words).toLocaleString(window.LectureSiftI18n?.locale || currentLanguage),
     });
@@ -1207,7 +1219,7 @@ function renderDocumentSampleResult(data) {
   if (sample && [sample.start_page, sample.end_page, sample.original_pages, sample.processed_pages, sample.word_limit]
     .every(value => Number.isSafeInteger(value) && value > 0)
     && sample.end_page >= sample.start_page && sample.end_page <= sample.original_pages
-    && sample.processed_pages <= 5 && sample.word_limit <= 1000) {
+    && sample.processed_pages <= sample.end_page - sample.start_page + 1) {
     const number = value => value.toLocaleString(window.LectureSiftI18n?.locale || currentLanguage);
     $("documentSampleResultRange").textContent = documentQuotaText("document.sampleResultRange", "{total} sayfalık belgenin {start}–{end}. sayfaları · en fazla {words} kelime.", {
       total:number(sample.original_pages), start:number(sample.start_page), end:number(sample.end_page), words:number(sample.word_limit),

@@ -114,20 +114,20 @@ def test_dense_pdf_stops_within_first_page_without_reading_full_text(monkeypatch
     assert state.closed and state.closed_pages == state.closed_text == [0]
 
 
-def test_sample_has_hard_five_page_cap_even_if_caller_requests_more(monkeypatch, tmp_path):
-    path, state = _fake_pdf(monkeypatch, tmp_path, [f"Chapter {i} explains a useful scientific principle." for i in range(9)])
+def test_sample_has_hard_ten_page_cap_even_if_caller_requests_more(monkeypatch, tmp_path):
+    path, state = _fake_pdf(monkeypatch, tmp_path, [f"Chapter {i} explains a useful scientific principle." for i in range(15)])
     result = documents.extract_documents([path], pdf_sample={"start_page": 2, "max_words": 1000, "max_pages": 999})
-    assert state.opened == [1, 2, 3, 4, 5]
-    assert result["pages"] == 5 and result["original_pages"] == 9
-    assert result["sample"]["end_page"] == 6 and result["sample"]["truncated"] is True
+    assert state.opened == list(range(1, 11))
+    assert result["pages"] == 10 and result["original_pages"] == 15
+    assert result["sample"]["end_page"] == 11 and result["sample"]["truncated"] is True
 
 
-def test_sample_has_hard_thousand_word_cap_even_for_oversized_internal_budget(monkeypatch, tmp_path):
+def test_sample_has_hard_two_thousand_word_cap_even_for_oversized_internal_budget(monkeypatch, tmp_path):
     path, state = _fake_pdf(monkeypatch, tmp_path, ["native content " * 5000])
     result = documents.extract_documents([path], pdf_sample={"max_words": 100_000})
-    assert result["words"] == 1000
-    assert result["sample"]["word_limit"] == 1000 and result["sample"]["truncated"] is True
-    assert state.opened == [0] and sum(count for _, _, count in state.reads) < 10_000
+    assert result["words"] == 2000
+    assert result["sample"]["word_limit"] == 2000 and result["sample"]["truncated"] is True
+    assert state.opened == [0] and sum(count for _, _, count in state.reads) < 20_000
 
 
 @pytest.mark.parametrize("native", ["", "   \n", "---"])
@@ -158,7 +158,7 @@ def test_five_tiny_headings_do_not_expand_window_to_find_later_chapter(monkeypat
         "A later chapter has enough text but lies outside the selected five pages.",
     ])
     with pytest.raises(LectureSiftError) as error:
-        documents.extract_documents([path], pdf_sample={"max_words": 1000})
+        documents.extract_documents([path], pdf_sample={"max_words": 1000, "max_pages": 5})
     assert error.value.code == "LS-DOC-14"
     assert state.opened == [0, 1, 2, 3, 4] and state.closed
     assert state.closed_pages == state.closed_text == state.opened

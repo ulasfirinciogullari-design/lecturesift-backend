@@ -191,8 +191,8 @@ CONTACT_MESSAGES = Table(
 )
 
 
-# Guest accounts must never fall back to the 60-minute registered free plan.
-# They receive a hidden, persistent five-minute plan instead.
+# Guest accounts must never fall back to the registered free plan.
+# They receive a hidden, persistent single-job trial plan instead.
 PLAN_BY_CODE.setdefault(
     "guest",
     Plan(
@@ -207,10 +207,10 @@ PLAN_BY_CODE.setdefault(
         ("detailed",),
         1,
         max_files_per_job=1,
-        max_media_upload_mb=25,
-        max_document_upload_mb=10,
+        max_media_upload_mb=100,
+        max_document_upload_mb=25,
         max_minutes_per_job=max(1, int(round(config.GUEST_TRIAL_MAX_MINUTES))),
-        max_document_pages=10,
+        max_document_pages=25,
         max_ocr_pages=5,
     ),
 )

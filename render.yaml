@@ -169,7 +169,7 @@ services:
       - key: PUBLIC_BASE_URL
         value: https://api.lecturesift.com
       - key: LECTURESIFT_GUEST_TRIAL_MINUTES
-        value: "5"
+        value: "20"
       - key: LECTURESIFT_REQUIRE_DURABLE_PROCESSING
         value: "true"
       - key: LECTURESIFT_INSTAGRAM_BONUS_MINUTES
@@ -339,7 +339,7 @@ services:
           name: lecturesift-postgres
           property: connectionString
       - key: LECTURESIFT_GUEST_TRIAL_MINUTES
-        value: "5"
+        value: "20"
       - key: LECTURESIFT_INSTAGRAM_BONUS_MINUTES
         value: "30"
       - key: CELERY_BROKER_URL
