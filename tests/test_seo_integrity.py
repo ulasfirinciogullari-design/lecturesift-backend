@@ -360,7 +360,13 @@ def test_locale_rewrites_only_serve_noindex_app_pages_and_real_assets(localized_
     lines = (localized_output / "_redirects").read_text(encoding="utf-8").splitlines()
     rules = [line.split() for line in lines if line.strip() and not line.startswith("#")]
     assert len(rules) < 2000
-    rewrites = {source: target for source, target, status in rules if status == "200"}
+    # The one non-locale rewrite recovers a retired JS bundle. It must stay
+    # unforced and single-segment; all app/asset locale routes remain exact.
+    fallback = "/assets/i18n/:bundle"
+    assert [rule for rule in rules if rule[0] == fallback] == [[fallback, "/i18n.js", "200"]]
+    assert (localized_output / "i18n.js").read_bytes() == (FRONTEND / "i18n.js").read_bytes()
+    rewrites = {source: target for source, target, status in rules
+                if status == "200" and source != fallback}
     assert rewrites
     for source, target in rewrites.items():
         assert "*" not in source and ":" not in source, source

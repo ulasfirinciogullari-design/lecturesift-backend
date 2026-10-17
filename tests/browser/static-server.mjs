@@ -9,10 +9,13 @@ const mime = {'.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 't
 const inside = target => target.startsWith(root + path.sep);
 // Use the built Netlify allowlist, so private-page/browser checks also catch a
 // missing rewrite. This server is not a full Netlify redirect emulator.
-const sharedRewrites = new Map((await readFile(path.join(root, '_redirects'), 'utf8'))
-  .split('\n').map(line => line.trim().split(/\s+/))
+const redirectRules = (await readFile(path.join(root, '_redirects'), 'utf8'))
+  .split('\n').map(line => line.trim().split(/\s+/));
+const sharedRewrites = new Map(redirectRules
   .filter(([from, to, status]) => status === '200' && from.startsWith('/') && !/[*:]/.test(from) && to.startsWith('/'))
   .map(([from, to]) => [from, to]));
+const localeRuntimeFallback = redirectRules.some(([from, to, status]) =>
+  from === '/assets/i18n/:bundle' && to === '/i18n.js' && status === '200');
 
 http.createServer(async (request, response) => {
   if (!['GET', 'HEAD'].includes(request.method)) {
@@ -26,6 +29,11 @@ http.createServer(async (request, response) => {
     const rewritten = destination ? path.resolve(root, `.${destination}`) : null;
     const candidates = [requested, requested + '.html', path.join(requested, 'index.html')];
     if (rewritten) candidates.push(rewritten, rewritten + '.html');
+    // Only the deployed, unforced single-segment rule is supported here. Static
+    // files must win, as they do on Netlify, and unrelated 404s stay visible.
+    if (localeRuntimeFallback && /^\/assets\/i18n\/[^/]+$/.test(pathname)) {
+      candidates.push(path.join(root, 'i18n.js'));
+    }
     // Canonical /en/features and /features map to the actual generated .html files.
     for (const candidate of candidates) {
       if (!inside(candidate)) continue;
