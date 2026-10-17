@@ -967,7 +967,8 @@ function setJobBusy(busy) {
 
 function showError(message, code = "LS-SYSTEM-01", {stopProcessing = true} = {}) {
   const known = ERRORS.tr[code];
-  const centralKey = ({"LS-URL-02":"error.url02","LS-URL-03":"error.url03","LS-URL-05":"error.url05","LS-URL-06":"error.url05","LS-AI-03":"error.ai03","LS-AI-04":"error.ai04","LS-AI-05":"error.ai05","LS-AI-06":"error.ai06","LS-AI-07":"error.ai07","LS-AI-08":"error.ai08","LS-DOC-14":"error.doc14","LS-DOC-15":"error.doc15","LS-DOC-16":"error.doc16","LS-DOC-17":"error.doc17","LS-DOC-18":"error.doc18"})[code];
+  const sampleOcrLimitError = code === "LS-OCR-02" && sampleSelected();
+  const centralKey = sampleOcrLimitError ? "error.sampleOcrLimit" : ({"LS-URL-02":"error.url02","LS-URL-03":"error.url03","LS-URL-05":"error.url05","LS-URL-06":"error.url05","LS-AI-03":"error.ai03","LS-AI-04":"error.ai04","LS-AI-05":"error.ai05","LS-AI-06":"error.ai06","LS-AI-07":"error.ai07","LS-AI-08":"error.ai08","LS-DOC-14":"error.doc14","LS-DOC-15":"error.doc15","LS-DOC-16":"error.doc16","LS-DOC-17":"error.doc17","LS-DOC-18":"error.doc18"})[code];
   const translated = code === "LS-UPLOAD-02" && message
     ? message
     : centralKey
@@ -980,7 +981,7 @@ function showError(message, code = "LS-SYSTEM-01", {stopProcessing = true} = {})
   if (stopProcessing) { setJobBusy(false); clearTimeout(pollHandle); clearInterval(timerHandle); }
   $("quotaRecoveryActions")?.remove();
   $("documentRecoveryActions")?.remove();
-  if (["LS-DOC-14", "LS-DOC-15", "LS-DOC-18"].includes(code)) {
+  if (sampleOcrLimitError || ["LS-DOC-14", "LS-DOC-15", "LS-DOC-18"].includes(code)) {
     const actions = document.createElement("div");
     actions.id = "documentRecoveryActions";
     actions.className = "quota-recovery-actions";

@@ -97,6 +97,37 @@ test('unreadable sample recovery retains the source and focuses the starting pag
   expect(await page.evaluate(() => window.syntheticPdfUploadCount)).toBe(1);
 });
 
+for (const selected of [true, false]) {
+  test(`scanned-page limit recovery is scoped to an opted-in sample: ${selected}`, async ({page}) => {
+    await prepare(page, {sampleWords:2000, samplePages:10, supportsOcr:true, accountOcrPages:0});
+    await openWorkspace(page);
+    await page.locator('#classicFiles').setInputFiles(pdf('scanned-chapter.pdf'));
+    if (selected) {
+      await page.locator('#documentSample').check();
+      await page.locator('#documentStartPage').fill('7');
+    }
+    await page.locator('#analyzeButton').click();
+    await page.waitForFunction(() => Boolean(window.syntheticPdfUpload));
+    await finishUpload(page, {detail:{code:'LS-OCR-02', message:'Synthetic scoped OCR limit detail'}}, 422);
+    await expect(page.locator('#errorMessage')).not.toContainText('Synthetic');
+    if (selected) {
+      await expect(page.locator('#errorMessage')).toContainText('This short sample reached its scanned-page limit');
+      await expect(page.locator('#errorMessage')).not.toContainText('Split it');
+      await expect(page.locator('[data-recovery="file"]')).toBeVisible();
+      await page.locator('[data-recovery="page"]').click();
+      await expect(page.locator('#documentStartPage')).toBeFocused();
+      await expect(page.locator('#documentStartPage')).toHaveValue('7');
+      await expect(page.locator('#documentSample')).toBeChecked();
+    } else {
+      await expect(page.locator('#errorMessage')).toContainText('The document has too many scanned pages');
+      await expect(page.locator('#documentRecoveryActions')).toHaveCount(0);
+      await expect(page.locator('#documentSample')).not.toBeChecked();
+    }
+    await expect(page.locator('#classicFileList')).toContainText('scanned-chapter.pdf');
+    expect(await page.evaluate(() => window.syntheticPdfUploadCount)).toBe(1);
+  });
+}
+
 test('reader failure offers explicit replacement and preserves the selection if the picker is cancelled', async ({page}) => {
   await prepare(page, {sampleWords:2000, samplePages:10, supportsOcr:true});
   await openWorkspace(page);
