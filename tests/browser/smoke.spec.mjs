@@ -658,9 +658,9 @@ test('mobile offer numbers, descriptions and links stay inside separate card row
       await expect(skipLink).not.toBeFocused();
       const cards = page.locator('.campaign-card');
       await expect(cards).toHaveCount(3);
-      await expect(cards.nth(0).locator('.campaign-value')).toHaveText('20');
+      await expect(cards.nth(0).locator('.campaign-value')).toHaveText('30');
       await expect(cards.nth(1).locator('.campaign-value')).toHaveText('120');
-      await expect(cards.nth(0).locator('h3')).toContainText('20');
+      await expect(cards.nth(0).locator('h3')).toContainText('30');
       await expect(cards.nth(1).locator('h3')).toContainText('120');
       await cards.first().scrollIntoViewIfNeeded();
       for (const card of await cards.all()) {

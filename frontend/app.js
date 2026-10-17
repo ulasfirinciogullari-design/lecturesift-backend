@@ -533,6 +533,9 @@ function activeSourceLimits() {
   const accountLimits = billingAccount?.job_entitlements?.limits || billingAccount?.plan?.entitlements?.limits;
   if (accountLimits) return accountLimits;
   if (billingAccount && billingAccount.plan?.code !== "guest") return DEFAULT_SOURCE_LIMITS;
+  // A returning account is not a guest while its entitlement request is pending.
+  // Submission checks the loaded limits again before any source is uploaded.
+  if (!billingAccount && billingToken && localStorage.getItem("lecturesift-billing-token") === billingToken) return DEFAULT_SOURCE_LIMITS;
   const advertised = billingCatalog?.guest_trial_limits;
   return Object.fromEntries(Object.entries(DEFAULT_GUEST_SOURCE_LIMITS).map(([key, fallback]) => [key,
     Number.isSafeInteger(advertised?.[key]) && advertised[key] >= 0 ? advertised[key] : fallback]));

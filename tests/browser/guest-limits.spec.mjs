@@ -6,7 +6,7 @@ const limits = {max_files_per_job:1, max_media_upload_mb:150, max_document_uploa
   max_minutes_per_job:30, max_document_pages:40, max_ocr_pages:8};
 const pdf = name => ({name, mimeType:'application/pdf', buffer:Buffer.from('Synthetic PDF transport fixture; no extraction.')});
 
-async function prepare(page, {advertised = limits, actual = limits, locale = 'en'} = {}) {
+async function prepare(page, {advertised = limits, actual = limits, locale = 'en', waitForAllowance = true} = {}) {
   let identities = 0;
   await page.addInitScript(locale => {
     localStorage.setItem('lecturesift-ui', locale);
@@ -38,9 +38,42 @@ async function prepare(page, {advertised = limits, actual = limits, locale = 'en
   await page.goto(`${locale === 'tr' ? '' : `/${locale}`}/workspace.html`);
   await page.locator('[data-consent="essential"]').click();
   await expect(page.locator('#analyzeButton')).toHaveAttribute('data-guest-wrapped', '1');
-  await expect(page.locator('#documentQuotaAllowance')).toContainText(locale === 'tr' ? 'kelime' : 'words');
+  if (waitForAllowance) await expect(page.locator('#documentQuotaAllowance')).toContainText(locale === 'tr' ? 'kelime' : 'words');
   return () => identities;
 }
+
+test('a returning registered account keeps multiple sources while its account request is pending', async ({page}) => {
+  await page.addInitScript(() => localStorage.setItem('lecturesift-billing-token', 'synthetic-returning-owner'));
+  let requested = false, releaseAccount;
+  const accountReady = new Promise(resolve => { releaseAccount = resolve; });
+  await page.route(`${API}/billing/me`, async route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({status:204, headers});
+    requested = true;
+    await accountReady;
+    return route.fulfill({headers, json:{account:{user:{id:'synthetic-returning-owner', email:'returning@example.invalid'},
+      remaining_minutes:120, plan:{code:'free', entitlements:{limits:{...limits, max_files_per_job:3,
+        max_media_upload_mb:250, max_document_upload_mb:50, max_minutes_per_job:60}, download_enabled:false}}}}});
+  });
+  try {
+    const identities = await prepare(page, {waitForAllowance:false});
+    await expect.poll(() => requested).toBe(true);
+    await expect(page.locator('#sourceLimitHelp')).toContainText('250 MB');
+    await expect(page.locator('#sourceLimitHelp')).toContainText('50 MB');
+    await page.locator('#classicFiles').setInputFiles([pdf('first.pdf'), pdf('second.pdf')]);
+    await expect(page.locator('#classicFileList .source-file-row')).toHaveCount(2);
+    await expect(page.locator('#errorBox')).toBeHidden();
+    expect(await page.evaluate(() => window.syntheticGuestUploadCount || 0)).toBe(0);
+    releaseAccount();
+    await page.waitForFunction(() => billingAccount?.plan?.code === 'free');
+    await expect(page.locator('#classicFileList .source-file-row')).toHaveCount(2);
+    await expect(page.locator('#documentQuotaAllowance')).toHaveText('Your allowance for this job is 60 minutes: about 12,000 words.');
+    expect(await page.evaluate(() => window.syntheticGuestUploadCount || 0)).toBe(0);
+    expect(identities()).toBe(0);
+    await page.locator('#analyzeButton').click();
+    await expect.poll(() => page.evaluate(() => window.syntheticGuestUploadCount || 0)).toBe(1);
+    expect(identities()).toBe(0);
+  } finally { releaseAccount(); }
+});
 
 test('quota rejection stays retryable while a used-trial API response gives a localized registration gate', async ({page}) => {
   const identities = await prepare(page, {locale:'tr'});
