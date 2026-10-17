@@ -526,9 +526,16 @@ const DOCUMENT_EXTENSIONS = new Set(["pdf", "docx", "pptx", "txt", "md", "png", 
 const VIDEO_EXTENSIONS = new Set(["mp4", "mov", "mkv", "webm", "mpeg", "mpg", "m4v"]);
 const AUDIO_EXTENSIONS = new Set(["mp3", "wav", "m4a", "aac", "flac", "ogg", "oga", "opus", "wma", "aiff", "aif", "mka"]);
 const MEDIA_EXTENSIONS = new Set([...VIDEO_EXTENSIONS, ...AUDIO_EXTENSIONS]);
-const DEFAULT_SOURCE_LIMITS = {max_files_per_job:3, max_media_upload_mb:100, max_document_upload_mb:25};
+const DEFAULT_SOURCE_LIMITS = {max_files_per_job:3, max_media_upload_mb:250, max_document_upload_mb:50};
+const DEFAULT_GUEST_SOURCE_LIMITS = {max_files_per_job:1, max_media_upload_mb:150, max_document_upload_mb:35,
+  max_minutes_per_job:30, max_document_pages:40, max_ocr_pages:8};
 function activeSourceLimits() {
-  return billingAccount?.job_entitlements?.limits || billingAccount?.plan?.entitlements?.limits || DEFAULT_SOURCE_LIMITS;
+  const accountLimits = billingAccount?.job_entitlements?.limits || billingAccount?.plan?.entitlements?.limits;
+  if (accountLimits) return accountLimits;
+  if (billingAccount && billingAccount.plan?.code !== "guest") return DEFAULT_SOURCE_LIMITS;
+  const advertised = billingCatalog?.guest_trial_limits;
+  return Object.fromEntries(Object.entries(DEFAULT_GUEST_SOURCE_LIMITS).map(([key, fallback]) => [key,
+    Number.isSafeInteger(advertised?.[key]) && advertised[key] >= 0 ? advertised[key] : fallback]));
 }
 function updateSourceLimitHelp() {
   const node = $("sourceLimitHelp");
@@ -553,7 +560,7 @@ function documentQuotaContext() {
   const nonnegative = value => value != null && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
   const rate = nonnegative(billingCatalog?.document_words_per_credit_minute);
   const guestMinutes = nonnegative(billingCatalog?.guest_trial_minutes);
-  const limit = billingAccount ? nonnegative(activeSourceLimits().max_minutes_per_job) : guestMinutes;
+  const limit = nonnegative(activeSourceLimits().max_minutes_per_job) ?? (billingAccount ? null : guestMinutes);
   const remaining = billingAccount ? nonnegative(billingAccount.remaining_minutes) : guestMinutes;
   const remainingKnown = !billingAccount || billingAccount.remaining_minutes === null || remaining != null;
   const available = limit == null || !remainingKnown ? null : remaining == null ? limit : Math.min(limit, remaining);
@@ -566,7 +573,7 @@ function documentSampleLimits() {
 }
 function documentSampleOcrLimit(limits) {
   if (limits?.supports_ocr !== true || !Number.isSafeInteger(limits.max_ocr_pages) || limits.max_ocr_pages < 1) return 0;
-  const accountLimit = billingAccount ? activeSourceLimits().max_ocr_pages : limits.max_ocr_pages;
+  const accountLimit = activeSourceLimits().max_ocr_pages;
   return Number.isSafeInteger(accountLimit) && accountLimit >= 0
     ? Math.min(limits.max_ocr_pages, limits.max_pages, accountLimit) : 0;
 }
@@ -968,7 +975,7 @@ function setJobBusy(busy) {
 function showError(message, code = "LS-SYSTEM-01", {stopProcessing = true} = {}) {
   const known = ERRORS.tr[code];
   const sampleOcrLimitError = code === "LS-OCR-02" && sampleSelected();
-  const centralKey = sampleOcrLimitError ? "error.sampleOcrLimit" : ({"LS-URL-02":"error.url02","LS-URL-03":"error.url03","LS-URL-05":"error.url05","LS-URL-06":"error.url05","LS-AI-03":"error.ai03","LS-AI-04":"error.ai04","LS-AI-05":"error.ai05","LS-AI-06":"error.ai06","LS-AI-07":"error.ai07","LS-AI-08":"error.ai08","LS-DOC-14":"error.doc14","LS-DOC-15":"error.doc15","LS-DOC-16":"error.doc16","LS-DOC-17":"error.doc17","LS-DOC-18":"error.doc18"})[code];
+  const centralKey = sampleOcrLimitError ? "error.sampleOcrLimit" : ({"LS-URL-02":"error.url02","LS-URL-03":"error.url03","LS-URL-05":"error.url05","LS-URL-06":"error.url05","LS-AI-03":"error.ai03","LS-AI-04":"error.ai04","LS-AI-05":"error.ai05","LS-AI-06":"error.ai06","LS-AI-07":"error.ai07","LS-AI-08":"error.ai08","LS-DOC-14":"error.doc14","LS-DOC-15":"error.doc15","LS-DOC-16":"error.doc16","LS-DOC-17":"error.doc17","LS-DOC-18":"error.doc18","LS-GUEST-05":"rollout.guestUsed"})[code];
   const translated = code === "LS-UPLOAD-02" && message
     ? message
     : centralKey
@@ -979,6 +986,7 @@ function showError(message, code = "LS-SYSTEM-01", {stopProcessing = true} = {})
   $("errorMessage").textContent = translated || message || t("errorFallback");
   $("errorCode").textContent = `${window.LectureSiftI18n?.exact("Hata kodu") || "Hata kodu"}: ${code}`; $("errorBox").hidden = false;
   if (stopProcessing) { setJobBusy(false); clearTimeout(pollHandle); clearInterval(timerHandle); }
+  if (code === "LS-GUEST-05") window.LectureSiftGuestTrial?.markUsed?.();
   $("quotaRecoveryActions")?.remove();
   $("documentRecoveryActions")?.remove();
   if (sampleOcrLimitError || ["LS-DOC-14", "LS-DOC-15", "LS-DOC-18"].includes(code)) {
@@ -1122,6 +1130,9 @@ $("analyzeButton").onclick = async () => {
   if (!uploadFiles.length) { setJobBusy(false); $("classicFiles").click(); return; }
   const documentUpload = uploadFiles.every(isDocumentFile);
   const sourceLimits = activeSourceLimits();
+  if (uploadFiles.length > Number(sourceLimits.max_files_per_job || DEFAULT_SOURCE_LIMITS.max_files_per_job)) {
+    showError(window.LectureSiftI18n?.t("upload.planFileLimit", "Planının tek işte kaynak sayısı sınırına ulaştın."), "LS-UPLOAD-04"); return;
+  }
   const uploadLimitMb = Number(documentUpload ? sourceLimits.max_document_upload_mb : sourceLimits.max_media_upload_mb);
   if (uploadFiles.reduce((total, file) => total + file.size, 0) > uploadLimitMb * 1024 ** 2) {
     showError(uploadLimitMessage(documentUpload, uploadLimitMb), "LS-UPLOAD-02"); return;

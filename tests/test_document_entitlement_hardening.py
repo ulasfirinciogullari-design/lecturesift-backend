@@ -155,7 +155,7 @@ def test_synthetic_guest_eighteen_minute_document_is_accepted_without_consuming_
     trial = rollout_service.guest_trial_status(user_id)
     assert trial["used"] is True
     assert trial["job_id"] == job_id
-    assert trial["max_minutes"] == 20
+    assert trial["max_minutes"] == 30
     # Reservation is separate from the eventual successful-usage charge.
     assert billing.account_status(user_id)["used_minutes"] == 0
 
@@ -177,7 +177,7 @@ def test_registered_free_accepts_sixty_minutes_and_rejects_sixty_one(document_mo
     assert unchanged["remaining_minutes"] == 120
 
 
-def test_guest_rejected_twenty_one_minute_document_preserves_twenty_minute_trial(tmp_path):
+def test_guest_rejected_thirty_one_minute_document_preserves_thirty_minute_trial(tmp_path):
     from lecturesift import rollout_service
 
     created = rollout_service.create_or_resume_guest(f"document-boundary-{uuid.uuid4()}")
@@ -185,17 +185,17 @@ def test_guest_rejected_twenty_one_minute_document_preserves_twenty_minute_trial
     source = tmp_path / "lesson.pdf"
     source.write_bytes(b"synthetic-native-document")
     options = {"billing_user_id": user_id}
-    with pytest.raises(BillingError, match="hesabında 20 dakika kaldı"):
+    with pytest.raises(BillingError, match="hesabında 30 dakika kaldı"):
         pipeline._enforce_actual_document_entitlement(
             f"too-long-{uuid.uuid4()}", options, [source],
-            {"credit_seconds": 21 * 60, "pages": 20, "ocr_pages": 0},
+            {"credit_seconds": 31 * 60, "pages": 40, "ocr_pages": 0},
         )
     trial = rollout_service.guest_trial_status(user_id)
-    assert trial["used"] is False and trial["remaining_minutes"] == 20
+    assert trial["used"] is False and trial["remaining_minutes"] == 30
     accepted_job = f"fits-{uuid.uuid4()}"
     pipeline._enforce_actual_document_entitlement(
         accepted_job, options, [source],
-        {"credit_seconds": 20 * 60, "pages": 20, "ocr_pages": 0},
+        {"credit_seconds": 30 * 60, "pages": 40, "ocr_pages": 0},
     )
     assert rollout_service.guest_trial_status(user_id)["job_id"] == accepted_job
     assert billing.account_status(user_id)["used_minutes"] == 0

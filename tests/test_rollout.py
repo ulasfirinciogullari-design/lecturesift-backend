@@ -268,18 +268,18 @@ def test_analytics_config_requires_opt_in_and_a_valid_public_measurement_id(monk
     }
 
 
-def test_guest_trial_is_twenty_minutes_resumable_and_single_job():
+def test_guest_trial_is_thirty_minutes_resumable_and_single_job():
     device = f"device-{uuid.uuid4()}"
     first = client.post("/billing/guest-session", json={"device_id": device})
     assert first.status_code == 200
     body = first.json()
     assert body["guest"] is True
     assert body["account"]["plan"]["code"] == "guest"
-    assert body["account"]["remaining_minutes"] == 20
+    assert body["account"]["remaining_minutes"] == 30
     assert body["trial"] == {
         "used": False,
-        "max_minutes": 20.0,
-        "remaining_minutes": 20.0,
+        "max_minutes": 30.0,
+        "remaining_minutes": 30.0,
         "job_id": None,
     }
 
@@ -294,7 +294,7 @@ def test_guest_trial_is_twenty_minutes_resumable_and_single_job():
     used = client.post("/billing/guest-session", json={"device_id": device}).json()
     assert used["trial"] == {
         "used": True,
-        "max_minutes": 20.0,
+        "max_minutes": 30.0,
         "remaining_minutes": 0,
         "job_id": first_job,
     }
@@ -306,7 +306,7 @@ def test_guest_trial_is_twenty_minutes_resumable_and_single_job():
         rollout_service.reserve_guest_job(user_id, f"job-{uuid.uuid4()}", 1.0)
     other = client.post("/billing/guest-session", json={"device_id": f"device-{uuid.uuid4()}"}).json()
     with pytest.raises(Exception, match="en fazla"):
-        rollout_service.reserve_guest_job(other["account"]["user"]["id"], "too-long", 20.5)
+        rollout_service.reserve_guest_job(other["account"]["user"]["id"], "too-long", 30.5)
 
 
 def test_profile_email_change_and_session_rotation(monkeypatch):

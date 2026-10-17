@@ -726,12 +726,14 @@ def health() -> dict:
 @app.get("/billing/plans")
 def billing_plans(currency: str = "TRY") -> dict:
     from .document_samples import ocr_sample_cap
+    from .rollout_service import guest_source_limits
 
     sample_ocr_pages = ocr_sample_cap()
     return {
         **public_catalog(currency),
         "document_words_per_credit_minute": config.DOCUMENT_WORDS_PER_CREDIT_MINUTE,
         "guest_trial_minutes": config.GUEST_TRIAL_MAX_MINUTES,
+        "guest_trial_limits": guest_source_limits(),
         "document_sample": {"enabled": config.DOCUMENT_SAMPLE_ENABLED,
                             "max_words": config.PDF_SAMPLE_MAX_WORDS,
                             "max_pages": config.PDF_SAMPLE_MAX_PAGES,
@@ -1737,6 +1739,15 @@ async def create_job(
         )
     except BillingError as exc:
         raise HTTPException(402, detail={"code": "LS-BILL-10", "message": str(exc)}) from exc
+    if entitlement.get("plan", {}).get("code") == "guest":
+        from .rollout_service import guest_trial_status
+
+        trial = guest_trial_status(billing_user["id"])
+        if trial and trial["used"]:
+            raise HTTPException(402, detail={
+                "code": "LS-GUEST-05",
+                "message": "Tek seferlik misafir denemen kullanılmış veya işleniyor. Devam etmek için ücretsiz hesap oluştur.",
+            })
     plan_limits = entitlement["job_plan"]["entitlements"]["limits"]
     max_plan_files = int(plan_limits["max_files_per_job"])
     layout = "separate" if requested_layout == "separate" or slides_file or visual_files else "classic"

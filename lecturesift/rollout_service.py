@@ -207,13 +207,19 @@ PLAN_BY_CODE.setdefault(
         ("detailed",),
         1,
         max_files_per_job=1,
-        max_media_upload_mb=100,
-        max_document_upload_mb=25,
+        max_media_upload_mb=150,
+        max_document_upload_mb=35,
         max_minutes_per_job=max(1, int(round(config.GUEST_TRIAL_MAX_MINUTES))),
-        max_document_pages=25,
-        max_ocr_pages=5,
+        max_document_pages=40,
+        max_ocr_pages=8,
     ),
 )
+
+
+def guest_source_limits() -> dict:
+    """Advertise the actual hidden plan before a visitor creates a session."""
+    return PLAN_BY_CODE["guest"].public()["entitlements"]["limits"]
+
 
 CONTACT_REPLIES = Table(
     "lecturesift_contact_replies",
