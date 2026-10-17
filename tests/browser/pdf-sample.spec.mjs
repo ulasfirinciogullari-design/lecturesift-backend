@@ -219,7 +219,7 @@ test('full PDF processing stays the default and the original multipart source is
 });
 
 for (const allowance of [
-  {name:'expanded guest trial', registered:false, guestMinutes:20, sampleWords:2000, samplePages:10, words:'2,000', minutes:20, fullWords:'4,000'},
+  {name:'expanded guest trial', registered:false, guestMinutes:30, sampleWords:2000, samplePages:10, words:'2,000', minutes:30, fullWords:'6,000'},
   {name:'expanded free account', registered:true, remaining:120, maxJobMinutes:60, sampleWords:2000, samplePages:10, words:'2,000', minutes:60, fullWords:'12,000'},
   {name:'smaller advertised sample', registered:true, remaining:120, maxJobMinutes:60, sampleWords:700, samplePages:3, words:'700', minutes:60, fullWords:'12,000'},
 ]) {
@@ -289,8 +289,15 @@ for (const interruption of ['catalog disabled', 'source changed']) {
       }}));
       // Refresh the actual catalog while the identity response is pending.
       await page.evaluate(() => loadBilling());
-    } else await page.locator('#classicFiles').setInputFiles(pdf('second.pdf'));
-    await expect(page.locator('#documentSampleOption')).toBeHidden();
+      await expect(page.locator('#documentSampleOption')).toBeHidden();
+    } else {
+      // A guest has one source slot: replacing it still invalidates the
+      // explicitly selected sample while the identity request is pending.
+      await page.locator('[data-action="remove"]').click();
+      await page.locator('#classicFiles').setInputFiles(pdf('second.pdf'));
+      await expect(page.locator('#documentSampleOption')).toBeVisible();
+      await expect(page.locator('#documentSample')).not.toBeChecked();
+    }
     releaseGuest();
     await expect(page.locator('#errorCode')).toContainText('LS-DOC-17');
     expect(await page.evaluate(() => window.syntheticPdfUploadCount || 0)).toBe(0);

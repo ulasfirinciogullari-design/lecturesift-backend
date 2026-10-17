@@ -231,11 +231,10 @@ def install_durable_runtime() -> None:
                     document_pages=int(options.get("document_pages") or 0),
                     ocr_pages=int(options.get("document_ocr_pages") or 0),
                 )
-                # Reject all media limits before consuming the single-use trial.
-                # Documents wait for final extraction/OCR in the pipeline; media
-                # reserves atomically here before upload/worker dispatch.
-                if guest_user and not document_mode:
-                    reserve_guest_job(user_id, job_id, media_minutes)
+                # Durable media reserves on the worker after source download
+                # and validation. Upload/dispatch failure must not consume the
+                # trial before processing can start. Documents reserve after
+                # final extraction/OCR in the pipeline as before.
         except BillingError as exc:
             JOBS.update(
                 job_id,
@@ -268,7 +267,9 @@ def install_durable_runtime() -> None:
             eta_started_at=None if worker_document_preflight else time.time(),
             usage_estimated=worker_document_preflight,
             document_preflight_deferred_to_worker=worker_document_preflight,
-            guest_reservation_deferred_to_worker=bool(guest_user and worker_document_preflight),
+            guest_reservation_deferred_to_worker=bool(
+                guest_user and (worker_document_preflight or (queue_ready and not document_mode))
+            ),
             guest_reservation_deferred_to_pipeline=bool(guest_user and document_mode),
         )
 
@@ -320,9 +321,37 @@ def install_durable_runtime() -> None:
                     job_id,
                     queue_mode="fallback",
                     worker_state="local_fallback",
+                    guest_reservation_deferred_to_worker=False,
                     queue_error=str(exc),
                 )
 
+        if guest_user and not document_mode:
+            try:
+                # Optional local processing needs the same last-moment quota
+                # check and atomic reservation that the durable worker owns.
+                require_duration_entitlement(
+                    user_id,
+                    duration,
+                    source_file_count=len(audio_paths) + len(visual_paths),
+                    source_size_bytes=size_bytes,
+                    document_mode=False,
+                    document_pages=0,
+                    ocr_pages=0,
+                )
+                reserve_guest_job(user_id, job_id, media_minutes)
+            except BillingError as exc:
+                JOBS.update(
+                    job_id,
+                    status="error",
+                    percent=0,
+                    stage="error",
+                    worker_state="rejected",
+                    error_code="LS-GUEST-04",
+                    error=str(exc),
+                    notify_failure=True,
+                    notification_context=getattr(exc, "notification_context", None),
+                )
+                return
         started = time.time()
         local_process_job(job_id, audio_paths, options, visual_paths or None)
         finished = JOBS.get(job_id) or {}
