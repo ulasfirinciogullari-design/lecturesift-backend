@@ -10,7 +10,8 @@ const result = {title:'Synthetic short sample', job_type:'study_pack', summary:'
   quiz:[], artifacts:[], flashcards:[], slides:[], transcript_segments:[], download_enabled:false, ...sampleMetadata};
 
 async function prepare(page, {remaining = 2.7, locale = 'en', job = null, jobResult = result, capability = true, registered = true,
-  sampleWords = 1000, samplePages = 5, guestMinutes = 5, maxJobMinutes = 30} = {}) {
+  sampleWords = 1000, samplePages = 5, guestMinutes = 5, maxJobMinutes = 30,
+  supportsOcr = false, sampleOcrPages = 5, accountOcrPages = 30} = {}) {
   await page.addInitScript(({locale,registered}) => {
     if (location.origin !== 'http://127.0.0.1:4173') return;
     if (registered) localStorage.setItem('lecturesift-billing-token', 'synthetic-pdf-owner');
@@ -33,12 +34,14 @@ async function prepare(page, {remaining = 2.7, locale = 'en', job = null, jobRes
   }, {locale,registered});
   await page.route(`${API}/billing/plans?currency=TRY`, route => route.fulfill({headers:cors, json:{
     plans:[], selected_currency:'TRY', guest_trial_minutes:guestMinutes, document_words_per_credit_minute:200,
-    ...(capability == null ? {} : {document_sample:{enabled:capability, max_words:sampleWords, max_pages:samplePages, native_text_only:true, formats:['pdf']}}),
+    ...(capability == null ? {} : {document_sample:{enabled:capability, max_words:sampleWords, max_pages:samplePages,
+      ...(supportsOcr == null ? {} : {supports_ocr:supportsOcr, max_ocr_pages:sampleOcrPages}), native_text_only:supportsOcr !== true, formats:['pdf']}}),
   }}));
   await page.route(`${API}/billing/me`, route => route.fulfill(route.request().method() === 'OPTIONS'
     ? {status:204, headers:cors} : {headers:cors, json:{account:{
       user:{id:'synthetic-pdf-user', email:'pdf@example.invalid'}, remaining_minutes:remaining,
-      plan:{code:'free', entitlements:{limits:{max_minutes_per_job:maxJobMinutes, max_files_per_job:3, max_document_upload_mb:25, max_media_upload_mb:100}, download_enabled:false}},
+      plan:{code:'free', entitlements:{limits:{max_minutes_per_job:maxJobMinutes, max_files_per_job:3, max_document_upload_mb:25,
+        max_media_upload_mb:100, ...(accountOcrPages == null ? {} : {max_ocr_pages:accountOcrPages})}, download_enabled:false}},
     }}}));
   await page.route(`${API}/jobs/${JOB_ID}`, route => route.fulfill(route.request().method() === 'OPTIONS'
     ? {status:204, headers:cors} : {headers:cors, json:job || {job_id:JOB_ID, status:'done', stage:'done', percent:100,
@@ -46,6 +49,102 @@ async function prepare(page, {remaining = 2.7, locale = 'en', job = null, jobRes
   await page.route(`${API}/jobs/${JOB_ID}/result`, route => route.fulfill(route.request().method() === 'OPTIONS'
     ? {status:204, headers:cors} : {headers:cors, json:jobResult}));
 }
+
+for (const ocr of [
+  {name:'guest scanned sample', registered:false, supportsOcr:true, expected:5},
+  {name:'registered scanned sample', supportsOcr:true, expected:5},
+  {name:'smaller account OCR limit', supportsOcr:true, accountOcrPages:2, expected:2},
+  {name:'zero account OCR limit', supportsOcr:true, accountOcrPages:0, expected:0},
+  {name:'missing account OCR limit', supportsOcr:true, accountOcrPages:null, expected:0},
+  {name:'disabled OCR capability', supportsOcr:false, expected:0},
+  {name:'legacy catalog without OCR metadata', supportsOcr:null, expected:0},
+]) {
+  test(`sample OCR guidance respects ${ocr.name}`, async ({page}) => {
+    await prepare(page, {sampleWords:2000, samplePages:10, remaining:120, ...ocr});
+    await openWorkspace(page);
+    await page.locator('#classicFiles').setInputFiles(pdf('scanned-chapter.pdf'));
+    await page.locator('#documentSample').check();
+    const help = page.locator('#documentSampleHelp');
+    if (ocr.expected) {
+      await expect(help).toContainText(`including up to ${ocr.expected} scanned pages within that section`);
+      await expect(help).not.toContainText('does not use OCR');
+    } else {
+      await expect(help).toContainText('does not use OCR');
+      await expect(help).not.toContainText('scanned pages');
+    }
+    await expect(help).not.toContainText('{');
+    expect(await page.evaluate(() => window.syntheticPdfUploadCount || 0)).toBe(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  });
+}
+
+test('unreadable sample recovery retains the source and focuses the starting page without retrying', async ({page}) => {
+  await prepare(page, {sampleWords:2000, samplePages:10, supportsOcr:true});
+  await openWorkspace(page);
+  await page.locator('#classicFiles').setInputFiles(pdf('scanned-chapter.pdf'));
+  await page.locator('#documentSample').check();
+  await page.locator('#documentStartPage').fill('7');
+  await page.locator('#analyzeButton').click();
+  await page.waitForFunction(() => Boolean(window.syntheticPdfUpload));
+  await finishUpload(page, {detail:{code:'LS-DOC-14', message:'Synthetic internal extraction detail'}}, 422);
+  await expect(page.locator('#errorMessage')).toContainText('Not enough readable text');
+  await expect(page.locator('#errorMessage')).not.toContainText('Synthetic');
+  await page.locator('[data-recovery="page"]').click();
+  await expect(page.locator('#documentStartPage')).toBeFocused();
+  await expect(page.locator('#documentStartPage')).toHaveValue('7');
+  await expect(page.locator('#documentSample')).toBeChecked();
+  await expect(page.locator('#classicFileList')).toContainText('scanned-chapter.pdf');
+  expect(await page.evaluate(() => window.syntheticPdfUploadCount)).toBe(1);
+});
+
+test('reader failure offers explicit replacement and preserves the selection if the picker is cancelled', async ({page}) => {
+  await prepare(page, {sampleWords:2000, samplePages:10, supportsOcr:true});
+  await openWorkspace(page);
+  await page.locator('#classicFiles').setInputFiles(pdf('original.pdf'));
+  await page.locator('#documentSample').check();
+  await page.locator('#documentStartPage').fill('7');
+  await page.locator('#analyzeButton').click();
+  await page.waitForFunction(() => Boolean(window.syntheticPdfUpload));
+  await finishUpload(page, {detail:{code:'LS-DOC-18', message:'Synthetic private PDF reader detail'}}, 422);
+  await expect(page.locator('#errorMessage')).toContainText('Export the file as a PDF again');
+  await expect(page.locator('#errorMessage')).not.toContainText('Synthetic');
+  await expect(page.locator('[data-recovery="page"]')).toHaveCount(0);
+  let chooserReady = page.waitForEvent('filechooser');
+  await page.locator('[data-recovery="file"]').click();
+  await (await chooserReady).setFiles([]);
+  await expect(page.locator('#classicFileList')).toContainText('original.pdf');
+  await expect(page.locator('#documentSample')).toBeChecked();
+  await expect(page.locator('#documentStartPage')).toHaveValue('7');
+  chooserReady = page.waitForEvent('filechooser');
+  await page.locator('[data-recovery="file"]').click();
+  await (await chooserReady).setFiles(pdf('clearer-copy.pdf'));
+  await expect(page.locator('#classicFileList .source-file-row')).toHaveCount(1);
+  await expect(page.locator('#classicFileList')).toContainText('clearer-copy.pdf');
+  await expect(page.locator('#classicFileList')).not.toContainText('original.pdf');
+  await expect(page.locator('#documentSample')).not.toBeChecked();
+  await expect(page.locator('#documentStartPage')).toHaveValue('1');
+  await expect(page.locator('#errorBox')).toBeHidden();
+  expect(await page.evaluate(() => window.syntheticPdfUploadCount)).toBe(1);
+});
+
+test('invalid replacement keeps the original sample selection without submitting it', async ({page}) => {
+  await prepare(page, {supportsOcr:true});
+  await openWorkspace(page);
+  await page.locator('#classicFiles').setInputFiles(pdf('original.pdf'));
+  await page.locator('#documentSample').check();
+  await page.locator('#documentStartPage').fill('7');
+  await page.locator('#analyzeButton').click();
+  await page.waitForFunction(() => Boolean(window.syntheticPdfUpload));
+  await finishUpload(page, {detail:{code:'LS-DOC-18', message:'Synthetic reader failure'}}, 422);
+  const chooserReady = page.waitForEvent('filechooser');
+  await page.locator('[data-recovery="file"]').click();
+  await (await chooserReady).setFiles({name:'wrong.txt', mimeType:'text/plain', buffer:Buffer.from('Synthetic selection only.')});
+  await expect(page.locator('#errorCode')).toContainText('LS-UPLOAD-01');
+  await expect(page.locator('#classicFileList')).toContainText('original.pdf');
+  await expect(page.locator('#documentSample')).toBeChecked();
+  await expect(page.locator('#documentStartPage')).toHaveValue('7');
+  expect(await page.evaluate(() => window.syntheticPdfUploadCount)).toBe(1);
+});
 
 async function openWorkspace(page, path = '/en/workspace.html') {
   await page.goto(path);
@@ -280,13 +379,21 @@ for (const partial of [false, true]) {
   });
 }
 
-test('Arabic sample controls remain readable without horizontal overflow', async ({page}) => {
-  await prepare(page, {locale:'ar'});
+test('Arabic scanned sample controls and reader recovery remain readable without horizontal overflow', async ({page}, testInfo) => {
+  await prepare(page, {locale:'ar', supportsOcr:true, sampleWords:2000, samplePages:10});
   await openWorkspace(page, '/ar/workspace.html');
   await page.locator('#classicFiles').setInputFiles(pdf('chapter.pdf'));
   await page.locator('#documentSample').check();
   await expect(page.locator('#documentSampleLabel')).toHaveText('إنشاء عينة قصيرة');
   await expect(page.locator('#documentSampleAllowance')).toContainText('كلمة');
+  await expect(page.locator('#documentSampleHelp')).toContainText('صفحات ممسوحة');
   await expect(page.locator('#documentSampleOption')).not.toContainText('Kısa örnek');
+  await expect(page.locator('#documentSampleHelp')).not.toContainText('{');
+  await page.locator('#analyzeButton').click();
+  await page.waitForFunction(() => Boolean(window.syntheticPdfUpload));
+  await finishUpload(page, {detail:{code:'LS-DOC-18', message:'Synthetic reader details'}}, 422);
+  await expect(page.locator('#errorMessage')).toContainText('أعد تصدير الملف');
+  await expect(page.locator('[data-recovery="file"]')).toHaveText('اختيار ملف PDF آخر');
+  if (testInfo.project.name.endsWith('light')) await page.locator('#errorBox').screenshot({path:testInfo.outputPath('arabic-pdf-recovery.jpg'), type:'jpeg', quality:75});
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });

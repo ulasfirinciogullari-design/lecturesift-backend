@@ -14,13 +14,13 @@ from lecturesift.billing_service import BillingError
 from lecturesift.errors import LectureSiftError
 
 
-def entitlement(remaining=60, per_job=30, pages=50):
+def entitlement(remaining=60, per_job=30, pages=50, ocr_pages=5):
     return {"remaining_minutes": remaining, "download_enabled": False,
             "plan": {"history_days": 1},
             "job_plan": {"entitlements": {"limits": {
                 "max_minutes_per_job": per_job, "max_document_pages": pages,
                 "max_files_per_job": 3, "max_media_upload_mb": 50,
-                "max_document_upload_mb": 25,
+                "max_document_upload_mb": 25, "max_ocr_pages": ocr_pages,
             }}}}
 
 
@@ -33,7 +33,7 @@ def entitlement(remaining=60, per_job=30, pages=50):
 ])
 def test_budget_comes_from_real_remaining_and_whole_minute_billing(remaining, per_job, trial, rate, expected):
     assert samples.sample_request(entitlement(remaining, per_job), 3, rate, trial) == {
-        "start_page": 3, "max_words": expected, "max_pages": 10,
+        "start_page": 3, "max_words": expected, "max_pages": 10, "max_ocr_pages": 5,
     }
 
 
@@ -47,6 +47,23 @@ def test_consumed_guest_or_fractional_allowance_cannot_start_sample():
     assert error.value.code == "LS-DOC-15"
 
 
+@pytest.mark.parametrize("plan_cap,server_cap,enabled,expected", [
+    (30, 150, True, 5), (2, 150, True, 2), (30, 3, True, 3),
+    (0, 150, True, 0), (5, 150, False, 0),
+])
+def test_sample_ocr_budget_respects_account_server_and_feature_limits(monkeypatch, plan_cap, server_cap, enabled, expected):
+    monkeypatch.setattr(config, "OCR_MAX_PAGES", server_cap)
+    monkeypatch.setattr(config, "OCR_ENABLED", enabled)
+    selection = samples.sample_request(entitlement(ocr_pages=plan_cap), 1, 200)
+    assert selection["max_ocr_pages"] == expected
+
+
+def test_missing_legacy_ocr_entitlement_cannot_grant_scanned_pages():
+    account = entitlement()
+    del account["job_plan"]["entitlements"]["limits"]["max_ocr_pages"]
+    assert samples.sample_request(account, 1, 200)["max_ocr_pages"] == 0
+
+
 @pytest.fixture
 def sample_client(monkeypatch, tmp_path):
     captured = []
@@ -55,6 +72,8 @@ def sample_client(monkeypatch, tmp_path):
     monkeypatch.setattr(api, "_require_ai_provider", lambda *args, **kw: None)
     monkeypatch.setattr(api, "WORK_DIR", tmp_path)
     monkeypatch.setattr(config, "DOCUMENT_SAMPLE_ENABLED", True)
+    monkeypatch.setattr(config, "OCR_ENABLED", True)
+    monkeypatch.setattr(config, "OCR_MAX_PAGES", 150)
     monkeypatch.setattr(rollout_service, "guest_trial_status", lambda _id: {"remaining_minutes": 2})
     def job_path(job_id):
         path = tmp_path / job_id
@@ -74,14 +93,16 @@ def sample_client(monkeypatch, tmp_path):
 def test_api_captures_only_server_budget_and_explicit_selection(sample_client):
     client, captured = sample_client
     response = client.post("/jobs", data={"document_sample": "true", "document_start_page": "3",
-        "max_words": "999999", "quiz_count": "0", "flashcard_count": "0"},
+        "max_words": "999999", "max_ocr_pages": "999999", "quiz_count": "0", "flashcard_count": "0"},
         files={"files": ("book.pdf", b"%PDF-synthetic-upload", "application/pdf")})
     assert response.status_code == 200, response.text
     advertised = client.get("/billing/plans").json()["document_sample"]
     assert advertised["max_words"] == 2000 and advertised["max_pages"] == 10
+    assert advertised["supports_ocr"] is True and advertised["native_text_only"] is False
+    assert advertised["max_ocr_pages"] == 5
     assert captured[0][2]["pdf_sample"] == {"start_page": 3,
         "max_words": min(advertised["max_words"], 2 * config.DOCUMENT_WORDS_PER_CREDIT_MINUTE),
-        "max_pages": advertised["max_pages"]}
+        "max_pages": advertised["max_pages"], "max_ocr_pages": 5}
 
 
 @pytest.mark.parametrize("filename,start,code", [
@@ -113,6 +134,19 @@ def test_unreleased_sample_is_rejected_and_catalog_does_not_advertise_it(sample_
     assert response.json()["detail"]["code"] == "LS-DOC-17"
     assert not captured
     assert client.get("/billing/plans").json()["document_sample"]["enabled"] is False
+
+
+def test_disabled_ocr_is_not_advertised_or_granted(sample_client, monkeypatch):
+    client, captured = sample_client
+    monkeypatch.setattr(config, "OCR_ENABLED", False)
+    capability = client.get("/billing/plans").json()["document_sample"]
+    assert capability["max_ocr_pages"] == 0
+    assert capability["supports_ocr"] is False and capability["native_text_only"] is True
+    response = client.post("/jobs", data={"document_sample": "true", "max_ocr_pages": "5",
+        "quiz_count": "0", "flashcard_count": "0"},
+        files={"files": ("book.pdf", b"%PDF-synthetic-upload", "application/pdf")})
+    assert response.status_code == 200
+    assert captured[0][2]["pdf_sample"]["max_ocr_pages"] == 0
 
 
 @pytest.mark.parametrize("malformed", [{}, False, "true"])

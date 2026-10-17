@@ -2,10 +2,12 @@
 
 import json
 import math
+import re
 from functools import lru_cache
 from pathlib import Path
 
 from .billing_service import BillingError
+from . import config
 from .config import PDF_SAMPLE_MAX_PAGES, PDF_SAMPLE_MAX_WORDS
 from .errors import LectureSiftError
 
@@ -26,7 +28,38 @@ def sample_request(entitlement: dict, start_page: int, words_per_minute: int,
     pages = min(PDF_SAMPLE_MAX_PAGES, int(limits["max_document_pages"]))
     if word_limit < 1 or pages < 1:
         raise BillingError("Kısa örnek için kullanım hakkın kalmadı. Hesabını veya planını kontrol et.")
-    return {"start_page": start_page, "max_words": word_limit, "max_pages": pages}
+    return {"start_page": start_page, "max_words": word_limit, "max_pages": pages,
+            "max_ocr_pages": min(ocr_sample_cap(), max(0, int(limits.get("max_ocr_pages", 0))))}
+
+
+def ocr_sample_cap() -> int:
+    """Advertise and enforce the same server OCR ceiling for short samples."""
+    return min(config.PDF_SAMPLE_MAX_OCR_PAGES, config.OCR_MAX_PAGES) if config.OCR_ENABLED else 0
+
+
+def failure_metadata(technical_message: object) -> dict:
+    """Expose only our finite diagnostic vocabulary, never raw exception text."""
+    if not isinstance(technical_message, str) or not technical_message.startswith("pdf_sample:"):
+        return {}
+    if len(technical_message) > 512:
+        return {}
+    try:
+        data = json.loads(technical_message.removeprefix("pdf_sample:"))
+    except ValueError:
+        return {}
+    reasons = {"no_readable_text", "native_reader_failed", "page_count_mismatch", "ocr_budget_exhausted"}
+    if not isinstance(data, dict) or not isinstance(data.get("reason"), str) or data["reason"] not in reasons:
+        return {}
+    result = {"reason": data["reason"]}
+    page = data.get("page")
+    if type(page) is int and 1 <= page <= config.MAX_DOCUMENT_PAGES:
+        result["page"] = page
+    # Class names are useful only for the native reader failure. All exception
+    # messages, paths, source text and arbitrary fields are deliberately absent.
+    kind = data.get("exception_type")
+    if data["reason"] == "native_reader_failed" and isinstance(kind, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,63}", kind):
+        result["exception_type"] = kind
+    return result
 
 
 def extraction_options(options: dict) -> dict:

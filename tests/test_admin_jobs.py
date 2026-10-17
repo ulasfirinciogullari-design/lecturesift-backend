@@ -119,6 +119,44 @@ def test_admin_error_explanation_never_falls_back_to_provider_diagnostics(public
     assert 'secret' not in json.dumps(item) and '/private/' not in json.dumps(item)
 
 
+def test_pdf_sample_diagnostics_expose_only_bounded_reason_page_and_exception_class(state):
+    client, store, user, path = state
+    diagnostic = 'pdf_sample:' + json.dumps({
+        'reason': 'native_reader_failed', 'page': 4, 'exception_type': 'PdfiumError',
+        'message': 'secret provider response /private/source.pdf', 'token': 'secret',
+    })
+    store.update('lesson-1', status='error', worker_state='rejected', error_code='LS-DOC-18',
+        error='The selected PDF section could not be read.', technical_error=diagnostic)
+    response = client.get('/billing/admin/jobs', headers=ADMIN)
+    assert response.status_code == 200
+    item, = response.json()['jobs']
+    assert item['document_sample_failure'] == {
+        'reason': 'native_reader_failed', 'page': 4, 'exception_type': 'PdfiumError',
+    }
+    assert 'secret' not in response.text and '/private/' not in response.text
+    assert 'technical_error' not in item
+    store.update('lesson-1', status='working', worker_state='processing')
+    assert 'document_sample_failure' not in store.admin_summary(store.metadata('lesson-1'))
+
+
+@pytest.mark.parametrize('diagnostic', [
+    'private failure text', 'pdf_sample:not-json', 'pdf_sample:[]',
+    'pdf_sample:{"reason":[]}', 'pdf_sample:{"reason":"private-secret"}',
+    'pdf_sample:' + 'x' * 513,
+])
+def test_pdf_sample_diagnostics_reject_unknown_or_malformed_details(diagnostic):
+    item = jobs.JobStore.admin_summary({'status':'error', 'error_code':'LS-DOC-14',
+        'error':'Try another section.', 'technical_error':diagnostic})
+    assert 'document_sample_failure' not in item
+
+
+def test_pdf_sample_diagnostics_drop_paths_and_invalid_page_numbers():
+    item = jobs.JobStore.admin_summary({'status':'error', 'error_code':'LS-DOC-18',
+        'technical_error':'pdf_sample:' + json.dumps({'reason':'native_reader_failed',
+            'page':True, 'exception_type':'/private/source.pdf'})})
+    assert item['document_sample_failure'] == {'reason':'native_reader_failed'}
+
+
 def test_inspection_and_manifest_download_require_admin_and_are_audited(state):
     client, store, user, path = state
     for endpoint in ('lesson-1', 'lesson-1/artifacts/notes.txt'):

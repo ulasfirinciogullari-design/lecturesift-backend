@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import re
@@ -34,6 +35,7 @@ from .config import (
     OCR_MIN_NATIVE_CHARACTERS,
     OCR_PARALLELISM,
     OCR_PAGE_TIMEOUT_SECONDS,
+    PDF_SAMPLE_MAX_OCR_PAGES,
     PDF_SAMPLE_MAX_PAGES,
     PDF_SAMPLE_MAX_WORDS,
 )
@@ -390,13 +392,28 @@ def _extract_pdf_native_pages(path: Path, page_count: int) -> tuple[list[str], s
         return [_normalize_text(page.extract_text() or "") for page in reader.pages], "pypdf"
 
 
-def _pdf_sample_error() -> LectureSiftError:
+def _pdf_sample_error(reason: str = "no_readable_text", page: int = 1,
+                      exception_type: str | None = None) -> LectureSiftError:
+    reader_failure = reason in {"native_reader_failed", "page_count_mismatch"}
+    diagnostic = {"reason": reason, "page": page}
+    if exception_type:
+        diagnostic["exception_type"] = exception_type
     return LectureSiftError(
-        "LS-DOC-14",
-        "Seçilen bölümde kısa deneme için okunabilir PDF metni bulunamadı. "
-        "Metin içeren başka bir başlangıç sayfası veya PDF seç. Bu denemede taranmış sayfalara OCR uygulanmaz.",
-        "Selected PDF sample has insufficient readable native text",
+        "LS-DOC-18" if reader_failure else "LS-DOC-14",
+        "PDF örneği güvenli biçimde okunamadı. Yeniden dene veya başka bir PDF seç."
+        if reader_failure else
+        "Seçilen bölümde okunabilir metin bulunamadı. Daha net bir PDF veya başka bir başlangıç sayfası seç.",
+        "pdf_sample:" + json.dumps(diagnostic, separators=(",", ":")),
         422,
+    )
+
+
+def _pdf_sample_ocr_limit(page: int) -> LectureSiftError:
+    return LectureSiftError(
+        "LS-OCR-02",
+        "Bu örnekteki taranmış sayfalar kullanılabilir OCR sınırını aşıyor. Başlangıç sayfasını değiştir veya daha kısa bir PDF seç.",
+        'pdf_sample:' + json.dumps({"reason": "ocr_budget_exhausted", "page": page}, separators=(",", ":")),
+        413,
     )
 
 
@@ -419,6 +436,8 @@ def _read_pdf_sample_page(
     A final word crossing a chunk boundary is kept only once it is complete.
     """
     char_count = text_page.count_chars()
+    if char_count == 0:
+        return "", False, 0, 0
     offset = 0
     raw = ""
     text = ""
@@ -453,7 +472,11 @@ def _read_pdf_sample_page(
     return selected, True, offset, len(text)
 
 
-def _extract_pdf_sample(path: Path, sample_options: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+def _extract_pdf_sample(
+    path: Path, sample_options: dict[str, Any], source_language: str = "auto", *,
+    enable_ocr: bool = True,
+    progress_callback: Callable[[int, int], None] | None = None,
+) -> tuple[str, dict[str, Any]]:
     start_page = sample_options.get("start_page", 1)
     if type(start_page) is not int or start_page < 1:
         raise LectureSiftError(
@@ -466,6 +489,10 @@ def _extract_pdf_sample(path: Path, sample_options: dict[str, Any]) -> tuple[str
             "LS-DOC-16", "Kısa PDF denemesi ayarları geçersiz. Dosyayı yeniden seçerek dene.",
             "Invalid PDF sample bounds", 400,
         )
+    ocr_limit = sample_options.get("max_ocr_pages", 0)
+    if type(ocr_limit) is not int or ocr_limit < 0:
+        raise LectureSiftError("LS-DOC-16", "Kısa PDF denemesi ayarları geçersiz.", "Invalid PDF sample OCR bound", 400)
+    ocr_limit = min(ocr_limit, PDF_SAMPLE_MAX_OCR_PAGES, OCR_MAX_PAGES) if OCR_ENABLED else 0
     max_pages = min(max_pages, _PDF_SAMPLE_MAX_PAGES)
     word_limit = min(word_limit, _PDF_SAMPLE_MAX_WORDS)
     with path.open("rb") as stream:
@@ -507,14 +534,20 @@ def _extract_pdf_sample(path: Path, sample_options: dict[str, Any]) -> tuple[str
         raise LectureSiftError("LS-DOC-13", "Belge metni güvenli işleme sınırını aşıyor.", "PDF sample character limit", 413)
     parts: list[str] = []
     clipped_page = False
+    ocr_pages = 0
+    native_text_pages = 0
+    ocr_language = ""
+    ocr_limit_hit = False
+    current_page = start_page
     try:
         import pypdfium2 as pdfium
 
         document = pdfium.PdfDocument(str(path))
         try:
             if len(document) != original_pages:
-                raise _pdf_sample_error()
+                raise _pdf_sample_error("page_count_mismatch", start_page)
             for page_index in range(start_page - 1, last_allowed_page):
+                current_page = page_index + 1
                 page = document[page_index]
                 try:
                     text_page = page.get_textpage()
@@ -526,15 +559,48 @@ def _extract_pdf_sample(path: Path, sample_options: dict[str, Any]) -> tuple[str
                         text_page.close()
                 finally:
                     page.close()
-                # A native title page belongs to the selected scope even if it
-                # is short. A blank/scanned page still fails closed: never skip
-                # it or silently move outside the selected page window.
-                if not _DOCUMENT_WORD_PATTERN.search(text):
-                    raise _pdf_sample_error()
+                native_words = bool(_DOCUMENT_WORD_PATTERN.search(text))
+                native_text = text
+                sparse_native = len(text) < OCR_MIN_NATIVE_CHARACTERS
+                needs_ocr = not native_words or (sparse_native and ocr_limit > 0)
+                if not needs_ocr:
+                    # Legacy native-only jobs keep short titles; new samples
+                    # also OCR sparse overlays such as a scanned page number.
+                    native_text_pages += int(native_words)
+                elif not clipped_page:
+                    # Unknown blank/scanned pages are never skipped. Preflight
+                    # marks them pending without rendering; final extraction
+                    # OCRs only these explicitly selected pages, sequentially.
+                    if ocr_pages >= ocr_limit:
+                        ocr_limit_hit = True
+                        break
+                    ocr_pages += 1
+                    if enable_ocr:
+                        _, ocr_text, language = _ocr_pdf_page(path, page_index, source_language)
+                        if language and not ocr_language:
+                            ocr_language = language
+
+                        class OcrTextPage:
+                            def count_chars(self):
+                                return len(ocr_text)
+
+                            def get_text_range(self, *, index, count):
+                                return ocr_text[index:index + count]
+
+                        text, clipped_page, ocr_characters, _ = _read_pdf_sample_page(
+                            OcrTextPage(), word_limit=remaining_words,
+                            character_budget=max(0, remaining_characters - read_characters),
+                        )
+                        read_characters += ocr_characters
+                        if len(native_text) > len(text):
+                            # A real title must not disappear when its render
+                            # yields no better OCR. Its page remains in scope.
+                            text = native_text
+                            native_text_pages += int(native_words)
+                        if progress_callback:
+                            progress_callback(ocr_pages, min(ocr_limit, last_allowed_page - start_page + 1))
                 parts.append(text)
                 remaining_words -= len(_DOCUMENT_WORD_PATTERN.findall(text))
-                # Reserve separators as well as PDFium reads, including readers
-                # that return more characters than their internal count.
                 remaining_characters -= max(read_characters, len(text)) + 2
                 if clipped_page or remaining_words <= 0 or remaining_characters <= 0:
                     break
@@ -543,12 +609,14 @@ def _extract_pdf_sample(path: Path, sample_options: dict[str, Any]) -> tuple[str
     except LectureSiftError:
         raise
     except Exception as exc:
-        # In particular, do not fall back to unbounded pypdf extraction or OCR.
-        raise _pdf_sample_error() from exc
-    # Judge readability across the extracted source, without counting the scope
-    # header or separators as evidence that a sparse document is usable.
-    if sum(len(part) for part in parts) < OCR_MIN_NATIVE_CHARACTERS:
-        raise _pdf_sample_error()
+        # Native-reader failures are distinct from legitimately empty scans.
+        # Never extract the whole source or render an unselected page as fallback.
+        raise _pdf_sample_error("native_reader_failed", current_page, type(exc).__name__) from exc
+    ocr_pending = bool(ocr_pages and not enable_ocr)
+    if not parts or (not ocr_pending and sum(len(part) for part in parts) < OCR_MIN_NATIVE_CHARACTERS):
+        if ocr_limit_hit:
+            raise _pdf_sample_ocr_limit(current_page)
+        raise _pdf_sample_error("no_readable_text", current_page)
     end_page = start_page + len(parts) - 1
     sample = {
         "start_page": start_page,
@@ -562,11 +630,11 @@ def _extract_pdf_sample(path: Path, sample_options: dict[str, Any]) -> tuple[str
     return combined, {
         "pages": len(parts),
         "original_pages": original_pages,
-        "native_text_pages": len(parts),
-        "ocr_pages": 0,
-        "ocr_used": False,
-        "ocr_required": False,
-        "ocr_language": "",
+        "native_text_pages": native_text_pages,
+        "ocr_pages": ocr_pages,
+        "ocr_used": bool(enable_ocr and ocr_pages),
+        "ocr_required": ocr_pending,
+        "ocr_language": ocr_language,
         "text_engine": "pdfium",
         "partial_source": True,
         "sample": sample,
@@ -1039,7 +1107,10 @@ def extract_documents(
         if suffix not in DOCUMENT_EXTENSIONS:
             raise LectureSiftError("LS-DOC-11", "Bu belge biçimi desteklenmiyor.", f"Unsupported document: {suffix}", 400)
         if pdf_sample is not None:
-            text, details = _extract_pdf_sample(path, pdf_sample)
+            text, details = _extract_pdf_sample(
+                path, pdf_sample, source_language, enable_ocr=enable_ocr,
+                progress_callback=progress_callback,
+            )
         elif suffix == ".pdf":
             progress_offset = completed_ocr_units
             text, details = _extract_pdf(
@@ -1081,6 +1152,8 @@ def extract_documents(
         else:
             text, details = _extract_text(path)
         ocr_pending = bool(details.get("ocr_required"))
+        if pdf_sample is not None and ocr_pending and not allow_ocr_pending:
+            raise _pdf_sample_error("no_readable_text", int(details["sample"]["start_page"]))
         if not text.strip() and not (allow_ocr_pending and ocr_pending):
             raise LectureSiftError(
                 "LS-DOC-12",
@@ -1108,6 +1181,10 @@ def extract_documents(
     )
     estimated_ocr_words = pending_ocr_pages * OCR_ESTIMATED_WORDS_PER_PAGE
     words = extracted_words + estimated_ocr_words
+    if pdf_sample is not None and pending_ocr_pages:
+        # OCR can fill the whole bounded sample. Reserve the trusted maximum,
+        # never a per-page guess that underestimates or exceeds that sample.
+        words = int(metadata[0]["sample"]["word_limit"])
     credit_minutes = max(1, math.ceil(words / DOCUMENT_WORDS_PER_CREDIT_MINUTE))
     result = {
         "text": combined,
