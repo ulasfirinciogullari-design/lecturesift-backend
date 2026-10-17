@@ -725,6 +725,9 @@ def health() -> dict:
 
 @app.get("/billing/plans")
 def billing_plans(currency: str = "TRY") -> dict:
+    from .document_samples import ocr_sample_cap
+
+    sample_ocr_pages = ocr_sample_cap()
     return {
         **public_catalog(currency),
         "document_words_per_credit_minute": config.DOCUMENT_WORDS_PER_CREDIT_MINUTE,
@@ -732,7 +735,9 @@ def billing_plans(currency: str = "TRY") -> dict:
         "document_sample": {"enabled": config.DOCUMENT_SAMPLE_ENABLED,
                             "max_words": config.PDF_SAMPLE_MAX_WORDS,
                             "max_pages": config.PDF_SAMPLE_MAX_PAGES,
-                            "formats": ["pdf"], "native_text_only": True},
+                            "max_ocr_pages": sample_ocr_pages,
+                            "formats": ["pdf"], "native_text_only": sample_ocr_pages == 0,
+                            "supports_ocr": sample_ocr_pages > 0},
     }
 
 

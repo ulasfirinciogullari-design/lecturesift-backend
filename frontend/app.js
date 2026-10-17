@@ -564,6 +564,12 @@ function documentSampleLimits() {
   return limits?.enabled === true && [limits.max_words, limits.max_pages].every(value => Number.isSafeInteger(value) && value > 0)
     ? limits : null;
 }
+function documentSampleOcrLimit(limits) {
+  if (limits?.supports_ocr !== true || !Number.isSafeInteger(limits.max_ocr_pages) || limits.max_ocr_pages < 1) return 0;
+  const accountLimit = billingAccount ? activeSourceLimits().max_ocr_pages : limits.max_ocr_pages;
+  return Number.isSafeInteger(accountLimit) && accountLimit >= 0
+    ? Math.min(limits.max_ocr_pages, limits.max_pages, accountLimit) : 0;
+}
 function sampleEligibleFile() {
   return documentSampleLimits() && DEFAULT_JOB_TYPE === "study_pack"
     && classicVideos.length === 1 && fileExtension(classicVideos[0]) === "pdf" ? classicVideos[0] : null;
@@ -588,8 +594,11 @@ function updateDocumentSample() {
   const limits = documentSampleLimits();
   if (file && limits) {
     const number = value => value.toLocaleString(window.LectureSiftI18n?.locale || currentLanguage);
-    $("documentSampleHelp").textContent = documentQuotaText("document.sampleHelp", "Seçtiğin sayfadan başlayarak en fazla {pages} sayfa ve {words} kelime işlenir. Kalan kullanım hakkın daha azsa örnek buna göre kısalır. Yalnızca seçilebilir metin içeren PDF’ler desteklenir; örnekte OCR kullanılmaz.", {
-      pages:number(limits.max_pages), words:number(limits.max_words),
+    const ocrPages = documentSampleOcrLimit(limits);
+    $("documentSampleHelp").textContent = documentQuotaText(ocrPages ? "document.sampleHelpOcr" : "document.sampleHelp", ocrPages
+      ? "Seçtiğin sayfadan başlayarak en fazla {pages} sayfa ve {words} kelime işlenir; bu bölümde en fazla {ocr} taranmış sayfa okunabilir. Kalan kullanım hakkına göre örnek daha erken bitebilir. Sonuç yalnızca okunan bölümü kapsar."
+      : "Seçtiğin sayfadan başlayarak en fazla {pages} sayfa ve {words} kelime işlenir. Kalan kullanım hakkın daha azsa örnek buna göre kısalır. Yalnızca seçilebilir metin içeren PDF’ler desteklenir; örnekte OCR kullanılmaz.", {
+      pages:number(limits.max_pages), words:number(limits.max_words), ocr:number(ocrPages),
     });
   }
   const {rate, available} = documentQuotaContext();
@@ -958,7 +967,8 @@ function setJobBusy(busy) {
 
 function showError(message, code = "LS-SYSTEM-01", {stopProcessing = true} = {}) {
   const known = ERRORS.tr[code];
-  const centralKey = ({"LS-URL-02":"error.url02","LS-URL-03":"error.url03","LS-URL-05":"error.url05","LS-URL-06":"error.url05","LS-AI-03":"error.ai03","LS-AI-04":"error.ai04","LS-AI-05":"error.ai05","LS-AI-06":"error.ai06","LS-AI-07":"error.ai07","LS-AI-08":"error.ai08","LS-DOC-14":"error.doc14","LS-DOC-15":"error.doc15","LS-DOC-16":"error.doc16","LS-DOC-17":"error.doc17"})[code];
+  const sampleOcrLimitError = code === "LS-OCR-02" && sampleSelected();
+  const centralKey = sampleOcrLimitError ? "error.sampleOcrLimit" : ({"LS-URL-02":"error.url02","LS-URL-03":"error.url03","LS-URL-05":"error.url05","LS-URL-06":"error.url05","LS-AI-03":"error.ai03","LS-AI-04":"error.ai04","LS-AI-05":"error.ai05","LS-AI-06":"error.ai06","LS-AI-07":"error.ai07","LS-AI-08":"error.ai08","LS-DOC-14":"error.doc14","LS-DOC-15":"error.doc15","LS-DOC-16":"error.doc16","LS-DOC-17":"error.doc17","LS-DOC-18":"error.doc18"})[code];
   const translated = code === "LS-UPLOAD-02" && message
     ? message
     : centralKey
@@ -970,6 +980,48 @@ function showError(message, code = "LS-SYSTEM-01", {stopProcessing = true} = {})
   $("errorCode").textContent = `${window.LectureSiftI18n?.exact("Hata kodu") || "Hata kodu"}: ${code}`; $("errorBox").hidden = false;
   if (stopProcessing) { setJobBusy(false); clearTimeout(pollHandle); clearInterval(timerHandle); }
   $("quotaRecoveryActions")?.remove();
+  $("documentRecoveryActions")?.remove();
+  if (sampleOcrLimitError || ["LS-DOC-14", "LS-DOC-15", "LS-DOC-18"].includes(code)) {
+    const actions = document.createElement("div");
+    actions.id = "documentRecoveryActions";
+    actions.className = "quota-recovery-actions";
+    if (code !== "LS-DOC-18" && sampleSelected()) {
+      const changePage = document.createElement("button");
+      changePage.type = "button";
+      changePage.dataset.recovery = "page";
+      changePage.textContent = documentQuotaText("document.changeStartPage", "Başlangıç sayfasını değiştir");
+      changePage.onclick = () => {
+        if (jobBusy || !sampleSelected()) return;
+        $("errorBox").hidden = true;
+        $("documentStartPage").scrollIntoView({block:"center", behavior:"smooth"});
+        $("documentStartPage").focus({preventScroll:true});
+      };
+      actions.append(changePage);
+    }
+    const replacement = document.createElement("input");
+    replacement.type = "file";
+    replacement.accept = ".pdf,application/pdf";
+    replacement.hidden = true;
+    replacement.onchange = () => {
+      const file = replacement.files?.[0];
+      if (jobBusy || !file) return;
+      if (fileExtension(file) !== "pdf") { showError("Bu dosya biçimi desteklenmiyor.", "LS-UPLOAD-01"); return; }
+      const maxMb = Number(activeSourceLimits().max_document_upload_mb || DEFAULT_SOURCE_LIMITS.max_document_upload_mb);
+      if (file.size > maxMb * 1024 * 1024) { showError(uploadLimitMessage(true, maxMb), "LS-UPLOAD-02"); return; }
+      classicVideos.splice(0, classicVideos.length, file);
+      renderFileList("classic");
+      configureProgressProfile(null, true);
+      $("errorBox").hidden = true;
+      $("classicDropZone").scrollIntoView({block:"center", behavior:"smooth"});
+    };
+    const chooseFile = document.createElement("button");
+    chooseFile.type = "button";
+    chooseFile.dataset.recovery = "file";
+    chooseFile.textContent = documentQuotaText("document.chooseAnotherPdf", "Başka PDF seç");
+    chooseFile.onclick = () => { if (!jobBusy) replacement.click(); };
+    actions.append(chooseFile, replacement);
+    $("errorCode").insertAdjacentElement("afterend", actions);
+  }
   if (code === "LS-BILL-10") {
     const actions = document.createElement("div");
     actions.id = "quotaRecoveryActions";

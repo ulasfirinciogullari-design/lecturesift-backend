@@ -486,7 +486,7 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         expected_theme_version = "17"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
         assert "/theme.js?v=12" in content, page.name
-        expected_i18n_version = "55"
+        expected_i18n_version = "56"
         assert f"i18n.js?v={expected_i18n_version}" in content, page.name
         assert "page-i18n.js?v=11" in content, page.name
 
@@ -921,7 +921,7 @@ def test_admin_growth_reads_and_escapes_advertising_management_status():
     catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
 
     assert 'id="adminGrowthStatus" class="admin-growth-grid" aria-live="polite"' in admin
-    assert 'src="/admin.js?v=30"' in admin and 'src="/i18n.js?v=55"' in admin
+    assert 'src="/admin.js?v=30"' in admin and 'src="/i18n.js?v=56"' in admin
     assert '"/billing/admin/advertising-readiness"' in admin_script
     assert "renderAdminAdSenseSummary" in admin_script
     assert 'id="adminAdSenseSummary"' in admin
@@ -1572,7 +1572,7 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=40"' in index
+    assert 'src="./app.js?v=41"' in index
     assert 'src="/rollout.js?v=14"' in index
     assert '$("plans").scrollIntoView' not in app
 

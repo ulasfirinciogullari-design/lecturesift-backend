@@ -470,6 +470,12 @@ class JobStore:
                 message for key in ("error", "public_error")
                 if isinstance(message := data.get(key), str) and message.strip()
             ), None)
+            if item.get("error_code") in {"LS-DOC-14", "LS-DOC-18", "LS-OCR-02"}:
+                from .document_samples import failure_metadata
+
+                diagnostic = failure_metadata(data.get("technical_error"))
+                if diagnostic:
+                    item["document_sample_failure"] = diagnostic
         else:
             # Recovery can retain an earlier failure in persisted metadata.
             # Keep that history intact without presenting it as a current
