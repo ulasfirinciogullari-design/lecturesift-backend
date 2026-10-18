@@ -1,12 +1,11 @@
 [Unit]
-Description=Publish LectureSift Instagram content and answer comments and DMs
+Description=Publish LectureSift Instagram content daily
 
 [Timer]
-# Every 15 minutes. Publishing is idempotent per day and slot (Reel from 11:00, carousel from
-# 19:00 Europe/Istanbul), so most runs only answer new comments and DMs.
-OnCalendar=*-*-* *:00/15:00
+# 11:00 Europe/Istanbul (UTC+03 year-round).
+OnCalendar=*-*-* 08:00:00 UTC
 Persistent=true
-RandomizedDelaySec=60
+RandomizedDelaySec=300
 AccuracySec=1min
 
 [Install]

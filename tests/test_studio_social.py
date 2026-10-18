@@ -66,10 +66,12 @@ def test_schedule_publishes_reel_then_carousel(monkeypatch):
     calls, rows = [], {}
     monkeypatch.setattr(studio, "INSTAGRAM_DAILY_AUTOMATION_ENABLED", True)
     monkeypatch.setattr(studio, "_row", lambda day: rows.get(day))
+    monkeypatch.setattr(studio, "INSTAGRAM_REEL_HOUR", 11)
+    monkeypatch.setattr(studio, "INSTAGRAM_CAROUSEL_HOUR", 19)
 
     def reel(day):
         calls.append("reel")
-        rows[day] = {"reel_media_id": "1"}
+        rows[day] = {**rows.get(day, {}), "reel_media_id": "1"}
         return {"status": "published"}
 
     def carousel(day):

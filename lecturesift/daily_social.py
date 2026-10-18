@@ -654,14 +654,18 @@ def publish_daily_post(day: date | None = None) -> dict:
 def main() -> int:
     """The scheduled Instagram job: publish what is due, then answer comments and DMs.
 
-    Publishing is idempotent per day and slot, so the timer can run this often; most runs then
+    Publishing is idempotent per day and slot, so the cron runs this every 15 minutes; most runs
     only answer messages. A publishing failure does not stop the replies, and vice versa.
     """
-    from .config import INSTAGRAM_REEL_HOUR, INSTAGRAM_REPLIES_ENABLED, INSTAGRAM_STUDIO_ENABLED
+    from .config import (
+        ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, INSTAGRAM_REEL_HOUR, INSTAGRAM_REPLIES_ENABLED,
+        INSTAGRAM_STUDIO_ENABLED,
+    )
 
     failed = False
     try:
-        if INSTAGRAM_STUDIO_ENABLED:
+        # Without an ElevenLabs voice the studio cannot narrate, so the legacy Reel keeps the day covered.
+        if INSTAGRAM_STUDIO_ENABLED and ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID:
             from .studio_social import run_scheduled
             print(json.dumps(run_scheduled(), ensure_ascii=False))
         elif datetime.now(ZoneInfo("Europe/Istanbul")).hour >= INSTAGRAM_REEL_HOUR:

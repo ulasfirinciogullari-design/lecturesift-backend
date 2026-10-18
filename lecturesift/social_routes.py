@@ -159,11 +159,12 @@ def install_social_routes(app: FastAPI) -> None:
         selected_day = _parse_day(day) if day else date.today()
         marker = daily_marker(selected_day)
         generated_marker = f"LectureSift · reel · {selected_day.isoformat()}"
+        studio_marker = f"LectureSift · studio-reel · {selected_day.isoformat()}"
         try:
             _account, recent = _instagram_snapshot()
             completed = completed_indices(recent)
             marker_present = any(
-                marker in (item.get("caption") or "") or generated_marker in (item.get("caption") or "")
+                any(m in (item.get("caption") or "") for m in (marker, generated_marker, studio_marker))
                 for item in recent
             )
         except InstagramConfigurationError as exc:

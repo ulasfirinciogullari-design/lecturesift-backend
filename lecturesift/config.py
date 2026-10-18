@@ -218,8 +218,8 @@ INSTAGRAM_DAILY_MEDIA_TYPE = os.getenv("INSTAGRAM_DAILY_MEDIA_TYPE", "MIXED").st
 # enabled and ElevenLabs is configured. Replies answer comments and DMs on the official account.
 INSTAGRAM_STUDIO_ENABLED = os.getenv("INSTAGRAM_STUDIO_ENABLED", "false").lower() == "true"
 INSTAGRAM_REPLIES_ENABLED = os.getenv("INSTAGRAM_REPLIES_ENABLED", "false").lower() == "true"
-INSTAGRAM_REEL_HOUR = int(os.getenv("INSTAGRAM_REEL_HOUR", "11"))
-INSTAGRAM_CAROUSEL_HOUR = int(os.getenv("INSTAGRAM_CAROUSEL_HOUR", "19"))
+INSTAGRAM_REEL_HOUR = int(os.getenv("INSTAGRAM_REEL_HOUR", "20"))
+INSTAGRAM_CAROUSEL_HOUR = int(os.getenv("INSTAGRAM_CAROUSEL_HOUR", "13"))
 INSTAGRAM_REPLIES_DAILY_LIMIT = int(os.getenv("INSTAGRAM_REPLIES_DAILY_LIMIT", "120"))
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
 ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "")
