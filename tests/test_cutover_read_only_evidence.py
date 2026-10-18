@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 import importlib.util
 import json
 import os
 from pathlib import Path
 import re
 import sys
+from urllib.parse import parse_qs
 
 import pytest
 
@@ -98,51 +100,110 @@ def _render_cron(**updates):
     return service
 
 
-def test_render_executor_stop_proof_uses_only_four_exact_gets_and_is_stable():
+CRON_ID = "crn-" + "b" * 20
+NOW = datetime(2026, 10, 19, 18, 0, 5, tzinfo=timezone.utc)
+
+
+def _cron_events(event_type, run_numbers, **event_updates):
+    items = []
+    for index, number in enumerate(run_numbers):
+        event = {
+            "id": f"evt-{index:020d}",
+            "serviceId": CRON_ID,
+            "timestamp": "2026-10-19T17:45:02Z",
+            "type": event_type,
+            "details": {"cronJobRunId": f"{CRON_ID}-{number}"},
+        }
+        if event_type == "cron_job_run_ended":
+            event["details"]["status"] = "successful"
+        event.update(event_updates)
+        items.append({"event": event, "cursor": f"cursor-{index}"})
+    return items
+
+
+def _stopped_responses(
+    *,
+    service=None,
+    instances=(),
+    cron=None,
+    started=None,
+    ended=None,
+):
+    return [
+        FakeResponse(service if service is not None else _render_service()),
+        FakeResponse(list(instances)),
+        FakeResponse(cron if cron is not None else _render_cron()),
+        FakeResponse(
+            started
+            if started is not None
+            else _cron_events("cron_job_run_started", [29872650, 29872665])
+        ),
+        FakeResponse(
+            ended
+            if ended is not None
+            else _cron_events("cron_job_run_ended", [29872635, 29872650, 29872665])
+        ),
+    ]
+
+
+def _digest(responses, *, clock=lambda: NOW):
+    connection = FakeConnection(responses)
+    return render_stop.worker_stop_digest(
+        _render_control(),
+        connection_factory=lambda *_args, **_kwargs: connection,
+        clock=clock,
+    )
+
+
+def test_render_executor_stop_proof_uses_only_five_exact_gets_and_is_stable():
     connections = []
 
     def factory(host, port, *, context, timeout):
         assert (host, port, timeout) == ("api.render.com", 443, 15)
         assert context is not None
-        connection = FakeConnection(
-            [
-                FakeResponse(_render_service()),
-                FakeResponse([]),
-                FakeResponse(_render_cron()),
-                FakeResponse([]),
-            ]
-        )
+        connection = FakeConnection(_stopped_responses())
         connections.append(connection)
         return connection
 
-    first = render_stop.worker_stop_digest(_render_control(), connection_factory=factory)
+    first = render_stop.worker_stop_digest(
+        _render_control(), connection_factory=factory, clock=lambda: NOW
+    )
     assert len(first) == 64
     connection = connections[0]
-    assert [item[:2] for item in connection.requests] == [
-        ("GET", "/v1/services/srv-" + "a" * 20),
-        ("GET", "/v1/services/srv-" + "a" * 20 + "/instances"),
-        ("GET", "/v1/services/crn-" + "b" * 20),
-        ("GET", "/v1/services/crn-" + "b" * 20 + "/instances"),
+    paths = [item[1] for item in connection.requests]
+    assert all(item[0] == "GET" for item in connection.requests)
+    assert paths[:3] == [
+        "/v1/services/srv-" + "a" * 20,
+        "/v1/services/srv-" + "a" * 20 + "/instances",
+        f"/v1/services/{CRON_ID}",
     ]
+    # Render answers HTTP 400 for a cron job's instance list, so it is never asked.
+    assert not any(path.startswith(f"/v1/services/{CRON_ID}/instances") for path in paths)
+    queried_types = []
+    for path in paths[3:]:
+        route, query = path.split("?", 1)
+        assert route == f"/v1/services/{CRON_ID}/events"
+        params = parse_qs(query, strict_parsing=True)
+        assert params["startTime"] == ["2026-10-19T05:00:05Z"]
+        assert params["limit"] == ["100"]
+        assert set(params) == {"type", "startTime", "limit"}
+        queried_types.extend(params["type"])
+    assert queried_types == ["cron_job_run_started", "cron_job_run_ended"]
     assert all(
         item[2]["Authorization"] == "Bearer " + _render_control()["RENDER_API_TOKEN"]
         for item in connection.requests
     )
     assert connection.closed is True
 
-    def reordered_factory(*_args, **_kwargs):
-        return FakeConnection(
-            [
-                FakeResponse(_render_service(suspenders=["billing", "user"], extra="ignored")),
-                FakeResponse([]),
-                FakeResponse(_render_cron(extra="ignored")),
-                FakeResponse([]),
-            ]
-        )
-
-    assert render_stop.worker_stop_digest(
-        _render_control(), connection_factory=reordered_factory
-    ) == first
+    # The proof is re-taken at every cutover step while the window moves on:
+    # older finished runs drop out of it without changing the digest.
+    later = _stopped_responses(
+        service=_render_service(suspenders=["billing", "user"], extra="ignored"),
+        cron=_render_cron(extra="ignored"),
+        started=[],
+        ended=[],
+    )
+    assert _digest(later, clock=lambda: NOW + timedelta(hours=2)) == first
 
 
 @pytest.mark.parametrize(
@@ -157,42 +218,55 @@ def test_render_executor_stop_proof_uses_only_four_exact_gets_and_is_stable():
 def test_render_stop_proof_fails_closed_on_wrong_identity_state_or_instances(
     service, instances
 ):
-    connection = FakeConnection(
-        [
-            FakeResponse(service),
-            FakeResponse(instances),
-            FakeResponse(_render_cron()),
-            FakeResponse([]),
-        ]
-    )
     with pytest.raises(render_stop.StopEvidenceError):
-        render_stop.worker_stop_digest(
-            _render_control(), connection_factory=lambda *_args, **_kwargs: connection
-        )
+        _digest(_stopped_responses(service=service, instances=instances))
 
 
 @pytest.mark.parametrize(
-    "cron,instances",
+    "cron",
     [
-        (_render_cron(suspended="not_suspended"), []),
-        (_render_cron(type="background_worker"), []),
-        (_render_cron(name="another-cron"), []),
-        (_render_cron(), [{"id": "ins-active"}]),
+        _render_cron(suspended="not_suspended"),
+        _render_cron(type="background_worker"),
+        _render_cron(name="another-cron"),
     ],
 )
-def test_render_stop_proof_fails_closed_when_instagram_cron_can_run(cron, instances):
-    connection = FakeConnection(
-        [
-            FakeResponse(_render_service()),
-            FakeResponse([]),
-            FakeResponse(cron),
-            FakeResponse(instances),
-        ]
-    )
+def test_render_stop_proof_fails_closed_when_instagram_cron_can_run(cron):
     with pytest.raises(render_stop.StopEvidenceError):
-        render_stop.worker_stop_digest(
-            _render_control(), connection_factory=lambda *_args, **_kwargs: connection
-        )
+        _digest(_stopped_responses(cron=cron))
+
+
+def test_render_stop_proof_fails_closed_while_a_cron_run_is_in_progress():
+    responses = _stopped_responses(
+        started=_cron_events("cron_job_run_started", [29872665, 29872680]),
+        ended=_cron_events("cron_job_run_ended", [29872665]),
+    )
+    with pytest.raises(render_stop.StopEvidenceError, match="run in progress"):
+        _digest(responses)
+
+
+def test_render_stop_proof_fails_closed_when_cron_events_are_unavailable():
+    responses = _stopped_responses()
+    responses[3] = FakeResponse({"message": "invalid request"}, status=400)
+    with pytest.raises(render_stop.StopEvidenceError, match="HTTP 400"):
+        _digest(responses)
+
+
+@pytest.mark.parametrize(
+    "started",
+    [
+        _cron_events("cron_job_run_started", [1], serviceId="crn-" + "c" * 20),
+        _cron_events("cron_job_run_started", [1], type="cron_job_run_ended"),
+        _cron_events("cron_job_run_started", [1], id="evt-short"),
+        _cron_events("cron_job_run_started", [1, 1]),
+        [{"event": _cron_events("cron_job_run_started", [1])[0]["event"]}],
+        [_cron_events("cron_job_run_started", [1])[0]["event"]],
+        {"events": []},
+        _cron_events("cron_job_run_started", range(100)),
+    ],
+)
+def test_render_stop_proof_rejects_inexact_or_truncated_cron_events(started):
+    with pytest.raises(render_stop.StopEvidenceError):
+        _digest(_stopped_responses(started=started))
 
 
 def test_render_stop_parser_is_exact_and_token_never_enters_errors():
@@ -223,18 +297,8 @@ def test_render_stop_parser_is_exact_and_token_never_enters_errors():
 
 def test_render_stop_rejects_duplicate_json_without_echoing_body():
     secret_body = b'{"id":"one","id":"secret-value"}'
-    connection = FakeConnection(
-        [
-            FakeResponse(secret_body),
-            FakeResponse([]),
-            FakeResponse(_render_cron()),
-            FakeResponse([]),
-        ]
-    )
     with pytest.raises(render_stop.StopEvidenceError) as exc:
-        render_stop.worker_stop_digest(
-            _render_control(), connection_factory=lambda *_args, **_kwargs: connection
-        )
+        _digest(_stopped_responses(service=secret_body))
     assert "secret-value" not in str(exc.value)
 
 

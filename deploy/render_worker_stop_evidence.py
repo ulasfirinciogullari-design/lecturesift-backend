@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """Produce a stable, GET-only proof that Render source executors are suspended.
 
+The worker is proven idle by its empty instance list.  Render has no instance
+list for cron jobs (that endpoint answers HTTP 400), so the Instagram cron is
+proven idle by its run events: every run started in the lookback window must
+also have ended.
+
 The Render API token is read from one fixed root-only control file.  The token
 is never included in output, diagnostics, or the resulting digest.
 """
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 import hashlib
 import http.client
 import json
@@ -17,6 +23,7 @@ import ssl
 import stat
 import sys
 from typing import Callable, Final
+from urllib.parse import urlencode
 
 
 CONTROL_FILE: Final = Path("/root/.lecturesift-render-cutover-control.env")
@@ -26,13 +33,19 @@ API_HOST: Final = "api.render.com"
 API_PORT: Final = 443
 MAX_CONTROL_BYTES: Final = 16 * 1024
 MAX_RESPONSE_BYTES: Final = 1024 * 1024
-SCHEMA: Final = "lecturesift-render-source-executors-stop-v2"
+SCHEMA: Final = "lecturesift-render-source-executors-stop-v3"
+# Render ends a cron job run after at most 12 hours, so a 13-hour window holds
+# the start event of every run that could still be active.
+CRON_RUN_LOOKBACK: Final = timedelta(hours=13)
+CRON_EVENT_PAGE_LIMIT: Final = 100
 
 _TOKEN = re.compile(r"[A-Za-z0-9._~-]{20,512}")
 _SERVICE_ID = re.compile(r"srv-[a-z0-9]{16,40}")
 _CRON_SERVICE_ID = re.compile(r"crn-[a-z0-9]{16,40}")
 _SERVICE_NAME = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9._ -]{0,126}[A-Za-z0-9])?")
 _OWNER_ID = re.compile(r"[A-Za-z][A-Za-z0-9_-]{2,127}")
+_EVENT_ID = re.compile(r"evt-[0-9a-z]{20}")
+_CRON_RUN_ID = re.compile(r"[A-Za-z0-9_-]{1,128}")
 _ALLOWED_SUSPENDERS: Final = {
     "admin",
     "billing",
@@ -192,41 +205,94 @@ def _get_json(connection: http.client.HTTPSConnection, path: str, token: str) ->
     return _strict_json(data)
 
 
+def _cron_run_ids(events: object, *, cron_id: str, event_type: str) -> set[str]:
+    if not isinstance(events, list):
+        raise StopEvidenceError("a Render cron run event response is not a list")
+    if len(events) >= CRON_EVENT_PAGE_LIMIT:
+        raise StopEvidenceError(
+            "the Render cron run event window is too full to prove that no run is active"
+        )
+    run_ids: set[str] = set()
+    for item in events:
+        event = item.get("event") if isinstance(item, dict) else None
+        details = event.get("details") if isinstance(event, dict) else None
+        run_id = details.get("cronJobRunId") if isinstance(details, dict) else None
+        event_id = event.get("id") if isinstance(event, dict) else None
+        if (
+            not isinstance(item.get("cursor"), str)
+            or not isinstance(event_id, str)
+            or _EVENT_ID.fullmatch(event_id) is None
+            or event.get("serviceId") != cron_id
+            or event.get("type") != event_type
+            or not isinstance(event.get("timestamp"), str)
+            or not isinstance(run_id, str)
+            or _CRON_RUN_ID.fullmatch(run_id) is None
+            or run_id in run_ids
+        ):
+            raise StopEvidenceError("a Render cron run event is not exact")
+        run_ids.add(run_id)
+    return run_ids
+
+
 def worker_stop_digest(
     control: dict[str, str],
     *,
     connection_factory: Callable[..., http.client.HTTPSConnection] = http.client.HTTPSConnection,
+    clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
 ) -> str:
     token = control["RENDER_API_TOKEN"]
+    worker = {
+        "id": control["RENDER_WORKER_SERVICE_ID"],
+        "name": control["RENDER_WORKER_SERVICE_NAME"],
+        "type": "background_worker",
+    }
+    cron = {
+        "id": control["RENDER_INSTAGRAM_CRON_SERVICE_ID"],
+        "name": control["RENDER_INSTAGRAM_CRON_SERVICE_NAME"],
+        "type": "cron_job",
+    }
+    window_start = (clock() - CRON_RUN_LOOKBACK).astimezone(timezone.utc)
     context = ssl.create_default_context()
     connection = connection_factory(API_HOST, API_PORT, context=context, timeout=15)
     try:
-        observed: list[tuple[dict[str, str], object, object]] = []
-        for service_id_key, service_name_key, service_type in (
-            ("RENDER_WORKER_SERVICE_ID", "RENDER_WORKER_SERVICE_NAME", "background_worker"),
-            (
-                "RENDER_INSTAGRAM_CRON_SERVICE_ID",
-                "RENDER_INSTAGRAM_CRON_SERVICE_NAME",
-                "cron_job",
-            ),
-        ):
-            identity = {
-                "id": control[service_id_key],
-                "name": control[service_name_key],
-                "type": service_type,
-            }
-            service = _get_json(connection, f"/v1/services/{identity['id']}", token)
-            instances = _get_json(
-                connection, f"/v1/services/{identity['id']}/instances", token
+        worker_service = _get_json(connection, f"/v1/services/{worker['id']}", token)
+        worker_instances = _get_json(connection, f"/v1/services/{worker['id']}/instances", token)
+        cron_service = _get_json(connection, f"/v1/services/{cron['id']}", token)
+        # Started events are read before ended events, so a run that ends
+        # between the two reads still shows as finished rather than missing.
+        cron_events = {}
+        for event_type in ("cron_job_run_started", "cron_job_run_ended"):
+            query = urlencode(
+                {
+                    "type": event_type,
+                    "startTime": window_start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "limit": CRON_EVENT_PAGE_LIMIT,
+                }
             )
-            observed.append((identity, service, instances))
+            cron_events[event_type] = _get_json(
+                connection, f"/v1/services/{cron['id']}/events?{query}", token
+            )
     finally:
         try:
             connection.close()
         except Exception:
             pass
+    started = _cron_run_ids(
+        cron_events["cron_job_run_started"],
+        cron_id=cron["id"],
+        event_type="cron_job_run_started",
+    )
+    ended = _cron_run_ids(
+        cron_events["cron_job_run_ended"],
+        cron_id=cron["id"],
+        event_type="cron_job_run_ended",
+    )
+    observed = (
+        (worker, worker_service, "instances", worker_instances),
+        (cron, cron_service, "activeRuns", sorted(started - ended)),
+    )
     canonical_services = []
-    for identity, service, instances in observed:
+    for identity, service, idle_key, active in observed:
         if not isinstance(service, dict):
             raise StopEvidenceError("a Render service response is not an object")
         owner_id = service.get("ownerId")
@@ -248,14 +314,16 @@ def worker_stop_digest(
             raise StopEvidenceError(
                 "a Render source executor identity or suspended state is not exact"
             )
-        if not isinstance(instances, list) or instances:
+        if not isinstance(active, list) or active:
             raise StopEvidenceError(
-                "a suspended Render source executor still has a listed instance"
+                "a suspended Render cron job still has a run in progress"
+                if idle_key == "activeRuns"
+                else "a suspended Render source executor still has a listed instance"
             )
         canonical_services.append(
             {
                 "id": identity["id"],
-                "instances": [],
+                idle_key: [],
                 "name": identity["name"],
                 "ownerId": owner_id,
                 "suspended": "suspended",
