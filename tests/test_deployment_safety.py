@@ -1179,10 +1179,35 @@ def test_postgres_reverse_reconciliation_never_guesses_a_merge_or_traffic_flip()
     assert "render-before.dump" in script
     assert "render-after-capture.safe" in script
     assert 'cmp --silent "$RUN_DIR/render-before.safe" "$RUN_DIR/render-after-capture.safe"' in script
-    assert "legacy-manifest" in script
-    assert "LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on" in script
-    assert "legacy-provider-sessions" in script
-    assert "SCHEMA_COMPAT|legacy_missing_table|billing_payment_provider_sessions" in script
+    # Both sides use the strict family named by the finalized cutover proof.
+    assert "legacy-manifest" not in script
+    assert "LECTURESIFT_ALLOW_LEGACY" not in script
+    assert "legacy-provider-sessions" not in script
+    assert "SCHEMA_COMPAT|legacy_missing_table" not in script
+    assert " legacy --manifest" not in script and "SCHEMA_VERIFIER\" legacy" not in script
+    routing = script.index("final-schema-contract-version")
+    assert script.index("validate-final") < routing < script.index("trap cleanup EXIT")
+    assert 'MANIFEST_NAME="rehearsal_manifest_v${SCHEMA_CONTRACT_VERSION}.sql"' in script
+    assert 'SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition_v${SCHEMA_CONTRACT_VERSION}.py"' in script
+    assert '-f "/probe/$MANIFEST_NAME" >"/backup/$OUTPUT_NAME"' in script
+    assert '--accept "$SCHEMA_CONTRACT_VERSION"' in script
+    assert 'require_contract_inventory "$RUN_DIR/ovh-schema-inventory.txt" "OVH"' in script
+    assert (
+        'require_contract_inventory "$RUN_DIR/render-schema-inventory.txt" "still-fenced Render"'
+        in script
+    )
+    assert "grep -Eq '^(TABLE_DIFF|UNVALIDATED_FK|SCHEMA_COMPAT)\\|'" in script
+    assert script.count("printf 'schema_contract_version=%s\\n' \"$SCHEMA_CONTRACT_VERSION\"") == 3
+    # Separate Render runtime logins would lose their grants to the owner-only
+    # --no-acl replacement, so it is refused before any Render mutation.
+    assert "render_command runtime-acl render-runtime-acl.txt" in script
+    acl_refusal = script.index('[[ "$RENDER_RUNTIME_ACL_GRANTS" == "0" ]] ||')
+    assert script.index("LECTURESIFT_RENDER_REPLACE_CONFIRM") < acl_refusal < script.index(
+        'render_mutated="true"'
+    )
+    assert "automatic owner-only replacement would drop them, so Render was not modified" in script
+    assert "printf 'render_runtime_acl_grants=%s\\n' \"$RENDER_RUNTIME_ACL_GRANTS\"" in script
+    assert "automatic_replacement_supported=false" in script
     assert "RECONCILIATION_REQUIRED" in script
     assert 'LECTURESIFT_RENDER_REPLACE_CONFIRM:-}" != "REPLACE_STILL_FENCED_RENDER"' in script
     assert "DROP SCHEMA IF EXISTS lecturesift_worker CASCADE" in script
@@ -1194,7 +1219,7 @@ def test_postgres_reverse_reconciliation_never_guesses_a_merge_or_traffic_flip()
     assert 'render_command reset-restore-approved ovh-final.dump' in script
     assert 'cmp --silent "$RUN_DIR/ovh-final.safe" "$RUN_DIR/render-restored.safe"' in script
     assert 'render_command manifest render-restored.txt' in script
-    assert 'canonical "$RUN_DIR/render-restored.txt" "$RUN_DIR/render-restored.safe" strict' in script
+    assert 'canonical "$RUN_DIR/render-restored.txt" "$RUN_DIR/render-restored.safe"\n' in script
     assert "postgres-rollback-render-unproven" in script
     assert "redis_reconciliation_complete=false" in script
     assert "r2_reconciliation_complete=false" in script
@@ -1244,7 +1269,8 @@ def test_rehearsal_hard_purge_and_schema_contract_are_fail_closed():
     for version in (4, 5):
         assert f"verify_schema_transition_v{version}.py" in rehearsal
         assert f"verify_schema_transition_v{version}.py" in migration
-    assert "verify_schema_transition_v3.py" in rollback
+    for version in (4, 5):
+        assert f"verify_schema_transition_v{version}.py" in rollback
     assert "schema_contract_payment_provider_sessions_v1.txt" in rehearsal
     assert "schema_contract_payment_provider_sessions_v1.txt" in migration
     assert "schema_contract_payment_provider_sessions_v1.txt" in rollback

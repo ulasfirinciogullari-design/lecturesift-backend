@@ -302,3 +302,52 @@ def test_real_product_and_workspace_databases_select_their_own_strict_family(cur
     broken.write_text(_strict_manifest(name, "rehearsal_manifest_v5.sql"), encoding="utf-8")
     with pytest.raises(state.contract_v5.ContractError):
         _verify(5, broken)
+
+
+def test_rollback_runtime_acl_census_is_read_only_and_bounded():
+    sql = _read("deploy/rollback_runtime_acl.sql")
+    statements = re.sub(r"--[^\n]*", "", sql).upper()
+    for forbidden in ("INSERT", "UPDATE", "DELETE", "CREATE", "ALTER", "DROP", "GRANT", "REVOKE", "TRUNCATE"):
+        assert re.search(rf"\b{forbidden}\b", statements) is None
+    for source in ("nspacl", "relacl", "attacl", "proacl", "typacl", "defaclacl"):
+        assert source in sql
+    assert "nspname IN ('public', 'lecturesift_worker')" in sql
+    assert "item.grantee <> 0" in sql and "'pg_database_owner'" in sql
+    assert "'RUNTIME_ACL_GRANTS|' || count(*)" in sql
+    assert "'RUNTIME_ACL_COMPLETE|v1'" in sql
+
+
+def _runtime_acl_grants(name: str) -> int:
+    lines = client(
+        name, ["psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-f", "/probe/deploy/rollback_runtime_acl.sql"]
+    ).decode().split()
+    assert lines[-1] == "RUNTIME_ACL_COMPLETE|v1"
+    counts = [line for line in lines if line.startswith("RUNTIME_ACL_GRANTS|")]
+    assert len(counts) == 1
+    return int(counts[0].split("|", 1)[1])
+
+
+def test_real_runtime_acl_census_counts_only_separate_login_grants(database):
+    from sqlalchemy import text
+
+    engine, name, _ = database
+    # Owner-created objects plus PUBLIC/pg_database_owner defaults are not runtime grants.
+    assert _runtime_acl_grants(name) == 0
+    with engine.begin() as connection:
+        connection.execute(text(f"CREATE ROLE {name}_api NOLOGIN"))
+        connection.execute(text("GRANT SELECT ON billing_users TO PUBLIC"))
+    assert _runtime_acl_grants(name) == 0
+    with engine.begin() as connection:
+        connection.execute(text(f"GRANT USAGE ON SCHEMA public TO {name}_api"))
+        connection.execute(text(f"GRANT SELECT (email) ON billing_users TO {name}_api"))
+        connection.execute(
+            text(f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO {name}_api")
+        )
+    assert _runtime_acl_grants(name) == 3
+
+
+def test_real_provisioned_runtime_logins_block_owner_only_rollback(current):
+    _, name, _ = current
+    # postgres-app-role.sh grants the separate API/worker logins, so the
+    # owner-only Render replacement would drop them and must be refused.
+    assert _runtime_acl_grants(name) > 0

@@ -466,6 +466,7 @@ def _parse_postgres_marker(payload: bytes) -> dict[str, str]:
         "reconciled_database_manifest_sha256",
         "historical_payment_providers",
         "historical_provider_manifest_sha256",
+        "schema_contract_version",
         "source_worker_stop_evidence_sha256",
         "traffic_changed",
     }
@@ -501,6 +502,8 @@ def _parse_postgres_marker(payload: bytes) -> dict[str, str]:
         "PostgreSQL historical provider manifest",
     )
     _marker_historical_providers(result.get("historical_payment_providers", ""))
+    if result.get("schema_contract_version") not in {"4", "5"}:
+        raise RollbackEvidenceError("PostgreSQL marker schema contract version is invalid")
     if result.get("traffic_changed") != "false":
         raise RollbackEvidenceError("PostgreSQL marker must prove traffic was unchanged")
     _hex(result.get("source_worker_stop_evidence_sha256"), HEX64, "PostgreSQL worker-stop evidence")
@@ -1092,6 +1095,13 @@ def validate_bundle(
         expected_ovh_revision=expected_ovh_revision,
         now=validation_time,
     )
+    # Both rollback manifests were routed by the finalized proof's contract.
+    if marker["schema_contract_version"] != _parse_cutover_proof(cutover_proof_payload).get(
+        "schema_contract_version"
+    ):
+        raise RollbackEvidenceError(
+            "PostgreSQL marker schema contract does not match the cutover proof"
+        )
     current_providers, current_presence_digest = _runtime_provider_census(runtime_payload)
     historical_providers = _marker_historical_providers(
         marker["historical_payment_providers"]

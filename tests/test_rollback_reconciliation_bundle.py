@@ -170,6 +170,7 @@ def _marker() -> bytes:
         f"reconciled_database_manifest_sha256={DATABASE_MANIFEST}\n"
         "historical_payment_providers=iyzico\n"
         f"historical_provider_manifest_sha256={'b' * 64}\n"
+        "schema_contract_version=5\n"
         "render_matches_ovh=true\n"
         "automatic_row_merge=false\n"
         "whole_database_replacement=false\n"
@@ -445,7 +446,29 @@ def test_postgres_database_manifest_must_match_the_bundle(tmp_path: Path):
         _validate(bundle, marker)
 
 
-def test_cutover_proof_without_the_current_schema_contract_is_rejected():
+def test_postgres_marker_schema_contract_must_match_the_cutover_proof(tmp_path: Path):
+    bundle, marker = _bundle(tmp_path)
+    marker.write_bytes(
+        marker.read_bytes().replace(
+            b"schema_contract_version=5\n", b"schema_contract_version=4\n"
+        )
+    )
+    _rewrite_json(
+        bundle / "context.json",
+        lambda context: context.__setitem__(
+            "postgres_marker_sha256", hashlib.sha256(marker.read_bytes()).hexdigest()
+        ),
+    )
+    with pytest.raises(validator.RollbackEvidenceError, match="schema contract does not match"):
+        _validate(bundle, marker)
+
+    for invalid in (b"schema_contract_version=3\n", b""):
+        marker.write_bytes(
+            _marker().replace(b"schema_contract_version=5\n", invalid)
+        )
+        with pytest.raises(validator.RollbackEvidenceError):
+            validator._parse_postgres_marker(marker.read_bytes())
+
     # A version-3 proof, or one without a contract, is never a rollback anchor.
     for proof in (
         _cutover_proof().replace(b"\nversion=4\n", b"\nversion=3\n"),

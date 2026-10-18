@@ -823,11 +823,22 @@ revoked, and a catalog inventory proves the owner-only app ACL policy. Render's
 database-level ACL, role settings, default ACLs, collation attributes and
 extension inventory must remain byte-identical to their pre-operation evidence.
 The tool proves strict manifest and schema equality and attempts to restore the
-original Render dump with its original ACLs on any failure. A still-fenced pre-release Render schema is inspected with the
-same single explicit provider-session compatibility marker, so its rollback
-dump can be restored and proven without pretending the missing table is an
-anomaly-free current schema. The OVH replacement itself must always pass the
-strict current-schema manifest. It still does not switch traffic. Reconcile the logical Redis job
+original Render dump with its original ACLs on any failure. Both sides are
+captured with the one strict manifest/verifier family named by the finalized
+provider-cutover proof (`schema_contract_version` 4 for a product database, 5
+for a workspace database), and a live catalog inventory on each side must
+still detect exactly that family; no legacy compatibility marker is accepted.
+An OVH database upgraded to a later family after cutover therefore stops the
+rollback instead of being compared with the wrong manifest.
+
+The owner-only replacement cannot recreate grants held by separate Render
+runtime logins, such as the distinct API and worker logins described in
+`docs/PRODUCT_ACTIVATION.md`. The evidence run records
+`render_runtime_acl_grants` and `automatic_replacement_supported` in
+`RECONCILIATION_REQUIRED`, and the replacement mode refuses to touch Render
+while that count is not zero. Those grants must be reconciled through a
+separately reviewed manual procedure; the automatic replacement does not do
+it. It still does not switch traffic. Reconcile the logical Redis job
 state in the reverse direction with a separately reviewed procedure, reconcile
 R2 objects created after cutover, re-test signed payment callbacks, and only
 then return traffic to Render. A PostgreSQL success marker explicitly records

@@ -26,12 +26,21 @@ ROOT_DIR="${LECTURESIFT_ROOT:-/opt/lecturesift}"
 SOURCE_ENV_FILE="/root/.lecturesift-render-source.env"
 DB_ENV_FILE="/etc/lecturesift/postgres.env"
 RUNTIME_ENV_FILE="/etc/lecturesift/runtime.env"
-MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest_v3.sql"
+# Both sides are captured with the one strict family named by the finalized
+# provider-cutover proof (v4 product or v5 workspace), never an env label.
+SCHEMA_CONTRACT_VERSION=""
+MANIFEST=""
+MANIFEST_NAME=""
+SCHEMA_VERIFIER=""
+SCHEMA_INVENTORY="$ROOT_DIR/deploy/schema_contract_inventory.sql"
+SCHEMA_STATE_TOOL="$ROOT_DIR/deploy/schema_contract_state.py"
+RUNTIME_ACL_QUERY="$ROOT_DIR/deploy/rollback_runtime_acl.sql"
 DATABASE_INVENTORY="$ROOT_DIR/deploy/rollback_database_inventory.sql"
 SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt"
 PURCHASE_TERMS_CONTRACT="$ROOT_DIR/deploy/schema_contract_billing_purchase_terms_v1.txt"
 PRESERVED_SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt"
-SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition_v3.py"
+PRODUCT_SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_product_v1.txt"
+WORKSPACE_SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_workspace_v1.txt"
 RENDER_WORKER_STOP_TOOL="$ROOT_DIR/deploy/render_worker_stop_evidence.py"
 INSTAGRAM_STOP_GATE="$ROOT_DIR/deploy/verify_instagram_publishers_stopped.sh"
 SOURCE_POSTGRES_TRANSPORT="$ROOT_DIR/deploy/source_postgres_transport.py"
@@ -71,8 +80,12 @@ check_private() {
 check_private "$SOURCE_ENV_FILE" "Render environment"
 check_private "$DB_ENV_FILE" "OVH database environment"
 check_private "$RUNTIME_ENV_FILE" "OVH runtime environment"
-for path in "$MANIFEST" "$DATABASE_INVENTORY" "$SCHEMA_CONTRACT" \
-  "$PURCHASE_TERMS_CONTRACT" "$PRESERVED_SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" \
+for path in "$DATABASE_INVENTORY" "$SCHEMA_CONTRACT" \
+  "$PURCHASE_TERMS_CONTRACT" "$PRESERVED_SCHEMA_CONTRACT" \
+  "$PRODUCT_SCHEMA_CONTRACT" "$WORKSPACE_SCHEMA_CONTRACT" \
+  "$ROOT_DIR/deploy/rehearsal_manifest_v4.sql" "$ROOT_DIR/deploy/rehearsal_manifest_v5.sql" \
+  "$ROOT_DIR/deploy/verify_schema_transition_v4.py" "$ROOT_DIR/deploy/verify_schema_transition_v5.py" \
+  "$SCHEMA_INVENTORY" "$SCHEMA_STATE_TOOL" "$RUNTIME_ACL_QUERY" \
   "$RENDER_WORKER_STOP_TOOL" "$INSTAGRAM_STOP_GATE" \
   "$SOURCE_POSTGRES_TRANSPORT" \
   "$CUTOVER_EVIDENCE_TOOL"; do
@@ -98,6 +111,17 @@ ovh_checkout_status="$(git -C "$ROOT_DIR" status --porcelain --untracked-files=n
 python3 "$CUTOVER_EVIDENCE_TOOL" validate-final \
   --expected-revision "$OVH_RELEASE_REVISION" >/dev/null ||
   fail "the original provider-cutover proof does not match the OVH release"
+SCHEMA_CONTRACT_VERSION="$(
+  python3 "$CUTOVER_EVIDENCE_TOOL" final-schema-contract-version \
+    --expected-revision "$OVH_RELEASE_REVISION"
+)" || fail "the original provider-cutover proof names no valid schema contract"
+case "$SCHEMA_CONTRACT_VERSION" in
+  4|5) ;;
+  *) fail "the original provider-cutover proof names an unsupported schema contract" ;;
+esac
+MANIFEST_NAME="rehearsal_manifest_v${SCHEMA_CONTRACT_VERSION}.sql"
+MANIFEST="$ROOT_DIR/deploy/$MANIFEST_NAME"
+SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition_v${SCHEMA_CONTRACT_VERSION}.py"
 ORIGINAL_CUTOVER_ID="$(python3 - "$PROVIDER_CUTOVER_PROOF" <<'PY'
 from pathlib import Path
 import re
@@ -182,6 +206,7 @@ snapshot_app_name="lecturesift-rollback-snapshot-$STAMP"
 snapshot_info_file="/tmp/lecturesift-rollback-snapshot-$STAMP"
 render_mutated="false"
 render_verified="false"
+RENDER_RUNTIME_ACL_GRANTS=""
 SOURCE_WORKER_STOP_EVIDENCE_SHA256=""
 
 write_marker() {
@@ -225,45 +250,55 @@ SQL
   "${compose[@]}" exec -T postgres rm -f "$snapshot_info_file" >/dev/null 2>&1 || true
 }
 
+# Every rollback capture is strict: a contract-current source and its OVH
+# copy carry no legacy-absent table, so no SCHEMA_COMPAT record is tolerated.
 manifest_integrity_valid() {
-  local input="$1" mode="${2:-strict}" compat_count
-  [[ "$mode" == "strict" || "$mode" == "legacy-provider-sessions" ]] || return 1
-  if grep -Eq '^(TABLE_DIFF|UNVALIDATED_FK)\|' "$input" ||
+  local input="$1"
+  if grep -Eq '^(TABLE_DIFF|UNVALIDATED_FK|SCHEMA_COMPAT)\|' "$input" ||
      awk -F'|' '$1 == "ANOMALY" && $3 != "0" {bad=1} END {exit(bad ? 0 : 1)}' "$input"; then
-    return 1
-  fi
-  compat_count="$(grep -c '^SCHEMA_COMPAT|' "$input" || true)"
-  if [[ "$mode" == "strict" ]]; then
-    [[ "$compat_count" == "0" ]] || return 1
-  elif [[ "$compat_count" -gt 2 ]] ||
-       grep '^SCHEMA_COMPAT|' "$input" |
-         grep -Fvxq -e 'SCHEMA_COMPAT|legacy_missing_table|billing_payment_provider_sessions|integrity_checks_deferred_to_current_schema_migration' \
-           -e 'SCHEMA_COMPAT|legacy_missing_table|billing_purchase_terms|integrity_checks_deferred_to_current_schema_migration'; then
     return 1
   fi
 }
 
 canonical() {
-  local input="$1" output="$2" mode="${3:-strict}"
-  if [[ "$mode" == "strict" ]]; then
-    python3 "$SCHEMA_VERIFIER" current --manifest "$input" \
-      --contract "$SCHEMA_CONTRACT" \
-      --preserved-contract "$PRESERVED_SCHEMA_CONTRACT" >"$output.schema-contract" ||
-      fail "a strict rollback manifest failed its current schema contract"
-  else
-    python3 "$SCHEMA_VERIFIER" legacy --manifest "$input" \
-      --contract "$SCHEMA_CONTRACT" \
-      --preserved-contract "$PRESERVED_SCHEMA_CONTRACT" >"$output.schema-contract" ||
-      fail "a legacy rollback manifest failed its bounded schema contract"
-  fi
+  local input="$1" output="$2"
+  [[ -n "$SCHEMA_VERIFIER" ]] || fail "the rollback schema verifier was not selected from the cutover proof"
+  python3 "$SCHEMA_VERIFIER" current --manifest "$input" \
+    --contract "$SCHEMA_CONTRACT" \
+    --preserved-contract "$PRESERVED_SCHEMA_CONTRACT" >"$output.schema-contract" ||
+    fail "a strict rollback manifest failed its current schema contract"
   tr -d '\r' <"$input" |
     grep -E '^(DATABASE|SCHEMA|SCHEMA_OBJECT|TABLE|ANOMALY|STATUS|SCHEMA_COMPAT|UNVALIDATED_FK|MANIFEST_COMPLETE)\|' |
     LC_ALL=C sort >"$output"
   [[ "$(grep -c '^DATABASE|' "$output")" == "1" &&
      "$(grep -c '^SCHEMA|' "$output")" == "1" &&
      "$(grep -c '^TABLE|' "$output")" -gt 0 ]] || fail "a rollback manifest is incomplete"
-  manifest_integrity_valid "$input" "$mode" ||
+  manifest_integrity_valid "$input" ||
     fail "a rollback manifest contains integrity anomalies or an unapproved schema difference"
+}
+
+# The live family on each side must still be the one the cutover proof names.
+require_contract_inventory() {
+  local inventory="$1" label="$2" detected
+  detected="$(
+    python3 "$SCHEMA_STATE_TOOL" detect --inventory "$inventory" \
+      --accept "$SCHEMA_CONTRACT_VERSION"
+  )" || fail "$label no longer has exactly the schema contract bound into the cutover proof"
+  [[ "$detected" == "$SCHEMA_CONTRACT_VERSION" ]] ||
+    fail "$label schema contract detection is ambiguous"
+}
+
+# Replacement restores the OVH dump with --no-acl and keeps owner-only app
+# ACLs, which would silently drop grants held by separate Render runtime
+# logins. Automatic replacement is therefore refused unless this is zero.
+render_runtime_acl_grants() {
+  local input="$1" count
+  [[ "$(grep -c '^RUNTIME_ACL_GRANTS|' "$input")" == "1" &&
+     "$(grep -c '^RUNTIME_ACL_COMPLETE|v1$' "$input")" == "1" ]] ||
+    fail "the Render runtime ACL census is incomplete"
+  count="$(sed -n 's/^RUNTIME_ACL_GRANTS|//p' "$input" | tr -d '\r')"
+  [[ "$count" =~ ^(0|[1-9][0-9]*)$ ]] || fail "the Render runtime ACL census is invalid"
+  printf '%s\n' "$count"
 }
 
 canonical_schema_dump() {
@@ -357,24 +392,30 @@ assert_render_worker_stopped() {
 
 render_command() {
   local operation="$1" output_name="${2:-}"
-  [[ "$operation" =~ ^(manifest|legacy-manifest|database-inventory|schema-dump|pending|dump|reset-restore-original|reset-restore-approved)$ ]] || fail "unsafe Render operation"
+  [[ "$operation" =~ ^(manifest|schema-inventory|runtime-acl|database-inventory|schema-dump|pending|dump|reset-restore-original|reset-restore-approved)$ ]] || fail "unsafe Render operation"
   [[ -z "$output_name" || "$output_name" =~ ^[a-z0-9-]+[.](txt|sql|dump)$ ]] || fail "unsafe Render output"
+  [[ "$MANIFEST_NAME" =~ ^rehearsal_manifest_v[45][.]sql$ &&
+     "$MANIFEST" == "$ROOT_DIR/deploy/$MANIFEST_NAME" ]] ||
+    fail "the Render manifest was not selected from the cutover proof"
   source_pg_exec docker run --rm --user 0:0 \
     "${SOURCE_PG_DOCKER_ENV[@]}" \
     --volume "$RUN_DIR:/backup" --volume "$ROOT_DIR/deploy:/probe:ro" \
     --env "OPERATION=$operation" --env "OUTPUT_NAME=$output_name" \
+    --env "MANIFEST_NAME=$MANIFEST_NAME" \
     --env "PENDING_SQL=$PENDING_SQL" postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af bash -euc '
       set +x
       case "$OPERATION" in
         manifest)
           psql --no-psqlrc -v ON_ERROR_STOP=1 \
-            -f /probe/rehearsal_manifest_v3.sql >"/backup/$OUTPUT_NAME"
+            -f "/probe/$MANIFEST_NAME" >"/backup/$OUTPUT_NAME"
           ;;
-        legacy-manifest)
+        schema-inventory)
           psql --no-psqlrc -v ON_ERROR_STOP=1 \
-            -v LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on \
-            -v LECTURESIFT_ALLOW_LEGACY_PURCHASE_TERMS=on \
-            -f /probe/rehearsal_manifest_v3.sql >"/backup/$OUTPUT_NAME"
+            -f /probe/schema_contract_inventory.sql >"/backup/$OUTPUT_NAME"
+          ;;
+        runtime-acl)
+          psql --no-psqlrc -v ON_ERROR_STOP=1 \
+            -f /probe/rollback_runtime_acl.sql >"/backup/$OUTPUT_NAME"
           ;;
         database-inventory)
           psql --no-psqlrc -v ON_ERROR_STOP=1 \
@@ -543,7 +584,7 @@ cleanup() {
   if [[ "$status" != "0" && "$render_mutated" == "true" && "$render_verified" != "true" ]]; then
     echo "The Render replacement failed; restoring its root-only pre-operation dump." >&2
     if render_command reset-restore-original render-before.dump &&
-       render_command legacy-manifest render-rollback-check.txt &&
+       render_command manifest render-rollback-check.txt &&
        render_command schema-dump render-rollback-check.sql &&
        render_command database-inventory render-rollback-inventory.txt; then
       tr -d '\r' <"$RUN_DIR/render-rollback-check.txt" |
@@ -553,7 +594,7 @@ cleanup() {
         "$RUN_DIR/render-rollback-check.schema.safe"
       canonical_database_inventory "$RUN_DIR/render-rollback-inventory.txt" \
         "$RUN_DIR/render-rollback-inventory.safe"
-      if python3 "$SCHEMA_VERIFIER" legacy \
+      if python3 "$SCHEMA_VERIFIER" current \
            --manifest "$RUN_DIR/render-rollback-check.txt" \
            --contract "$SCHEMA_CONTRACT" \
            --preserved-contract "$PRESERVED_SCHEMA_CONTRACT" >/dev/null &&
@@ -602,6 +643,10 @@ queue_idle || fail "the OVH queue is not completely drained"
 [[ "$(render_command pending | tr -d '\r[:space:]')" == "0" ]] ||
   fail "Render still has pending provider payments"
 
+"${compose[@]}" exec -T postgres psql --no-psqlrc --quiet \
+  --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -v ON_ERROR_STOP=1 \
+  -f - <"$SCHEMA_INVENTORY" >"$RUN_DIR/ovh-schema-inventory.txt"
+require_contract_inventory "$RUN_DIR/ovh-schema-inventory.txt" "OVH"
 "${compose[@]}" cp "$MANIFEST" postgres:/tmp/lecturesift-rollback-manifest.sql
 "${compose[@]}" cp "$DATABASE_INVENTORY" \
   postgres:/tmp/lecturesift-rollback-database-inventory.sql
@@ -620,7 +665,7 @@ python3 "$SCHEMA_VERIFIER" current \
   --contract "$SCHEMA_CONTRACT" \
   --preserved-contract "$PRESERVED_SCHEMA_CONTRACT" \
   >"$RUN_DIR/ovh-schema-contract.txt" ||
-  fail "OVH does not match the exact current provider-session schema contract"
+  fail "OVH does not match the exact schema contract bound into the cutover proof"
 ovh_size="$(sed -n 's/^DATABASE_SIZE|//p' "$RUN_DIR/ovh-before.txt" | tr -d '\r')"
 [[ "$(grep -c '^DATABASE_SIZE|' "$RUN_DIR/ovh-before.txt")" == "1" &&
    "$ovh_size" =~ ^[1-9][0-9]*$ && "$ovh_size" -le 1000000000000 ]] ||
@@ -708,9 +753,12 @@ HISTORICAL_PAYMENT_PROVIDERS="$(
    "$HISTORICAL_PAYMENT_PROVIDERS" =~ ^(none|iyzico|paytr|iyzico,paytr)$ ]] ||
   fail "the frozen database/provider census identity is invalid"
 
-render_command legacy-manifest render-before.txt
-canonical "$RUN_DIR/render-before.txt" "$RUN_DIR/render-before.safe" \
-  legacy-provider-sessions
+render_command schema-inventory render-schema-inventory.txt
+require_contract_inventory "$RUN_DIR/render-schema-inventory.txt" "still-fenced Render"
+render_command manifest render-before.txt
+canonical "$RUN_DIR/render-before.txt" "$RUN_DIR/render-before.safe"
+render_command runtime-acl render-runtime-acl.txt
+RENDER_RUNTIME_ACL_GRANTS="$(render_runtime_acl_grants "$RUN_DIR/render-runtime-acl.txt")"
 render_command database-inventory render-before-inventory.txt
 canonical_database_inventory "$RUN_DIR/render-before-inventory.txt" \
   "$RUN_DIR/render-before-inventory.safe"
@@ -730,9 +778,8 @@ render_command dump render-before.dump
 docker run --rm --user 0:0 --volume "$RUN_DIR:/backup:ro" postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af \
   pg_restore --list /backup/render-before.dump >"$RUN_DIR/render-before.dump.list"
 sha256sum "$RUN_DIR/render-before.dump" >"$RUN_DIR/render-before.dump.sha256"
-render_command legacy-manifest render-after-capture.txt
-canonical "$RUN_DIR/render-after-capture.txt" "$RUN_DIR/render-after-capture.safe" \
-  legacy-provider-sessions
+render_command manifest render-after-capture.txt
+canonical "$RUN_DIR/render-after-capture.txt" "$RUN_DIR/render-after-capture.safe"
 render_command database-inventory render-after-capture-inventory.txt
 canonical_database_inventory "$RUN_DIR/render-after-capture-inventory.txt" \
   "$RUN_DIR/render-after-capture-inventory.safe"
@@ -765,6 +812,7 @@ if cmp --silent "$RUN_DIR/ovh-final.safe" "$RUN_DIR/render-before.safe" &&
     printf 'reconciled_database_manifest_sha256=%s\n' "$RECONCILED_DATABASE_MANIFEST_SHA256"
     printf 'historical_payment_providers=%s\n' "$HISTORICAL_PAYMENT_PROVIDERS"
     printf 'historical_provider_manifest_sha256=%s\n' "$HISTORICAL_PROVIDER_MANIFEST_SHA256"
+    printf 'schema_contract_version=%s\n' "$SCHEMA_CONTRACT_VERSION"
     printf 'both_databases_identical=true\n'
     printf 'source_worker_stop_evidence_sha256=%s\n' "$SOURCE_WORKER_STOP_EVIDENCE_SHA256"
     printf 'traffic_changed=false\n'
@@ -780,6 +828,13 @@ fi
   printf 'ovh_manifest_sha256=%s\n' "$(sha256sum "$RUN_DIR/ovh-final.safe" | awk '{print $1}')"
   printf 'render_manifest_sha256=%s\n' "$(sha256sum "$RUN_DIR/render-before.safe" | awk '{print $1}')"
   printf 'automatic_row_merge=false\n'
+  printf 'schema_contract_version=%s\n' "$SCHEMA_CONTRACT_VERSION"
+  printf 'render_runtime_acl_grants=%s\n' "$RENDER_RUNTIME_ACL_GRANTS"
+  if [[ "$RENDER_RUNTIME_ACL_GRANTS" == "0" ]]; then
+    printf 'automatic_replacement_supported=true\n'
+  else
+    printf 'automatic_replacement_supported=false\n'
+  fi
   printf 'source_worker_stop_evidence_sha256=%s\n' "$SOURCE_WORKER_STOP_EVIDENCE_SHA256"
 } >"$RUN_DIR/RECONCILIATION_REQUIRED"
 if [[ "${LECTURESIFT_RENDER_REPLACE_CONFIRM:-}" != "REPLACE_STILL_FENCED_RENDER" ]]; then
@@ -789,6 +844,11 @@ if [[ "${LECTURESIFT_RENDER_REPLACE_CONFIRM:-}" != "REPLACE_STILL_FENCED_RENDER"
   exit 2
 fi
 
+# Grants held by separate Render API/worker logins cannot be recreated by the
+# owner-only replacement, so refuse it before any Render mutation; those
+# grants must be reconciled through a reviewed manual procedure instead.
+[[ "$RENDER_RUNTIME_ACL_GRANTS" == "0" ]] ||
+  fail "still-fenced Render grants $RENDER_RUNTIME_ACL_GRANTS app privileges to separate runtime logins; automatic owner-only replacement would drop them, so Render was not modified"
 # The snapshot and review interval may be arbitrarily long. Re-prove every
 # OVH publisher path immediately adjacent to the first Render mutation.
 assert_ovh_instagram_publishers_stopped ||
@@ -796,7 +856,7 @@ assert_ovh_instagram_publishers_stopped ||
 render_mutated="true"
 render_command reset-restore-approved ovh-final.dump
 render_command manifest render-restored.txt
-canonical "$RUN_DIR/render-restored.txt" "$RUN_DIR/render-restored.safe" strict
+canonical "$RUN_DIR/render-restored.txt" "$RUN_DIR/render-restored.safe"
 cmp --silent "$RUN_DIR/ovh-final.safe" "$RUN_DIR/render-restored.safe" ||
   fail "still-fenced Render does not exactly match the OVH snapshot after replacement"
 render_command schema-dump render-restored-schema.sql
@@ -837,6 +897,7 @@ check_render_health_freeze
   printf 'reconciled_database_manifest_sha256=%s\n' "$RECONCILED_DATABASE_MANIFEST_SHA256"
   printf 'historical_payment_providers=%s\n' "$HISTORICAL_PAYMENT_PROVIDERS"
   printf 'historical_provider_manifest_sha256=%s\n' "$HISTORICAL_PROVIDER_MANIFEST_SHA256"
+  printf 'schema_contract_version=%s\n' "$SCHEMA_CONTRACT_VERSION"
   printf 'render_matches_ovh=true\n'
   printf 'automatic_row_merge=false\n'
   printf 'whole_database_replacement=false\n'

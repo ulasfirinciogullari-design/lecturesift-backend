@@ -150,8 +150,25 @@ OVH checkout must be clean. Both health endpoints must report their supplied
 40-character revision while frozen; values typed by an operator alone are not
 accepted as revision evidence.
 
+The schema family comes only from the finalized proof's
+`schema_contract_version`: 4 selects `rehearsal_manifest_v4.sql` and
+`verify_schema_transition_v4.py`, 5 selects the v5 pair. Both OVH and Render
+are captured strictly with that family after a live catalog inventory on each
+side detects exactly it. A v3 proof, a missing value, or a side whose tables no
+longer match the proven family stops before any capture is trusted.
+
+Automatic replacement is owner-only: it restores the OVH dump with `--no-acl`.
+When still-fenced Render grants application privileges to separate runtime
+logins (for example the distinct API and worker logins), that replacement
+would silently drop them. The evidence run therefore records the read-only
+`render_runtime_acl_grants` census and `automatic_replacement_supported` in
+`RECONCILIATION_REQUIRED`, and the replacement mode refuses to mutate Render
+unless the census is zero. Reapplying runtime grants is not automated here; it
+needs a separately reviewed procedure against the managed provider.
+
 Retain the original `RECONCILIATION_VERIFIED`; the final validator hashes it
-and checks its timestamp, traffic flag and Render/OVH equality evidence. A
+and checks its timestamp, traffic flag, Render/OVH equality evidence and that
+its `schema_contract_version` equals the cutover proof's. A
 PostgreSQL success is not Redis, R2 or payment success.
 The marker also binds the canonical reconciled database manifest and the
 trusted read-only census of all provider values present in payment orders and
