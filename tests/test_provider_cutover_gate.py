@@ -972,7 +972,14 @@ def test_first_cutover_seed_is_exact_format_fenced_and_never_changes_runtime():
     assert 'TARGET_BEFORE_MANIFEST_SHA256="$(' in seed
     assert 'sha256sum "$RUN_DIR/target-cutover-snapshot.safe"' in seed
     assert '--migrated-manifest-sha256 "$TARGET_BEFORE_MANIFEST_SHA256"' in seed
-    assert 'CUTOVER_MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest_v3.sql"' in seed
+    # The seed manifest family comes only from the PostgreSQL proof's contract.
+    assert 'CUTOVER_MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest_v4.sql"' in seed
+    assert 'CUTOVER_MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest_v5.sql"' in seed
+    assert "rehearsal_manifest_v3.sql" not in seed
+    assert seed.index("sed -n 's/^schema_contract_version=//p' \"$POSTGRES_CUTOVER_PROOF\"") < seed.index(
+        'cat "$CUTOVER_MANIFEST"'
+    )
+    assert '--schema-contract-version "$SCHEMA_CONTRACT_VERSION"' in seed
     assert "SCHEMA_OBJECT" in seed
     assert 'cat "$CUTOVER_MANIFEST"' in seed
     assert 'SET TRANSACTION SNAPSHOT' in seed

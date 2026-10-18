@@ -69,6 +69,46 @@ def test_routes_match_backup_product_schema_versions_one_and_two():
         assert '[[ "$metadata_manifest_version" != "4" ]] || schema_verifier=5' in source
 
 
+def test_seed_finalize_and_first_start_route_exactly_like_backup_and_restore():
+    seed = _read("deploy/seed_first_cutover_backup.sh")
+    finalize = _read("deploy/finalize_provider_cutover.sh")
+    first_start = _read("deploy/verify_provider_first_start.sh")
+    for version in state.PROVIDER_SOURCE_VERSIONS:
+        route = state.ROUTES[version]
+        # Seed BACKUP_METADATA is what restore.sh and restic_restore_rehearsal.sh
+        # route on, so it must name the recovery family those tools accept.
+        assert (
+            f"  {version})\n"
+            f"    RECOVERY_MANIFEST_VERSION={route.recovery_manifest_version}\n"
+            f'    CUTOVER_MANIFEST="$ROOT_DIR/deploy/{route.manifest}"\n'
+            f'    SCHEMA_VERIFIER="$ROOT_DIR/deploy/{route.verifier}"\n'
+            f'    APPLICATION_SCHEMA_COMPATIBILITY="{route.application_schema_compatibility}"\n'
+            f"    PRODUCT_SCHEMA_VERSION={route.product_schema_version}\n"
+            "    ;;\n"
+        ) in seed
+        assert (
+            f"  {version})\n"
+            f'    TARGET_DATA_MANIFEST="$ROOT_DIR/deploy/{route.manifest}"\n'
+            f'    SCHEMA_VERIFIER="$ROOT_DIR/deploy/{route.verifier}"\n'
+            "    ;;\n"
+        ) in finalize
+        assert (
+            f"  {version})\n"
+            f'    DATA_MANIFEST="$ROOT_DIR/deploy/{route.manifest}"\n'
+            f'    SCHEMA_VERIFIER="$ROOT_DIR/deploy/{route.verifier}"\n'
+            "    ;;\n"
+        ) in first_start
+    assert 'RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v${RECOVERY_MANIFEST_VERSION}.sql"' in seed
+    assert "printf 'schema_manifest_version=%s\\n' \"$RECOVERY_MANIFEST_VERSION\"" in seed
+    assert "printf 'application_schema_compatibility=%s\\n' \"$APPLICATION_SCHEMA_COMPATIBILITY\"" in seed
+    # The env label never selects; it must agree so scheduled backups match.
+    assert '[[ "${LECTURESIFT_PRODUCT_SCHEMA_VERSION:-0}" == "$PRODUCT_SCHEMA_VERSION" ]]' in seed
+    for script in (seed, finalize):
+        assert '--schema-contract-version "$SCHEMA_CONTRACT_VERSION"' in script
+    for script in (seed, finalize, first_start):
+        assert "*) fail " in script
+
+
 @pytest.mark.parametrize("version", [3, 4, 5])
 def test_each_exact_family_is_detected(tmp_path: Path, version: int):
     inventory = _inventory(tmp_path / "inventory.txt", state.TABLE_SETS[version])

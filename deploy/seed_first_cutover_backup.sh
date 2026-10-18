@@ -32,13 +32,21 @@ ROLE_ENV_GENERATOR="$ROOT_DIR/deploy/generate_role_envs.py"
 CONFIGURATION_SNAPSHOT_TOOL="$ROOT_DIR/deploy/configuration_snapshot.py"
 CONFIGURATION_SNAPSHOT_NAME="configuration-snapshot-v1"
 CONFIGURATION_CHECKSUM_NAME="CONFIGURATION_SHA256SUMS"
-RECOVERY_MANIFEST_VERSION=2
-RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v${RECOVERY_MANIFEST_VERSION}.sql"
-CUTOVER_MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest_v3.sql"
+# The manifest family, verifier and backup metadata are routed only from the
+# schema_contract_version recorded in the verified PostgreSQL cutover proof:
+# v4 -> recovery v3/lecturesift-schema-v3, v5 -> recovery v4/lecturesift-schema-v4.
+SCHEMA_CONTRACT_VERSION=""
+RECOVERY_MANIFEST_VERSION=""
+RECOVERY_MANIFEST=""
+CUTOVER_MANIFEST=""
+SCHEMA_VERIFIER=""
+APPLICATION_SCHEMA_COMPATIBILITY=""
+PRODUCT_SCHEMA_VERSION=""
 SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt"
 PURCHASE_TERMS_CONTRACT="$ROOT_DIR/deploy/schema_contract_billing_purchase_terms_v1.txt"
 PRESERVED_SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt"
-SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition_v3.py"
+PRODUCT_SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_product_v1.txt"
+WORKSPACE_SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_workspace_v1.txt"
 CUTOVER_EVIDENCE_TOOL="$ROOT_DIR/deploy/provider_cutover_evidence.py"
 RENDER_WORKER_STOP_TOOL="$ROOT_DIR/deploy/render_worker_stop_evidence.py"
 SOURCE_REDIS_GUARD="$ROOT_DIR/deploy/source_redis_guard.py"
@@ -104,8 +112,12 @@ for fixed in \
 done
 
 for path in \
-  "$ROLE_ENV_GENERATOR" "$CONFIGURATION_SNAPSHOT_TOOL" "$RECOVERY_MANIFEST" \
-  "$CUTOVER_MANIFEST" "$SCHEMA_CONTRACT" "$PURCHASE_TERMS_CONTRACT" "$PRESERVED_SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" \
+  "$ROLE_ENV_GENERATOR" "$CONFIGURATION_SNAPSHOT_TOOL" \
+  "$ROOT_DIR/deploy/recovery_manifest_v3.sql" "$ROOT_DIR/deploy/recovery_manifest_v4.sql" \
+  "$ROOT_DIR/deploy/rehearsal_manifest_v4.sql" "$ROOT_DIR/deploy/rehearsal_manifest_v5.sql" \
+  "$ROOT_DIR/deploy/verify_schema_transition_v4.py" "$ROOT_DIR/deploy/verify_schema_transition_v5.py" \
+  "$SCHEMA_CONTRACT" "$PURCHASE_TERMS_CONTRACT" "$PRESERVED_SCHEMA_CONTRACT" \
+  "$PRODUCT_SCHEMA_CONTRACT" "$WORKSPACE_SCHEMA_CONTRACT" \
   "$CUTOVER_EVIDENCE_TOOL" "$RENDER_WORKER_STOP_TOOL" \
   "$SOURCE_REDIS_GUARD" "$SOURCE_POSTGRES_TRANSPORT" \
   "$TARGET_REDIS_MANIFEST_TOOL" "$RELEASE_TOOL" "$ROOT_DIR/compose.yaml"; do
@@ -241,6 +253,33 @@ EXPECTED_POSTGRES_ROLE_LOGIN_PROBE_SHA256="$(
 [[ "$(grep -c '^postgres_role_login_probe_sha256=' "$POSTGRES_CUTOVER_PROOF")" == "1" &&
    "$EXPECTED_POSTGRES_ROLE_LOGIN_PROBE_SHA256" =~ ^[0-9a-f]{64}$ ]] ||
   fail "the PostgreSQL cutover proof has no unambiguous trusted role-login digest"
+SCHEMA_CONTRACT_VERSION="$(
+  sed -n 's/^schema_contract_version=//p' "$POSTGRES_CUTOVER_PROOF"
+)"
+[[ "$(grep -c '^schema_contract_version=' "$POSTGRES_CUTOVER_PROOF")" == "1" ]] ||
+  fail "the PostgreSQL cutover proof has no unambiguous schema contract version"
+case "$SCHEMA_CONTRACT_VERSION" in
+  4)
+    RECOVERY_MANIFEST_VERSION=3
+    CUTOVER_MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest_v4.sql"
+    SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition_v4.py"
+    APPLICATION_SCHEMA_COMPATIBILITY="lecturesift-schema-v3"
+    PRODUCT_SCHEMA_VERSION=1
+    ;;
+  5)
+    RECOVERY_MANIFEST_VERSION=4
+    CUTOVER_MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest_v5.sql"
+    SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition_v5.py"
+    APPLICATION_SCHEMA_COMPATIBILITY="lecturesift-schema-v4"
+    PRODUCT_SCHEMA_VERSION=2
+    ;;
+  *) fail "the PostgreSQL cutover proof names no supported schema contract" ;;
+esac
+RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v${RECOVERY_MANIFEST_VERSION}.sql"
+# The label never selects the contract; it must agree with the proof so the
+# scheduled backup.sh that follows the seed records the same recovery family.
+[[ "${LECTURESIFT_PRODUCT_SCHEMA_VERSION:-0}" == "$PRODUCT_SCHEMA_VERSION" ]] ||
+  fail "runtime LECTURESIFT_PRODUCT_SCHEMA_VERSION must be $PRODUCT_SCHEMA_VERSION for schema contract v$SCHEMA_CONTRACT_VERSION"
 
 for marker in \
   /var/lib/lecturesift/migration-fail-stop/redis-state-unproven \
@@ -744,7 +783,7 @@ done
 {
   printf 'format=lecturesift-backup-v2\n'
   printf 'application_identity=lecturesift-production\n'
-  printf 'application_schema_compatibility=lecturesift-schema-v2\n'
+  printf 'application_schema_compatibility=%s\n' "$APPLICATION_SCHEMA_COMPATIBILITY"
   printf 'schema_manifest_version=%s\n' "$RECOVERY_MANIFEST_VERSION"
   printf 'schema_manifest_sha256=%s\n' "$schema_manifest_sha256"
   printf 'database_identity_sha256=%s\n' "$database_identity_sha256"
@@ -870,7 +909,8 @@ python3 "$CUTOVER_EVIDENCE_TOOL" write-seed \
   --redis-dump-sha256 "$REDIS_DUMP_SHA256" \
   --source-worker-stop-evidence-sha256 "$SOURCE_WORKER_STOP_EVIDENCE_SHA256" \
   --target-redis-manifest-sha256 "$TARGET_REDIS_MANIFEST_SHA256" \
-  --configuration-checksums-sha256 "$CONFIGURATION_CHECKSUMS_SHA256" ||
+  --configuration-checksums-sha256 "$CONFIGURATION_CHECKSUMS_SHA256" \
+  --schema-contract-version "$SCHEMA_CONTRACT_VERSION" ||
   fail "the repository-bound first-cutover seed proof could not be recorded"
 
 echo "First-cutover Restic seed verified: $RESTIC_SNAPSHOT_ID. API/worker remain stopped; Caddy/DNS were unchanged. Run the isolated Restic restore rehearsal next."

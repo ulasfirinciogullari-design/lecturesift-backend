@@ -135,16 +135,26 @@ def test_current_recovery_and_cutover_routing_preserves_historical_files():
     assert r"\set LECTURESIFT_ALLOW_LEGACY_PURCHASE_TERMS off" in current_sql
     assert current_sql.count("('billing_purchase_terms')") == 2
     assert "('billing_purchase_terms')" in (DEPLOY / "recovery_manifest_v2.sql").read_text(encoding="utf-8")
-    for name in ("migrate_postgres.sh", "rehearsal_restore.sh", "rollback_postgres_to_render.sh",
-                 "finalize_provider_cutover.sh", "verify_provider_first_start.sh",
-                 "run_exact_rehearsal.sh", "seed_first_cutover_backup.sh"):
+    # Provider sources are product (v4) or workspace (v5) databases; every
+    # cutover tool carries both families and selects one from live evidence.
+    for name in ("migrate_postgres.sh", "finalize_provider_cutover.sh",
+                 "verify_provider_first_start.sh", "seed_first_cutover_backup.sh"):
         text = (DEPLOY / name).read_text(encoding="utf-8")
-        assert "rehearsal_manifest_v3.sql" in text
-        assert "verify_schema_transition_v3.py" in text
-    for name in ("backup.sh", "seed_first_cutover_backup.sh"):
+        for version in (4, 5):
+            assert f"rehearsal_manifest_v{version}.sql" in text, name
+            assert f"verify_schema_transition_v{version}.py" in text, name
+    for name in ("finalize_provider_cutover.sh", "verify_provider_first_start.sh",
+                 "seed_first_cutover_backup.sh"):
         text = (DEPLOY / name).read_text(encoding="utf-8")
-        assert "RECOVERY_MANIFEST_VERSION=2" in text
-        assert "application_schema_compatibility=lecturesift-schema-v2" in text
+        assert "rehearsal_manifest_v3.sql" not in text, name
+        assert "verify_schema_transition_v3.py" not in text, name
+    backup = (DEPLOY / "backup.sh").read_text(encoding="utf-8")
+    assert "RECOVERY_MANIFEST_VERSION=2" in backup
+    assert "application_schema_compatibility=lecturesift-schema-v2" in backup
+    seed = (DEPLOY / "seed_first_cutover_backup.sh").read_text(encoding="utf-8")
+    assert "RECOVERY_MANIFEST_VERSION=2" not in seed
+    assert "RECOVERY_MANIFEST_VERSION=3" in seed and "RECOVERY_MANIFEST_VERSION=4" in seed
+    assert "printf 'application_schema_compatibility=%s\\n' \"$APPLICATION_SCHEMA_COMPATIBILITY\"" in seed
     for name in ("restore.sh", "restic_restore_rehearsal.sh"):
         text = (DEPLOY / name).read_text(encoding="utf-8")
         for version in (1, 2):

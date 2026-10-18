@@ -27,11 +27,16 @@ RENDER_WORKER_STOP_TOOL="$ROOT_DIR/deploy/render_worker_stop_evidence.py"
 SOURCE_REDIS_GUARD="$ROOT_DIR/deploy/source_redis_guard.py"
 SOURCE_POSTGRES_TRANSPORT="$ROOT_DIR/deploy/source_postgres_transport.py"
 TARGET_REDIS_MANIFEST_TOOL="$ROOT_DIR/deploy/target_redis_manifest.sh"
-TARGET_DATA_MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest_v3.sql"
+# Routed only from the schema_contract_version bound into the validated seed
+# and PostgreSQL proofs: v4 -> rehearsal manifest/verifier v4, v5 -> v5.
+SCHEMA_CONTRACT_VERSION=""
+TARGET_DATA_MANIFEST=""
+SCHEMA_VERIFIER=""
 SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt"
 PURCHASE_TERMS_CONTRACT="$ROOT_DIR/deploy/schema_contract_billing_purchase_terms_v1.txt"
 PRESERVED_SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt"
-SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition_v3.py"
+PRODUCT_SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_product_v1.txt"
+WORKSPACE_SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_workspace_v1.txt"
 POSTGRES_SECURITY_MANIFEST="$ROOT_DIR/deploy/postgres_security_manifest.sql"
 POSTGRES_SECURITY_VALIDATOR="$ROOT_DIR/deploy/validate_postgres_security_manifest.py"
 POSTGRES_ROLE_LOGIN_PROBE="$ROOT_DIR/deploy/postgres_role_login_probe.sh"
@@ -84,8 +89,10 @@ for path in "$CUTOVER_EVIDENCE_TOOL" "$RENDER_WORKER_STOP_TOOL" \
   "$PROVIDER_BASELINE_TOOL" \
   "$TARGET_REDIS_MANIFEST_TOOL" "$SOURCE_REDIS_GUARD" \
   "$SOURCE_POSTGRES_TRANSPORT" \
-  "$TARGET_DATA_MANIFEST" \
-  "$SCHEMA_CONTRACT" "$PURCHASE_TERMS_CONTRACT" "$PRESERVED_SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" \
+  "$ROOT_DIR/deploy/rehearsal_manifest_v4.sql" "$ROOT_DIR/deploy/rehearsal_manifest_v5.sql" \
+  "$ROOT_DIR/deploy/verify_schema_transition_v4.py" "$ROOT_DIR/deploy/verify_schema_transition_v5.py" \
+  "$SCHEMA_CONTRACT" "$PURCHASE_TERMS_CONTRACT" "$PRESERVED_SCHEMA_CONTRACT" \
+  "$PRODUCT_SCHEMA_CONTRACT" "$WORKSPACE_SCHEMA_CONTRACT" \
   "$POSTGRES_SECURITY_MANIFEST" "$POSTGRES_SECURITY_VALIDATOR" \
   "$POSTGRES_ROLE_LOGIN_PROBE" \
   "$RELEASE_TOOL" "$ROOT_DIR/compose.yaml"; do
@@ -245,6 +252,7 @@ assert_target_redis_manifest_unchanged() {
 
 capture_target_data_manifest() {
   local raw="$1" safe="$2"
+  [[ -n "$TARGET_DATA_MANIFEST" && -n "$SCHEMA_VERIFIER" ]] || return 1
   "${compose[@]}" exec -T postgres psql --no-psqlrc --quiet \
     --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -v ON_ERROR_STOP=1 \
     -f - <"$TARGET_DATA_MANIFEST" >"$raw" || return 1
@@ -414,6 +422,22 @@ SEED_BACKUP_SET_SHA256="$(sed -n 's/^backup_set_sha256=//p' "$SEED_PROOF")"
 [[ "$SEED_SNAPSHOT_ID" =~ ^[0-9a-f]{64}$ &&
    "$SEED_BACKUP_SET_SHA256" =~ ^[0-9a-f]{64}$ ]] ||
   fail "the first-cutover seed identity is malformed"
+# validate-seed has already required the seed and PostgreSQL proofs to name
+# the same contract; the finalizer evidence call re-checks it once more.
+[[ "$(grep -c '^schema_contract_version=' "$SEED_PROOF")" == "1" ]] ||
+  fail "the first-cutover seed schema contract is ambiguous"
+SCHEMA_CONTRACT_VERSION="$(sed -n 's/^schema_contract_version=//p' "$SEED_PROOF")"
+case "$SCHEMA_CONTRACT_VERSION" in
+  4)
+    TARGET_DATA_MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest_v4.sql"
+    SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition_v4.py"
+    ;;
+  5)
+    TARGET_DATA_MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest_v5.sql"
+    SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition_v5.py"
+    ;;
+  *) fail "the first-cutover seed names no supported schema contract" ;;
+esac
 
 [[ -d "$RECOVERY_ROOT" && ! -L "$RECOVERY_ROOT" &&
    "$(realpath -e -- "$RECOVERY_ROOT")" == "$RECOVERY_ROOT" ]] ||
@@ -483,7 +507,8 @@ python3 "$CUTOVER_EVIDENCE_TOOL" finalize \
   --recovery-sha256 "$(sha256sum "$recovery_marker" | awk '{print $1}')" \
   --retention-marker "$(basename -- "$RETENTION_MARKER")" \
   --retention-sha256 "$(sha256sum "$RETENTION_MARKER" | awk '{print $1}')" \
-  --repository-id-sha256 "$REPOSITORY_ID_SHA256" ||
+  --repository-id-sha256 "$REPOSITORY_ID_SHA256" \
+  --schema-contract-version "$SCHEMA_CONTRACT_VERSION" ||
   fail "the exact matching provider-cutover proof could not be finalized"
 
 # Capture the provider census from the fixed root-only runtime configuration,

@@ -629,7 +629,14 @@ def test_first_start_is_crash_fenced_and_failure_stops_all_public_writers():
         "docker compose up -d --no-deps --wait --wait-timeout 600 egress-proxy api worker"
     ) < service.index("verify_provider_first_start.sh complete")
     assert "MANIFEST_COMPLETE" in verifier
-    assert "verify_schema_transition_v3.py" in verifier
+    assert "verify_schema_transition_v3.py" not in verifier
+    for version in (4, 5):
+        assert f'DATA_MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest_v{version}.sql"' in verifier
+        assert f'SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition_v{version}.py"' in verifier
+    # The final proof selects the family; the consume-only branch stays first.
+    assert verifier.index('if [[ "$MODE" == "complete" ]]; then') < verifier.index(
+        "final-schema-contract-version --expected-revision"
+    ) < verifier.index('-f - <"$DATA_MANIFEST"')
     assert "recover-first-start" in verifier
     assert "LECTURESIFT_PROVIDER_FIRST_START_RECOVERY_CONFIRM" in verifier
 
