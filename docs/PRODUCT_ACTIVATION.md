@@ -16,6 +16,8 @@ before manifest, locks existing tables, compares schema and row fingerprints,
 adds only absent whole tables, verifies the resulting transition, and commits
 all DDL together. An incompatible existing table or stale row rejects the run.
 Historical cutover v2/v3 and recovery v1/v2 files retain their exact meaning.
+Provider cutover tooling selects cutover v4/recovery v3 or cutover v5/recovery
+v4 from the live source catalog and refuses a core-only v3 source.
 
 ## Managed Render release
 
@@ -92,13 +94,15 @@ media access evidence.
    rolls back the table additions; never repair by manually creating a few tables.
 4. Reapply the existing `postgres-app-role.sh` runtime grants. Verify that the API
    can use all eight tables and the worker cannot read or modify them. Run the
-   strict v4 manifest and verifier again. The old provider cutover/rollback scripts
-   remain core-only and deliberately reject this expanded inventory; do not use
-   them as product migration or downgrade tools.
+   strict v4 manifest and verifier again. The provider cutover and rollback
+   scripts are not product migration or downgrade tools. They detect the
+   product (v4) or workspace (v5) family from the live catalog, bind it into the
+   cutover proof and refuse a core-only v3 source.
 5. Set private runtime `LECTURESIFT_PRODUCT_SCHEMA_VERSION=1` so normal backups
-   select recovery v3. The restore and restore-rehearsal commands recognize v1,
-   v2 and v3 metadata; the configuration snapshot format v3 preserves all new
-   release contracts while still verifying previous v1/v2 snapshots.
+   select recovery v3. The restore and restore-rehearsal commands recognize v1
+   to v4 metadata; configuration snapshot format v4 preserves the product and
+   workspace release contracts while still verifying previous v1/v2/v3
+   snapshots.
 6. Take a product-aware backup and restore it into the dedicated rehearsal
    environment. Compare schema and all row fingerprints, including cached
    answers, in-flight reservations, old coupons and unused credits. Validate

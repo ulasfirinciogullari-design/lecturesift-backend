@@ -109,9 +109,16 @@ skip the runtime gate only when a usable Bash is unavailable.
    disaster-restore validation retain their separate explicit proof paths.
 
 The outer gate retains the complete manifest and verifies both the pre- and
-post-rehearsal main database with `verify_schema_transition_v3.py current`,
-using `rehearsal_manifest_v3.sql` and the reviewed provider-session,
-purchase-terms and preserved email-verification schema contracts.
+post-rehearsal main database. Each capture first detects the main database's
+schema family from a read-only catalog inventory (`schema_contract_state.py`):
+core v3 before the provider cutover, product v4 or workspace v5 after it. It
+then runs that family's `rehearsal_manifest_vN.sql` and
+`verify_schema_transition_vN.py current` with the reviewed provider-session,
+purchase-terms and preserved email-verification schema contracts, and the
+before and after captures must name the same family. The inner rehearsal
+detects the Render source family the same way and accepts only v4 or v5; its
+source, clone, migrated clone and post-E2E clone all use that one strict
+family, and the migration must be exactly `current_to_current`.
 `TABLE_DIFF`, `SCHEMA_COMPAT`,
 `UNVALIDATED_FK`, any non-zero `ANOMALY`, a missing `SCHEMA_OBJECT`, or contract
 drift rejects admission before the canonical before/after comparison.

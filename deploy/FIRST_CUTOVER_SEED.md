@@ -72,23 +72,33 @@ forget`/`prune`, or interprets an unproved snapshot as success.
      bash /opt/lecturesift/deploy/seed_first_cutover_backup.sh
    ```
 
-   The script first opens one exported read-only PostgreSQL snapshot. Before
-   `pg_dump` consumes it, the script runs the same strict
-   `rehearsal_manifest_v3.sql` inside that snapshot and verifies it with
-   `verify_schema_transition_v3.py current` and the same provider-session,
-   purchase-terms and preserved email-verification schema contracts as
-   PostgreSQL migration. That fresh, snapshot-bound SHA-256 must exactly equal
-   `migrated_target_manifest_sha256` in the root-only
-   `postgres-cutover.ok`; a changed target fails before any backup is taken.
+   The script takes the schema family only from `schema_contract_version` in
+   the root-only `postgres-cutover.ok`, which PostgreSQL migration detected from
+   the live Render catalog: 4 (product) selects `rehearsal_manifest_v4.sql`,
+   `verify_schema_transition_v4.py`, `recovery_manifest_v3.sql` and
+   `application_schema_compatibility=lecturesift-schema-v3`; 5 (workspace)
+   selects the v5 manifest/verifier, `recovery_manifest_v4.sql` and
+   `lecturesift-schema-v4`. The private runtime
+   `LECTURESIFT_PRODUCT_SCHEMA_VERSION` must already be 1 or 2 respectively,
+   so the scheduled `backup.sh` that follows records the same recovery family;
+   the label never selects the family. The script first opens one exported
+   read-only PostgreSQL snapshot. Before `pg_dump` consumes it, the script runs
+   that strict manifest inside the snapshot and verifies it with the selected
+   verifier and the same provider-session, purchase-terms and preserved
+   email-verification schema contracts as PostgreSQL migration. That fresh,
+   snapshot-bound SHA-256 must exactly equal `migrated_target_manifest_sha256`
+   in `postgres-cutover.ok`; a changed target fails before any backup is taken.
    The script then exports one PostgreSQL MVCC snapshot, binds both `pg_dump`
-   and `recovery_manifest_v2.sql` to it, forces and validates a Redis 7.4 AOF/RDB
-   checkpoint, creates the exact `lecturesift-backup-v2` payload plus the
-   existing `configuration-snapshot-v1`, uploads it with the fixed production
+   and the selected recovery manifest to it, forces and validates a Redis 7.4
+   AOF/RDB checkpoint, creates the exact `lecturesift-backup-v2` payload plus
+   the existing `configuration-snapshot-v1` package (written in configuration
+   snapshot format v4), uploads it with the fixed production
    host/tags, reopens the full 64-hex Restic snapshot, and deletes its
    root-private plaintext staging directory before atomically writing
    `first-cutover-seed.ok`. The seed proof repeats the verified migrated-target
-   manifest SHA-256 and must match the PostgreSQL proof, binding the captured
-   backup to the already-proven migrated state. Plaintext cleanup is ordinary
+   manifest SHA-256 and schema contract version and must match the PostgreSQL
+   proof, binding the captured backup to the already-proven migrated state.
+   Finalization and the first-start gate reuse that recorded family. Plaintext cleanup is ordinary
    filesystem deletion, not a guarantee of storage-media sanitization.
 6. Do not allow another snapshot writer to run. Immediately execute:
 

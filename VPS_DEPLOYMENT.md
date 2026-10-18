@@ -320,16 +320,16 @@ and non-secret E2E reports under `/var/backups/lecturesift/rehearsal`; no databa
 clone or raw production dump is handed off to a later command or retained
 indefinitely; non-secret reports are pruned after 30 days. The rehearsal first
 proves exact manifest equality between the read-only source and its raw restored
-clone. The sole pre-release compatibility exception is an explicitly recorded
-missing `billing_payment_provider_sessions` table; no missing-table anomaly is
-reported as zero. The owner migration then runs only on the disposable clone,
-after which a strict table diff, schema fingerprint, constraints and anomaly
-report must pass. Existing `DATABASE`, `STATUS` and table-data fingerprints must
-remain unchanged, and the new table must be empty when it was absent at source.
-The migration also emits a canonical `SCHEMA_OBJECT` inventory. The reviewed
-revision contract fixes every column, index and constraint of the sole allowed
-new table, while all other public-table column/index/constraint records must be
-byte-identical before and after migration. This is deliberately a migration
+clone. The source schema family is detected first from a read-only catalog
+inventory; only product (v4) or workspace (v5) is accepted, and that family's
+strict manifest and verifier are used for every capture with no compatibility
+marker. The owner provisioning then runs only on the disposable clone, after
+which a strict table diff, schema fingerprint, constraints and anomaly report
+must pass. Existing `DATABASE`, `STATUS` and table-data fingerprints must
+remain unchanged and the transition must be exactly `current_to_current`.
+The migration also emits a canonical `SCHEMA_OBJECT` inventory, and every
+public-table column/index/constraint record must be byte-identical before and
+after provisioning. This is deliberately a migration
 delta contract, not a golden declaration of preserved legacy schemas, views,
 functions, grants or extensions. Both application E2Es are mandatory. Their
 generated UUIDs and addresses are then consumed by a rehearsal-only cleanup
@@ -535,9 +535,13 @@ the installer also refuses an already-enabled staging unit.
    one Render MVCC snapshot, runs the manifest and `pg_dump` against that same
    read-only snapshot, and requires exact live before/snapshot/after equality.
    The source database is never schema-migrated or otherwise written by this
-   command. A pre-release source may carry only the explicitly recorded missing
-   `billing_payment_provider_sessions` compatibility marker; every other missing
-   table, unvalidated constraint or data anomaly remains fatal. Before
+   command. Before any manifest runs, a read-only catalog inventory selects the
+   source family from the live database, never from an environment label:
+   product (`schema_contract_version=4`, manifest/verifier v4) or workspace
+   (`5`, v5). A core-only (v3), partial or unknown table set is refused, and no
+   compatibility marker, missing table, unvalidated constraint or data anomaly
+   is accepted. The selected version is bound into the PostgreSQL, seed and
+   final proofs, which the seed, finalizer, first-start gate and rollback reuse. Before
    replacing OVH PostgreSQL it stops only the OVH API and worker, records a
    root-only target rollback dump, and preserves 5 GiB of host reserve. It
    restores without source owners/ACLs and proves the raw target manifest is
@@ -545,10 +549,8 @@ the installer also refuses an already-enabled staging unit.
    It then applies the current schema on OVH, provisions the least-privilege
    database roles, and requires a strict manifest with no compatibility marker,
    table difference, unvalidated constraint or anomaly. `DATABASE`, `STATUS`
-   and every pre-existing table-data fingerprint must survive that migration;
-   if the provider-session table was absent at source it must be newly created
-   and empty, while an already existing table and all of its rows must be
-   preserved. Real one-shot API and worker table-access probes run only against
+   and every pre-existing table-data fingerprint must survive that migration,
+   and the schema transition must be exactly `current_to_current`. Real one-shot API and worker table-access probes run only against
    this migrated target and must leave its strict manifest unchanged. Render's
    freeze, stopped worker/queue and zero pending payments are rechecked after
    target verification. Both the source manifest hash and strict migrated-target
