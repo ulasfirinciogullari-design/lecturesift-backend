@@ -512,10 +512,10 @@ the installer also refuses an already-enabled staging unit.
    `RENDER_WORKER_SERVICE_ID`, `RENDER_WORKER_SERVICE_NAME`,
    `RENDER_INSTAGRAM_CRON_SERVICE_ID`, and
    `RENDER_INSTAGRAM_CRON_SERVICE_NAME`. The token needs
-   read access to those two services only. Cutover tools issue only five
-   official Render GET requests: each service, the worker's instances, and the
-   cron's `cron_job_run_started` and `cron_job_run_ended` events from the last
-   13 hours. Render has no instance list for cron jobs (it answers HTTP 400), so
+   read access to those two services only. Cutover tools issue only six
+   official Render GET requests: each service, the worker's instances, the
+   cron's `cron_job_run_ended` and then `cron_job_run_started` events from the
+   last 13 hours, and the cron service again. Render has no instance list for cron jobs (it answers HTTP 400), so
    the cron counts as idle only when every run started in that window has also
    ended. The tools require the exact worker and cron to be suspended with no
    listed worker instance and no running cron run, and bind the secret-free

@@ -258,10 +258,12 @@ def worker_stop_digest(
         worker_service = _get_json(connection, f"/v1/services/{worker['id']}", token)
         worker_instances = _get_json(connection, f"/v1/services/{worker['id']}/instances", token)
         cron_service = _get_json(connection, f"/v1/services/{cron['id']}", token)
-        # Started events are read before ended events, so a run that ends
-        # between the two reads still shows as finished rather than missing.
+        # Ended events are read before started events, so a run still active at
+        # the ended read is always in the started read.  A run ending between
+        # the two reads only makes the proof fail closed.  The cron is read
+        # again last, so it was suspended before and after both event reads.
         cron_events = {}
-        for event_type in ("cron_job_run_started", "cron_job_run_ended"):
+        for event_type in ("cron_job_run_ended", "cron_job_run_started"):
             query = urlencode(
                 {
                     "type": event_type,
@@ -272,6 +274,7 @@ def worker_stop_digest(
             cron_events[event_type] = _get_json(
                 connection, f"/v1/services/{cron['id']}/events?{query}", token
             )
+        cron_service_after = _get_json(connection, f"/v1/services/{cron['id']}", token)
     finally:
         try:
             connection.close()
@@ -290,6 +293,7 @@ def worker_stop_digest(
     observed = (
         (worker, worker_service, "instances", worker_instances),
         (cron, cron_service, "activeRuns", sorted(started - ended)),
+        (cron, cron_service_after, "activeRuns", sorted(started - ended)),
     )
     canonical_services = []
     for identity, service, idle_key, active in observed:
@@ -331,9 +335,12 @@ def worker_stop_digest(
                 "type": identity["type"],
             }
         )
+    worker_entry, cron_entry, cron_entry_after = canonical_services
+    if cron_entry_after != cron_entry:
+        raise StopEvidenceError("the Render cron job changed while its stop proof was read")
     canonical = {
         "schema": SCHEMA,
-        "services": canonical_services,
+        "services": [worker_entry, cron_entry],
     }
     encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()

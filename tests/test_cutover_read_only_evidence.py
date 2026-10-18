@@ -128,21 +128,24 @@ def _stopped_responses(
     cron=None,
     started=None,
     ended=None,
+    cron_after=None,
 ):
+    cron = cron if cron is not None else _render_cron()
     return [
         FakeResponse(service if service is not None else _render_service()),
         FakeResponse(list(instances)),
-        FakeResponse(cron if cron is not None else _render_cron()),
-        FakeResponse(
-            started
-            if started is not None
-            else _cron_events("cron_job_run_started", [29872650, 29872665])
-        ),
+        FakeResponse(cron),
         FakeResponse(
             ended
             if ended is not None
             else _cron_events("cron_job_run_ended", [29872635, 29872650, 29872665])
         ),
+        FakeResponse(
+            started
+            if started is not None
+            else _cron_events("cron_job_run_started", [29872650, 29872665])
+        ),
+        FakeResponse(cron_after if cron_after is not None else cron),
     ]
 
 
@@ -155,7 +158,7 @@ def _digest(responses, *, clock=lambda: NOW):
     )
 
 
-def test_render_executor_stop_proof_uses_only_five_exact_gets_and_is_stable():
+def test_render_executor_stop_proof_uses_only_six_exact_gets_and_is_stable():
     connections = []
 
     def factory(host, port, *, context, timeout):
@@ -179,8 +182,10 @@ def test_render_executor_stop_proof_uses_only_five_exact_gets_and_is_stable():
     ]
     # Render answers HTTP 400 for a cron job's instance list, so it is never asked.
     assert not any(path.startswith(f"/v1/services/{CRON_ID}/instances") for path in paths)
+    assert len(paths) == 6
+    assert paths[5] == f"/v1/services/{CRON_ID}"
     queried_types = []
-    for path in paths[3:]:
+    for path in paths[3:5]:
         route, query = path.split("?", 1)
         assert route == f"/v1/services/{CRON_ID}/events"
         params = parse_qs(query, strict_parsing=True)
@@ -188,7 +193,8 @@ def test_render_executor_stop_proof_uses_only_five_exact_gets_and_is_stable():
         assert params["limit"] == ["100"]
         assert set(params) == {"type", "startTime", "limit"}
         queried_types.extend(params["type"])
-    assert queried_types == ["cron_job_run_started", "cron_job_run_ended"]
+    # Ended first: a run still active at that read is always in the started read.
+    assert queried_types == ["cron_job_run_ended", "cron_job_run_started"]
     assert all(
         item[2]["Authorization"] == "Bearer " + _render_control()["RENDER_API_TOKEN"]
         for item in connection.requests
@@ -233,6 +239,18 @@ def test_render_stop_proof_fails_closed_on_wrong_identity_state_or_instances(
 def test_render_stop_proof_fails_closed_when_instagram_cron_can_run(cron):
     with pytest.raises(render_stop.StopEvidenceError):
         _digest(_stopped_responses(cron=cron))
+
+
+@pytest.mark.parametrize(
+    "cron_after",
+    [
+        _render_cron(suspended="not_suspended"),
+        _render_cron(suspenders=["user", "billing"]),
+    ],
+)
+def test_render_stop_proof_fails_closed_when_cron_changes_during_the_proof(cron_after):
+    with pytest.raises(render_stop.StopEvidenceError):
+        _digest(_stopped_responses(cron_after=cron_after))
 
 
 def test_render_stop_proof_fails_closed_while_a_cron_run_is_in_progress():
