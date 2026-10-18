@@ -65,6 +65,14 @@ def _runtime_fixture(tmp_path: Path) -> Path:
         "INSTAGRAM_DAILY_AUTOMATION_ENABLED": "true",
         "INSTAGRAM_DAILY_MEDIA_TYPE": "REELS",
         "INSTAGRAM_ADMIN_TOKEN": "ig-admin",
+        "INSTAGRAM_STUDIO_ENABLED": "true",
+        "INSTAGRAM_REPLIES_ENABLED": "true",
+        "INSTAGRAM_REEL_HOUR": "20",
+        "INSTAGRAM_CAROUSEL_HOUR": "13",
+        "INSTAGRAM_REPLIES_DAILY_LIMIT": "120",
+        "ELEVENLABS_API_KEY": "voice-secret",
+        "ELEVENLABS_VOICE_ID": "voice-id",
+        "ELEVENLABS_MODEL": "eleven_multilingual_v2",
         "ADMIN_ADMIN": "root-admin",
         "BILLING_SESSION_SECRET": "session-secret",
         "PAYMENT_TOKEN_BINDING_SECRET": "payment-binding-secret",
@@ -120,7 +128,7 @@ def test_worker_and_instagram_roles_are_exact_least_privilege(tmp_path: Path):
     worker_keys = _keys(worker)
     instagram_keys = _keys(instagram)
     host_only = {key for key in assignments if role_envs._host_only(key)}
-    assert api_keys == set(assignments).difference(host_only)
+    assert api_keys == set(assignments).difference(host_only | role_envs.INSTAGRAM_ONLY_KEYS)
     assert "DATABASE_URL" in worker_keys
     assert "LECTURESIFT_WORKER_DATABASE_URL" not in worker_keys
     assert (
@@ -133,6 +141,9 @@ def test_worker_and_instagram_roles_are_exact_least_privilege(tmp_path: Path):
     assert api_keys.isdisjoint(host_only)
     assert worker_keys.isdisjoint(host_only)
     assert instagram_keys.isdisjoint(host_only)
+    assert role_envs.INSTAGRAM_ONLY_KEYS <= instagram_keys
+    assert api_keys.isdisjoint(role_envs.INSTAGRAM_ONLY_KEYS)
+    assert worker_keys.isdisjoint(role_envs.INSTAGRAM_ONLY_KEYS)
 
     forbidden_worker = {
         "ADMIN_ADMIN",
@@ -179,9 +190,6 @@ def test_worker_and_instagram_roles_are_exact_least_privilege(tmp_path: Path):
             "DATABASE_URL",
             "CELERY_BROKER_URL",
             "REDIS_URL",
-            "OPENAI_API_KEY",
-            "S3_ACCESS_KEY_ID",
-            "S3_SECRET_ACCESS_KEY",
             "ADMIN_ADMIN",
             "INSTAGRAM_ADMIN_TOKEN",
             "BILLING_SESSION_SECRET",
@@ -218,6 +226,28 @@ def test_disabled_instagram_role_needs_no_account_credentials(tmp_path: Path):
     assignments["INSTAGRAM_DAILY_AUTOMATION_ENABLED"] = "true"
     with pytest.raises(role_envs.RoleEnvironmentError, match="missing instagram keys"):
         role_envs.render_role(assignments, "instagram")
+
+
+def test_enabled_instagram_studio_and_replies_need_their_credentials(tmp_path: Path):
+    assignments = role_envs.parse_runtime(_runtime_fixture(tmp_path))
+    assert "ELEVENLABS_API_KEY=voice-secret" in role_envs.render_role(assignments, "instagram")
+
+    studio = dict(assignments, ELEVENLABS_API_KEY="")
+    with pytest.raises(role_envs.RoleEnvironmentError, match="ELEVENLABS_API_KEY"):
+        role_envs.render_role(studio, "instagram")
+
+    replies_only = dict(assignments, INSTAGRAM_STUDIO_ENABLED="false", OPENAI_API_KEY="")
+    del replies_only["ELEVENLABS_API_KEY"]
+    with pytest.raises(role_envs.RoleEnvironmentError, match="OPENAI_API_KEY"):
+        role_envs.render_role(replies_only, "instagram")
+
+    legacy = dict(
+        assignments,
+        INSTAGRAM_STUDIO_ENABLED="false",
+        INSTAGRAM_REPLIES_ENABLED="false",
+        ELEVENLABS_API_KEY="",
+    )
+    assert "INSTAGRAM_STUDIO_ENABLED=false" in role_envs.render_role(legacy, "instagram")
 
 
 def test_role_generation_rejects_ambiguous_or_dangerous_master_files(tmp_path: Path):
