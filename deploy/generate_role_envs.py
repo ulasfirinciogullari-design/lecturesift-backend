@@ -152,6 +152,23 @@ INSTAGRAM_ENABLED_REQUIRED = frozenset(
     }
 )
 
+# Values the studio and reply modes cannot run without. Checked only while the
+# Instagram job is enabled, so a half-copied runtime.env fails at generation
+# instead of silently falling back to the legacy publisher.
+INSTAGRAM_STORAGE_REQUIRED = frozenset(
+    {
+        "OPENAI_API_KEY",
+        "S3_ENDPOINT_URL",
+        "S3_BUCKET",
+        "S3_ACCESS_KEY_ID",
+        "S3_SECRET_ACCESS_KEY",
+    }
+)
+INSTAGRAM_STUDIO_REQUIRED = INSTAGRAM_STORAGE_REQUIRED | {
+    "ELEVENLABS_API_KEY",
+    "ELEVENLABS_VOICE_ID",
+}
+
 # Application credentials are intentionally enumerated. A future secret-like
 # name that is not reviewed here blocks generation instead of silently entering
 # the internet-facing API container.
@@ -319,6 +336,16 @@ def render_role(assignments: Mapping[str, str], role: str) -> str:
             )
         keys = (key for key in assignments if key in INSTAGRAM_KEYS)
         required = INSTAGRAM_ENABLED_REQUIRED
+        mode_required: set[str] = set()
+        if _literal_value(assignments, "INSTAGRAM_STUDIO_ENABLED").casefold() == "true":
+            mode_required |= INSTAGRAM_STUDIO_REQUIRED
+        if _literal_value(assignments, "INSTAGRAM_REPLIES_ENABLED").casefold() == "true":
+            mode_required |= INSTAGRAM_STORAGE_REQUIRED
+        empty = sorted(key for key in mode_required if not _literal_value(assignments, key))
+        if empty:
+            raise RoleEnvironmentError(
+                f"runtime environment is missing instagram studio keys: {', '.join(empty)}"
+            )
     else:
         raise RoleEnvironmentError(f"unknown role: {role}")
 

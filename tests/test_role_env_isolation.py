@@ -228,6 +228,28 @@ def test_disabled_instagram_role_needs_no_account_credentials(tmp_path: Path):
         role_envs.render_role(assignments, "instagram")
 
 
+def test_enabled_instagram_studio_and_replies_need_their_credentials(tmp_path: Path):
+    assignments = role_envs.parse_runtime(_runtime_fixture(tmp_path))
+    assert "ELEVENLABS_API_KEY=voice-secret" in role_envs.render_role(assignments, "instagram")
+
+    studio = dict(assignments, ELEVENLABS_API_KEY="")
+    with pytest.raises(role_envs.RoleEnvironmentError, match="ELEVENLABS_API_KEY"):
+        role_envs.render_role(studio, "instagram")
+
+    replies_only = dict(assignments, INSTAGRAM_STUDIO_ENABLED="false", OPENAI_API_KEY="")
+    del replies_only["ELEVENLABS_API_KEY"]
+    with pytest.raises(role_envs.RoleEnvironmentError, match="OPENAI_API_KEY"):
+        role_envs.render_role(replies_only, "instagram")
+
+    legacy = dict(
+        assignments,
+        INSTAGRAM_STUDIO_ENABLED="false",
+        INSTAGRAM_REPLIES_ENABLED="false",
+        ELEVENLABS_API_KEY="",
+    )
+    assert "INSTAGRAM_STUDIO_ENABLED=false" in role_envs.render_role(legacy, "instagram")
+
+
 def test_role_generation_rejects_ambiguous_or_dangerous_master_files(tmp_path: Path):
     duplicate = tmp_path / "duplicate.env"
     duplicate.write_text("DATABASE_URL=one\nDATABASE_URL=two\n", encoding="utf-8")

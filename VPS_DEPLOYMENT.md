@@ -33,7 +33,10 @@ systemd owners for the private core and public ingress.
   and one real analysis job pass on the new API.
 - Never run both Instagram schedulers at the same time.
   `INSTAGRAM_DAILY_AUTOMATION_ENABLED` stays `false` through cutover and is
-  changed only after the Render cron is confirmed disabled.
+  changed only after the Render cron is confirmed disabled. Copy the Render
+  cron's studio, reply and ElevenLabs values into `runtime.env` first: with
+  automation enabled, role generation fails if studio or replies are on
+  without their OpenAI, R2 or ElevenLabs values.
 - The Compose stack is a single-host 4-vCPU/8-GB profile. Every long-running
   container has a hard memory/CPU/PID ceiling, a lower reservation and a
   bounded `/tmp`. The one worker stays at concurrency 1 so FFmpeg, Tesseract
