@@ -523,6 +523,13 @@ the installer also refuses an already-enabled staging unit.
    not enough: `deploy/migrate_postgres.sh` checks the direct health response
    and requires the combined count of manual `pending` plus card
    `created`/`pending` orders to remain exactly zero before and after capture.
+   On a product or workspace database the API's assistant retention loop keeps
+   running every 60 seconds even in freeze mode: it clears cached answer text
+   older than 15 minutes and removes guest trial counters once they fall outside
+   the two-day UTC window. Start captures at least 15 minutes after the last
+   assistant answer and not across 00:00 UTC; otherwise the exact
+   before/snapshot/after equality fails closed and the step must be repeated.
+   The same applies to exact rehearsals while the OVH API is running.
 3. From a clean, reviewed checkout, record one 32-hex cutover ID and its exact
    40-hex Git revision in the root operator session. Use those same two values
    for PostgreSQL, Redis and finalization; never generate a second ID halfway
