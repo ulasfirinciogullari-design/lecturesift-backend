@@ -68,9 +68,11 @@ def test_candidate_rehearsal_files_stream_atomically_into_allowlisted_tmpfs_path
     assert stack.count("docker cp") == 0
     assert restore.count("docker cp") == 1
     assert (
-        'docker cp "$ROOT_DIR/deploy/rehearsal_manifest_v3.sql" \\\n'
-        "  lecturesift-postgres-1:/tmp/rehearsal_manifest_v3.sql"
+        'docker cp "$REHEARSAL_MANIFEST" \\\n'
+        '  "lecturesift-postgres-1:$TARGET_REHEARSAL_MANIFEST"'
     ) in restore
+    assert "TARGET_REHEARSAL_MANIFEST=/tmp/lecturesift-rehearsal-manifest.sql" in restore
+    assert restore.count('rm -f "$TARGET_REHEARSAL_MANIFEST"') == 2
 
     for script in (stack, restore):
         helper = script.split("write_candidate_tmp_file() {", 1)[1].split("\n}\n", 1)[0]
@@ -186,16 +188,31 @@ def test_database_rehearsal_root_and_source_consistency_fail_closed():
     assert "Source and restored PostgreSQL version/encoding/collation identities differ" in script
     assert "Rehearsal data-integrity anomalies must be resolved before cutover" in script
     assert '$1 == "ANOMALY" && $3 != "0"' in script
-    assert script.count("LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on") == 3
-    assert "legacy_compat_marker='SCHEMA_COMPAT|legacy_missing_table|" in script
+    # The source family is detected live (v4/v5 only) before any manifest and
+    # every capture is strict: no legacy-absent table is tolerated anywhere.
+    assert "LECTURESIFT_ALLOW_LEGACY" not in script
+    assert "legacy_compat_marker" not in script
+    assert "legacy_provider_sessions_missing" not in script
+    assert "TABLE|billing_payment_provider_sessions|0|0|0" not in script
+    assert "verify_schema_transition_v3.py" not in script
+    assert " legacy --manifest" not in script
+    inventory = script.index("-f /probe/schema_contract_inventory.sql > /backup/source-inventory.txt")
+    detection = script.index('--inventory "$run_dir/source-inventory.txt" --accept 4,5')
+    first_source_manifest = script.index('-f "/probe/$MANIFEST_NAME" > /backup/source-before.txt')
+    assert inventory < detection < first_source_manifest
+    assert script.index('-f "/probe/$MANIFEST_NAME" > /backup/source-after.txt') > first_source_manifest
+    assert 'REHEARSAL_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition_v${SOURCE_CONTRACT_VERSION}.py"' in script
+    assert script.count('python3 "$REHEARSAL_VERIFIER" current') == 5
+    assert "A contract-current source manifest must not contain schema compatibility evidence." in script
+    assert "^schema_transition=current_to_current$" in script
     assert "target-migrated.txt" in script
     assert "target-after-e2e.txt" in script
     assert "The schema migration changed pre-existing table data" in script
-    assert "TABLE|billing_payment_provider_sessions|0|0|0" in script
-    assert "legacy_provider_sessions_missing" in script
     assert "grep -E '^(DATABASE|TABLE|STATUS)" in script
-    assert 'if [[ "$legacy_provider_sessions_missing" == "true" ]]' in script
-    assert "target-after-migration.comparable" in script
+    assert (
+        'diff -u "$run_dir/target-before-migration.data" \\\n'
+        '  "$run_dir/target-after-migration.data"'
+    ) in script
     raw_equality = script.index("Stable source and restored target manifests differ")
     schema_migration = script.index('LECTURESIFT_PROVISION_DATABASE="$rehearsal_db"')
     strict_manifest = script.index('> "$run_dir/target-migrated.txt"')
@@ -1224,8 +1241,8 @@ def test_rehearsal_hard_purge_and_schema_contract_are_fail_closed():
     assert "SELECT 1, 'SCHEMA_OBJECT|' || item" in manifest
     assert "SCHEMA_OBJECT" in rehearsal and "SCHEMA_OBJECT" in migration
     assert "SCHEMA_OBJECT" in rollback
-    assert "verify_schema_transition_v3.py" in rehearsal
     for version in (4, 5):
+        assert f"verify_schema_transition_v{version}.py" in rehearsal
         assert f"verify_schema_transition_v{version}.py" in migration
     assert "verify_schema_transition_v3.py" in rollback
     assert "schema_contract_payment_provider_sessions_v1.txt" in rehearsal
@@ -1383,7 +1400,8 @@ def test_rehearsal_clone_owner_and_candidate_secret_boundaries_are_structural():
     postgres_role = _read("deploy/postgres-app-role.sh")
     stack = _read("deploy/rehearsal_stack.sh")
 
-    assert restore.count('--env "PGOPTIONS=-c default_transaction_read_only=on"') == 3
+    # Source inventory, source-before manifest, dump and source-after manifest.
+    assert restore.count('--env "PGOPTIONS=-c default_transaction_read_only=on"') == 4
     assert "lecturesift_rehearsal_owner_" in restore
     assert "owner_role=lecturesift_rehearsal_owner_" in restore
     assert "WHERE rolname IN (:'owner_role', :'api_role', :'worker_role')" in restore

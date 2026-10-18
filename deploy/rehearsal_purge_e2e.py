@@ -37,6 +37,20 @@ EMAIL_PATTERNS = (
 OWNER_ONLY_USER_FOREIGN_KEYS = frozenset(
     {("billing_email_verifications", "user_id")}
 )
+# Product (v4) and workspace (v5) tables key private rows by plain user/job
+# columns without a billing_users foreign key, so the inventory above cannot
+# find them. They exist only on product/workspace clones: an absent table is
+# skipped, while a present one is purged by user and then proven empty for
+# every rehearsal user and job. Items are removed before their folders.
+OPTIONAL_USER_TABLES = (
+    "assistant_credit_grants_v1",
+    "assistant_credit_requests_v1",
+    "workspace_items_v1",
+    "workspace_folders_v1",
+    "admin_ad_free_grants_v1",
+    "admin_order_archives_v1",
+)
+OPTIONAL_JOB_COLUMNS = {"workspace_items_v1": "job_id"}
 
 
 class PurgeError(RuntimeError):
@@ -292,6 +306,52 @@ def _assert_no_matches(
             raise PurgeError("rehearsal purchase terms remain")
 
 
+def _present_optional_tables(connection: Connection) -> tuple[str, ...]:
+    present = {
+        str(name)
+        for name in connection.execute(
+            text(
+                "SELECT c.relname FROM pg_catalog.pg_class c "
+                "JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace "
+                "WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') "
+                "AND c.relname IN :names"
+            ).bindparams(bindparam("names", expanding=True)),
+            {"names": list(OPTIONAL_USER_TABLES)},
+        ).scalars().all()
+    }
+    return tuple(table for table in OPTIONAL_USER_TABLES if table in present)
+
+
+def _purge_optional_tables(
+    connection: Connection,
+    user_ids: list[str],
+    job_ids: list[str],
+) -> dict[str, int]:
+    deleted: dict[str, int] = {}
+    present = _present_optional_tables(connection)
+    for table_name in present:
+        deleted[table_name] = _delete_in(
+            connection,
+            f"DELETE FROM public.{table_name} WHERE user_id IN :values",
+            user_ids,
+        )
+    for table_name in present:
+        checks = [("user_id", user_ids)]
+        if table_name in OPTIONAL_JOB_COLUMNS:
+            checks.append((OPTIONAL_JOB_COLUMNS[table_name], job_ids))
+        for column_name, values in checks:
+            remaining = connection.execute(
+                text(
+                    f"SELECT count(*) FROM public.{table_name} "
+                    f"WHERE {column_name} IN :values"
+                ).bindparams(bindparam("values", expanding=True)),
+                {"values": values},
+            ).scalar_one()
+            if int(remaining):
+                raise PurgeError(f"rehearsal rows remain in {table_name}")
+    return deleted
+
+
 def purge(application_result: Path, formats_result: Path) -> dict[str, object]:
     if os.getenv("LECTURESIFT_REHEARSAL") != "1":
         raise PurgeError("LECTURESIFT_REHEARSAL=1 is required")
@@ -355,6 +415,8 @@ def purge(application_result: Path, formats_result: Path) -> dict[str, object]:
                 "DELETE FROM public.billing_purchase_terms WHERE reference IN :values",
                 term_references,
             )
+
+            deleted.update(_purge_optional_tables(connection, user_ids, job_ids))
 
             foreign_keys = _direct_user_foreign_keys(connection)
             mutable_foreign_keys = _mutable_user_foreign_keys(foreign_keys)

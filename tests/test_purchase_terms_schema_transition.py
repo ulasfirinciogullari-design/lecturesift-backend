@@ -137,14 +137,20 @@ def test_current_recovery_and_cutover_routing_preserves_historical_files():
     assert "('billing_purchase_terms')" in (DEPLOY / "recovery_manifest_v2.sql").read_text(encoding="utf-8")
     # Provider sources are product (v4) or workspace (v5) databases; every
     # cutover tool carries both families and selects one from live evidence.
-    for name in ("migrate_postgres.sh", "finalize_provider_cutover.sh",
+    for name in ("migrate_postgres.sh", "rehearsal_restore.sh", "finalize_provider_cutover.sh",
                  "verify_provider_first_start.sh", "seed_first_cutover_backup.sh"):
         text = (DEPLOY / name).read_text(encoding="utf-8")
         for version in (4, 5):
             assert f"rehearsal_manifest_v{version}.sql" in text, name
             assert f"verify_schema_transition_v{version}.py" in text, name
-    for name in ("finalize_provider_cutover.sh", "verify_provider_first_start.sh",
-                 "seed_first_cutover_backup.sh"):
+    # The OVH main database is core before the cutover and product/workspace
+    # after it, so the exact-rehearsal wrapper selects any family live.
+    exact = (DEPLOY / "run_exact_rehearsal.sh").read_text(encoding="utf-8")
+    assert '--inventory "$output.inventory" --accept 3,4,5' in exact
+    assert 'rehearsal_manifest_v${contract_version}.sql' in exact
+    assert 'verify_schema_transition_v${contract_version}.py' in exact
+    for name in ("rehearsal_restore.sh", "finalize_provider_cutover.sh",
+                 "verify_provider_first_start.sh", "seed_first_cutover_backup.sh"):
         text = (DEPLOY / name).read_text(encoding="utf-8")
         assert "rehearsal_manifest_v3.sql" not in text, name
         assert "verify_schema_transition_v3.py" not in text, name
