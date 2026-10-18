@@ -305,6 +305,15 @@ def test_real_product_and_workspace_clones_purge_only_rehearsal_rows(current, tm
         "(:id, :uid, 'ADMIN-synthetic', 'admin', 5, 5, now() + interval '1 day', now())"
     )
     with engine.begin() as connection:
+        # The retained grant must belong to a real user, or the strict
+        # manifest the workspace release runs next reports it as an anomaly.
+        connection.execute(
+            text(
+                "INSERT INTO billing_users (id,email,password_salt,password_hash,credit_minutes,created_at) "
+                "VALUES (:id,'retained@example.invalid','x','y',0,now())"
+            ),
+            dict(id=other),
+        )
         for index, uid in enumerate((*USERS, other)):
             connection.execute(text(grant), dict(id=f"grant-{index}", uid=uid))
     with engine.begin() as connection:
