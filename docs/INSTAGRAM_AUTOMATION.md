@@ -43,3 +43,36 @@ Keşfet görünürlüğü garanti edilemez. Açıklamalarda alakasız popüler s
 ve yoğun etiket yığınları kullanılmaz. Gönderi performansı Instagram içgörülerinde
 erişim, izlenme süresi, kaydetme ve paylaşma üzerinden düzenli incelenmeli;
 zayıf konular bu dosyadaki editoryal döngüden çıkarılmalıdır.
+
+## Stüdyo Reels, karusel ve otomatik cevaplar
+
+Render cron görevi artık 15 dakikada bir çalışır. Her çalışmada önce zamanı gelen paylaşım
+yapılır, sonra yeni yorum ve DM'ler cevaplanır. Paylaşım gün ve saat dilimi başına bir kez olur
+(açıklama işareti ve depodaki kayıt), bu yüzden sık çalışma çift gönderi üretmez.
+
+- `INSTAGRAM_STUDIO_ENABLED=true` ve `ELEVENLABS_API_KEY` ile `ELEVENLABS_VOICE_ID` tanımlıysa
+  günün dersi (`lecturesift/studio_social.py`) 20:00'de ElevenLabs seslendirmeli 1080x1920 Reel,
+  13:00'te aynı dersin 5 sayfalık 4:5 karuseli olarak paylaşılır (`INSTAGRAM_REEL_HOUR`,
+  `INSTAGRAM_CAROUSEL_HOUR`, Europe/Istanbul). Soru `gpt-4o-mini` ile yazılır, ikinci bağımsız bir
+  çağrı cevabı doğrulamazsa elle kontrol edilmiş yedek derslerden biri kullanılır. ElevenLabs
+  anahtarı yoksa eski günlük Reel akışı devam eder.
+- `INSTAGRAM_REPLIES_ENABLED=true` iken `lecturesift/instagram_replies.py` son 14 günün
+  gönderilerindeki yorumlara ve son 24 saatteki DM'lere yazanın dilinde kısa cevap verir. Spam,
+  link, hakaret ve hassas konular atlanır; ödeme ve hesap sorunları iletişim sayfasına yönlendirilir.
+  Günlük üst sınır `INSTAGRAM_REPLIES_DAILY_LIMIT` (120), kişi başı günde 5 cevap. Token'ın ayrıca
+  `instagram_business_manage_comments` ve `instagram_business_manage_messages` izinlerine sahip
+  olması gerekir; izin yoksa cevaplar atlanır, paylaşım sürer.
+- Üretilen dosyalar `social/instagram/studio/<gün>/` altında durur ve
+  `GET /instagram/studio/<gün>/<dosya>` ile Instagram'a sunulur.
+
+Denetim komutları:
+
+```bash
+python -m lecturesift.instagram_replies dry-run              # cevapları yazar, göndermez
+python -m lecturesift.studio_social prepare YYYY-MM-DD       # üretir, paylaşmaz
+python -m lecturesift.reel_studio preview /tmp/onizleme      # örnek ders, anahtarsız sessiz önizleme
+```
+
+OVH `lecturesift-instagram.timer` kapalı kalmaya devam eder. OVH'nin `instagram.env` rolü OpenAI ve
+depolama anahtarlarını bilerek içermez; yayıncı ileride OVH'ye taşınırsa bu anahtarların role
+eklenmesi ayrıca kararlaştırılmalıdır.

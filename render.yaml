@@ -367,9 +367,19 @@ services:
     name: lecturesift-instagram-daily
     runtime: docker
     plan: starter
-    schedule: "0 17 * * *"
+    # Every 15 minutes: publishing is idempotent per slot (Reel from 20:00, carousel from 13:00
+    # Europe/Istanbul) and the other runs answer new comments and DMs.
+    schedule: "*/15 * * * *"
     dockerCommand: python -m lecturesift.daily_social
     envVars:
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: ELEVENLABS_VOICE_ID
+        sync: false
+      - key: INSTAGRAM_STUDIO_ENABLED
+        value: "true"
+      - key: INSTAGRAM_REPLIES_ENABLED
+        value: "true"
       - key: INSTAGRAM_ACCESS_TOKEN
         sync: false
       - key: INSTAGRAM_ACCOUNT_ID
