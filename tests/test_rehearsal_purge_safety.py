@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
@@ -213,3 +214,144 @@ def test_purchase_term_reference_shared_with_another_user_fails_closed():
             connection,
             ["00000000-0000-4000-8000-000000000001"],
         )
+
+
+class _Deleted:
+    def __init__(self, rowcount):
+        self.rowcount = rowcount
+
+
+class _OptionalTableConnection:
+    def __init__(self, present, *, remaining=None):
+        self.present = present
+        self.remaining = remaining or {}
+        self.calls = []
+
+    def execute(self, statement, parameters):
+        sql = str(statement)
+        self.calls.append((sql, parameters))
+        if "pg_catalog.pg_class" in sql:
+            return _QueryResult(rows=[name for name in parameters["names"] if name in self.present])
+        table, column = re.search(r"public\.(\w+) WHERE (\w+) IN", sql).groups()
+        if sql.startswith("DELETE"):
+            return _Deleted(1)
+        return _QueryResult(scalar=self.remaining.get((table, column), 0))
+
+
+USERS = ["00000000-0000-4000-8000-000000000001", "00000000-0000-4000-8000-000000000002"]
+JOBS = ["00000000-0000-4000-8000-0000000000aa"]
+
+
+def test_core_clone_skips_every_absent_product_and_workspace_table():
+    connection = _OptionalTableConnection(set())
+    assert purge._purge_optional_tables(connection, USERS, JOBS) == {}
+    assert len(connection.calls) == 1
+    assert connection.calls[0][1] == {"names": list(purge.OPTIONAL_USER_TABLES)}
+
+
+def test_product_clone_purges_only_its_present_assistant_tables():
+    connection = _OptionalTableConnection(
+        {"assistant_credit_grants_v1", "assistant_credit_requests_v1"}
+    )
+    assert purge._purge_optional_tables(connection, USERS, JOBS) == {
+        "assistant_credit_grants_v1": 1,
+        "assistant_credit_requests_v1": 1,
+    }
+    deletes = [sql for sql, _ in connection.calls if sql.startswith("DELETE")]
+    assert len(deletes) == 2
+    assert all("WHERE user_id IN" in sql for sql in deletes)
+    assert not any("workspace" in sql for sql, _ in connection.calls[1:])
+
+
+def test_workspace_clone_purges_items_before_folders_and_checks_jobs():
+    connection = _OptionalTableConnection(set(purge.OPTIONAL_USER_TABLES))
+    assert set(purge._purge_optional_tables(connection, USERS, JOBS)) == set(
+        purge.OPTIONAL_USER_TABLES
+    )
+    deletes = [sql for sql, _ in connection.calls if sql.startswith("DELETE")]
+    tables = [re.search(r"public\.(\w+)", sql).group(1) for sql in deletes]
+    assert tables.index("workspace_items_v1") < tables.index("workspace_folders_v1")
+    job_checks = [
+        parameters for sql, parameters in connection.calls
+        if "workspace_items_v1 WHERE job_id IN" in sql
+    ]
+    assert job_checks == [{"values": JOBS}]
+
+
+@pytest.mark.parametrize(
+    "remaining",
+    [("admin_order_archives_v1", "user_id"), ("workspace_items_v1", "job_id")],
+)
+def test_optional_table_residue_fails_closed(remaining):
+    connection = _OptionalTableConnection(
+        set(purge.OPTIONAL_USER_TABLES), remaining={remaining: 1}
+    )
+    with pytest.raises(purge.PurgeError, match=f"rehearsal rows remain in {remaining[0]}"):
+        purge._purge_optional_tables(connection, USERS, JOBS)
+
+
+# Real PostgreSQL 18 proof on the allocated synthetic CI service only.
+from test_product_schema_release import client, database  # noqa: E402,F401
+from test_workspace_schema_release import current, migrate  # noqa: E402,F401
+
+
+def test_real_product_and_workspace_clones_purge_only_rehearsal_rows(current, tmp_path):
+    from sqlalchemy import text
+
+    engine, name, _ = current
+    other = "00000000-0000-4000-8000-0000000000ff"
+    grant = (
+        "INSERT INTO assistant_credit_grants_v1 VALUES "
+        "(:id, :uid, 'ADMIN-synthetic', 'admin', 5, 5, now() + interval '1 day', now())"
+    )
+    with engine.begin() as connection:
+        # The retained grant must belong to a real user, or the strict
+        # manifest the workspace release runs next reports it as an anomaly.
+        connection.execute(
+            text(
+                "INSERT INTO billing_users (id,email,password_salt,password_hash,credit_minutes,created_at) "
+                "VALUES (:id,'retained@example.invalid','x','y',0,now())"
+            ),
+            dict(id=other),
+        )
+        for index, uid in enumerate((*USERS, other)):
+            connection.execute(text(grant), dict(id=f"grant-{index}", uid=uid))
+    with engine.begin() as connection:
+        assert purge._purge_optional_tables(connection, USERS, JOBS) == {
+            "assistant_credit_grants_v1": 2,
+            "assistant_credit_requests_v1": 0,
+        }
+
+    assert migrate(name, tmp_path / "workspace") == 4
+    with engine.begin() as connection:
+        for uid, job, folder in ((USERS[0], JOBS[0], "folder-a"), (other, "other-job", "folder-b")):
+            connection.execute(
+                text("INSERT INTO workspace_folders_v1 VALUES (:folder, :uid, 'Notes', now())"),
+                dict(folder=folder, uid=uid),
+            )
+            connection.execute(
+                text("INSERT INTO workspace_items_v1 VALUES (:job, :uid, :folder)"),
+                dict(job=job, uid=uid, folder=folder),
+            )
+            connection.execute(
+                text("INSERT INTO admin_ad_free_grants_v1 VALUES (:uid, true, now())"), dict(uid=uid)
+            )
+            connection.execute(
+                text("INSERT INTO admin_order_archives_v1 VALUES (:ref, :uid, now())"),
+                dict(ref="LS-" + folder, uid=uid),
+            )
+    with engine.begin() as connection:
+        deleted = purge._purge_optional_tables(connection, USERS, JOBS)
+    assert {table: count for table, count in deleted.items() if count} == {
+        "workspace_items_v1": 1,
+        "workspace_folders_v1": 1,
+        "admin_ad_free_grants_v1": 1,
+        "admin_order_archives_v1": 1,
+    }
+    with engine.connect() as connection:
+        for table in purge.OPTIONAL_USER_TABLES:
+            if table == "assistant_credit_requests_v1":
+                continue
+            assert connection.execute(
+                text(f"SELECT count(*) FROM {table} WHERE user_id = :uid"), dict(uid=other)
+            ).scalar_one() == 1

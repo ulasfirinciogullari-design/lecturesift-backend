@@ -97,8 +97,9 @@ columns and indexes. Synthetic PostgreSQL 18 checks cover restored balances,
 in-flight reservations, refund races, erasure and credit SKU report labels.
 Production migration separately verified preservation of every existing row and
 schema object, followed by real API/worker authority checks and managed backup
-evidence. Do not create tables ad hoc or run the older core-only cutover scripts
-against the expanded schema. A real paid top-up has not been placed as a test.
+evidence. Do not create tables ad hoc. The provider cutover tools select the
+product or workspace schema family from the live catalog and refuse a
+core-only source; never point the historical core-only manifest at it. A real paid top-up has not been placed as a test.
 
 Official sources reviewed 2026-09-08:
 

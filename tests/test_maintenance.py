@@ -98,7 +98,7 @@ def test_durable_ingress_state_freezes_until_atomic_activation(monkeypatch, tmp_
         "source_revision": "unbound",
         "status": "provider-ingress-required",
         "updated_at_utc": "2026-09-07T12:00:00Z",
-        "version": "3",
+        "version": "4",
     }
     state.write_text(
         "".join(f"{key}={value}\n" for key, value in sorted(fields.items())),

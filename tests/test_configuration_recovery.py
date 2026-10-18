@@ -23,7 +23,7 @@ def _snapshot_module():
     spec.loader.exec_module(module)
     return module
 
-@pytest.mark.parametrize("version", [1, 2, 3])
+@pytest.mark.parametrize("version", [1, 2, 3, 4])
 def test_snapshot_verifier_preserves_exact_versioned_inventories(tmp_path, monkeypatch, version):
     import hashlib
     import json
@@ -61,7 +61,7 @@ def test_snapshot_verifier_preserves_exact_versioned_inventories(tmp_path, monke
     checksums.extend(f"{item['sha256']}  {item['archive_path']}" for item in files)
     (snapshot_root / snapshot.CHECKSUM_NAME).write_text("\n".join(checksums) + "\n", encoding="ascii")
     assert snapshot.verify_snapshot(snapshot_root, str(deploy_root), quiet=True) == len(expected)
-    manifest["format"] = f"lecturesift-configuration-snapshot-v{version % 3 + 1}"
+    manifest["format"] = f"lecturesift-configuration-snapshot-v{version % 4 + 1}"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     with pytest.raises(snapshot.SnapshotError, match="file count"):
         snapshot.verify_snapshot(snapshot_root, str(deploy_root), quiet=True)
@@ -167,7 +167,7 @@ def test_configuration_snapshot_uses_only_exact_allowlists():
         "deploy/schema_contract_billing_purchase_terms_v1.txt",
         "deploy/recovery_manifest_v2.sql",
     )
-    assert snapshot.IDENTITY_ALLOWLIST == snapshot.PREVIOUS_IDENTITY_ALLOWLIST + (
+    assert snapshot.PRODUCT_IDENTITY_ALLOWLIST == snapshot.PREVIOUS_IDENTITY_ALLOWLIST + (
         "deploy/rehearsal_manifest_v4.sql",
         "deploy/recovery_manifest_v3.sql",
         "deploy/verify_schema_transition_v4.py",
@@ -175,6 +175,16 @@ def test_configuration_snapshot_uses_only_exact_allowlists():
         "deploy/product_tables_v1.sql",
         "deploy/product_schema_release.py",
     )
+    assert snapshot.IDENTITY_ALLOWLIST == snapshot.PRODUCT_IDENTITY_ALLOWLIST + (
+        "deploy/rehearsal_manifest_v5.sql",
+        "deploy/recovery_manifest_v4.sql",
+        "deploy/verify_schema_transition_v5.py",
+        "deploy/schema_contract_workspace_v1.txt",
+        "deploy/workspace_tables_v1.sql",
+        "deploy/workspace_schema_release.py",
+    )
+    assert snapshot.SNAPSHOT_FORMAT == "lecturesift-configuration-snapshot-v4"
+    assert snapshot.PRODUCT_SNAPSHOT_FORMAT == "lecturesift-configuration-snapshot-v3"
     assert all(".git" not in path and ".docker" not in path for path in snapshot.IDENTITY_ALLOWLIST)
 
 
@@ -201,11 +211,15 @@ def test_configuration_snapshot_covers_the_steady_state_startup_chain_only():
         "deploy/provision_database_role.sh",
         "deploy/postgres-app-role.sh",
         "deploy/verify_provider_first_start.sh",
-        "deploy/rehearsal_manifest_v3.sql",
+        "deploy/rehearsal_manifest_v4.sql",
+        "deploy/rehearsal_manifest_v5.sql",
         "deploy/schema_contract_payment_provider_sessions_v1.txt",
         "deploy/schema_contract_billing_purchase_terms_v1.txt",
         "deploy/schema_contract_billing_email_verifications_v1.txt",
-        "deploy/verify_schema_transition_v3.py",
+        "deploy/schema_contract_product_v1.txt",
+        "deploy/schema_contract_workspace_v1.txt",
+        "deploy/verify_schema_transition_v4.py",
+        "deploy/verify_schema_transition_v5.py",
         "deploy/postgres_security_manifest.sql",
         "deploy/validate_postgres_security_manifest.py",
         "deploy/postgres_role_login_probe.sh",

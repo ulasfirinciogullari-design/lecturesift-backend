@@ -170,6 +170,7 @@ def _marker() -> bytes:
         f"reconciled_database_manifest_sha256={DATABASE_MANIFEST}\n"
         "historical_payment_providers=iyzico\n"
         f"historical_provider_manifest_sha256={'b' * 64}\n"
+        "schema_contract_version=5\n"
         "render_matches_ovh=true\n"
         "automatic_row_merge=false\n"
         "whole_database_replacement=false\n"
@@ -188,8 +189,9 @@ def _cutover_proof() -> bytes:
     return (
         f"cutover_id={CUTOVER_ID}\n"
         f"release_revision={OVH_REVISION}\n"
+        "schema_contract_version=5\n"
         "status=provider-cutover-verified\n"
-        "version=3\n"
+        "version=4\n"
     ).encode("ascii")
 
 
@@ -442,6 +444,38 @@ def test_postgres_database_manifest_must_match_the_bundle(tmp_path: Path):
         match="reconciled_database_manifest_sha256 does not match",
     ):
         _validate(bundle, marker)
+
+
+def test_postgres_marker_schema_contract_must_match_the_cutover_proof(tmp_path: Path):
+    bundle, marker = _bundle(tmp_path)
+    marker.write_bytes(
+        marker.read_bytes().replace(
+            b"schema_contract_version=5\n", b"schema_contract_version=4\n"
+        )
+    )
+    _rewrite_json(
+        bundle / "context.json",
+        lambda context: context.__setitem__(
+            "postgres_marker_sha256", hashlib.sha256(marker.read_bytes()).hexdigest()
+        ),
+    )
+    with pytest.raises(validator.RollbackEvidenceError, match="schema contract does not match"):
+        _validate(bundle, marker)
+
+    for invalid in (b"schema_contract_version=3\n", b""):
+        marker.write_bytes(
+            _marker().replace(b"schema_contract_version=5\n", invalid)
+        )
+        with pytest.raises(validator.RollbackEvidenceError):
+            validator._parse_postgres_marker(marker.read_bytes())
+
+    # A version-3 proof, or one without a contract, is never a rollback anchor.
+    for proof in (
+        _cutover_proof().replace(b"\nversion=4\n", b"\nversion=3\n"),
+        _cutover_proof().replace(b"schema_contract_version=5\n", b""),
+    ):
+        with pytest.raises(validator.RollbackEvidenceError, match="identity is invalid"):
+            validator._parse_cutover_proof(proof)
 
 
 def test_bundle_rejects_tampering_unknown_fields_and_expiry(tmp_path: Path):

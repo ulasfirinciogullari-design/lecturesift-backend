@@ -106,7 +106,8 @@ def _ingress_cutover_mode() -> str | None:
     source_revision = fields.get("source_revision", "")
     if (
         set(fields) != expected
-        or fields.get("version") != "3"
+        # Must equal deploy/provider_cutover_evidence.py VERSION.
+        or fields.get("version") != "4"
         or fields.get("status") not in _INGRESS_STATE_STATUSES
         or not re.fullmatch(r"[0-9a-f]{32}", fields.get("cutover_id", ""))
         or not _SHA256_PATTERN.fullmatch(fields.get("final_proof_sha256", ""))

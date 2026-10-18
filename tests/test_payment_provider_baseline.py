@@ -23,8 +23,9 @@ def _proof() -> bytes:
     return (
         f"cutover_id={CUTOVER_ID}\n"
         f"release_revision={REVISION}\n"
+        "schema_contract_version=4\n"
         "status=provider-cutover-verified\n"
-        "version=3\n"
+        "version=4\n"
     ).encode("ascii")
 
 
@@ -101,6 +102,19 @@ def test_existing_baseline_is_immutable_and_idempotent(tmp_path: Path):
             now=NOW,
             enforce_filesystem=False,
         )
+
+
+@pytest.mark.parametrize(
+    "proof",
+    [
+        _proof().replace(b"\nversion=4\n", b"\nversion=3\n"),
+        _proof().replace(b"schema_contract_version=4\n", b""),
+        _proof().replace(b"schema_contract_version=4\n", b"schema_contract_version=3\n"),
+    ],
+)
+def test_baseline_rejects_proofs_without_the_current_schema_contract(proof: bytes):
+    with pytest.raises(baseline_tool.ProviderBaselineError, match="identity is invalid"):
+        baseline_tool._proof_fields(proof)
 
 
 def test_check_mode_cannot_repair_a_missing_baseline(tmp_path: Path):

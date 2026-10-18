@@ -296,10 +296,93 @@ return 0
   }
 }
 
-set -a
-# shellcheck disable=SC1090
-source "$SOURCE_ENV_FILE" >/dev/null 2>&1
-set +a
+# The root-private source file is parsed as strict dotenv data and is never
+# executed as shell (the rules of parse_dotenv_text in generate_rehearsal_envs.py):
+# one KEY=value assignment per line, no duplicate keys, exactly one quoted or
+# bare word per value, no NUL or multiline values. Only the reviewed source
+# endpoint keys are read from it; inherited values for them are discarded so
+# the file alone supplies the source identity.
+SOURCE_DATABASE_URL=""
+SOURCE_HEALTH_URL=""
+SOURCE_REDIS_URL=""
+SOURCE_CELERY_BROKER_URL=""
+REDIS_URL=""
+CELERY_BROKER_URL=""
+PUBLIC_BASE_URL=""
+source_env_values="$(python3 - "$SOURCE_ENV_FILE" <<'PY'
+import re
+import shlex
+import sys
+from pathlib import Path
+
+ASSIGNMENT = re.compile(r"^[ \t]*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
+READ_KEYS = {
+    "SOURCE_DATABASE_URL",
+    "SOURCE_HEALTH_URL",
+    "SOURCE_REDIS_URL",
+    "SOURCE_CELERY_BROKER_URL",
+    "REDIS_URL",
+    "CELERY_BROKER_URL",
+    "PUBLIC_BASE_URL",
+}
+
+
+def refuse(reason: str) -> None:
+    raise SystemExit(f"The Render source environment {reason}.")
+
+
+try:
+    text = Path(sys.argv[1]).read_text(encoding="utf-8")
+except (OSError, UnicodeError):
+    refuse("could not be read as UTF-8")
+if "\x00" in text:
+    refuse("contains a NUL byte")
+values = {}
+for number, raw in enumerate(text.splitlines(), 1):
+    if not raw.strip() or raw.lstrip().startswith("#"):
+        continue
+    match = ASSIGNMENT.fullmatch(raw)
+    if not match:
+        refuse(f"has unsupported syntax at line {number}")
+    key, rhs = match.groups()
+    if key in values:
+        refuse(f"repeats a key at line {number}")
+    value = ""
+    if rhs.strip():
+        lexer = shlex.shlex(rhs, posix=True)
+        lexer.whitespace_split = True
+        lexer.commenters = ""
+        try:
+            words = list(lexer)
+        except ValueError:
+            refuse(f"has invalid quoting at line {number}")
+        if len(words) != 1:
+            refuse(f"has an ambiguous value at line {number}")
+        value = words[0]
+    if any(character in value for character in "\r\n"):
+        refuse(f"has a multiline value at line {number}")
+    values[key] = value
+for key in sorted(READ_KEYS & values.keys()):
+    print(f"{key}={values[key]}")
+PY
+)" || {
+  echo "The Render source environment is not strict dotenv data." >&2
+  exit 1
+}
+while IFS= read -r source_env_assignment; do
+  [[ -n "$source_env_assignment" ]] || continue
+  source_env_key="${source_env_assignment%%=*}"
+  case "$source_env_key" in
+    SOURCE_DATABASE_URL|SOURCE_HEALTH_URL|SOURCE_REDIS_URL|SOURCE_CELERY_BROKER_URL|REDIS_URL|CELERY_BROKER_URL|PUBLIC_BASE_URL)
+      printf -v "$source_env_key" '%s' "${source_env_assignment#*=}"
+      ;;
+    *)
+      echo "The Render source environment parser returned an unreviewed key." >&2
+      exit 1
+      ;;
+  esac
+done <<<"$source_env_values"
+unset source_env_values source_env_assignment source_env_key
 SOURCE_REDIS_URL="${SOURCE_REDIS_URL:-${REDIS_URL:-}}"
 SOURCE_CELERY_BROKER_URL="${SOURCE_CELERY_BROKER_URL:-${CELERY_BROKER_URL:-}}"
 SOURCE_HEALTH_URL="${SOURCE_HEALTH_URL:-}"

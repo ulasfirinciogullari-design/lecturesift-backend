@@ -708,18 +708,33 @@ snapshot_redis() {
   docker exec lecturesift-redis-1 redis-cli --json EVAL_RO "$redis_lua" 0 "$redis_salt" >"$output"
 }
 
+# The main database is the OVH target: core (v3) before the provider cutover
+# and product (v4) or workspace (v5) after it. Each capture selects its frozen
+# manifest/verifier family from the live catalog, never from an env label, and
+# the before/after captures must name the same family. Every step returns
+# explicitly because the after-capture runs where errexit is suspended.
 snapshot_manifest() {
-  local output="$1" canonical="$2"
-  docker cp "$root/deploy/rehearsal_manifest_v3.sql" \
-    "lecturesift-postgres-1:$main_manifest_in_container"
+  local output="$1" canonical="$2" contract_version
+  docker exec -i lecturesift-postgres-1 psql --no-psqlrc --quiet \
+    --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+    -v ON_ERROR_STOP=1 -f - <"$root/deploy/schema_contract_inventory.sql" \
+    >"$output.inventory" || return 1
+  contract_version="$(
+    python3 "$root/deploy/schema_contract_state.py" detect \
+      --inventory "$output.inventory" --accept 3,4,5
+  )" || return 1
+  [[ "$contract_version" =~ ^[345]$ ]] || return 1
+  printf '%s\n' "$contract_version" >"$output.contract-version" || return 1
+  docker cp "$root/deploy/rehearsal_manifest_v${contract_version}.sql" \
+    "lecturesift-postgres-1:$main_manifest_in_container" || return 1
   docker exec lecturesift-postgres-1 psql --no-psqlrc --quiet \
     --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
-    -v ON_ERROR_STOP=1 -f "$main_manifest_in_container" >"$output"
-  python3 "$root/deploy/verify_schema_transition_v3.py" current \
+    -v ON_ERROR_STOP=1 -f "$main_manifest_in_container" >"$output" || return 1
+  python3 "$root/deploy/verify_schema_transition_v${contract_version}.py" current \
     --manifest "$output" \
     --contract "$root/deploy/schema_contract_payment_provider_sessions_v1.txt" \
     --preserved-contract "$root/deploy/schema_contract_billing_email_verifications_v1.txt" \
-    >"$output.schema-contract"
+    >"$output.schema-contract" || return 1
   grep -E '^(DATABASE|SCHEMA|SCHEMA_OBJECT|SCHEMA_COMPAT|TABLE|TABLE_DIFF|ANOMALY|STATUS|UNVALIDATED_FK|MANIFEST_COMPLETE)\|' \
     "$output" | LC_ALL=C sort >"$canonical"
 }
@@ -1042,6 +1057,7 @@ outer_exit() {
     cmp --silent "$state/before.roles" "$state/after.roles" || post_failed=true
     cmp --silent "$state/before.databases" "$state/after.databases" || post_failed=true
     cmp --silent "$state/before.grants" "$state/after.grants" || post_failed=true
+    cmp --silent "$state/before.manifest.contract-version" "$state/after.manifest.contract-version" || post_failed=true
     cmp --silent "$state/before.manifest.canonical" "$state/after.manifest.canonical" || post_failed=true
     cmp --silent "$state/before.manifest.schema-contract" "$state/after.manifest.schema-contract" || post_failed=true
     verify_redis "$after_epoch_ms" || post_failed=true

@@ -12,7 +12,8 @@ import re
 import stat
 import sys
 
-import verify_schema_transition_v3 as schema_verifier
+import verify_schema_transition_v4 as schema_verifier_v4
+import verify_schema_transition_v5 as schema_verifier_v5
 
 
 FORMAT = "lecturesift-exact-rehearsal-result-v3"
@@ -63,8 +64,41 @@ R2_PAYLOAD_EVIDENCE_BY_CASE = {
 }
 
 
+# Provider sources are product (v4) or workspace (v5) databases. The family
+# is read from each capture's single terminal record, never from the caller.
+SCHEMA_VERIFIERS = {
+    "v4": schema_verifier_v4,
+    "v5": schema_verifier_v5,
+}
+
+
 class ArtifactError(RuntimeError):
     pass
+
+
+def _manifest_contract(raw: Path) -> str:
+    completion = [
+        line
+        for line in raw.read_text(encoding="utf-8").splitlines()
+        if line.startswith("MANIFEST_COMPLETE|")
+    ]
+    if len(completion) != 1:
+        raise ArtifactError(f"rehearsal manifest lacks one completion record: {raw.name}")
+    token = completion[0].split("|", 2)[1]
+    if token not in SCHEMA_VERIFIERS:
+        raise ArtifactError(
+            f"rehearsal manifest names no supported provider schema contract: {raw.name}"
+        )
+    return token
+
+
+def _schema_verifier(*raws: Path):
+    """Select one verifier family on which every capture agrees exactly."""
+
+    contracts = {_manifest_contract(raw) for raw in raws}
+    if len(contracts) != 1:
+        raise ArtifactError("rehearsal manifest captures name different schema contracts")
+    return SCHEMA_VERIFIERS[contracts.pop()]
 
 
 def _private_file(path: Path) -> bytes:
@@ -229,9 +263,12 @@ def validate(root: Path, run_dir: Path, revision: str) -> dict[str, str]:
     after_e2e = run_dir / "target-after-e2e.txt"
     for raw in (before, migrated, after_e2e):
         _private_file(raw)
+    schema_verifier = _schema_verifier(before, migrated, after_e2e)
     transition, contract_digest = schema_verifier.verify_transition(
         before, migrated, contract, preserved_contract
     )
+    if transition != "current_to_current":
+        raise ArtifactError("a contract-current rehearsal clone changed its schema family")
     after_digest = schema_verifier.verify_current(
         after_e2e, contract, preserved_contract
     )

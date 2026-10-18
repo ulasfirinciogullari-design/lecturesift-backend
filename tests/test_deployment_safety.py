@@ -68,9 +68,11 @@ def test_candidate_rehearsal_files_stream_atomically_into_allowlisted_tmpfs_path
     assert stack.count("docker cp") == 0
     assert restore.count("docker cp") == 1
     assert (
-        'docker cp "$ROOT_DIR/deploy/rehearsal_manifest_v3.sql" \\\n'
-        "  lecturesift-postgres-1:/tmp/rehearsal_manifest_v3.sql"
+        'docker cp "$REHEARSAL_MANIFEST" \\\n'
+        '  "lecturesift-postgres-1:$TARGET_REHEARSAL_MANIFEST"'
     ) in restore
+    assert "TARGET_REHEARSAL_MANIFEST=/tmp/lecturesift-rehearsal-manifest.sql" in restore
+    assert restore.count('rm -f "$TARGET_REHEARSAL_MANIFEST"') == 2
 
     for script in (stack, restore):
         helper = script.split("write_candidate_tmp_file() {", 1)[1].split("\n}\n", 1)[0]
@@ -186,16 +188,31 @@ def test_database_rehearsal_root_and_source_consistency_fail_closed():
     assert "Source and restored PostgreSQL version/encoding/collation identities differ" in script
     assert "Rehearsal data-integrity anomalies must be resolved before cutover" in script
     assert '$1 == "ANOMALY" && $3 != "0"' in script
-    assert script.count("LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on") == 3
-    assert "legacy_compat_marker='SCHEMA_COMPAT|legacy_missing_table|" in script
+    # The source family is detected live (v4/v5 only) before any manifest and
+    # every capture is strict: no legacy-absent table is tolerated anywhere.
+    assert "LECTURESIFT_ALLOW_LEGACY" not in script
+    assert "legacy_compat_marker" not in script
+    assert "legacy_provider_sessions_missing" not in script
+    assert "TABLE|billing_payment_provider_sessions|0|0|0" not in script
+    assert "verify_schema_transition_v3.py" not in script
+    assert " legacy --manifest" not in script
+    inventory = script.index("-f /probe/schema_contract_inventory.sql > /backup/source-inventory.txt")
+    detection = script.index('--inventory "$run_dir/source-inventory.txt" --accept 4,5')
+    first_source_manifest = script.index('-f "/probe/$MANIFEST_NAME" > /backup/source-before.txt')
+    assert inventory < detection < first_source_manifest
+    assert script.index('-f "/probe/$MANIFEST_NAME" > /backup/source-after.txt') > first_source_manifest
+    assert 'REHEARSAL_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition_v${SOURCE_CONTRACT_VERSION}.py"' in script
+    assert script.count('python3 "$REHEARSAL_VERIFIER" current') == 5
+    assert "A contract-current source manifest must not contain schema compatibility evidence." in script
+    assert "^schema_transition=current_to_current$" in script
     assert "target-migrated.txt" in script
     assert "target-after-e2e.txt" in script
     assert "The schema migration changed pre-existing table data" in script
-    assert "TABLE|billing_payment_provider_sessions|0|0|0" in script
-    assert "legacy_provider_sessions_missing" in script
     assert "grep -E '^(DATABASE|TABLE|STATUS)" in script
-    assert 'if [[ "$legacy_provider_sessions_missing" == "true" ]]' in script
-    assert "target-after-migration.comparable" in script
+    assert (
+        'diff -u "$run_dir/target-before-migration.data" \\\n'
+        '  "$run_dir/target-after-migration.data"'
+    ) in script
     raw_equality = script.index("Stable source and restored target manifests differ")
     schema_migration = script.index('LECTURESIFT_PROVISION_DATABASE="$rehearsal_db"')
     strict_manifest = script.index('> "$run_dir/target-migrated.txt"')
@@ -384,6 +401,61 @@ def test_restic_retention_matches_cloudflare_object_lock_contract():
     assert "restic/locks/" in docs and "restic/index/" in docs
     assert "keeps **every** snapshot for at least 92 days" in docs
     assert "Automated prune is disabled" in policy
+
+
+def _redis_source_env_parser(tmp_path: Path) -> Path:
+    script = _read("deploy/migrate_redis_state.sh")
+    start = script.index('source_env_values="$(python3 - "$SOURCE_ENV_FILE" <<\'PY\'\n')
+    body = script[script.index("\n", start) + 1 : script.index("\nPY\n)\"", start)]
+    parser = tmp_path / "source_env_parser.py"
+    parser.write_text(body + "\n", encoding="utf-8")
+    return parser
+
+
+def test_redis_migration_parses_the_source_env_as_data_never_shell(tmp_path: Path):
+    script = _read("deploy/migrate_redis_state.sh")
+    assert 'source "$SOURCE_ENV_FILE"' not in script
+    assert "set -a" not in script
+    parse = script.index('source_env_values="$(python3 - "$SOURCE_ENV_FILE"')
+    assert script.index('SOURCE_REDIS_URL=""') < parse
+    assert parse < script.index('SOURCE_REDIS_URL="${SOURCE_REDIS_URL:-${REDIS_URL:-}}"')
+    assert 'printf -v "$source_env_key" \'%s\' "${source_env_assignment#*=}"' in script
+
+    parser = _redis_source_env_parser(tmp_path)
+    marker = tmp_path / "executed"
+    source = tmp_path / "source.env"
+    source.write_text(
+        "# Render source\n"
+        "export SOURCE_HEALTH_URL='https://lecturesift-backend.onrender.com/health'\n"
+        f'SOURCE_DATABASE_URL="$(touch {marker})"\n'
+        "REDIS_URL=rediss://user:secret@source.example:6380\n"
+        "UNRELATED_SETTING=ignored\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [sys.executable, str(parser), str(source)], capture_output=True, text=True, check=True
+    )
+    assert result.stdout.splitlines() == [
+        "REDIS_URL=rediss://user:secret@source.example:6380",
+        f"SOURCE_DATABASE_URL=$(touch {marker})",
+        "SOURCE_HEALTH_URL=https://lecturesift-backend.onrender.com/health",
+    ]
+    assert not marker.exists()
+
+    for invalid in (
+        "SOURCE_REDIS_URL=one two\n",
+        "SOURCE_REDIS_URL=a\nSOURCE_REDIS_URL=b\n",
+        "SOURCE_REDIS_URL='unterminated\n",
+        "source /etc/passwd\n",
+        f"SOURCE_REDIS_URL=x; touch {marker}\n",
+    ):
+        source.write_text(invalid, encoding="utf-8")
+        refused = subprocess.run(
+            [sys.executable, str(parser), str(source)], capture_output=True, text=True
+        )
+        assert refused.returncode != 0 and refused.stdout == ""
+        assert "The Render source environment" in refused.stderr
+    assert not marker.exists()
 
 
 def test_logical_redis_migration_proves_freeze_and_final_state():
@@ -1030,15 +1102,52 @@ def test_postgres_cutover_is_snapshot_consistent_reversible_and_fail_stopped():
     assert "INSERT INTO lecturesift_runtime_metrics" in script
     assert "INSERT INTO billing_usage_events" in script
     assert "transaction.rollback()" in script
-    assert "LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on" in script
-    assert "legacy-provider-sessions" in script
+    # A v4/v5 source is contract-current: no legacy-absent table is tolerated.
+    assert "LECTURESIFT_ALLOW_LEGACY" not in script
+    assert "legacy-provider-sessions" not in script
+    assert "rehearsal_manifest_v3.sql" not in script.split("probe_application_role() {", 1)[1]
+    inventory = script.index("run_render_inventory source-inventory.txt")
+    detection = script.index('--inventory "$RUN_DIR/source-inventory.txt" --accept 4,5')
+    first_source_manifest = script.index("run_render_manifest source-before.txt")
+    assert inventory < detection < first_source_manifest
+    assert 'MANIFEST="$(contract_manifest "$SOURCE_CONTRACT_VERSION")"' in script
+    assert 'SCHEMA_VERIFIER="$(contract_verifier "$SOURCE_CONTRACT_VERSION")"' in script
+    for version in (3, 4, 5):
+        assert f'{version}) printf \'%s\\n\' "$ROOT_DIR/deploy/rehearsal_manifest_v{version}.sql" ;;' in script
+        assert f'{version}) printf \'%s\\n\' "$ROOT_DIR/deploy/verify_schema_transition_v{version}.py" ;;' in script
+    assert '"$PRODUCT_SCHEMA_CONTRACT" "$WORKSPACE_SCHEMA_CONTRACT"' in script
+    assert 'cat "/probe/$MANIFEST_NAME"' in script
+    # The core-only OVH target and its rollback are proved by their own family.
+    assert 'target_contract_version "$RUN_DIR/target-before-inventory.txt" 3,4,5' in script
+    assert 'install_target_manifest "$TARGET_BEFORE_MANIFEST"' in script
+    assert '"$RUN_DIR/target-before.safe" \\\n  "$TARGET_BEFORE_VERIFIER"' in script
+    assert (
+        '[[ "$(target_contract_version "$RUN_DIR/target-rollback-inventory.txt" 3,4,5)" == \\\n'
+        '          "$TARGET_BEFORE_CONTRACT_VERSION" ]]'
+    ) in script
+    assert 'target_contract_version "$RUN_DIR/target-restored-inventory.txt" 4,5' in script
+    assert "^schema_transition=current_to_current$" in script
+    assert "owner provisioning changed pre-existing source data" in script
+    # The role probe mirrors postgres-app-role.sh for product/workspace tables.
+    assert 'LECTURESIFT_PROBE_CONTRACT_VERSION=$SOURCE_CONTRACT_VERSION' in script
+    for table in (
+        "assistant_credit_grants_v1",
+        "billing_referral_rewards",
+        "workspace_items_v1",
+        "admin_order_archives_v1",
+    ):
+        assert f'"{table}"' in script
+    assert 'assert not any(table_privilege(table, privilege) for privilege in CRUD), table' in script
+    assert 'denied(f"SELECT count(*) FROM public.{table}")' in script
+    assert 'assert table_privilege("admin_ad_free_grants_v1", "SELECT")' in script
+    assert "'public.admin_order_archives_v1', 'reference', 'SELECT'" in script
+    assert 'denied("SELECT * FROM public.admin_order_archives_v1 LIMIT 0")' in script
     assert "target-restored-raw.safe" in script
     assert 'cmp --silent "$RUN_DIR/source-snapshot.safe" "$RUN_DIR/target-restored-raw.safe"' in script
     assert "target-migrated.safe" in script
     assert "target-before-migration.data" in script
     assert "target-after-migration.data" in script
-    assert "legacy_provider_sessions_missing" in script
-    assert "TABLE|billing_payment_provider_sessions|0|0|0" in script
+    assert "legacy_provider_sessions_missing" not in script
     assert "grep -E '^(DATABASE|TABLE|STATUS)" in script
     assert 'cmp --silent "$RUN_DIR/target-migrated.safe" "$RUN_DIR/target-after-probes.safe"' in script
     raw_restore = script.index('target_manifest "$RUN_DIR/target-restored-raw.txt"')
@@ -1046,13 +1155,15 @@ def test_postgres_cutover_is_snapshot_consistent_reversible_and_fail_stopped():
         'cmp --silent "$RUN_DIR/source-snapshot.safe" "$RUN_DIR/target-restored-raw.safe"'
     )
     owner_migration = script.index("provision_target_schema_and_roles", raw_equality)
-    strict_manifest = script.index('target_manifest "$RUN_DIR/target-migrated.txt" strict')
+    strict_manifest = script.index('target_manifest "$RUN_DIR/target-migrated.txt"\n')
     role_probe = script.index("probe_application_role api")
     assert raw_restore < raw_equality < owner_migration < strict_manifest < role_probe
     assert script.count("assert_render_frozen") >= 4
     assert "migrated_target_manifest_sha256" in script
     assert "--migrated-manifest-sha256" in script
-    assert "source_legacy_provider_sessions_missing" in script
+    assert "source_legacy_provider_sessions_missing" not in script
+    assert "printf 'schema_contract_version=%s\\n' \"$SOURCE_CONTRACT_VERSION\"" in script
+    assert '--schema-contract-version "$SOURCE_CONTRACT_VERSION"' in script
     assert "an OVH API/worker writer became active during target verification" in script
     assert "postgres-cutover-target-unproven" in script
     assert 'FAIL_STOP_MARKER="$FAIL_STOP_ROOT/postgres-cutover-unproven"' in script
@@ -1123,10 +1234,35 @@ def test_postgres_reverse_reconciliation_never_guesses_a_merge_or_traffic_flip()
     assert "render-before.dump" in script
     assert "render-after-capture.safe" in script
     assert 'cmp --silent "$RUN_DIR/render-before.safe" "$RUN_DIR/render-after-capture.safe"' in script
-    assert "legacy-manifest" in script
-    assert "LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on" in script
-    assert "legacy-provider-sessions" in script
-    assert "SCHEMA_COMPAT|legacy_missing_table|billing_payment_provider_sessions" in script
+    # Both sides use the strict family named by the finalized cutover proof.
+    assert "legacy-manifest" not in script
+    assert "LECTURESIFT_ALLOW_LEGACY" not in script
+    assert "legacy-provider-sessions" not in script
+    assert "SCHEMA_COMPAT|legacy_missing_table" not in script
+    assert " legacy --manifest" not in script and "SCHEMA_VERIFIER\" legacy" not in script
+    routing = script.index("final-schema-contract-version")
+    assert script.index("validate-final") < routing < script.index("trap cleanup EXIT")
+    assert 'MANIFEST_NAME="rehearsal_manifest_v${SCHEMA_CONTRACT_VERSION}.sql"' in script
+    assert 'SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition_v${SCHEMA_CONTRACT_VERSION}.py"' in script
+    assert '-f "/probe/$MANIFEST_NAME" >"/backup/$OUTPUT_NAME"' in script
+    assert '--accept "$SCHEMA_CONTRACT_VERSION"' in script
+    assert 'require_contract_inventory "$RUN_DIR/ovh-schema-inventory.txt" "OVH"' in script
+    assert (
+        'require_contract_inventory "$RUN_DIR/render-schema-inventory.txt" "still-fenced Render"'
+        in script
+    )
+    assert "grep -Eq '^(TABLE_DIFF|UNVALIDATED_FK|SCHEMA_COMPAT)\\|'" in script
+    assert script.count("printf 'schema_contract_version=%s\\n' \"$SCHEMA_CONTRACT_VERSION\"") == 3
+    # Separate Render runtime logins would lose their grants to the owner-only
+    # --no-acl replacement, so it is refused before any Render mutation.
+    assert "render_command runtime-acl render-runtime-acl.txt" in script
+    acl_refusal = script.index('[[ "$RENDER_RUNTIME_ACL_GRANTS" == "0" ]] ||')
+    assert script.index("LECTURESIFT_RENDER_REPLACE_CONFIRM") < acl_refusal < script.index(
+        'render_mutated="true"'
+    )
+    assert "automatic owner-only replacement would drop them, so Render was not modified" in script
+    assert "printf 'render_runtime_acl_grants=%s\\n' \"$RENDER_RUNTIME_ACL_GRANTS\"" in script
+    assert "automatic_replacement_supported=false" in script
     assert "RECONCILIATION_REQUIRED" in script
     assert 'LECTURESIFT_RENDER_REPLACE_CONFIRM:-}" != "REPLACE_STILL_FENCED_RENDER"' in script
     assert "DROP SCHEMA IF EXISTS lecturesift_worker CASCADE" in script
@@ -1138,7 +1274,7 @@ def test_postgres_reverse_reconciliation_never_guesses_a_merge_or_traffic_flip()
     assert 'render_command reset-restore-approved ovh-final.dump' in script
     assert 'cmp --silent "$RUN_DIR/ovh-final.safe" "$RUN_DIR/render-restored.safe"' in script
     assert 'render_command manifest render-restored.txt' in script
-    assert 'canonical "$RUN_DIR/render-restored.txt" "$RUN_DIR/render-restored.safe" strict' in script
+    assert 'canonical "$RUN_DIR/render-restored.txt" "$RUN_DIR/render-restored.safe"\n' in script
     assert "postgres-rollback-render-unproven" in script
     assert "redis_reconciliation_complete=false" in script
     assert "r2_reconciliation_complete=false" in script
@@ -1185,9 +1321,11 @@ def test_rehearsal_hard_purge_and_schema_contract_are_fail_closed():
     assert "SELECT 1, 'SCHEMA_OBJECT|' || item" in manifest
     assert "SCHEMA_OBJECT" in rehearsal and "SCHEMA_OBJECT" in migration
     assert "SCHEMA_OBJECT" in rollback
-    assert "verify_schema_transition_v3.py" in rehearsal
-    assert "verify_schema_transition_v3.py" in migration
-    assert "verify_schema_transition_v3.py" in rollback
+    for version in (4, 5):
+        assert f"verify_schema_transition_v{version}.py" in rehearsal
+        assert f"verify_schema_transition_v{version}.py" in migration
+    for version in (4, 5):
+        assert f"verify_schema_transition_v{version}.py" in rollback
     assert "schema_contract_payment_provider_sessions_v1.txt" in rehearsal
     assert "schema_contract_payment_provider_sessions_v1.txt" in migration
     assert "schema_contract_payment_provider_sessions_v1.txt" in rollback
@@ -1343,7 +1481,8 @@ def test_rehearsal_clone_owner_and_candidate_secret_boundaries_are_structural():
     postgres_role = _read("deploy/postgres-app-role.sh")
     stack = _read("deploy/rehearsal_stack.sh")
 
-    assert restore.count('--env "PGOPTIONS=-c default_transaction_read_only=on"') == 3
+    # Source inventory, source-before manifest, dump and source-after manifest.
+    assert restore.count('--env "PGOPTIONS=-c default_transaction_read_only=on"') == 4
     assert "lecturesift_rehearsal_owner_" in restore
     assert "owner_role=lecturesift_rehearsal_owner_" in restore
     assert "WHERE rolname IN (:'owner_role', :'api_role', :'worker_role')" in restore

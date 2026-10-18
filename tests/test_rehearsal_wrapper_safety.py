@@ -181,7 +181,8 @@ def test_exact_wrapper_attests_all_base_state_without_exposing_values() -> None:
     assert "FROM pg_tablespace" in script
     assert script.count("docker exec -i lecturesift-postgres-1 psql") >= 3
     assert script.count("--set ON_ERROR_STOP=1") >= 3
-    assert script.count('>"$output" || return 1') == 3
+    # Roles, databases and grants, plus the main-database manifest capture.
+    assert script.count('>"$output" || return 1') == 4
     assert script.count('[[ -s "$output" && ! -L "$output" ]]') == 3
     assert 'grep -Fq "ROLE|$POSTGRES_USER|" "$output"' in script
     assert 'grep -Fq "ROLE|$LECTURESIFT_APP_DB_USER|" "$output"' in script
@@ -211,7 +212,20 @@ def test_exact_wrapper_attests_all_base_state_without_exposing_values() -> None:
     assert "grants_unchanged=true" in script
     assert "SCHEMA_OBJECT|SCHEMA_COMPAT" in script
     assert "TABLE_DIFF" in script
-    assert 'verify_schema_transition_v3.py" current' in script
+    # The main-database family is detected live on each capture (core before
+    # the provider cutover, product/workspace after) and must not change.
+    snapshot = script[script.index("snapshot_manifest() {"):]
+    snapshot = snapshot[: snapshot.index("\n}\n")]
+    detection = snapshot.index('--inventory "$output.inventory" --accept 3,4,5')
+    assert snapshot.index('<"$root/deploy/schema_contract_inventory.sql"') < detection
+    assert detection < snapshot.index('rehearsal_manifest_v${contract_version}.sql')
+    assert detection < snapshot.index('verify_schema_transition_v${contract_version}.py" current')
+    assert "rehearsal_manifest_v3.sql" not in snapshot
+    assert snapshot.count("|| return 1") == 7
+    assert (
+        'cmp --silent "$state/before.manifest.contract-version" '
+        '"$state/after.manifest.contract-version" || post_failed=true'
+    ) in script
     assert "schema_contract_payment_provider_sessions_v1.txt" in script
     assert "schema_contract_billing_email_verifications_v1.txt" in script
     assert 'before.manifest.canonical" "$state/after.manifest.canonical' in script
@@ -464,3 +478,59 @@ def test_cutover_input_installer_matches_redis_migration_source_names() -> None:
     )
     assert 'SOURCE_REDIS_URL="${REDIS_URL:-}"' not in migration
     assert 'SOURCE_CELERY_BROKER_URL="${CELERY_BROKER_URL:-}"' not in migration
+
+
+def _artifact_validator():
+    import importlib.util
+    import sys
+
+    deploy = str(ROOT / "deploy")
+    if deploy not in sys.path:
+        sys.path.insert(0, deploy)
+    spec = importlib.util.spec_from_file_location(
+        "lecturesift_validate_rehearsal_artifacts_schema",
+        ROOT / "deploy" / "validate_rehearsal_artifacts.py",
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _completion(path: Path, *records: str) -> Path:
+    path.write_text("".join(f"{record}\n" for record in ("DATABASE|18", *records)), encoding="utf-8")
+    return path
+
+
+@pytest.mark.parametrize("version", [4, 5])
+def test_artifact_validator_selects_the_family_every_capture_names(tmp_path: Path, version: int):
+    validator = _artifact_validator()
+    captures = [
+        _completion(tmp_path / f"{name}.txt", f"MANIFEST_COMPLETE|v{version}|DATABASE|1")
+        for name in ("target", "target-migrated", "target-after-e2e")
+    ]
+    selected = validator._schema_verifier(*captures)
+    assert selected is getattr(validator, f"schema_verifier_v{version}")
+    assert selected.__name__ == f"verify_schema_transition_v{version}"
+
+
+@pytest.mark.parametrize(
+    ("records", "message"),
+    [
+        (("MANIFEST_COMPLETE|v4|DATABASE|1", "MANIFEST_COMPLETE|v5|DATABASE|1", "MANIFEST_COMPLETE|v4|DATABASE|1"),
+         "different schema contracts"),
+        (("MANIFEST_COMPLETE|v3|DATABASE|1",) * 3, "no supported provider schema contract"),
+        (("MANIFEST_COMPLETE|v5|DATABASE|1", "", "MANIFEST_COMPLETE|v5|DATABASE|1"), "lacks one completion record"),
+    ],
+)
+def test_artifact_validator_rejects_mixed_core_or_incomplete_captures(tmp_path: Path, records, message):
+    validator = _artifact_validator()
+    captures = [
+        _completion(tmp_path / f"capture-{index}.txt", *([record] if record else []))
+        for index, record in enumerate(records)
+    ]
+    with pytest.raises(validator.ArtifactError, match=message):
+        validator._schema_verifier(*captures)
+    source = _read("deploy/validate_rehearsal_artifacts.py")
+    assert "verify_schema_transition_v3" not in source
+    assert 'raise ArtifactError("a contract-current rehearsal clone changed its schema family")' in source

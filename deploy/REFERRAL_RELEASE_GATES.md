@@ -6,8 +6,9 @@ the API has `LECTURESIFT_REFERRALS_ENABLED=true`, the complete v4 schema,
 recovery v3 selection and a fixed campaign boundary. The environment flag
 still defaults off for other deployments. See `docs/PRODUCT_ACTIVATION.md`
 for actual migration, runtime-role, backup and separate synthetic restore
-evidence. Never use the older core-only migration or recovery v2 contracts
-against these expanded tables. No actual paid referral purchase/renewal has
+evidence. Never use the older core-only manifest, verifier or recovery v2
+contracts against these expanded tables; the provider cutover tools now select
+the product or workspace family from the live source catalog instead. No actual paid referral purchase/renewal has
 been placed as a live test.
 
 ## Program rules
@@ -155,8 +156,11 @@ PR67 now includes v4 catalogs, recovery v3, the explicit additive product migrat
 version-routed backups/restores and configuration snapshots v3. The old migration
 entry point remains blocked. Use `docs/PRODUCT_ACTIVATION.md` for the complete
 release procedure and distinguish synthetic CI proof from actual deployment
-backup/restore evidence. Historical provider cutover/rollback controllers remain
-core-only; they deliberately refuse the expanded product schema.
+backup/restore evidence. The provider cutover, rehearsal, seed, finalization,
+first-start and rollback tools now detect the product (v4) or workspace (v5)
+family from the live source catalog, bind it into the cutover proof as
+`schema_contract_version`, and refuse a core-only (v3) provider source. This is
+a source change; no cutover has been run with it.
 
 ## Residual cost and fraud risk
 
