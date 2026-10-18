@@ -21,9 +21,12 @@ systemd owners for the private core and public ingress.
   repository/storage/encryption credentials. The worker receives only
   database, queue, OpenAI, R2, processing and cost values.
   It never receives account/session, admin, payment, email, Instagram or legal
-  secrets. The scheduled Instagram container receives only its publishing
-  credentials and public media URL settings. Restic remains separate from all
-  application containers.
+  secrets. The scheduled Instagram container receives its publishing
+  credentials, public media URL, studio/reply settings, OpenAI, R2 and the
+  ElevenLabs voice values (the same set the Render cron uses today), but no
+  database, Redis, admin, payment or email credentials. ElevenLabs values
+  reach only that container. Restic remains separate from all application
+  containers.
 - Only ports 22, 80 and 443 may be public. PostgreSQL and Redis stay on the
   internal Compose network.
 - Keep Render available for rollback until data, payment callbacks, uploads

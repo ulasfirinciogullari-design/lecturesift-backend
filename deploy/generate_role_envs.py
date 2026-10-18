@@ -88,6 +88,19 @@ WORKER_KEYS = frozenset(
     }
 )
 
+# Voice credentials are needed only by the Instagram studio job. They never
+# enter the internet-facing API or the processing worker.
+INSTAGRAM_ONLY_KEYS = frozenset(
+    {
+        "ELEVENLABS_API_KEY",
+        "ELEVENLABS_VOICE_ID",
+        "ELEVENLABS_MODEL",
+    }
+)
+
+# The studio publisher writes rendered Reels/carousels to object storage, asks
+# OpenAI for scripts and replies, and narrates with ElevenLabs. It still gets no
+# database, Redis, admin, payment or email credentials.
 INSTAGRAM_KEYS = frozenset(
     {
         "PUBLIC_BASE_URL",
@@ -97,7 +110,19 @@ INSTAGRAM_KEYS = frozenset(
         "INSTAGRAM_GRAPH_API_VERSION",
         "INSTAGRAM_DAILY_AUTOMATION_ENABLED",
         "INSTAGRAM_DAILY_MEDIA_TYPE",
+        "INSTAGRAM_STUDIO_ENABLED",
+        "INSTAGRAM_REPLIES_ENABLED",
+        "INSTAGRAM_REEL_HOUR",
+        "INSTAGRAM_CAROUSEL_HOUR",
+        "INSTAGRAM_REPLIES_DAILY_LIMIT",
+        "OPENAI_API_KEY",
+        "S3_ENDPOINT_URL",
+        "S3_REGION",
+        "S3_BUCKET",
+        "S3_ACCESS_KEY_ID",
+        "S3_SECRET_ACCESS_KEY",
     }
+    | INSTAGRAM_ONLY_KEYS
 )
 
 WORKER_REQUIRED = frozenset(
@@ -251,7 +276,7 @@ def _host_only(key: str) -> bool:
 
 
 def _api_allowed(key: str) -> bool:
-    if _host_only(key):
+    if _host_only(key) or key in INSTAGRAM_ONLY_KEYS:
         return False
     if any(marker in key for marker in SENSITIVE_NAME_MARKERS):
         if key not in API_SENSITIVE_KEYS:

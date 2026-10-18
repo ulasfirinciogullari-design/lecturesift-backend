@@ -29,8 +29,8 @@ On the VPS, `/etc/lecturesift/runtime.env` is a root-side source of truth, not
 a container environment file. Production preflight derives independent
 root-only `api.env`, `worker.env`, and `instagram.env` files. This keeps admin,
 session, payment, email, legal and Instagram secrets out of the processing
-worker, while the scheduled Instagram job receives no database, R2, OpenAI,
-payment or admin credentials. Host-only restic repository, storage and
+worker, while the scheduled Instagram studio job receives only its publishing,
+OpenAI, R2 and ElevenLabs values and no database, payment or admin credentials. Host-only restic repository, storage and
 encryption credentials are never copied into any application role. See
 [VPS_DEPLOYMENT.md](VPS_DEPLOYMENT.md) for
 the fail-closed generation and validation procedure.

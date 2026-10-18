@@ -65,6 +65,14 @@ def _runtime_fixture(tmp_path: Path) -> Path:
         "INSTAGRAM_DAILY_AUTOMATION_ENABLED": "true",
         "INSTAGRAM_DAILY_MEDIA_TYPE": "REELS",
         "INSTAGRAM_ADMIN_TOKEN": "ig-admin",
+        "INSTAGRAM_STUDIO_ENABLED": "true",
+        "INSTAGRAM_REPLIES_ENABLED": "true",
+        "INSTAGRAM_REEL_HOUR": "20",
+        "INSTAGRAM_CAROUSEL_HOUR": "13",
+        "INSTAGRAM_REPLIES_DAILY_LIMIT": "120",
+        "ELEVENLABS_API_KEY": "voice-secret",
+        "ELEVENLABS_VOICE_ID": "voice-id",
+        "ELEVENLABS_MODEL": "eleven_multilingual_v2",
         "ADMIN_ADMIN": "root-admin",
         "BILLING_SESSION_SECRET": "session-secret",
         "PAYMENT_TOKEN_BINDING_SECRET": "payment-binding-secret",
@@ -120,7 +128,7 @@ def test_worker_and_instagram_roles_are_exact_least_privilege(tmp_path: Path):
     worker_keys = _keys(worker)
     instagram_keys = _keys(instagram)
     host_only = {key for key in assignments if role_envs._host_only(key)}
-    assert api_keys == set(assignments).difference(host_only)
+    assert api_keys == set(assignments).difference(host_only | role_envs.INSTAGRAM_ONLY_KEYS)
     assert "DATABASE_URL" in worker_keys
     assert "LECTURESIFT_WORKER_DATABASE_URL" not in worker_keys
     assert (
@@ -133,6 +141,9 @@ def test_worker_and_instagram_roles_are_exact_least_privilege(tmp_path: Path):
     assert api_keys.isdisjoint(host_only)
     assert worker_keys.isdisjoint(host_only)
     assert instagram_keys.isdisjoint(host_only)
+    assert role_envs.INSTAGRAM_ONLY_KEYS <= instagram_keys
+    assert api_keys.isdisjoint(role_envs.INSTAGRAM_ONLY_KEYS)
+    assert worker_keys.isdisjoint(role_envs.INSTAGRAM_ONLY_KEYS)
 
     forbidden_worker = {
         "ADMIN_ADMIN",
@@ -179,9 +190,6 @@ def test_worker_and_instagram_roles_are_exact_least_privilege(tmp_path: Path):
             "DATABASE_URL",
             "CELERY_BROKER_URL",
             "REDIS_URL",
-            "OPENAI_API_KEY",
-            "S3_ACCESS_KEY_ID",
-            "S3_SECRET_ACCESS_KEY",
             "ADMIN_ADMIN",
             "INSTAGRAM_ADMIN_TOKEN",
             "BILLING_SESSION_SECRET",

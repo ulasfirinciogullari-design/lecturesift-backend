@@ -73,6 +73,7 @@ python -m lecturesift.studio_social prepare YYYY-MM-DD       # üretir, paylaşm
 python -m lecturesift.reel_studio preview /tmp/onizleme      # örnek ders, anahtarsız sessiz önizleme
 ```
 
-OVH `lecturesift-instagram.timer` kapalı kalmaya devam eder. OVH'nin `instagram.env` rolü OpenAI ve
-depolama anahtarlarını bilerek içermez; yayıncı ileride OVH'ye taşınırsa bu anahtarların role
-eklenmesi ayrıca kararlaştırılmalıdır.
+OVH `lecturesift-instagram.timer` Render cron kapatılana kadar kapalı kalır. Yayıncı OVH'ye
+taşındığında `instagram.env` rolü Render cron ile aynı anahtarları alır: Instagram, OpenAI, R2
+depolama ve ElevenLabs. Veritabanı, Redis, yönetici, ödeme ve e-posta anahtarları bu role girmez;
+ElevenLabs değerleri yalnız bu role gider. OVH zamanlayıcısı da Render gibi 15 dakikada bir çalışır.

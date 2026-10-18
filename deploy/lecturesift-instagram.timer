@@ -1,11 +1,13 @@
 [Unit]
-Description=Publish LectureSift Instagram content daily
+Description=Run the LectureSift Instagram studio and replies every 15 minutes
 
 [Timer]
-# 11:00 Europe/Istanbul (UTC+03 year-round).
-OnCalendar=*-*-* 08:00:00 UTC
+# Same cadence as the Render cron: each slot (carousel from 13:00, Reel from
+# 20:00 Europe/Istanbul) publishes once per day and the other runs answer
+# comments and DMs. A run still in progress makes the next tick a no-op.
+OnCalendar=*-*-* *:00/15:00 UTC
 Persistent=true
-RandomizedDelaySec=300
+RandomizedDelaySec=60
 AccuracySec=1min
 
 [Install]
