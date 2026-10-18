@@ -192,3 +192,25 @@ def test_reel_is_rendered_ahead_of_its_slot_after_the_carousel(monkeypatch):
     assert [r["status"] for r in first] == ["published", "reel_ready"]
     assert studio.run_scheduled(datetime(2026, 10, 18, 13, 20, tzinfo=tz))[0]["status"] == "nothing_due"
     assert len(prepared) == 1
+
+
+def test_narration_is_stored_outside_the_post_history(monkeypatch):
+    store = _fake_storage(monkeypatch)
+    monkeypatch.setattr(studio, "ELEVENLABS_API_KEY", "key")
+    monkeypatch.setattr(studio, "ELEVENLABS_VOICE_ID", "voice")
+    silent_narrate = studio.reel_studio.narrate
+    monkeypatch.setattr(studio.reel_studio, "narrate", lambda row, voice=True: studio.reel_studio.Narration(
+        b"wav", *(lambda n: (n.words, n.scenes, n.duration))(silent_narrate(row, voice=False))))
+    monkeypatch.setattr(studio.reel_studio, "render_reel", lambda *a: (_ for _ in ()).throw(studio.reel_studio.StudioError("x")))
+    with pytest.raises(studio.reel_studio.StudioError):
+        studio.prepare(date(2026, 10, 18))
+    json_keys = [k for k in store if k.endswith(".json") and k.startswith(studio._PREFIX)]
+    assert json_keys == ["social/instagram/studio/2026-10-18/post.json"]
+    assert "social/instagram/studio-voice/2026-10-18/narration.json" in store
+
+
+def test_run_command_exits_non_zero_when_a_slot_fails(monkeypatch):
+    monkeypatch.setattr(studio, "run_scheduled", lambda: [{"status": "published"}, {"status": "failed"}])
+    assert studio.main(["run"]) == 1
+    monkeypatch.setattr(studio, "run_scheduled", lambda: [{"status": "nothing_due"}])
+    assert studio.main(["run"]) == 0

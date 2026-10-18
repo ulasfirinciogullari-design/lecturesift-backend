@@ -37,6 +37,8 @@ from .instagram import InstagramConfigurationError
 from .social_storage import read_bytes, read_json, recent_json, write_bytes, write_json
 
 _PREFIX = "social/instagram/studio/"
+# Outside _PREFIX: _recent_questions() reads every JSON file under it as a post.
+_VOICE_PREFIX = "social/instagram/studio-voice/"
 _TZ = ZoneInfo("Europe/Istanbul")
 CAROUSEL_SLIDES = 5
 
@@ -314,7 +316,8 @@ def prepare_carousel(day: date) -> dict:
 
 def _narration(day: date, row: dict) -> reel_studio.Narration:
     """ElevenLabs narration, stored after the first success so a failed render never pays for the voice twice."""
-    timing, audio = read_json(_key(day, "narration.json")), read_bytes(_key(day, "voice.wav"))
+    folder = f"{_VOICE_PREFIX}{day.isoformat()}/"
+    timing, audio = read_json(f"{folder}narration.json"), read_bytes(f"{folder}voice.wav")
     if timing and audio:
         return reel_studio.Narration(
             audio,
@@ -323,8 +326,8 @@ def _narration(day: date, row: dict) -> reel_studio.Narration:
             timing["duration"],
         )
     narration = reel_studio.narrate(row, voice=True)
-    write_bytes(_key(day, "voice.wav"), narration.audio, "audio/wav")
-    write_json(_key(day, "narration.json"), {
+    write_bytes(f"{folder}voice.wav", narration.audio, "audio/wav")
+    write_json(f"{folder}narration.json", {
         "words": [[w.text, w.start, w.end] for w in narration.words],
         "scenes": {name: list(span) for name, span in narration.scenes.items()},
         "duration": narration.duration,
@@ -464,8 +467,9 @@ def main(argv: list[str]) -> int:
             print(json.dumps({"status": "prepared", "question": row["question"], "seconds": row.get("seconds")}, ensure_ascii=False))
             return 0
         if argv == ["run"]:
-            print(json.dumps(run_scheduled(), ensure_ascii=False))
-            return 0
+            results = run_scheduled()
+            print(json.dumps(results, ensure_ascii=False))
+            return 1 if any(item.get("status") == "failed" for item in results) else 0
     except (InstagramConfigurationError, RuntimeError, ValueError, KeyError) as exc:
         print(f"Instagram studio failed: {exc}", file=sys.stderr)
         return 1
