@@ -271,6 +271,43 @@ def wrap(draw: ImageDraw.ImageDraw, text: str, f: ImageFont.FreeTypeFont, width:
     return lines
 
 
+def fit(draw: ImageDraw.ImageDraw, text: str, weight: str, size: int, width: int, max_lines: int, min_size: int = 30) -> tuple[ImageFont.FreeTypeFont, list[str]]:
+    """Largest font (down to min_size) whose wrapped lines all fit width within max_lines."""
+    for s in range(size, min_size - 1, -2):
+        f = font(s, weight)
+        lines = wrap(draw, text, f, width)
+        if len(lines) <= max_lines and all(draw.textlength(line, font=f) <= width for line in lines):
+            return f, lines
+    f = font(min_size, weight)
+    return f, wrap(draw, text, f, width)
+
+
+def hook_lines(draw: ImageDraw.ImageDraw, row: dict, width: int, size: int) -> tuple[ImageFont.FreeTypeFont, list[str]]:
+    """Hook text as at most three lines at one shared size."""
+    for s in range(size, 51, -4):
+        f = font(s, "black")
+        lines = [text for line in row["hook"] for text in wrap(draw, line, f, width)]
+        # The highlight box adds about 60px of padding to its line.
+        if len(lines) <= 3 and all(draw.textlength(text, font=f) + 60 <= width for text in lines):
+            return f, lines
+    f = font(52, "black")
+    return f, [text for line in row["hook"] for text in wrap(draw, line, f, width)]
+
+
+def draw_hook_line(draw: ImageDraw.ImageDraw, x: int, y: int, text: str, f, highlight: str, alpha: int = 255) -> None:
+    if highlight and highlight in text:
+        before, after = text.split(highlight, 1)
+        draw.text((x, y), before, font=f, fill=(*WHITE, alpha))
+        x += int(draw.textlength(before, font=f)) + (16 if before else 0)
+        box = draw.textbbox((x, y), highlight, font=f)
+        draw.rounded_rectangle((box[0] - 14, box[1] - 10, box[2] + 14, box[3] + 16), 22, fill=(*YELLOW, alpha))
+        draw.text((x, y), highlight, font=f, fill=(*NAVY, alpha))
+        x += int(draw.textlength(highlight, font=f)) + 16
+        draw.text((x, y), after, font=f, fill=(*WHITE, alpha))
+    else:
+        draw.text((x, y), text, font=f, fill=(*WHITE, alpha))
+
+
 @lru_cache(maxsize=1)
 def background() -> Image.Image:
     """A slightly oversized navy field with soft brand-colour glows; frames crop a drifting window."""
@@ -359,30 +396,15 @@ def check(draw: ImageDraw.ImageDraw, cx: int, cy: int, r: int, k: float, color=G
 
 def scene_hook(frame: Image.Image, row: dict, t: float, start: float, end: float) -> None:
     draw = ImageDraw.Draw(frame, "RGBA")
-    f = font(104, "black")
-    y = 640
-    hi = row.get("hook_highlight", "")
-    for li, line in enumerate(row["hook"]):
-        k = ease_back(ramp(t, start + li * 0.35, 0.5))
-        if k <= 0:
-            continue
-        lift = int((1 - k) * 90)
-        a = int(255 * clamp(k))
-        lines = wrap(draw, line, f, W - 160)
-        for text in lines:
-            x = 80
-            if hi and hi in text:
-                before, after = text.split(hi, 1)
-                draw.text((x, y + lift), before, font=f, fill=(*WHITE, a))
-                x += int(draw.textlength(before, font=f)) + (16 if before else 0)
-                wbox = draw.textbbox((x, y + lift), hi, font=f)
-                draw.rounded_rectangle((wbox[0] - 14, wbox[1] - 10, wbox[2] + 14, wbox[3] + 16), 22, fill=(*YELLOW, a))
-                draw.text((x, y + lift), hi, font=f, fill=(*NAVY, a))
-                x += int(draw.textlength(hi, font=f)) + 16
-                draw.text((x, y + lift), after, font=f, fill=(*WHITE, a))
-            else:
-                draw.text((x, y + lift), text, font=f, fill=(*WHITE, a))
-            y += 128
+    f, lines = hook_lines(draw, row, W - 160, 104)
+    step = int(f.size * 1.23)
+    # Centred on the frame, which is also the centre of the 3:4 profile-grid crop.
+    y = (H - (len(lines) * step + 100)) // 2
+    for li, text in enumerate(lines):
+        k = ease_back(ramp(t, start + li * 0.3, 0.5))
+        if k > 0:
+            draw_hook_line(draw, 80, y + int((1 - k) * 90), text, f, row.get("hook_highlight", ""), int(255 * clamp(k)))
+        y += step
     k = ease_out(ramp(t, start + 1.0, 0.5))
     if k > 0:
         draw.text((82, y + 40), "Bunu dene ↓", font=font(46, "semibold"), fill=(*MUTED, int(255 * k)))
@@ -485,12 +507,13 @@ def scene_quiz(frame: Image.Image, row: dict, t: float, start: float, end: float
         draw.text((cx - tw / 2, cy - 26), n, font=font(40, "black"), fill=INK)
     else:
         check(draw, cx, cy, r, ramp(t, reveal, 0.35))
-    f = font(52, "display")
+    f, lines = fit(draw, row["question"], "display", 52, box[2] - x0 - 56, 3, 38)
     yy = top + 150
-    for line in wrap(draw, row["question"], f, box[2] - x0 - 56):
+    for line in lines:
         draw.text((x0, yy), line, font=f, fill=INK)
-        yy += 68
+        yy += int(f.size * 1.31)
     yy += 40
+    of = min((fit(draw, o, "bold", 42, box[2] - 56 - x0 - 140, 1, 28)[0] for o in row["options"]), key=lambda x: x.size)
     shown = ramp(t, reveal, 0.4)
     for index, option in enumerate(row["options"]):
         appear = ease_out(ramp(t, start + 0.5 + index * 0.18, 0.35))
@@ -508,7 +531,7 @@ def scene_quiz(frame: Image.Image, row: dict, t: float, start: float, end: float
         draw.rounded_rectangle((x0 + 22, oy + 22, x0 + 86, oy + 86), 18, fill=(GREEN if shown > 0 and correct else (230, 235, 246)))
         lw = draw.textlength(letter, font=font(34, "black"))
         draw.text((x0 + 54 - lw / 2, oy + 32), letter, font=font(34, "black"), fill=WHITE if shown > 0 and correct else INK)
-        draw.text((x0 + 116, oy + 30), option, font=font(42, "bold"), fill=ink)
+        draw.text((x0 + 116, oy + 54), option, font=of, fill=ink, anchor="lm")
 
 
 def scene_cta(frame: Image.Image, row: dict, t: float, start: float, end: float) -> None:
@@ -615,7 +638,7 @@ def _scene_at(scenes: dict, t: float, duration: float) -> tuple[str, float, floa
     return bounds[-1]
 
 
-def render_frame(row: dict, narration: Narration, t: float, groups=None) -> Image.Image:
+def render_frame(row: dict, narration: Narration, t: float, groups=None, progress: bool = True) -> Image.Image:
     drift = 60 + 60 * math.sin(t * 0.35)
     base = background().crop((int(drift), int(120 + 50 * math.cos(t * 0.27)), int(drift) + W, int(120 + 50 * math.cos(t * 0.27)) + H))
     frame = base.copy()
@@ -637,10 +660,11 @@ def render_frame(row: dict, narration: Narration, t: float, groups=None) -> Imag
         ImageDraw.Draw(frame, "RGBA").rectangle((0, 0, W, H), fill=(255, 255, 255, int(70 * (1 - since / 0.12))))
     if name != "cta":
         brand_chip(frame)
-    # Thin progress bar along the top safe edge.
-    d = ImageDraw.Draw(frame, "RGBA")
-    d.rounded_rectangle((72, 120, W - 72, 128), 4, fill=(255, 255, 255, 40))
-    d.rounded_rectangle((72, 120, 72 + int((W - 144) * clamp(t / narration.duration)), 128), 4, fill=(*BLUE, 255))
+    if progress:
+        # Thin progress bar along the top safe edge.
+        d = ImageDraw.Draw(frame, "RGBA")
+        d.rounded_rectangle((72, 120, W - 72, 128), 4, fill=(255, 255, 255, 40))
+        d.rounded_rectangle((72, 120, 72 + int((W - 144) * clamp(t / narration.duration)), 128), 4, fill=(*BLUE, 255))
     draw_captions(frame, groups if groups is not None else caption_groups(narration.words), t)
     return frame.convert("RGB")
 
@@ -687,7 +711,7 @@ def render_reel(row: dict, narration: Narration, out: Path) -> Path:
 def render_cover(row: dict, narration: Narration) -> Image.Image:
     """The hook frame once every line has landed, without captions."""
     t = narration.scenes["hook"][0] + 1.6
-    frame = render_frame(row, Narration(None, (), narration.scenes, narration.duration), t, groups=[])
+    frame = render_frame(row, Narration(None, (), narration.scenes, narration.duration), t, groups=[], progress=False)
     return frame
 
 
@@ -717,73 +741,90 @@ def render_carousel(row: dict) -> list[Image.Image]:
     total = 5
     slides = []
 
+    # Every slide's text block is measured first and then centred between the header and the swipe hint,
+    # so long model-written text shrinks instead of overflowing and short text leaves no empty half.
+    top, bottom = 170, CH - 150
+
     frame, d = _slide_base(1, total)
-    y = 380
-    for line in row["hook"]:
-        f = font(100, "black")
-        for text in wrap(d, line, f, CW - 150):
-            hi = row.get("hook_highlight", "")
-            x = 72
-            if hi and hi in text:
-                before, after = text.split(hi, 1)
-                d.text((x, y), before, font=f, fill=WHITE)
-                x += int(d.textlength(before, font=f)) + (16 if before else 0)
-                box = d.textbbox((x, y), hi, font=f)
-                d.rounded_rectangle((box[0] - 14, box[1] - 10, box[2] + 14, box[3] + 16), 22, fill=YELLOW)
-                d.text((x, y), hi, font=f, fill=NAVY)
-                x += int(d.textlength(hi, font=f)) + 16
-                d.text((x, y), after, font=f, fill=WHITE)
-            else:
-                d.text((x, y), text, font=f, fill=WHITE)
-            y += 124
-    d.text((74, y + 40), "Önce bu 30 saniyelik testi yap.", font=font(44, "semibold"), fill=MUTED)
+    f, lines = hook_lines(d, row, CW - 150, 100)
+    step = int(f.size * 1.24)
+    sub = font(44, "semibold")
+    y = (top + bottom - (len(lines) * step + 40 + 56)) // 2
+    for text in lines:
+        draw_hook_line(d, 72, y, text, f, row.get("hook_highlight", ""))
+        y += step
+    d.text((74, y + 40), "Önce bu 30 saniyelik testi yap.", font=sub, fill=MUTED)
     _swipe_hint(d)
     slides.append(frame)
 
     frame, d = _slide_base(2, total)
-    d.text((72, 260), "NEDEN İŞE YARAMIYOR?", font=font(34, "bold"), fill=BLUE)
-    y = 340
-    for line in wrap(d, row["problem"], font(84, "black"), CW - 150):
-        d.text((72, y), line, font=font(84, "black"), fill=YELLOW)
-        y += 104
-    y += 30
-    for text in ("Notu tanımak, onu hatırlamak değildir.", "Sınav sana soru sorar, notunu göstermez.", "Kendini test etmek eksikleri hemen gösterir."):
-        check(d, 100, y + 30, 22, 1.0, BLUE)
-        for li, line in enumerate(wrap(d, text, font(42, "semibold"), CW - 230)):
-            d.text((146, y + li * 54), line, font=font(42, "semibold"), fill=WHITE)
-        y += 150
+    pf, plines = fit(d, row["problem"], "black", 84, CW - 150, 2, 56)
+    pstep = int(pf.size * 1.24)
+    bullets = ("Notu tanımak, onu hatırlamak değildir.", "Sınav sana soru sorar, notunu göstermez.", "Kendini test etmek eksikleri hemen gösterir.")
+    bf = font(42, "semibold")
+    wrapped = [wrap(d, text, bf, CW - 230) for text in bullets]
+    height = 70 + len(plines) * pstep + 40 + sum(len(w) * 54 for w in wrapped) + 56 * (len(wrapped) - 1)
+    y = (top + bottom - height) // 2
+    d.text((72, y), "NEDEN İŞE YARAMIYOR?", font=font(34, "bold"), fill=BLUE)
+    y += 70
+    for line in plines:
+        d.text((72, y), line, font=pf, fill=YELLOW)
+        y += pstep
+    y += 40
+    for lines in wrapped:
+        check(d, 100, y + 27, 22, 1.0, BLUE)
+        for li, line in enumerate(lines):
+            d.text((146, y + li * 54), line, font=bf, fill=WHITE)
+        y += len(lines) * 54 + 56
     _swipe_hint(d)
     slides.append(frame)
 
     frame, d = _slide_base(3, total)
-    d = card(frame, (72, 220, CW - 72, CH - 170), 44)
-    d.rounded_rectangle((124, 270, 354, 324), 27, fill=(237, 233, 255))
-    d.text((150, 278), "SORU 1/10", font=font(30, "bold"), fill=VIOLET)
-    y = 370
-    for line in wrap(d, row["question"], font(54, "display"), CW - 260):
-        d.text((124, y), line, font=font(54, "display"), fill=INK)
-        y += 70
+    qf, qlines = fit(d, row["question"], "display", 54, CW - 260, 3, 40)
+    qstep = int(qf.size * 1.3)
+    of = min((fit(d, o, "bold", 42, CW - 124 - 240 - 40, 1, 28)[0] for o in row["options"]), key=lambda x: x.size)
+    body = 54 + 46 + len(qlines) * qstep + 36 + 4 * 104 + 3 * 20 + 44 + 40
+    card_top = max(top + 30, (top + bottom - body - 104) // 2)
+    card_bottom = card_top + body + 104
+    d = card(frame, (72, card_top, CW - 72, card_bottom), 44)
+    y = card_top + 52
+    d.rounded_rectangle((124, y, 354, y + 54), 27, fill=(237, 233, 255))
+    d.text((150, y + 8), "SORU 1/10", font=font(30, "bold"), fill=VIOLET)
+    y += 54 + 46
+    for line in qlines:
+        d.text((124, y), line, font=qf, fill=INK)
+        y += qstep
     y += 36
     for index, option in enumerate(row["options"]):
         d.rounded_rectangle((124, y, CW - 124, y + 104), 26, fill=(246, 248, 253), outline=(226, 232, 244), width=4)
         d.rounded_rectangle((146, y + 20, 210, y + 84), 18, fill=(230, 235, 246))
         lw = d.textlength("ABCD"[index], font=font(34, "black"))
         d.text((178 - lw / 2, y + 30), "ABCD"[index], font=font(34, "black"), fill=INK)
-        d.text((240, y + 28), option, font=font(42, "bold"), fill=INK)
+        d.text((240, y + 52), option, font=of, fill=INK, anchor="lm")
         y += 124
-    d.text((124, CH - 250), "Cevabını aklında tut, sonra kaydır.", font=font(34, "semibold"), fill=(94, 110, 140))
+    d.text((124, y + 24), "Cevabını aklında tut, sonra kaydır.", font=font(34, "semibold"), fill=(94, 110, 140))
     _swipe_hint(d)
     slides.append(frame)
 
     frame, d = _slide_base(4, total)
-    d.text((72, 260), "CEVAP", font=font(34, "bold"), fill=GREEN)
     answer = row["options"][row["answer"]]
-    d.text((72, 320), answer, font=font(130, "black"), fill=WHITE)
-    check(d, CW - 160, 400, 64, 1.0)
-    y = 540
+    af, alines = fit(d, answer, "black", 130, CW - 72 - 72 - 180, 2, 44)
+    astep = int(af.size * 1.15)
+    steps = ("Dersi ya da PDF'i yükle", "Özet ve notları gözden geçir", "10 soruluk quiz'i çöz", "Bilemediklerini kartlarla tekrar et")
+    answer_h = max(len(alines) * astep, 140)
+    height = 60 + answer_h + 50 + 90 + 4 * 112 + 3 * 24
+    y = (top + bottom - height) // 2
+    d.text((72, y), "CEVAP", font=font(34, "bold"), fill=GREEN)
+    y += 60
+    check(d, CW - 144, y + answer_h // 2, 64, 1.0)
+    ay = y + (answer_h - len(alines) * astep) // 2
+    for line in alines:
+        d.text((72, ay), line, font=af, fill=WHITE)
+        ay += astep
+    y += answer_h + 50
     d.text((72, y), "Her ders için bu 4 adım:", font=font(42, "bold"), fill=MUTED)
     y += 90
-    for number, text in enumerate(("Dersi ya da PDF'i yükle", "Özet ve notları gözden geçir", "10 soruluk quiz'i çöz", "Bilemediklerini kartlarla tekrar et"), start=1):
+    for number, text in enumerate(steps, start=1):
         d.rounded_rectangle((72, y, CW - 72, y + 112), 28, fill=(255, 255, 255, 22))
         d.ellipse((100, y + 24, 164, y + 88), fill=BLUE)
         nw = d.textlength(str(number), font=font(36, "black"))
