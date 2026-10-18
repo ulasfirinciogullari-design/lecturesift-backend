@@ -103,3 +103,44 @@ class InstagramClient:
             {"fields": "id,caption,timestamp", "limit": str(limit)},
         )
 
+
+    def create_carousel_item(self, *, image_url: str) -> dict[str, Any]:
+        return self._request("POST", f"{self.account_id}/media", {"image_url": image_url, "is_carousel_item": "true"})
+
+    def create_carousel(self, *, children: list[str], caption: str = "") -> dict[str, Any]:
+        return self._request(
+            "POST",
+            f"{self.account_id}/media",
+            {"media_type": "CAROUSEL", "children": ",".join(children), "caption": caption},
+        )
+
+    def get_comments(self, media_id: str, limit: int = 50) -> dict[str, Any]:
+        return self._request(
+            "GET",
+            f"{media_id}/comments",
+            {"fields": "id,text,timestamp,username,from,replies{id,from,username}", "limit": str(limit)},
+        )
+
+    def reply_to_comment(self, comment_id: str, message: str) -> dict[str, Any]:
+        return self._request("POST", f"{comment_id}/replies", {"message": message})
+
+    def get_conversations(self, limit: int = 20) -> dict[str, Any]:
+        return self._request(
+            "GET",
+            f"{self.account_id}/conversations",
+            {"platform": "instagram", "fields": "id,updated_time", "limit": str(limit)},
+        )
+
+    def get_conversation_messages(self, conversation_id: str, limit: int = 10) -> dict[str, Any]:
+        return self._request(
+            "GET",
+            conversation_id,
+            {"fields": f"messages.limit({limit}){{id,message,from,created_time}}"},
+        )
+
+    def send_message(self, recipient_id: str, text: str) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            f"{self.account_id}/messages",
+            {"recipient": json.dumps({"id": recipient_id}), "message": json.dumps({"text": text}, ensure_ascii=False)},
+        )

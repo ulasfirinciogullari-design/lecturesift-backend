@@ -1,5 +1,5 @@
 [Unit]
-Description=LectureSift daily Instagram publisher
+Description=LectureSift Instagram publisher and replies
 Requires=docker.service lecturesift.service
 After=docker.service lecturesift.service network-online.target
 

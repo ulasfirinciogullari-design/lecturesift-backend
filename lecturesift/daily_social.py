@@ -652,13 +652,31 @@ def publish_daily_post(day: date | None = None) -> dict:
 
 
 def main() -> int:
+    """The scheduled Instagram job: publish what is due, then answer comments and DMs.
+
+    Publishing is idempotent per day and slot, so the timer can run this often; most runs then
+    only answer messages. A publishing failure does not stop the replies, and vice versa.
+    """
+    from .config import INSTAGRAM_REEL_HOUR, INSTAGRAM_REPLIES_ENABLED, INSTAGRAM_STUDIO_ENABLED
+
+    failed = False
     try:
-        result = publish_daily_post()
+        if INSTAGRAM_STUDIO_ENABLED:
+            from .studio_social import run_scheduled
+            print(json.dumps(run_scheduled(), ensure_ascii=False))
+        elif datetime.now(ZoneInfo("Europe/Istanbul")).hour >= INSTAGRAM_REEL_HOUR:
+            print(publish_daily_post().get("status", "unknown"))
     except (InstagramAPIError, InstagramConfigurationError, RuntimeError, KeyError) as exc:
         print(f"Instagram scheduled post failed: {exc}", file=sys.stderr)
-        return 1
-    print(result.get("status", "unknown"))
-    return 0
+        failed = True
+    if INSTAGRAM_REPLIES_ENABLED:
+        from .instagram_replies import run as answer_messages
+        try:
+            print(json.dumps(answer_messages(), ensure_ascii=False))
+        except (InstagramAPIError, InstagramConfigurationError, RuntimeError, KeyError) as exc:
+            print(f"Instagram replies failed: {exc}", file=sys.stderr)
+            failed = True
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

@@ -16,7 +16,6 @@ from __future__ import annotations
 import base64
 import json
 import math
-import os
 import subprocess
 import sys
 import tempfile
@@ -27,6 +26,8 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
+
+from .config import ELEVENLABS_API_KEY, ELEVENLABS_MODEL, ELEVENLABS_VOICE_ID
 
 W, H = 1080, 1920
 FPS = 30
@@ -43,9 +44,6 @@ GREEN = (55, 189, 133)
 WHITE = (255, 255, 255)
 MUTED = (166, 184, 214)
 
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
-ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "")
-ELEVENLABS_MODEL = os.getenv("ELEVENLABS_MODEL", "eleven_multilingual_v2")
 QUIZ_PAUSE = 1.6  # seconds of thinking time between the question and the answer
 SEGMENT_GAP = 0.18
 

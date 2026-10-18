@@ -214,6 +214,16 @@ INSTAGRAM_ADMIN_TOKEN = os.getenv("INSTAGRAM_ADMIN_TOKEN", "")
 INSTAGRAM_GRAPH_API_VERSION = os.getenv("INSTAGRAM_GRAPH_API_VERSION", "v23.0")
 INSTAGRAM_DAILY_AUTOMATION_ENABLED = os.getenv("INSTAGRAM_DAILY_AUTOMATION_ENABLED", "false").lower() == "true"
 INSTAGRAM_DAILY_MEDIA_TYPE = os.getenv("INSTAGRAM_DAILY_MEDIA_TYPE", "MIXED").strip().upper()
+# Studio Reels and carousels (lecturesift/studio_social.py) replace the legacy daily Reel when
+# enabled and ElevenLabs is configured. Replies answer comments and DMs on the official account.
+INSTAGRAM_STUDIO_ENABLED = os.getenv("INSTAGRAM_STUDIO_ENABLED", "false").lower() == "true"
+INSTAGRAM_REPLIES_ENABLED = os.getenv("INSTAGRAM_REPLIES_ENABLED", "false").lower() == "true"
+INSTAGRAM_REEL_HOUR = int(os.getenv("INSTAGRAM_REEL_HOUR", "11"))
+INSTAGRAM_CAROUSEL_HOUR = int(os.getenv("INSTAGRAM_CAROUSEL_HOUR", "19"))
+INSTAGRAM_REPLIES_DAILY_LIMIT = int(os.getenv("INSTAGRAM_REPLIES_DAILY_LIMIT", "120"))
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
+ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "")
+ELEVENLABS_MODEL = os.getenv("ELEVENLABS_MODEL", "eleven_multilingual_v2")
 PUBLIC_BASE_URL = (
     os.getenv("PUBLIC_BASE_URL")
     or os.getenv("RENDER_EXTERNAL_URL")

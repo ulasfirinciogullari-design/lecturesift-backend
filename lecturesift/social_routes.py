@@ -49,6 +49,22 @@ def _instagram_snapshot() -> tuple[dict, list[dict]]:
 
 
 def install_social_routes(app: FastAPI) -> None:
+    @app.get("/instagram/studio/{day}/{name}")
+    def instagram_studio_asset(day: str, name: str) -> Response:
+        from .studio_social import asset
+
+        selected_day = _parse_day(day)
+        if abs((selected_day - date.today()).days) > 2:
+            raise HTTPException(404, detail={"code": "LS-IG-07", "message": "Sosyal medya içeriği bulunamadı."})
+        try:
+            content = asset(selected_day, name)
+        except (RuntimeError, InstagramConfigurationError) as exc:
+            raise HTTPException(503, detail={"code": "LS-IG-07", "message": "Sosyal medya içeriği şu an alınamıyor."}) from exc
+        if content is None:
+            raise HTTPException(404, detail={"code": "LS-IG-07", "message": "Sosyal medya içeriği bulunamadı."})
+        media_type = "video/mp4" if name.endswith(".mp4") else "image/jpeg"
+        return Response(content=content, media_type=media_type, headers={"Cache-Control": "public, max-age=86400"})
+
     @app.get("/instagram/daily/plan")
     def instagram_daily_plan(day: str | None = None) -> dict:
         selected_day = _parse_day(day) if day else date.today()
