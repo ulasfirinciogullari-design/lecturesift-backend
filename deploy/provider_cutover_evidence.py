@@ -32,7 +32,11 @@ FIRST_START_IN_PROGRESS_NAME = "provider-first-start.in-progress"
 FIRST_START_PROOF_NAME = "provider-first-start.ok"
 FIRST_START_RECOVERY_PROOF_NAME = "provider-first-start-recovery.ok"
 INGRESS_STATE_NAME = "provider-ingress.state"
-VERSION = "3"
+# Version 4 binds the live-detected source schema contract into every proof and
+# reader. Version 3 proofs predate product/workspace sources and are rejected.
+VERSION = "4"
+# A provider cutover source runs the v4 product or v5 workspace contract.
+SCHEMA_CONTRACT_VERSIONS = frozenset({"4", "5"})
 CANONICAL_SOURCE_HEALTH_URL = "https://lecturesift-backend.onrender.com/health"
 _CUTOVER_ID = re.compile(r"^[0-9a-f]{32}$")
 _REVISION = re.compile(r"^[0-9a-f]{40}$")
@@ -345,7 +349,17 @@ def _matches_common(fields: dict[str, str], common: dict[str, str]) -> bool:
     return all(fields.get(key) == value for key, value in common.items())
 
 
+def _validate_schema_contract_version(value: str) -> None:
+    if value not in SCHEMA_CONTRACT_VERSIONS:
+        raise EvidenceError("schema contract version must be exactly 4 or 5")
+
+
 def _postgres_digests_valid(fields: dict[str, str]) -> bool:
+    # The detected source contract selects every later manifest and verifier,
+    # so a proof without one exact contract version is as unusable as one
+    # with a missing digest.
+    if fields.get("schema_contract_version") not in SCHEMA_CONTRACT_VERSIONS:
+        return False
     return all(
         _SHA256.fullmatch(fields.get(field, ""))
         for field in (
@@ -373,6 +387,8 @@ def _redis_digests_valid(fields: dict[str, str]) -> bool:
 
 
 def _seed_digests_valid(fields: dict[str, str]) -> bool:
+    if fields.get("schema_contract_version") not in SCHEMA_CONTRACT_VERSIONS:
+        return False
     return all(
         _SHA256.fullmatch(fields.get(field, ""))
         for field in (
@@ -440,10 +456,12 @@ def write_postgres(
     source_dump_sha256: str,
     source_worker_stop_evidence_sha256: str,
     rollback_dump_sha256: str,
+    schema_contract_version: str,
 ) -> None:
     common = _common_fields(cutover_id=cutover_id, revision=revision, source_fingerprint=source)
     if not _RUN_ID.fullmatch(run_id):
         raise EvidenceError("invalid PostgreSQL cutover run ID")
+    _validate_schema_contract_version(schema_contract_version)
     for value in (
         manifest_sha256,
         migrated_manifest_sha256,
@@ -468,6 +486,7 @@ def write_postgres(
             "pending_payments_before": "0",
             "run_id": run_id,
             "migrated_target_manifest_sha256": migrated_manifest_sha256,
+            "schema_contract_version": schema_contract_version,
             "postgres_role_login_probe_sha256": postgres_role_login_probe_sha256,
             "postgres_security_manifest_sha256": postgres_security_manifest_sha256,
             "source_dump_sha256": source_dump_sha256,
@@ -492,7 +511,11 @@ def begin_redis(root: Path, *, cutover_id: str, revision: str, source: str) -> N
     root = _ensure_evidence_root(root)
     _require_progress(root, common=common, phase="postgres-verified")
     postgres = _load(root / POSTGRES_PROOF_NAME)
-    if not _matches_common(postgres, common) or postgres.get("status") != "postgres-cutover-verified":
+    if (
+        not _matches_common(postgres, common)
+        or postgres.get("status") != "postgres-cutover-verified"
+        or not _postgres_digests_valid(postgres)
+    ):
         raise EvidenceError("PostgreSQL success proof does not match this Redis cutover")
     _atomic_write(
         root / IN_PROGRESS_NAME,
@@ -614,6 +637,7 @@ def validate_seed_ready(
         ],
         "postgres_proof_sha256": sha256_file(postgres_path),
         "redis_proof_sha256": sha256_file(redis_path),
+        "schema_contract_version": postgres["schema_contract_version"],
         "source_worker_stop_evidence_sha256": postgres[
             "source_worker_stop_evidence_sha256"
         ],
@@ -641,9 +665,11 @@ def write_seed(
     source_worker_stop_evidence_sha256: str,
     target_redis_manifest_sha256: str,
     configuration_checksums_sha256: str,
+    schema_contract_version: str,
 ) -> None:
     if not _RUN_ID.fullmatch(run_id):
         raise EvidenceError("invalid first-cutover seed run ID")
+    _validate_schema_contract_version(schema_contract_version)
     if not _SNAPSHOT_ID.fullmatch(snapshot_id):
         raise EvidenceError("first-cutover seed snapshot ID must be one full lowercase Restic ID")
     for value in (
@@ -670,6 +696,10 @@ def write_seed(
         source_worker_stop_evidence_sha256=source_worker_stop_evidence_sha256,
         target_redis_manifest_sha256=target_redis_manifest_sha256,
     )
+    if schema_contract_version != step_hashes["schema_contract_version"]:
+        raise EvidenceError(
+            "first-cutover schema contract does not match the PostgreSQL cutover proof"
+        )
     if migrated_manifest_sha256 != step_hashes[
         "migrated_target_manifest_sha256"
     ]:
@@ -719,6 +749,7 @@ def write_seed(
             "redis_proof_sha256": step_hashes["redis_proof_sha256"],
             "repository_id_sha256": repository_id_sha256,
             "run_id": run_id,
+            "schema_contract_version": schema_contract_version,
             "seeded_at_utc": _now(),
             "snapshot_id": snapshot_id,
             "source_worker_stop_evidence_sha256": source_worker_stop_evidence_sha256,
@@ -770,6 +801,8 @@ def validate_seed(
         or not _seed_digests_valid(seed)
         or seed.get("migrated_target_manifest_sha256")
         != postgres.get("migrated_target_manifest_sha256")
+        or seed.get("schema_contract_version")
+        != postgres.get("schema_contract_version")
         or seed.get("postgres_proof_sha256") != sha256_file(postgres_path)
         or seed.get("redis_proof_sha256") != sha256_file(redis_path)
         or seed.get("postgres_security_manifest_sha256")
@@ -895,10 +928,12 @@ def finalize(
     postgres_security_manifest_sha256: str,
     source_worker_stop_evidence_sha256: str,
     target_redis_manifest_sha256: str,
+    schema_contract_version: str,
 ) -> None:
     common = _common_fields(cutover_id=cutover_id, revision=revision, source_fingerprint=source)
     if not _REVISION.fullmatch(source_revision):
         raise EvidenceError("final Render source revision is invalid")
+    _validate_schema_contract_version(schema_contract_version)
     for value in (
         recovery_sha256,
         retention_sha256,
@@ -962,6 +997,8 @@ def finalize(
         != postgres.get("migrated_target_manifest_sha256")
         or migrated_target_manifest_sha256
         != seed.get("migrated_target_manifest_sha256")
+        or schema_contract_version != postgres.get("schema_contract_version")
+        or schema_contract_version != seed.get("schema_contract_version")
         or postgres_security_manifest_sha256
         != postgres.get("postgres_security_manifest_sha256")
         or postgres_security_manifest_sha256
@@ -1000,6 +1037,7 @@ def finalize(
             "r2_retention_marker": retention_marker.name,
             "r2_retention_marker_sha256": retention_sha256,
             "redis_proof_sha256": sha256_file(redis_path),
+            "schema_contract_version": schema_contract_version,
             "seed_backup_set_sha256": seed["backup_set_sha256"],
             "seed_proof_sha256": sha256_file(seed_path),
             "seed_snapshot_id": seed["snapshot_id"],
@@ -1027,6 +1065,7 @@ def validate_final(root: Path, *, expected_revision: str) -> dict[str, str]:
     final = _load(root / FINAL_PROOF_NAME)
     if (
         final.get("version") != VERSION
+        or final.get("schema_contract_version") not in SCHEMA_CONTRACT_VERSIONS
         or final.get("status") != "provider-cutover-verified"
         or final.get("release_revision") != expected_revision
         or final.get("caddy_changed") != "false"
@@ -1062,6 +1101,10 @@ def validate_final(root: Path, *, expected_revision: str) -> dict[str, str]:
         or not _redis_digests_valid(redis_fields)
         or seed_fields.get("migrated_target_manifest_sha256")
         != postgres_fields.get("migrated_target_manifest_sha256")
+        or seed_fields.get("schema_contract_version")
+        != postgres_fields.get("schema_contract_version")
+        or final.get("schema_contract_version")
+        != seed_fields.get("schema_contract_version")
         or seed_fields.get("postgres_proof_sha256") != sha256_file(postgres)
         or seed_fields.get("redis_proof_sha256") != sha256_file(redis)
         or seed_fields.get("postgres_security_manifest_sha256")
@@ -1118,6 +1161,14 @@ def validate_final(root: Path, *, expected_revision: str) -> dict[str, str]:
     ):
         raise EvidenceError("R2 recovery/retention evidence does not match the finalized repository")
     return final
+
+
+def final_schema_contract_version(root: Path, *, expected_revision: str) -> str:
+    """Return the schema contract bound into the complete validated chain."""
+
+    return validate_final(root, expected_revision=expected_revision)[
+        "schema_contract_version"
+    ]
 
 
 def _first_start_identity(
@@ -1636,6 +1687,7 @@ def _parser() -> argparse.ArgumentParser:
     postgres.add_argument("--source-dump-sha256", required=True)
     postgres.add_argument("--source-worker-stop-evidence-sha256", required=True)
     postgres.add_argument("--rollback-dump-sha256", required=True)
+    postgres.add_argument("--schema-contract-version", required=True)
     common(commands.add_parser("begin-redis"))
     redis = commands.add_parser("write-redis")
     common(redis)
@@ -1662,6 +1714,7 @@ def _parser() -> argparse.ArgumentParser:
     seed.add_argument("--source-worker-stop-evidence-sha256", required=True)
     seed.add_argument("--target-redis-manifest-sha256", required=True)
     seed.add_argument("--configuration-checksums-sha256", required=True)
+    seed.add_argument("--schema-contract-version", required=True)
     validate_seed_parser = commands.add_parser("validate-seed")
     common(validate_seed_parser)
     validate_seed_parser.add_argument("--repository-id-sha256", required=True)
@@ -1686,8 +1739,11 @@ def _parser() -> argparse.ArgumentParser:
     final.add_argument("--source-worker-stop-evidence-sha256", required=True)
     final.add_argument("--target-redis-manifest-sha256", required=True)
     final.add_argument("--source-revision", required=True)
+    final.add_argument("--schema-contract-version", required=True)
     validate = commands.add_parser("validate-final")
     validate.add_argument("--expected-revision", required=True)
+    final_contract = commands.add_parser("final-schema-contract-version")
+    final_contract.add_argument("--expected-revision", required=True)
     first_start_status_parser = commands.add_parser("first-start-status")
     first_start_status_parser.add_argument("--expected-revision", required=True)
     first_start_arm = commands.add_parser("arm-first-start")
@@ -1766,6 +1822,7 @@ def main(argv: list[str] | None = None) -> int:
                 source_dump_sha256=args.source_dump_sha256,
                 source_worker_stop_evidence_sha256=args.source_worker_stop_evidence_sha256,
                 rollback_dump_sha256=args.rollback_dump_sha256,
+                schema_contract_version=args.schema_contract_version,
             )
         elif args.command == "begin-redis":
             begin_redis(EVIDENCE_ROOT, **kwargs)
@@ -1802,6 +1859,7 @@ def main(argv: list[str] | None = None) -> int:
                 source_worker_stop_evidence_sha256=args.source_worker_stop_evidence_sha256,
                 target_redis_manifest_sha256=args.target_redis_manifest_sha256,
                 configuration_checksums_sha256=args.configuration_checksums_sha256,
+                schema_contract_version=args.schema_contract_version,
             )
         elif args.command == "validate-seed":
             validate_seed(
@@ -1826,9 +1884,16 @@ def main(argv: list[str] | None = None) -> int:
                 postgres_security_manifest_sha256=args.postgres_security_manifest_sha256,
                 source_worker_stop_evidence_sha256=args.source_worker_stop_evidence_sha256,
                 target_redis_manifest_sha256=args.target_redis_manifest_sha256,
+                schema_contract_version=args.schema_contract_version,
             )
         elif args.command == "validate-final":
             validate_final(EVIDENCE_ROOT, expected_revision=args.expected_revision)
+        elif args.command == "final-schema-contract-version":
+            print(
+                final_schema_contract_version(
+                    EVIDENCE_ROOT, expected_revision=args.expected_revision
+                )
+            )
         elif args.command == "first-start-status":
             print(
                 first_start_status(

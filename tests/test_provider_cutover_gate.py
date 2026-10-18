@@ -223,7 +223,7 @@ def test_source_fingerprint_omits_secrets_but_binds_every_source_endpoint():
 def test_atomic_state_machine_requires_matching_postgres_redis_r2_and_revision(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    assert evidence.VERSION == "3"
+    assert evidence.VERSION == "4"
     root = tmp_path / "provider-cutover"
     recovery_root = tmp_path / "recovery-drills"
     recovery_root.mkdir(mode=0o700)
@@ -247,6 +247,7 @@ def test_atomic_state_machine_requires_matching_postgres_redis_r2_and_revision(
             source_dump_sha256=SOURCE_DUMP,
             source_worker_stop_evidence_sha256=SOURCE_WORKER_STOP,
             rollback_dump_sha256=ROLLBACK_DUMP,
+            schema_contract_version="4",
         )
     evidence.write_postgres(
         root,
@@ -261,6 +262,7 @@ def test_atomic_state_machine_requires_matching_postgres_redis_r2_and_revision(
         source_dump_sha256=SOURCE_DUMP,
         source_worker_stop_evidence_sha256=SOURCE_WORKER_STOP,
         rollback_dump_sha256=ROLLBACK_DUMP,
+        schema_contract_version="4",
     )
     postgres_fields = dict(
         line.split("=", 1)
@@ -342,6 +344,7 @@ def test_atomic_state_machine_requires_matching_postgres_redis_r2_and_revision(
         "source_worker_stop_evidence_sha256": SOURCE_WORKER_STOP,
         "target_redis_manifest_sha256": TARGET_REDIS_MANIFEST,
         "configuration_checksums_sha256": "f" * 64,
+        "schema_contract_version": "4",
     }
     with pytest.raises(evidence.EvidenceError, match="target manifest does not match"):
         evidence.write_seed(
@@ -404,6 +407,7 @@ def test_atomic_state_machine_requires_matching_postgres_redis_r2_and_revision(
             postgres_security_manifest_sha256=POSTGRES_SECURITY,
             source_worker_stop_evidence_sha256=SOURCE_WORKER_STOP,
             target_redis_manifest_sha256=TARGET_REDIS_MANIFEST,
+            schema_contract_version="4",
         )
     assert (root / evidence.IN_PROGRESS_NAME).is_file()
     assert not (root / evidence.FINAL_PROOF_NAME).exists()
@@ -425,6 +429,7 @@ def test_atomic_state_machine_requires_matching_postgres_redis_r2_and_revision(
         postgres_security_manifest_sha256=POSTGRES_SECURITY,
         source_worker_stop_evidence_sha256=SOURCE_WORKER_STOP,
         target_redis_manifest_sha256=TARGET_REDIS_MANIFEST,
+        schema_contract_version="4",
     )
 
     final = root / evidence.FINAL_PROOF_NAME
@@ -680,6 +685,187 @@ def test_atomic_state_machine_requires_matching_postgres_redis_r2_and_revision(
         stream.write("tampered=true\n")
     with pytest.raises(evidence.EvidenceError, match="changed after finalization"):
         evidence.validate_final(root, expected_revision=REVISION)
+
+
+def _write_postgres_proof(root: Path, schema_contract_version: str) -> None:
+    evidence.write_postgres(
+        root,
+        cutover_id=CUTOVER_ID,
+        revision=REVISION,
+        source=SOURCE,
+        run_id="postgres-cutover-20261018T090000Z",
+        manifest_sha256=SOURCE_MANIFEST,
+        migrated_manifest_sha256=MIGRATED_MANIFEST,
+        postgres_role_login_probe_sha256=POSTGRES_ROLE_LOGIN_PROBE,
+        postgres_security_manifest_sha256=POSTGRES_SECURITY,
+        source_dump_sha256=SOURCE_DUMP,
+        source_worker_stop_evidence_sha256=SOURCE_WORKER_STOP,
+        rollback_dump_sha256=ROLLBACK_DUMP,
+        schema_contract_version=schema_contract_version,
+    )
+
+
+def test_schema_contract_version_is_bound_through_every_proof_reader(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    root = tmp_path / "provider-cutover"
+    recovery_root = tmp_path / "recovery-drills"
+    recovery_root.mkdir(mode=0o700)
+    monkeypatch.setattr(evidence, "RECOVERY_EVIDENCE_ROOT", recovery_root)
+    common = {"cutover_id": CUTOVER_ID, "revision": REVISION, "source": SOURCE}
+    state = {
+        "source_worker_stop_evidence_sha256": SOURCE_WORKER_STOP,
+        "target_redis_manifest_sha256": TARGET_REDIS_MANIFEST,
+    }
+
+    evidence.begin_postgres(root, **common)
+    # Only the live-detected v4 product or v5 workspace contract is a source.
+    for invalid in ("3", "", "6", "v5", "05"):
+        with pytest.raises(evidence.EvidenceError, match="schema contract version"):
+            _write_postgres_proof(root, invalid)
+    assert not (root / evidence.POSTGRES_PROOF_NAME).exists()
+    _write_postgres_proof(root, "5")
+    postgres_path = root / evidence.POSTGRES_PROOF_NAME
+    postgres_fields = evidence._load(postgres_path)
+    assert postgres_fields["schema_contract_version"] == "5"
+
+    # A PostgreSQL proof without one exact contract cannot open Redis or seed.
+    without_contract = dict(postgres_fields)
+    without_contract.pop("schema_contract_version")
+    evidence._atomic_write(postgres_path, without_contract)
+    with pytest.raises(evidence.EvidenceError, match="does not match this Redis"):
+        evidence.begin_redis(root, **common)
+    evidence._atomic_write(postgres_path, postgres_fields)
+    evidence.begin_redis(root, **common)
+    evidence.write_redis(
+        root,
+        **common,
+        run_id="redis-migration-20261018T090500Z",
+        state_sha256=REDIS_STATE,
+        rollback_sha256=REDIS_ROLLBACK,
+        **state,
+    )
+    for changed in (
+        {**postgres_fields, "schema_contract_version": "3"},
+        without_contract,
+    ):
+        evidence._atomic_write(postgres_path, changed)
+        with pytest.raises(evidence.EvidenceError, match="not ready"):
+            evidence.validate_seed_ready(root, **common, **state)
+    evidence._atomic_write(postgres_path, postgres_fields)
+    assert evidence.validate_seed_ready(root, **common, **state)[
+        "schema_contract_version"
+    ] == "5"
+
+    repository_hash = "a" * 64
+    snapshot_id = "b" * 64
+    backup_set_hash = "c" * 64
+    seed_kwargs = {
+        **common,
+        **state,
+        "run_id": "first-cutover-seed-20261018T091000Z-1",
+        "snapshot_id": snapshot_id,
+        "repository_id_sha256": repository_hash,
+        "backup_set_sha256": backup_set_hash,
+        "database_dump_sha256": "d" * 64,
+        "migrated_manifest_sha256": MIGRATED_MANIFEST,
+        "postgres_role_login_probe_sha256": POSTGRES_ROLE_LOGIN_PROBE,
+        "postgres_security_manifest_sha256": POSTGRES_SECURITY,
+        "redis_dump_sha256": "e" * 64,
+        "configuration_checksums_sha256": "f" * 64,
+    }
+    with pytest.raises(evidence.EvidenceError, match="schema contract does not match"):
+        evidence.write_seed(root, **seed_kwargs, schema_contract_version="4")
+    with pytest.raises(evidence.EvidenceError, match="schema contract version"):
+        evidence.write_seed(root, **seed_kwargs, schema_contract_version="3")
+    assert not (root / evidence.SEED_PROOF_NAME).exists()
+    evidence.write_seed(root, **seed_kwargs, schema_contract_version="5")
+    seed_path = root / evidence.SEED_PROOF_NAME
+    seed_fields = evidence.validate_seed(
+        root, **common, repository_id_sha256=repository_hash, **state
+    )
+    assert seed_fields["schema_contract_version"] == "5"
+    for changed in (
+        {**seed_fields, "schema_contract_version": "4"},
+        {key: value for key, value in seed_fields.items() if key != "schema_contract_version"},
+    ):
+        evidence._atomic_write(seed_path, changed)
+        with pytest.raises(evidence.EvidenceError, match="does not match this provider"):
+            evidence.validate_seed(
+                root, **common, repository_id_sha256=repository_hash, **state
+            )
+    evidence._atomic_write(seed_path, seed_fields)
+
+    recovery = recovery_root / "restic-restore-20261018T092000Z-1.ok"
+    retention = recovery_root / "r2-retention-lock.ok"
+    _write_external(
+        recovery,
+        {
+            "backup_set_sha256": backup_set_hash,
+            "drill_scope": "current-latest",
+            "live_services_touched": "false",
+            "postgres_restore": "verified",
+            "repository_id_sha256": repository_hash,
+            "redis_restore": "verified",
+            "restored_payload_removed": "true",
+            "snapshot_id": snapshot_id,
+            "status": "success",
+        },
+    )
+    _write_external(
+        retention,
+        {
+            "repository_id_sha256": repository_hash,
+            "status": "immutable-retention-verified",
+        },
+    )
+    finalize_kwargs = {
+        **common,
+        **state,
+        "source_revision": SOURCE_REVISION,
+        "recovery_marker": Path(recovery.name),
+        "recovery_sha256": evidence.sha256_file(recovery),
+        "retention_marker": Path(retention.name),
+        "retention_sha256": evidence.sha256_file(retention),
+        "repository_id_sha256": repository_hash,
+        "migrated_target_manifest_sha256": MIGRATED_MANIFEST,
+        "postgres_role_login_probe_sha256": POSTGRES_ROLE_LOGIN_PROBE,
+        "postgres_security_manifest_sha256": POSTGRES_SECURITY,
+    }
+    with pytest.raises(evidence.EvidenceError, match="exactly match the final session"):
+        evidence.finalize(root, **finalize_kwargs, schema_contract_version="4")
+    assert not (root / evidence.FINAL_PROOF_NAME).exists()
+    evidence.finalize(root, **finalize_kwargs, schema_contract_version="5")
+    assert (
+        evidence.final_schema_contract_version(root, expected_revision=REVISION)
+        == "5"
+    )
+
+    final = root / evidence.FINAL_PROOF_NAME
+    final_fields = evidence._load(final)
+    assert final_fields["version"] == evidence.VERSION == "4"
+    evidence._atomic_write(final, {**final_fields, "schema_contract_version": "4"})
+    with pytest.raises(evidence.EvidenceError, match="invalid digest evidence"):
+        evidence.final_schema_contract_version(root, expected_revision=REVISION)
+    evidence._atomic_write(final, {**final_fields, "schema_contract_version": "3"})
+    with pytest.raises(evidence.EvidenceError, match="exact release"):
+        evidence.validate_final(root, expected_revision=REVISION)
+    evidence._atomic_write(final, final_fields)
+    assert evidence.validate_final(root, expected_revision=REVISION)[
+        "schema_contract_version"
+    ] == "5"
+
+
+def test_ingress_state_reader_accepts_only_the_current_evidence_version():
+    config_source = _read("lecturesift/config.py")
+    assert f'fields.get("version") != "{evidence.VERSION}"' in config_source
+    for reader in (
+        "deploy/record_payment_provider_baseline.py",
+        "deploy/validate_rollback_reconciliation_bundle.py",
+    ):
+        source = _read(reader)
+        assert f'result.get("version") != "{evidence.VERSION}"' in source
+        assert 'result.get("schema_contract_version") not in {"4", "5"}' in source
 
 
 def test_postgres_and_redis_steps_leave_global_fence_until_finalizer():

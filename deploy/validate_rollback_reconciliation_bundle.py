@@ -544,7 +544,8 @@ def _parse_cutover_proof(payload: bytes) -> dict[str, str]:
             raise RollbackEvidenceError("provider cutover proof contains an unsafe field")
         result[key] = value
     if (
-        result.get("version") != "3"
+        result.get("version") != "4"
+        or result.get("schema_contract_version") not in {"4", "5"}
         or result.get("status") != "provider-cutover-verified"
         or not HEX32.fullmatch(result.get("cutover_id", ""))
         or not HEX40.fullmatch(result.get("release_revision", ""))

@@ -188,8 +188,9 @@ def _cutover_proof() -> bytes:
     return (
         f"cutover_id={CUTOVER_ID}\n"
         f"release_revision={OVH_REVISION}\n"
+        "schema_contract_version=5\n"
         "status=provider-cutover-verified\n"
-        "version=3\n"
+        "version=4\n"
     ).encode("ascii")
 
 
@@ -442,6 +443,16 @@ def test_postgres_database_manifest_must_match_the_bundle(tmp_path: Path):
         match="reconciled_database_manifest_sha256 does not match",
     ):
         _validate(bundle, marker)
+
+
+def test_cutover_proof_without_the_current_schema_contract_is_rejected():
+    # A version-3 proof, or one without a contract, is never a rollback anchor.
+    for proof in (
+        _cutover_proof().replace(b"\nversion=4\n", b"\nversion=3\n"),
+        _cutover_proof().replace(b"schema_contract_version=5\n", b""),
+    ):
+        with pytest.raises(validator.RollbackEvidenceError, match="identity is invalid"):
+            validator._parse_cutover_proof(proof)
 
 
 def test_bundle_rejects_tampering_unknown_fields_and_expiry(tmp_path: Path):
