@@ -1030,15 +1030,52 @@ def test_postgres_cutover_is_snapshot_consistent_reversible_and_fail_stopped():
     assert "INSERT INTO lecturesift_runtime_metrics" in script
     assert "INSERT INTO billing_usage_events" in script
     assert "transaction.rollback()" in script
-    assert "LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on" in script
-    assert "legacy-provider-sessions" in script
+    # A v4/v5 source is contract-current: no legacy-absent table is tolerated.
+    assert "LECTURESIFT_ALLOW_LEGACY" not in script
+    assert "legacy-provider-sessions" not in script
+    assert "rehearsal_manifest_v3.sql" not in script.split("probe_application_role() {", 1)[1]
+    inventory = script.index("run_render_inventory source-inventory.txt")
+    detection = script.index('--inventory "$RUN_DIR/source-inventory.txt" --accept 4,5')
+    first_source_manifest = script.index("run_render_manifest source-before.txt")
+    assert inventory < detection < first_source_manifest
+    assert 'MANIFEST="$(contract_manifest "$SOURCE_CONTRACT_VERSION")"' in script
+    assert 'SCHEMA_VERIFIER="$(contract_verifier "$SOURCE_CONTRACT_VERSION")"' in script
+    for version in (3, 4, 5):
+        assert f'{version}) printf \'%s\\n\' "$ROOT_DIR/deploy/rehearsal_manifest_v{version}.sql" ;;' in script
+        assert f'{version}) printf \'%s\\n\' "$ROOT_DIR/deploy/verify_schema_transition_v{version}.py" ;;' in script
+    assert '"$PRODUCT_SCHEMA_CONTRACT" "$WORKSPACE_SCHEMA_CONTRACT"' in script
+    assert 'cat "/probe/$MANIFEST_NAME"' in script
+    # The core-only OVH target and its rollback are proved by their own family.
+    assert 'target_contract_version "$RUN_DIR/target-before-inventory.txt" 3,4,5' in script
+    assert 'install_target_manifest "$TARGET_BEFORE_MANIFEST"' in script
+    assert '"$RUN_DIR/target-before.safe" \\\n  "$TARGET_BEFORE_VERIFIER"' in script
+    assert (
+        '[[ "$(target_contract_version "$RUN_DIR/target-rollback-inventory.txt" 3,4,5)" == \\\n'
+        '          "$TARGET_BEFORE_CONTRACT_VERSION" ]]'
+    ) in script
+    assert 'target_contract_version "$RUN_DIR/target-restored-inventory.txt" 4,5' in script
+    assert "^schema_transition=current_to_current$" in script
+    assert "owner provisioning changed pre-existing source data" in script
+    # The role probe mirrors postgres-app-role.sh for product/workspace tables.
+    assert 'LECTURESIFT_PROBE_CONTRACT_VERSION=$SOURCE_CONTRACT_VERSION' in script
+    for table in (
+        "assistant_credit_grants_v1",
+        "billing_referral_rewards",
+        "workspace_items_v1",
+        "admin_order_archives_v1",
+    ):
+        assert f'"{table}"' in script
+    assert 'assert not any(table_privilege(table, privilege) for privilege in CRUD), table' in script
+    assert 'denied(f"SELECT count(*) FROM public.{table}")' in script
+    assert 'assert table_privilege("admin_ad_free_grants_v1", "SELECT")' in script
+    assert "'public.admin_order_archives_v1', 'reference', 'SELECT'" in script
+    assert 'denied("SELECT * FROM public.admin_order_archives_v1 LIMIT 0")' in script
     assert "target-restored-raw.safe" in script
     assert 'cmp --silent "$RUN_DIR/source-snapshot.safe" "$RUN_DIR/target-restored-raw.safe"' in script
     assert "target-migrated.safe" in script
     assert "target-before-migration.data" in script
     assert "target-after-migration.data" in script
-    assert "legacy_provider_sessions_missing" in script
-    assert "TABLE|billing_payment_provider_sessions|0|0|0" in script
+    assert "legacy_provider_sessions_missing" not in script
     assert "grep -E '^(DATABASE|TABLE|STATUS)" in script
     assert 'cmp --silent "$RUN_DIR/target-migrated.safe" "$RUN_DIR/target-after-probes.safe"' in script
     raw_restore = script.index('target_manifest "$RUN_DIR/target-restored-raw.txt"')
@@ -1046,13 +1083,15 @@ def test_postgres_cutover_is_snapshot_consistent_reversible_and_fail_stopped():
         'cmp --silent "$RUN_DIR/source-snapshot.safe" "$RUN_DIR/target-restored-raw.safe"'
     )
     owner_migration = script.index("provision_target_schema_and_roles", raw_equality)
-    strict_manifest = script.index('target_manifest "$RUN_DIR/target-migrated.txt" strict')
+    strict_manifest = script.index('target_manifest "$RUN_DIR/target-migrated.txt"\n')
     role_probe = script.index("probe_application_role api")
     assert raw_restore < raw_equality < owner_migration < strict_manifest < role_probe
     assert script.count("assert_render_frozen") >= 4
     assert "migrated_target_manifest_sha256" in script
     assert "--migrated-manifest-sha256" in script
-    assert "source_legacy_provider_sessions_missing" in script
+    assert "source_legacy_provider_sessions_missing" not in script
+    assert "printf 'schema_contract_version=%s\\n' \"$SOURCE_CONTRACT_VERSION\"" in script
+    assert '--schema-contract-version "$SOURCE_CONTRACT_VERSION"' in script
     assert "an OVH API/worker writer became active during target verification" in script
     assert "postgres-cutover-target-unproven" in script
     assert 'FAIL_STOP_MARKER="$FAIL_STOP_ROOT/postgres-cutover-unproven"' in script
@@ -1186,7 +1225,8 @@ def test_rehearsal_hard_purge_and_schema_contract_are_fail_closed():
     assert "SCHEMA_OBJECT" in rehearsal and "SCHEMA_OBJECT" in migration
     assert "SCHEMA_OBJECT" in rollback
     assert "verify_schema_transition_v3.py" in rehearsal
-    assert "verify_schema_transition_v3.py" in migration
+    for version in (4, 5):
+        assert f"verify_schema_transition_v{version}.py" in migration
     assert "verify_schema_transition_v3.py" in rollback
     assert "schema_contract_payment_provider_sessions_v1.txt" in rehearsal
     assert "schema_contract_payment_provider_sessions_v1.txt" in migration

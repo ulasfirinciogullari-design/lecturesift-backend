@@ -26,11 +26,23 @@ ALLOWED_DB_ENV_FILE="/etc/lecturesift/postgres.env"
 DB_ENV_FILE="${LECTURESIFT_DB_ENV_FILE:-$ALLOWED_DB_ENV_FILE}"
 ALLOWED_RUNTIME_ENV_FILE="/etc/lecturesift/runtime.env"
 RUNTIME_ENV_FILE="${LECTURESIFT_ENV_FILE:-$ALLOWED_RUNTIME_ENV_FILE}"
-MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest_v3.sql"
 SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt"
 PURCHASE_TERMS_CONTRACT="$ROOT_DIR/deploy/schema_contract_billing_purchase_terms_v1.txt"
 PRESERVED_SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt"
-SCHEMA_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition_v3.py"
+PRODUCT_SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_product_v1.txt"
+WORKSPACE_SCHEMA_CONTRACT="$ROOT_DIR/deploy/schema_contract_workspace_v1.txt"
+SCHEMA_INVENTORY="$ROOT_DIR/deploy/schema_contract_inventory.sql"
+SCHEMA_STATE_TOOL="$ROOT_DIR/deploy/schema_contract_state.py"
+# The source manifest/verifier pair is chosen only from the live Render table
+# inventory (v4 product or v5 workspace contract) and the core-only OVH target
+# pair only from its own inventory. No environment label can select either.
+SOURCE_CONTRACT_VERSION=""
+MANIFEST=""
+SOURCE_MANIFEST_NAME=""
+SCHEMA_VERIFIER=""
+TARGET_BEFORE_CONTRACT_VERSION=""
+TARGET_BEFORE_MANIFEST=""
+TARGET_BEFORE_VERIFIER=""
 POSTGRES_SECURITY_MANIFEST="$ROOT_DIR/deploy/postgres_security_manifest.sql"
 POSTGRES_SECURITY_VALIDATOR="$ROOT_DIR/deploy/validate_postgres_security_manifest.py"
 POSTGRES_ROLE_LOGIN_PROBE="$ROOT_DIR/deploy/postgres_role_login_probe.sh"
@@ -74,7 +86,29 @@ check_private_file() {
 check_private_file "$SOURCE_ENV_FILE" "Render source environment"
 check_private_file "$DB_ENV_FILE" "Target database environment"
 check_private_file "$RUNTIME_ENV_FILE" "Runtime environment"
-for path in "$MANIFEST" "$SCHEMA_CONTRACT" "$PURCHASE_TERMS_CONTRACT" "$PRESERVED_SCHEMA_CONTRACT" "$SCHEMA_VERIFIER" \
+contract_manifest() {
+  case "$1" in
+    3) printf '%s\n' "$ROOT_DIR/deploy/rehearsal_manifest_v3.sql" ;;
+    4) printf '%s\n' "$ROOT_DIR/deploy/rehearsal_manifest_v4.sql" ;;
+    5) printf '%s\n' "$ROOT_DIR/deploy/rehearsal_manifest_v5.sql" ;;
+    *) return 1 ;;
+  esac
+}
+
+contract_verifier() {
+  case "$1" in
+    3) printf '%s\n' "$ROOT_DIR/deploy/verify_schema_transition_v3.py" ;;
+    4) printf '%s\n' "$ROOT_DIR/deploy/verify_schema_transition_v4.py" ;;
+    5) printf '%s\n' "$ROOT_DIR/deploy/verify_schema_transition_v5.py" ;;
+    *) return 1 ;;
+  esac
+}
+
+for path in "$(contract_manifest 3)" "$(contract_manifest 4)" "$(contract_manifest 5)" \
+  "$(contract_verifier 3)" "$(contract_verifier 4)" "$(contract_verifier 5)" \
+  "$SCHEMA_CONTRACT" "$PURCHASE_TERMS_CONTRACT" "$PRESERVED_SCHEMA_CONTRACT" \
+  "$PRODUCT_SCHEMA_CONTRACT" "$WORKSPACE_SCHEMA_CONTRACT" \
+  "$SCHEMA_INVENTORY" "$SCHEMA_STATE_TOOL" \
   "$POSTGRES_SECURITY_MANIFEST" "$POSTGRES_SECURITY_VALIDATOR" \
   "$POSTGRES_ROLE_LOGIN_PROBE" \
   "$PROVISION_ROLE" "$CUTOVER_EVIDENCE_TOOL" "$RENDER_WORKER_STOP_TOOL" \
@@ -206,21 +240,17 @@ close_snapshot() {
   snapshot_open="false"
 }
 
+# Every manifest is strict: a v4/v5 source already carries all of its release
+# tables, so no legacy-absent table is tolerated on either side.
 canonical_manifest() {
-  local source="$1" destination="$2" mode="${3:-strict}" compat_count
-  [[ "$mode" == "strict" || "$mode" == "legacy-provider-sessions" ]] ||
-    fail "an invalid manifest compatibility mode was requested"
-  if [[ "$mode" == "strict" ]]; then
-    python3 "$SCHEMA_VERIFIER" current \
-      --manifest "$source" --contract "$SCHEMA_CONTRACT" \
-      --preserved-contract "$PRESERVED_SCHEMA_CONTRACT" >/dev/null ||
-      fail "a strict database manifest violates the exact current schema contract"
-  else
-    python3 "$SCHEMA_VERIFIER" legacy \
-      --manifest "$source" --contract "$SCHEMA_CONTRACT" \
-      --preserved-contract "$PRESERVED_SCHEMA_CONTRACT" >/dev/null ||
-      fail "a legacy database manifest violates the reviewed schema contract"
-  fi
+  local source="$1" destination="$2" verifier="$3" compat_count
+  [[ -n "$verifier" &&
+     ( "$verifier" == "$SCHEMA_VERIFIER" || "$verifier" == "$TARGET_BEFORE_VERIFIER" ) ]] ||
+    fail "a manifest verifier was not selected from a live schema inventory"
+  python3 "$verifier" current \
+    --manifest "$source" --contract "$SCHEMA_CONTRACT" \
+    --preserved-contract "$PRESERVED_SCHEMA_CONTRACT" >/dev/null ||
+    fail "a strict database manifest violates the exact current schema contract"
   tr -d '\r' <"$source" |
     grep -E '^(DATABASE|SCHEMA|SCHEMA_OBJECT|TABLE|ANOMALY|STATUS|SCHEMA_COMPAT|UNVALIDATED_FK|MANIFEST_COMPLETE)\|' |
     LC_ALL=C sort >"$destination"
@@ -233,28 +263,42 @@ canonical_manifest() {
     fail "a database manifest contains an integrity anomaly"
   fi
   compat_count="$(grep -c '^SCHEMA_COMPAT|' "$source" || true)"
-  if [[ "$mode" == "strict" ]]; then
-    [[ "$compat_count" == "0" ]] || fail "a strict database manifest used schema compatibility"
-  elif [[ "$compat_count" -gt 2 ]] ||
-       grep '^SCHEMA_COMPAT|' "$source" |
-         grep -Fvxq -e 'SCHEMA_COMPAT|legacy_missing_table|billing_payment_provider_sessions|integrity_checks_deferred_to_current_schema_migration' \
-           -e 'SCHEMA_COMPAT|legacy_missing_table|billing_purchase_terms|integrity_checks_deferred_to_current_schema_migration'; then
-    fail "the source manifest contains an unapproved legacy schema difference"
-  fi
+  [[ "$compat_count" == "0" ]] || fail "a strict database manifest used schema compatibility"
+}
+
+require_source_manifest() {
+  [[ -n "$MANIFEST" &&
+     "$MANIFEST" == "$(contract_manifest "$SOURCE_CONTRACT_VERSION")" &&
+     "$SOURCE_MANIFEST_NAME" == "$(basename -- "$MANIFEST")" &&
+     "$SOURCE_MANIFEST_NAME" =~ ^rehearsal_manifest_v[45][.]sql$ ]] ||
+    fail "the Render source manifest was not selected from its live inventory"
 }
 
 run_render_manifest() {
   local output_name="$1"
   [[ "$output_name" =~ ^[a-z0-9-]+[.]txt$ ]] || fail "unsafe manifest output name"
+  require_source_manifest
+  source_pg_exec docker run --rm --user 0:0 \
+    "${SOURCE_PG_DOCKER_ENV[@]}" \
+    --volume "$RUN_DIR:/backup" --volume "$ROOT_DIR/deploy:/probe:ro" \
+    --env "OUTPUT_NAME=$output_name" --env "MANIFEST_NAME=$SOURCE_MANIFEST_NAME" \
+    postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af bash -euc '
+      set +x
+      psql --no-psqlrc -v ON_ERROR_STOP=1 \
+        -f "/probe/$MANIFEST_NAME" >"/backup/$OUTPUT_NAME"
+    '
+}
+
+run_render_inventory() {
+  local output_name="$1"
+  [[ "$output_name" =~ ^[a-z0-9-]+[.]txt$ ]] || fail "unsafe inventory output name"
   source_pg_exec docker run --rm --user 0:0 \
     "${SOURCE_PG_DOCKER_ENV[@]}" \
     --volume "$RUN_DIR:/backup" --volume "$ROOT_DIR/deploy:/probe:ro" \
     --env "OUTPUT_NAME=$output_name" postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af bash -euc '
       set +x
       psql --no-psqlrc -v ON_ERROR_STOP=1 \
-        -v LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on \
-        -v LECTURESIFT_ALLOW_LEGACY_PURCHASE_TERMS=on \
-        -f /probe/rehearsal_manifest_v3.sql >"/backup/$OUTPUT_NAME"
+        -f /probe/schema_contract_inventory.sql >"/backup/$OUTPUT_NAME"
     '
 }
 
@@ -302,19 +346,22 @@ assert_render_worker_and_queue_stopped() {
 }
 
 target_manifest() {
-  local destination="$1" mode="${2:-strict}"
-  local -a compatibility_args=()
-  case "$mode" in
-    strict) ;;
-    legacy-provider-sessions)
-      compatibility_args=(-v LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on -v LECTURESIFT_ALLOW_LEGACY_PURCHASE_TERMS=on)
-      ;;
-    *) fail "an invalid target manifest compatibility mode was requested" ;;
-  esac
+  local destination="$1"
   "${compose[@]}" exec -T postgres psql --no-psqlrc --quiet \
     --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -v ON_ERROR_STOP=1 \
-    "${compatibility_args[@]}" \
     -f /tmp/lecturesift-cutover-manifest.sql >"$destination"
+}
+
+target_inventory() {
+  local destination="$1"
+  "${compose[@]}" exec -T postgres psql --no-psqlrc --quiet \
+    --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -v ON_ERROR_STOP=1 \
+    -f - <"$SCHEMA_INVENTORY" >"$destination"
+}
+
+target_contract_version() {
+  local inventory="$1" accepted="$2"
+  python3 "$SCHEMA_STATE_TOOL" detect --inventory "$inventory" --accept "$accepted"
 }
 
 target_security_manifest() {
@@ -329,7 +376,11 @@ target_security_manifest() {
 }
 
 install_target_manifest() {
-  "${compose[@]}" cp "$MANIFEST" postgres:/tmp/lecturesift-cutover-manifest.sql
+  local manifest="$1"
+  [[ -n "$manifest" &&
+     ( "$manifest" == "$MANIFEST" || "$manifest" == "$TARGET_BEFORE_MANIFEST" ) ]] ||
+    return 1
+  "${compose[@]}" cp "$manifest" postgres:/tmp/lecturesift-cutover-manifest.sql
 }
 
 remove_target_manifest() {
@@ -373,7 +424,8 @@ target_stopped() {
 probe_application_role() {
   local service="$1"
   "${compose[@]}" run --rm --no-deps -T --entrypoint python \
-    -e "LECTURESIFT_PROBE_ROLE=$service" "$service" - <<'PY'
+    -e "LECTURESIFT_PROBE_ROLE=$service" \
+    -e "LECTURESIFT_PROBE_CONTRACT_VERSION=$SOURCE_CONTRACT_VERSION" "$service" - <<'PY'
 import os
 import uuid
 from sqlalchemy import create_engine, text
@@ -381,6 +433,27 @@ from sqlalchemy.exc import DBAPIError
 
 engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
 role = os.environ["LECTURESIFT_PROBE_ROLE"]
+contract = os.environ["LECTURESIFT_PROBE_CONTRACT_VERSION"]
+assert contract in {"4", "5"}
+# These mirror postgres-app-role.sh: the API owns product/workspace CRUD, the
+# worker reads none of it except two v5 entitlement facts.
+PRODUCT_TABLES = (
+    "assistant_credit_grants_v1",
+    "assistant_credit_requests_v1",
+    "assistant_daily_budget_v1",
+    "billing_referral_codes",
+    "billing_referral_coupons",
+    "billing_referral_renewal_rewards",
+    "billing_referral_reward_preferences",
+    "billing_referral_rewards",
+)
+WORKSPACE_TABLES = (
+    "admin_ad_free_grants_v1",
+    "admin_order_archives_v1",
+    "workspace_folders_v1",
+    "workspace_items_v1",
+) if contract == "5" else ()
+CRUD = ("SELECT", "INSERT", "UPDATE", "DELETE")
 connection = engine.connect()
 transaction = connection.begin()
 try:
@@ -416,6 +489,13 @@ try:
                    has_table_privilege(current_user, 'public.billing_users', 'DELETE')
         """)).one()
         assert all(bool(value) for value in privileges)
+        for table in (*PRODUCT_TABLES, *WORKSPACE_TABLES):
+            for privilege in CRUD:
+                assert connection.execute(
+                    text("SELECT has_table_privilege(current_user, :table, :privilege)"),
+                    {"table": f"public.{table}", "privilege": privilege},
+                ).scalar_one(), f"API lacks {privilege} on {table}"
+            assert connection.execute(text(f"SELECT count(*) FROM public.{table}")).scalar_one() >= 0
     else:
         search_path = connection.execute(text("SELECT current_setting('search_path')")).scalar_one()
         assert search_path.replace('"', '').replace(' ', '').startswith("lecturesift_worker,public")
@@ -448,6 +528,30 @@ try:
             "public.lecturesift_contact_messages",
         ):
             denied(f"SELECT count(*) FROM {protected}")
+
+        def table_privilege(table: str, privilege: str) -> bool:
+            return bool(connection.execute(
+                text("SELECT has_table_privilege(current_user, :table, :privilege)"),
+                {"table": f"public.{table}", "privilege": privilege},
+            ).scalar_one())
+
+        for table in PRODUCT_TABLES:
+            assert not any(table_privilege(table, privilege) for privilege in CRUD), table
+            denied(f"SELECT count(*) FROM public.{table}")
+        for table in WORKSPACE_TABLES:
+            assert not any(table_privilege(table, privilege) for privilege in CRUD[1:]), table
+        for table in ("workspace_folders_v1", "workspace_items_v1"):
+            if table in WORKSPACE_TABLES:
+                assert not table_privilege(table, "SELECT"), table
+                denied(f"SELECT count(*) FROM public.{table}")
+        if contract == "5":
+            assert table_privilege("admin_ad_free_grants_v1", "SELECT")
+            assert not table_privilege("admin_order_archives_v1", "SELECT")
+            assert connection.execute(text(
+                "SELECT has_column_privilege(current_user, 'public.admin_order_archives_v1', 'reference', 'SELECT')"
+            )).scalar_one()
+            connection.execute(text("SELECT reference FROM public.admin_order_archives_v1 LIMIT 0"))
+            denied("SELECT * FROM public.admin_order_archives_v1 LIMIT 0")
 
         probe_id = f"cutover-probe-{uuid.uuid4().hex}"
         connection.execute(
@@ -492,8 +596,11 @@ cleanup() {
   if [[ "$status" != "0" && "$target_mutated" == "true" && "$migration_verified" != "true" ]]; then
     echo "The cutover aborted after target mutation; attempting the fixed target rollback dump." >&2
     if reset_and_restore_target "$RUN_DIR/target-before.dump" &&
-       install_target_manifest &&
-       target_manifest "$RUN_DIR/target-rollback-raw.txt" strict; then
+       target_inventory "$RUN_DIR/target-rollback-inventory.txt" &&
+       [[ "$(target_contract_version "$RUN_DIR/target-rollback-inventory.txt" 3,4,5)" == \
+          "$TARGET_BEFORE_CONTRACT_VERSION" ]] &&
+       install_target_manifest "$TARGET_BEFORE_MANIFEST" &&
+       target_manifest "$RUN_DIR/target-rollback-raw.txt"; then
       tr -d '\r' <"$RUN_DIR/target-rollback-raw.txt" |
         grep -E '^(DATABASE|SCHEMA|SCHEMA_OBJECT|TABLE|ANOMALY|STATUS|SCHEMA_COMPAT|UNVALIDATED_FK|MANIFEST_COMPLETE)\|' |
         LC_ALL=C sort >"$RUN_DIR/target-rollback-raw.safe"
@@ -503,7 +610,7 @@ cleanup() {
            "$RUN_DIR/target-rollback-raw.txt" &&
          cmp --silent "$RUN_DIR/target-before.safe" "$RUN_DIR/target-rollback-raw.safe" &&
          provision_target_schema_and_roles &&
-         target_manifest "$RUN_DIR/target-rollback-check.txt" strict; then
+         target_manifest "$RUN_DIR/target-rollback-check.txt"; then
         tr -d '\r' <"$RUN_DIR/target-rollback-check.txt" |
           grep -E '^(DATABASE|SCHEMA|SCHEMA_OBJECT|TABLE|ANOMALY|STATUS|SCHEMA_COMPAT|UNVALIDATED_FK|MANIFEST_COMPLETE)\|' |
           LC_ALL=C sort >"$RUN_DIR/target-rollback-check.safe"
@@ -554,9 +661,21 @@ assert_render_worker_and_queue_stopped ||
 pending_before="$(render_pending_count)"
 [[ "$pending_before" == "0" ]] ||
   fail "pending payments are not zero; provider reconciliation must finish before cutover"
+# Decide the contract from the live frozen database, never from a label. The
+# historical v3 core family is refused: production has run v4 since 2026-09-09.
+run_render_inventory source-inventory.txt
+SOURCE_CONTRACT_VERSION="$(
+  python3 "$SCHEMA_STATE_TOOL" detect \
+    --inventory "$RUN_DIR/source-inventory.txt" --accept 4,5
+)" || fail "the Render source is not exactly the v4 product or v5 workspace schema contract"
+[[ "$SOURCE_CONTRACT_VERSION" == "4" || "$SOURCE_CONTRACT_VERSION" == "5" ]] ||
+  fail "the Render source schema contract version is invalid"
+MANIFEST="$(contract_manifest "$SOURCE_CONTRACT_VERSION")"
+SOURCE_MANIFEST_NAME="$(basename -- "$MANIFEST")"
+SCHEMA_VERIFIER="$(contract_verifier "$SOURCE_CONTRACT_VERSION")"
 run_render_manifest source-before.txt
 canonical_manifest "$RUN_DIR/source-before.txt" "$RUN_DIR/source-before.safe" \
-  legacy-provider-sessions
+  "$SCHEMA_VERIFIER"
 source_size="$(sed -n 's/^DATABASE_SIZE|//p' "$RUN_DIR/source-before.txt" | tr -d '\r')"
 [[ "$(grep -c '^DATABASE_SIZE|' "$RUN_DIR/source-before.txt")" == "1" &&
    "$source_size" =~ ^[1-9][0-9]*$ && "$source_size" -le 1000000000000 ]] ||
@@ -606,19 +725,19 @@ done
   fail "the Render consistent snapshot could not be exported"
 SNAPSHOT_ID="${snapshot_info#*|}"
 
+require_source_manifest
 source_pg_exec docker run --rm --user 0:0 \
   "${SOURCE_PG_DOCKER_ENV[@]}" \
   --volume "$RUN_DIR:/backup" --volume "$ROOT_DIR/deploy:/probe:ro" \
-  --env "SNAPSHOT_ID=$SNAPSHOT_ID" postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af bash -euc '
+  --env "SNAPSHOT_ID=$SNAPSHOT_ID" --env "MANIFEST_NAME=$SOURCE_MANIFEST_NAME" \
+  postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af bash -euc '
     set +x
     {
       printf "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;\n"
       printf "SET TRANSACTION SNAPSHOT '\''%s'\'';\n" "$SNAPSHOT_ID"
-      cat /probe/rehearsal_manifest_v3.sql
+      cat "/probe/$MANIFEST_NAME"
       printf "COMMIT;\n"
     } | psql --no-psqlrc -v ON_ERROR_STOP=1 \
-      -v LECTURESIFT_ALLOW_LEGACY_PROVIDER_SESSIONS=on \
-      -v LECTURESIFT_ALLOW_LEGACY_PURCHASE_TERMS=on \
       > /backup/source-snapshot.txt
     pg_dump --format=custom --no-owner --no-acl \
       --snapshot "$SNAPSHOT_ID" --file=/backup/render-final.dump
@@ -628,7 +747,7 @@ docker run --rm --user 0:0 --volume "$RUN_DIR:/backup:ro" postgres:18-bookworm@s
   pg_restore --list /backup/render-final.dump >"$RUN_DIR/render-final.dump.list"
 sha256sum "$RUN_DIR/render-final.dump" >"$RUN_DIR/render-final.dump.sha256"
 canonical_manifest "$RUN_DIR/source-snapshot.txt" "$RUN_DIR/source-snapshot.safe" \
-  legacy-provider-sessions
+  "$SCHEMA_VERIFIER"
 
 assert_render_frozen || fail "Render left freeze mode during the source capture"
 assert_render_worker_and_queue_stopped ||
@@ -637,7 +756,7 @@ pending_after="$(render_pending_count)"
 [[ "$pending_after" == "0" ]] || fail "a provider payment became pending during source capture"
 run_render_manifest source-after.txt
 canonical_manifest "$RUN_DIR/source-after.txt" "$RUN_DIR/source-after.safe" \
-  legacy-provider-sessions
+  "$SCHEMA_VERIFIER"
 cmp --silent "$RUN_DIR/source-before.safe" "$RUN_DIR/source-snapshot.safe" ||
   fail "Render data changed before the exported snapshot"
 cmp --silent "$RUN_DIR/source-snapshot.safe" "$RUN_DIR/source-after.safe" ||
@@ -647,9 +766,20 @@ cmp --silent "$RUN_DIR/source-snapshot.safe" "$RUN_DIR/source-after.safe" ||
 "${compose[@]}" stop --timeout 600 api worker
 target_stopped || fail "the OVH API/worker writer stop could not be proven"
 "${compose[@]}" up -d --wait --wait-timeout 300 postgres
-install_target_manifest
+# The existing OVH target is normally the core-only v3 family; its own exact
+# inventory selects the strict manifest that proves (and restores) it.
+target_inventory "$RUN_DIR/target-before-inventory.txt"
+TARGET_BEFORE_CONTRACT_VERSION="$(
+  target_contract_version "$RUN_DIR/target-before-inventory.txt" 3,4,5
+)" || fail "the existing OVH target is not exactly one reviewed schema contract"
+TARGET_BEFORE_MANIFEST="$(contract_manifest "$TARGET_BEFORE_CONTRACT_VERSION")" ||
+  fail "the existing OVH target schema contract version is invalid"
+TARGET_BEFORE_VERIFIER="$(contract_verifier "$TARGET_BEFORE_CONTRACT_VERSION")"
+install_target_manifest "$TARGET_BEFORE_MANIFEST" ||
+  fail "the OVH target manifest could not be installed"
 target_manifest "$RUN_DIR/target-before.txt"
-canonical_manifest "$RUN_DIR/target-before.txt" "$RUN_DIR/target-before.safe"
+canonical_manifest "$RUN_DIR/target-before.txt" "$RUN_DIR/target-before.safe" \
+  "$TARGET_BEFORE_VERIFIER"
 "${compose[@]}" exec -T postgres pg_dump --username "$POSTGRES_USER" \
   --dbname "$POSTGRES_DB" --format custom --no-owner --no-acl \
   >"$RUN_DIR/target-before.dump"
@@ -659,73 +789,51 @@ sha256sum "$RUN_DIR/target-before.dump" >"$RUN_DIR/target-before.dump.sha256"
 
 target_mutated="true"
 reset_and_restore_target "$RUN_DIR/render-final.dump"
-install_target_manifest
-target_manifest "$RUN_DIR/target-restored-raw.txt" legacy-provider-sessions
+target_inventory "$RUN_DIR/target-restored-inventory.txt"
+[[ "$(target_contract_version "$RUN_DIR/target-restored-inventory.txt" 4,5)" == \
+   "$SOURCE_CONTRACT_VERSION" ]] ||
+  fail "the restored OVH table inventory does not match the Render source contract"
+install_target_manifest "$MANIFEST" || fail "the source-contract manifest could not be installed"
+target_manifest "$RUN_DIR/target-restored-raw.txt"
 canonical_manifest "$RUN_DIR/target-restored-raw.txt" \
-  "$RUN_DIR/target-restored-raw.safe" legacy-provider-sessions
+  "$RUN_DIR/target-restored-raw.safe" "$SCHEMA_VERIFIER"
 cmp --silent "$RUN_DIR/source-snapshot.safe" "$RUN_DIR/target-restored-raw.safe" ||
   fail "the restored OVH manifest does not exactly match the stable Render snapshot"
 
-legacy_compat_marker='SCHEMA_COMPAT|legacy_missing_table|billing_payment_provider_sessions|integrity_checks_deferred_to_current_schema_migration'
-legacy_terms_compat_marker='SCHEMA_COMPAT|legacy_missing_table|billing_purchase_terms|integrity_checks_deferred_to_current_schema_migration'
-legacy_purchase_terms_missing="false"
-legacy_provider_sessions_missing="false"
-if grep -Fxq "$legacy_terms_compat_marker" "$RUN_DIR/target-restored-raw.txt"; then
-  legacy_purchase_terms_missing="true"
-fi
-if grep -Fxq "$legacy_compat_marker" "$RUN_DIR/target-restored-raw.txt"; then
-  legacy_provider_sessions_missing="true"
-fi
-
-# Only after raw source/target equality is proven may the owner migration add
-# the current schema. Long-lived API/worker services remain stopped throughout.
+# Only after raw source/target equality is proven may the owner provisioning
+# run. A v4/v5 source is already contract-current, so it may install roles and
+# grants but must not add, drop or rewrite any table or row. Long-lived
+# API/worker services remain stopped throughout.
 provision_target_schema_and_roles
-target_manifest "$RUN_DIR/target-migrated.txt" strict
-canonical_manifest "$RUN_DIR/target-migrated.txt" "$RUN_DIR/target-migrated.safe" strict
+target_manifest "$RUN_DIR/target-migrated.txt"
+canonical_manifest "$RUN_DIR/target-migrated.txt" "$RUN_DIR/target-migrated.safe" \
+  "$SCHEMA_VERIFIER"
 grep -E '^(DATABASE|TABLE|STATUS)\|' "$RUN_DIR/target-restored-raw.txt" |
   LC_ALL=C sort >"$RUN_DIR/target-before-migration.data"
 grep -E '^(DATABASE|TABLE|STATUS)\|' "$RUN_DIR/target-migrated.txt" |
   LC_ALL=C sort >"$RUN_DIR/target-after-migration.data"
-if [[ "$legacy_provider_sessions_missing" == "true" ]]; then
-  grep -Fxq 'TABLE|billing_payment_provider_sessions|0|0|0' \
-    "$RUN_DIR/target-migrated.txt" ||
-    fail "the migrated payment-provider session table is missing or unexpectedly non-empty"
-  grep -Fv 'TABLE|billing_payment_provider_sessions|' \
-    "$RUN_DIR/target-after-migration.data" \
-    >"$RUN_DIR/target-after-migration.comparable"
-else
-  cp -- "$RUN_DIR/target-after-migration.data" \
-    "$RUN_DIR/target-after-migration.comparable"
-fi
-if [[ "$legacy_purchase_terms_missing" == "true" ]]; then
-  grep -Fxq 'TABLE|billing_purchase_terms|0|0|0' \
-    "$RUN_DIR/target-migrated.txt" ||
-    fail "the migrated purchase-terms table is missing or unexpectedly non-empty"
-  grep -Fv 'TABLE|billing_purchase_terms|' \
-    "$RUN_DIR/target-after-migration.comparable" \
-    >"$RUN_DIR/target-after-migration.terms-comparable"
-  mv -- "$RUN_DIR/target-after-migration.terms-comparable" \
-    "$RUN_DIR/target-after-migration.comparable"
-fi
 cmp --silent "$RUN_DIR/target-before-migration.data" \
-  "$RUN_DIR/target-after-migration.comparable" ||
-  fail "the current schema migration changed pre-existing source data"
+  "$RUN_DIR/target-after-migration.data" ||
+  fail "owner provisioning changed pre-existing source data"
 python3 "$SCHEMA_VERIFIER" transition \
   --before "$RUN_DIR/target-restored-raw.txt" \
   --after "$RUN_DIR/target-migrated.txt" \
   --contract "$SCHEMA_CONTRACT" \
   --preserved-contract "$PRESERVED_SCHEMA_CONTRACT" \
   >"$RUN_DIR/schema-transition.txt" ||
-  fail "the current schema migration escaped its exact reviewed schema contract"
+  fail "owner provisioning escaped the exact reviewed schema contract"
+[[ "$(grep -c '^schema_transition=current_to_current$' "$RUN_DIR/schema-transition.txt")" == "1" &&
+   "$(wc -l <"$RUN_DIR/schema-transition.txt" | tr -d '[:space:]')" == "2" ]] ||
+  fail "a contract-current source must migrate exactly current_to_current"
 
 # Exercise the actual role-specific API and worker images, their generated env
 # files and the least-privilege PostgreSQL role. These are one-shot probes only;
 # neither long-running writer is started.
 probe_application_role api
 probe_application_role worker
-target_manifest "$RUN_DIR/target-after-probes.txt" strict
+target_manifest "$RUN_DIR/target-after-probes.txt"
 canonical_manifest "$RUN_DIR/target-after-probes.txt" \
-  "$RUN_DIR/target-after-probes.safe" strict
+  "$RUN_DIR/target-after-probes.safe" "$SCHEMA_VERIFIER"
 cmp --silent "$RUN_DIR/target-migrated.safe" "$RUN_DIR/target-after-probes.safe" ||
   fail "application/worker probes changed the migrated target"
 target_security_manifest "$RUN_DIR/postgres-security-final.txt" \
@@ -752,8 +860,9 @@ assert_render_worker_and_queue_stopped ||
   printf 'verified_at_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   printf 'source_manifest_sha256=%s\n' "$(sha256sum "$RUN_DIR/source-snapshot.safe" | awk '{print $1}')"
   printf 'migrated_target_manifest_sha256=%s\n' "$(sha256sum "$RUN_DIR/target-migrated.safe" | awk '{print $1}')"
-  printf 'source_legacy_provider_sessions_missing=%s\n' "$legacy_provider_sessions_missing"
-  printf 'source_legacy_purchase_terms_missing=%s\n' "$legacy_purchase_terms_missing"
+  printf 'schema_contract_version=%s\n' "$SOURCE_CONTRACT_VERSION"
+  printf 'target_before_schema_contract_version=%s\n' "$TARGET_BEFORE_CONTRACT_VERSION"
+  printf 'schema_transition=current_to_current\n'
   printf 'source_dump_sha256=%s\n' "$(cut -d' ' -f1 "$RUN_DIR/render-final.dump.sha256")"
   printf 'target_rollback_dump_sha256=%s\n' "$(cut -d' ' -f1 "$RUN_DIR/target-before.dump.sha256")"
   printf 'pending_payments_before=0\n'
@@ -783,7 +892,8 @@ python3 "$CUTOVER_EVIDENCE_TOOL" write-postgres \
   --postgres-role-login-probe-sha256 "$POSTGRES_ROLE_LOGIN_PROBE_SHA256" \
   --source-dump-sha256 "$(cut -d' ' -f1 "$RUN_DIR/render-final.dump.sha256")" \
   --source-worker-stop-evidence-sha256 "$SOURCE_WORKER_STOP_EVIDENCE_SHA256" \
-  --rollback-dump-sha256 "$(cut -d' ' -f1 "$RUN_DIR/target-before.dump.sha256")" ||
+  --rollback-dump-sha256 "$(cut -d' ' -f1 "$RUN_DIR/target-before.dump.sha256")" \
+  --schema-contract-version "$SOURCE_CONTRACT_VERSION" ||
   fail "the global PostgreSQL cutover proof could not be recorded"
 rm -f -- "$FAIL_STOP_MARKER"
 echo "PostgreSQL cutover data is verified. API/worker remain stopped and Caddy was not changed; complete Redis migration and final acceptance gates before traffic cutover."
