@@ -403,6 +403,61 @@ def test_restic_retention_matches_cloudflare_object_lock_contract():
     assert "Automated prune is disabled" in policy
 
 
+def _redis_source_env_parser(tmp_path: Path) -> Path:
+    script = _read("deploy/migrate_redis_state.sh")
+    start = script.index('source_env_values="$(python3 - "$SOURCE_ENV_FILE" <<\'PY\'\n')
+    body = script[script.index("\n", start) + 1 : script.index("\nPY\n)\"", start)]
+    parser = tmp_path / "source_env_parser.py"
+    parser.write_text(body + "\n", encoding="utf-8")
+    return parser
+
+
+def test_redis_migration_parses_the_source_env_as_data_never_shell(tmp_path: Path):
+    script = _read("deploy/migrate_redis_state.sh")
+    assert 'source "$SOURCE_ENV_FILE"' not in script
+    assert "set -a" not in script
+    parse = script.index('source_env_values="$(python3 - "$SOURCE_ENV_FILE"')
+    assert script.index('SOURCE_REDIS_URL=""') < parse
+    assert parse < script.index('SOURCE_REDIS_URL="${SOURCE_REDIS_URL:-${REDIS_URL:-}}"')
+    assert 'printf -v "$source_env_key" \'%s\' "${source_env_assignment#*=}"' in script
+
+    parser = _redis_source_env_parser(tmp_path)
+    marker = tmp_path / "executed"
+    source = tmp_path / "source.env"
+    source.write_text(
+        "# Render source\n"
+        "export SOURCE_HEALTH_URL='https://lecturesift-backend.onrender.com/health'\n"
+        f'SOURCE_DATABASE_URL="$(touch {marker})"\n'
+        "REDIS_URL=rediss://user:secret@source.example:6380\n"
+        "UNRELATED_SETTING=ignored\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [sys.executable, str(parser), str(source)], capture_output=True, text=True, check=True
+    )
+    assert result.stdout.splitlines() == [
+        "REDIS_URL=rediss://user:secret@source.example:6380",
+        f"SOURCE_DATABASE_URL=$(touch {marker})",
+        "SOURCE_HEALTH_URL=https://lecturesift-backend.onrender.com/health",
+    ]
+    assert not marker.exists()
+
+    for invalid in (
+        "SOURCE_REDIS_URL=one two\n",
+        "SOURCE_REDIS_URL=a\nSOURCE_REDIS_URL=b\n",
+        "SOURCE_REDIS_URL='unterminated\n",
+        "source /etc/passwd\n",
+        f"SOURCE_REDIS_URL=x; touch {marker}\n",
+    ):
+        source.write_text(invalid, encoding="utf-8")
+        refused = subprocess.run(
+            [sys.executable, str(parser), str(source)], capture_output=True, text=True
+        )
+        assert refused.returncode != 0 and refused.stdout == ""
+        assert "The Render source environment" in refused.stderr
+    assert not marker.exists()
+
+
 def test_logical_redis_migration_proves_freeze_and_final_state():
     script = _read("deploy/migrate_redis_state.sh")
 
