@@ -26,8 +26,17 @@ def test_valid_lesson_becomes_a_complete_row():
     assert row["hook"] == ["Kimya notlarını", "3. kez mi okuyorsun?"]
     assert [line["scene"] for line in row["voice"]] == ["hook", "problem", "product", "quiz", "answer", "cta"]
     assert row["voice"][4]["text"] == "Cevap: Asidik."
-    assert "{marker}" in row["caption_template"] and "Voice: AI-generated." in row["caption_template"]
-    assert studio._caption(row, date(2026, 10, 18), "reel").endswith("LectureSift · studio-reel · 2026-10-18")
+    assert "{marker}" in row["caption_template"] and "{voice}" in row["caption_template"]
+    reel = studio._caption(row, date(2026, 10, 18), "reel")
+    carousel = studio._caption(row, date(2026, 10, 18), "carousel")
+    assert reel.endswith("Seslendirme yapay zekâ ile üretildi.\nLectureSift · studio-reel · 2026-10-18")
+    assert "Seslendirme" not in carousel and carousel.endswith("#LectureSift\nLectureSift · studio-carousel · 2026-10-18")
+
+
+def test_rows_stored_with_the_old_disclosure_still_caption_correctly():
+    row = {"caption_template": "Metin\n#LectureSift\nVoice: AI-generated.\n{marker}"}
+    assert studio._caption(row, date(2026, 10, 18), "carousel") == "Metin\n#LectureSift\nLectureSift · studio-carousel · 2026-10-18"
+    assert "Voice:" not in studio._caption(row, date(2026, 10, 18), "reel")
 
 
 @pytest.mark.parametrize("overrides", [

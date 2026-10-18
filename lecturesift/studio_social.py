@@ -155,7 +155,7 @@ def build_row(lesson: dict, day: date, hook: tuple | None = None) -> dict:
         "LectureSift ders kaydını, PDF'ini ya da slaytlarını özet, quiz ve flashcard'lara çevirir. "
         "Kaç saniyede bildin? Yoruma yaz 👇\n\n"
         f"{hashtag} #DersÇalışma #AktifHatırlama #Üniversite #LectureSift\n"
-        f"Voice: AI-generated.\n{{marker}}"
+        "{voice}{marker}"
     )
     return {
         "subject": subject,
@@ -338,7 +338,12 @@ def asset_url(day: date, name: str) -> str:
 # ---------------------------------------------------------------- publish
 
 def _caption(row: dict, day: date, kind: str) -> str:
-    return row["caption_template"].replace("{marker}", marker(day, kind))
+    # Only the Reel carries narration, so only its caption discloses the synthetic voice.
+    voice = "Seslendirme yapay zekâ ile üretildi.\n" if kind == "reel" else ""
+    template = row["caption_template"]
+    if "{voice}" not in template:  # rows stored before the disclosure moved here
+        template = template.replace("Voice: AI-generated.\n", "{voice}")
+    return template.replace("{voice}", voice).replace("{marker}", marker(day, kind))
 
 
 def _already_published(client, row: dict, day: date, kind: str) -> bool:

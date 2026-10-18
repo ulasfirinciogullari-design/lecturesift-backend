@@ -1,8 +1,8 @@
 from lecturesift import reel_studio as studio
 
 
-def _narration():
-    return studio.narrate(studio.SAMPLE, voice=False)
+def _narration(row=studio.SAMPLE):
+    return studio.narrate(row, voice=False)
 
 
 def test_scenes_follow_the_script_order_with_a_quiz_pause():
@@ -41,3 +41,44 @@ def test_frames_and_carousel_have_instagram_sizes():
         assert studio.render_frame(studio.SAMPLE, narration, (start + end) / 2).size == (1080, 1920)
     slides = studio.render_carousel(studio.SAMPLE)
     assert len(slides) == 5 and all(s.size == (1080, 1350) for s in slides)
+
+
+_LONGEST = {
+    **studio.SAMPLE,
+    # Longest text the lesson validator lets through, with long unbreakable Turkish words.
+    "hook": ["Mikrobiyolojiyi hâlâ mı", "Elektronegatifliklerinin"],
+    "hook_highlight": "Elektronegatifliklerinin",
+    "question": "Elektronegatifliklerinin kıyaslanmasında periyodik tablonun hangi bölgesi genelde en yüksek?",
+    "options": ["Elektronegatifliklerinin", "Sağ üst köşedeki ametal", "Sol alt köşedeki metal", "Soygazlar her zaman en"],
+    "answer": 0,
+}
+
+
+def _bright_pixels(image, box):
+    region = image.crop(box).convert("RGB")
+    return sum(1 for r, g, b in region.getdata() if r > 200 and g > 140)
+
+
+def test_longest_text_stays_inside_the_safe_area():
+    slides = studio.render_carousel(_LONGEST)
+    for slide in slides:
+        # Nothing bright (text, highlight, cards) in the side margins.
+        assert _bright_pixels(slide, (0, 0, 52, studio.CH)) == 0
+        assert _bright_pixels(slide, (studio.CW - 52, 0, studio.CW, studio.CH)) == 0
+    # The question card ends above the swipe hint.
+    assert _bright_pixels(slides[2], (72, studio.CH - 140, 700, studio.CH)) == 0
+    narration = _narration(_LONGEST)
+    for name in ("hook", "quiz"):
+        start, end = narration.scenes[name]
+        frame = studio.render_frame(_LONGEST, narration, end - 0.3, groups=[])
+        assert _bright_pixels(frame, (0, 0, 52, studio.H)) == 0
+        assert _bright_pixels(frame, (studio.W - 52, 0, studio.W, studio.H)) == 0
+        # The caption band stays free for the subtitles.
+        assert _bright_pixels(frame, (52, 1450, studio.W - 52, 1700)) == 0
+
+
+def test_short_hook_is_vertically_centred():
+    slide = studio.render_carousel(studio.SAMPLE)[0].convert("L")
+    rows = [y for y in range(170, studio.CH - 150) if max(slide.crop((72, y, studio.CW - 72, y + 1)).getdata()) > 200]
+    middle = (rows[0] + rows[-1]) / 2
+    assert abs(middle - (170 + studio.CH - 150) / 2) < 60
