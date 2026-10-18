@@ -289,29 +289,63 @@ def _recent_questions() -> list[str]:
     return [row.get("question", "") for row in recent_json(_PREFIX, limit=60)]
 
 
+def _lesson_row(day: date) -> dict:
+    row = _row(day)
+    if row:
+        return row
+    lesson, hook = generate_lesson(day, _recent_questions())
+    row = build_row(lesson, day, hook)
+    row.update({"date": day.isoformat(), "rendered": False, "reel_media_id": None, "carousel_media_id": None})
+    write_json(_key(day, "post.json"), row)
+    return row
+
+
+def prepare_carousel(day: date) -> dict:
+    """Render the carousel once. It needs no voice or video, so it never waits on the Reel."""
+    row = _lesson_row(day)
+    if row.get("rendered") or row.get("carousel_rendered"):
+        return row
+    for index, slide in enumerate(reel_studio.render_carousel(row), start=1):
+        write_bytes(_key(day, f"carousel-{index}.jpg"), _jpeg(slide), "image/jpeg")
+    row = {**row, "carousel_rendered": True}
+    write_json(_key(day, "post.json"), row)
+    return row
+
+
+def _narration(day: date, row: dict) -> reel_studio.Narration:
+    """ElevenLabs narration, stored after the first success so a failed render never pays for the voice twice."""
+    timing, audio = read_json(_key(day, "narration.json")), read_bytes(_key(day, "voice.wav"))
+    if timing and audio:
+        return reel_studio.Narration(
+            audio,
+            tuple(reel_studio.Word(*w) for w in timing["words"]),
+            {name: tuple(span) for name, span in timing["scenes"].items()},
+            timing["duration"],
+        )
+    narration = reel_studio.narrate(row, voice=True)
+    write_bytes(_key(day, "voice.wav"), narration.audio, "audio/wav")
+    write_json(_key(day, "narration.json"), {
+        "words": [[w.text, w.start, w.end] for w in narration.words],
+        "scenes": {name: list(span) for name, span in narration.scenes.items()},
+        "duration": narration.duration,
+    })
+    return narration
+
+
 def prepare(day: date) -> dict:
     """Generate, narrate and render the day's Reel, cover and carousel once; later calls reuse them."""
-    existing = _row(day)
-    if existing and existing.get("rendered"):
-        return existing
     if not (ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID):
         raise InstagramConfigurationError("ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID are required for studio Reels")
-    if existing:
-        row = existing
-    else:
-        lesson, hook = generate_lesson(day, _recent_questions())
-        row = build_row(lesson, day, hook)
-        row.update({"date": day.isoformat(), "rendered": False, "reel_media_id": None, "carousel_media_id": None})
-        write_json(_key(day, "post.json"), row)
-    narration = reel_studio.narrate(row, voice=True)
+    row = prepare_carousel(day)
+    if row.get("rendered"):
+        return row
+    narration = _narration(day, row)
     if narration.duration > 58:
         raise RuntimeError("Studio Reel narration is longer than the Reel format allows")
     with tempfile.TemporaryDirectory(prefix="lecturesift-studio-") as folder:
         video = reel_studio.render_reel(row, narration, Path(folder) / "reel.mp4")
         write_bytes(_key(day, "reel.mp4"), video.read_bytes(), "video/mp4")
     write_bytes(_key(day, "cover.jpg"), _jpeg(reel_studio.render_cover(row, narration)), "image/jpeg")
-    for index, slide in enumerate(reel_studio.render_carousel(row), start=1):
-        write_bytes(_key(day, f"carousel-{index}.jpg"), _jpeg(slide), "image/jpeg")
     row = {**row, "rendered": True, "seconds": round(narration.duration, 2)}
     write_json(_key(day, "post.json"), row)
     return row
@@ -379,7 +413,7 @@ def publish_reel(day: date) -> dict:
 def publish_carousel(day: date) -> dict:
     client = _client()
     _assert_target_account(client)
-    row = prepare(day)
+    row = prepare_carousel(day)
     if _already_published(client, row, day, "carousel"):
         return {"status": "already_published", "kind": "studio_carousel", "date": day.isoformat()}
     children = []
@@ -400,12 +434,26 @@ def run_scheduled(now: datetime | None = None) -> list[dict]:
         return [{"status": "disabled"}]
     local = (now or datetime.now(_TZ)).astimezone(_TZ)
     day = local.date()
-    row = _row(day) or {}
     results = []
-    if local.hour >= INSTAGRAM_REEL_HOUR and not row.get("reel_media_id"):
-        results.append(publish_reel(day))
-    if local.hour >= INSTAGRAM_CAROUSEL_HOUR and not (_row(day) or {}).get("carousel_media_id"):
-        results.append(publish_carousel(day))
+    # Each slot is attempted on its own, so a Reel that cannot render never holds back the carousel.
+    for kind, hour, publish in (("carousel", INSTAGRAM_CAROUSEL_HOUR, publish_carousel), ("reel", INSTAGRAM_REEL_HOUR, publish_reel)):
+        if local.hour < hour or (_row(day) or {}).get(f"{kind}_media_id"):
+            continue
+        try:
+            results.append(publish(day))
+        except Exception as exc:  # reported in the job log; the next 15-minute run retries
+            results.append({"status": "failed", "kind": f"studio_{kind}", "date": day.isoformat(),
+                            "error": f"{type(exc).__name__}: {exc}"[:300]})
+    row = _row(day) or {}
+    if INSTAGRAM_CAROUSEL_HOUR <= local.hour < INSTAGRAM_REEL_HOUR and row and not row.get("rendered"):
+        # Render the evening Reel once the carousel is out: it can be watched at its public URL before
+        # it is posted, and a render problem shows up hours before the Reel slot.
+        try:
+            prepare(day)
+            results.append({"status": "reel_ready", "kind": "studio_reel", "date": day.isoformat()})
+        except Exception as exc:
+            results.append({"status": "failed", "kind": "studio_reel_render", "date": day.isoformat(),
+                            "error": f"{type(exc).__name__}: {exc}"[:300]})
     return results or [{"status": "nothing_due", "date": day.isoformat()}]
 
 

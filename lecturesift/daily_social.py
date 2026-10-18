@@ -667,7 +667,9 @@ def main() -> int:
         # Without an ElevenLabs voice the studio cannot narrate, so the legacy Reel keeps the day covered.
         if INSTAGRAM_STUDIO_ENABLED and ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID:
             from .studio_social import run_scheduled
-            print(json.dumps(run_scheduled(), ensure_ascii=False))
+            results = run_scheduled()
+            print(json.dumps(results, ensure_ascii=False))
+            failed = any(item.get("status") == "failed" for item in results)
         elif datetime.now(ZoneInfo("Europe/Istanbul")).hour >= INSTAGRAM_REEL_HOUR:
             print(publish_daily_post().get("status", "unknown"))
     except (InstagramAPIError, InstagramConfigurationError, RuntimeError, KeyError) as exc:

@@ -104,3 +104,91 @@ def test_asset_names_are_allow_listed(monkeypatch):
     assert studio.asset(date(2026, 10, 18), "reel.mp4") == b"x"
     assert studio.asset(date(2026, 10, 18), "post.json") is None
     assert studio.asset(date(2026, 10, 18), "../secret") is None
+
+
+def _fake_storage(monkeypatch):
+    store = {}
+    monkeypatch.setattr(studio, "read_json", lambda key: store.get(key))
+    monkeypatch.setattr(studio, "write_json", lambda key, value: store.__setitem__(key, value))
+    monkeypatch.setattr(studio, "read_bytes", lambda key: store.get(key))
+    monkeypatch.setattr(studio, "write_bytes", lambda key, content, content_type: store.__setitem__(key, content))
+    monkeypatch.setattr(studio, "recent_json", lambda prefix, limit: [])
+    monkeypatch.setattr(studio, "OPENAI_API_KEY", "")
+    return store
+
+
+def test_carousel_renders_without_voice_or_video(monkeypatch):
+    store = _fake_storage(monkeypatch)
+    monkeypatch.setattr(studio.reel_studio, "narrate", lambda *a, **k: pytest.fail("carousel must not narrate"))
+    row = studio.prepare_carousel(date(2026, 10, 18))
+    assert row["carousel_rendered"] and not row["rendered"]
+    assert all(f"social/instagram/studio/2026-10-18/carousel-{i}.jpg" in store for i in range(1, 6))
+    assert "social/instagram/studio/2026-10-18/reel.mp4" not in store
+
+
+def test_narration_is_paid_for_once_even_when_the_render_fails(monkeypatch):
+    _fake_storage(monkeypatch)
+    monkeypatch.setattr(studio, "ELEVENLABS_API_KEY", "key")
+    monkeypatch.setattr(studio, "ELEVENLABS_VOICE_ID", "voice")
+    calls, silent_narrate = [], studio.reel_studio.narrate
+
+    def narrate(row, voice=True):
+        calls.append(1)
+        silent = silent_narrate(row, voice=False)
+        return studio.reel_studio.Narration(b"wav", silent.words, silent.scenes, silent.duration)
+
+    def broken_render(row, narration, out):
+        assert narration.audio == b"wav" and narration.words
+        raise studio.reel_studio.StudioError("FFmpeg could not encode the Reel")
+
+    monkeypatch.setattr(studio.reel_studio, "narrate", narrate)
+    monkeypatch.setattr(studio.reel_studio, "render_reel", broken_render)
+    for _ in range(2):
+        with pytest.raises(studio.reel_studio.StudioError):
+            studio.prepare(date(2026, 10, 18))
+    assert calls == [1]
+
+
+def test_a_failing_reel_does_not_hold_back_the_carousel(monkeypatch):
+    rows = {}
+    monkeypatch.setattr(studio, "INSTAGRAM_DAILY_AUTOMATION_ENABLED", True)
+    monkeypatch.setattr(studio, "_row", lambda day: rows.get(day))
+    monkeypatch.setattr(studio, "INSTAGRAM_REEL_HOUR", 13)
+    monkeypatch.setattr(studio, "INSTAGRAM_CAROUSEL_HOUR", 13)
+
+    def reel(day):
+        raise studio.reel_studio.StudioError("FFmpeg could not encode the Reel")
+
+    def carousel(day):
+        rows[day] = {"carousel_media_id": "2"}
+        return {"status": "published", "kind": "studio_carousel"}
+
+    monkeypatch.setattr(studio, "publish_reel", reel)
+    monkeypatch.setattr(studio, "publish_carousel", carousel)
+    results = studio.run_scheduled(datetime(2026, 10, 18, 13, 5, tzinfo=ZoneInfo("Europe/Istanbul")))
+    assert [r["status"] for r in results] == ["published", "failed"]
+    assert results[1]["kind"] == "studio_reel" and "FFmpeg" in results[1]["error"]
+
+
+def test_reel_is_rendered_ahead_of_its_slot_after_the_carousel(monkeypatch):
+    rows, prepared = {}, []
+    monkeypatch.setattr(studio, "INSTAGRAM_DAILY_AUTOMATION_ENABLED", True)
+    monkeypatch.setattr(studio, "_row", lambda day: rows.get(day))
+    monkeypatch.setattr(studio, "INSTAGRAM_REEL_HOUR", 20)
+    monkeypatch.setattr(studio, "INSTAGRAM_CAROUSEL_HOUR", 13)
+
+    def carousel(day):
+        rows[day] = {"carousel_media_id": "2", "rendered": False}
+        return {"status": "published"}
+
+    def prepare(day):
+        prepared.append(day)
+        rows[day] = {**rows[day], "rendered": True}
+
+    monkeypatch.setattr(studio, "publish_carousel", carousel)
+    monkeypatch.setattr(studio, "prepare", prepare)
+    tz = ZoneInfo("Europe/Istanbul")
+    first = studio.run_scheduled(datetime(2026, 10, 18, 13, 5, tzinfo=tz))
+    assert [r["status"] for r in first] == ["published", "reel_ready"]
+    assert studio.run_scheduled(datetime(2026, 10, 18, 13, 20, tzinfo=tz))[0]["status"] == "nothing_due"
+    assert len(prepared) == 1

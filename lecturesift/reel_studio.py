@@ -694,7 +694,9 @@ def render_reel(row: dict, narration: Narration, out: Path) -> Path:
             "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
             *audio_args, *audio_filter,
             "-t", f"{narration.duration:.3f}",
-            "-c:v", "libx264", "-preset", "medium", "-crf", "19", "-pix_fmt", "yuv420p", "-profile:v", "high",
+            # One encoder thread and a short lookahead keep FFmpeg near 230 MB, inside a 512 MB cron
+            # container; frame drawing in Python is the slower side, so this costs no wall time.
+            "-c:v", "libx264", "-preset", "veryfast", "-threads", "1", "-crf", "18", "-pix_fmt", "yuv420p", "-profile:v", "high",
             "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-movflags", "+faststart", str(out),
         ]
         process = subprocess.Popen(command, stdin=subprocess.PIPE)
