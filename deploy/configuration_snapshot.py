@@ -23,7 +23,8 @@ from typing import Final
 
 LEGACY_SNAPSHOT_FORMAT: Final = "lecturesift-configuration-snapshot-v1"
 PREVIOUS_SNAPSHOT_FORMAT: Final = "lecturesift-configuration-snapshot-v2"
-SNAPSHOT_FORMAT: Final = "lecturesift-configuration-snapshot-v3"
+PRODUCT_SNAPSHOT_FORMAT: Final = "lecturesift-configuration-snapshot-v3"
+SNAPSHOT_FORMAT: Final = "lecturesift-configuration-snapshot-v4"
 APPLICATION_IDENTITY: Final = "lecturesift-production"
 MANIFEST_NAME: Final = "CONFIGURATION_MANIFEST.json"
 CHECKSUM_NAME: Final = "CONFIGURATION_SHA256SUMS"
@@ -127,13 +128,26 @@ PREVIOUS_IDENTITY_ALLOWLIST: Final = LEGACY_IDENTITY_ALLOWLIST + (
 )
 
 
-IDENTITY_ALLOWLIST: Final = PREVIOUS_IDENTITY_ALLOWLIST + (
+# Keep the v3 (product schema) inventory exact for existing backups.
+PRODUCT_IDENTITY_ALLOWLIST: Final = PREVIOUS_IDENTITY_ALLOWLIST + (
     "deploy/rehearsal_manifest_v4.sql",
     "deploy/recovery_manifest_v3.sql",
     "deploy/verify_schema_transition_v4.py",
     "deploy/schema_contract_product_v1.txt",
     "deploy/product_tables_v1.sql",
     "deploy/product_schema_release.py",
+)
+
+
+# v4 adds the workspace schema family that recovery_manifest_v4 backups and
+# a schema_contract_version=5 provider cutover depend on.
+IDENTITY_ALLOWLIST: Final = PRODUCT_IDENTITY_ALLOWLIST + (
+    "deploy/rehearsal_manifest_v5.sql",
+    "deploy/recovery_manifest_v4.sql",
+    "deploy/verify_schema_transition_v5.py",
+    "deploy/schema_contract_workspace_v1.txt",
+    "deploy/workspace_tables_v1.sql",
+    "deploy/workspace_schema_release.py",
 )
 
 
@@ -160,6 +174,8 @@ def _expected_entries(
 ) -> list[tuple[str, str, str, str]]:
     if snapshot_format == SNAPSHOT_FORMAT:
         identity_allowlist = IDENTITY_ALLOWLIST
+    elif snapshot_format == PRODUCT_SNAPSHOT_FORMAT:
+        identity_allowlist = PRODUCT_IDENTITY_ALLOWLIST
     elif snapshot_format == PREVIOUS_SNAPSHOT_FORMAT:
         identity_allowlist = PREVIOUS_IDENTITY_ALLOWLIST
     elif snapshot_format == LEGACY_SNAPSHOT_FORMAT:
@@ -400,7 +416,12 @@ def verify_snapshot(snapshot_root: Path, deploy_root_value: str, *, quiet: bool)
     }:
         raise SnapshotError("configuration snapshot manifest fields are invalid")
     if (
-        manifest["format"] not in (LEGACY_SNAPSHOT_FORMAT, PREVIOUS_SNAPSHOT_FORMAT, SNAPSHOT_FORMAT)
+        manifest["format"] not in (
+            LEGACY_SNAPSHOT_FORMAT,
+            PREVIOUS_SNAPSHOT_FORMAT,
+            PRODUCT_SNAPSHOT_FORMAT,
+            SNAPSHOT_FORMAT,
+        )
         or manifest["application_identity"] != APPLICATION_IDENTITY
         or manifest["deploy_root"] != str(deploy_root)
         or not isinstance(manifest["created_at_utc"], str)
