@@ -307,6 +307,13 @@ OCR_MIN_NATIVE_CHARACTERS = max(1, int(os.getenv("LECTURESIFT_OCR_MIN_NATIVE_CHA
 OCR_ESTIMATED_WORDS_PER_PAGE = max(50, int(os.getenv("LECTURESIFT_OCR_ESTIMATED_WORDS_PER_PAGE", "400")))
 JOB_TTL_SECONDS = int(os.getenv("LECTURESIFT_JOB_TTL_SECONDS", str(6 * 60 * 60)))
 GUEST_TRIAL_MAX_MINUTES = float(os.getenv("LECTURESIFT_GUEST_TRIAL_MINUTES", "30"))
+# New anonymous trials per client address and across the service per UTC day.
+# Resuming an existing trial is never counted. A global limit of 0 pauses new
+# guest trials without affecting registered accounts.
+GUEST_TRIAL_IP_DAILY_LIMIT = max(1, int(os.getenv("LECTURESIFT_GUEST_TRIAL_IP_DAILY_LIMIT", "3")))
+GUEST_TRIAL_GLOBAL_DAILY_LIMIT = max(
+    0, int(os.getenv("LECTURESIFT_GUEST_TRIAL_GLOBAL_DAILY_LIMIT", "100"))
+)
 PDF_SAMPLE_MAX_PAGES = 10
 PDF_SAMPLE_MAX_WORDS = 2000
 PDF_SAMPLE_MAX_OCR_PAGES = 5

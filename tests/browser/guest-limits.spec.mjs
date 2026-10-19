@@ -111,6 +111,29 @@ test('quota rejection stays retryable while a used-trial API response gives a lo
   expect(identities()).toBe(1);
 });
 
+test('a full daily guest-trial allowance shows a localized free-account link without uploading', async ({page}) => {
+  const identities = await prepare(page);
+  let refused = 0;
+  // Registered after prepare(), so this route takes precedence for the limit response.
+  await page.route(`${API}/billing/guest-session`, route => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({status:204, headers});
+    refused += 1;
+    return route.fulfill({status:429, headers:{...headers, 'Retry-After':'3600'}, json:{detail:{code:'LS-GUEST-06',
+      message:'Bugünlük hesapsız deneme hakkı doldu. Ücretsiz hesap açarak her ay 120 dakika kullanabilirsin.'}}});
+  });
+  await page.locator('#classicFiles').setInputFiles(pdf('chapter.pdf'));
+  await page.locator('#analyzeButton').click();
+  await expect(page.locator('#errorCode')).toContainText('LS-GUEST-06');
+  await expect(page.locator('#errorMessage')).toHaveText('No-account trials are full for today. Create a free account to get 120 minutes every month.');
+  await expect(page.locator('#guestTrialLimitSignup')).toHaveText('Create a free account');
+  await expect(page.locator('#guestTrialLimitSignup')).toHaveAttribute('href', /\/en\/register\.html\?next=/);
+  await expect(page.locator('#analyzeButton')).toBeEnabled();
+  await expect(page.locator('#classicFileList')).toContainText('chapter.pdf');
+  expect(refused).toBe(1);
+  expect(identities()).toBe(0);
+  expect(await page.evaluate(() => window.syntheticGuestUploadCount || 0)).toBe(0);
+});
+
 async function selectSizedFile(page, name, bytes) {
   // Exercise the real picker validation using a tiny synthetic File with an
   // overridden size. No 150MB buffer, upload, browser media read, or extraction.
