@@ -189,7 +189,9 @@ if [[ -n "$REQUESTED_SNAPSHOT_ID" ]]; then
     --tag lecturesift --tag production "$REQUESTED_SNAPSHOT_ID")
 else
   drill_scope="current-latest"
-  snapshot_query=(restic snapshots --json --latest 1 --host "$RESTIC_HOST" \
+  # restic's --latest keeps one snapshot per host and path set, and every seed
+  # stages a uniquely named path, so list them all and select the newest below.
+  snapshot_query=(restic snapshots --json --host "$RESTIC_HOST" \
     --tag lecturesift --tag production)
 fi
 if ! "${snapshot_query[@]}" >"$SNAPSHOTS_JSON" 2>"$RESTIC_LOG"; then
@@ -201,12 +203,21 @@ import json
 from pathlib import Path
 import sys
 
+def parsed_time(item):
+    return datetime.fromisoformat(str(item.get("time") or "").replace("Z", "+00:00"))
+
+
 snapshots = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-if not isinstance(snapshots, list) or len(snapshots) != 1:
+scope = sys.argv[3]
+if not isinstance(snapshots, list) or not snapshots:
+    raise SystemExit(1)
+if scope == "explicit-backup" and len(snapshots) != 1:
+    raise SystemExit(1)
+snapshots = sorted(snapshots, key=parsed_time, reverse=True)
+if len(snapshots) > 1 and parsed_time(snapshots[0]) == parsed_time(snapshots[1]):
     raise SystemExit(1)
 snapshot = snapshots[0]
 snapshot_id = str(snapshot.get("id") or "")
-snapshot_time_text = str(snapshot.get("time") or "")
 tags = set(snapshot.get("tags") or [])
 if (
     not snapshot_id
@@ -214,10 +225,9 @@ if (
     or not {"lecturesift", "production"}.issubset(tags)
 ):
     raise SystemExit(1)
-snapshot_time = datetime.fromisoformat(snapshot_time_text.replace("Z", "+00:00"))
+snapshot_time = parsed_time(snapshot)
 now = datetime.now(timezone.utc)
 age = (now - snapshot_time.astimezone(timezone.utc)).total_seconds()
-scope = sys.argv[3]
 if age < -300 or (scope == "current-latest" and age > int(sys.argv[2])):
     raise SystemExit(1)
 print(snapshot_id)
