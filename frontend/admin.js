@@ -4,11 +4,15 @@ const adminT = (key, fallback) => window.LectureSiftI18n?.t(key) || fallback || 
 const adminLocale = () => window.LectureSiftI18n?.locale || "tr-TR";
 const adminMinuteShort = () => adminT("unit.minuteShort", "dk");
 const ADMIN_SESSION_TOKEN_KEY = "lecturesift-admin-session-token";
+// Present only for account sessions; the emergency key has no account.
+const ADMIN_SESSION_EMAIL_KEY = "lecturesift-admin-session-email";
 const ADMIN_VIEW_KEY = "lecturesift-admin-view";
 const ADMIN_REFERRAL_CONFIRMATION_TTL_MS = 5 * 60 * 1000;
 const ADMIN_REFERRAL_EVIDENCE_RE = /^[A-Za-z0-9][A-Za-z0-9 ._:/-]{7,119}$/;
 const ADMIN_VIEWS = ["overview", "users", "finance", "referrals", "support", "jobs", "costs", "system", "growth", "audit"];
 let adminAccessToken = sessionStorage.getItem(ADMIN_SESSION_TOKEN_KEY) || "";
+let adminAccountEmail = sessionStorage.getItem(ADMIN_SESSION_EMAIL_KEY) || "";
+let adminLoginChallenge = null;
 let adminLoading = false;
 const emptyAdminState = () => ({overview:{counts:{}}, users:[], userPagination:{page:1,total:0,total_pages:1}, orders:[], orderPagination:{page:1,total:0,total_pages:1}, rewards:[], referrals:[], referralsError:"", referralsHasMore:false, referralsLimit:100, refunds:[], credits:[], accountEvents:[], contacts:[], jobs:[], costs:null, billing:null, runtime:null, ads:null, analytics:null, advertisingReadiness:null});
 let adminState = emptyAdminState();
@@ -26,11 +30,23 @@ let adminLoadPromise = null;
 let adminGrowthPromise = null;
 const adminNoticeTimers = new Map();
 
+function showAdminLoginStep(step) {
+  admin$("adminAccountForm").hidden = step !== "account";
+  admin$("adminCodeForm").hidden = step !== "code";
+  if (step === "account") adminLoginChallenge = null;
+  admin$("adminCode").value = "";
+}
+
 function endAdminSession(message = "Yönetici oturumu kapatıldı.") {
   adminSessionVersion += 1;
   adminGrowthPromise = null;
   adminAccessToken = "";
+  adminAccountEmail = "";
   sessionStorage.removeItem(ADMIN_SESSION_TOKEN_KEY);
+  sessionStorage.removeItem(ADMIN_SESSION_EMAIL_KEY);
+  admin$("adminPasswordOpen").hidden = true;
+  admin$("adminPasswordForm").reset();
+  showAdminLoginStep("account");
   adminRequests.forEach(controller => controller.abort());
   Object.keys(adminListVersions).forEach(key => { adminListVersions[key] += 1; });
   adminLoadErrors.clear();
@@ -295,13 +311,16 @@ async function adminRequest(path, options = {}) {
     });
     if (session !== adminSessionVersion) throw new DOMException("Oturum kapandı.", "AbortError");
     if (response.status === 401 && !publicRequest) {
-      endAdminSession("Yönetici erişimi doğrulanamadı. Anahtarını kontrol edip yeniden giriş yap.");
+      endAdminSession(adminAccountEmail
+        ? "Yönetici erişimi doğrulanamadı. Oturumun sona ermiş olabilir; yeniden giriş yap."
+        : "Yönetici erişimi doğrulanamadı. Anahtarını kontrol edip yeniden giriş yap.");
       throw new Error("Yönetici erişimi doğrulanamadı.");
     }
     const body = binary && response.ok ? await response.blob() : await response.json().catch(() => null);
     if (!response.ok) {
       const error = new Error(body?.detail?.message || (typeof body?.detail === "string" ? body.detail : adminT("error.request", "İstek tamamlanamadı.")));
       error.status = response.status;
+      error.code = body?.detail?.code || "";
       throw error;
     }
     if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("Sunucudan geçerli bir yanıt alınamadı. Tekrar dene.");
@@ -1905,6 +1924,8 @@ admin$("adminTokenForm").addEventListener("submit", async event => {
   const button = admin$("adminLoginButton");
   if (button.disabled) return;
   adminAccessToken = admin$("adminToken").value.trim();
+  adminAccountEmail = "";
+  sessionStorage.removeItem(ADMIN_SESSION_EMAIL_KEY);
   button.disabled = true;
   button.textContent = "Açılıyor…";
   try {
@@ -1913,7 +1934,71 @@ admin$("adminTokenForm").addEventListener("submit", async event => {
   } catch (error) { adminNotice(error.message, true); }
   finally { button.disabled = false; button.textContent = adminT("admin.open", "Paneli aç"); }
 });
-admin$("adminLogout")?.addEventListener("click", () => endAdminSession());
+const adminPublicPost = (path, payload) => adminRequest(path, {
+  publicRequest:true, method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload),
+});
+admin$("adminAccountForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const button = admin$("adminAccountButton");
+  if (button.disabled) return;
+  const email = admin$("adminEmail").value.trim();
+  button.disabled = true;
+  try {
+    const body = await adminPublicPost("/billing/admin/session/start", {email, password:admin$("adminPassword").value});
+    admin$("adminPassword").value = "";
+    showAdminLoginStep("code");
+    adminLoginChallenge = {email, challenge:body.challenge};
+    adminNotice(body.message || "Giriş kodunu e-posta adresine gönderdik.");
+    admin$("adminCode").focus();
+  } catch (error) { adminNotice(error.message, true); }
+  finally { button.disabled = false; }
+});
+admin$("adminCodeForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const button = admin$("adminCodeButton");
+  if (button.disabled || !adminLoginChallenge) return;
+  button.disabled = true;
+  try {
+    const body = await adminPublicPost("/billing/admin/session/verify", {...adminLoginChallenge, code:admin$("adminCode").value.trim()});
+    // The code is single use, so keep the session even if the first load fails.
+    adminAccessToken = body.token;
+    adminAccountEmail = body.email;
+    sessionStorage.setItem(ADMIN_SESSION_TOKEN_KEY, adminAccessToken);
+    sessionStorage.setItem(ADMIN_SESSION_EMAIL_KEY, adminAccountEmail);
+    admin$("adminPasswordOpen").hidden = false;
+    showAdminLoginStep("account");
+    await loadAdmin();
+  } catch (error) {
+    // LS-ADMIN-AUTH-03: the challenge expired or ran out of attempts; ask for a new code.
+    if (error.code === "LS-ADMIN-AUTH-03") showAdminLoginStep("account");
+    else admin$("adminCode").value = "";
+    adminNotice(error.message, true);
+  } finally { button.disabled = false; }
+});
+admin$("adminLogout")?.addEventListener("click", async () => {
+  if (adminAccountEmail) await adminRequest("/billing/admin/session/logout", {method:"POST"}).catch(() => {});
+  endAdminSession();
+});
+admin$("adminPasswordOpen").addEventListener("click", () => admin$("adminPasswordDialog").showModal());
+admin$("adminPasswordForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const button = admin$("adminPasswordSubmit");
+  if (button.disabled) return;
+  const next = admin$("adminNewPassword").value;
+  if (next !== admin$("adminNewPasswordConfirm").value) {
+    adminNotice(adminT("auth.passwordMismatch", "Parolalar birbiriyle eşleşmiyor."), true);
+    return;
+  }
+  button.disabled = true;
+  try {
+    const body = await adminRequest("/billing/admin/session/change-password", {
+      method:"POST", body:JSON.stringify({current_password:admin$("adminCurrentPassword").value, new_password:next}),
+    });
+    // The new password ends every session of the account, including this one.
+    endAdminSession(body.message || "Parolan güncellendi. Yeni parolanla yeniden giriş yap.");
+  } catch (error) { adminNotice(error.message, true); }
+  finally { button.disabled = false; }
+});
 admin$("adminContactDialog")?.addEventListener("close", () => { adminListVersions.contact += 1; });
 
 admin$("adminRefresh").addEventListener("click", () => loadAdmin().catch(error => adminNotice(error.message, true)));
@@ -1949,7 +2034,11 @@ setInterval(() => {
     loadAdmin({silent:true}).catch(error => adminNotice(error.message, true));
   }
 }, 60000);
+admin$("adminPasswordOpen").hidden = !adminAccountEmail;
 if (adminAccessToken) {
-  admin$("adminToken").value = adminAccessToken;
+  if (!adminAccountEmail) {
+    admin$("adminEmergency").open = true;
+    admin$("adminToken").value = adminAccessToken;
+  }
   loadAdmin().catch(error => adminNotice(error.message, true));
 }

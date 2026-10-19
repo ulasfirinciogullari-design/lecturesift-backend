@@ -60,6 +60,7 @@ async function openGrowthView(page, advertisingReadiness, {readinessStatus = 200
 
   await page.goto('/admin.html#admin-growth');
   await page.locator('[data-consent="essential"]').click();
+  await page.locator('#adminEmergency > summary').click();
   await page.locator('#adminToken').fill('synthetic-admin-token');
   await page.locator('#adminLoginButton').click();
   await expect(page.locator('#adminPanel')).toBeVisible();
