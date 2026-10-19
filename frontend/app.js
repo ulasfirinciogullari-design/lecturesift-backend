@@ -50,7 +50,7 @@ const EN = {
   accountTitle: "Create an account or sign in", accountHelp: "Your plan, minutes, and payments are linked to this account.",
   remainingMinutes: "Processing minutes remaining", transferEyebrow: "Bank transfer details", transferTitle: "Your order is ready",
   orderReference: "Order reference", amount: "Amount", accountHolder: "Account holder", sendReceipt: "Email the receipt",
-  currentPlan: "Current plan", choosePlan: "Choose plan", popular: "Popular", perMonth: "/ month", oneTime: "one time",
+  currentPlan: "Current plan", choosePlan: "Choose plan", popular: "Popular", perMonth: "30-day package", oneTime: "one time",
   pendingApproval: "Pending review", loginRequired: "Sign in before choosing a plan.", accountReady: "Account is ready."
 };
 
@@ -94,7 +94,7 @@ const TR = {
   accountTitle: "Hesabını oluştur veya giriş yap", accountHelp: "Planın, dakikaların ve ödemelerin bu hesaba bağlanır.",
   remainingMinutes: "Kalan işlem dakikası", transferEyebrow: "Havale bilgileri", transferTitle: "Siparişin oluşturuldu",
   orderReference: "Sipariş referansı", amount: "Tutar", accountHolder: "Hesap sahibi", sendReceipt: "Dekontu e-postayla gönder",
-  currentPlan: "Mevcut plan", choosePlan: "Planı seç", popular: "Popüler", perMonth: "/ ay", oneTime: "tek ödeme",
+  currentPlan: "Mevcut plan", choosePlan: "Planı seç", popular: "Popüler", perMonth: "30 günlük paket", oneTime: "tek ödeme",
   pendingApproval: "Kontrol bekliyor", loginRequired: "Plan seçmeden önce giriş yap.", accountReady: "Hesabın hazır."
 };
 
@@ -102,19 +102,19 @@ const PLAN_COPY = {
   tr: {
     free: ["Ücretsiz", "LectureSift'i denemek ve kısa dersleri işlemek için.", "120 dk / ay"],
     credit: ["Dakika Paketi", "Abonelik olmadan ek işlem hakkı.", "180 dakika"],
-    lite: ["Lite", "Düzenli bireysel ders çalışması için.", "400 dk / ay"],
-    plus: ["Plus", "Yoğun ders dönemi ve çoklu kaynaklar için.", "900 dk / ay"],
-    pro: ["Pro", "Uzun kayıtlar ve öncelikli işleme için.", "2.000 dk / ay"],
-    max: ["Max", "En yüksek bireysel kullanım kapasitesi.", "4.000 dk / ay"],
+    lite: ["Lite", "Düzenli bireysel ders çalışması için.", "400 dk / 30 gün"],
+    plus: ["Plus", "Yoğun ders dönemi ve çoklu kaynaklar için.", "900 dk / 30 gün"],
+    pro: ["Pro", "Uzun kayıtlar ve öncelikli işleme için.", "2.000 dk / 30 gün"],
+    max: ["Max", "En yüksek bireysel kullanım kapasitesi.", "4.000 dk / 30 gün"],
     business: ["Business", "Ekipler, kurumlar ve özel kapasite için.", "10 kullanıcı"]
   },
   en: {
     free: ["Free", "Try LectureSift and process short lectures.", "120 min / month"],
     credit: ["Minute Pack", "Extra processing without a subscription.", "180 minutes"],
-    lite: ["Lite", "For regular individual study.", "400 min / month"],
-    plus: ["Plus", "For intensive study and multiple sources.", "900 min / month"],
-    pro: ["Pro", "For long recordings and priority processing.", "2,000 min / month"],
-    max: ["Max", "The highest individual processing capacity.", "4,000 min / month"],
+    lite: ["Lite", "For regular individual study.", "400 min / 30 days"],
+    plus: ["Plus", "For intensive study and multiple sources.", "900 min / 30 days"],
+    pro: ["Pro", "For long recordings and priority processing.", "2,000 min / 30 days"],
+    max: ["Max", "The highest individual processing capacity.", "4,000 min / 30 days"],
     business: ["Business", "For teams, institutions, and custom capacity.", "10 seats"]
   }
 };
@@ -317,7 +317,9 @@ function planCopy(code) {
     ? central?.t("plans.userUnit", "kullanıcı")
     : code === "credit"
       ? central?.t("plans.minuteUnit", "dakika")
-      : central?.t("plans.minutesPerMonth", "dk / ay");
+      : PLAN_FALLBACK[code]?.[0] === "subscription"
+        ? central?.t("plans.minutesPer30Days", "dk / 30 gün")
+        : central?.t("plans.minutesPerMonth", "dk / ay");
   return [
     central?.t(`plan.${code}`, fallback[0]) || fallback[0],
     central?.t(`plan.${code}.description`, fallback[1]) || fallback[1],
@@ -452,7 +454,10 @@ function renderPlans() {
     };
     const priceInfo = plan.display_price || plan.manual_price;
     const price = priceInfo ? formatPrice(priceInfo.amount_minor, priceInfo.currency || billingCatalog.selected_currency) : (code === "free" ? formatPrice(0, billingCatalog.selected_currency) : (window.LectureSiftI18n?.t("plans.quote", "Teklif") || "Teklif"));
-    const suffix = plan.kind === "subscription" ? t("perMonth") : (plan.kind === "one_time" ? t("oneTime") : "");
+    // Fixed 30-day packages never renew, so they are not labelled monthly.
+    const suffix = plan.kind === "subscription"
+      ? (window.LectureSiftI18n?.t("plans.thirtyDayPackageShort", t("perMonth")) || t("perMonth"))
+      : (plan.kind === "one_time" ? t("oneTime") : "");
     const buttonLabel = current ? t("currentPlan") : (code === "business" ? (window.LectureSiftI18n?.t("plans.contact", "Bize ulaş") || "Bize ulaş") : t("choosePlan"));
     const local = (key, fallback) => window.LectureSiftI18n?.t(key, fallback) || fallback;
     return `<article class="plan-card ${plan.featured ? "featured" : ""}">

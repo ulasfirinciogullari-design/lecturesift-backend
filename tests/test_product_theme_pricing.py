@@ -197,3 +197,17 @@ def test_static_plan_cards_match_the_backend_try_catalog():
         if plan.kind == "subscription":
             assert {"plans.minutesPer30Days", "rollout.chooseMonthly"} <= card["keys"], plan.code
         assert "plans.perMonth" not in card["keys"], plan.code
+
+
+def test_workspace_plan_cards_name_fixed_terms_as_30_day_packages():
+    app = (FRONTEND / "app.js").read_text(encoding="utf-8")
+    plan_copy = app.split("const PLAN_COPY = {", 1)[1].split("\n};", 1)[0]
+    for plan in PLANS:
+        if plan.kind == "subscription":
+            assert re.search(rf'\b{plan.code}: \[[^\n]* dk / 30 gün"\]', plan_copy), plan.code
+            assert re.search(rf'\b{plan.code}: \[[^\n]* min / 30 days"\]', plan_copy), plan.code
+    # Free keeps its calendar-month quota wording.
+    assert '"120 dk / ay"' in plan_copy and '"120 min / month"' in plan_copy
+    assert 'perMonth: "/ ay"' not in app and 'perMonth: "/ month"' not in app
+    assert 'window.LectureSiftI18n?.t("plans.thirtyDayPackageShort", t("perMonth"))' in app
+    assert 'central?.t("plans.minutesPer30Days", "dk / 30 gün")' in app

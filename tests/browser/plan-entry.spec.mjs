@@ -141,5 +141,16 @@ test.describe('without JavaScript', () => {
     await expect(page.locator('#plansGrid [data-plan-card="plus"] .plan-price')).toContainText('30-day package');
     await expect(page.locator('#plansGrid [data-plan-card="plus"]')).toContainText('min / 30 days');
     await expect(page.locator('#morePlans > summary')).toContainText('Other packages');
+    // The build rewrites Turkish number formatting for each language.
+    await expect(page.locator('[data-plan-card="plus"] [data-plan-value="annual_price"]')).toHaveText('₺5,990');
+    await expect(page.locator('[data-plan-card="pro"] [data-plan-value="price"]')).toHaveText('₺1,199');
+    await expect(page.locator('[data-plan-card="pro"] [data-plan-value="minutes"]')).toHaveText('2,000');
+    await expect(page.locator('[data-plan-card="max"] [data-plan-value="max_media_upload_mb"]')).toHaveText('1,024');
+    const signIn = await page.locator('#plansGrid .plan-action[data-plan="credit"]').getAttribute('href');
+    const loginUrl = new URL(signIn, page.url());
+    expect(loginUrl.pathname).toBe('/en/login.html');
+    expect(loginUrl.searchParams.get('next')).toBe('/en/plans?plan=credit&interval=one_time');
+    await page.goto('/de/plans.html');
+    await expect(page.locator('[data-plan-card="pro"] [data-plan-value="price"]')).toHaveText(/^1\.199\s₺$/);
   });
 });
