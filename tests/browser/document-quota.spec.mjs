@@ -40,8 +40,13 @@ async function openWorkspace(page, {account = null, rate = 200, locale = 'en', f
 }
 
 const freeAccount = {
-  plan:{code:'free', entitlements:{limits:{max_minutes_per_job:30}, download_enabled:false}},
+  plan:{code:'free', entitlements:{limits:{max_minutes_per_job:30}, download_enabled:true}},
   remaining_minutes:60,
+};
+// A response from a backend release that still withholds downloads.
+const previewOnlyAccount = {
+  ...freeAccount,
+  plan:{...freeAccount.plan, entitlements:{...freeAccount.plan.entitlements, download_enabled:false}},
 };
 
 for (const scenario of [
@@ -58,13 +63,13 @@ for (const scenario of [
     await page.locator('#classicFiles').setInputFiles({name:'chapter.pdf', mimeType:'application/pdf', buffer:Buffer.from('Synthetic selection only; no upload.')});
     await expect(page.locator('#documentQuotaAllowance')).toContainText(scenario.words);
     expect(writes).toEqual([]);
-    if (scenario.account?.download_enabled) await expect(page.locator('#documentQuotaHelp')).not.toContainText('file downloads are not included');
+    if (scenario.account) await expect(page.locator('#documentQuotaHelp')).not.toContainText('file downloads are not included');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   });
 }
 
 test('document estimates use the server conversion rate and retain other limits', async ({page}) => {
-  await openWorkspace(page, {account:freeAccount, rate:400});
+  await openWorkspace(page, {account:previewOnlyAccount, rate:400});
   await expect(page.locator('#documentQuotaAllowance')).toContainText('12,000 words');
   await page.locator('#documentQuotaHelp summary').click();
   await expect(page.locator('#documentQuotaHelp')).toContainText('About 400 words');

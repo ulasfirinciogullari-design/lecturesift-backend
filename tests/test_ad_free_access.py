@@ -48,7 +48,9 @@ def test_permanent_access_preserves_plan_balances_and_survives_subscription_expi
     assert expired["permanent_ad_free"] is True
     assert expired["plan"]["entitlements"]["ad_free"] is True
     assert expired["job_entitlements"]["ad_free"] is True
-    assert expired["download_enabled"] is False
+    # Downloads come from the free plan itself, not from the add-on.
+    assert expired["download_enabled"] is True
+    assert expired["download_access_source"] == "plan"
     assert expired["credit_minutes"] == 0
     assert not rollout_service.rewarded_ads_for_user(owner)["enabled"]
 
@@ -75,7 +77,8 @@ def test_manual_purchase_requires_approval_and_grants_only_ad_free(monkeypatch):
     assert after["permanent_ad_free"] is True
     assert after["plan"]["code"] == "free"
     assert after["credit_minutes"] == 0
-    assert after["download_enabled"] is False
+    assert after["download_access_source"] == "plan"
+    assert after["job_entitlements"]["export_formats"] == ["pdf"]
     with pytest.raises(service.BillingError):
         service.create_manual_order(owner, "ad_free", "one_time")
 

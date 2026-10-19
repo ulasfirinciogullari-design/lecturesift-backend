@@ -300,8 +300,8 @@ def _require_job_download(data: dict, user: dict) -> None:
             detail={
                 "code": "LS-BILL-11",
                 "message": (
-                    "Dosya indirmek için tek kullanımlık dakika paketi veya ücretli plan seç. "
-                    "Ücretsiz hesapta sonuçları sitede önizleyebilirsin."
+                    "Bu hesap hakkı dosya indirmeyi içermiyor. Sonuçları sitede görüntüleyebilir "
+                    "veya dakika paketi ya da ücretli plan seçebilirsin."
                 ),
             },
         )

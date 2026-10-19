@@ -39,7 +39,7 @@ def test_billing_catalog_has_hybrid_plans_and_translation_keys():
     assert {"free", "credit", "lite", "plus", "pro", "max", "business"} <= plans.keys()
     assert "test" not in plans
     assert catalog["ad_free"]["display_price"] == {"currency": "TRY", "amount_minor": 5990}
-    assert plans["free"]["export_enabled"] is False
+    assert plans["free"]["export_enabled"] is True
     assert plans["credit"]["kind"] == "one_time"
     assert plans["plus"]["featured"] is True
     assert plans["pro"]["name_key"] == "billing.plan.pro.name"
@@ -52,7 +52,8 @@ def test_billing_catalog_has_hybrid_plans_and_translation_keys():
     )
     assert plans["free"]["entitlements"]["ad_free"] is False
     assert plans["free"]["entitlements"]["rewarded_minutes_eligible"] is True
-    assert plans["free"]["entitlements"]["download_enabled"] is False
+    assert plans["free"]["entitlements"]["download_enabled"] is True
+    assert plans["free"]["entitlements"]["export_formats"] == ["pdf"]
     assert plans["credit"]["entitlements"]["download_enabled"] is True
     assert plans["plus"]["entitlements"]["ad_free"] is False
     assert plans["plus"]["entitlements"]["ad_mode"] == "limited"
@@ -628,30 +629,73 @@ def test_job_creation_requires_account():
     assert response.json()["detail"]["code"] == "LS-BILL-01"
 
 
-def test_free_results_are_preview_only_until_a_paid_credit_purchase(tmp_path, monkeypatch):
+def _completed_package_job(tmp_path, user_id: str, *, download_entitled: bool) -> str:
+    job_id = f"package-{uuid.uuid4()}"
+    package = tmp_path / "package"
+    package.mkdir()
+    (package / "notes.pdf").write_bytes(b"pdf-package")
+    (tmp_path / "result.json").write_text(
+        '{"title":"Package","artifacts":[{"file":"notes.pdf","format":"pdf","label":"Notes","size_bytes":11}]}',
+        encoding="utf-8",
+    )
+    archive = tmp_path / "LectureSift_Paketi.zip"
+    archive.write_bytes(b"zip-package")
+    JOBS.create(job_id, tmp_path, {"billing_user_id": user_id, "download_entitled": download_entitled})
+    JOBS.update(job_id, status="done", result_path=str(archive))
+    return job_id
+
+
+def test_verified_free_account_downloads_only_its_own_results(tmp_path):
+    client = TestClient(app)
+    _, owner_token = _new_account(client)
+    _, other_token = _new_account(client)
+    owner_headers = {"Authorization": f"Bearer {owner_token}"}
+    other_headers = {"Authorization": f"Bearer {other_token}"}
+    account = client.get("/billing/me", headers=owner_headers).json()["account"]
+    assert account["plan"]["code"] == "free"
+    assert account["download_enabled"] is True
+    assert account["download_access_source"] == "plan"
+    # Jobs created before free downloads were enabled carry a false snapshot;
+    # the owner's current free entitlement still unlocks them.
+    job_id = _completed_package_job(tmp_path, account["user"]["id"], download_entitled=False)
+
+    result = client.get(f"/jobs/{job_id}/result", headers=owner_headers)
+    assert result.status_code == 200
+    assert result.json()["download_enabled"] is True
+    assert client.get(f"/jobs/{job_id}/artifact/notes.pdf", headers=owner_headers).status_code == 200
+    assert client.get(f"/jobs/{job_id}/download", headers=owner_headers).status_code == 200
+
+    for path in ("result", "artifact/notes.pdf", "download"):
+        assert client.get(f"/jobs/{job_id}/{path}", headers=other_headers).status_code == 404
+        assert client.get(f"/jobs/{job_id}/{path}").status_code == 401
+
+
+def test_results_without_a_download_entitlement_stay_preview_only(tmp_path, monkeypatch):
     client = TestClient(app)
     _, token = _new_account(client)
     headers = {"Authorization": f"Bearer {token}"}
     user_id = client.get("/billing/me", headers=headers).json()["account"]["user"]["id"]
-    job_id = f"preview-{uuid.uuid4()}"
-    package = tmp_path / "package"
-    package.mkdir()
-    (package / "notes.pdf").write_bytes(b"pdf-preview")
-    (tmp_path / "result.json").write_text(
-        '{"title":"Preview","artifacts":[{"file":"notes.pdf","format":"pdf","label":"Notes","size_bytes":11}]}',
-        encoding="utf-8",
-    )
-    archive = tmp_path / "LectureSift_Paketi.zip"
-    archive.write_bytes(b"zip-preview")
-    JOBS.create(job_id, tmp_path, {"billing_user_id": user_id, "download_entitled": False})
-    JOBS.update(job_id, status="done", result_path=str(archive))
+    job_id = _completed_package_job(tmp_path, user_id, download_entitled=False)
 
+    def no_downloads(_user_id):
+        raise billing_service_module.BillingError("Bu hesap hakkı dosya indirmeyi içermiyor.")
+
+    monkeypatch.setattr(app_module, "require_download_entitlement", no_downloads)
     result = client.get(f"/jobs/{job_id}/result", headers=headers)
     assert result.status_code == 200
     assert result.json()["download_enabled"] is False
-    assert client.get(f"/jobs/{job_id}/artifact/notes.pdf", headers=headers).status_code == 402
+    blocked = client.get(f"/jobs/{job_id}/artifact/notes.pdf", headers=headers)
+    assert blocked.status_code == 402
+    assert blocked.json()["detail"]["code"] == "LS-BILL-11"
+    assert "Ücretsiz hesapta" not in blocked.json()["detail"]["message"]
     assert client.get(f"/jobs/{job_id}/download", headers=headers).status_code == 402
 
+
+def test_paid_minute_credit_keeps_its_job_plan_on_the_free_account(monkeypatch):
+    client = TestClient(app)
+    _, token = _new_account(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    user_id = client.get("/billing/me", headers=headers).json()["account"]["user"]["id"]
     monkeypatch.setattr(config, "BILLING_BANK_IBAN", "TR000000000000000000000000")
     monkeypatch.setattr(config, "BILLING_BANK_ACCOUNT_HOLDER", "LectureSift Test")
     monkeypatch.setattr(config, "BILLING_SUPPORT_EMAIL", "billing@example.com")
@@ -663,10 +707,11 @@ def test_free_results_are_preview_only_until_a_paid_credit_purchase(tmp_path, mo
     order = create_manual_order(user_id, "credit", "one_time")
     approve_manual_order(order["reference"])
 
-    unlocked = client.get(f"/jobs/{job_id}/result", headers=headers)
-    assert unlocked.json()["download_enabled"] is True
-    assert client.get(f"/jobs/{job_id}/artifact/notes.pdf", headers=headers).status_code == 200
-    assert client.get(f"/jobs/{job_id}/download", headers=headers).status_code == 200
+    account = client.get("/billing/me", headers=headers).json()["account"]
+    assert account["plan"]["code"] == "free"
+    assert account["download_enabled"] is True
+    assert account["download_access_source"] == "credit"
+    assert account["job_entitlements"]["export_formats"] == ["pdf", "docx", "txt"]
 
 
 def test_job_status_is_visible_only_to_its_owner(tmp_path):

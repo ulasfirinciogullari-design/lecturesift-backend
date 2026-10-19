@@ -45,7 +45,10 @@ class Plan:
 
     @property
     def download_enabled(self) -> bool:
-        return self.code not in {"free", "ad_free"} and not self.code.startswith("ai_")
+        # Verified free accounts download their own results, like guest
+        # trials. Add-ons without study minutes grant no downloads by
+        # themselves; ownership and minute limits are enforced elsewhere.
+        return self.code != "ad_free" and not self.code.startswith("ai_")
 
     @property
     def ad_free(self) -> bool:

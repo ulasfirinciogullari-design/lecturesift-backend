@@ -1442,6 +1442,14 @@ def account_status(user_id: str) -> dict:
     paid_credit_access = credit_minutes > 0 and paid_credit_purchases > 0
     download_enabled = bool(plan.download_enabled or paid_credit_access)
     effective_job_plan = PLAN_BY_CODE["credit"] if plan.code == "free" and paid_credit_access else plan
+    # Paid credit on the free plan also unlocks the minute pack's job limits;
+    # _effective_job_plan reads this source, so report it before the plan.
+    if effective_job_plan is not plan:
+        download_access_source = "credit"
+    elif plan.download_enabled:
+        download_access_source = "plan"
+    else:
+        download_access_source = "credit" if paid_credit_access else None
     public_plan = plan.public()
     job_entitlements = effective_job_plan.public()["entitlements"]
     if permanent_ad_free:
@@ -1473,9 +1481,7 @@ def account_status(user_id: str) -> dict:
         "download_enabled": download_enabled,
         "permanent_ad_free": permanent_ad_free,
         "job_entitlements": job_entitlements,
-        "download_access_source": (
-            "plan" if plan.download_enabled else "credit" if paid_credit_access else None
-        ),
+        "download_access_source": download_access_source,
         "is_admin": False,
         "manual_orders": [_public_manual_order(order) for order in orders],
         "payment_orders": [_public_payment_order(order) for order in payment_orders],
@@ -1668,8 +1674,8 @@ def require_download_entitlement(user_id: str) -> dict:
     status = account_status(user_id)
     if not status["download_enabled"]:
         raise BillingError(
-            "Dosya indirmek için tek kullanımlık dakika paketi veya ücretli plan seç. "
-            "Ücretsiz hesapta sonuçları sitede önizleyebilirsin."
+            "Bu hesap hakkı dosya indirmeyi içermiyor. Sonuçları sitede görüntüleyebilir "
+            "veya dakika paketi ya da ücretli plan seçebilirsin."
         )
     return status
 
@@ -1751,7 +1757,7 @@ def validate_job_features(
 ) -> dict:
     status = require_job_entitlement(user_id)
     if job_type in {"audio_export", "download_video"} and not status["download_enabled"]:
-        raise BillingError("MP3 ve dosya indirme araçları dakika paketi veya ücretli plan gerektirir.")
+        raise BillingError("MP3 dışa aktarma ve dosya indirme bu hesap hakkına dahil değil.")
     plan = _effective_job_plan(status)
     if plan.quiz_questions is not None and quiz_count > plan.quiz_questions:
         raise BillingError(f"Planın en fazla {plan.quiz_questions} quiz sorusuna izin veriyor.")
