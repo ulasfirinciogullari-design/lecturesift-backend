@@ -1,5 +1,7 @@
 import {test, expect} from './fixtures.mjs';
 
+const COURSE_SLUGS = ['medicine-lecture-notes', 'law-lecture-notes', 'engineering-lecture-notes', 'psychology-lecture-notes', 'economics-lecture-notes'];
+
 test('localized home links to an actual guide edition after client localization', async ({page}, testInfo) => {
   await page.goto('/de/');
   const link = page.locator('.study-resource-entry a');
@@ -84,12 +86,39 @@ test.describe('open learning material without JavaScript', () => {
 
   test('every published guide has a readable body and working internal section links', async ({page}) => {
     for (const prefix of ['', '/en']) {
-      for (const slug of ['study-guides','study-pack-example','check-ai-notes','active-recall','about-study-guides','cornell-notes','pdf-note-check']) {
+      for (const slug of ['study-guides','study-pack-example','check-ai-notes','active-recall','about-study-guides','cornell-notes','pdf-note-check',...COURSE_SLUGS]) {
         await page.goto(`${prefix}/${slug}`);
         await expect(page.locator('.guide-article h1')).toHaveCount(1);
         await expect(page.locator('.guide-article section').first()).toBeVisible();
         expect(await page.locator('.guide-toc a[href^="#"]').evaluateAll(links => links.every(link => document.getElementById(link.hash.slice(1))))).toBe(true);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+      }
+    }
+  });
+
+  test('subject pages are reachable from the library with trial calls and a working FAQ', async ({page}, testInfo) => {
+    for (const prefix of ['', '/en']) {
+      await page.goto(`${prefix}/study-guides`);
+      await expect(page.locator('.guide-subjects a')).toHaveCount(COURSE_SLUGS.length);
+      await page.locator(`.guide-subjects a[href="${prefix}/law-lecture-notes"]`).click();
+      await expect(page).toHaveURL(`${prefix}/law-lecture-notes`);
+      for (const slug of COURSE_SLUGS) {
+        await page.goto(`${prefix}/${slug}`);
+        await expect(page.locator('html')).toHaveAttribute('lang', prefix ? 'en' : 'tr');
+        const trial = page.locator('[data-guide-trial] a');
+        await expect(trial.first()).toHaveAttribute('href', `${prefix}/workspace.html`);
+        await expect(trial.nth(1)).toHaveAttribute('href', `${prefix}/register.html`);
+        await expect(page.locator('.guide-note')).toContainText(prefix ? 'This section is an example.' : 'Bu bölüm bir örnektir.');
+        const question = page.locator('.faq-list details').first();
+        await expect(question.locator('p')).toBeHidden();
+        await question.locator('summary').click();
+        await expect(question.locator('p')).toBeVisible();
+        await expect(page.locator('[data-guide-subjects] a')).toHaveCount(COURSE_SLUGS.length - 1);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+        if (!prefix && slug === 'engineering-lecture-notes' && testInfo.project.name === 'mobile-light') {
+          await page.evaluate(() => scrollTo(0, 0));
+          await page.screenshot({path: testInfo.outputPath('course-page-layout.jpg'), fullPage: true, type: 'jpeg', quality: 65});
+        }
       }
     }
   });
