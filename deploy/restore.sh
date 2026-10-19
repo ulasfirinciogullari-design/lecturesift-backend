@@ -259,35 +259,37 @@ if [[ ! "$validation_host_available_bytes" =~ ^[0-9]+$ ]] ||
   echo "Insufficient host memory for isolated PostgreSQL validation with a 2 GiB reserve." >&2
   exit 1
 fi
-docker run --rm --pull=never --network none --read-only \
+# Backup files are root-only (umask 077), so the unprivileged image user cannot
+# open them through a bind mount. Stream the dump on stdin; pg_restore reads a
+# custom archive sequentially in TOC order.
+docker run -i --rm --pull=never --network none --read-only \
   --user "$postgres_uid:$postgres_gid" --cap-drop ALL \
   --security-opt no-new-privileges --pids-limit 256 \
   --memory "${validation_container_memory_bytes}b" \
   --memory-swap "${validation_container_memory_bytes}b" \
   --tmpfs "/var/lib/postgresql:rw,nosuid,nodev,size=$validation_tmpfs_bytes,uid=$postgres_uid,gid=$postgres_gid,mode=0700" \
   --tmpfs "/tmp:rw,nosuid,nodev,size=128m,uid=$postgres_uid,gid=$postgres_gid,mode=0700" \
-  -v "$SOURCE:/backup:ro" \
   -v "$RECOVERY_MANIFEST:/probe/recovery_manifest.sql:ro" \
   --entrypoint bash postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af \
   -euo pipefail -c '
     export PGDATA=/var/lib/postgresql/data
     initdb --no-sync --auth-local=trust --auth-host=reject \
-      --locale=en_US.UTF8 --encoding=UTF8 >/dev/null
+      --locale=en_US.UTF8 --encoding=UTF8 >/dev/null </dev/null
     pg_ctl -o "-c listen_addresses= -c unix_socket_directories=/tmp -c fsync=off" \
-      -w start >/dev/null
+      -w start >/dev/null </dev/null
     trap '\''pg_ctl -m immediate -w stop >/dev/null 2>&1 || true'\'' EXIT
-    createdb --host=/tmp --template=template0 --encoding=UTF8 restore_validation
+    createdb --host=/tmp --template=template0 --encoding=UTF8 restore_validation </dev/null
     pg_restore --host=/tmp --exit-on-error --single-transaction \
-      --no-owner --no-acl --dbname=restore_validation /backup/postgres.dump
+      --no-owner --no-acl --dbname=restore_validation
     psql --host=/tmp --dbname=restore_validation -v ON_ERROR_STOP=1 \
-      -f /probe/recovery_manifest.sql > /tmp/rehearsal-manifest.out
+      -f /probe/recovery_manifest.sql </dev/null > /tmp/rehearsal-manifest.out
     grep -q "^SCHEMA|" /tmp/rehearsal-manifest.out
     grep -q "^TABLE|" /tmp/rehearsal-manifest.out
     ! grep -Eq "^(TABLE_DIFF|UNVALIDATED_FK)\\|" /tmp/rehearsal-manifest.out
     awk -F"|" '\''$1 == "ANOMALY" && $3 != "0" { invalid=1 } END { exit invalid }'\'' \
       /tmp/rehearsal-manifest.out
     cat /tmp/rehearsal-manifest.out
-  ' >"$VALIDATION_RUN_DIR/rehearsal-manifest.out"
+  ' <"$SOURCE/postgres.dump" >"$VALIDATION_RUN_DIR/rehearsal-manifest.out"
 if [[ "$metadata_manifest_version" == "3" || "$metadata_manifest_version" == "4" ]]; then
   schema_verifier=4
   [[ "$metadata_manifest_version" != "4" ]] || schema_verifier=5
