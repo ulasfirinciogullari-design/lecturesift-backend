@@ -56,7 +56,7 @@
   const description = document.querySelector('meta[name="description"]')?.content
     || document.querySelector(".lead,.detail-hero > p:not(.eyebrow)")?.textContent?.trim()
     || "LectureSift ders videolarını transkript, özet, quiz ve bilgi kartlarına dönüştürür.";
-  const imageUrl = `${PRODUCTION_ORIGIN}/og-image.png`;
+  const imageUrl = `${PRODUCTION_ORIGIN}/og-image.jpg`;
   const imageAlt = document.title;
   const applicationId = `${PRODUCTION_ORIGIN}/#application`;
   const productDescription = "Video, ses, PDF, Word ve PowerPoint ders kaynaklarını özet, transkript, quiz, bilgi kartı ve indirilebilir çalışma paketine dönüştür.";
@@ -117,9 +117,9 @@
     document.head.append(node);
   });
   setMeta('meta[property="og:image"]', {property: "og:image", content: imageUrl});
-  setMeta('meta[property="og:image:type"]', {property: "og:image:type", content: "image/png"});
-  setMeta('meta[property="og:image:width"]', {property: "og:image:width", content: "1731"});
-  setMeta('meta[property="og:image:height"]', {property: "og:image:height", content: "909"});
+  setMeta('meta[property="og:image:type"]', {property: "og:image:type", content: "image/jpeg"});
+  setMeta('meta[property="og:image:width"]', {property: "og:image:width", content: "1200"});
+  setMeta('meta[property="og:image:height"]', {property: "og:image:height", content: "630"});
   setMeta('meta[property="og:image:alt"]', {property: "og:image:alt", content: imageAlt});
   setMeta('meta[name="twitter:card"]', {name: "twitter:card", content: "summary_large_image"});
   setMeta('meta[name="twitter:title"]', {name: "twitter:title", content: document.title});
@@ -162,7 +162,7 @@
       isPartOf: {"@id": `${PRODUCTION_ORIGIN}/#website`},
       about: {"@id": `${PRODUCTION_ORIGIN}/#application`},
       ...(path !== "/" ? {breadcrumb: {"@id": `${canonicalUrl}#breadcrumb`}} : {}),
-      primaryImageOfPage: {"@type": "ImageObject", url: imageUrl, width: 1731, height: 909},
+      primaryImageOfPage: {"@type": "ImageObject", url: imageUrl, width: 1200, height: 630},
     },
     {
       "@type": "SoftwareApplication",

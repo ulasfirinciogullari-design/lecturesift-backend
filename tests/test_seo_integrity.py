@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -107,26 +108,34 @@ def _parse_html(path: Path) -> _SeoHeadParser:
     return parser
 
 
-@pytest.fixture(scope="module")
-def localized_output(tmp_path_factory: pytest.TempPathFactory) -> Path:
+def _build_site(sandbox: Path, operator_env: dict[str, str] | None = None) -> Path:
     node = shutil.which("node")
     assert node, "Node.js is required to validate the production SEO build"
-    sandbox = tmp_path_factory.mktemp("localized-seo-build")
     shutil.copytree(FRONTEND, sandbox / "frontend")
     (sandbox / "scripts").mkdir()
     shutil.copy2(ROOT / "scripts" / "build_localized_site.mjs", sandbox / "scripts")
+    # Seller identity is optional build input; never let a developer's shell
+    # values leak into, or change, the default build under test.
+    env = {key: value for key, value in os.environ.items() if not key.startswith("LEGAL_")}
+    env.update(operator_env or {})
     result = subprocess.run(
         [node, "scripts/build_localized_site.mjs"],
         cwd=sandbox,
+        env=env,
         text=True,
         encoding="utf-8",
         errors="replace",
         capture_output=True,
-        timeout=30,
+        timeout=60,
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     return sandbox / "dist"
+
+
+@pytest.fixture(scope="module")
+def localized_output(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return _build_site(tmp_path_factory.mktemp("localized-seo-build"))
 
 
 def test_checked_in_sitemap_matches_its_generator_exactly() -> None:
@@ -435,3 +444,52 @@ def test_runtime_seo_language_is_derived_from_the_indexable_url() -> None:
         '(document.documentElement.lang || "tr");'
     ) not in seo
     assert 'if (publicRoutes.has(basePath)) return "tr";' in i18n
+
+
+def _operator_section(html: str) -> str:
+    sections = re.findall(r'<section class="legal-operator" data-legal-operator="static">.*?</section>', html, re.S)
+    assert len(sections) == 1
+    return sections[0]
+
+
+def test_unconfigured_build_renders_no_static_seller_identity(localized_output: Path) -> None:
+    for page_path in localized_output.rglob("*.html"):
+        html = page_path.read_text(encoding="utf-8")
+        assert 'data-legal-operator="static"' not in html, page_path
+        assert "data-about-operator" not in html, page_path
+
+
+def test_configured_build_prerenders_seller_identity_without_the_api(tmp_path: Path) -> None:
+    dist = _build_site(tmp_path / "operator-build", {
+        "LEGAL_OPERATOR_NAME": "Synthetic <Seller> & Co",
+        "LEGAL_OPERATOR_ADDRESS": "Synthetic Street 1, Test City",
+        "LEGAL_OPERATOR_COUNTRY": "TR",
+        "LEGAL_OPERATOR_PHONE": "+90 500 000 00 00",
+        "LEGAL_OPERATOR_EMAIL": "seller@example.invalid",
+        "LEGAL_TAX_OFFICE": "Synthetic Office",
+    })
+
+    english = _operator_section((dist / "en" / "distance-sales.html").read_text(encoding="utf-8"))
+    assert "<h2>Service provider details</h2>" in english
+    assert "<dt>Legal name</dt><dd>Synthetic &lt;Seller&gt; &amp; Co</dd>" in english
+    assert "<dt>Registered address</dt><dd>Synthetic Street 1, Test City</dd>" in english
+    assert '<a href="tel:+905000000000">+90 500 000 00 00</a>' in english
+    assert '<a href="mailto:seller@example.invalid">seller@example.invalid</a>' in english
+    assert "<dt>Tax office</dt><dd>Synthetic Office</dd>" in english
+    assert "Tax ID" not in english and "MERSIS" not in english
+    assert "<Seller>" not in (dist / "en" / "distance-sales.html").read_text(encoding="utf-8")
+
+    turkish_contact = (dist / "contact.html").read_text(encoding="utf-8")
+    assert "<h2>Hizmet sağlayıcı bilgileri</h2>" in _operator_section(turkish_contact)
+    # The block follows the page lead so the heading order stays h1 -> h2.
+    assert turkish_contact.index('class="lead"') < turkish_contact.index("data-legal-operator")
+
+    german_about = (dist / "de" / "about.html").read_text(encoding="utf-8")
+    assert (
+        '<p class="about-operator" data-about-operator>LectureSift wird von '
+        "<strong>Synthetic &lt;Seller&gt; &amp; Co</strong> betrieben. "
+        '<a href="/de/distance-sales">' in german_about
+    )
+    assert "Synthetic Street" not in german_about
+    for unrelated in ("privacy.html", "terms.html", "index.html"):
+        assert "Synthetic" not in (dist / "en" / unrelated).read_text(encoding="utf-8")

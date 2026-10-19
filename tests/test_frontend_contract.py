@@ -1360,7 +1360,10 @@ def test_public_pages_have_share_metadata_canonical_urls_and_structured_data():
     assert "max-image-preview:large" in seo
     assert 'url: `${PRODUCTION_ORIGIN}/`' in seo
     assert '"/distance-sales"' in seo
-    assert (FRONTEND / "og-image.png").stat().st_size > 100_000
+    assert not (FRONTEND / "og-image.png").exists()
+    assert 100_000 < (FRONTEND / "og-image.jpg").stat().st_size < 300_000
+    assert "og-image.jpg" in seo and "image/jpeg" in seo
+    assert 'content: "1200"' in seo and 'content: "630"' in seo
 
 
 def test_netlify_build_prerenders_every_public_language_with_static_seo():
