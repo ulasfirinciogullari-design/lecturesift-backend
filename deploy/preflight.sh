@@ -594,20 +594,24 @@ print(matches[0])
   # selected disaster restore instead relies on its freshly generated exact
   # backup-set drill marker below; requiring a fresh *latest* snapshot in that
   # mode would make recovery impossible precisely during a backup outage.
+  # restic's --latest keeps one snapshot per host and path set, and each cutover
+  # seed stages its own path apart from the daily backups, so check the newest.
   if [[ -z "$REQUIRED_BACKUP_SET_SHA256" ]]; then
-    restic snapshots --json --latest 1 --host lecturesift-production \
+    restic snapshots --json --host lecturesift-production \
       --tag lecturesift --tag production 2>/dev/null | \
       python3 -c '
 from datetime import datetime, timezone
 import json, sys
+def parsed_time(item):
+    return datetime.fromisoformat(str(item.get("time") or "").replace("Z", "+00:00"))
 snapshots = json.load(sys.stdin)
-if not isinstance(snapshots, list) or len(snapshots) != 1:
+if not isinstance(snapshots, list) or not snapshots:
     raise SystemExit(1)
-snapshot = snapshots[0]
+snapshot = max(snapshots, key=parsed_time)
 tags = set(snapshot.get("tags") or [])
 if snapshot.get("hostname") != "lecturesift-production" or not {"lecturesift", "production"}.issubset(tags):
     raise SystemExit(1)
-created = datetime.fromisoformat(str(snapshot.get("time") or "").replace("Z", "+00:00"))
+created = parsed_time(snapshot)
 age = (datetime.now(timezone.utc) - created.astimezone(timezone.utc)).total_seconds()
 raise SystemExit(0 if -300 <= age <= int(sys.argv[1]) else 1)
 ' "$RECOVERY_SNAPSHOT_MAX_AGE_SECONDS" || \

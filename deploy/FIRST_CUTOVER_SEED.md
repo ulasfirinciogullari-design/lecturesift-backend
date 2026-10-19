@@ -152,6 +152,6 @@ can be reused.
    `migrate_postgres.sh` accepts a target in any reviewed contract (3, 4 or 5),
    keeps it as `target-before.dump`, and replaces it with the new Render capture.
    `migrate_redis_state.sh` requires empty target queues, keeps the previous job
-   state for its own rollback and replaces it. The new seed becomes the latest
-   Restic snapshot, which the restore drill then restores; the older, unproved
-   snapshot stays in R2 and is never used by finalization.
+   state for its own rollback and replaces it. The new seed becomes the newest
+   Restic snapshot, which the restore drill selects across all staging paths;
+   the older, unproved snapshot stays in R2 and is never used by finalization.

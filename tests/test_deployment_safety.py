@@ -241,7 +241,7 @@ def test_production_preflight_requires_recent_real_recovery_evidence():
     assert "RECOVERY_DRILL_MAX_AGE_DAYS=90" in script
     assert "RECOVERY_SNAPSHOT_MAX_AGE_SECONDS=172800" in script
     assert "latest off-site production snapshot is missing or older than 48 hours" in script
-    assert "--latest 1 --host lecturesift-production" in script
+    assert "restic snapshots --json --host lecturesift-production" in script
     assert "snapshot_time_epoch >= completed_time_epoch - RECOVERY_SNAPSHOT_MAX_AGE_SECONDS" in script
     assert 'drill_scope="$(sed -n' in script
     assert 'drill_scope" != "current-latest"' in script
@@ -1583,3 +1583,69 @@ def test_unprivileged_postgres_validation_streams_root_only_backup_dumps():
         assert validation.count("</dev/null") == 4, path
         restore = validation.index("pg_restore --host=/tmp")
         assert "</dev/null" not in validation[restore:validation.index("psql --host=/tmp")]
+
+
+def _restic_snapshot(snapshot_id: str, created: str, path: str) -> dict[str, object]:
+    return {
+        "id": snapshot_id,
+        "time": created,
+        "hostname": "lecturesift-production",
+        "paths": [path],
+        "tags": ["lecturesift", "production", "first-cutover-seed"],
+    }
+
+
+def test_snapshot_selectors_pick_the_newest_across_staging_paths(tmp_path: Path):
+    # restic's --latest keeps one snapshot per host and path set; each cutover
+    # seed stages a unique path, so a retry left two "latest" seed snapshots.
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    older = (now - timedelta(hours=1)).isoformat().replace("+00:00", "Z")
+    newer = (now - timedelta(minutes=1)).isoformat().replace("+00:00", "Z")
+    snapshots = [
+        _restic_snapshot("b" * 64, newer, "/var/backups/lecturesift/seed-2/payload"),
+        _restic_snapshot("a" * 64, older, "/var/backups/lecturesift/seed-1/payload"),
+    ]
+    drill = _read("deploy/restic_restore_rehearsal.sh")
+    preflight = _read("deploy/preflight.sh")
+    assert "--json --latest" not in drill
+    assert "--json --latest" not in preflight
+
+    selector = drill.split('"$drill_scope" <<\'PY\'\n', 1)[1].split("\nPY\n", 1)[0]
+    freshness = preflight.split("restic snapshots --json --host lecturesift-production", 1)[1]
+    freshness = freshness.split("python3 -c '", 1)[1].split("' \"$RECOVERY_SNAPSHOT_MAX_AGE_SECONDS\"", 1)[0]
+
+    def run_selector(items: list[dict[str, object]], scope: str) -> subprocess.CompletedProcess[str]:
+        listing = tmp_path / "snapshots.json"
+        listing.write_text(json.dumps(items), encoding="utf-8")
+        return subprocess.run(
+            [sys.executable, "-c", selector, str(listing), "172800", scope],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    for items in (snapshots, list(reversed(snapshots))):
+        selected = run_selector(items, "current-latest")
+        assert selected.returncode == 0, selected.stderr
+        assert selected.stdout.splitlines()[0] == "b" * 64
+    tied = [snapshots[0], {**snapshots[1], "time": newer}]
+    assert run_selector(tied, "current-latest").returncode != 0
+    assert run_selector(snapshots, "explicit-backup").returncode != 0
+    assert run_selector([], "current-latest").returncode != 0
+
+    fresh = subprocess.run(
+        [sys.executable, "-c", freshness, "172800"],
+        input=json.dumps([snapshots[1], snapshots[0]]),
+        text=True,
+        check=False,
+    )
+    assert fresh.returncode == 0
+    stale = [
+        _restic_snapshot("c" * 64, (now - timedelta(days=3)).isoformat(), "/a"),
+        _restic_snapshot("d" * 64, (now - timedelta(days=4)).isoformat(), "/b"),
+    ]
+    assert subprocess.run(
+        [sys.executable, "-c", freshness, "172800"], input=json.dumps(stale), text=True, check=False
+    ).returncode != 0
