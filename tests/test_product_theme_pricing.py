@@ -1,4 +1,5 @@
 """Small offline contracts: readable palette and one price/limit catalog."""
+from html.parser import HTMLParser
 import json
 from pathlib import Path
 import re
@@ -80,3 +81,133 @@ def test_compact_plan_details_and_translations_remain_available():
         row = re.search(r'"' + re.escape(key) + r'":(\[[^\n]+\]),?', i18n).group(1)
         values = json.loads(row)
         assert len(values) == 13 and all(values)
+
+
+class _StaticPlanCards(HTMLParser):
+    """Collect the plan cards that plans.html shows before any API answers."""
+
+    GRIDS = ("plansGrid", "morePlansGrid")
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.cards = {}
+        self.order = {grid: [] for grid in self.GRIDS}
+        self._grid = None
+        self._grid_divs = 0
+        self._card = None
+        self._field = None
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "div" and self._grid:
+            self._grid_divs += 1
+        elif tag == "div" and attrs.get("id") in self.GRIDS:
+            self._grid, self._grid_divs = attrs["id"], 1
+        if tag == "article" and "data-plan-card" in attrs:
+            code = attrs["data-plan-card"]
+            assert code not in self.cards, code
+            self._card = {
+                "classes": (attrs.get("class") or "").split(),
+                "price_try_minor": attrs.get("data-price-try-minor"),
+                "values": {},
+                "keys": set(),
+            }
+            self.cards[code] = self._card
+            assert self._grid, f"{code} card is outside the plan grids"
+            self.order[self._grid].append(code)
+        elif self._card is not None:
+            if attrs.get("data-i18n"):
+                self._card["keys"].add(attrs["data-i18n"])
+            if tag == "span" and "data-plan-value" in attrs:
+                self._field = attrs["data-plan-value"]
+                assert self._field not in self._card["values"], self._field
+                self._card["values"][self._field] = ""
+
+    def handle_endtag(self, tag):
+        if tag == "div" and self._grid:
+            self._grid_divs -= 1
+            if not self._grid_divs:
+                self._grid = None
+        elif tag == "article":
+            self._card = None
+        elif tag == "span":
+            self._field = None
+
+    def handle_data(self, data):
+        if self._field:
+            self._card["values"][self._field] += data
+
+
+def _turkish_number(value):
+    return "∞" if value is None else f"{value:,}".replace(",", ".")
+
+
+def _turkish_try(amount_minor):
+    whole, cents = divmod(amount_minor, 100)
+    return f"₺{_turkish_number(whole)}" + (f",{cents:02d}" if cents else "")
+
+
+def test_static_plan_cards_match_the_backend_try_catalog():
+    parser = _StaticPlanCards()
+    parser.feed((FRONTEND / "plans.html").read_text(encoding="utf-8"))
+    sellable = [plan for plan in PLANS if plan.code != "test"]
+    assert set(parser.cards) == {plan.code for plan in sellable}
+
+    popular = [plan.code for plan in sellable if plan.featured and plan.kind == "subscription"]
+    assert popular == ["plus"]
+    highlighted = ["free", "credit", *popular]
+    assert parser.order["plansGrid"] == highlighted
+    assert parser.order["morePlansGrid"] == [plan.code for plan in sellable if plan.code not in highlighted]
+    assert 'const HIGHLIGHTED_PLANS = ["free", "credit"];' in (FRONTEND / "plans.js").read_text(encoding="utf-8")
+
+    for plan in sellable:
+        card = parser.cards[plan.code]
+        price = REGIONAL_PRICES.get(plan.code, {}).get("TRY")
+        expected = {
+            "max_minutes_per_job": _turkish_number(plan.max_minutes_per_job),
+            "max_files_per_job": _turkish_number(plan.max_files_per_job),
+            "quiz_questions": _turkish_number(plan.quiz_questions),
+            "flashcards": _turkish_number(plan.flashcards),
+            "history_days": _turkish_number(plan.history_days),
+            "max_media_upload_mb": _turkish_number(plan.max_media_upload_mb),
+            "max_document_upload_mb": _turkish_number(plan.max_document_upload_mb),
+            "max_document_pages": _turkish_number(plan.max_document_pages),
+            "max_ocr_pages": _turkish_number(plan.max_ocr_pages),
+        }
+        if plan.minutes is None:
+            expected["team_seats"] = _turkish_number(plan.team_seats)
+        else:
+            expected["minutes"] = _turkish_number(plan.minutes)
+        if price is not None:
+            expected["price"] = _turkish_try(price)
+            if plan.kind == "subscription":
+                # create_payment_order charges ten 30-day prices for a year.
+                expected["annual_price"] = _turkish_try(price * 10)
+        assert card["values"] == expected, plan.code
+        assert card["price_try_minor"] == (None if price is None else str(price)), plan.code
+        assert ("featured" in card["classes"]) is plan.featured, plan.code
+
+        ad_keys = {"none": "plans.adFree", "limited": "plans.limitedAds"}
+        ad_key = ad_keys.get(plan.ad_mode, "plans.adsMayAppear")
+        assert ad_key in card["keys"], plan.code
+        assert not ({"plans.adFree", "plans.limitedAds", "plans.adsMayAppear"} - {ad_key}) & card["keys"], plan.code
+        price_suffix = {"subscription": "plans.thirtyDayPackageShort", "one_time": "plans.oneTimeShort"}.get(plan.kind)
+        if price_suffix:
+            assert price_suffix in card["keys"], plan.code
+        if plan.kind == "subscription":
+            assert {"plans.minutesPer30Days", "rollout.chooseMonthly"} <= card["keys"], plan.code
+        assert "plans.perMonth" not in card["keys"], plan.code
+
+
+def test_workspace_plan_cards_name_fixed_terms_as_30_day_packages():
+    app = (FRONTEND / "app.js").read_text(encoding="utf-8")
+    plan_copy = app.split("const PLAN_COPY = {", 1)[1].split("\n};", 1)[0]
+    for plan in PLANS:
+        if plan.kind == "subscription":
+            assert re.search(rf'\b{plan.code}: \[[^\n]* dk / 30 gün"\]', plan_copy), plan.code
+            assert re.search(rf'\b{plan.code}: \[[^\n]* min / 30 days"\]', plan_copy), plan.code
+    # Free keeps its calendar-month quota wording.
+    assert '"120 dk / ay"' in plan_copy and '"120 min / month"' in plan_copy
+    assert 'perMonth: "/ ay"' not in app and 'perMonth: "/ month"' not in app
+    assert 'window.LectureSiftI18n?.t("plans.thirtyDayPackageShort", t("perMonth"))' in app
+    assert 'central?.t("plans.minutesPer30Days", "dk / 30 gün")' in app

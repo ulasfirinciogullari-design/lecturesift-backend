@@ -319,14 +319,14 @@
     const minutes = entitlements.minutes ?? plan.minutes;
     const current = currentCode === plan.code;
     const actions = plan.kind === "subscription"
-      ? `<div class="rollout-plan-actions"><button data-rollout-plan="${esc(plan.code)}" data-rollout-cycle="monthly" ${current ? "disabled" : ""}>${esc(rt("rollout.chooseMonthly", "Aylık seç"))}</button><button data-rollout-plan="${esc(plan.code)}" data-rollout-cycle="annual" ${current ? "disabled" : ""}>${esc(rt("rollout.annual", "Yıllık"))} · ${esc(annual)}</button></div>`
+      ? `<div class="rollout-plan-actions"><button data-rollout-plan="${esc(plan.code)}" data-rollout-cycle="monthly" ${current ? "disabled" : ""}>${esc(rt("rollout.chooseMonthly", "30 günlük paketi seç"))}</button><button data-rollout-plan="${esc(plan.code)}" data-rollout-cycle="annual" ${current ? "disabled" : ""}>${esc(rt("rollout.annual", "Yıllık"))} · ${esc(annual)}</button></div>`
       : plan.kind === "one_time"
         ? `<div class="rollout-plan-actions"><button data-rollout-plan="${esc(plan.code)}" data-rollout-cycle="one_time">${esc(rt("rollout.chooseOnce", "Tek seferlik seç"))}</button></div>`
         : `<div class="rollout-plan-actions"><button disabled>${esc(current ? rt("plans.current", "Mevcut plan") : plan.code === "business" ? rt("plans.contact", "Bize ulaş") : rt("rollout.included", "Dahil"))}</button></div>`;
     return `<article class="plan-card ${plan.featured ? "featured" : ""}">
       ${plan.featured ? `<span class="plan-badge">${esc(rt("plans.popular", "Popüler"))}</span>` : ""}
       <h3>${esc(planName(plan.code))}</h3>
-      <div class="plan-price">${esc(monthly)} <small>${plan.kind === "subscription" ? rt("plans.perMonth", "/ ay") : plan.kind === "one_time" ? rt("plans.oneTimeShort", "tek ödeme") : ""}</small></div>
+      <div class="plan-price">${esc(monthly)} <small>${plan.kind === "subscription" ? rt("plans.thirtyDayPackageShort", "30 günlük paket") : plan.kind === "one_time" ? rt("plans.oneTimeShort", "tek ödeme") : ""}</small></div>
       <ul class="plan-features"><li>${minutes == null ? esc(rt("rollout.enterpriseCapacity", "Kurumsal kapasite")) : `${Number(minutes).toLocaleString(rolloutLocale())} ${esc(rt("plans.minuteUnit", "dakika"))}`}</li><li>${entitlements.quiz_questions ?? plan.quiz_questions ?? "∞"} ${esc(rt("plans.quizShort", "quiz"))}</li><li>${entitlements.flashcards ?? plan.flashcards ?? "∞"} ${esc(rt("plans.cardsShort", "bilgi kartı"))}</li><li>${esc((entitlements.export_formats || plan.export_formats || []).join(", ").toUpperCase())}</li></ul>
       ${actions}
     </article>`;

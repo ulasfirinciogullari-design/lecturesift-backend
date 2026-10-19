@@ -1460,13 +1460,14 @@ def test_banner_ads_are_opt_in_public_only_and_respect_ad_free_rights():
     admin = (FRONTEND / "admin.js").read_text(encoding="utf-8")
     blueprint = (FRONTEND.parent / "render.yaml").read_text(encoding="utf-8")
 
-    assert 'displayAdsScript.src = "/display-ads.js?v=5"' in i18n
+    assert 'displayAdsScript.src = "/display-ads.js?v=6"' in i18n
     assert 'displayAdsStyle.href = "/display-ads.css?v=2"' in i18n
     assert 'LectureSiftConsent?.allows("advertising")' in display
     assert 'body.account?.plan?.entitlements?.ad_free === true' in display
     assert 'const PUBLIC_AD_PATHS = new Set([' in display
     allowed_paths = display.split("const PUBLIC_AD_PATHS", 1)[1].split("]);", 1)[0]
     assert '"/account.html"' not in allowed_paths
+    assert '"/plans"' not in allowed_paths  # No ads on the purchase page.
     assert 'json("/ads/config")' in display
     assert "securepubads.g.doubleclick.net/tag/js/gpt.js" in display
     assert "loadAdSenseAutoAds" in display

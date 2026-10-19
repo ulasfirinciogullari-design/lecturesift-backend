@@ -208,6 +208,46 @@ function deferNonCriticalScripts(html) {
   });
 }
 
+// plans.html writes its static plan numbers in Turkish format ("₺1.199",
+// "4.000"). Reformat them for each language so a reader or crawler never sees
+// ₺1.199 as about one lira; plans.js later replaces them with live catalog data.
+function localizeStaticPlanValues(html, language) {
+  if (language === "tr") return html;
+  const locale = OG_LOCALES[language].replace("_", "-");
+  const number = new Intl.NumberFormat(locale);
+  const lira = new Intl.NumberFormat(locale, {
+    style: "currency", currency: "TRY", currencyDisplay: "narrowSymbol",
+    minimumFractionDigits: 0, maximumFractionDigits: 0,
+  });
+  return html.replace(/(<span\b[^>]*\bdata-plan-value="[^"]+"[^>]*>)([^<>]*)(<\/span>)/gi, (match, open, value, close) => {
+    const text = value.trim();
+    const price = text.startsWith("₺");
+    const digits = price ? text.slice(1) : text;
+    if (!/^\d{1,3}(?:\.\d{3})*$/.test(digits)) return match;
+    const amount = Number(digits.replaceAll(".", ""));
+    const formatted = price
+      ? lira.formatToParts(amount).map(part => part.type === "currency" ? "₺" : part.value).join("")
+      : number.format(amount);
+    return `${open}${formatted}${close}`;
+  });
+}
+
+// Static sign-in links carry a continuation target such as next=/plans.html?...
+// Keep the reader on their language after sign-in.
+function localizeContinuationTargets(html, language) {
+  if (language === "tr") return html;
+  return html.replace(/<a\b[^>]*>/gi, tag => tag.replace(/\bhref="([^"]*[?&]next=)([^"&#]*)/i, (match, prefix, encoded) => {
+    let next;
+    try { next = decodeURIComponent(encoded); } catch { return match; }
+    if (!next.startsWith("/") || next.startsWith("//")) return match;
+    const boundary = next.search(/[?#]/);
+    const pathname = boundary >= 0 ? next.slice(0, boundary) : next;
+    const suffix = boundary >= 0 ? next.slice(boundary) : "";
+    if (!PUBLIC_PATH_SET.has(pathname)) return match;
+    return `href="${prefix}${encodeURIComponent(localizedPath(language, pathname) + suffix)}`;
+  }));
+}
+
 function removeStaticTranslationCatalog(html) {
   // Public pages are already translated before they are written to dist. The
   // 1.1 MB all-language fallback catalog is still required by authenticated
@@ -405,6 +445,8 @@ for (const language of LANGUAGES) {
     const sourceName = publicPath === "/" ? "index.html" : publicPath.slice(1);
     let html = await readFile(path.join(SOURCE, sourceName), "utf8");
     html = translateDocument(html, language);
+    html = localizeStaticPlanValues(html, language);
+    html = localizeContinuationTargets(html, language);
     html = enrichLandingPage(html, language, publicPath);
     html = canonicalizePublicLinks(html);
     html = removeStaticTranslationCatalog(html);

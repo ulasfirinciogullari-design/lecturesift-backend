@@ -229,5 +229,5 @@ def test_checkout_passes_coupon_to_server_without_client_side_discount_math() ->
     assert '/^LSC-[A-F0-9]{24}$/' in script
     assert "coupon.percent" not in script
     assert "coupon.max_discount_minor" not in script
-    assert "Kupon, verildiği para biriminde aylık Lite, Plus, Pro veya Max planında kullanılabilir" in html
+    assert "Kupon, verildiği para biriminde 30 günlük Lite, Plus, Pro veya Max paketinde kullanılabilir" in html
     assert "Nihai indirim sipariş oluşturulurken hesaplanır" in html

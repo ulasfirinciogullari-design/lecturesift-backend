@@ -753,7 +753,7 @@ async function initAccount() {
       const targetPlan = planName(targetCode);
       const term = interval === "annual"
         ? t("account.annualTerm", "yıllık dönem")
-        : t("account.monthlyTerm", "aylık dönem");
+        : t("account.monthlyTerm", "30 günlük dönem");
       const currentIndex = planRanks.indexOf(account.plan.code);
       const targetIndex = planRanks.indexOf(targetCode);
       const relationship = subscription && currentIndex === targetIndex
