@@ -166,3 +166,11 @@ body[data-page="admin"] .admin-growth-grid .ready header span {color: var(--ui-g
 #adminJobDialogTitle{overflow-wrap:anywhere}
 #adminJobSearch{max-width:100%;min-width:0}
 @media(max-width:640px){#adminJobDialogBody{padding:0 12px 16px}.admin-work-scope{align-items:flex-start;flex-direction:column}.admin-work-downloads button{width:100%}}
+
+/* Account sign-in steps, the collapsed emergency key and the password dialog. */
+body[data-page="admin"] .admin-login [hidden] {display: none;}
+body[data-page="admin"] .admin-emergency {margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--ui-line);}
+body[data-page="admin"] .admin-emergency summary {cursor: pointer; font-size: 13px; font-weight: 700; color: var(--ui-muted);}
+body[data-page="admin"] .admin-emergency[open] summary {margin-bottom: 12px;}
+body[data-page="admin"] .admin-password-dialog {width: min(480px, calc(100% - 32px));}
+#adminPasswordForm {padding: 20px;}

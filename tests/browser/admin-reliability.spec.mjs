@@ -26,7 +26,7 @@ const advertising = {
   google_ads:{management_api:{status:'not_configured', connected:false}},
 };
 
-async function openAdmin(page, {override, saved = false, hash = 'overview', theme} = {}) {
+async function openAdmin(page, {override, saved = false, manual = false, hash = 'overview', theme} = {}) {
   const responses = new Map([
     ['/billing/admin/overview?limit=250', {counts:{users:1, verified_users:1, active_subscriptions:1}, users:[user], orders:[], plan_distribution:{plus:1}, revenue_by_currency:{}}],
     ['/admin/instagram-rewards?status=', {rewards:[]}],
@@ -71,7 +71,8 @@ async function openAdmin(page, {override, saved = false, hash = 'overview', them
   });
   await page.goto(`/admin.html#admin-${hash}`);
   await page.locator('[data-consent="essential"]').click();
-  if (!saved) {
+  if (!saved && !manual) {
+    await page.locator('#adminEmergency > summary').click();
     await page.locator('#adminToken').fill('synthetic-admin-token');
     await page.locator('#adminLoginButton').click();
   }
@@ -423,6 +424,69 @@ test('a real authentication rejection closes the panel, but a server failure kee
   await expect(page.locator('#adminNotice')).toContainText('Yönetici erişimi doğrulanamadı');
   await expect(page.locator('#adminPanel')).toBeHidden();
   expect(await page.evaluate(() => sessionStorage.getItem('lecturesift-admin-session-token'))).toBeNull();
+  expect(unexpected).toEqual([]);
+});
+
+test('an admin account signs in with an emailed code and a password change ends the session', async ({page}) => {
+  const posts = [];
+  const unexpected = await openAdmin(page, {manual:true, override:async (route, url) => {
+    const request = route.request();
+    if (request.method() !== 'POST' || !url.pathname.startsWith('/billing/admin/session/')) return false;
+    const body = request.postDataJSON() || {};
+    posts.push({path:url.pathname, body, authorization:request.headers().authorization || ''});
+    let status = 200;
+    let json = {ok:true, message:'Parolan güncellendi. Yeni parolanla yeniden giriş yap.'};
+    if (url.pathname.endsWith('/start')) json = {ok:true, challenge:'c'.repeat(43), message:'Kodu gönderdik.'};
+    if (url.pathname.endsWith('/verify')) {
+      if (body.code === '123456') json = {ok:true, token:'synthetic-account-session', email:'owner@example.invalid'};
+      else [status, json] = [400, {detail:{code:'LS-ADMIN-AUTH-04', message:'Kod hatalı. Kalan deneme: 4.'}}];
+    }
+    await route.fulfill({status, headers:CORS, json});
+    return true;
+  }});
+  await expect(page.locator('#adminToken')).toBeHidden();
+  await page.locator('#adminEmail').fill('owner@example.invalid');
+  await page.locator('#adminPassword').fill('Synthetic-password1');
+  await page.locator('#adminAccountButton').click();
+  await page.locator('#adminCode').fill('000000');
+  await page.locator('#adminCodeButton').click();
+  await expect(page.locator('#adminNotice')).toContainText('Kod hatalı');
+  await page.locator('#adminCode').fill('123456');
+  await page.locator('#adminCodeButton').click();
+  await expect(page.locator('#adminPanel')).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem('lecturesift-admin-session-token'))).toBe('synthetic-account-session');
+  await page.locator('#adminPasswordOpen').click();
+  await page.locator('#adminCurrentPassword').fill('Synthetic-password1');
+  await page.locator('#adminNewPassword').fill('Synthetic-password2');
+  await page.locator('#adminNewPasswordConfirm').fill('Synthetic-password2');
+  await page.locator('#adminPasswordSubmit').click();
+  await expect(page.locator('#adminPanel')).toBeHidden();
+  await expect(page.locator('#adminNotice')).toContainText('Yeni parolanla');
+  expect(await page.evaluate(() => sessionStorage.getItem('lecturesift-admin-session-token'))).toBeNull();
+  expect(posts.map(item => item.path.split('/').pop())).toEqual(['start', 'verify', 'verify', 'change-password']);
+  expect(posts[0]).toEqual({path:'/billing/admin/session/start', body:{email:'owner@example.invalid', password:'Synthetic-password1'}, authorization:''});
+  expect(posts[2].body).toEqual({email:'owner@example.invalid', challenge:'c'.repeat(43), code:'123456'});
+  expect(posts[3]).toMatchObject({body:{current_password:'Synthetic-password1', new_password:'Synthetic-password2'}, authorization:'Bearer synthetic-account-session'});
+  expect(unexpected).toEqual([]);
+});
+
+test('signing out of an admin account ends the session on the server', async ({page}) => {
+  let logoutAuthorization = '';
+  await page.addInitScript(() => {
+    sessionStorage.setItem('lecturesift-admin-session-token', 'synthetic-account-session');
+    sessionStorage.setItem('lecturesift-admin-session-email', 'owner@example.invalid');
+  });
+  const unexpected = await openAdmin(page, {manual:true, override:async (route, url) => {
+    if (route.request().method() !== 'POST' || url.pathname !== '/billing/admin/session/logout') return false;
+    logoutAuthorization = route.request().headers().authorization;
+    await route.fulfill({headers:CORS, json:{ok:true}});
+    return true;
+  }});
+  await expect(page.locator('#adminPasswordOpen')).toBeVisible();
+  await page.locator('#adminLogout').click();
+  await expect(page.locator('#adminPanel')).toBeHidden();
+  expect(logoutAuthorization).toBe('Bearer synthetic-account-session');
+  expect(await page.evaluate(() => sessionStorage.getItem('lecturesift-admin-session-email'))).toBeNull();
   expect(unexpected).toEqual([]);
 });
 

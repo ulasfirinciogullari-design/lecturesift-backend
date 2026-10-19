@@ -80,10 +80,14 @@ Bu adres kullanıcı sayfası değildir; PayTR'ın imzalı ödeme sonucunu gönd
 sunucu adresidir. Anahtarlar koda, GitHub'a veya uygulama kayıtlarına yazılmaz.
 
 YÖNETİCİ ERİŞİMİ
-Yönetici paneli yalnızca Render'daki bağımsız ADMIN_ADMIN anahtarıyla açılır.
-Normal kullanıcı oturumu, hukuki iletişim adresi, ödeme bilgileri veya Instagram
-anahtarları admin yetkisi vermez. ADMIN_ADMIN koda yazılmaz ve tarayıcıda yalnızca
-mevcut sekme kapanana kadar tutulur.
+LECTURESIFT_ADMIN_EMAILS listesindeki doğrulanmış hesaplar yönetici paneline
+kendi parolaları ve o adrese e-postayla gelen altı haneli kodla girer. Kod 10
+dakika ve en fazla 5 deneme geçerlidir; yönetici oturumu 12 saat sürer ve çıkış,
+parola değişikliği veya oturumların kapatılmasıyla biter. Bağımsız ADMIN_ADMIN
+anahtarı acil durum anahtarı olarak kalır. Normal kullanıcı oturumu, hukuki
+iletişim adresi, ödeme bilgileri veya Instagram anahtarları admin yetkisi vermez.
+Bu bilgiler koda yazılmaz ve tarayıcıda yalnızca mevcut sekme kapanana kadar
+tutulur.
 
 IYZICO CANLI ÖDEME
 Kartlı ödemede birincil sağlayıcı iyzico'dur. IYZICO_API_KEY ve

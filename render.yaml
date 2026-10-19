@@ -100,6 +100,8 @@ services:
         generateValue: true
       - key: ADMIN_ADMIN
         sync: false
+      - key: LECTURESIFT_ADMIN_EMAILS
+        sync: false
       - key: BILLING_PROTECTED_EMAILS
         sync: false
       - key: BILLING_BANK_IBAN

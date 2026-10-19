@@ -24,10 +24,12 @@ from .billing_service import (
     account_status,
     admin_billing_overview,
     approve_manual_order,
+    authenticate_admin,
     authenticate_session,
     billing_database_health,
     change_account_password,
     commerce_identity,
+    complete_admin_login,
     create_password_reset_token,
     create_verification_token,
     create_manual_order,
@@ -39,6 +41,7 @@ from .billing_service import (
     register_user,
     require_download_entitlement,
     reset_password,
+    start_admin_login,
     update_account_preferences,
     update_account_profile,
     validate_job_features,
@@ -228,14 +231,13 @@ def _billing_user(authorization: str | None = Header(None)) -> dict:
         raise HTTPException(401, detail={"code": "LS-BILL-02", "message": str(exc)}) from exc
 
 
-def _billing_admin(authorization: str | None = Header(None)) -> None:
-    if not config.ADMIN_ADMIN:
-        raise HTTPException(503, detail={"code": "LS-BILL-03", "message": "Ödeme onayı yönetimi etkin değil."})
-    scheme, _, value = (authorization or "").partition(" ")
-    if scheme.lower() == "bearer" and value:
-        if hmac.compare_digest(value, config.ADMIN_ADMIN):
-            return
-    raise HTTPException(401, detail={"code": "LS-BILL-04", "message": "Yetkisiz istek."})
+def _billing_admin(authorization: str | None = Header(None)) -> dict:
+    try:
+        return authenticate_admin(authorization or "")
+    except BillingConfigurationError as exc:
+        raise HTTPException(503, detail={"code": "LS-BILL-03", "message": str(exc)}) from exc
+    except BillingAuthenticationError as exc:
+        raise HTTPException(401, detail={"code": "LS-BILL-04", "message": str(exc)}) from exc
 
 
 def _owned_job(job_id: str, user: dict) -> dict:
@@ -340,6 +342,10 @@ class BillingTokenRequest(BaseModel):
 class BillingVerificationCodeRequest(BaseModel):
     email: str
     code: str
+
+
+class AdminLoginCodeRequest(BillingVerificationCodeRequest):
+    challenge: str = Field(min_length=32, max_length=128)
 
 
 class BillingPasswordResetRequest(BillingTokenRequest):
@@ -451,6 +457,23 @@ def _send_password_reset_email(email: str, token: str) -> None:
             "<p>Bu bağlantı 45 dakika geçerlidir. Bu isteği sen yapmadıysan e-postayı yok say.</p>"
         ),
         f"LectureSift şifreni yenile: {link}\nBu bağlantı 45 dakika geçerlidir.",
+    )
+
+
+def _send_admin_login_code(email: str, code: str) -> None:
+    send_transactional_email(
+        email,
+        "LectureSift yönetici giriş kodu",
+        (
+            "<h1>Yönetici paneli giriş kodun</h1>"
+            "<p>LectureSift yönetici paneline girmek için aşağıdaki kodu kullan.</p>"
+            f'<p style="font-size:30px;font-weight:800;letter-spacing:8px">{code}</p>'
+            "<p>Kod 10 dakika geçerlidir ve tek kullanımlıktır. Bu girişi sen başlatmadıysan parolanı hemen değiştir.</p>"
+        ),
+        (
+            f"LectureSift yönetici giriş kodun: {code}\n"
+            "Kod 10 dakika geçerlidir. Bu girişi sen başlatmadıysan parolanı hemen değiştir."
+        ),
     )
 
 
@@ -584,12 +607,14 @@ def _rate_limit(
     *,
     limit: int,
     window_seconds: int,
+    per_client: bool = True,
 ) -> None:
     client = _client_ip(request) or (request.client.host if request.client else "unknown")
+    identity = discriminator.strip().casefold()
     try:
         RATE_LIMITER.check(
             scope,
-            f"{client}|{discriminator.strip().casefold()}",
+            f"{client}|{identity}" if per_client else identity,
             limit=limit,
             window_seconds=window_seconds,
         )
@@ -939,6 +964,88 @@ def billing_logout(request: Request, user: dict = Depends(_billing_user)) -> dic
     )
     logout_user(user["id"])
     return {"ok": True, "message": "Oturum kapatıldı.", "user_id": user["id"]}
+
+
+@app.post("/billing/admin/session/start")
+def billing_admin_session_start(payload: BillingAuthRequest, request: Request) -> dict:
+    _rate_limit(request, "admin-login", "", limit=10, window_seconds=15 * 60)
+    _rate_limit(request, "admin-login-email", payload.email, limit=5, window_seconds=15 * 60, per_client=False)
+    if not email_delivery_configured():
+        raise HTTPException(503, detail={"code": "LS-BILL-15", "message": "E-posta hizmeti henüz etkinleştirilmemiş."})
+    try:
+        challenge = start_admin_login(payload.email, payload.password)
+        _send_admin_login_code(challenge["email"], challenge["code"])
+    except BillingConfigurationError as exc:
+        raise HTTPException(503, detail={"code": "LS-ADMIN-AUTH-01", "message": str(exc)}) from exc
+    except EmailDeliveryError as exc:
+        raise HTTPException(503, detail={"code": "LS-BILL-16", "message": str(exc)}) from exc
+    except BillingAuthenticationError as exc:
+        raise HTTPException(401, detail={"code": "LS-ADMIN-AUTH-02", "message": str(exc)}) from exc
+    return {
+        "ok": True,
+        "challenge": challenge["challenge"],
+        "message": "Altı haneli giriş kodunu e-posta adresine gönderdik. Kod 10 dakika geçerlidir.",
+    }
+
+
+@app.post("/billing/admin/session/verify")
+def billing_admin_session_verify(payload: AdminLoginCodeRequest, request: Request) -> dict:
+    _rate_limit(request, "admin-code", "", limit=10, window_seconds=15 * 60)
+    _rate_limit(request, "admin-code-email", payload.email, limit=10, window_seconds=15 * 60, per_client=False)
+    try:
+        result = complete_admin_login(payload.email, payload.challenge, payload.code)
+    except BillingConfigurationError as exc:
+        raise HTTPException(503, detail={"code": "LS-BILL-00", "message": str(exc)}) from exc
+    except BillingAuthenticationError as exc:
+        raise HTTPException(400, detail={"code": "LS-ADMIN-AUTH-03", "message": str(exc)}) from exc
+    except BillingError as exc:
+        raise HTTPException(400, detail={"code": "LS-ADMIN-AUTH-04", "message": str(exc)}) from exc
+    record_account_activity(
+        result.pop("user_id"),
+        "admin_login",
+        _client_ip(request),
+        request.headers.get("user-agent", ""),
+    )
+    return {"ok": True, **result}
+
+
+def _account_admin(admin: dict = Depends(_billing_admin)) -> dict:
+    if "user" not in admin:
+        raise HTTPException(
+            400,
+            detail={"code": "LS-ADMIN-AUTH-05", "message": "Bu işlem için acil durum anahtarı yerine hesabınla giriş yap."},
+        )
+    return admin["user"]
+
+
+@app.post("/billing/admin/session/change-password")
+def billing_admin_change_password(
+    payload: BillingPasswordChangeRequest,
+    user: dict = Depends(_account_admin),
+) -> dict:
+    try:
+        change_account_password(user["id"], payload.current_password, payload.new_password)
+    except BillingAuthenticationError as exc:
+        # The admin session is valid; a wrong current password must not look
+        # like an expired session to the panel.
+        raise HTTPException(400, detail={"code": "LS-BILL-23", "message": str(exc)}) from exc
+    except BillingError as exc:
+        raise HTTPException(400, detail={"code": "LS-BILL-19", "message": str(exc)}) from exc
+    # The new session_version ends this and every other session of the account.
+    return {"ok": True, "message": "Parolan güncellendi. Yeni parolanla yeniden giriş yap."}
+
+
+@app.post("/billing/admin/session/logout")
+def billing_admin_logout(request: Request, user: dict = Depends(_account_admin)) -> dict:
+    record_account_activity(
+        user["id"],
+        "admin_logout",
+        _client_ip(request),
+        request.headers.get("user-agent", ""),
+    )
+    # Sessions are stateless, so like /billing/logout this ends all of them.
+    logout_user(user["id"])
+    return {"ok": True, "message": "Yönetici oturumu kapatıldı."}
 
 
 @app.get("/billing/me")

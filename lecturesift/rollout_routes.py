@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
-import hmac
 import re
 import unicodedata
 from datetime import date
@@ -16,7 +15,13 @@ from pydantic import BaseModel, Field
 from . import config
 from .adsense_management import adsense_management_readiness
 from .google_ads_management import google_ads_management_readiness
-from .billing_service import BillingAuthenticationError, BillingConfigurationError, BillingError, authenticate_session
+from .billing_service import (
+    BillingAuthenticationError,
+    BillingConfigurationError,
+    BillingError,
+    authenticate_admin,
+    authenticate_session,
+)
 from .costs import cost_overview, delete_actual_cost, save_actual_cost
 from .jobs import JOBS
 from .mailer import EmailDeliveryError
@@ -235,13 +240,12 @@ def _user(authorization: str | None = Header(None)) -> dict:
 
 
 def _admin(authorization: str | None = Header(None)) -> dict:
-    scheme, _, token = (authorization or "").partition(" ")
-    if not config.ADMIN_ADMIN:
-        raise HTTPException(503, detail={"code": "LS-BILL-03", "message": "Admin paneli henüz etkin değil."})
-    if scheme.casefold() == "bearer" and token:
-        if hmac.compare_digest(token, config.ADMIN_ADMIN):
-            return {"actor": "admin_token"}
-    raise HTTPException(401, detail={"code": "LS-BILL-04", "message": "Admin yetkisi gerekli."})
+    try:
+        return authenticate_admin(authorization or "")
+    except BillingConfigurationError as exc:
+        raise HTTPException(503, detail={"code": "LS-BILL-03", "message": str(exc)}) from exc
+    except BillingAuthenticationError as exc:
+        raise HTTPException(401, detail={"code": "LS-BILL-04", "message": str(exc)}) from exc
 
 
 def _billing_failure(exc: Exception, code: str = "LS-BILL-22") -> None:
