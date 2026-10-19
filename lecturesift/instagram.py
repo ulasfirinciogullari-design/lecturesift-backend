@@ -79,7 +79,8 @@ class InstagramClient:
             except (ValueError, AttributeError, OSError, HTTPException):
                 message, error_type = "Instagram API request failed", "instagram_api_error"
             raise InstagramAPIError(message, status_code=502, error_type=error_type, transient=transient) from None
-        except (OSError, HTTPException, json.JSONDecodeError):  # URLError, timeouts and dropped connections
+        # URLError, timeouts, dropped connections and answers that are not UTF-8 JSON.
+        except (OSError, HTTPException, json.JSONDecodeError, UnicodeDecodeError):
             raise InstagramAPIError("Instagram API is temporarily unavailable", transient=True) from None
 
     def get_account(self) -> dict[str, Any]:

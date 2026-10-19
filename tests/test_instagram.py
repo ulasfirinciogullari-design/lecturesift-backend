@@ -102,6 +102,24 @@ def test_publish_failures_with_an_unknown_outcome_are_transient(monkeypatch, fai
     assert "access-token" not in str(caught.value)
 
 
+@pytest.mark.parametrize("body", [b"\xff\xfe not utf-8", b"<html>not json</html>"])
+def test_unreadable_publish_answer_is_transient(monkeypatch, body):
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def read(self):
+            return body
+
+    monkeypatch.setattr("lecturesift.instagram.urlopen", lambda *_args, **_kwargs: Response())
+    with pytest.raises(InstagramAPIError) as caught:
+        client().publish_media("container-1")
+    assert caught.value.transient is True
+
+
 def test_instagram_health_returns_safe_account_metadata():
     class FakeClient:
         def get_account(self):
