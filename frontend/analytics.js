@@ -9,11 +9,15 @@
     "/document-summary", "/lecture-video-summary", "/quiz-flashcards",
     "/study-guides", "/study-pack-example", "/check-ai-notes", "/active-recall",
     "/about-study-guides", "/cornell-notes", "/pdf-note-check",
+    "/medicine-lecture-notes", "/law-lecture-notes", "/engineering-lecture-notes",
+    "/psychology-lecture-notes", "/economics-lecture-notes",
   ]);
   const CONTENT_PATHS = new Set([
     "/", "/document-summary", "/lecture-video-summary", "/quiz-flashcards",
     "/study-guides", "/study-pack-example", "/check-ai-notes", "/active-recall",
     "/about-study-guides", "/cornell-notes", "/pdf-note-check",
+    "/medicine-lecture-notes", "/law-lecture-notes", "/engineering-lecture-notes",
+    "/psychology-lecture-notes", "/economics-lecture-notes",
   ]);
   const RESOURCE_PATHS = new Set([
     "/assets/study/mean-median-tr.txt", "/assets/study/mean-median-en.txt",

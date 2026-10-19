@@ -22,6 +22,7 @@ SITEMAP_NAMESPACE = "http://www.sitemaps.org/schemas/sitemap/0.9"
 XHTML_NAMESPACE = "http://www.w3.org/1999/xhtml"
 STUDY_RESOURCES = json.loads((FRONTEND / "study-resources.json").read_text(encoding="utf-8"))
 STUDY_SLUGS = {page["slug"] for page in STUDY_RESOURCES["pages"]}
+COURSE_PAGES = [page for page in STUDY_RESOURCES["pages"] if page["kind"] == "course"]
 
 
 def _page_languages(location: str) -> tuple[str, ...]:
@@ -274,6 +275,77 @@ def test_landing_examples_faqs_and_dates_survive_prerendering(localized_output: 
         de_html = _output_path(localized_output, f"{ORIGIN}/de{route.removesuffix('.html')}").read_text(encoding="utf-8")
         assert "data-landing-page" not in de_html
     assert not (localized_output / "landing-pages.json").exists()
+
+
+def test_course_pages_are_turkish_english_pairs_with_trial_calls_and_faq(localized_output: Path) -> None:
+    assert [page["slug"] for page in COURSE_PAGES] == [
+        "medicine-lecture-notes", "law-lecture-notes", "engineering-lecture-notes",
+        "psychology-lecture-notes", "economics-lecture-notes",
+    ]
+    records = _sitemap_records()
+    sitemap = ElementTree.parse(FRONTEND / "sitemap.xml")
+    dates = {
+        node.findtext(f"{{{SITEMAP_NAMESPACE}}}loc"): node.findtext(f"{{{SITEMAP_NAMESPACE}}}lastmod")
+        for node in sitemap.findall(f"{{{SITEMAP_NAMESPACE}}}url")
+    }
+    for page in COURSE_PAGES:
+        slug = page["slug"]
+        pair = {"tr": f"{ORIGIN}/{slug}", "en": f"{ORIGIN}/en/{slug}"}
+        # Only the written Turkish and English editions exist; no other language is indexed.
+        assert [url for url in records if urlsplit(url).path.rsplit("/", 1)[-1] == slug] == list(pair.values())
+        assert not any((localized_output / language / f"{slug}.html").exists() for language in LANGUAGES[2:])
+        for language, location in pair.items():
+            copy = page[language]
+            prefix = "" if language == "tr" else "/en"
+            output = _output_path(localized_output, location)
+            html = output.read_text(encoding="utf-8")
+            parsed = _parse_html(output)
+            assert parsed.document_language == language
+            assert parsed.canonicals == [location]
+            assert records[location] == {**pair, "x-default": pair["tr"]}
+            assert {code: values[0] for code, values in parsed.alternates.items()} == records[location]
+            title = unescape(re.search(r"<title>(.*?)</title>", html).group(1))
+            assert title == f"{copy['title']} | LectureSift" and len(title) <= 72, location
+            assert parsed.descriptions == [copy["description"]] and 110 <= len(copy["description"]) <= 160, location
+            assert '<meta property="og:type" content="article">' in html
+
+            graph = [node for schema in parsed.structured_data for node in schema.get("@graph", [])]
+            nodes = {node["@type"]: node for node in graph}
+            assert nodes["WebPage"]["name"] == title and nodes["WebPage"]["inLanguage"] == language
+            assert nodes["Article"]["dateModified"] == page["updated"] == dates[location]
+            assert [item["item"] for item in nodes["BreadcrumbList"]["itemListElement"]] == [
+                f"{ORIGIN}{prefix}/", f"{ORIGIN}{prefix}/study-guides", location,
+            ]
+            faq_html = re.search(r'<div class="faq-list">(.*?)</div>', html, re.S).group(1)
+            visible_questions = re.findall(r"<summary>(.*?)</summary>", faq_html)
+            assert len(visible_questions) >= 4
+            assert [item["name"] for item in nodes["FAQPage"]["mainEntity"]] == visible_questions
+            # The worked output is explicitly an authored example, not a customer result.
+            assert re.search(
+                r'<section id="(?:ornek|example)"><h2>[^<]+</h2><p class="guide-note"><strong>'
+                r"(?:Bu bölüm bir örnektir\.|This section is an example\.)</strong>",
+                html,
+            ), location
+
+            trial = re.search(r'<div class="guide-hero-actions" data-guide-trial>(.*?)</div>', html).group(1)
+            assert f'href="{prefix}/workspace.html"' in trial and f'href="{prefix}/register.html"' in trial
+            subjects = re.search(r"<nav[^>]*data-guide-subjects[^>]*>(.*?)</nav>", html).group(1)
+            assert re.findall(r'href="([^"]+)"', subjects) == [
+                f"{prefix}/{other['slug']}" for other in COURSE_PAGES if other is not page
+            ]
+            for attributes, href in re.findall(r'<a\b([^>]*)\bhref="(/[^"]*)"', html):
+                if "guide-language" in attributes:
+                    assert href == (f"/en/{slug}" if language == "tr" else f"/{slug}")
+                elif language == "en":
+                    assert href.startswith("/en/") or href.startswith("/assets/"), (location, href)
+                else:
+                    assert not href.startswith("/en/"), (location, href)
+
+    # The bilingual study library makes every course page discoverable in its own language.
+    for prefix in ("", "/en"):
+        library = _output_path(localized_output, f"{ORIGIN}{prefix}/study-guides").read_text(encoding="utf-8")
+        listed = re.search(r'<ul class="guide-subjects">(.*?)</ul>', library, re.S).group(1)
+        assert re.findall(r'href="([^"]+)"', listed) == [f"{prefix}/{page['slug']}" for page in COURSE_PAGES]
 
 
 def test_guide_measurement_has_consent_controls_without_the_large_application_scripts(localized_output: Path) -> None:

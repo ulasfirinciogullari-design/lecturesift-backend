@@ -8,6 +8,8 @@
     "/cookies", "/refund", "/distance-sales", "/document-summary", "/lecture-video-summary",
     "/quiz-flashcards", "/study-guides", "/study-pack-example", "/check-ai-notes",
     "/active-recall", "/about-study-guides", "/cornell-notes", "/pdf-note-check",
+    "/medicine-lecture-notes", "/law-lecture-notes", "/engineering-lecture-notes",
+    "/psychology-lecture-notes", "/economics-lecture-notes",
   ]);
   const path = location.pathname.replace(/^\/(tr|en|de|fr|es|it|pt|ru|ar|zh|ja|ko|hi)(?=\/|$)/, "")
     .replace(/\.html$/, "").replace(/\/$/, "") || "/";
