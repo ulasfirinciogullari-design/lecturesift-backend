@@ -30,7 +30,9 @@ from sqlalchemy import (
     Text,
     case,
     create_engine,
+    delete,
     func,
+    inspect,
     select,
     text,
     update,
@@ -542,6 +544,33 @@ def _guest_claimed_hash(guest_user_id: str) -> str:
     return _token_hash(f"{GUEST_CLAIMED_PURPOSE}:{guest_user_id}")
 
 
+# A Google sign-in link is stored the same way: the primary key is derived
+# from Google's stable subject id ("sub") and user_id is the linked account.
+# The row is born consumed and long-lived so the generic token clean-ups never
+# treat it as an open token. Closing an account deletes it with every other
+# auth token, and a password reset deletes it (see reset_password).
+GOOGLE_LINK_PURPOSE = "google_link"
+_GOOGLE_LINK_LIFETIME = timedelta(days=3650)
+# Google owns these mailboxes and never hands a deleted address to someone
+# else. For any other domain Google is authoritative only when the ID token's
+# hosted-domain claim ("hd", Google Workspace) is that same domain.
+GOOGLE_AUTHORITATIVE_DOMAINS = frozenset({"gmail.com", "googlemail.com"})
+_GOOGLE_EMAIL_UNUSABLE = "Google hesabının e-posta adresi kullanılamıyor."
+
+
+class GoogleAccountLinkRefused(BillingError):
+    """An account exists for the address and Google cannot vouch for its owner."""
+
+
+def _google_link_hash(sub: str) -> str:
+    return _token_hash(f"{GOOGLE_LINK_PURPOSE}:{sub}")
+
+
+def google_is_authoritative(email: str, hosted_domain: str = "") -> bool:
+    domain = email.rsplit("@", 1)[-1]
+    return domain in GOOGLE_AUTHORITATIVE_DOMAINS or (bool(hosted_domain) and hosted_domain == domain)
+
+
 def register_user(
     email: str,
     password: str,
@@ -650,67 +679,156 @@ def register_user(
     }
 
 
+def _reclaim_unverified_account(connection, user_id: str, country_code: str, now: datetime) -> None:
+    """Hand a never-verified registration to the address's verified owner.
+
+    Whoever registered first may not have owned the address, so nothing they
+    set up survives: the password and open tokens, a pending guest claim
+    (it would move their guest results into this library), a referral
+    attribution (they would become the inviter) and the profile details
+    (they would prefill checkout).
+    """
+    salt = secrets.token_bytes(16)
+    connection.execute(
+        update(USERS)
+        .where(USERS.c.id == user_id)
+        .values(
+            password_salt=salt.hex(),
+            password_hash=_hash_password(secrets.token_urlsafe(48), salt),
+        )
+    )
+    connection.execute(
+        update(USER_PROFILES)
+        .where(USER_PROFILES.c.user_id == user_id)
+        .values(
+            first_name="",
+            last_name="",
+            phone=None,
+            phone_verified_at=None,
+            country_code=country_code,
+            email_verified_at=now,
+            session_version=USER_PROFILES.c.session_version + 1,
+            updated_at=now,
+        )
+    )
+    connection.execute(
+        update(AUTH_TOKENS)
+        .where(
+            AUTH_TOKENS.c.user_id == user_id,
+            AUTH_TOKENS.c.purpose.in_(("verify_email", "verify_email_code", "reset_password")),
+            AUTH_TOKENS.c.consumed_at.is_(None),
+        )
+        .values(consumed_at=now)
+    )
+    # The pending claim row is owned by the guest and keyed by this account.
+    connection.execute(
+        delete(AUTH_TOKENS).where(
+            AUTH_TOKENS.c.token_hash == _guest_claim_pending_hash(user_id),
+            AUTH_TOKENS.c.purpose == GUEST_CLAIM_PENDING_PURPOSE,
+        )
+    )
+    from .referrals import REWARDS
+
+    # The referral schema is installed explicitly, never by startup.
+    if inspect(connection).has_table(REWARDS.name):
+        connection.execute(delete(REWARDS).where(REWARDS.c.invitee_user_id == user_id))
+
+
 def sign_in_with_google(
     email: str,
     *,
+    sub: str,
+    hosted_domain: str = "",
     given_name: str = "",
     family_name: str = "",
     country_code: str = "TR",
     referral_code: str = "",
 ) -> dict:
-    """Sign in, or create a verified account, for an email Google verified.
+    """Sign in, link, or create a verified account for a Google identity.
 
     The caller must already have verified the Google ID token (signature,
-    audience, issuer, expiry and email_verified). An existing unverified
-    account is verified here and its password is replaced with a random one,
-    so somebody who pre-registered this address cannot keep a password to it.
+    audience, issuer, expiry and email_verified). A Google subject that is
+    already linked signs in to its account. Otherwise an existing account for
+    the address is linked only when Google is authoritative for the address
+    (google_is_authoritative); a never-verified registration is then
+    reclaimed. For any other address the person signs in with the password.
+    The result's "google_link" is "existing", "linked" or "created".
     """
     init_billing_database()
-    normalized = email.strip().casefold()
+    raw_email = str(email or "").strip()
+    # Reject before casefold(): casefolding non-ASCII text can turn one
+    # address into another (for example "ß" becomes "ss").
+    if not raw_email.isascii():
+        raise BillingAuthenticationError(_GOOGLE_EMAIL_UNUSABLE)
+    normalized = raw_email.casefold()
     if (
         "@" not in normalized
         or "." not in normalized.rsplit("@", 1)[-1]
         or len(normalized) > 320
         or normalized.endswith(("@guest.lecturesift.invalid", "@users.invalid"))
     ):
-        raise BillingAuthenticationError("Google hesabının e-posta adresi kullanılamıyor.")
+        raise BillingAuthenticationError(_GOOGLE_EMAIL_UNUSABLE)
+    selected_sub = str(sub or "").strip()
+    if not selected_sub or len(selected_sub) > 255 or not selected_sub.isascii() or not selected_sub.isprintable():
+        raise BillingAuthenticationError("Google hesabı doğrulanamadı.")
+    selected_hd = str(hosted_domain or "").strip()
+    selected_hd = selected_hd.casefold() if selected_hd.isascii() else ""
+    selected_country = country_code.strip().upper()[:2] if len(country_code.strip()) >= 2 else "TR"
+    link_hash = _google_link_hash(selected_sub)
     now = utcnow()
-    with ENGINE.begin() as connection:
-        row = connection.execute(
-            select(USERS).where(USERS.c.email == normalized).with_for_update()
-        ).first()
-        if row:
-            profile = _profile_for(connection, row.id)
-            if profile and profile.email_verified_at is None:
-                salt = secrets.token_bytes(16)
-                connection.execute(
-                    update(USERS)
-                    .where(USERS.c.id == row.id)
-                    .values(
-                        password_salt=salt.hex(),
-                        password_hash=_hash_password(secrets.token_urlsafe(48), salt),
-                    )
+    row = profile = None
+    google_link = "existing"
+    try:
+        with ENGINE.begin() as connection:
+            link = connection.execute(
+                select(AUTH_TOKENS.c.user_id).where(
+                    AUTH_TOKENS.c.token_hash == link_hash,
+                    AUTH_TOKENS.c.purpose == GOOGLE_LINK_PURPOSE,
                 )
-                connection.execute(
-                    update(USER_PROFILES)
-                    .where(USER_PROFILES.c.user_id == row.id)
-                    .values(
-                        email_verified_at=now,
-                        session_version=USER_PROFILES.c.session_version + 1,
-                        updated_at=now,
+            ).first()
+            if link:
+                row = connection.execute(
+                    select(USERS).where(USERS.c.id == link.user_id).with_for_update()
+                ).first()
+                profile = _profile_for(connection, row.id) if row else None
+                if (
+                    not row
+                    or (profile is not None and profile.email_verified_at is None)
+                    or row.email.endswith(("@guest.lecturesift.invalid", "@users.invalid"))
+                ):
+                    # Closing an account deletes its links; never trust a stale one.
+                    connection.execute(delete(AUTH_TOKENS).where(AUTH_TOKENS.c.token_hash == link_hash))
+                    row = profile = None
+            if row is None:
+                row = connection.execute(
+                    select(USERS).where(USERS.c.email == normalized).with_for_update()
+                ).first()
+                if row:
+                    if not google_is_authoritative(normalized, selected_hd):
+                        raise GoogleAccountLinkRefused(
+                            "Bu e-posta adresiyle zaten bir LectureSift hesabı var. Google bu adresin bugünkü "
+                            "sahibini doğrulayamadığı için hesabı Google'a bağlayamıyoruz. E-posta adresin ve "
+                            "parolanla giriş yap; parolanı hatırlamıyorsan parola yenileme bağlantısı iste."
+                        )
+                    profile = _profile_for(connection, row.id)
+                    if profile and profile.email_verified_at is None:
+                        _reclaim_unverified_account(connection, row.id, selected_country, now)
+                    connection.execute(
+                        AUTH_TOKENS.insert().values(
+                            token_hash=link_hash,
+                            user_id=row.id,
+                            purpose=GOOGLE_LINK_PURPOSE,
+                            expires_at=now + _GOOGLE_LINK_LIFETIME,
+                            consumed_at=now,
+                            created_at=now,
+                        )
                     )
-                )
-                connection.execute(
-                    update(AUTH_TOKENS)
-                    .where(
-                        AUTH_TOKENS.c.user_id == row.id,
-                        AUTH_TOKENS.c.purpose.in_(("verify_email", "verify_email_code", "reset_password")),
-                        AUTH_TOKENS.c.consumed_at.is_(None),
-                    )
-                    .values(consumed_at=now)
-                )
-                row = connection.execute(select(USERS).where(USERS.c.id == row.id)).first()
-                profile = _profile_for(connection, row.id)
+                    google_link = "linked"
+                    row = connection.execute(select(USERS).where(USERS.c.id == row.id)).first()
+                    profile = _profile_for(connection, row.id)
+    except IntegrityError as exc:
+        # A parallel sign-in linked the same Google account first.
+        raise BillingError("Hesap hazırlanırken bir çakışma oldu. Tekrar dene.") from exc
     if row:
         session_version = int(profile.session_version) if profile else 1
         return {
@@ -718,6 +836,7 @@ def sign_in_with_google(
             "token": issue_session(row.id, row.email, session_version),
             "created": False,
             "referral_status": "not_provided",
+            "google_link": google_link,
         }
 
     def optional_name(value: str, label: str) -> str:
@@ -730,7 +849,6 @@ def sign_in_with_google(
 
     selected_first_name = optional_name(given_name, "Ad")
     selected_last_name = optional_name(family_name, "Soyad")
-    selected_country = country_code.strip().upper()[:2] if len(country_code.strip()) >= 2 else "TR"
     salt = secrets.token_bytes(16)
     user_id = str(uuid.uuid4())
     try:
@@ -769,6 +887,16 @@ def sign_in_with_google(
                         )
                 except Exception:
                     referral_status = "unavailable"
+            connection.execute(
+                AUTH_TOKENS.insert().values(
+                    token_hash=link_hash,
+                    user_id=user_id,
+                    purpose=GOOGLE_LINK_PURPOSE,
+                    expires_at=now + _GOOGLE_LINK_LIFETIME,
+                    consumed_at=now,
+                    created_at=now,
+                )
+            )
             row = connection.execute(select(USERS).where(USERS.c.id == user_id)).first()
             profile = _profile_for(connection, user_id)
     except IntegrityError as exc:
@@ -779,6 +907,7 @@ def sign_in_with_google(
         "token": issue_session(user_id, normalized, 1),
         "created": True,
         "referral_status": referral_status,
+        "google_link": "created",
     }
 
 
@@ -1054,6 +1183,14 @@ def reset_password(token: str, new_password: str) -> None:
             update(USER_PROFILES)
             .where(USER_PROFILES.c.user_id == auth_token.user_id)
             .values(session_version=USER_PROFILES.c.session_version + 1, updated_at=now)
+        )
+        # Resetting through the mailbox revokes Google links as well, so a
+        # former owner of a recycled address loses a linked Google sign-in.
+        connection.execute(
+            delete(AUTH_TOKENS).where(
+                AUTH_TOKENS.c.user_id == auth_token.user_id,
+                AUTH_TOKENS.c.purpose == GOOGLE_LINK_PURPOSE,
+            )
         )
         connection.execute(
             update(AUTH_TOKENS)

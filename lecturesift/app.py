@@ -21,6 +21,7 @@ from .billing_service import (
     BillingAuthenticationError,
     BillingConfigurationError,
     BillingError,
+    GoogleAccountLinkRefused,
     account_status,
     admin_billing_overview,
     approve_manual_order,
@@ -474,6 +475,27 @@ def _send_password_reset_email(email: str, token: str) -> None:
             "<p>Bu bağlantı 45 dakika geçerlidir. Bu isteği sen yapmadıysan e-postayı yok say.</p>"
         ),
         f"LectureSift şifreni yenile: {link}\nBu bağlantı 45 dakika geçerlidir.",
+    )
+
+
+def _send_google_link_email(email: str) -> None:
+    reset_link = f"{FRONTEND_BASE_URL}/forgot-password.html"
+    send_transactional_email(
+        email,
+        "LectureSift hesabına Google ile giriş eklendi",
+        (
+            "<h1>Google ile giriş eklendi</h1>"
+            "<p>LectureSift hesabın bir Google hesabına bağlandı. Bu Google hesabıyla artık parola "
+            "girmeden oturum açılabilir.</p>"
+            f'<p>Bunu sen yapmadıysan hemen <a href="{reset_link}">parolanı yenile</a>. '
+            "Parola yenileme Google bağlantısını da kaldırır ve açık oturumları kapatır.</p>"
+        ),
+        (
+            "LectureSift hesabın bir Google hesabına bağlandı. Bu Google hesabıyla artık parola girmeden "
+            "oturum açılabilir.\n"
+            f"Bunu sen yapmadıysan hemen parolanı yenile: {reset_link}\n"
+            "Parola yenileme Google bağlantısını da kaldırır ve açık oturumları kapatır."
+        ),
     )
 
 
@@ -996,15 +1018,26 @@ def billing_login(payload: BillingLoginRequest, request: Request) -> dict:
     return {"ok": True, **result, "guest_claim": guest_claim, "account": account_status(result["user"]["id"])}
 
 
+GOOGLE_SIGN_IN_CLIENT_LIMIT = 20
+GOOGLE_SIGN_IN_GLOBAL_LIMIT = 600
+
+
 @app.post("/billing/google")
 def billing_google_sign_in(payload: BillingGoogleRequest, request: Request) -> dict:
     if not google_client_id():
         raise HTTPException(404, detail={"code": "LS-GOOGLE-00", "message": "Google ile giriş etkin değil."})
-    _rate_limit(request, "google-sign-in", "google", limit=20, window_seconds=15 * 60)
+    _rate_limit(request, "google-sign-in", "google", limit=GOOGLE_SIGN_IN_CLIENT_LIMIT, window_seconds=15 * 60)
+    # Every Google attempt costs an outbound call; cap the whole service too.
+    _rate_limit(
+        request, "google-sign-in-all", "all",
+        limit=GOOGLE_SIGN_IN_GLOBAL_LIMIT, window_seconds=15 * 60, per_client=False,
+    )
     try:
         identity = verify_google_id_token(payload.credential)
         result = sign_in_with_google(
             identity["email"],
+            sub=identity["sub"],
+            hosted_domain=identity["hd"],
             given_name=identity["given_name"],
             family_name=identity["family_name"],
             country_code=payload.country_code,
@@ -1016,6 +1049,8 @@ def billing_google_sign_in(payload: BillingGoogleRequest, request: Request) -> d
             _client_ip(request),
             request.headers.get("user-agent", ""),
         )
+    except GoogleAccountLinkRefused as exc:
+        raise HTTPException(409, detail={"code": "LS-GOOGLE-04", "message": str(exc)}) from exc
     except GoogleSignInUnavailable as exc:
         raise HTTPException(503, detail={"code": "LS-GOOGLE-02", "message": str(exc)}) from exc
     except BillingConfigurationError as exc:
@@ -1024,6 +1059,13 @@ def billing_google_sign_in(payload: BillingGoogleRequest, request: Request) -> d
         raise HTTPException(401, detail={"code": "LS-GOOGLE-01", "message": str(exc)}) from exc
     except BillingError as exc:
         raise HTTPException(400, detail={"code": "LS-GOOGLE-03", "message": str(exc)}) from exc
+    if result.get("google_link") == "linked" and email_delivery_configured():
+        # Tell the owner whenever Google is first linked to an existing account.
+        # The sign-in itself does not depend on the notice being delivered.
+        try:
+            _send_google_link_email(result["user"]["email"])
+        except EmailDeliveryError:
+            pass
     guest_claim = claim_guest_work(result["user"]["id"], payload.guest_token)
     return {"ok": True, **result, "guest_claim": guest_claim, "account": account_status(result["user"]["id"])}
 
