@@ -272,6 +272,25 @@ def delete_lesson(user_id, job_id):
         connection.execute(delete(ITEMS).where(ITEMS.c.job_id == job_id, ITEMS.c.user_id == user_id))
 
 
+def transfer_account_state(connection, from_user_id, to_user_id):
+    """Move library folders and placements. Callers hold both user locks."""
+    if not all(inspect(connection).has_table(table.name) for table in (FOLDERS, ITEMS)):
+        return
+    existing = {row.name.casefold(): row.id for row in connection.execute(
+        select(FOLDERS).where(FOLDERS.c.user_id == to_user_id)).all()}
+    for folder in connection.execute(select(FOLDERS).where(FOLDERS.c.user_id == from_user_id)).all():
+        target = existing.get(folder.name.casefold())
+        if target:
+            # Folder names are unique per user; merge into the account's folder.
+            connection.execute(update(ITEMS).where(ITEMS.c.user_id == from_user_id, ITEMS.c.folder_id == folder.id)
+                               .values(folder_id=target))
+            connection.execute(delete(FOLDERS).where(FOLDERS.c.id == folder.id))
+        else:
+            connection.execute(update(FOLDERS).where(FOLDERS.c.id == folder.id).values(user_id=to_user_id))
+            existing[folder.name.casefold()] = folder.id
+    connection.execute(update(ITEMS).where(ITEMS.c.user_id == from_user_id).values(user_id=to_user_id))
+
+
 def erase_account_state(connection, user_id):
     for table in (ITEMS, FOLDERS, AD_FREE_GRANTS):
         if inspect(connection).has_table(table.name):

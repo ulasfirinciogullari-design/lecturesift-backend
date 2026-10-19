@@ -257,6 +257,9 @@ BILLING_PROTECTED_EMAILS = {
     for email in os.getenv("BILLING_PROTECTED_EMAILS", "").split(",")
     if email.strip()
 }
+# Public OAuth web client id for "Google ile devam et". Empty keeps Google
+# sign-in disabled: the button stays hidden and /billing/google returns 404.
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "").strip()
 BILLING_BANK_IBAN = os.getenv("BILLING_BANK_IBAN", "").replace(" ", "").upper()
 BILLING_BANK_ACCOUNT_HOLDER = os.getenv("BILLING_BANK_ACCOUNT_HOLDER", "").strip()
 BILLING_BANK_NAME = os.getenv("BILLING_BANK_NAME", "").strip()

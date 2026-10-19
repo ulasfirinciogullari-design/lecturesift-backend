@@ -97,6 +97,16 @@ button, input, select { font: inherit; }
 .referral-coupon small{color:var(--muted);font-size:12px}
 
 #referralContent:not([hidden]){display:grid;gap:16px}
+#legacyNameFields[hidden],#referralRow[hidden],.google-signin[hidden],.referral-toggle[hidden]{display:none!important}
+.password-input{position:relative}
+.password-input input{padding-inline-end:88px}
+.password-toggle{position:absolute;inset-block:6px;inset-inline-end:6px;min-width:64px;padding:0 10px;border:1px solid var(--ui-line,var(--line));border-radius:9px;background:transparent;color:var(--ui-action,#7fc8ff);cursor:pointer;font-size:12px;font-weight:760}
+.password-toggle:focus-visible,.referral-toggle:focus-visible{outline:2px solid var(--ui-action,var(--blue));outline-offset:2px}
+.referral-toggle{justify-self:start;min-height:32px;font-size:12px}
+.google-signin{display:grid;gap:14px;margin-bottom:14px}
+.google-button{min-height:44px;display:flex;justify-content:center}
+.auth-divider{display:flex;align-items:center;gap:10px;margin:0;color:var(--ui-muted,var(--muted));font-size:12px}
+.auth-divider::before,.auth-divider::after{content:"";flex:1;height:1px;background:var(--ui-line,var(--line))}
 .referral-reward-copy{min-width:0;overflow-wrap:anywhere}
 .referral-choice-actions{align-items:end;min-width:0}
 .referral-choice-actions .field{flex-basis:100%;min-width:0}

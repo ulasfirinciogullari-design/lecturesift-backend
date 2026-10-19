@@ -33,12 +33,9 @@ async function prepare(context, verifiedUser = user) {
 }
 
 async function register(page) {
-  await page.locator('#firstName').fill('Synthetic');
-  await page.locator('#lastName').fill('Student');
+  // The short form: email, one password and the existing consent only.
   await page.locator('#email').fill(user.email);
-  await page.locator('#countryCode').selectOption('TR');
   await page.locator('#password').fill('SyntheticPassword123');
-  await page.locator('#passwordConfirm').fill('SyntheticPassword123');
   await page.locator('#terms').check();
   await page.locator('#registerSubmit').click();
   await expect(page.locator('#successBox')).toBeVisible();

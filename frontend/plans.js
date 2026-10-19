@@ -252,9 +252,21 @@ async function api(path, options = {}) {
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw Object.assign(
     new Error(body?.detail?.message || body?.message || pt("error.request", "İstek tamamlanamadı.")),
-    {code: body?.detail?.code},
+    {code: body?.detail?.code, missingFields: Array.isArray(body?.detail?.missing_fields) ? body.detail.missing_fields : []},
   );
   return body;
+}
+
+const CHECKOUT_BUYER_FIELDS = {
+  first_name: "checkoutFirstName", last_name: "checkoutLastName", phone: "checkoutPhone",
+  billing_address: "checkoutAddress", billing_city: "checkoutCity", billing_zip_code: "checkoutZipCode",
+};
+function focusMissingBuyerField(error) {
+  // Signup no longer asks for names or phone; take the user to the first
+  // detail the payment provider still needs.
+  if (error?.code !== "LS-PAY-03") return;
+  const field = error.missingFields.map(name => $(CHECKOUT_BUYER_FIELDS[name] || "")).find(Boolean);
+  if (field) field.focus();
 }
 
 function summaryEntitlement() {
@@ -708,6 +720,7 @@ async function startHostedCheckout(preferredMethod = "card") {
     if (checkoutSelection !== selection) return;
     selection.completed = false;
     $("checkoutNotice").textContent = error.message;
+    focusMissingBuyerField(error);
   } finally {
     if (checkoutRequest === request) checkoutRequest = null;
     updateCheckoutButtons();

@@ -1336,9 +1336,24 @@ function renderDocumentSampleResult(data) {
   $("documentSamplePlans").href = localized("/plans.html");
 }
 
+function renderGuestSaveResult() {
+  // A guest result is kept briefly. Signing up (or in) from here moves it to
+  // the account server-side and returns to this exact result afterwards.
+  const notice = $("guestSaveResult");
+  if (!notice) return;
+  notice.hidden = billingAccount?.plan?.code !== "guest" || !/^[A-Za-z0-9-]{8,80}$/.test(jobId || "");
+  if (notice.hidden) return;
+  const localized = path => window.LectureSiftI18n?.localizedPath?.(currentLanguage, path) || path;
+  const next = `${localized("/workspace.html")}?${new URLSearchParams({job:jobId})}`;
+  const query = `?${new URLSearchParams({next})}`;
+  $("guestSaveRegister").href = `${localized("/register.html")}${query}`;
+  $("guestSaveLogin").href = `${localized("/login.html")}${query}`;
+}
+
 function renderResult(data, {open = true} = {}) {
   $("resultHeading").textContent = data.title || "LectureSift";
   renderDocumentSampleResult(data);
+  renderGuestSaveResult();
   const utilityResult = data.job_type && data.job_type !== "study_pack";
   const options = data.options || {};
   const selected = {
