@@ -664,23 +664,34 @@ def _b64decode(value: str) -> bytes:
     return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
 
 
-def issue_session(user_id: str, email: str, session_version: int = 1) -> str:
-    payload = json.dumps(
-        {
-            "sub": user_id,
-            "email": email,
-            "ver": session_version,
-            "exp": int((utcnow() + timedelta(days=14)).timestamp()),
-        },
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
+def issue_session(
+    user_id: str,
+    email: str,
+    session_version: int = 1,
+    *,
+    scope: str = "",
+    ttl: timedelta = timedelta(days=14),
+) -> str:
+    claims = {
+        "sub": user_id,
+        "email": email,
+        "ver": session_version,
+        "exp": int((utcnow() + ttl).timestamp()),
+    }
+    if scope:
+        claims["scope"] = scope
+    payload = json.dumps(claims, separators=(",", ":"), sort_keys=True).encode("utf-8")
     body = _b64encode(payload)
     signature = _b64encode(hmac.new(_token_secret(), body.encode("ascii"), hashlib.sha256).digest())
     return f"{body}.{signature}"
 
 
-def authenticate_session(token: str) -> dict:
+def authenticate_session(token: str, *, scope: str = "") -> dict:
+    """Return the account for a signed session issued for exactly ``scope``.
+
+    Normal sessions carry no scope, so they never open admin routes and an
+    admin session is never accepted as a normal site session.
+    """
     try:
         body, signature = token.split(".", 1)
         signatures = (
@@ -692,6 +703,8 @@ def authenticate_session(token: str) -> dict:
         payload = json.loads(_b64decode(body))
         if int(payload["exp"]) <= int(utcnow().timestamp()):
             raise ValueError("expired")
+        if str(payload.get("scope", "")) != scope:
+            raise ValueError("scope")
         user_id = str(payload["sub"])
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
         raise BillingAuthenticationError("Oturum geçersiz veya süresi dolmuş.") from exc
@@ -700,6 +713,9 @@ def authenticate_session(token: str) -> dict:
         row = connection.execute(select(USERS).where(USERS.c.id == user_id)).first()
         profile = _profile_for(connection, user_id) if row else None
     if not row or (row.email.startswith("deleted+") and row.email.endswith("@users.invalid")):
+        raise BillingAuthenticationError("Hesap bulunamadı.")
+    if scope and not profile:
+        # Scoped sessions are bound to session_version, which lives on the profile.
         raise BillingAuthenticationError("Hesap bulunamadı.")
     if profile and int(payload.get("ver", 1)) != int(profile.session_version):
         raise BillingAuthenticationError("Oturum geçersiz veya süresi dolmuş.")
@@ -879,6 +895,156 @@ def logout_user(user_id: str) -> None:
             .where(USER_PROFILES.c.user_id == user_id)
             .values(session_version=USER_PROFILES.c.session_version + 1, updated_at=utcnow())
         )
+
+
+ADMIN_LOGIN_CODE_TTL = timedelta(minutes=10)
+ADMIN_LOGIN_MAX_ATTEMPTS = 5
+ADMIN_SESSION_TTL = timedelta(hours=12)
+# billing_auth_tokens has no attempt column and the cutover schema contract is
+# strict, so an admin login challenge keeps its failed-attempt count in the
+# purpose suffix. A row at the limit no longer matches an active purpose.
+_ADMIN_LOGIN_PURPOSES = tuple(f"admin_login:{count}" for count in range(ADMIN_LOGIN_MAX_ATTEMPTS))
+
+
+def _admin_code_hash(challenge: str, code: str) -> str:
+    # The challenge is a 256-bit secret held only by the signing-in browser,
+    # so the stored digest cannot be brute-forced back to the six-digit code.
+    return _token_hash(f"admin_login:{challenge}:{code}")
+
+
+def start_admin_login(email: str, password: str) -> dict:
+    """Check a listed admin's password and store a fresh emailed login code."""
+    if not config.ADMIN_EMAILS:
+        raise BillingConfigurationError("Hesapla yönetici girişi henüz etkin değil.")
+    init_billing_database()
+    normalized = email.strip().casefold()
+    with ENGINE.connect() as connection:
+        row = connection.execute(select(USERS).where(USERS.c.email == normalized)).first()
+        profile = _profile_for(connection, row.id) if row else None
+    if not row or not hmac.compare_digest(
+        _hash_password(password, bytes.fromhex(row.password_salt)), row.password_hash
+    ):
+        raise BillingAuthenticationError("E-posta veya parola hatalı.")
+    if normalized not in config.ADMIN_EMAILS:
+        raise BillingAuthenticationError("Bu hesap için yönetici erişimi tanımlı değil.")
+    if not profile or profile.email_verified_at is None:
+        raise BillingAuthenticationError("Yönetici girişi için doğrulanmış bir hesap gerekir.")
+    challenge = secrets.token_urlsafe(32)
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    now = utcnow()
+    with ENGINE.begin() as connection:
+        connection.execute(
+            update(AUTH_TOKENS)
+            .where(
+                AUTH_TOKENS.c.user_id == row.id,
+                AUTH_TOKENS.c.purpose.in_(_ADMIN_LOGIN_PURPOSES),
+                AUTH_TOKENS.c.consumed_at.is_(None),
+            )
+            .values(consumed_at=now)
+        )
+        connection.execute(
+            AUTH_TOKENS.insert().values(
+                token_hash=_admin_code_hash(challenge, code),
+                user_id=row.id,
+                purpose=_ADMIN_LOGIN_PURPOSES[0],
+                expires_at=now + ADMIN_LOGIN_CODE_TTL,
+                consumed_at=None,
+                created_at=now,
+            )
+        )
+    return {"email": row.email, "challenge": challenge, "code": code}
+
+
+def complete_admin_login(email: str, challenge: str, code: str) -> dict:
+    """Redeem an emailed admin code once and issue a short admin session.
+
+    BillingAuthenticationError means the challenge is gone and a new code is
+    needed; a plain BillingError means this code was wrong but may be retried.
+    """
+    init_billing_database()
+    normalized = email.strip().casefold()
+    normalized_code = "".join(char for char in code if char.isdigit())
+    expired = "Kod geçersiz veya süresi dolmuş. Yeni kod iste."
+    failures = 0
+    with ENGINE.begin() as connection:
+        user = connection.execute(
+            select(USERS).where(USERS.c.email == normalized).with_for_update()
+        ).first()
+        pending = (
+            connection.execute(
+                select(AUTH_TOKENS)
+                .where(
+                    AUTH_TOKENS.c.user_id == user.id,
+                    AUTH_TOKENS.c.purpose.in_(_ADMIN_LOGIN_PURPOSES),
+                    AUTH_TOKENS.c.consumed_at.is_(None),
+                )
+                .order_by(AUTH_TOKENS.c.created_at.desc())
+                .limit(1)
+            ).first()
+            if user and normalized in config.ADMIN_EMAILS
+            else None
+        )
+        if not pending or _token_is_expired(pending.expires_at):
+            raise BillingAuthenticationError(expired)
+        now = utcnow()
+        if len(normalized_code) == 6 and hmac.compare_digest(
+            pending.token_hash, _admin_code_hash(challenge, normalized_code)
+        ):
+            consumed = connection.execute(
+                update(AUTH_TOKENS)
+                .where(AUTH_TOKENS.c.token_hash == pending.token_hash, AUTH_TOKENS.c.consumed_at.is_(None))
+                .values(consumed_at=now)
+            )
+            profile = _profile_for(connection, user.id)
+            if consumed.rowcount != 1 or not profile or profile.email_verified_at is None:
+                raise BillingAuthenticationError(expired)
+            session_version = int(profile.session_version)
+        else:
+            failures = int(pending.purpose.rsplit(":", 1)[1]) + 1
+            connection.execute(
+                update(AUTH_TOKENS)
+                .where(AUTH_TOKENS.c.token_hash == pending.token_hash, AUTH_TOKENS.c.purpose == pending.purpose)
+                .values(
+                    purpose=f"admin_login:{failures}",
+                    consumed_at=now if failures >= ADMIN_LOGIN_MAX_ATTEMPTS else None,
+                )
+            )
+    # Raising inside ENGINE.begin() would roll back the failed-attempt count.
+    if failures >= ADMIN_LOGIN_MAX_ATTEMPTS:
+        raise BillingAuthenticationError("Kod çok kez hatalı girildi. Yeni kod iste.")
+    if failures:
+        raise BillingError(f"Kod hatalı. Kalan deneme: {ADMIN_LOGIN_MAX_ATTEMPTS - failures}.")
+    return {
+        "user_id": user.id,
+        "email": user.email,
+        "token": issue_session(user.id, user.email, session_version, scope="admin", ttl=ADMIN_SESSION_TTL),
+    }
+
+
+def authenticate_admin(authorization: str) -> dict:
+    """Authorize a Bearer value for admin routes and name the audit actor.
+
+    The ADMIN_ADMIN key remains an emergency credential. Account sessions must
+    be admin-scoped, match the current session_version and belong to an email
+    that is still listed in LECTURESIFT_ADMIN_EMAILS.
+    """
+    if not config.ADMIN_ADMIN and not config.ADMIN_EMAILS:
+        raise BillingConfigurationError("Admin paneli henüz etkin değil.")
+    scheme, _, token = (authorization or "").partition(" ")
+    denied = BillingAuthenticationError("Admin yetkisi gerekli.")
+    if scheme.casefold() != "bearer" or not token:
+        raise denied
+    if config.ADMIN_ADMIN and hmac.compare_digest(token.encode("utf-8"), config.ADMIN_ADMIN.encode("utf-8")):
+        return {"actor": "admin_token"}
+    if not config.ADMIN_EMAILS:
+        raise denied
+    try:
+        user = authenticate_session(token, scope="admin")
+    except BillingAuthenticationError as exc:
+        raise denied from exc
+    if user["email"].casefold() not in config.ADMIN_EMAILS:
+        raise denied
+    return {"actor": user["email"], "user": user}
 
 
 def _active_subscription(connection, user_id: str, now: datetime):

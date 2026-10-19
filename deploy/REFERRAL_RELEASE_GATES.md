@@ -69,9 +69,9 @@ the minute option remains available; a currency is never silently substituted.
 Both `/billing/checkout` and `/billing/manual-transfer/orders` accept optional
 `coupon_code`. Prices are always recomputed by the server.
 
-The existing ADMIN_ADMIN Bearer guard protects GET `/billing/admin/referrals`,
-POST `/billing/admin/referrals/{id}/release` (requires boolean
-`provider_reconciled:true` and `evidence_reference`), and POST
+The admin guard (ADMIN_ADMIN key or a listed admin account session) protects
+GET `/billing/admin/referrals`, POST `/billing/admin/referrals/{id}/release`
+(requires boolean `provider_reconciled:true` and `evidence_reference`), and POST
 `/billing/admin/referrals/reconcile-order` (`order_reference`). The last
 operation only repairs deferred qualification/coupon reconciliation; it cannot
 release credits. It also repairs reservations for known terminal failed or

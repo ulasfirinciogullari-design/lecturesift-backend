@@ -236,6 +236,14 @@ REQUIRE_POSTGRES = os.getenv("LECTURESIFT_REQUIRE_POSTGRES", "false").lower() ==
 BILLING_SESSION_SECRET = os.getenv("BILLING_SESSION_SECRET", "")
 BILLING_LEGACY_SESSION_SECRET_HEX = os.getenv("BILLING_LEGACY_SESSION_SECRET_HEX", "").strip()
 ADMIN_ADMIN = os.getenv("ADMIN_ADMIN", "")
+# Verified accounts that may open the admin panel with their password and an
+# emailed code. Empty disables account sign-in; ADMIN_ADMIN stays the
+# emergency key either way.
+ADMIN_EMAILS = {
+    email.strip().casefold()
+    for email in os.getenv("LECTURESIFT_ADMIN_EMAILS", "").split(",")
+    if email.strip()
+}
 BILLING_PROTECTED_EMAILS = {
     email.strip().casefold()
     for email in os.getenv("BILLING_PROTECTED_EMAILS", "").split(",")
