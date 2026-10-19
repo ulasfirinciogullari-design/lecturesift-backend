@@ -189,6 +189,17 @@ def test_github_social_checks_wait_for_exact_github_sha_first():
     assert "social checks are blocked" in workflow
 
 
+def test_github_social_checks_skip_pushes_and_accept_the_live_revision():
+    workflow = _read(".github/workflows/production-social-check.yml")
+    triggers = workflow.split("permissions:", 1)[0]
+
+    assert "push:" not in triggers
+    assert "schedule:" in triggers
+    assert "workflow_dispatch:" in triggers
+    assert "ref: ${{ inputs.revision || github.sha }}" in workflow
+    assert 'expected_revision="${REQUESTED_REVISION,,}"' in workflow
+
+
 def test_release_contract_is_documented_without_runtime_secret_override():
     docs = _read("VPS_DEPLOYMENT.md")
     runtime_example = _read("deploy/env.example")

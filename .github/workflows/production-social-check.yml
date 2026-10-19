@@ -6,6 +6,11 @@ on:
   schedule:
     - cron: "30 18 * * *"
   workflow_dispatch:
+    inputs:
+      revision:
+        description: "Full commit id production serves now; leave empty for the latest main"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -18,6 +23,8 @@ jobs:
     steps:
       - name: Check out source configuration
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.revision || github.sha }}
 
       - name: Validate source-controlled Instagram publishing state
         id: instagram_publishing
@@ -90,12 +97,17 @@ jobs:
 
       - name: Wait for the production deployment and API health
         shell: bash
+        env:
+          REQUESTED_REVISION: ${{ inputs.revision }}
         run: |
           set -euo pipefail
           health_url="https://api.lecturesift.com/health"
           expected_revision="${GITHUB_SHA,,}"
+          if [ -n "${REQUESTED_REVISION:-}" ]; then
+            expected_revision="${REQUESTED_REVISION,,}"
+          fi
           [[ "$expected_revision" =~ ^[0-9a-f]{40}$ ]] || {
-            echo "GITHUB_SHA is not one full commit id." >&2
+            echo "GITHUB_SHA or the requested revision is not one full commit id." >&2
             exit 1
           }
           for attempt in $(seq 1 40); do
