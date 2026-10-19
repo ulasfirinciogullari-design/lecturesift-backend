@@ -25,12 +25,12 @@ SCHEMA_STATE_TOOL="$ROOT_DIR/deploy/schema_contract_state.py"
 # The source family is selected from the live Render catalog before any
 # manifest runs: product (v4) or workspace (v5). The core v3 family is never a
 # provider source. The restored clone is captured with the same frozen file,
-# copied to one fixed container path that cleanup always removes.
+# streamed to psql on stdin because the postgres container's /tmp is a tmpfs
+# that docker cp cannot write into.
 SOURCE_CONTRACT_VERSION=""
 REHEARSAL_MANIFEST=""
 REHEARSAL_MANIFEST_NAME=""
 REHEARSAL_VERIFIER=""
-TARGET_REHEARSAL_MANIFEST=/tmp/lecturesift-rehearsal-manifest.sql
 
 if [[ "$(id -u)" != "0" ]]; then
   echo "Run this rehearsal as root." >&2
@@ -666,7 +666,6 @@ cleanup_rehearsal() {
   local original_status="$?" cleanup_failed="false"
   trap - EXIT
   set +e
-  docker exec lecturesift-postgres-1 rm -f "$TARGET_REHEARSAL_MANIFEST" >/dev/null 2>&1 || true
   rm -f -- "$run_dir/render.dump" \
     "$run_dir/rehearsal-api.env" "$run_dir/rehearsal-worker.env" \
     "$run_dir/rehearsal-api-squid.conf" \
@@ -1178,11 +1177,9 @@ rm -f -- "$run_dir/render.dump"
   echo "The rehearsal manifest was not selected from the live source inventory." >&2
   exit 1
 }
-docker cp "$REHEARSAL_MANIFEST" \
-  "lecturesift-postgres-1:$TARGET_REHEARSAL_MANIFEST"
 docker compose --project-directory "$ROOT_DIR" --file "$ROOT_DIR/compose.yaml" \
   exec -T postgres psql --no-psqlrc --quiet -U "$POSTGRES_USER" -d "$rehearsal_db" \
-  -v ON_ERROR_STOP=1 -f "$TARGET_REHEARSAL_MANIFEST" > "$run_dir/target.txt"
+  -v ON_ERROR_STOP=1 -f - <"$REHEARSAL_MANIFEST" > "$run_dir/target.txt"
 
 printf '%s\n' "$rehearsal_db" > "$run_dir/database-name.txt"
 safe_pattern='^(DATABASE|SCHEMA|SCHEMA_OBJECT|TABLE|TABLE_DIFF|ANOMALY|STATUS|SCHEMA_COMPAT|UNVALIDATED_FK|MANIFEST_COMPLETE)\|'
@@ -1258,7 +1255,7 @@ LECTURESIFT_PROVISION_DATABASE="$rehearsal_db" \
   "$ROOT_DIR/deploy/provision_database_role.sh"
 docker compose --project-directory "$ROOT_DIR" --file "$ROOT_DIR/compose.yaml" \
   exec -T postgres psql --no-psqlrc --quiet -U "$POSTGRES_USER" -d "$rehearsal_db" \
-  -v ON_ERROR_STOP=1 -f "$TARGET_REHEARSAL_MANIFEST" > "$run_dir/target-migrated.txt"
+  -v ON_ERROR_STOP=1 -f - <"$REHEARSAL_MANIFEST" > "$run_dir/target-migrated.txt"
 if grep -Eq '^(TABLE_DIFF|SCHEMA_COMPAT|UNVALIDATED_FK)\|' \
   "$run_dir/target-migrated.txt" || \
    awk -F'|' '$1 == "ANOMALY" && $3 != "0" { invalid=1 } END { exit(invalid ? 0 : 1) }' \
@@ -1332,7 +1329,7 @@ docker exec --user 10001:10001 -e PYTHONPATH=/app lecturesift-api-rehearsal \
   >"$run_dir/e2e-purge.json"
 docker compose --project-directory "$ROOT_DIR" --file "$ROOT_DIR/compose.yaml" \
   exec -T postgres psql --no-psqlrc --quiet -U "$POSTGRES_USER" -d "$rehearsal_db" \
-  -v ON_ERROR_STOP=1 -f "$TARGET_REHEARSAL_MANIFEST" > "$run_dir/target-after-e2e.txt"
+  -v ON_ERROR_STOP=1 -f - <"$REHEARSAL_MANIFEST" > "$run_dir/target-after-e2e.txt"
 if grep -Eq '^(TABLE_DIFF|SCHEMA_COMPAT|UNVALIDATED_FK)\|' \
   "$run_dir/target-after-e2e.txt" || \
    awk -F'|' '$1 == "ANOMALY" && $3 != "0" { invalid=1 } END { exit(invalid ? 0 : 1) }' \
@@ -1353,7 +1350,6 @@ if ! diff -u "$run_dir/target-migrated.safe" \
   echo "The full application rehearsal did not return to its exact pre-E2E database state." >&2
   exit 1
 fi
-docker exec lecturesift-postgres-1 rm -f "$TARGET_REHEARSAL_MANIFEST"
 cleanup_rehearsal_containers "$rehearsal_suffix"
 cleanup_rehearsal_proxy_networks "$rehearsal_suffix"
 cleanup_rehearsal_work_volumes "$rehearsal_suffix"

@@ -578,9 +578,6 @@ cleanup() {
   trap - EXIT
   set +e
   close_snapshot || true
-  "${compose[@]}" exec -T postgres rm -f \
-    /tmp/lecturesift-rollback-manifest.sql \
-    /tmp/lecturesift-rollback-database-inventory.sql >/dev/null 2>&1 || true
   if [[ "$status" != "0" && "$render_mutated" == "true" && "$render_verified" != "true" ]]; then
     echo "The Render replacement failed; restoring its root-only pre-operation dump." >&2
     if render_command reset-restore-original render-before.dump &&
@@ -647,17 +644,16 @@ queue_idle || fail "the OVH queue is not completely drained"
   --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -v ON_ERROR_STOP=1 \
   -f - <"$SCHEMA_INVENTORY" >"$RUN_DIR/ovh-schema-inventory.txt"
 require_contract_inventory "$RUN_DIR/ovh-schema-inventory.txt" "OVH"
-"${compose[@]}" cp "$MANIFEST" postgres:/tmp/lecturesift-rollback-manifest.sql
-"${compose[@]}" cp "$DATABASE_INVENTORY" \
-  postgres:/tmp/lecturesift-rollback-database-inventory.sql
+# The postgres container's /tmp is a tmpfs that docker cp cannot write into, so
+# the manifest and inventory are streamed to psql on stdin.
 "${compose[@]}" exec -T postgres psql --no-psqlrc --quiet \
   --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -v ON_ERROR_STOP=1 \
-  -f /tmp/lecturesift-rollback-manifest.sql >"$RUN_DIR/ovh-before.txt"
+  -f - <"$MANIFEST" >"$RUN_DIR/ovh-before.txt"
 canonical "$RUN_DIR/ovh-before.txt" "$RUN_DIR/ovh-before.safe"
 capture_local_payment_provider_census "$RUN_DIR/ovh-provider-census-before.safe"
 "${compose[@]}" exec -T postgres psql --no-psqlrc --quiet \
   --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -v ON_ERROR_STOP=1 \
-  -f /tmp/lecturesift-rollback-database-inventory.sql >"$RUN_DIR/ovh-inventory.txt"
+  -f - <"$DATABASE_INVENTORY" >"$RUN_DIR/ovh-inventory.txt"
 canonical_database_inventory "$RUN_DIR/ovh-inventory.txt" \
   "$RUN_DIR/ovh-inventory.safe"
 python3 "$SCHEMA_VERIFIER" current \
@@ -726,7 +722,7 @@ docker run --rm --user 0:0 --volume "$RUN_DIR:/backup:ro" postgres:18-bookworm@s
   pg_restore --list /backup/ovh-final.dump >"$RUN_DIR/ovh-final.dump.list"
 "${compose[@]}" exec -T postgres psql --no-psqlrc --quiet \
   --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -v ON_ERROR_STOP=1 \
-  -f /tmp/lecturesift-rollback-manifest.sql >"$RUN_DIR/ovh-after.txt"
+  -f - <"$MANIFEST" >"$RUN_DIR/ovh-after.txt"
 canonical "$RUN_DIR/ovh-after.txt" "$RUN_DIR/ovh-after.safe"
 capture_local_payment_provider_census "$RUN_DIR/ovh-provider-census-after.safe"
 cmp --silent "$RUN_DIR/ovh-before.safe" "$RUN_DIR/ovh-final.safe" ||

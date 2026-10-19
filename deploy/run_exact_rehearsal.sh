@@ -17,7 +17,6 @@ admission="$admission_root/$revision.ok"
 provenance_root=/var/lib/lecturesift/rehearsal-provenance
 rehearsal_run_root=/var/backups/lecturesift/rehearsal
 postgres_env=/etc/lecturesift/postgres.env
-main_manifest_in_container=/tmp/lecturesift-main-db-rehearsal-manifest.sql
 baseline_ready=false
 rehearsal_succeeded=false
 inner_run_dir=""
@@ -725,11 +724,12 @@ snapshot_manifest() {
   )" || return 1
   [[ "$contract_version" =~ ^[345]$ ]] || return 1
   printf '%s\n' "$contract_version" >"$output.contract-version" || return 1
-  docker cp "$root/deploy/rehearsal_manifest_v${contract_version}.sql" \
-    "lecturesift-postgres-1:$main_manifest_in_container" || return 1
-  docker exec lecturesift-postgres-1 psql --no-psqlrc --quiet \
+  # The postgres container's /tmp is a tmpfs that docker cp cannot write into,
+  # so the frozen manifest is streamed on stdin like the inventory above.
+  docker exec -i lecturesift-postgres-1 psql --no-psqlrc --quiet \
     --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
-    -v ON_ERROR_STOP=1 -f "$main_manifest_in_container" >"$output" || return 1
+    -v ON_ERROR_STOP=1 -f - <"$root/deploy/rehearsal_manifest_v${contract_version}.sql" \
+    >"$output" || return 1
   python3 "$root/deploy/verify_schema_transition_v${contract_version}.py" current \
     --manifest "$output" \
     --contract "$root/deploy/schema_contract_payment_provider_sessions_v1.txt" \
@@ -1036,7 +1036,6 @@ outer_exit() {
   local original_status="$?" post_failed=false after_epoch_ms
   trap - EXIT
   set +e
-  docker exec lecturesift-postgres-1 rm -f -- "$main_manifest_in_container" >/dev/null 2>&1 || true
   cleanup_labeled_residue || post_failed=true
   check_provenance_residue || post_failed=true
   if [[ "$baseline_ready" == "true" ]]; then
@@ -1062,7 +1061,6 @@ outer_exit() {
     cmp --silent "$state/before.manifest.schema-contract" "$state/after.manifest.schema-contract" || post_failed=true
     verify_redis "$after_epoch_ms" || post_failed=true
   fi
-  docker exec lecturesift-postgres-1 rm -f -- "$main_manifest_in_container" >/dev/null 2>&1 || true
   if [[ "$original_status" == "0" && "$rehearsal_succeeded" == "true" && "$post_failed" == "false" ]]; then
     if ! write_admission || ! write_handoff_completion; then
       post_failed=true

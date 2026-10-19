@@ -43,6 +43,7 @@ SCHEMA_VERIFIER=""
 TARGET_BEFORE_CONTRACT_VERSION=""
 TARGET_BEFORE_MANIFEST=""
 TARGET_BEFORE_VERIFIER=""
+TARGET_MANIFEST_FILE=""
 POSTGRES_SECURITY_MANIFEST="$ROOT_DIR/deploy/postgres_security_manifest.sql"
 POSTGRES_SECURITY_VALIDATOR="$ROOT_DIR/deploy/validate_postgres_security_manifest.py"
 POSTGRES_ROLE_LOGIN_PROBE="$ROOT_DIR/deploy/postgres_role_login_probe.sh"
@@ -347,9 +348,10 @@ assert_render_worker_and_queue_stopped() {
 
 target_manifest() {
   local destination="$1"
+  [[ -n "$TARGET_MANIFEST_FILE" && -f "$TARGET_MANIFEST_FILE" ]] || return 1
   "${compose[@]}" exec -T postgres psql --no-psqlrc --quiet \
     --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -v ON_ERROR_STOP=1 \
-    -f /tmp/lecturesift-cutover-manifest.sql >"$destination"
+    -f - <"$TARGET_MANIFEST_FILE" >"$destination"
 }
 
 target_inventory() {
@@ -380,12 +382,13 @@ install_target_manifest() {
   [[ -n "$manifest" &&
      ( "$manifest" == "$MANIFEST" || "$manifest" == "$TARGET_BEFORE_MANIFEST" ) ]] ||
     return 1
-  "${compose[@]}" cp "$manifest" postgres:/tmp/lecturesift-cutover-manifest.sql
+  # The postgres service mounts a tmpfs on /tmp, which docker cp cannot write
+  # into, so the selected manifest is streamed to psql on stdin.
+  TARGET_MANIFEST_FILE="$manifest"
 }
 
 remove_target_manifest() {
-  "${compose[@]}" exec -T postgres rm -f /tmp/lecturesift-cutover-manifest.sql \
-    >/dev/null 2>&1 || true
+  TARGET_MANIFEST_FILE=""
 }
 
 reset_and_restore_target() {
