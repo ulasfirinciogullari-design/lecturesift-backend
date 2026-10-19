@@ -460,9 +460,11 @@ WITH objects(item) AS (
   SELECT 1, 'SECURITY_OBJECT|' || item FROM objects
   UNION ALL
   SELECT 2, 'SECURITY_COMPLETE|v1|' || count(*)::text || '|' ||
-            coalesce(md5(string_agg(item, E'\n' ORDER BY item)), md5(''))
+            coalesce(md5(string_agg(item, E'\n' ORDER BY item COLLATE "C")), md5(''))
   FROM objects
 )
+-- The validator requires code-point order, so sort bytewise rather than by the
+-- database's en_US collation, which ignores case and punctuation.
 SELECT line
 FROM emitted
-ORDER BY sort_key, line;
+ORDER BY sort_key, line COLLATE "C";
