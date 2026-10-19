@@ -728,10 +728,18 @@ def test_first_start_complete_bypasses_status_while_the_gate_is_armed():
         encoding="utf-8"
     )
 
+    consumed_probe = verifier.index('if [[ "$MODE" == "arm" || "$MODE" == "complete" ]]')
+    probe_call = verifier.index("first-start-status", consumed_probe)
+    probe_fallback = verifier.index('|| consumed_status=""', probe_call)
+    instagram_gate = verifier.index('bash "$INSTAGRAM_STOP_GATE"')
     complete_branch = verifier.index('if [[ "$MODE" == "complete" ]]')
     complete_call = verifier.index("complete-first-start", complete_branch)
     complete_exit = verifier.index("exit 0", complete_call)
-    status_call = verifier.index("first-start-status")
+    status_call = verifier.index("first-start-status", complete_exit)
     arm_call = verifier.index("arm-first-start")
 
+    # The consumed probe tolerates the armed (in-progress) status by falling
+    # through to the publisher gate and the strict completion below.
+    assert consumed_probe < probe_call < probe_fallback < instagram_gate
+    assert instagram_gate < complete_branch
     assert complete_branch < complete_call < complete_exit < status_call < arm_call

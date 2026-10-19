@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -329,6 +330,46 @@ def record_baseline(
     return candidate
 
 
+def _load_cutover_evidence():
+    """Load the sibling cutover state machine from its fixed tracked path."""
+
+    path = Path(__file__).resolve(strict=True).with_name("provider_cutover_evidence.py")
+    if not path.is_file() or path.is_symlink():
+        raise ProviderBaselineError("the provider cutover evidence tool is missing or unsafe")
+    spec = importlib.util.spec_from_file_location("lecturesift_provider_cutover_evidence", path)
+    if spec is None or spec.loader is None:
+        raise ProviderBaselineError("the provider cutover evidence tool cannot be loaded")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def cutover_revision_for_check(
+    release_revision: str,
+    *,
+    evidence=None,
+    evidence_root: Path = EVIDENCE_ROOT,
+    ingress_state_root: Path | None = None,
+) -> str:
+    """Resolve the running release to the revision the census is bound to.
+
+    The census stays bound to the cutover release forever. A later release is
+    checked against it only through the one shared settled-cutover resolver.
+    """
+
+    evidence = evidence or _load_cutover_evidence()
+    if ingress_state_root is None:
+        if evidence_root != EVIDENCE_ROOT or evidence.EVIDENCE_ROOT != EVIDENCE_ROOT:
+            raise ProviderBaselineError("production baseline paths are fixed")
+        ingress_state_root = evidence.INGRESS_STATE_ROOT
+    try:
+        return evidence.cutover_revision_for_release(
+            evidence_root, ingress_state_root, release_revision=release_revision
+        )
+    except evidence.EvidenceError as exc:
+        raise ProviderBaselineError(f"cutover is not settled for this release: {exc}") from exc
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cutover-id")
@@ -346,12 +387,18 @@ def main() -> int:
         if args.cutover_id is None and not args.check:
             raise ProviderBaselineError("--cutover-id is required when recording")
         output = EVIDENCE_ROOT / f"payment-provider-baseline-{cutover_id}.json"
+        # Recording is a one-time cutover step and stays pinned to its exact
+        # release. A check from a later release of a settled cutover validates
+        # the same immutable census against the cutover revision.
+        expected_revision = (
+            cutover_revision_for_check(args.revision) if args.check else args.revision
+        )
         result = record_baseline(
             RUNTIME_ENV,
             FINAL_PROOF,
             output,
             expected_cutover_id=cutover_id,
-            expected_revision=args.revision,
+            expected_revision=expected_revision,
             require_existing=args.check,
         )
     except (OSError, ProviderBaselineError) as exc:

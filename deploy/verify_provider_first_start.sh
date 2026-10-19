@@ -79,6 +79,22 @@ EXPECTED_REVISION="$(sed -n 's/^LECTURESIFT_EXPECTED_BUILD_REVISION=//p' "$RELEA
    "$EXPECTED_REVISION" =~ ^[0-9a-f]{40}$ ]] ||
   fail "the release identity is invalid"
 
+# Every later core start, reload and reboot reaches arm/complete again, after
+# Instagram automation may legitimately have been enabled. A first start that
+# is already consumed and valid (for this release or a later release of the
+# settled cutover) arms and consumes nothing, so it needs no publisher proof.
+# A required or armed first start, any unprovable status, and every recovery
+# still pass the stopped-publisher gate below.
+if [[ "$MODE" == "arm" || "$MODE" == "complete" ]]; then
+  consumed_status="$(
+    python3 "$EVIDENCE_TOOL" first-start-status --expected-revision "$EXPECTED_REVISION" 2>/dev/null
+  )" || consumed_status=""
+  if [[ "$consumed_status" == "consumed" ]]; then
+    echo "Provider first-start gate was already consumed."
+    exit 0
+  fi
+fi
+
 bash "$INSTAGRAM_STOP_GATE" >/dev/null ||
   fail "an Instagram publisher remains enabled, active, running, or configured on"
 

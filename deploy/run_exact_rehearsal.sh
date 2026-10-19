@@ -376,6 +376,39 @@ exec 7>"$staging_base/.exact-rehearsal.lock"
 chmod 0600 "$staging_base/.exact-rehearsal.lock"
 flock -n 7 || fail another-exact-rehearsal-active
 
+production_root=/opt/lecturesift
+production_datastores_healthy() {
+  local service identity
+  for service in postgres redis; do
+    identity="$(docker container inspect --format \
+      '{{ index .Config.Labels "com.docker.compose.project" }}|{{ index .Config.Labels "com.docker.compose.service" }}|{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' \
+      "lecturesift-$service-1" 2>/dev/null)" || return 1
+    [[ "$identity" == "lecturesift|$service|true|healthy" ]] || return 1
+  done
+}
+
+# After the provider cutover lecturesift.service owns PostgreSQL and Redis, so
+# stopping the core for a release also stops the two data stores that this
+# rehearsal reads and baselines. Only after every production unit and writer
+# above is proven stopped, start exactly those two services from the installed
+# production project (never from the candidate compose file), then re-prove
+# that no API, worker, proxy or Caddy container came with them.
+ensure_production_datastores() {
+  production_datastores_healthy && return 0
+  [[ -d "$production_root" && ! -L "$production_root" && \
+     "$(realpath -e -- "$production_root")" == "$production_root" && \
+     "$(stat -c '%u' -- "$production_root")" == "0" && \
+     -f "$production_root/compose.yaml" && ! -L "$production_root/compose.yaml" ]] || return 1
+  (( (8#$(stat -c '%a' -- "$production_root") & 8#022) == 0 )) || return 1
+  env -i PATH="$PATH" HOME=/root LANG=C.UTF-8 \
+    docker compose --project-directory "$production_root" \
+    --file "$production_root/compose.yaml" \
+    up -d --no-deps --wait --wait-timeout 300 postgres redis >/dev/null || return 1
+  production_datastores_healthy || return 1
+  bash "$root/deploy/assert_rehearsal_production_stopped.sh" >/dev/null
+}
+ensure_production_datastores || fail production-datastores-unavailable
+
 reconcile_stale_labeled_resources() {
   local identifier record rehearsal_label run_label purpose_label name internal driver scope endpoint endpoints
   local stale_run="" stale_age_ok postgres_identity network_name
