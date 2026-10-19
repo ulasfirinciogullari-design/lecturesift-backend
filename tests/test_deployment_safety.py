@@ -66,13 +66,8 @@ def test_candidate_rehearsal_files_stream_atomically_into_allowlisted_tmpfs_path
     restore = _read("deploy/rehearsal_restore.sh")
 
     assert stack.count("docker cp") == 0
-    assert restore.count("docker cp") == 1
-    assert (
-        'docker cp "$REHEARSAL_MANIFEST" \\\n'
-        '  "lecturesift-postgres-1:$TARGET_REHEARSAL_MANIFEST"'
-    ) in restore
-    assert "TARGET_REHEARSAL_MANIFEST=/tmp/lecturesift-rehearsal-manifest.sql" in restore
-    assert restore.count('rm -f "$TARGET_REHEARSAL_MANIFEST"') == 2
+    assert "TARGET_REHEARSAL_MANIFEST" not in restore
+    assert restore.count('-v ON_ERROR_STOP=1 -f - <"$REHEARSAL_MANIFEST" >') == 3
 
     for script in (stack, restore):
         helper = script.split("write_candidate_tmp_file() {", 1)[1].split("\n}\n", 1)[0]
@@ -1531,3 +1526,26 @@ def test_snapshot_wrapped_manifests_run_psql_quietly():
             assert "--quiet" in following[0], f"{path.name}:{index + 1} runs psql without --quiet"
             checked += 1
     assert checked >= 5
+
+
+def test_postgres_container_files_are_streamed_not_copied_into_tmpfs():
+    # docker cp writes beneath a tmpfs mount, so a file copied into the postgres
+    # container's /tmp is invisible to psql or pg_restore running inside it.
+    postgres = _read("compose.yaml").split("\n  postgres:\n", 1)[1].split("\n  redis:\n", 1)[0]
+    assert "      - /tmp:rw,noexec,nosuid,nodev," in postgres
+    copy_into_postgres = re.compile(r'\bcp\b[^\n]*\s"?(?:postgres|lecturesift-postgres-1):')
+    file_argument = re.compile(r"\s-f\s+(\S+)")
+    checked = 0
+    for path in sorted((ROOT / "deploy").glob("*.sh")):
+        commands = path.read_text(encoding="utf-8").replace("\\\n", " ").splitlines()
+        for command in commands:
+            if command.lstrip().startswith("#"):
+                continue
+            assert not copy_into_postgres.search(command), f"{path.name}: {command.strip()}"
+            if not re.search(r"(?:\bpostgres|lecturesift-postgres-1)\s+(?:psql|pg_restore)\b", command):
+                continue
+            assert "/tmp/lecturesift" not in command, f"{path.name}: {command.strip()}"
+            for argument in file_argument.findall(command):
+                assert argument == "-", f"{path.name}: {command.strip()}"
+                checked += 1
+    assert checked >= 10

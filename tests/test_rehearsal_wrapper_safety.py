@@ -221,7 +221,8 @@ def test_exact_wrapper_attests_all_base_state_without_exposing_values() -> None:
     assert detection < snapshot.index('rehearsal_manifest_v${contract_version}.sql')
     assert detection < snapshot.index('verify_schema_transition_v${contract_version}.py" current')
     assert "rehearsal_manifest_v3.sql" not in snapshot
-    assert snapshot.count("|| return 1") == 7
+    assert snapshot.count("|| return 1") == 6
+    assert '-f - <"$root/deploy/rehearsal_manifest_v${contract_version}.sql"' in snapshot
     assert (
         'cmp --silent "$state/before.manifest.contract-version" '
         '"$state/after.manifest.contract-version" || post_failed=true'

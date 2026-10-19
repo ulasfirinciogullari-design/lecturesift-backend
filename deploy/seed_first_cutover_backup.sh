@@ -73,9 +73,7 @@ RESTIC_LOG="$RUN_DIR/restic.log"
 RESTIC_EVENTS="$RUN_DIR/restic-events.jsonl"
 SNAPSHOT_INFO_FILE="/tmp/lecturesift-$RUN_ID.snapshot"
 SNAPSHOT_APP_NAME="lecturesift-$RUN_ID"
-TARGET_RECOVERY_MANIFEST_FILE="/tmp/lecturesift-first-cutover-manifest.sql"
 snapshot_export_pid=""
-target_manifest_installed="false"
 SOURCE_WORKER_STOP_EVIDENCE_SHA256=""
 TARGET_REDIS_MANIFEST_SHA256=""
 
@@ -319,13 +317,6 @@ install -d -o root -g root -m 0700 -- "$PAYLOAD_DIR" "$RESTIC_CACHE_DIR"
 
 compose=(docker compose --project-directory "$ROOT_DIR" --file "$ROOT_DIR/compose.yaml")
 
-remove_target_manifest() {
-  [[ "$target_manifest_installed" == "true" ]] || return 0
-  "${compose[@]}" exec -T postgres rm -f "$TARGET_RECOVERY_MANIFEST_FILE" \
-    >/dev/null 2>&1 || true
-  target_manifest_installed="false"
-}
-
 close_snapshot() {
   local remaining=""
   "${compose[@]}" exec -T postgres psql --no-psqlrc --quiet \
@@ -359,7 +350,6 @@ cleanup() {
   trap - EXIT
   set +e
   close_snapshot || status=1
-  remove_target_manifest
   if [[ -d "$RUN_DIR" && ! -L "$RUN_DIR" ]]; then
     resolved="$(realpath -e -- "$RUN_DIR" 2>/dev/null || true)"
     if [[ "$resolved" == "$BACKUP_ROOT/$RUN_ID" && "$resolved" != "$BACKUP_ROOT" ]]; then
@@ -515,11 +505,13 @@ canonical_manifest() {
   fi
 }
 
+# The postgres container's /tmp is a tmpfs that docker cp cannot write into, so
+# the recovery manifest is streamed to psql on stdin.
 target_manifest() {
   local destination="$1"
   "${compose[@]}" exec -T postgres psql --no-psqlrc --quiet \
     --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -v ON_ERROR_STOP=1 \
-    -f "$TARGET_RECOVERY_MANIFEST_FILE" >"$destination"
+    -f - <"$RECOVERY_MANIFEST" >"$destination"
 }
 
 validate_marker_permissions() {
@@ -613,8 +605,6 @@ available_bytes="$(df --output=avail -B1 -- "$BACKUP_ROOT" | awk 'NR == 2 {print
 required_bytes=$((database_size * 3 + redis_used_memory * 3 + 5368709120))
 (( available_bytes >= required_bytes )) || fail "insufficient seed storage while preserving 5 GiB"
 
-"${compose[@]}" cp "$RECOVERY_MANIFEST" "postgres:$TARGET_RECOVERY_MANIFEST_FILE"
-target_manifest_installed="true"
 target_manifest "$RUN_DIR/target-before.txt"
 canonical_manifest "$RUN_DIR/target-before.txt" "$RUN_DIR/target-before.safe"
 

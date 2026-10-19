@@ -413,7 +413,6 @@ trap restore_failed ERR
 
 fail_stop_required="true"
 docker compose stop caddy api worker redis
-docker compose cp "$SOURCE/postgres.dump" postgres:/tmp/lecturesift.dump
 docker compose exec -T postgres dropdb \
   --if-exists \
   --username "$POSTGRES_USER" \
@@ -427,12 +426,13 @@ docker compose exec -T postgres createdb \
   --locale en_US.UTF8 \
   --owner "$POSTGRES_USER" \
   "$POSTGRES_DB"
+# The postgres container's /tmp is a small tmpfs that docker cp cannot write
+# into, so the dump is streamed to pg_restore on stdin.
 docker compose exec -T postgres pg_restore \
   --username "$POSTGRES_USER" \
   --dbname "$POSTGRES_DB" \
   --clean --if-exists --no-owner --no-acl --exit-on-error --single-transaction \
-  /tmp/lecturesift.dump
-docker compose exec -T postgres rm -f /tmp/lecturesift.dump
+  <"$SOURCE/postgres.dump"
 
 # Re-prove the database that was actually written into the production volume.
 # The earlier disposable rehearsal protects the live database from a bad dump;
