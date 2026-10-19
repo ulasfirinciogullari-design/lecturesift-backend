@@ -372,8 +372,9 @@ const OPERATOR = {
   address: buildEnv("LEGAL_OPERATOR_ADDRESS"),
   country: buildEnv("LEGAL_OPERATOR_COUNTRY"),
   phone: buildEnv("LEGAL_OPERATOR_PHONE"),
-  email: buildEnv("LEGAL_OPERATOR_EMAIL") || buildEnv("BILLING_SUPPORT_EMAIL")
-    || buildEnv("CONTACT_EMAIL") || "support@lecturesift.com",
+  // Only keys listed in netlify.toml SECRETS_SCAN_OMIT_KEYS may reach dist/;
+  // the literal default matches the backend's final fallback address.
+  email: buildEnv("LEGAL_OPERATOR_EMAIL") || "support@lecturesift.com",
   taxId: buildEnv("LEGAL_TAX_ID"),
   taxOffice: buildEnv("LEGAL_TAX_OFFICE"),
   registrationId: buildEnv("LEGAL_REGISTRATION_ID"),

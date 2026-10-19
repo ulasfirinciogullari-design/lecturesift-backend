@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 import hashlib
 import uuid
+from types import SimpleNamespace
 
 import lecturesift.app as app_module
 import lecturesift.billing_service as billing_service_module
@@ -712,6 +713,53 @@ def test_paid_minute_credit_keeps_its_job_plan_on_the_free_account(monkeypatch):
     assert account["download_enabled"] is True
     assert account["download_access_source"] == "credit"
     assert account["job_entitlements"]["export_formats"] == ["pdf", "docx", "txt"]
+
+
+
+def test_minute_pack_jobs_on_the_free_plan_keep_the_pack_retention(tmp_path, monkeypatch):
+    created = []
+
+    def job_path(job_id):
+        path = tmp_path / job_id
+        path.mkdir()
+        return path
+
+    monkeypatch.setattr(app_module, "_require_ai_provider", lambda *args, **kwargs: None)
+    monkeypatch.setattr(app_module, "_job_path", job_path)
+    monkeypatch.setattr(app_module, "JOBS", SimpleNamespace(
+        cleanup_expired=lambda: None, create=lambda *args, **kwargs: created.append(kwargs),
+    ))
+    monkeypatch.setattr(app_module, "threading", SimpleNamespace(
+        Thread=lambda **kwargs: SimpleNamespace(start=lambda: None),
+    ))
+    client = TestClient(app)
+    _, token = _new_account(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    user_id = client.get("/billing/me", headers=headers).json()["account"]["user"]["id"]
+
+    def retention_days() -> float:
+        response = client.post(
+            "/jobs",
+            headers=headers,
+            data={"quiz_count": "0", "flashcard_count": "0", "output_formats": "pdf"},
+            files={"files": ("notes.pdf", b"%PDF-synthetic", "application/pdf")},
+        )
+        assert response.status_code == 200, response.text
+        return created[-1]["retention_seconds"] / 86400
+
+    assert retention_days() == 7
+    monkeypatch.setattr(config, "BILLING_BANK_IBAN", "TR000000000000000000000000")
+    monkeypatch.setattr(config, "BILLING_BANK_ACCOUNT_HOLDER", "LectureSift Test")
+    monkeypatch.setattr(config, "BILLING_SUPPORT_EMAIL", "billing@example.com")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_NAME", "LectureSift Test")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_ADDRESS", "Test Address 1")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_COUNTRY", "TR")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_PHONE", "+905551112233")
+    monkeypatch.setattr(config, "LEGAL_OPERATOR_EMAIL", "billing@example.com")
+    approve_manual_order(create_manual_order(user_id, "credit", "one_time")["reference"])
+    # The account stays on the free plan; the paid pack's 30-day retention wins.
+    assert client.get("/billing/me", headers=headers).json()["account"]["plan"]["code"] == "free"
+    assert retention_days() == 30
 
 
 def test_job_status_is_visible_only_to_its_owner(tmp_path):
