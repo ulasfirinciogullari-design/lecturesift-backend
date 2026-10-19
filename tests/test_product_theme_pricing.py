@@ -186,6 +186,8 @@ def test_static_plan_cards_match_the_backend_try_catalog():
         assert card["values"] == expected, plan.code
         assert card["price_try_minor"] == (None if price is None else str(price)), plan.code
         assert ("featured" in card["classes"]) is plan.featured, plan.code
+        # The static card must follow the same download rule plans.js renders.
+        assert ("plans.previewOnly" in card["keys"]) is (not plan.download_enabled), plan.code
 
         ad_keys = {"none": "plans.adFree", "limited": "plans.limitedAds"}
         ad_key = ad_keys.get(plan.ad_mode, "plans.adsMayAppear")
