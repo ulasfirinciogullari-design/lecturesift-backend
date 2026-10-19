@@ -92,15 +92,18 @@ def main() -> int:
             return 0
         except (InstagramAPIError, InstagramConfigurationError, RuntimeError, KeyError) as exc:
             last_error = exc
+            # An unanswered publish may already be live, so it is never retried in the same process.
+            retry = attempt < 3 and getattr(exc, "error_type", "") != "publish_outcome_unknown"
             _write_status(
                 {
-                    "status": "retrying" if attempt < 3 else "error",
+                    "status": "retrying" if retry else "error",
                     "attempt": attempt + 1,
                     "error_type": getattr(exc, "error_type", type(exc).__name__),
                 }
             )
-            if attempt < 3:
-                time.sleep(20 * (attempt + 1))
+            if not retry:
+                break
+            time.sleep(20 * (attempt + 1))
 
     print(f"Instagram deployment check failed: {type(last_error).__name__ if last_error else 'unknown'}", file=sys.stderr)
     return 1

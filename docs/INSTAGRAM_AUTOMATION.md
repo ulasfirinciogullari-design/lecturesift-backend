@@ -49,6 +49,10 @@ zayıf konular bu dosyadaki editoryal döngüden çıkarılmalıdır.
 Render cron görevi artık 15 dakikada bir çalışır. Her çalışmada önce zamanı gelen paylaşım
 yapılır, sonra yeni yorum ve DM'ler cevaplanır. Paylaşım gün ve saat dilimi başına bir kez olur
 (açıklama işareti ve depodaki kayıt), bu yüzden sık çalışma çift gönderi üretmez.
+`media_publish` 90 saniyeye kadar beklenir. Meta bu sürede cevap vermez ya da geçici bir hata
+(5xx, kopan bağlantı) döndürürse aynı çalışma yeniden paylaşmaz: son gönderilerde açıklama
+işaretini arar, gönderi oradaysa normal paylaşım gibi kaydeder; yoksa çalışma hata verir ve sonraki
+çalışma önce işareti kontrol eder.
 
 - `INSTAGRAM_STUDIO_ENABLED=true` ve `ELEVENLABS_API_KEY` ile `ELEVENLABS_VOICE_ID` tanımlıysa
   günün dersi (`lecturesift/studio_social.py`) 20:00'de ElevenLabs seslendirmeli 1080x1920 Reel,

@@ -1,6 +1,7 @@
 import hashlib
 import hmac
-from urllib.error import HTTPError
+from http.client import RemoteDisconnected
+from urllib.error import HTTPError, URLError
 
 import pytest
 from fastapi.testclient import TestClient
@@ -47,6 +48,76 @@ def test_api_error_does_not_include_request_or_credentials(monkeypatch):
     assert str(caught.value) == "Invalid token"
     assert caught.value.error_type == "OAuthException"
     assert "access-token" not in str(caught.value)
+
+
+def test_only_media_publish_waits_longer_than_other_graph_calls(monkeypatch):
+    timeouts = {}
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def read(self):
+            return b'{"id":"x"}'
+
+    def fake_urlopen(request, timeout):
+        timeouts[request.full_url.split("?")[0].rsplit("/", 1)[-1]] = timeout
+        return Response()
+
+    monkeypatch.setattr("lecturesift.instagram.urlopen", fake_urlopen)
+    api = client()
+    api.get_recent_media()
+    api.get_container_status("container-1")
+    api.publish_media("container-1")
+    assert timeouts == {"media": 15.0, "container-1": 15.0, "media_publish": 90.0}
+
+
+def _http_error(code, body):
+    error = HTTPError("https://example.invalid", code, "error", {}, None)
+    error.read = lambda: body
+    return error
+
+
+@pytest.mark.parametrize(("failure", "transient"), [
+    (lambda: TimeoutError("The read operation timed out"), True),
+    (lambda: URLError(TimeoutError("timed out")), True),
+    (lambda: ConnectionResetError(104, "Connection reset by peer"), True),
+    (lambda: RemoteDisconnected("Remote end closed connection without response"), True),
+    (lambda: _http_error(500, b'{"error":{"message":"Please retry","type":"OAuthException"}}'), True),
+    (lambda: _http_error(503, b"<html>busy</html>"), True),
+    (lambda: _http_error(400, b'{"error":{"message":"Please retry","type":"OAuthException","is_transient":true}}'), True),
+    (lambda: _http_error(400, b'{"error":{"message":"Invalid parameter","type":"OAuthException"}}'), False),
+])
+def test_publish_failures_with_an_unknown_outcome_are_transient(monkeypatch, failure, transient):
+    def fake_urlopen(*_args, **_kwargs):
+        raise failure()
+
+    monkeypatch.setattr("lecturesift.instagram.urlopen", fake_urlopen)
+    with pytest.raises(InstagramAPIError) as caught:
+        client().publish_media("container-1")
+    assert caught.value.transient is transient
+    assert "access-token" not in str(caught.value)
+
+
+@pytest.mark.parametrize("body", [b"\xff\xfe not utf-8", b"<html>not json</html>"])
+def test_unreadable_publish_answer_is_transient(monkeypatch, body):
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def read(self):
+            return body
+
+    monkeypatch.setattr("lecturesift.instagram.urlopen", lambda *_args, **_kwargs: Response())
+    with pytest.raises(InstagramAPIError) as caught:
+        client().publish_media("container-1")
+    assert caught.value.transient is True
 
 
 def test_instagram_health_returns_safe_account_metadata():

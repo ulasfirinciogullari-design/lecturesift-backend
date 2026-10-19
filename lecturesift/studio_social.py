@@ -32,7 +32,14 @@ from .config import (
     OPENAI_API_KEY,
     PUBLIC_BASE_URL,
 )
-from .daily_social import _assert_target_account, _client, _verify_public_video, _wait_until_ready
+from .daily_social import (
+    _assert_target_account,
+    _client,
+    _find_marked_media,
+    _publish_container,
+    _verify_public_video,
+    _wait_until_ready,
+)
 from .instagram import InstagramConfigurationError
 from .social_storage import read_bytes, read_json, recent_json, write_bytes, write_json
 
@@ -387,9 +394,8 @@ def _already_published(client, row: dict, day: date, kind: str) -> bool:
     field = f"{kind}_media_id"
     if row.get(field):
         return True
-    recent = client.get_recent_media(limit=50).get("data", [])
-    found = next((item for item in recent if marker(day, kind) in (item.get("caption") or "")), None)
-    if found and found.get("id"):
+    found = _find_marked_media(client, marker(day, kind))
+    if found:
         write_json(_key(day, "post.json"), {**row, field: found["id"]})
         return True
     return False
@@ -408,7 +414,7 @@ def publish_reel(day: date) -> dict:
         cover_url=asset_url(day, "cover.jpg"),
     )
     _wait_until_ready(client, container["id"])
-    published = client.publish_media(container["id"])
+    published = _publish_container(client, container["id"], marker(day, "reel"))
     write_json(_key(day, "post.json"), {**row, "reel_media_id": published.get("id")})
     return {"status": "published", "kind": "studio_reel", "date": day.isoformat(), "media_id": published.get("id")}
 
@@ -426,7 +432,7 @@ def publish_carousel(day: date) -> dict:
         children.append(item["id"])
     container = client.create_carousel(children=children, caption=_caption(row, day, "carousel"))
     _wait_until_ready(client, container["id"])
-    published = client.publish_media(container["id"])
+    published = _publish_container(client, container["id"], marker(day, "carousel"))
     write_json(_key(day, "post.json"), {**row, "carousel_media_id": published.get("id")})
     return {"status": "published", "kind": "studio_carousel", "date": day.isoformat(), "media_id": published.get("id")}
 

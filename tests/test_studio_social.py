@@ -3,7 +3,9 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from lecturesift import daily_social
 from lecturesift import studio_social as studio
+from lecturesift.instagram import InstagramAPIError
 
 
 def _draft(**overrides):
@@ -214,3 +216,124 @@ def test_run_command_exits_non_zero_when_a_slot_fails(monkeypatch):
     assert studio.main(["run"]) == 1
     monkeypatch.setattr(studio, "run_scheduled", lambda: [{"status": "nothing_due"}])
     assert studio.main(["run"]) == 0
+
+
+class _TimeoutGraph:
+    """Fake Graph client whose media_publish times out, either after Meta created the post or before."""
+
+    def __init__(self, creates_post: bool):
+        self.creates_post = creates_post
+        self.media, self.captions = [], {}
+        self.publish_calls = self.recent_calls = 0
+
+    def get_account(self):
+        return {"username": "lecturesift"}
+
+    def get_recent_media(self, limit=25):
+        self.recent_calls += 1
+        return {"data": list(self.media)}
+
+    def create_media_container(self, *, media_url, caption="", media_type="IMAGE", cover_url=None):
+        self.captions["container-1"] = caption
+        return {"id": "container-1"}
+
+    def create_carousel_item(self, *, image_url):
+        return {"id": "item-" + image_url.rsplit("-", 1)[-1]}
+
+    def create_carousel(self, *, children, caption=""):
+        assert len(children) == studio.CAROUSEL_SLIDES
+        self.captions["container-1"] = caption
+        return {"id": "container-1"}
+
+    def get_container_status(self, _container_id):
+        return {"status_code": "FINISHED"}
+
+    def publish_media(self, container_id):
+        self.publish_calls += 1
+        if self.creates_post:
+            self.media.insert(0, {"id": "media-9", "caption": self.captions[container_id]})
+        raise InstagramAPIError("Instagram API is temporarily unavailable", transient=True)
+
+
+def _studio_publish_setup(monkeypatch, graph, day):
+    store = _fake_storage(monkeypatch)
+    store[studio._key(day, "post.json")] = {
+        **studio.build_row(studio._CURATED[0], day), "date": day.isoformat(), "rendered": True,
+        "carousel_rendered": True, "reel_media_id": None, "carousel_media_id": None,
+    }
+    monkeypatch.setattr(studio, "_client", lambda: graph)
+    monkeypatch.setattr(studio, "prepare", studio._row)
+    monkeypatch.setattr(studio, "prepare_carousel", studio._row)
+    monkeypatch.setattr(studio, "_verify_public_video", lambda _url: None)
+    monkeypatch.setattr(daily_social.time, "sleep", lambda _seconds: None)
+    return store
+
+
+@pytest.mark.parametrize("kind", ["reel", "carousel"])
+def test_publish_that_times_out_after_meta_created_the_post_is_recorded(monkeypatch, kind):
+    day = date(2026, 10, 19)
+    graph = _TimeoutGraph(creates_post=True)
+    store = _studio_publish_setup(monkeypatch, graph, day)
+    result = getattr(studio, f"publish_{kind}")(day)
+    assert result == {"status": "published", "kind": f"studio_{kind}", "date": "2026-10-19", "media_id": "media-9"}
+    assert store[studio._key(day, "post.json")][f"{kind}_media_id"] == "media-9"
+    assert graph.publish_calls == 1
+
+
+@pytest.mark.parametrize("kind", ["reel", "carousel"])
+def test_publish_that_times_out_without_a_post_fails_without_republishing(monkeypatch, kind):
+    day = date(2026, 10, 19)
+    graph = _TimeoutGraph(creates_post=False)
+    store = _studio_publish_setup(monkeypatch, graph, day)
+    with pytest.raises(InstagramAPIError) as caught:
+        getattr(studio, f"publish_{kind}")(day)
+    assert caught.value.error_type == "publish_outcome_unknown"
+    assert "not in recent media" in str(caught.value)
+    assert graph.publish_calls == 1
+    assert graph.recent_calls == 4  # the check before publishing, then three looks for the marker
+    assert store[studio._key(day, "post.json")][f"{kind}_media_id"] is None
+
+
+def test_a_definitive_publish_error_is_not_retried_or_masked(monkeypatch):
+    day = date(2026, 10, 19)
+    graph = _TimeoutGraph(creates_post=False)
+    _studio_publish_setup(monkeypatch, graph, day)
+
+    def reject(_container_id):
+        graph.publish_calls += 1
+        raise InstagramAPIError("The media is not ready for publishing", error_type="OAuthException")
+
+    graph.publish_media = reject
+    with pytest.raises(InstagramAPIError, match="not ready"):
+        studio.publish_reel(day)
+    assert graph.publish_calls == 1 and graph.recent_calls == 1
+
+
+def _reel_slot(monkeypatch, graph, day):
+    store = _studio_publish_setup(monkeypatch, graph, day)
+    store[studio._key(day, "post.json")]["carousel_media_id"] = "carousel-1"
+    monkeypatch.setattr(studio, "INSTAGRAM_DAILY_AUTOMATION_ENABLED", True)
+    monkeypatch.setattr(studio, "INSTAGRAM_REEL_HOUR", 20)
+    monkeypatch.setattr(studio, "INSTAGRAM_CAROUSEL_HOUR", 13)
+    return store
+
+
+def test_scheduled_reel_slot_succeeds_when_meta_answers_publish_late(monkeypatch):
+    day, tz = date(2026, 10, 19), ZoneInfo("Europe/Istanbul")
+    graph = _TimeoutGraph(creates_post=True)
+    _reel_slot(monkeypatch, graph, day)
+    assert [r["status"] for r in studio.run_scheduled(datetime(2026, 10, 19, 20, 0, tzinfo=tz))] == ["published"]
+    assert studio.run_scheduled(datetime(2026, 10, 19, 20, 15, tzinfo=tz))[0]["status"] == "nothing_due"
+    assert graph.publish_calls == 1
+
+
+def test_scheduled_reel_slot_with_unknown_outcome_is_settled_by_the_next_run(monkeypatch):
+    day, tz = date(2026, 10, 19), ZoneInfo("Europe/Istanbul")
+    graph = _TimeoutGraph(creates_post=False)
+    store = _reel_slot(monkeypatch, graph, day)
+    first = studio.run_scheduled(datetime(2026, 10, 19, 20, 0, tzinfo=tz))
+    assert first[0]["status"] == "failed" and "outcome unknown" in first[0]["error"]
+    graph.media.insert(0, {"id": "media-late", "caption": graph.captions["container-1"]})  # listed late
+    assert studio.run_scheduled(datetime(2026, 10, 19, 20, 15, tzinfo=tz))[0]["status"] == "already_published"
+    assert store[studio._key(day, "post.json")]["reel_media_id"] == "media-late"
+    assert graph.publish_calls == 1

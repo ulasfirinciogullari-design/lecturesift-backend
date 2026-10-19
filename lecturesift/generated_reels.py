@@ -25,6 +25,7 @@ from .daily_social import (
     _client,
     _fit_wrapped,
     _font,
+    _publish_container,
     _verify_public_video,
     _wait_until_ready,
     render_tip_reel,
@@ -500,7 +501,7 @@ def publish_generated_reel(day: date | None = None) -> dict:
         cover_url=f"{base_url}/instagram/evergreen/reel/{selected_day.isoformat()}.jpg",
     )
     _wait_until_ready(client, container["id"])
-    published = client.publish_media(container["id"])
+    published = _publish_container(client, container["id"], marker)
     write_json(_key(selected_day), {**post, "published_media_id": published.get("id")})
     return {"status": "published", "kind": "generated_reel", "date": selected_day.isoformat(), "media_id": published.get("id")}
 

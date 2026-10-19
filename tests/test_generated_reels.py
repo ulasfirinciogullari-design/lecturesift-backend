@@ -4,6 +4,7 @@ import subprocess
 
 import lecturesift.generated_reels as reels
 from lecturesift.daily_social import _reel_audio
+from lecturesift.instagram import InstagramAPIError
 
 
 def _growth_concept():
@@ -70,6 +71,46 @@ def test_generated_reel_does_not_republish_a_recent_marker(monkeypatch):
     monkeypatch.setattr(reels, "_client", FakeClient)
     monkeypatch.setattr(reels, "_ensure_post", lambda _day: {"published_media_id": None})
     assert reels.publish_generated_reel(day)["status"] == "already_published"
+
+
+def test_generated_reel_records_a_post_meta_created_before_publish_timed_out(monkeypatch):
+    day = date(2026, 10, 19)
+    objects = {}
+
+    class FakeClient:
+        def __init__(self):
+            self.media, self.publishes = [], 0
+
+        def get_account(self):
+            return {"username": "lecturesift"}
+
+        def get_recent_media(self, limit=50):
+            return {"data": list(self.media)}
+
+        def create_media_container(self, **kwargs):
+            self.caption = kwargs["caption"]
+            return {"id": "container-1"}
+
+        def get_container_status(self, _container_id):
+            return {"status_code": "FINISHED"}
+
+        def publish_media(self, _container_id):
+            self.publishes += 1
+            self.media.append({"id": "media-7", "caption": self.caption})
+            raise InstagramAPIError("Instagram API is temporarily unavailable", transient=True)
+
+    client = FakeClient()
+    monkeypatch.setattr(reels, "INSTAGRAM_DAILY_AUTOMATION_ENABLED", True)
+    monkeypatch.setattr(reels, "_client", lambda: client)
+    monkeypatch.setattr(reels, "_ensure_post", lambda _day: {
+        "published_media_id": None, "caption": "Hook\n\n#LectureSift\nLectureSift · reel · 2026-10-19\nVoice: AI-generated.",
+    })
+    monkeypatch.setattr(reels, "_verify_public_video", lambda _url: None)
+    monkeypatch.setattr(reels, "write_json", lambda key, value: objects.__setitem__(key, value))
+    result = reels.publish_generated_reel(day)
+    assert result == {"status": "published", "kind": "generated_reel", "date": "2026-10-19", "media_id": "media-7"}
+    assert objects[reels._key(day)]["published_media_id"] == "media-7"
+    assert client.publishes == 1
 
 
 def test_reel_prepare_command_never_publishes(monkeypatch):
