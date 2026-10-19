@@ -13,7 +13,7 @@ import logging
 import uuid
 from datetime import timedelta, timezone
 
-from sqlalchemy import select, update
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
 from . import billing_service as billing, config
@@ -23,6 +23,9 @@ LOGGER = logging.getLogger(__name__)
 # A later callback may retry a failed send only while the provider still
 # deduplicates the idempotency key. Older paid orders are never backfilled.
 RETRY_WINDOW = timedelta(hours=24)
+# A sender that died between claiming and recording the outcome leaves its
+# claim pending. The mailer gives up after 15 s, so an older claim is stale.
+STALE_CLAIM = timedelta(minutes=10)
 EVENT_NAMESPACE = uuid.UUID("5d0c7e43-2f1b-4c55-9a35-0b8f3c6e7a21")
 ACTOR = "system"
 PENDING = "order_confirmation_pending"
@@ -95,6 +98,9 @@ def _prepare(reference: str) -> tuple[str, dict | None]:
         if plan.kind == "subscription":
             ends_at = connection.execute(select(billing.SUBSCRIPTIONS.c.ends_at).where(
                 billing.SUBSCRIPTIONS.c.source_reference == reference)).scalar()
+    # Card providers may charge more than the order price (PayTR installment
+    # fees), so report the provider-confirmed amount. Bank transfers have none.
+    charged_minor = getattr(order, "provider_amount_minor", None) or order.amount_minor
     from .order_notification_templates import render_order_confirmation_email
     message = render_order_confirmation_email(
         recipient["language"],
@@ -102,7 +108,7 @@ def _prepare(reference: str) -> tuple[str, dict | None]:
         plan_code=order.plan_code,
         plan_kind=plan.kind,
         interval=order.interval,
-        amount_minor=order.amount_minor,
+        amount_minor=charged_minor,
         currency=order.currency,
         purchased_at=order.updated_at,
         minutes=plan.minutes,
@@ -117,8 +123,9 @@ def _prepare(reference: str) -> tuple[str, dict | None]:
 
 def _claim(events, reference: str, user_id: str, email: str) -> bool:
     key = event_id(reference)
+    now = billing.utcnow()
     values = {"subject_email": email[:320], "action": PENDING,
-              "summary": f"{_SUMMARIES[PENDING]}: {reference}", "created_at": billing.utcnow()}
+              "summary": f"{_SUMMARIES[PENDING]}: {reference}", "created_at": now}
     try:
         with billing.ENGINE.begin() as connection:
             connection.execute(events.insert().values(
@@ -126,11 +133,17 @@ def _claim(events, reference: str, user_id: str, email: str) -> bool:
         return True
     except IntegrityError:
         pass
-    # Pending, sent and ambiguous deliveries stay closed. Only a definite
-    # failure that the provider would still deduplicate is claimed again.
+    # Sent and ambiguous deliveries stay closed, and so does a live claim.
+    # Resend deduplicates the deterministic idempotency key for 24 hours, so
+    # a definite failure or a stale claim left by a crashed sender may be
+    # claimed again; the conditional update lets only one caller win.
+    if config.EMAIL_PROVIDER != "resend":
+        return False
+    reclaimable = or_(events.c.action == RETRY,
+                      and_(events.c.action == PENDING, events.c.created_at < now - STALE_CLAIM))
     with billing.ENGINE.begin() as connection:
         result = connection.execute(update(events).where(
-            events.c.id == key, events.c.action == RETRY).values(**values))
+            events.c.id == key, reclaimable).values(**values))
     return result.rowcount == 1
 
 
@@ -153,7 +166,7 @@ def _deliver(reference: str) -> str:
     if not _claim(ADMIN_ACCOUNT_EVENTS, reference, prepared["order"].user_id, recipient["email"]):
         return "duplicate"
     # A retry within the window reuses this key, so the provider drops a copy
-    # whose first attempt was accepted despite an ambiguous response.
+    # whose first attempt was accepted despite an ambiguous response or crash.
     key = "order-confirmation/" + hashlib.sha256(reference.encode()).hexdigest()
     try:
         send_transactional_email(recipient["email"], message["subject"], message["html"], message["text"],

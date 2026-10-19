@@ -151,13 +151,14 @@ def test_failed_payment_sends_no_confirmation(mail):
     assert billing.account_status(user_id)["credit_minutes"] == 0
 
 
-def test_duplicate_paytr_callbacks_send_one_confirmation(mail, monkeypatch):
+def test_duplicate_paytr_callbacks_send_one_confirmation_with_the_charged_amount(mail, monkeypatch):
     monkeypatch.setattr(config, "PAYTR_MERCHANT_ID", "123456")
     monkeypatch.setattr(config, "PAYTR_MERCHANT_KEY", "merchant-key")
     monkeypatch.setattr(config, "PAYTR_MERCHANT_SALT", "merchant-salt")
     user_id, _ = _customer()
     order = billing.create_payment_order(user_id, "paytr", "credit", "one_time", "TRY")
-    reference, total = order["reference"], "19900"
+    # PayTR reports installment fees in total_amount; the card was charged that.
+    reference, total = order["reference"], "20500"
     digest = hmac.new(b"merchant-key", f"{reference}merchant-saltsuccess{total}".encode(), hashlib.sha256).digest()
     callback = {"merchant_oid": reference, "status": "success", "total_amount": total,
                 "payment_amount": "19900", "hash": base64.b64encode(digest).decode()}
@@ -167,7 +168,10 @@ def test_duplicate_paytr_callbacks_send_one_confirmation(mail, monkeypatch):
 
     assert [(response.status_code, response.text) for response in responses] == [(200, "OK")] * 3
     assert len(mail) == 1
-    assert billing.payment_order(reference)["status"] == "paid"
+    (_, _, html, text), _ = mail[0]
+    assert "Tutar: 205,00 TRY" in text and "205,00 TRY" in html
+    assert "199,00" not in text
+    assert billing.payment_order(reference)["provider_amount_minor"] == 20500
     assert billing.account_status(user_id)["credit_minutes"] == 180
 
 
@@ -233,6 +237,39 @@ def test_ambiguous_smtp_failure_is_never_replayed(mail, monkeypatch):
 
     assert len(attempts) == 1
     assert _event(order["reference"]).action == notifications.UNKNOWN
+
+
+@pytest.mark.parametrize("provider", ["resend", "smtp"])
+def test_a_claim_left_pending_by_a_crashed_sender_is_recovered_only_when_stale(mail, monkeypatch, provider):
+    monkeypatch.setattr(config, "EMAIL_PROVIDER", provider)
+    user_id, email = _customer()
+    order = billing.create_payment_order(user_id, "iyzico", "credit", "one_time", "TRY")
+    reference = order["reference"]
+    monkeypatch.setattr(notifications, "email_delivery_configured", lambda: False)
+    _paid(reference, 19900)
+    monkeypatch.setattr(notifications, "email_delivery_configured", lambda: True)
+    # The process died after committing its claim and before sending.
+    assert notifications._claim(rollout_service.ADMIN_ACCOUNT_EVENTS, reference, user_id, email)
+
+    _paid(reference, 19900)
+    assert mail == []
+    assert notifications.notify_paid_order(reference) == "duplicate"
+
+    events = rollout_service.ADMIN_ACCOUNT_EVENTS
+    with billing.ENGINE.begin() as connection:
+        connection.execute(update(events).where(events.c.id == notifications.event_id(reference)).values(
+            created_at=billing.utcnow() - notifications.STALE_CLAIM - timedelta(minutes=1)))
+    _paid(reference, 19900)
+    _paid(reference, 19900)
+
+    if provider == "smtp":
+        # Without an idempotency key a stale claim may already have been sent.
+        assert mail == []
+        assert _event(reference).action == notifications.PENDING
+        return
+    assert len(mail) == 1
+    assert mail[0][1]["idempotency_key"] == "order-confirmation/" + hashlib.sha256(reference.encode()).hexdigest()
+    assert _event(reference).action == notifications.SENT
 
 
 def test_a_crashing_notifier_never_fails_the_payment(mail, monkeypatch):
