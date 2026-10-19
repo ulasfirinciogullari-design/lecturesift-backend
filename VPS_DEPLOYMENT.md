@@ -757,6 +757,17 @@ manifest under the shared migration lock. It writes a durable recovery audit
 proof before removing the fence. Any mismatch leaves the fence in place for
 investigation; there is no marker-deletion bypass.
 
+## Post-cutover releases
+
+Every release after the provider cutover follows the ordered procedure in
+[`deploy/POST_CUTOVER_RELEASE.md`](deploy/POST_CUTOVER_RELEASE.md): pause the
+scheduled jobs, stage, stop production, rehearse, promote, start, verify, and
+prune old images while keeping the current and previous releases. It also
+covers the rollback. A later release passes the read-only cutover gates only
+once the cutover is settled: valid final proof, consumed first start,
+`activated` ingress and a valid baseline, all for the cutover revision. Every
+mutating cutover step stays pinned to the cutover revision.
+
 ## Post-cutover disaster recovery
 
 `deploy/restore.sh` is only for a backup created by `deploy/backup.sh` from the

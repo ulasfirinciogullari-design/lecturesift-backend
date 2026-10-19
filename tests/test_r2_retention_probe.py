@@ -172,3 +172,53 @@ def test_service_uses_only_root_host_backup_environment():
     assert "never lists the bucket" in docs
     assert "Generic permission failure" not in docs  # wording stays unambiguous and lowercase
     assert "generic permission failure is not proof" in docs
+
+
+def test_retention_record_is_never_replaced_after_the_provider_cutover_is_final(
+    tmp_path, monkeypatch, capsys
+):
+    final_proof = tmp_path / "provider-cutover.ok"
+    # Before finalization the first-cutover seed may need a fresh re-probe.
+    probe.refuse_after_provider_cutover(final_proof)
+    final_proof.write_text("status=provider-cutover-verified\n", encoding="utf-8")
+    with pytest.raises(probe.ProbeError, match="never replaced"):
+        probe.refuse_after_provider_cutover(final_proof)
+
+    # The finalized proof hash-binds the record; a late write never replaces it.
+    evidence_root = tmp_path / "recovery-drills"
+    evidence_root.mkdir()
+    record = evidence_root / probe.EVIDENCE_NAME
+    record.write_text("status=immutable-retention-verified\n", encoding="utf-8")
+    before = record.read_bytes()
+    with pytest.raises(probe.ProbeError, match="never replaced"):
+        probe._write_evidence(
+            {
+                "delete_result": "retention-locked",
+                "key": "restic/data/.lecturesift-retention-probes/v1/probe.json",
+                "payload_sha256": "a" * 64,
+            },
+            target=probe.parse_repository(VALID_REPOSITORY),
+            repository_id_sha256="b" * 64,
+            root=evidence_root,
+            final_proof=final_proof,
+        )
+    assert record.read_bytes() == before
+    assert sorted(path.name for path in evidence_root.iterdir()) == [probe.EVIDENCE_NAME]
+
+    # The service refuses before it creates an immutable R2 object.
+    def unexpected(*_args, **_kwargs):
+        pytest.fail("the probe must not run after the provider cutover is final")
+
+    monkeypatch.setattr(probe, "PROVIDER_CUTOVER_FINAL_PROOF", final_proof)
+    monkeypatch.setattr(probe.os, "geteuid", lambda: 0, raising=False)
+    monkeypatch.setattr(probe, "CloudflareR2Client", unexpected)
+    monkeypatch.setattr(probe, "run_probe", unexpected)
+    assert probe.main(["--confirm", probe.CONFIRMATION]) == 1
+    assert "never replaced" in capsys.readouterr().out
+
+    service = (ROOT / "deploy" / "lecturesift-r2-retention-probe.service").read_text(
+        encoding="utf-8"
+    )
+    timers = sorted(path.name for path in (ROOT / "deploy").glob("*.timer"))
+    assert "lecturesift-r2-retention-probe.timer" not in timers
+    assert "[Install]" not in service

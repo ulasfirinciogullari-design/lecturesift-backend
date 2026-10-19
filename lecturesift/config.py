@@ -112,7 +112,15 @@ def _ingress_cutover_mode() -> str | None:
         or not re.fullmatch(r"[0-9a-f]{32}", fields.get("cutover_id", ""))
         or not _SHA256_PATTERN.fullmatch(fields.get("final_proof_sha256", ""))
         or not _FULL_BUILD_REVISION.fullmatch(fields.get("release_revision", ""))
-        or fields.get("release_revision") != BUILD_REVISION
+        or not _FULL_BUILD_REVISION.fullmatch(BUILD_REVISION)
+        # The state stays bound to the cutover release. Only its terminal
+        # activated status may serve a later release: the host preflight
+        # starts one only after re-proving the finalized cutover chain, the
+        # consumed first start and this activation for the cutover revision.
+        or (
+            fields.get("release_revision") != BUILD_REVISION
+            and fields.get("status") != "provider-ingress-activated"
+        )
         or (
             source_revision != "unbound"
             and not _FULL_BUILD_REVISION.fullmatch(source_revision)
