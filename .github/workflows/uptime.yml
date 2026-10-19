@@ -1,0 +1,35 @@
+name: Uptime alert
+
+# Outside-in check of the public homepage and API health. A confirmed failure
+# opens one "outage" issue that mentions the repository owner, so GitHub emails
+# them; state changes add one comment and recovery closes the issue.
+on:
+  schedule:
+    # Every 10 minutes, off the top of the hour when scheduled runs queue most.
+    - cron: "4,14,24,34,44,54 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: uptime-alert
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/uptime_alert.py
+          sparse-checkout-cone-mode: false
+      - name: Check the site and API, then open, update or close the outage issue
+        # Three attempts about 30 s apart before a target counts as down.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: python3 scripts/uptime_alert.py
