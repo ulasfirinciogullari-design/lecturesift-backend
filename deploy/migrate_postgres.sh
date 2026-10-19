@@ -737,7 +737,7 @@ source_pg_exec docker run --rm --user 0:0 \
       printf "SET TRANSACTION SNAPSHOT '\''%s'\'';\n" "$SNAPSHOT_ID"
       cat "/probe/$MANIFEST_NAME"
       printf "COMMIT;\n"
-    } | psql --no-psqlrc -v ON_ERROR_STOP=1 \
+    } | psql --no-psqlrc --quiet -v ON_ERROR_STOP=1 \
       > /backup/source-snapshot.txt
     pg_dump --format=custom --no-owner --no-acl \
       --snapshot "$SNAPSHOT_ID" --file=/backup/render-final.dump
