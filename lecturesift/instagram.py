@@ -2,8 +2,9 @@ import hashlib
 import hmac
 import json
 from dataclasses import dataclass
+from http.client import HTTPException
 from typing import Any
-from urllib.error import HTTPError, URLError
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -13,10 +14,19 @@ class InstagramConfigurationError(RuntimeError):
 
 
 class InstagramAPIError(RuntimeError):
-    def __init__(self, message: str, *, status_code: int = 502, error_type: str = "instagram_api_error"):
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int = 502,
+        error_type: str = "instagram_api_error",
+        transient: bool = False,
+    ):
         super().__init__(message)
         self.status_code = status_code
         self.error_type = error_type
+        # A timeout, dropped connection or 5xx: Meta may still have carried out the request.
+        self.transient = transient
 
 
 @dataclass(frozen=True)
@@ -27,6 +37,8 @@ class InstagramClient:
     api_version: str = "v23.0"
     base_url: str = "https://graph.instagram.com"
     timeout_seconds: float = 15.0
+    # Meta can take well over the default to answer media_publish while it finishes the post.
+    publish_timeout_seconds: float = 90.0
 
     def __post_init__(self) -> None:
         if not all((self.access_token, self.account_id, self.app_secret)):
@@ -42,7 +54,9 @@ class InstagramClient:
         ).hexdigest()
         return {"access_token": self.access_token, "appsecret_proof": proof}
 
-    def _request(self, method: str, path: str, params: dict[str, Any]) -> dict[str, Any]:
+    def _request(
+        self, method: str, path: str, params: dict[str, Any], *, timeout: float | None = None
+    ) -> dict[str, Any]:
         payload = {**params, **self._auth()}
         url = f"{self.base_url.rstrip('/')}/{self.api_version}/{path.lstrip('/')}"
         body = None
@@ -52,19 +66,21 @@ class InstagramClient:
             body = urlencode(payload).encode("utf-8")
         request = Request(url, data=body, method=method, headers={"Accept": "application/json"})
         try:
-            with urlopen(request, timeout=self.timeout_seconds) as response:
+            with urlopen(request, timeout=timeout or self.timeout_seconds) as response:
                 return json.loads(response.read().decode("utf-8"))
         except HTTPError as exc:
+            transient = exc.code >= 500
             try:
                 data = json.loads(exc.read().decode("utf-8"))
                 error = data.get("error", {})
                 message = error.get("message", "Instagram API request failed")
                 error_type = error.get("type", "instagram_api_error")
-            except (ValueError, AttributeError):
+                transient = transient or error.get("is_transient") is True
+            except (ValueError, AttributeError, OSError, HTTPException):
                 message, error_type = "Instagram API request failed", "instagram_api_error"
-            raise InstagramAPIError(message, status_code=502, error_type=error_type) from None
-        except (URLError, TimeoutError, json.JSONDecodeError):
-            raise InstagramAPIError("Instagram API is temporarily unavailable") from None
+            raise InstagramAPIError(message, status_code=502, error_type=error_type, transient=transient) from None
+        except (OSError, HTTPException, json.JSONDecodeError):  # URLError, timeouts and dropped connections
+            raise InstagramAPIError("Instagram API is temporarily unavailable", transient=True) from None
 
     def get_account(self) -> dict[str, Any]:
         return self._request(
@@ -94,7 +110,12 @@ class InstagramClient:
         return self._request("GET", container_id, {"fields": "id,status_code,status"})
 
     def publish_media(self, container_id: str) -> dict[str, Any]:
-        return self._request("POST", f"{self.account_id}/media_publish", {"creation_id": container_id})
+        return self._request(
+            "POST",
+            f"{self.account_id}/media_publish",
+            {"creation_id": container_id},
+            timeout=self.publish_timeout_seconds,
+        )
 
     def get_recent_media(self, limit: int = 25) -> dict[str, Any]:
         return self._request(
