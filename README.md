@@ -75,6 +75,21 @@ node --check frontend/app.js
 
 The automated suite covers human-readable API errors, SSRF/private-URL rejection, PDF-only default packaging, selectable Word/TXT outputs, ordered multi-source routing, legacy separate audio/visual compatibility, MP3 merging, slide-vs-scene classification, WebM timestamp accuracy, and genuine-slide preservation.
 
+## Uptime alert
+
+`.github/workflows/uptime.yml` checks the site from outside every 10 minutes
+(and on manual dispatch): `https://lecturesift.com/` must return 200 with the
+homepage hero, and `https://api.lecturesift.com/health` must return 200 with
+`ok: true` and a version. A failing address is retried twice about 30 seconds
+apart before it counts as down. A confirmed failure opens one issue labelled
+`outage` ("Site erişilemiyor: ...") that mentions the repository owner, so
+GitHub emails them; later runs comment only when the set of failing addresses
+changes, and the first healthy run comments "Site yeniden erişilebilir" and
+closes the issue. It uses only the workflow's `GITHUB_TOKEN` (`issues: write`,
+`contents: read`). GitHub runs scheduled workflows from `main` only, may delay
+them under load, and pauses them in public repositories after 60 days without
+repository activity; re-enable it from the Actions tab if that happens.
+
 ## Main API routes
 
 - `POST /jobs`: upload ordered sources in `files`. The paired `audio_files` plus
