@@ -512,9 +512,13 @@ the installer also refuses an already-enabled staging unit.
    `RENDER_WORKER_SERVICE_ID`, `RENDER_WORKER_SERVICE_NAME`,
    `RENDER_INSTAGRAM_CRON_SERVICE_ID`, and
    `RENDER_INSTAGRAM_CRON_SERVICE_NAME`. The token needs
-   read access to those two services only. Cutover tools issue only four
-   official Render GET requests (each service plus its instances), require the
-   exact worker and cron to be suspended with no listed instance, and bind the secret-free
+   read access to those two services only. Cutover tools issue only six
+   official Render GET requests: each service, the worker's instances, the
+   cron's `cron_job_run_ended` and then `cron_job_run_started` events from the
+   last 13 hours, and the cron service again. Render has no instance list for cron jobs (it answers HTTP 400), so
+   the cron counts as idle only when every run started in that window has also
+   ended. The tools require the exact worker and cron to be suspended with no
+   listed worker instance and no running cron run, and bind the secret-free
    result digest into every provider proof. They never send Celery remote-control
    commands to the live Render Redis service.
 2. Put the live Render API into exact `freeze` mode, stop its worker, drain all
@@ -635,7 +639,7 @@ the installer also refuses an already-enabled staging unit.
    ID/revision and
    `LECTURESIFT_PROVIDER_CUTOVER_FINALIZE_CONFIRM=YES`. The finalizer rechecks
    the direct Render freeze response and provider identity, the exact Render
-   revision, absence of both its worker and Instagram cron instances, both queues,
+   revision, absence of any worker instance or running Instagram cron run, both queues,
    pending provider orders, clean Git revision, seed proof, and
    repository-bound recovery and retention evidence. Only exact-matching
    PostgreSQL, Redis and first-cutover seed proofs can
