@@ -1649,3 +1649,16 @@ def test_snapshot_selectors_pick_the_newest_across_staging_paths(tmp_path: Path)
     assert subprocess.run(
         [sys.executable, "-c", freshness, "172800"], input=json.dumps(stale), text=True, check=False
     ).returncode != 0
+
+
+def test_redis_converter_drops_privileges_with_the_pinned_images_setpriv():
+    # redis:7.4-alpine@sha256:ff02b58f... ships util-linux setpriv (its own
+    # docker-entrypoint.sh uses it) but no su-exec or gosu.
+    converter = _read("deploy/redis_rdb_to_aof.sh")
+    assert "su-exec redis" not in converter
+    assert "gosu redis" not in converter
+    assert "/usr/bin/setpriv --reuid redis --regid redis --clear-groups redis-server" in converter
+    for path in ("deploy/restic_restore_rehearsal.sh", "deploy/restore.sh"):
+        script = _read(path)
+        assert "--user 0" in script
+        assert "redis:7.4-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf" in script

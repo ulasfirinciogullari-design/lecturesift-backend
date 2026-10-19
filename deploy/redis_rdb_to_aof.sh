@@ -29,8 +29,10 @@ shutdown_redis() {
 }
 trap shutdown_redis EXIT INT TERM
 
+# The pinned image has no su-exec; drop to `redis` the way its own
+# docker-entrypoint.sh does.
 start_and_wait() {
-  su-exec redis redis-server "$@" \
+  /usr/bin/setpriv --reuid redis --regid redis --clear-groups redis-server "$@" \
     --port 0 --unixsocket "$SOCKET" --unixsocketperm 0700 --daemonize yes
   ready=false
   for _ in $(seq 1 120); do
