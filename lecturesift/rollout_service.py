@@ -572,15 +572,20 @@ def create_or_resume_guest(
     ``daily_limit`` caps new trials across the service per UTC day and is
     counted from the durable trial rows, so a restart cannot reset it.
     ``before_create`` runs only for a new trial that passed that cap, letting
-    the caller charge per-client limits without counting resumed sessions.
+    the caller charge per-client limits without counting resumed sessions,
+    including a duplicate request that waited while the same trial was created.
     """
     init_rollout_database()
     fingerprint_hash = _hash(fingerprint)
     now = utcnow()
     with ENGINE.begin() as connection:
-        trial = connection.execute(
-            select(GUEST_TRIALS).where(GUEST_TRIALS.c.fingerprint_hash == fingerprint_hash)
-        ).first()
+        lookup = select(GUEST_TRIALS).where(GUEST_TRIALS.c.fingerprint_hash == fingerprint_hash)
+        trial = connection.execute(lookup).first()
+        if not trial:
+            # New trials are serialized. Look again after the lock: a concurrent
+            # request for this device may have created the trial while waiting.
+            _lock_guest_trial_budget(connection)
+            trial = connection.execute(lookup).first()
         if trial:
             user = connection.execute(select(USERS).where(USERS.c.id == trial.user_id)).first()
             profile = connection.execute(
@@ -606,7 +611,6 @@ def create_or_resume_guest(
             }
 
         if daily_limit is not None:
-            _lock_guest_trial_budget(connection)
             day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
             created_today = int(
                 connection.execute(

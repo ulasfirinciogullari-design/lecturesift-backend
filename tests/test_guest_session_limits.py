@@ -132,6 +132,33 @@ def test_global_daily_cap_survives_a_restart_and_resets_on_the_next_utc_day(stat
     assert _trial_count(state) == 4
 
 
+def test_a_duplicate_request_that_waited_for_the_lock_resumes_without_using_the_ip_allowance(state, monkeypatch):
+    monkeypatch.setattr(config, "GUEST_TRIAL_IP_DAILY_LIMIT", 2)
+    device = _device()
+    real_lock = rollout._lock_guest_trial_budget
+    concurrent = {}
+
+    def lock_after_concurrent_request(connection):
+        if "started" not in concurrent:
+            concurrent["started"] = True
+            # Another tab with the same device id commits while this request waits.
+            concurrent["response"] = _open(state, device, "198.51.100.60")
+        real_lock(connection)
+
+    monkeypatch.setattr(rollout, "_lock_guest_trial_budget", lock_after_concurrent_request)
+    waited = _open(state, device, "198.51.100.60")
+    first = concurrent["response"]
+    assert first.status_code == 200 and first.json()["resumed"] is False
+    assert waited.status_code == 200, waited.text
+    assert waited.json()["resumed"] is True
+    assert waited.json()["account"]["user"]["id"] == first.json()["account"]["user"]["id"]
+    assert _trial_count(state) == 1
+
+    # Only the trial that was actually created used this address's allowance.
+    assert _open(state, _device(), "198.51.100.60").status_code == 200
+    _assert_limited(_open(state, _device(), "198.51.100.60"))
+
+
 def test_reopening_an_existing_trial_is_never_counted_or_blocked(state, monkeypatch):
     monkeypatch.setattr(config, "GUEST_TRIAL_IP_DAILY_LIMIT", 1)
     device = _device()
