@@ -38,6 +38,9 @@ https://clever-horse-22b1a8.netlify.app/* https://lecturesift.com/:splat 301!
 /refund.html                        /refund                   301!
 /:lang/refund.html                  /:lang/refund             301!
 
+# Link previews cached before the JPEG re-encode still point at the PNG.
+/og-image.png                       /og-image.jpg             301!
+
 # Study resources have Turkish and English editions.
 /pdf-note-check.html /pdf-note-check 301!
 /:lang/pdf-note-check.html /:lang/pdf-note-check 301!

@@ -303,7 +303,7 @@ function fallbackCatalog(currency) {
   return {selected_currency:selected, supported_currencies:Object.keys(FALLBACK_PRICES), plans:PLAN_ORDER.map((code, index) => {
     const [kind, minutes, quiz, cards, formats, summaries, priority, featured] = PLAN_FALLBACK[code];
     const amount = FALLBACK_PRICES[selected][index];
-    return {code, kind, minutes, priority, featured, display_price:amount == null ? null : {currency:selected, amount_minor:amount}, entitlements:{minutes, quiz_questions:quiz, flashcards:cards, export_formats:formats, summary_profiles:summaries, priority, limits:PLAN_SOURCE_LIMITS[code], download_enabled:code !== "free"}};
+    return {code, kind, minutes, priority, featured, display_price:amount == null ? null : {currency:selected, amount_minor:amount}, entitlements:{minutes, quiz_questions:quiz, flashcards:cards, export_formats:formats, summary_profiles:summaries, priority, limits:PLAN_SOURCE_LIMITS[code], download_enabled:true}};
   })};
 }
 

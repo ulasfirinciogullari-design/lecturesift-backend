@@ -300,8 +300,8 @@ def _require_job_download(data: dict, user: dict) -> None:
             detail={
                 "code": "LS-BILL-11",
                 "message": (
-                    "Dosya indirmek için tek kullanımlık dakika paketi veya ücretli plan seç. "
-                    "Ücretsiz hesapta sonuçları sitede önizleyebilirsin."
+                    "Bu hesap hakkı dosya indirmeyi içermiyor. Sonuçları sitede görüntüleyebilir "
+                    "veya dakika paketi ya da ücretli plan seçebilirsin."
                 ),
             },
         )
@@ -1959,6 +1959,12 @@ async def create_job(
 
     options["billing_user_id"] = billing_user["id"]
     options["download_entitled"] = bool(entitlement.get("download_enabled"))
+    # A minute pack bought on the free plan keeps results as long as the pack
+    # promises; the account plan's own retention is never shortened.
+    history_days = max(
+        int(entitlement["plan"]["history_days"]),
+        int(entitlement["job_plan"].get("history_days") or 0),
+    )
     options["document_mode"] = document_mode
     source_type = (
         ("document_multi" if len(audio_paths) > 1 else "document")
@@ -1977,7 +1983,7 @@ async def create_job(
         source_file_count=len(audio_paths) + len(visual_paths),
         document_words=None,
         billable_minutes=None,
-        retention_seconds=max(1, int(entitlement["plan"]["history_days"])) * 24 * 60 * 60,
+        retention_seconds=max(1, history_days) * 24 * 60 * 60,
     )
     threading.Thread(
         target=process_job,

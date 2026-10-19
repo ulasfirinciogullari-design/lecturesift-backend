@@ -2,6 +2,12 @@
   command = "node scripts/build_localized_site.mjs"
   publish = "dist"
 
+[build.environment]
+  # Optional seller identity for the legal pages, set in the Netlify UI. The
+  # build publishes these values by design, so secret scanning must not
+  # treat their presence in dist/ as a leak. Unset means no static block.
+  SECRETS_SCAN_OMIT_KEYS = "LEGAL_OPERATOR_NAME,LEGAL_OPERATOR_ADDRESS,LEGAL_OPERATOR_COUNTRY,LEGAL_OPERATOR_PHONE,LEGAL_OPERATOR_EMAIL,LEGAL_TAX_ID,LEGAL_TAX_OFFICE,LEGAL_REGISTRATION_ID,LEGAL_MERSIS_ID,LEGAL_TRADE_REGISTRY,LEGAL_KEP_ADDRESS,LEGAL_CHAMBER_NAME"
+
 [[context.production.plugins]]
   package = "@netlify/plugin-csp-nonce"
   [context.production.plugins.inputs]
@@ -83,7 +89,7 @@
     Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
 
 [[headers]]
-  for = "/og-image.png"
+  for = "/og-image.jpg"
   [headers.values]
     Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
 

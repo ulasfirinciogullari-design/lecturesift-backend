@@ -314,7 +314,7 @@ function structuredData(html, language, publicPath, canonical, title, descriptio
       "@type": "WebPage", "@id": webpageId, name: title, url: canonical, description,
       inLanguage: language, isPartOf: {"@id": websiteId}, about: {"@id": applicationId},
       ...(publicPath !== "/" ? {breadcrumb: {"@id": `${canonical}#breadcrumb`}} : {}),
-      primaryImageOfPage: {"@type": "ImageObject", url: image, width: 1731, height: 909},
+      primaryImageOfPage: {"@type": "ImageObject", url: image, width: 1200, height: 630},
     },
     {
       "@type": "SoftwareApplication", "@id": applicationId, name: "LectureSift", url: `${ORIGIN}/`,
@@ -372,7 +372,7 @@ function staticSeo(html, language, publicPath) {
   const alternates = pageLanguages(publicPath).map(alternate =>
     `  <link rel="alternate" hreflang="${alternate}" href="${ORIGIN}${localizedPath(alternate, publicPath)}">`
   ).join("\n");
-  const image = `${ORIGIN}/og-image.png`;
+  const image = `${ORIGIN}/og-image.jpg`;
   const alt = escapeAttribute(title);
   const schema = structuredData(html, language, publicPath, canonical, title, description, image);
   const staticDescription = /<meta\s+name="description"/i.test(html)
@@ -391,9 +391,9 @@ ${alternates}
   <meta property="og:url" content="${canonical}">
   <meta property="og:locale" content="${OG_LOCALES[language]}">
   <meta property="og:image" content="${image}">
-  <meta property="og:image:type" content="image/png">
-  <meta property="og:image:width" content="1731">
-  <meta property="og:image:height" content="909">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="${alt}">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${escapeAttribute(title)}">
@@ -403,6 +403,73 @@ ${alternates}
   <script type="application/ld+json" data-lecturesift-seo>${schema}</script>
 `;
   return html.replace(/<\/head>/i, `${metadata}</head>`);
+}
+
+// Seller identity is rendered into the static HTML so it stays visible without
+// JavaScript or the API. Values come from the Netlify build environment under
+// the backend's names: they are never committed or sent to a translation
+// service. Like /billing/operator, nothing is rendered until every required
+// field is set; legal-operator.js still refreshes the block from the API.
+const buildEnv = name => String(process.env[name] || "").trim();
+const OPERATOR = {
+  operatorName: buildEnv("LEGAL_OPERATOR_NAME"),
+  address: buildEnv("LEGAL_OPERATOR_ADDRESS"),
+  country: buildEnv("LEGAL_OPERATOR_COUNTRY"),
+  phone: buildEnv("LEGAL_OPERATOR_PHONE"),
+  // Only keys listed in netlify.toml SECRETS_SCAN_OMIT_KEYS may reach dist/;
+  // the literal default matches the backend's final fallback address.
+  email: buildEnv("LEGAL_OPERATOR_EMAIL") || "support@lecturesift.com",
+  taxId: buildEnv("LEGAL_TAX_ID"),
+  taxOffice: buildEnv("LEGAL_TAX_OFFICE"),
+  registrationId: buildEnv("LEGAL_REGISTRATION_ID"),
+  mersisId: buildEnv("LEGAL_MERSIS_ID"),
+  tradeRegistry: buildEnv("LEGAL_TRADE_REGISTRY"),
+  kepAddress: buildEnv("LEGAL_KEP_ADDRESS"),
+  chamberName: buildEnv("LEGAL_CHAMBER_NAME"),
+};
+const OPERATOR_CONFIGURED = ["operatorName", "address", "country", "phone", "email"].every(field => OPERATOR[field]);
+const OPERATOR_PAGES = new Set(["/distance-sales.html", "/contact.html"]);
+
+function keyedCopy(key, language) {
+  const row = keyCatalog[key];
+  const value = row?.[LANGUAGES.indexOf(language)] || row?.[1];
+  if (!value) throw new Error(`Missing operator copy: ${language}/${key}`);
+  return value;
+}
+
+function insertAfterLead(html, addition, publicPath) {
+  const lead = /<article\b[^>]*\bclass="legal-card"[^>]*>[\s\S]*?<p\b[^>]*\bclass="lead"[^>]*>[\s\S]*?<\/p>/i;
+  if (!lead.test(html)) throw new Error(`${publicPath} has no legal lead paragraph`);
+  return html.replace(lead, match => `${match}${addition}`);
+}
+
+function injectOperatorIdentity(html, language, publicPath) {
+  if (!OPERATOR_CONFIGURED) return html;
+  const e = escapeAttribute;
+  const title = e(keyedCopy("legal.operatorTitle", language));
+  if (OPERATOR_PAGES.has(publicPath)) {
+    const rows = [
+      ["operatorName"], ["address"], ["country"],
+      ["phone", `tel:${OPERATOR.phone.replace(/[^+\d]/g, "")}`],
+      ["email", `mailto:${OPERATOR.email}`],
+      ["taxId"], ["taxOffice"], ["registrationId"], ["mersisId"], ["tradeRegistry"],
+      ["kepAddress", `mailto:${OPERATOR.kepAddress}`],
+      ["chamberName"],
+    ].filter(([field]) => OPERATOR[field]).map(([field, href]) => {
+      const value = e(OPERATOR[field]);
+      const detail = href ? `<a href="${e(href)}">${value}</a>` : value;
+      return `<div><dt>${e(keyedCopy(`legal.${field}`, language))}</dt><dd>${detail}</dd></div>`;
+    }).join("");
+    const block = `<section class="legal-operator" data-legal-operator="static"><h2>${title}</h2><dl>${rows}</dl></section>`;
+    return insertAfterLead(html, block, publicPath);
+  }
+  if (publicPath === "/about.html") {
+    const name = `<strong>${e(OPERATOR.operatorName)}</strong>`;
+    const sentence = e(keyedCopy("about.operator", language)).replace("{name}", () => name);
+    const link = `<a href="${localizedPath(language, "/distance-sales.html")}">${title}</a>`;
+    return insertAfterLead(html, `<p class="about-operator" data-about-operator>${sentence} ${link}</p>`, publicPath);
+  }
+  return html;
 }
 
 function validateLocalizedPage(html, language, publicPath) {
@@ -448,6 +515,7 @@ for (const language of LANGUAGES) {
     html = localizeStaticPlanValues(html, language);
     html = localizeContinuationTargets(html, language);
     html = enrichLandingPage(html, language, publicPath);
+    html = injectOperatorIdentity(html, language, publicPath);
     html = canonicalizePublicLinks(html);
     html = removeStaticTranslationCatalog(html);
     html = html.replace(/src="\/i18n\.js(?:\?[^\"]*)?"/g, `src="${runtimePath}"`);

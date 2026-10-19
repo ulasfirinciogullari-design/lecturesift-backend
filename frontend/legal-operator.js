@@ -1,7 +1,9 @@
 (function () {
   const API = "https://api.lecturesift.com";
   const card = document.querySelector(".legal-card");
-  if (!card || document.querySelector("[data-legal-operator]")) return;
+  // A build-time block (data-legal-operator="static") keeps the seller visible
+  // without JavaScript or the API; a configured API response refreshes it.
+  if (!card) return;
   const i18n = window.LectureSiftI18n;
   const t = (key, fallback) => i18n?.t(key, fallback) || fallback;
   const segments = location.pathname.split("/").filter(Boolean);
@@ -45,7 +47,7 @@
     .then(response => response.ok ? response.json() : null)
     .then(operator => {
       if (!operator?.configured) return;
-      card.querySelectorAll("[data-legal-operator]").forEach(existing => existing.remove());
+      const existing = [...card.querySelectorAll("[data-legal-operator]")];
       const section = document.createElement("section");
       section.dataset.legalOperator = "true";
       section.className = "legal-operator";
@@ -65,7 +67,12 @@
       addRow(list, t("legal.kepAddress", "KEP adresi"), operator.kep_address, operator.kep_address ? `mailto:${operator.kep_address}` : "");
       addRow(list, t("legal.chamberName", "Meslek odası"), operator.chamber_name);
       section.append(heading, list);
-      card.prepend(section);
+      if (existing.length) {
+        existing.slice(1).forEach(extra => extra.remove());
+        existing[0].replaceWith(section);
+      } else {
+        card.prepend(section);
+      }
     })
     .catch(() => {});
 })();
