@@ -1,10 +1,11 @@
 name: Production social check
 
 on:
-  push:
-    branches: [main]
+  # Production releases on the OVH server are staged and promoted by hand, so a
+  # push to main is not live yet; checking right after a push only times out.
   schedule:
     - cron: "30 18 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -87,7 +88,7 @@ jobs:
           print(f"enabled={values[literal]}")
           PY
 
-      - name: Wait for Render deployment and API health
+      - name: Wait for the production deployment and API health
         shell: bash
         run: |
           set -euo pipefail
