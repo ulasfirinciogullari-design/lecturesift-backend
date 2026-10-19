@@ -366,7 +366,7 @@
     "account.manageFixedTerm":["Paketi değiştir veya yeni dönem satın al","Change package or buy a new term","Paket wechseln oder neue Laufzeit kaufen","Changer de forfait ou acheter une nouvelle période","Cambiar de paquete o comprar un nuevo período","Cambia pacchetto o acquista un nuovo periodo","Alterar pacote ou comprar um novo período","Сменить пакет или купить новый срок","غيّر الباقة أو اشترِ فترة جديدة","更换套餐或购买新周期","パッケージの変更または新しい期間の購入","패키지 변경 또는 새 기간 구매","पैकेज बदलें या नई अवधि खरीदें"],
     "account.packageToBuy":["Satın alınacak paket","Package to purchase","Zu kaufendes Paket","Forfait à acheter","Paquete que comprar","Pacchetto da acquistare","Pacote a comprar","Пакет для покупки","الباقة المراد شراؤها","要购买的套餐","購入するパッケージ","구매할 패키지","खरीदने का पैकेज"],
     "account.termToBuy":["Yeni dönem","New term","Neue Laufzeit","Nouvelle période","Nuevo período","Nuovo periodo","Novo período","Новый срок","الفترة الجديدة","新周期","新しい期間","새 기간","नई अवधि"],
-    "account.monthlyTerm":["aylık dönem","monthly term","monatliche Laufzeit","période mensuelle","período mensual","periodo mensile","período mensal","месячный срок","فترة شهرية","月度周期","月間期間","월간 기간","मासिक अवधि"],
+    "account.monthlyTerm":["30 günlük dönem","30-day term","30-tägige Laufzeit","période de 30 jours","período de 30 días","periodo di 30 giorni","período de 30 dias","30-дневный срок","فترة 30 يومًا","30天周期","30日間の期間","30일 기간","30 दिन की अवधि"],
     "account.annualTerm":["yıllık dönem","annual term","jährliche Laufzeit","période annuelle","período anual","periodo annuale","período anual","годовой срок","فترة سنوية","年度周期","年間期間","연간 기간","वार्षिक अवधि"],
     "account.continueInPlans":["Planlar’da devam et","Continue in Plans","Weiter zu den Tarifen","Continuer dans les forfaits","Continuar en Planes","Continua nei piani","Continuar nos planos","Продолжить в тарифах","المتابعة في الخطط","在套餐页面继续","プランページで続ける","요금제 페이지에서 계속","प्लान पेज पर जारी रखें"],
     "account.newTermAction":["{plan} için yeni {term} satın al","Buy a new {term} for {plan}","Neue {term} für {plan} kaufen","Acheter une nouvelle {term} pour {plan}","Comprar un nuevo {term} para {plan}","Acquista un nuovo {term} per {plan}","Comprar um novo {term} para {plan}","Купить новый {term} для {plan}","اشترِ {term} جديدة لباقة {plan}","为 {plan} 购买新的{term}","{plan} の新しい{term}を購入","{plan}의 새 {term} 구매","{plan} के लिए नई {term} खरीदें"],
@@ -557,12 +557,16 @@
     "plans.perMonth":["/ ay","/ month","/ Monat","/ mois","/ mes","/ mese","/ mês","/ месяц","/ شهر","/ 月","/ 月","/ 월","/ माह"],
     "plans.oneTimeShort":["tek ödeme","one time","einmalig","unique","pago único","una tantum","pagamento único","разово","دفعة واحدة","一次性","一回払い","일회성","एक बार"],
     "plans.minutesPerMonth":["dk / ay","min / month","Min. / Monat","min / mois","min / mes","min / mese","min / mês","мин / месяц","دقيقة / شهر","分钟/月","分/月","분/월","मिनट/माह"],
+    "plans.minutesPer30Days":["dk / 30 gün","min / 30 days","Min. / 30 Tage","min / 30 jours","min / 30 días","min / 30 giorni","min / 30 dias","мин / 30 дней","دقيقة / 30 يومًا","分钟/30天","分/30日","분/30일","मिनट/30 दिन"],
+    "plans.thirtyDayPackageShort":["30 günlük paket","30-day package","30-Tage-Paket","forfait de 30 jours","paquete de 30 días","pacchetto di 30 giorni","pacote de 30 dias","пакет на 30 дней","باقة لمدة 30 يومًا","30天套餐","30日間パッケージ","30일 패키지","30 दिन का पैकेज"],
+    "plans.thirtyDayPackage":["30 günlük paket","30-day package","30-Tage-Paket","Forfait de 30 jours","Paquete de 30 días","Pacchetto di 30 giorni","Pacote de 30 dias","Пакет на 30 дней","باقة لمدة 30 يومًا","30天套餐","30日間パッケージ","30일 패키지","30 दिन का पैकेज"],
     "plans.minuteUnit":["dakika","minutes","Minuten","minutes","minutos","minuti","minutos","минут","دقائق","分钟","分","분","मिनट"],
     "plans.userUnit":["kullanıcı","users","Nutzer","utilisateurs","usuarios","utenti","usuários","пользователей","مستخدمين","位用户","ユーザー","사용자","उपयोगकर्ता"],
     "plans.popular":["Popüler","Popular","Beliebt","Populaire","Popular","Popolare","Popular","Популярный","الأكثر شيوعًا","热门","人気","인기","लोकप्रिय"],
+    "plans.otherPackages":["Diğer paketler","Other packages","Weitere Pakete","Autres forfaits","Otros paquetes","Altri pacchetti","Outros pacotes","Другие пакеты","باقات أخرى","其他套餐","その他のパッケージ","다른 패키지","अन्य पैकेज"],
     "plans.processingSuffix":["işleme","processing","Verarbeitung","traitement","procesamiento","elaborazione","processamento","обработка","معالجة","处理","処理","처리","प्रोसेसिंग"],
     "plans.current":["Mevcut plan","Current plan","Aktueller Tarif","Forfait actuel","Plan actual","Piano attuale","Plano atual","Текущий тариф","الخطة الحالية","当前套餐","現在のプラン","현재 요금제","वर्तमान प्लान"],
-    "plans.newMonthlyTerm":["Yeni aylık dönem","New monthly term","Neue monatliche Laufzeit","Nouvelle période mensuelle","Nuevo período mensual","Nuovo periodo mensile","Novo período mensal","Новый месячный срок","فترة شهرية جديدة","新月度周期","新しい月間期間","새 월간 기간","नई मासिक अवधि"],
+    "plans.newMonthlyTerm":["Yeni 30 günlük paket","New 30-day package","Neues 30-Tage-Paket","Nouveau forfait de 30 jours","Nuevo paquete de 30 días","Nuovo pacchetto di 30 giorni","Novo pacote de 30 dias","Новый пакет на 30 дней","باقة جديدة لمدة 30 يومًا","新的30天套餐","新しい30日間パッケージ","새 30일 패키지","नया 30 दिन का पैकेज"],
     "plans.newAnnualTerm":["Yeni yıllık dönem","New annual term","Neue jährliche Laufzeit","Nouvelle période annuelle","Nuevo período anual","Nuovo periodo annuale","Novo período anual","Новый годовой срок","فترة سنوية جديدة","新年度周期","新しい年間期間","새 연간 기간","नई वार्षिक अवधि"],
     "plans.contact":["Bize ulaş","Contact us","Kontakt","Nous contacter","Contáctanos","Contattaci","Fale conosco","Связаться","تواصل معنا","联系我们","お問い合わせ","문의하기","संपर्क करें"],
     "plans.select":["Planı seç","Choose plan","Tarif wählen","Choisir","Elegir plan","Scegli piano","Escolher plano","Выбрать тариф","اختر الخطة","选择套餐","プランを選択","요금제 선택","प्लान चुनें"],
@@ -912,7 +916,7 @@
     "rollout.loginToBuy":["Plan satın almak için doğrulanmış hesabınla giriş yap.","Sign in with a verified account to purchase a plan.","Melde dich mit einem bestätigten Konto an, um einen Tarif zu kaufen.","Connectez-vous avec un compte vérifié pour acheter un forfait.","Inicia sesión con una cuenta verificada para comprar un plan.","Accedi con un account verificato per acquistare un piano.","Entre com uma conta verificada para comprar um plano.","Войдите в подтверждённую учётную запись, чтобы купить тариф.","سجّل الدخول بحساب موثّق لشراء خطة.","请使用已验证账户登录以购买套餐。","プランを購入するには、確認済みアカウントでログインしてください。","요금제를 구매하려면 인증된 계정으로 로그인하세요.","प्लान खरीदने के लिए सत्यापित खाते से साइन इन करें।"],
     "rollout.orderNumber":["Sipariş numaran","Your order number","Deine Bestellnummer","Votre numéro de commande","Tu número de pedido","Il tuo numero d’ordine","Seu número do pedido","Номер вашего заказа","رقم طلبك","您的订单号","注文番号","주문 번호","आपका ऑर्डर नंबर"],
     "rollout.transferPending":["Havale/EFT onayı bekliyor","Bank transfer pending approval","Banküberweisung wartet auf Bestätigung","Virement en attente d’approbation","Transferencia pendiente de aprobación","Bonifico in attesa di approvazione","Transferência aguardando aprovação","Перевод ожидает подтверждения","التحويل المصرفي بانتظار الموافقة","银行转账待审核","銀行振込の承認待ち","계좌이체 승인 대기 중","बैंक ट्रांसफर स्वीकृति के लिए लंबित"],
-    "rollout.chooseMonthly":["Aylık seç","Choose monthly","Monatlich wählen","Choisir mensuel","Elegir mensual","Scegli mensile","Escolher mensal","Выбрать ежемесячно","اختر شهريًا","选择月付","月額を選択","월간 선택","मासिक चुनें"],
+    "rollout.chooseMonthly":["30 günlük paketi seç","Choose 30-day package","30-Tage-Paket wählen","Choisir le forfait de 30 jours","Elegir paquete de 30 días","Scegli il pacchetto di 30 giorni","Escolher pacote de 30 dias","Выбрать пакет на 30 дней","اختر باقة 30 يومًا","选择30天套餐","30日間パッケージを選択","30일 패키지 선택","30 दिन का पैकेज चुनें"],
     "rollout.annual":["Yıllık","Annual","Jährlich","Annuel","Anual","Annuale","Anual","Годовой","سنوي","年付","年額","연간","वार्षिक"],
     "rollout.chooseOnce":["Tek seferlik seç","Choose one-time","Einmalig wählen","Choisir l’achat unique","Elegir pago único","Scegli una tantum","Escolher pagamento único","Выбрать разово","اختر لمرة واحدة","选择一次性购买","一回払いを選択","일회성 선택","एकमुश्त चुनें"],
     "rollout.included":["Dahil","Included","Enthalten","Inclus","Incluido","Incluso","Incluído","Включено","مشمول","已包含","含まれます","포함","शामिल"],
@@ -1080,7 +1084,7 @@
   displayAdsStyle.href = "/display-ads.css?v=2";
   document.head.append(displayAdsStyle);
   const displayAdsScript = document.createElement("script");
-  displayAdsScript.src = "/display-ads.js?v=5";
+  displayAdsScript.src = "/display-ads.js?v=6";
   displayAdsScript.defer = true;
   document.head.append(displayAdsScript);
   if (location.hostname.endsWith(".netlify.app")) {

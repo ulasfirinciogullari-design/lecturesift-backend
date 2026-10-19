@@ -46,7 +46,10 @@ async function openPlans(page, override) {
 }
 
 async function choosePlan(page, code = 'lite') {
-  await page.locator(`[data-plan="${code}"][data-interval="monthly"]`).click();
+  const action = page.locator(`[data-plan="${code}"][data-interval="monthly"]`);
+  // Only free, the credit pack and the popular package are shown before "Other packages" opens.
+  if (!await action.isVisible()) await page.locator('#morePlans > summary').click();
+  await action.click();
   await expect(page.locator('#checkoutPanel')).toBeVisible();
   await page.locator('#checkoutFirstName').fill('Synthetic');
   await page.locator('#checkoutLastName').fill('Student');

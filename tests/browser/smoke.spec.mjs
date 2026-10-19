@@ -70,7 +70,7 @@ test('account shows zero-decimal payments and fixed-term package self-service', 
   await expect(page.locator('#managePlanInterval')).toHaveValue('monthly');
   await expect(page.locator('#managePlanSummary')).toContainText('850 package minutes left');
   await expect(page.locator('#managePlanSummary')).toContainText('do not carry over');
-  await expect(page.locator('#managePlanContinue')).toHaveText('Buy a new monthly term for Plus');
+  await expect(page.locator('#managePlanContinue')).toHaveText('Buy a new 30-day term for Plus');
   await page.locator('#managePlanSelect').selectOption('pro');
   await expect(page.locator('#managePlanContinue')).toHaveText('Upgrade to Pro');
   await page.locator('#managePlanSelect').selectOption('lite');
@@ -100,9 +100,10 @@ test('account shows zero-decimal payments and fixed-term package self-service', 
   await expect(page.locator('#checkoutFixedTermNotice')).toContainText('There is no automatic renewal');
   await page.locator('#checkoutClose').click();
   await expect(page.locator('.plan-action[data-plan="plus"][data-interval="monthly"]')).toBeEnabled();
-  await expect(page.locator('.plan-action[data-plan="plus"][data-interval="monthly"]')).toHaveText('New monthly term');
+  await expect(page.locator('.plan-action[data-plan="plus"][data-interval="monthly"]')).toHaveText('New 30-day package');
   await page.locator('#billingCurrency').selectOption('JPY');
   await expect(page.locator('#plansGrid')).toContainText('¥');
+  await page.locator('#morePlans > summary').click();
   await page.locator('.plan-action[data-plan="lite"][data-interval="monthly"]').click();
   await expect(page.locator('#errorBox')).toBeVisible();
   await expect(page.locator('#errorMessage')).toHaveText('iyzico is active, but card checkout does not support JPY. Choose a currency supported by the provider to pay.');

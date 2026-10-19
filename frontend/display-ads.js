@@ -3,7 +3,8 @@
 
   const API_BASE = "https://api.lecturesift.com";
   const GPT_SRC = "https://securepubads.g.doubleclick.net/tag/js/gpt.js";
-  const PUBLIC_AD_PATHS = new Set(["/", "/features", "/plans", "/about"]);
+  // Purchase pages (plans and checkout) never show publisher ads or house campaigns.
+  const PUBLIC_AD_PATHS = new Set(["/", "/features", "/about"]);
   const TOKEN_KEY = "lecturesift-billing-token";
   const pageNonce = document.querySelector("script[nonce]")?.nonce || "";
   let started = false;

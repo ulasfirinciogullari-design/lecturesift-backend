@@ -1,6 +1,8 @@
 const API = "https://api.lecturesift.com";
 const TOKEN_KEY = "lecturesift-billing-token";
 const ORDER = ["free", "test", "credit", "lite", "plus", "pro", "max", "business"];
+// Shown first with the popular package; the rest stay under "Diğer paketler".
+const HIGHLIGHTED_PLANS = ["free", "credit"];
 const LOCALE_DATA = window.LECTURESIFT_LOCALE_DATA || {
   countries: [], currencies: ["TRY", "USD", "EUR", "GBP"], currencyForCountry: {},
 };
@@ -91,6 +93,7 @@ let currency = "TRY";
 let catalogLoadVersion = 0;
 let catalogLoading = false;
 let catalogCapacityFresh = false;
+let capacityPlansRevealed = false;
 let checkoutSelection = null;
 let checkoutRequest = null;
 const $ = id => document.getElementById(id);
@@ -231,7 +234,14 @@ function openRequestedPlan() {
   params.delete("plan");
   params.delete("interval");
   history.replaceState({}, "", `${location.pathname}${params.size ? `?${params}` : ""}${location.hash}`);
+  revealPlanCard(planCode);
   void buy(planCode, interval);
+}
+
+// Expand "Diğer paketler" when a link or measured need points at a card it holds.
+function revealPlanCard(code) {
+  const more = $("morePlans");
+  if (more && ORDER.includes(code) && more.querySelector(`[data-plan-card="${code}"]`)) more.open = true;
 }
 
 async function api(path, options = {}) {
@@ -257,6 +267,10 @@ function planLabel(code) {
   return pt(`plan.${code}`, COPY[code]?.[0] || code);
 }
 function visibleOrder() { return ORDER.filter(code => code !== "test"); }
+function highlightedOrder() {
+  const popular = (catalog?.plans || []).find(plan => plan.featured && plan.kind === "subscription")?.code || "plus";
+  return [...HIGHLIGHTED_PLANS, popular];
+}
 
 function renderCompare() {
   const plans = visibleOrder().map(code => catalog?.plans?.find(plan => plan.code === code)).filter(Boolean);
@@ -377,68 +391,85 @@ function renderPaymentStatus() {
 }
 
 function renderPlans() {
-  renderDocumentNeed();
-  const map = new Map((catalog?.plans || []).map(plan => [plan.code, plan]));
-  $("plansGrid").innerHTML = visibleOrder().map(code => {
-    const plan = map.get(code);
-    if (!plan) return "";
-    const entitlements = plan.entitlements || {};
-    const limits = entitlements.limits || {};
-    const price = plan.display_price || plan.manual_price;
-    const current = account?.plan?.code === code;
-    const priceText = price
-      ? format(price.amount_minor, price.currency || currency)
-      : (code === "free" ? format(0, currency) : pt("plans.quote", "Teklif"));
-    const suffix = plan.kind === "subscription" ? pt("plans.perMonth", "/ ay") : (plan.kind === "one_time" ? pt("plans.oneTimeShort", "tek ödeme") : "");
-    const minutes = entitlements.minutes ?? plan.minutes;
-    const minutesText = minutes == null
-      ? `${entitlements.team_seats || plan.team_seats || 10} ${pt("plans.userUnit", "kullanıcı")}`
-      : `${Number(minutes).toLocaleString(PLANS_I18N.locale)} ${plan.kind === "subscription" || plan.kind === "free" ? pt("plans.minutesPerMonth", "dk / ay") : pt("plans.minuteUnit", "dakika")}`;
-    const monthlyAction = current ? pt("plans.newMonthlyTerm", "Yeni aylık dönem") : pt("rollout.chooseMonthly", "Aylık seç");
-    const annualAction = current ? pt("plans.newAnnualTerm", "Yeni yıllık dönem") : pt("rollout.annual", "Yıllık");
-    const registered = Boolean(localStorage.getItem(TOKEN_KEY)) && account?.plan?.code !== "guest";
-    const freeAction = registered ? pt("nav.workspace", "Çalışma alanına dön") : pt("auth.freeCreate", "Ücretsiz hesap oluştur");
-    const actions = code === "free" || code === "business"
-      ? `<button type="button" class="plan-action" data-plan="${esc(code)}">${esc(code === "free" ? freeAction : pt("plans.contact", "Bize ulaş"))}</button>`
-      : plan.kind === "subscription"
-      ? `<div class="plan-card-actions"><button class="plan-action" data-plan="${esc(code)}" data-interval="monthly">${esc(monthlyAction)}</button><button class="plan-action" data-plan="${esc(code)}" data-interval="annual">${esc(annualAction)} · ${esc(price ? format(price.amount_minor * 10, price.currency || currency) : "")}</button></div>`
-      : `<button class="plan-action" data-plan="${esc(code)}" data-interval="${plan.kind === "one_time" ? "one_time" : "monthly"}" ${current ? "disabled" : ""}>${esc(current ? pt("plans.current", "Mevcut plan") : pt("plans.select", "Planı seç"))}</button>`;
-    return `<article class="plan-card ${plan.featured ? "featured" : ""}" data-plan-card="${esc(code)}">
-      ${plan.featured ? `<span class="plan-badge">${esc(pt("plans.popular", "Popüler"))}</span>` : ""}
-      <h3>${esc(planLabel(code))}</h3><p>${esc(pt(`plan.${code}.description`, COPY[code][1]))}</p>
-      <div class="plan-price">${esc(priceText)} <small>${suffix}</small></div>
-      ${capacityNotice(plan)}
-      <ul class="plan-features">
-        <li>${esc(minutesText)}</li>
-        ${catalog?.assistant?.available && entitlements.assistant_credits ? `<li>${Number(entitlements.assistant_credits).toLocaleString(PLANS_I18N.locale)} ${esc(at('credits'))}</li>` : ''}
-        <li>${Number(limits.max_minutes_per_job || 0).toLocaleString(PLANS_I18N.locale)} ${esc(pt("plans.minutesPerJob", "dk / tek iş"))}</li>
-        <li>${Number(limits.max_files_per_job || 0).toLocaleString(PLANS_I18N.locale)} ${esc(pt("plans.filesPerJobShort", "kaynak / iş"))}</li>
-        <li>${entitlements.quiz_questions ?? "∞"} ${esc(pt("plans.quizShort", "quiz sorusu"))} · ${entitlements.flashcards ?? "∞"} ${esc(pt("plans.cardsShort", "bilgi kartı"))}</li>
-        <li>${esc(pt("plans.historyDays", "Sonuç geçmişi (gün)"))}: ${Number(entitlements.history_days || 0).toLocaleString(PLANS_I18N.locale)}</li>
-        <li>${esc(entitlements.ad_free ? pt("plans.adFree", "Reklamsız kullanım") : entitlements.ad_mode === "limited" ? pt("plans.limitedAds") : pt("plans.adsMayAppear", "Reklam gösterilebilir"))}</li>
-      </ul>
-      <details class="plan-details"><summary>${esc(pt("plans.allLimits", "Tüm özellik ve sınırlar"))}</summary><ul class="plan-features">
-        <li>${Number(limits.max_media_upload_mb || 0).toLocaleString(PLANS_I18N.locale)} MB ${esc(pt("plans.mediaShort", "medya"))} · ${Number(limits.max_document_upload_mb || 0).toLocaleString(PLANS_I18N.locale)} MB ${esc(pt("plans.documentShort", "belge"))}</li>
-        <li>${Number(limits.max_document_pages || 0).toLocaleString(PLANS_I18N.locale)} ${esc(pt("plans.pagesShort", "sayfa"))} · ${Number(limits.max_ocr_pages || 0).toLocaleString(PLANS_I18N.locale)} OCR</li>
-        <li>${esc(summaryEntitlement())} ${esc(pt("plans.summaryShort", "özet"))}</li>
-        <li>${esc(entitlements.download_enabled === false ? pt("plans.previewOnly", "Sitede önizleme · dosya indirme yok") : (entitlements.export_formats || []).join(", ").toUpperCase())}</li>
-        <li>${esc(plan.priority === "priority" ? pt("priority.priority", "Öncelikli") : pt("priority.standard", "Standart"))} ${esc(pt("plans.processingSuffix", "işleme"))}</li>
-        <li>${esc(pt("plans.optionalLearning", "Quiz ve bilgi kartlarını istediğinde kapatabilirsin."))}</li>
-      </ul></details>
-      ${actions}
-    </article>`;
-  }).join("");
-  document.querySelectorAll(".plan-action[data-plan]").forEach(button => {
-    button.onclick = () => buy(button.dataset.plan, button.dataset.interval);
-  });
-  renderCompare();
+  renderPlanCards();
   renderAssistantOffers();
   renderAdFreeOffer();
 }
 
+function renderPlanCards() {
+  renderDocumentNeed();
+  const map = new Map((catalog?.plans || []).map(plan => [plan.code, plan]));
+  const codes = visibleOrder().filter(code => map.has(code));
+  const highlighted = highlightedOrder();
+  const others = codes.filter(code => !highlighted.includes(code));
+  $("plansGrid").innerHTML = codes.filter(code => highlighted.includes(code)).map(code => planCard(map.get(code))).join("");
+  $("morePlansGrid").innerHTML = others.map(code => planCard(map.get(code))).join("");
+  $("morePlansNames").textContent = others.map(planLabel).join(" · ");
+  $("morePlans").hidden = !others.length;
+  document.querySelectorAll(".plan-action[data-plan]").forEach(button => {
+    button.onclick = () => buy(button.dataset.plan, button.dataset.interval);
+  });
+  // A measured document that no highlighted package fits must not leave the
+  // packages that may fit it collapsed.
+  if (documentNeed && catalogCapacityFresh && !capacityPlansRevealed) {
+    capacityPlansRevealed = true;
+    if (!highlighted.some(code => map.has(code) && documentPlanCapacity(map.get(code)) === "fits")) $("morePlans").open = true;
+  }
+  renderCompare();
+}
+
+function planCard(plan) {
+  const code = plan.code;
+  const entitlements = plan.entitlements || {};
+  const limits = entitlements.limits || {};
+  const price = plan.display_price || plan.manual_price;
+  const current = account?.plan?.code === code;
+  const priceText = price
+    ? format(price.amount_minor, price.currency || currency)
+    : (code === "free" ? format(0, currency) : pt("plans.quote", "Teklif"));
+  const suffix = plan.kind === "subscription" ? pt("plans.thirtyDayPackageShort", "30 günlük paket") : (plan.kind === "one_time" ? pt("plans.oneTimeShort", "tek ödeme") : "");
+  const minutes = entitlements.minutes ?? plan.minutes;
+  const minutesText = minutes == null
+    ? `${entitlements.team_seats || plan.team_seats || 10} ${pt("plans.userUnit", "kullanıcı")}`
+    : `${Number(minutes).toLocaleString(PLANS_I18N.locale)} ${plan.kind === "subscription" ? pt("plans.minutesPer30Days", "dk / 30 gün") : plan.kind === "free" ? pt("plans.minutesPerMonth", "dk / ay") : pt("plans.minuteUnit", "dakika")}`;
+  const monthlyAction = current ? pt("plans.newMonthlyTerm", "Yeni 30 günlük paket") : pt("rollout.chooseMonthly", "30 günlük paketi seç");
+  const annualAction = current ? pt("plans.newAnnualTerm", "Yeni yıllık dönem") : pt("rollout.annual", "Yıllık");
+  const registered = Boolean(localStorage.getItem(TOKEN_KEY)) && account?.plan?.code !== "guest";
+  const freeAction = registered ? pt("nav.workspace", "Çalışma alanına dön") : pt("auth.freeCreate", "Ücretsiz hesap oluştur");
+  const actions = code === "free" || code === "business"
+    ? `<button type="button" class="plan-action" data-plan="${esc(code)}">${esc(code === "free" ? freeAction : pt("plans.contact", "Bize ulaş"))}</button>`
+    : plan.kind === "subscription"
+    ? `<div class="plan-card-actions"><button class="plan-action" data-plan="${esc(code)}" data-interval="monthly">${esc(monthlyAction)}</button><button class="plan-action" data-plan="${esc(code)}" data-interval="annual">${esc(annualAction)} · ${esc(price ? format(price.amount_minor * 10, price.currency || currency) : "")}</button></div>`
+    : `<button class="plan-action" data-plan="${esc(code)}" data-interval="${plan.kind === "one_time" ? "one_time" : "monthly"}" ${current ? "disabled" : ""}>${esc(current ? pt("plans.current", "Mevcut plan") : pt("plans.select", "Planı seç"))}</button>`;
+  return `<article class="plan-card ${plan.featured ? "featured" : ""}" data-plan-card="${esc(code)}">
+    ${plan.featured ? `<span class="plan-badge">${esc(pt("plans.popular", "Popüler"))}</span>` : ""}
+    <h3>${esc(planLabel(code))}</h3><p>${esc(pt(`plan.${code}.description`, COPY[code][1]))}</p>
+    <div class="plan-price">${esc(priceText)} <small>${esc(suffix)}</small></div>
+    ${capacityNotice(plan)}
+    <ul class="plan-features">
+      <li>${esc(minutesText)}</li>
+      ${catalog?.assistant?.available && entitlements.assistant_credits ? `<li>${Number(entitlements.assistant_credits).toLocaleString(PLANS_I18N.locale)} ${esc(at('credits'))}</li>` : ''}
+      <li>${Number(limits.max_minutes_per_job || 0).toLocaleString(PLANS_I18N.locale)} ${esc(pt("plans.minutesPerJob", "dk / tek iş"))}</li>
+      <li>${Number(limits.max_files_per_job || 0).toLocaleString(PLANS_I18N.locale)} ${esc(pt("plans.filesPerJobShort", "kaynak / iş"))}</li>
+      <li>${entitlements.quiz_questions ?? "∞"} ${esc(pt("plans.quizShort", "quiz sorusu"))} · ${entitlements.flashcards ?? "∞"} ${esc(pt("plans.cardsShort", "bilgi kartı"))}</li>
+      <li>${esc(pt("plans.historyDays", "Sonuç geçmişi (gün)"))}: ${Number(entitlements.history_days || 0).toLocaleString(PLANS_I18N.locale)}</li>
+      <li>${esc(entitlements.ad_free ? pt("plans.adFree", "Reklamsız kullanım") : entitlements.ad_mode === "limited" ? pt("plans.limitedAds") : pt("plans.adsMayAppear", "Reklam gösterilebilir"))}</li>
+    </ul>
+    <details class="plan-details"><summary>${esc(pt("plans.allLimits", "Tüm özellik ve sınırlar"))}</summary><ul class="plan-features">
+      <li>${Number(limits.max_media_upload_mb || 0).toLocaleString(PLANS_I18N.locale)} MB ${esc(pt("plans.mediaShort", "medya"))} · ${Number(limits.max_document_upload_mb || 0).toLocaleString(PLANS_I18N.locale)} MB ${esc(pt("plans.documentShort", "belge"))}</li>
+      <li>${Number(limits.max_document_pages || 0).toLocaleString(PLANS_I18N.locale)} ${esc(pt("plans.pagesShort", "sayfa"))} · ${Number(limits.max_ocr_pages || 0).toLocaleString(PLANS_I18N.locale)} OCR</li>
+      <li>${esc(summaryEntitlement())} ${esc(pt("plans.summaryShort", "özet"))}</li>
+      <li>${esc(entitlements.download_enabled === false ? pt("plans.previewOnly", "Sitede önizleme · dosya indirme yok") : (entitlements.export_formats || []).join(", ").toUpperCase())}</li>
+      <li>${esc(plan.priority === "priority" ? pt("priority.priority", "Öncelikli") : pt("priority.standard", "Standart"))} ${esc(pt("plans.processingSuffix", "işleme"))}</li>
+      <li>${esc(pt("plans.optionalLearning", "Quiz ve bilgi kartlarını istediğinde kapatabilirsin."))}</li>
+    </ul></details>
+    ${actions}
+  </article>`;
+}
+
 function renderAdFreeOffer() {
   let section = document.getElementById('adFreeAccess');
-  if (!section) {section=document.createElement('section');section.id='adFreeAccess';section.className='ad-free-offer';$('plansGrid').after(section);}
+  if (!section) {section=document.createElement('section');section.id='adFreeAccess';section.className='ad-free-offer';$('morePlans').after(section);}
   const offer = catalog?.ad_free;
   section.hidden = !offer?.display_price;
   section.replaceChildren();
@@ -460,7 +491,7 @@ function renderAdFreeOffer() {
 
 function renderAssistantOffers() {
   let section = document.getElementById('assistantCredits');
-  if (!section) {section=document.createElement('section');section.id='assistantCredits';section.className='assistant-credit-offers';$('plansGrid').after(section);}
+  if (!section) {section=document.createElement('section');section.id='assistantCredits';section.className='assistant-credit-offers';$('morePlans').after(section);}
   const offers=catalog?.assistant;
   if(!offers){section.hidden=true;return;}
   section.hidden=false;section.replaceChildren();
@@ -540,7 +571,7 @@ async function buy(planCode, interval = "monthly") {
     ? pt("rollout.annual", "Yıllık")
     : interval === "one_time"
     ? pt("plans.oneTime", "Tek ödeme")
-    : pt("rollout.chooseMonthly", "Aylık");
+    : pt("plans.thirtyDayPackage", "30 günlük paket");
   $("checkoutSummaryTotal").textContent = price
     ? format(price.amount_minor * multiplier, price.currency || currency)
     : pt("plans.quote", "Teklif");
@@ -567,7 +598,7 @@ async function buy(planCode, interval = "monthly") {
           current:planLabel(account.plan.code),
           date:new Intl.DateTimeFormat(PLANS_I18N.locale, {dateStyle:"long"}).format(currentEnd),
           remaining:Math.max(0, Math.trunc(includedMinutes - usedMinutes)).toLocaleString(PLANS_I18N.locale),
-          term:interval === "annual" ? pt("account.annualTerm", "yıllık dönem") : pt("account.monthlyTerm", "aylık dönem"),
+          term:interval === "annual" ? pt("account.annualTerm", "yıllık dönem") : pt("account.monthlyTerm", "30 günlük dönem"),
           target:planLabel(planCode),
         },
       )
@@ -771,44 +802,61 @@ async function load() {
   const version = ++catalogLoadVersion;
   catalogLoading = true;
   catalogCapacityFresh = false;
-  $("plansGrid").setAttribute("aria-busy", "true");
-  document.querySelectorAll(".plan-action").forEach(button => { button.disabled = true; });
   const selected = currency || detectedCurrency();
   currency = selected;
   populateCurrencies();
   $("billingCurrency").value = selected;
+  if (!catalog) {
+    // The static cards carry TRY list prices. Show the bundled regional prices
+    // for the selected currency until the live catalog answers.
+    catalog = normalizeCatalog(null, selected);
+    renderPlanCards();
+  }
+  $("plansGrid").setAttribute("aria-busy", "true");
+  document.querySelectorAll(".plan-action").forEach(button => { button.disabled = true; });
+  // Payment capabilities are loaded alongside, but never decide whether the
+  // packages themselves can be shown.
+  const [remoteResult, providerResult, transferResult] = await Promise.allSettled([
+    api(`/billing/plans?currency=${encodeURIComponent(selected)}`),
+    api("/billing/providers"),
+    api("/billing/manual-transfer"),
+  ]);
+  if (version !== catalogLoadVersion) return;
+  if (providerResult.status === "fulfilled") {
+    providers = providerResult.value.providers || [];
+    commerceIdentity = providerResult.value.commerce_identity || {configured:false};
+  }
+  // The public capability endpoint deliberately exposes availability only.
+  // Bank details are read exclusively from the authenticated, order-specific response.
+  const transferBody = transferResult.status === "fulfilled" ? transferResult.value : null;
+  manualTransfer = {available:Boolean(transferBody?.available), bank:null};
+  const capabilityError = [providerResult, transferResult].find(result => result.status === "rejected")?.reason;
   try {
-    const [remote, providerBody, transferBody] = await Promise.all([
-      api(`/billing/plans?currency=${encodeURIComponent(selected)}`),
-      api("/billing/providers"),
-      api("/billing/manual-transfer"),
-    ]);
-    if (version !== catalogLoadVersion) return;
+    if (remoteResult.status === "rejected") throw remoteResult.reason;
     let updatedAccount = null;
     try { updatedAccount = (await api("/billing/me")).account; } catch { /* Public plans remain available. */ }
     if (version !== catalogLoadVersion) return;
-    providers = providerBody.providers || [];
-    commerceIdentity = providerBody.commerce_identity || {configured:false};
-    // The public capability endpoint deliberately exposes availability only.
-    // Bank details are read exclusively from the authenticated, order-specific response.
-    manualTransfer = {available:Boolean(transferBody?.available), bank:null};
-    catalog = normalizeCatalog(remote, selected);
+    catalog = normalizeCatalog(remoteResult.value, selected);
     catalogCapacityFresh = true;
     account = updatedAccount;
     catalogLoading = false;
     renderAccount();
     renderPlans();
     renderPaymentStatus();
+    if (capabilityError) showError(capabilityError.message, capabilityError.code);
     showPaymentRedirectResult();
     openRequestedPlan();
   } catch (error) {
     if (version !== catalogLoadVersion) return;
-    if (catalog) {
+    // Keep the previous catalog (or the bundled prices on a first failure) so
+    // the packages stay visible, and restore the currency it was loaded for.
+    if (catalog.selected_currency !== currency) {
       currency = catalog.selected_currency;
       localStorage.setItem("lecturesift-currency", currency);
       populateCurrencies();
-      renderPlans();
     }
+    renderPlans();
+    renderPaymentStatus();
     showError(error.message, error.code);
   } finally {
     if (version === catalogLoadVersion) {
@@ -854,4 +902,5 @@ document.querySelectorAll("[data-copy-target]").forEach(button => {
   });
 });
 currency = detectedCurrency();
+revealPlanCard(new URLSearchParams(location.search).get("plan"));
 load();

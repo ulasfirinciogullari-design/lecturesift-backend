@@ -246,15 +246,26 @@ def test_explicit_adsense_provider_loads_only_auto_ads() -> None:
     [
         "/", "/index.html", "/en/", "/ar/index.html",
         "/features", "/features/", "/features.html",
-        "/plans", "/plans/", "/plans.html",
         "/about", "/about/", "/about.html",
-        "/en/features/", "/ar/plans.html", "/de/about/",
+        "/en/features/", "/ar/features.html", "/de/about/",
     ],
 )
 def test_public_canonical_routes_and_html_aliases_allow_publisher_ads(pathname: str) -> None:
     result = run_scenario("gpt_enabled", pathname)
     assert result["scripts"] == ["https://securepubads.g.doubleclick.net/tag/js/gpt.js"]
     assert result["queuedGptCommands"] == 1
+
+
+@pytest.mark.parametrize("scenario", ["gpt_enabled", "adsense_enabled", "disabled_auto_ads"])
+@pytest.mark.parametrize(
+    "pathname",
+    ["/plans", "/plans/", "/plans.html", "/en/plans", "/ar/plans.html", "/de/plans/", "/thanks.html"],
+)
+def test_purchase_pages_never_request_publisher_ads_or_house_campaigns(scenario: str, pathname: str) -> None:
+    result = run_scenario(scenario, pathname)
+    assert result["fetchUrls"] == []
+    assert result["scripts"] == []
+    assert result["displayAds"] == 0
 
 
 def test_gpt_copies_the_preview_nonce_and_forces_safeframe_before_slot_definition() -> None:
