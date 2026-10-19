@@ -30,7 +30,7 @@ const source = fs.readFileSync(process.argv[2], 'utf8');
       head: {append: element => scripts.push(element.src)},
       addEventListener: (name, callback) => listeners.set(name, callback),
     },
-    LectureSiftConsent: {get: () => consent},
+    LectureSiftConsent: options.consentLate ? undefined : {get: () => consent},
     __lecturesiftAnalyticsQueue: (options.queued || []).map(([name, parameters]) => (
       {type: 'event', name, parameters, resolve: value => queued.push(value)})),
     fetch: async url => {
@@ -43,8 +43,18 @@ const source = fs.readFileSync(process.argv[2], 'utf8');
   };
   context.window = context;
   vm.runInNewContext(source, context);
+  const pending = (options.calls || []).map(([name, parameters]) => context.lectureSiftTrack(name, parameters));
+  let early = null;
+  if (options.consentLate) {
+    // consent.js finishes loading after analytics.js and the page's first calls.
+    await new Promise(setImmediate);
+    early = {queued: [...queued], events: (context.dataLayer || []).filter(args => args[0] === 'event').length,
+      requests: requests.length};
+    context.LectureSiftConsent = {get: () => consent};
+    listeners.get('lecturesift:consent-ready')();
+  }
   const results = [];
-  for (const [name, parameters] of options.calls || []) results.push(await context.lectureSiftTrack(name, parameters));
+  for (const promise of pending) results.push(await promise);
   const beforeRevoke = (context.dataLayer || []).length;
   if (options.afterRevoke) {
     consent = {analytics: false, advertising: false};
@@ -52,15 +62,16 @@ const source = fs.readFileSync(process.argv[2], 'utf8');
     results.push(await context.lectureSiftTrack(...options.afterRevoke));
   }
   await new Promise(setImmediate);
-  console.log(JSON.stringify({results, queued, scripts, requests, beforeRevoke,
+  console.log(JSON.stringify({results, queued, scripts, requests, beforeRevoke, early,
     calls: (context.dataLayer || []).map(args => Array.from(args))}));
 })().catch(error => { console.error(error.stack); process.exitCode = 1; });
 """
 
 
-def observe(path, *, analytics=True, advertising=True, origin=ORIGIN, calls=(), queued=(), after_revoke=None):
+def observe(path, *, analytics=True, advertising=True, origin=ORIGIN, calls=(), queued=(), after_revoke=None,
+            consent_late=False):
     options = {"path": path, "analytics": analytics, "advertising": advertising, "origin": origin,
-               "calls": list(calls), "queued": list(queued), "afterRevoke": after_revoke}
+               "calls": list(calls), "queued": list(queued), "afterRevoke": after_revoke, "consentLate": consent_late}
     result = subprocess.run(
         [NODE, "-e", HARNESS, json.dumps(options), str(ROOT / "frontend/analytics.js")],
         check=True, capture_output=True, text=True, timeout=8,
@@ -167,6 +178,16 @@ def test_calls_queued_before_loading_are_checked_against_consent(analytics):
     row = observe("/workspace.html", analytics=analytics, queued=TRIAL)
     assert row["queued"] == [analytics]
     assert [event[0] for event in events(row)] == (["trial_start"] if analytics else [])
+
+
+@pytest.mark.parametrize("analytics", [False, True])
+def test_events_before_consent_is_ready_wait_for_the_saved_choice(analytics):
+    row = observe("/workspace.html", analytics=analytics, consent_late=True, queued=TRIAL,
+                  calls=[["trial_limit_reached", {"reason": "trial_used"}]])
+    assert row["early"] == {"queued": [], "events": 0, "requests": 0}
+    assert row["queued"] == [analytics]
+    assert row["results"] == [analytics]
+    assert [event[0] for event in events(row)] == (["trial_start", "trial_limit_reached"] if analytics else [])
 
 
 def test_revoking_consent_stops_later_funnel_events():

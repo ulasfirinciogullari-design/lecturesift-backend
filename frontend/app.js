@@ -407,12 +407,22 @@ async function protectedFetch(path) {
 
 // Product funnel events go through analytics.js, which sends nothing without
 // analytics consent. A call made before it loads waits in its queue.
+// The promise is true only once the tag has accepted the event.
 function recordFunnel(name, parameters = {}) {
   try {
-    if (typeof window.lectureSiftTrack === "function") return void window.lectureSiftTrack(name, parameters);
+    if (typeof window.lectureSiftTrack === "function") {
+      return Promise.resolve(window.lectureSiftTrack(name, parameters)).then(value => value === true, () => false);
+    }
     window.__lecturesiftAnalyticsQueue = window.__lecturesiftAnalyticsQueue || [];
-    window.__lecturesiftAnalyticsQueue.push({type:"event", name, parameters});
-  } catch (_) {}
+    return new Promise(resolve => window.__lecturesiftAnalyticsQueue.push({type:"event", name, parameters, resolve}));
+  } catch (_) { return Promise.resolve(false); }
+}
+
+// Covers a guest job that finished while this page polled it and one that had
+// already finished when the guest came back; rollout.js counts it once per tab.
+function recordTrialComplete(job) {
+  if (!latestResult) return;
+  window.LectureSiftGuestTrial?.record?.("trial_complete", {source_type: String(job?.source_type || "").startsWith("document") ? "document" : "media"});
 }
 
 async function downloadProtected(path, filename) {
@@ -424,7 +434,7 @@ async function downloadProtected(path, filename) {
     document.body.appendChild(anchor); anchor.click(); anchor.remove();
     setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     // Only the format is measured, never the file name or job.
-    recordFunnel("result_download", {
+    void recordFunnel("result_download", {
       content_type: path.endsWith("/download") ? "package" : "file",
       file_extension: (/\.([a-z0-9]{1,5})$/i.exec(filename || "")?.[1] || "").toLowerCase(),
     });
@@ -519,7 +529,7 @@ async function restoreRequestedJob() {
     if (!response.ok) { const error = await responseError(response); showError(error.message, error.code); return; }
     const job = await response.json();
     updateJobView(job);
-    if (job.status === "done") await loadResult();
+    if (job.status === "done") { await loadResult(); recordTrialComplete(job); }
     else if (job.status === "error") showError(job.error, job.error_code);
     else { startTimer(); pollJob(); }
   } catch (error) {
@@ -1243,7 +1253,7 @@ async function pollJob() {
     if (job.status === "done") {
       clearInterval(timerHandle);
       await loadResult({open:$("autoOpenResult").checked});
-      if (latestResult) window.LectureSiftGuestTrial?.record?.("trial_complete", {source_type: String(job.source_type || "").startsWith("document") ? "document" : "media"});
+      recordTrialComplete(job);
       await refreshBillingAccount();
       return;
     }

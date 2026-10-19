@@ -100,6 +100,31 @@ test('a returning guest whose trial is used reports the sign-up wall once', asyn
   await expect.poll(() => funnel(page)).toEqual([['trial_limit_reached', {reason:'trial_used'}]]);
 });
 
+test('a guest returning to a finished trial job counts its completion once per tab', async ({page}) => {
+  await recordFunnel(page);
+  await page.addInitScript(() => {
+    if (location.origin !== 'http://127.0.0.1:4173') return;
+    localStorage.setItem('lecturesift-ui', 'en');
+    localStorage.setItem('lecturesift-currency', 'TRY');
+    sessionStorage.setItem('lecturesift-guest-token', 'synthetic-funnel-guest-token');
+  });
+  await page.route(`${API}/billing/me`, answer({account:guestAccount}));
+  await page.route(`${API}/billing/me/rollout`, answer({guest_trial:{used:true, remaining_minutes:0, job_id:JOB_ID}, rewarded_ads:{enabled:false}}));
+  // Hold the catalog until the guest session is restored, so the job link is
+  // reopened with that session instead of racing it.
+  await page.route(`${API}/billing/plans?currency=TRY`, async route => {
+    await page.waitForFunction(() => typeof billingAccount !== 'undefined' && billingAccount?.plan?.code === 'guest', null, {polling:100});
+    await answer({plans:[], selected_currency:'TRY'})(route);
+  });
+  const opened = [['trial_limit_reached', {reason:'trial_used'}], ['trial_complete', {source_type:'document'}]];
+  await page.goto(`/en/workspace.html?job=${JOB_ID}`);
+  await expect(page.locator('#resultHeading')).toHaveText('Synthetic browser quiz');
+  await expect.poll(() => funnel(page)).toEqual(opened);
+  await page.reload();
+  await expect(page.locator('#resultHeading')).toHaveText('Synthetic browser quiz');
+  await expect.poll(() => funnel(page)).toEqual([...opened, ['trial_limit_reached', {reason:'trial_used'}]]);
+});
+
 test('a result download reports only its kind and format', async ({page}) => {
   await recordFunnel(page);
   await page.addInitScript(() => {

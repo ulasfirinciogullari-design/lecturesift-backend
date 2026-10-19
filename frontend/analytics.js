@@ -38,6 +38,9 @@
   let remoteConfig = null;
   let configPromise = null;
   let tagLoaded = false;
+  // consent.js loads in parallel. Until it is ready a saved choice is unknown,
+  // not refused, so an early event waits for it instead of being dropped.
+  const consentWaiters = [];
 
   function unlocalizedPath(pathname = location.pathname) {
     const languages = new Set(["tr", "en", "de", "fr", "es", "it", "pt", "ru", "ar", "zh", "ja", "ko", "hi"]);
@@ -160,7 +163,9 @@
   }
 
   async function send(eventName, parameters, paths) {
-    if (!PRODUCTION_ORIGIN || !paths.has(unlocalizedPath()) || !choices().analytics) return false;
+    if (!PRODUCTION_ORIGIN || !paths.has(unlocalizedPath())) return false;
+    if (!window.LectureSiftConsent) await new Promise(resolve => consentWaiters.push(resolve));
+    if (!choices().analytics) return false;
     const config = await getConfig();
     // Consent may have been withdrawn while configuration was loading.
     if (!choices().analytics) return false;
@@ -254,7 +259,11 @@
     void result.then(value => item?.resolve?.(value === true), () => item?.resolve?.(false));
   });
   document.addEventListener("lecturesift:consent", () => { updateConsent(); void start(); });
-  document.addEventListener("lecturesift:consent-ready", () => { updateConsent(); void start(); });
+  document.addEventListener("lecturesift:consent-ready", () => {
+    consentWaiters.splice(0).forEach(resolve => resolve());
+    updateConsent();
+    void start();
+  });
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, {once: true});
   else void start();
 })();
