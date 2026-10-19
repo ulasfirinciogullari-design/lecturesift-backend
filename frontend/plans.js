@@ -22,7 +22,7 @@ const referralCouponCode = value => {
 };
 
 function recordPlanAnalytics(name, parameters = {}) {
-  if (window.LectureSiftAnalytics?.track) return void window.LectureSiftAnalytics.track(name, parameters);
+  if (typeof window.lectureSiftTrack === "function") return void window.lectureSiftTrack(name, parameters);
   window.__lecturesiftAnalyticsQueue = window.__lecturesiftAnalyticsQueue || [];
   window.__lecturesiftAnalyticsQueue.push({type:"event", name, parameters});
 }

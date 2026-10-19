@@ -405,6 +405,16 @@ async function protectedFetch(path) {
   return response;
 }
 
+// Product funnel events go through analytics.js, which sends nothing without
+// analytics consent. A call made before it loads waits in its queue.
+function recordFunnel(name, parameters = {}) {
+  try {
+    if (typeof window.lectureSiftTrack === "function") return void window.lectureSiftTrack(name, parameters);
+    window.__lecturesiftAnalyticsQueue = window.__lecturesiftAnalyticsQueue || [];
+    window.__lecturesiftAnalyticsQueue.push({type:"event", name, parameters});
+  } catch (_) {}
+}
+
 async function downloadProtected(path, filename) {
   try {
     const response = await protectedFetch(path);
@@ -413,6 +423,11 @@ async function downloadProtected(path, filename) {
     anchor.href = objectUrl; anchor.download = filename || "LectureSift";
     document.body.appendChild(anchor); anchor.click(); anchor.remove();
     setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    // Only the format is measured, never the file name or job.
+    recordFunnel("result_download", {
+      content_type: path.endsWith("/download") ? "package" : "file",
+      file_extension: (/\.([a-z0-9]{1,5})$/i.exec(filename || "")?.[1] || "").toLowerCase(),
+    });
   } catch (error) { showError(error.message, error.code || "LS-NETWORK-01", {stopProcessing:false}); }
 }
 
@@ -990,6 +1005,9 @@ function showError(message, code = "LS-SYSTEM-01", {stopProcessing = true} = {})
   $("errorCode").textContent = `${window.LectureSiftI18n?.exact("Hata kodu") || "Hata kodu"}: ${code}`; $("errorBox").hidden = false;
   if (stopProcessing) { setJobBusy(false); clearTimeout(pollHandle); clearInterval(timerHandle); }
   if (code === "LS-GUEST-05") window.LectureSiftGuestTrial?.markUsed?.();
+  if (code === "LS-GUEST-04" || code === "LS-GUEST-05") {
+    window.LectureSiftGuestTrial?.record?.("trial_limit_reached", {reason: code === "LS-GUEST-05" ? "trial_used" : "source_limit"});
+  }
   $("quotaRecoveryActions")?.remove();
   $("documentRecoveryActions")?.remove();
   if (sampleOcrLimitError || ["LS-DOC-14", "LS-DOC-15", "LS-DOC-18"].includes(code)) {
@@ -1193,6 +1211,7 @@ $("analyzeButton").onclick = async () => {
         return;
       }
       jobId = created.job_id;
+      window.LectureSiftGuestTrial?.record?.("trial_start", {source_type: documentUpload ? "document" : "media"});
       if (created.ocr_required) {
         const pageCount = Number(created.ocr_pages || 0);
         updateProgress(8, t("stageDocument"), `${pageCount} ${window.LectureSiftI18n?.exact?.("taranmış sayfa") || "taranmış sayfa"}`);
@@ -1221,7 +1240,13 @@ async function pollJob() {
     if (job.status === "processing" || job.status === "done") {
       window.LectureSiftGuestTrial?.markUsed?.(jobId);
     }
-    if (job.status === "done") { clearInterval(timerHandle); await loadResult({open:$("autoOpenResult").checked}); await refreshBillingAccount(); return; }
+    if (job.status === "done") {
+      clearInterval(timerHandle);
+      await loadResult({open:$("autoOpenResult").checked});
+      if (latestResult) window.LectureSiftGuestTrial?.record?.("trial_complete", {source_type: String(job.source_type || "").startsWith("document") ? "document" : "media"});
+      await refreshBillingAccount();
+      return;
+    }
     if (job.status === "error") { showError(job.error, job.error_code); return; }
     pollHandle = setTimeout(pollJob, 1300);
   } catch (error) { pollHandle = setTimeout(pollJob, 2500); }
