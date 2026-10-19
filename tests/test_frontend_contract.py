@@ -1572,6 +1572,8 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
+    assert 'error.code === "LS-GUEST-06"' in rollout
+    assert '"rollout.guestLimit"' in rollout and '"rollout.guestLimit"' in catalog
     assert 'src="./app.js?v=42"' in index
     assert 'src="/rollout.js?v=15"' in index
     assert '$("plans").scrollIntoView' not in app

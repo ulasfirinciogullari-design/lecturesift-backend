@@ -17,7 +17,7 @@ import secrets
 import statistics
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Callable
 
 from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Table, and_, delete, exists, func, literal, or_, select, union_all, update
 from sqlalchemy.exc import IntegrityError
@@ -541,7 +541,39 @@ def close_user_account(
     return {"closed_at": now.isoformat(), "status": "closed"}
 
 
-def create_or_resume_guest(fingerprint: str) -> dict[str, Any]:
+_GUEST_TRIAL_GLOBAL_LOCK_ID = 731_206_448_093  # Stable PostgreSQL transaction lock key.
+GUEST_TRIAL_LIMIT_MESSAGE = (
+    "Bugünlük hesapsız deneme hakkı doldu. "
+    "Ücretsiz hesap açarak her ay 120 dakika kullanabilirsin."
+)
+
+
+class GuestTrialLimitExceeded(BillingError):
+    """No new anonymous trial may start before the next UTC day."""
+
+    def __init__(self, retry_after: int):
+        super().__init__(GUEST_TRIAL_LIMIT_MESSAGE)
+        self.retry_after = max(1, int(retry_after))
+
+
+def _lock_guest_trial_budget(connection) -> None:
+    if connection.dialect.name == "postgresql":
+        connection.execute(select(func.pg_advisory_xact_lock(_GUEST_TRIAL_GLOBAL_LOCK_ID)))
+
+
+def create_or_resume_guest(
+    fingerprint: str,
+    *,
+    daily_limit: int | None = None,
+    before_create: Callable[[], None] | None = None,
+) -> dict[str, Any]:
+    """Resume this device's trial, or start a new one within the daily limits.
+
+    ``daily_limit`` caps new trials across the service per UTC day and is
+    counted from the durable trial rows, so a restart cannot reset it.
+    ``before_create`` runs only for a new trial that passed that cap, letting
+    the caller charge per-client limits without counting resumed sessions.
+    """
     init_rollout_database()
     fingerprint_hash = _hash(fingerprint)
     now = utcnow()
@@ -572,6 +604,23 @@ def create_or_resume_guest(fingerprint: str) -> dict[str, Any]:
                     "job_id": trial.job_id,
                 },
             }
+
+        if daily_limit is not None:
+            _lock_guest_trial_budget(connection)
+            day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            created_today = int(
+                connection.execute(
+                    select(func.count()).select_from(GUEST_TRIALS).where(
+                        GUEST_TRIALS.c.created_at >= day_start,
+                    )
+                ).scalar_one()
+                or 0
+            )
+            if created_today >= daily_limit:
+                next_day = day_start + timedelta(days=1)
+                raise GuestTrialLimitExceeded(math.ceil((next_day - now).total_seconds()))
+        if before_create is not None:
+            before_create()
 
         user_id = str(uuid.uuid4())
         guest_email = f"guest-{fingerprint_hash[:24]}@guest.lecturesift.invalid"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
+import ipaddress
 import re
 import unicodedata
 from datetime import date
@@ -28,6 +29,8 @@ from .mailer import EmailDeliveryError
 from .queue import worker_health
 from .security import RATE_LIMITER, RateLimitExceeded
 from .rollout_service import (
+    GUEST_TRIAL_LIMIT_MESSAGE,
+    GuestTrialLimitExceeded,
     add_public_contact_reply,
     admin_close_user_account,
     admin_user_identity,
@@ -576,6 +579,23 @@ def public_contact_reply(
     }
 
 
+def _guest_trial_client_key(request: Request) -> str:
+    # Reuse the API's address parsing: in production Caddy replaces
+    # X-Forwarded-For with the socket peer before the request reaches uvicorn.
+    from .app import _client_ip
+
+    address = _client_ip(request)
+    if not address:
+        return request.client.host if request.client else "unknown"
+    parsed = ipaddress.ip_address(address)
+    if parsed.version == 6:
+        if parsed.ipv4_mapped:
+            return str(parsed.ipv4_mapped)
+        # One IPv6 subscriber normally controls a whole /64.
+        return str(ipaddress.ip_network(f"{parsed}/64", strict=False))
+    return address
+
+
 @router.post("/billing/guest-session")
 def billing_guest_session(payload: GuestSessionRequest, request: Request) -> dict:
     device_id = payload.device_id.strip()
@@ -597,8 +617,29 @@ def billing_guest_session(payload: GuestSessionRequest, request: Request) -> dic
     user_agent = request.headers.get("user-agent", "unknown")[:300]
     # Keep the trial tied to this browser/device even when the user changes Wi-Fi or mobile network.
     fingerprint = hashlib.sha256(f"{device_id}|{user_agent}".encode("utf-8")).hexdigest()
+    client_key = _guest_trial_client_key(request)
+
+    def charge_client_address() -> None:
+        # Called only for a new trial, so a returning device always resumes.
+        RATE_LIMITER.check(
+            "guest-trial-ip",
+            client_key,
+            limit=config.GUEST_TRIAL_IP_DAILY_LIMIT,
+            window_seconds=24 * 60 * 60,
+        )
+
     try:
-        result = create_or_resume_guest(fingerprint)
+        result = create_or_resume_guest(
+            fingerprint,
+            daily_limit=config.GUEST_TRIAL_GLOBAL_DAILY_LIMIT,
+            before_create=charge_client_address,
+        )
+    except (RateLimitExceeded, GuestTrialLimitExceeded) as exc:
+        raise HTTPException(
+            429,
+            detail={"code": "LS-GUEST-06", "message": GUEST_TRIAL_LIMIT_MESSAGE},
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
     except (BillingError, BillingAuthenticationError, BillingConfigurationError) as exc:
         _billing_failure(exc, "LS-GUEST-02")
     return {

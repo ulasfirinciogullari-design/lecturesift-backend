@@ -184,6 +184,32 @@
     node.textContent = message;
   }
 
+  function showGuestTrialLimit(error) {
+    const message = rt(
+      "rollout.guestLimit",
+      error.message || "Bugünlük hesapsız deneme hakkı doldu. Ücretsiz hesap açarak her ay 120 dakika kullanabilirsin.",
+    );
+    if (typeof showError !== "function" || !$("errorCode")) {
+      showInlineMessage(message, true);
+      return;
+    }
+    showError(message, error.code);
+    // showError removes this recovery container before showing the next error.
+    const actions = document.createElement("div");
+    actions.id = "quotaRecoveryActions";
+    actions.className = "quota-recovery-actions";
+    const language = window.LectureSiftI18n?.language || "tr";
+    const signup = document.createElement("a");
+    signup.id = "guestTrialLimitSignup";
+    signup.href = window.LectureSiftI18n?.localizedPath?.(language, "/register.html") || "/register.html";
+    signup.search = new URLSearchParams({
+      next: window.LectureSiftI18n?.localizedPath?.(language, "/workspace.html") || "/workspace",
+    }).toString();
+    signup.textContent = rt("rollout.createFreeAccount", "Ücretsiz hesap oluştur");
+    actions.append(signup);
+    $("errorCode").insertAdjacentElement("afterend", actions);
+  }
+
   function installUploadSpeedProbe() {
     if (XMLHttpRequest.prototype.__lecturesiftSpeedProbe) return;
     const originalSend = XMLHttpRequest.prototype.send;
@@ -330,7 +356,11 @@
         }
         if (!activeToken()) {
           try { await ensureGuestIdentity(); }
-          catch (error) { showInlineMessage(error.message, true); return; }
+          catch (error) {
+            if (error.code === "LS-GUEST-06") showGuestTrialLimit(error);
+            else showInlineMessage(error.message, true);
+            return;
+          }
         }
         if (requestedSample && !sampleSelected()) {
           showError("", "LS-DOC-17");
