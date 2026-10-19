@@ -113,7 +113,7 @@ function recordAnalytics(type, name, parameters = {}) {
   const analytics = window.LectureSiftAnalytics;
   try {
     if (type === "conversion" && analytics?.trackConversion) return Promise.resolve(analytics.trackConversion(name, parameters)).then(value => value === true, () => false);
-    if (type === "event" && analytics?.track) return Promise.resolve(analytics.track(name, parameters)).then(value => value === true, () => false);
+    if (type === "event" && typeof window.lectureSiftTrack === "function") return Promise.resolve(window.lectureSiftTrack(name, parameters)).then(value => value === true, () => false);
     return new Promise(resolve => {
       window.__lecturesiftAnalyticsQueue = window.__lecturesiftAnalyticsQueue || [];
       window.__lecturesiftAnalyticsQueue.push({type, name, parameters, resolve});
@@ -352,6 +352,8 @@ async function initLogin() {
         body: JSON.stringify({email: $("email").value.trim(), password: $("password").value}),
       });
       localStorage.setItem(TOKEN_KEY, sessionTokenFrom(body));
+      // Without analytics consent this settles at once; it never holds sign-in for long.
+      await Promise.race([recordAnalytics("event", "login", {method: "email"}), new Promise(resolve => setTimeout(resolve, 1000))]);
       location.replace(safeNext());
     } catch (error) { showNotice(error.message, true); }
     finally { setBusy(button, false, t("auth.signIn", "Giriş yap")); }

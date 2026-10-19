@@ -135,3 +135,21 @@ Instagram credentials are read only from `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_AC
 token, so they remain disabled by default. Never place any of these values in source control.
 
 Transient job files are stored under `/tmp/lecturesift` and expire automatically.
+
+## Product analytics (GA4)
+
+Page scripts send GA4 funnel events only through `window.lectureSiftTrack(name, params)` in `frontend/analytics.js`. It sends nothing on previews or local origins, before the visitor allows analytics, for unknown event names, or on pages outside the funnel. It drops unknown parameters and any text that could be an email address, URL, path or file name. The workspace still loads no Google tag when it opens; its first funnel event loads GA4 only (no page view, no Google Ads tag), with the URL query and fragment removed.
+
+| Event | Sent when | Parameters |
+| --- | --- | --- |
+| `trial_start` | The API accepts a guest's first upload | `source_type` (`document` or `media`) |
+| `trial_complete` | That guest job finishes and its result is shown | `source_type` |
+| `trial_limit_reached` | A guest sees the used-trial sign-up wall (on return, on trying again or on `LS-GUEST-05`), or a source exceeds the trial allowance (`LS-GUEST-04`) | `reason` (`trial_used` or `source_limit`) |
+| `sign_up` | Registration is accepted, before email verification | `method` |
+| `login` | Password sign-in succeeds | `method` |
+| `begin_checkout` | A plan's checkout form opens on the plans page | `currency`, `value`, `items` (`item_id` is the plan code) |
+| `add_payment_info` | Hosted checkout or a manual bank-transfer order starts | `payment_type`, `items` |
+| `purchase` | The account page, where payments return, confirms the order as paid; once per order per browser tab | `transaction_id` (random order reference), `value`, `currency`, `items` |
+| `result_download` | A result package or file download starts | `content_type` (`package` or `file`), `file_extension` |
+
+Each trial event is sent at most once per page load, and `trial_complete` at most once per browser tab, including when the guest comes back to a job that finished while they were away. An event counts as sent only when the tag accepts it, and an event fired before the consent script is ready waits for the visitor's saved choice. In GA4 Admin, mark `trial_start`, `sign_up` and `purchase` as key events. To see `source_type`, `reason`, `content_type` or `file_extension` in reports, register them as event-scoped custom dimensions. The site is not a single-page app, so "Page changes based on browser history events" can be switched off in the web stream's Enhanced measurement settings; otherwise tab switches on the account and workspace pages, which rewrite the URL fragment, can count as page views.

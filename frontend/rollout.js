@@ -6,6 +6,8 @@
   const ZERO_DECIMAL = new Set(["JPY", "KRW"]);
   let guestTrialState = null;
   let guestIdentityRequest = null;
+  const recordedTrialEvents = new Set();
+  const TRIAL_COMPLETE_KEY = "lecturesift-trial-complete-sent";
   const $ = id => document.getElementById(id);
   const rt = (key, fallback) => window.LectureSiftI18n?.t(key) || fallback || key;
   const rolloutLocale = () => window.LectureSiftI18n?.locale || navigator.language || "tr-TR";
@@ -46,6 +48,26 @@
     return value;
   }
 
+  // Guest funnel milestones, at most once each per page (a finished trial once
+  // per tab). recordFunnel (app.js) hands them to analytics.js, which drops
+  // them without analytics consent; only an accepted event counts as sent.
+  function recordTrialEvent(name, parameters = {}) {
+    const guest = typeof billingAccount !== "undefined" && billingAccount?.plan?.code === "guest";
+    const key = `${name}:${parameters.reason || ""}`;
+    let completed = false;
+    if (name === "trial_complete") {
+      try { completed = sessionStorage.getItem(TRIAL_COMPLETE_KEY) === "1"; } catch {}
+    }
+    if (!guest || completed || recordedTrialEvents.has(key) || typeof recordFunnel !== "function") return;
+    recordedTrialEvents.add(key);
+    void recordFunnel(name, parameters).then(sent => {
+      if (!sent) recordedTrialEvents.delete(key);
+      else if (name === "trial_complete") {
+        try { sessionStorage.setItem(TRIAL_COMPLETE_KEY, "1"); } catch {}
+      }
+    });
+  }
+
   function setWorkspaceIdentity(token, account, guest = false, trial = null) {
     if (typeof billingToken !== "undefined") billingToken = token;
     if (typeof billingAccount !== "undefined") billingAccount = account;
@@ -56,6 +78,7 @@
     if (typeof renderBillingAccount === "function") renderBillingAccount();
     if (typeof renderPlans === "function") renderPlans();
     updateGuestTrialUi();
+    if (guest && trial?.used === true) recordTrialEvent("trial_limit_reached", {reason: "trial_used"});
   }
 
   async function ensureGuestIdentity() {
@@ -145,6 +168,7 @@
       updateGuestTrialUi();
     },
     state() { return guestTrialState ? {...guestTrialState} : null; },
+    record: recordTrialEvent,
   };
 
   function formatCurrency(amountMinor, currency) {
@@ -352,6 +376,7 @@
             rt("rollout.guestUsed", "Tek seferlik 30 dakikalık denemen kullanıldı. Devam etmek için ücretsiz hesap oluştur."),
             true,
           );
+          recordTrialEvent("trial_limit_reached", {reason: "trial_used"});
           return;
         }
         if (!activeToken()) {

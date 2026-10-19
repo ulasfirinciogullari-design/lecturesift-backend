@@ -24,12 +24,27 @@
     "/assets/study/cornell-notes-tr.txt", "/assets/study/cornell-notes-en.txt",
     "/assets/study/pdf-check-tr.txt", "/assets/study/pdf-check-en.txt",
   ]);
-  const EVENT_PATHS = new Set([...PUBLIC_PATHS, "/register", "/account"]);
+  const EVENT_PATHS = new Set([...PUBLIC_PATHS, "/register", "/login", "/account"]);
+  // The workspace never starts measurement on load. Only the fixed product
+  // funnel events below may load Google Analytics there, never advertising tags.
+  const FUNNEL_PATHS = new Set([...EVENT_PATHS, "/workspace"]);
+  const FUNNEL_EVENTS = new Set([
+    "trial_start", "trial_complete", "trial_limit_reached", "sign_up", "login",
+    "begin_checkout", "add_payment_info", "purchase", "result_download",
+  ]);
+  const FUNNEL_PARAMETERS = new Set([
+    "method", "source_type", "reason", "content_type", "file_extension",
+    "currency", "value", "transaction_id", "payment_type", "items",
+  ]);
+  const ITEM_PARAMETERS = new Set(["item_id", "item_name", "quantity"]);
   const configuredIds = new Set();
   const pageNonce = document.querySelector("script[nonce]")?.nonce || "";
   let remoteConfig = null;
   let configPromise = null;
   let tagLoaded = false;
+  // consent.js loads in parallel. Until it is ready a saved choice is unknown,
+  // not refused, so an early event waits for it instead of being dropped.
+  const consentWaiters = [];
 
   function unlocalizedPath(pathname = location.pathname) {
     const languages = new Set(["tr", "en", "de", "fr", "es", "it", "pt", "ru", "ar", "zh", "ja", "ko", "hi"]);
@@ -116,12 +131,12 @@
     return configPromise;
   }
 
-  function configureDestinations(config) {
+  function configureDestinations(config, advertising = true) {
     const consent = choices();
     const gaId = String(config?.measurement_id || "").toUpperCase();
     const adsId = String(config?.google_ads?.id || "").toUpperCase();
     const gaReady = consent.analytics && config?.enabled && /^G-[A-Z0-9]+$/.test(gaId);
-    const adsReady = consent.advertising && config?.google_ads?.enabled && /^AW-[0-9]+$/.test(adsId);
+    const adsReady = advertising && consent.advertising && config?.google_ads?.enabled && /^AW-[0-9]+$/.test(adsId);
     if (!gaReady && !adsReady) return;
     prepareGtag();
     updateConsent();
@@ -151,16 +166,49 @@
     configureDestinations(config);
   }
 
-  async function track(eventName, parameters = {}) {
-    if (!PRODUCTION_ORIGIN || !EVENT_PATHS.has(unlocalizedPath()) || !choices().analytics) return false;
+  async function send(eventName, parameters, paths) {
+    if (!PRODUCTION_ORIGIN || !paths.has(unlocalizedPath())) return false;
+    if (!window.LectureSiftConsent) await new Promise(resolve => consentWaiters.push(resolve));
+    if (!choices().analytics) return false;
     const config = await getConfig();
     // Consent may have been withdrawn while configuration was loading.
     if (!choices().analytics) return false;
-    configureDestinations(config);
+    configureDestinations(config, EVENT_PATHS.has(unlocalizedPath()));
     const measurementId = String(config?.measurement_id || "").toUpperCase();
     if (!config?.enabled || !configuredIds.has(measurementId) || typeof window.gtag !== "function") return false;
     window.gtag("event", String(eventName), {...parameters, ...pageContext(), send_to: measurementId});
     return true;
+  }
+
+  function track(eventName, parameters = {}) {
+    return send(eventName, parameters, EVENT_PATHS);
+  }
+
+  // Page scripts send fixed labels, plan codes, amounts and random order
+  // references only. Unknown keys and text that could hold an email address,
+  // a URL, a path or a file name are dropped before anything reaches the tag.
+  function safeParameters(parameters, allowed) {
+    const safe = {};
+    for (const [key, value] of Object.entries(parameters || {})) {
+      if (!allowed.has(key)) continue;
+      if (key === "items") {
+        if (Array.isArray(value)) safe.items = value.slice(0, 10).map(item => safeParameters(item, ITEM_PARAMETERS));
+      } else if (typeof value === "number" && Number.isFinite(value)) {
+        safe[key] = value;
+      } else if (typeof value === "string") {
+        const text = value.trim();
+        if (text && text.length <= 100 && !/[@/\\:?=&#]|\.[A-Za-z0-9]{1,5}$/.test(text)) safe[key] = text;
+      }
+    }
+    return safe;
+  }
+
+  // The one entry point for product funnel events. Without analytics consent,
+  // on previews or for an unknown event name it sends nothing and resolves false.
+  function trackFunnel(eventName, parameters = {}) {
+    const name = String(eventName || "");
+    if (!FUNNEL_EVENTS.has(name)) return Promise.resolve(false);
+    return send(name, safeParameters(parameters, FUNNEL_PARAMETERS), FUNNEL_PATHS);
   }
 
   async function trackConversion(kind, parameters = {}) {
@@ -206,14 +254,20 @@
   document.addEventListener("click", contentAction);
 
   window.LectureSiftAnalytics = Object.freeze({track, trackConversion, refresh: start});
+  window.lectureSiftTrack = trackFunnel;
+  // Calls made before this file loaded are checked against consent now.
   const queued = Array.isArray(window.__lecturesiftAnalyticsQueue) ? window.__lecturesiftAnalyticsQueue.splice(0) : [];
   queued.forEach(item => {
     const result = item?.type === "conversion" ? trackConversion(item.name, item.parameters)
-      : item?.type === "event" ? track(item.name, item.parameters) : Promise.resolve(false);
+      : item?.type === "event" ? trackFunnel(item.name, item.parameters) : Promise.resolve(false);
     void result.then(value => item?.resolve?.(value === true), () => item?.resolve?.(false));
   });
   document.addEventListener("lecturesift:consent", () => { updateConsent(); void start(); });
-  document.addEventListener("lecturesift:consent-ready", () => { updateConsent(); void start(); });
+  document.addEventListener("lecturesift:consent-ready", () => {
+    consentWaiters.splice(0).forEach(resolve => resolve());
+    updateConsent();
+    void start();
+  });
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, {once: true});
   else void start();
 })();

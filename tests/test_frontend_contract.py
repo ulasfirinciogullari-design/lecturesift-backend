@@ -773,11 +773,11 @@ def test_payment_routes_are_distinct_localized_and_account_history_is_auditable(
         assert len(values) == 13, key
         assert all(str(value).strip() for value in values), key
 
-    assert 'src="/plans.js?v=31"' in plans_html
+    assert 'src="/plans.js?v=32"' in plans_html
     assert 'manualTransfer = {available:Boolean(transferBody?.available), bank:null};' in plans_js
     assert 'order.bank?.iban' in plans_js
     assert 'transferBody?.bank' not in plans_js
-    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=21"', 'href="./auth.css?v=4"'))
+    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=22"', 'href="./auth.css?v=4"'))
     assert all(value in auth_js for value in ("paymentMethodLabel", "paymentMoney", "paymentDateTime", "payment-order-meta"))
     assert all(value in admin_html for value in ('value="iyzico_card"', 'value="iyzico_bank_transfer"', 'value="manual_bank_transfer"', 'value="iyzico_legacy"'))
     assert "provider:selectedProvider" in admin_js
@@ -1401,7 +1401,7 @@ def test_optional_analytics_and_advertising_are_consent_gated():
     assert ".consent-manage{position:fixed" not in consent_css
     assert 'analytics: false, advertising: false' in consent
     assert 'category === "necessary"' in consent
-    assert 'analyticsScript.src = "/analytics.js?v=9"' in i18n
+    assert 'analyticsScript.src = "/analytics.js?v=10"' in i18n
     assert 'window.LectureSiftConsent?.get?.()' in analytics
     assert "/analytics/config" in analytics
     assert "googletagmanager.com/gtag/js" in analytics
@@ -1574,8 +1574,8 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert '"rollout.createFreeAccount"' in catalog
     assert 'error.code === "LS-GUEST-06"' in rollout
     assert '"rollout.guestLimit"' in rollout and '"rollout.guestLimit"' in catalog
-    assert 'src="./app.js?v=42"' in index
-    assert 'src="/rollout.js?v=15"' in index
+    assert 'src="./app.js?v=43"' in index
+    assert 'src="/rollout.js?v=16"' in index
     assert '$("plans").scrollIntoView' not in app
 
 
