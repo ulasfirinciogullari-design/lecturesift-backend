@@ -129,3 +129,29 @@ forget`/`prune`, or interprets an unproved snapshot as success.
   exact restore/finalizer gate.
 - The resulting proof states that a compatible seed was uploaded and restored.
   It does not claim that Redis or R2 rollback was performed.
+
+## Retrying after a rollback
+
+A rollback before activation unfreezes Render, so every proof of that attempt
+describes a capture that Render has since moved past. The OVH target still holds
+that capture, and `/var/lib/lecturesift/provider-cutover/` keeps
+`provider-cutover.in-progress` plus whichever of `postgres-cutover.ok`,
+`redis-cutover.ok` and `first-cutover-seed.ok` the attempt reached. None of them
+can be reused.
+
+1. Confirm Render serves traffic again, `provider-cutover.ok` and both
+   `provider-first-start.*` files are absent, no file exists under
+   `/var/lib/lecturesift/migration-fail-stop/`, and API/worker are stopped.
+2. Rename the fence and the attempt's proofs inside the same directory, for
+   example `provider-cutover.in-progress.rolled-back-<UTC stamp>`. Preflight and
+   `provider_cutover_evidence.py` read only the exact names, so renamed files are
+   ignored and stay as the attempt's audit record. Do not delete them.
+   `begin-postgres` refuses to start while `provider-cutover.in-progress`
+   exists, and removes any remaining phase proofs once it writes the new fence.
+3. Run the whole sequence again from a fresh freeze with a new cutover ID.
+   `migrate_postgres.sh` accepts a target in any reviewed contract (3, 4 or 5),
+   keeps it as `target-before.dump`, and replaces it with the new Render capture.
+   `migrate_redis_state.sh` requires empty target queues, keeps the previous job
+   state for its own rollback and replaces it. The new seed becomes the latest
+   Restic snapshot, which the restore drill then restores; the older, unproved
+   snapshot stays in R2 and is never used by finalization.

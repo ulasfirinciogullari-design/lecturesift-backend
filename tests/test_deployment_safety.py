@@ -1561,3 +1561,25 @@ def test_security_manifest_sorts_bytewise_for_the_code_point_validator():
     validator = _read("deploy/validate_postgres_security_manifest.py")
     assert "objects != sorted(objects)" in validator
     assert '"\\n".join(payloads)' in validator
+
+
+def test_unprivileged_postgres_validation_streams_root_only_backup_dumps():
+    # Backup sets and restored payloads are root-only (0700 directories, 0600
+    # files), so the image's postgres user cannot open a bind-mounted dump.
+    for path, backup_dir, database in (
+        ("deploy/restic_restore_rehearsal.sh", "$BACKUP_DIR", "lecturesift_rehearsal"),
+        ("deploy/restore.sh", "$SOURCE", "restore_validation"),
+    ):
+        script = _read(path)
+        user = script.index('--user "$postgres_uid:$postgres_gid"')
+        start = script.rindex("docker run", 0, user)
+        end = script.index('rehearsal-manifest.out"\n', user)
+        validation = script[start:end]
+        assert validation.startswith("docker run -i --rm "), path
+        assert "/backup" not in validation, path
+        assert f"--no-owner --no-acl --dbname={database}\n" in validation, path
+        assert f"' <\"{backup_dir}/postgres.dump\" >" in validation, path
+        # Only pg_restore may consume the streamed archive.
+        assert validation.count("</dev/null") == 4, path
+        restore = validation.index("pg_restore --host=/tmp")
+        assert "</dev/null" not in validation[restore:validation.index("psql --host=/tmp")]
