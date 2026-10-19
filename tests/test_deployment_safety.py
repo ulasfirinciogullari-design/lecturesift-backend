@@ -1549,3 +1549,15 @@ def test_postgres_container_files_are_streamed_not_copied_into_tmpfs():
                 assert argument == "-", f"{path.name}: {command.strip()}"
                 checked += 1
     assert checked >= 10
+
+
+def test_security_manifest_sorts_bytewise_for_the_code_point_validator():
+    # The database collation is en_US.UTF8, which ignores case and punctuation
+    # (it puts "lecturesift_app" before "PUBLIC"), while the validator requires
+    # Python code-point order for both the lines and the completion digest.
+    manifest = _read("deploy/postgres_security_manifest.sql")
+    assert "string_agg(item, E'\\n' ORDER BY item COLLATE \"C\")" in manifest
+    assert manifest.rstrip().endswith('ORDER BY sort_key, line COLLATE "C";')
+    validator = _read("deploy/validate_postgres_security_manifest.py")
+    assert "objects != sorted(objects)" in validator
+    assert '"\\n".join(payloads)' in validator
