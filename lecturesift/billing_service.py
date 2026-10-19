@@ -2253,7 +2253,10 @@ def complete_payment_order(
             _complete_unsettled_payment(connection, order, succeeded, provider_amount_minor,
                                         failure_code, failure_message, reference, now)
     _reconcile_referral_order(reference)
-    return payment_order(reference)
+    result = payment_order(reference)
+    if result["status"] == "paid":
+        _send_order_confirmation(reference)
+    return result
 
 
 def _reconcile_referral_order(reference: str) -> None:
@@ -2262,6 +2265,18 @@ def _reconcile_referral_order(reference: str) -> None:
         after_order_change(reference)
     except Exception:
         # Never undo/obscure a committed payment due to optional referral code.
+        pass
+
+
+def _send_order_confirmation(reference: str) -> None:
+    # Called only after the paid transaction has committed. Duplicate provider
+    # callbacks reach this again; the notifier records each order's delivery
+    # and never emails the same order twice.
+    try:
+        from .order_notifications import notify_paid_order
+        notify_paid_order(reference)
+    except Exception:
+        # Never undo/obscure a committed payment due to email delivery.
         pass
 
 
@@ -2702,6 +2717,7 @@ def approve_manual_order(reference: str) -> dict:
                 now=now,
             )
     _reconcile_referral_order(reference)
+    _send_order_confirmation(reference)
     return account_status(order.user_id)
 
 
