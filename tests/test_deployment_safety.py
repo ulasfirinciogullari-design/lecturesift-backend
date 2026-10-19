@@ -1514,3 +1514,20 @@ def test_rehearsal_clone_owner_and_candidate_secret_boundaries_are_structural():
     assert "API proxy did not explicitly deny" in stack
     assert "API can resolve the worker egress proxy" in stack
     assert "direct Internet egress unexpectedly succeeded" in stack
+
+
+def test_snapshot_wrapped_manifests_run_psql_quietly():
+    # The manifests turn QUIET on themselves, but the BEGIN and SET TRANSACTION
+    # SNAPSHOT lines sent before them would still print their command tags,
+    # which the strict verifiers reject as unknown record families.
+    checked = 0
+    for path in sorted((ROOT / "deploy").glob("*.sh")):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for index, line in enumerate(lines):
+            if "SET TRANSACTION SNAPSHOT" not in line:
+                continue
+            following = [text for text in lines[index + 1 : index + 12] if "psql" in text]
+            assert following, f"{path.name}:{index + 1} has no psql after its snapshot"
+            assert "--quiet" in following[0], f"{path.name}:{index + 1} runs psql without --quiet"
+            checked += 1
+    assert checked >= 5
