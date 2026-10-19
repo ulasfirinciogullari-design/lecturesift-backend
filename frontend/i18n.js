@@ -1088,7 +1088,7 @@
   consentScript.defer = true;
   document.head.append(consentScript);
   const analyticsScript = document.createElement("script");
-  analyticsScript.src = "/analytics.js?v=10";
+  analyticsScript.src = "/analytics.js?v=11";
   analyticsScript.defer = true;
   document.head.append(analyticsScript);
   const rewardedAdsScript = document.createElement("script");
