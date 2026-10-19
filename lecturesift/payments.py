@@ -98,6 +98,30 @@ class PaymentProviderError(BillingError):
     pass
 
 
+class MissingBuyerDataError(BillingError):
+    """The provider requires buyer details that the account has not given."""
+
+    def __init__(self, fields: list[str]) -> None:
+        self.fields = list(fields)
+        labels = {
+            "first_name": "ad", "last_name": "soyad", "phone": "telefon",
+            "billing_address": "fatura adresi", "billing_city": "şehir",
+            "billing_zip_code": "posta kodu",
+        }
+        super().__init__(
+            "Ödemeyi başlatmak için ödeme sağlayıcısının istediği bilgileri tamamla: "
+            + ", ".join(labels[field] for field in self.fields) + "."
+        )
+
+
+def _require_buyer_data(values: dict[str, str]) -> None:
+    # Signup no longer asks for names or phone. Never fill them in for the
+    # buyer; ask for the exact missing fields before any order is created.
+    missing = [field for field, value in values.items() if not " ".join(str(value or "").split())]
+    if missing:
+        raise MissingBuyerDataError(missing)
+
+
 def paytr_configured() -> bool:
     return all((config.PAYTR_MERCHANT_ID, config.PAYTR_MERCHANT_KEY, config.PAYTR_MERCHANT_SALT))
 
@@ -507,6 +531,16 @@ def create_iyzico_checkout(
             )
         if selected_currency != "TRY":
             raise BillingError("iyzico Korumalı Havale/EFT yalnızca TRY ile kullanılabilir.")
+    # iyzico's buyer object requires name, surname, GSM number, address, city
+    # and zip code.
+    _require_buyer_data({
+        "first_name": first_name or user.get("first_name") or "",
+        "last_name": last_name or user.get("last_name") or "",
+        "phone": phone or user.get("phone") or "",
+        "billing_address": billing_address,
+        "billing_city": billing_city,
+        "billing_zip_code": billing_zip_code,
+    })
     selected_address = _clean_address(billing_address)
     selected_city = _clean_location(billing_city, "şehir", maximum=80)
     selected_zip = _clean_location(billing_zip_code, "posta kodu", maximum=20)
@@ -771,6 +805,13 @@ def create_paytr_checkout(
     paytr_currency = PAYTR_CURRENCIES.get(selected_currency)
     if not paytr_currency:
         raise BillingError("PayTR bu para birimini desteklemiyor. TRY, USD, EUR veya GBP seç.")
+    # PayTR requires user_name, user_address and user_phone.
+    _require_buyer_data({
+        "first_name": first_name or user.get("first_name") or "",
+        "last_name": last_name or user.get("last_name") or "",
+        "phone": phone or user.get("phone") or "",
+        "billing_address": billing_address,
+    })
     selected_address = _clean_address(billing_address)
     selected_phone = _phone(phone or user.get("phone") or "")
     selected_first_name = _clean_name(first_name or user.get("first_name") or "", "ad")

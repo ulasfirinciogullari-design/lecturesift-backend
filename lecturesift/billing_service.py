@@ -450,6 +450,14 @@ def _normalize_name(value: str, label: str) -> str:
     return normalized
 
 
+def _normalize_optional_name(value: str, label: str) -> str:
+    # Names are collected at checkout when a payment provider needs them, so
+    # signup may leave them blank. Stored as empty strings: no schema change.
+    if not " ".join(str(value or "").split()):
+        return ""
+    return _normalize_name(str(value), label)
+
+
 def _normalize_phone(value: str) -> str | None:
     normalized = "".join(char for char in value.strip() if char.isdigit() or char == "+")
     if not normalized:
@@ -516,22 +524,42 @@ def _create_auth_token(connection, user_id: str, purpose: str, ttl: timedelta) -
     return token, expires_at
 
 
+# A guest trial claim needs no new table. AUTH_TOKENS already carries other
+# short state in its purpose column (see the admin login attempts below):
+# - pending: created at registration by the holder of a guest session and
+#   applied once the new account verifies its email (user_id = guest);
+# - claimed: a permanent marker whose primary key is derived from the guest
+#   user, so a guest identity can be claimed by exactly one account.
+GUEST_CLAIM_PENDING_PURPOSE = "guest_claim_pending"
+GUEST_CLAIMED_PURPOSE = "guest_claimed"
+
+
+def _guest_claim_pending_hash(account_user_id: str) -> str:
+    return _token_hash(f"{GUEST_CLAIM_PENDING_PURPOSE}:{account_user_id}")
+
+
+def _guest_claimed_hash(guest_user_id: str) -> str:
+    return _token_hash(f"{GUEST_CLAIMED_PURPOSE}:{guest_user_id}")
+
+
 def register_user(
     email: str,
     password: str,
-    first_name: str,
-    last_name: str,
+    first_name: str = "",
+    last_name: str = "",
     phone: str = "",
     country_code: str = "TR",
     referral_code: str = "",
+    *,
+    guest_user_id: str = "",
 ) -> dict:
     init_billing_database()
     normalized = email.strip().casefold()
     if "@" not in normalized or "." not in normalized.rsplit("@", 1)[-1] or len(normalized) > 320:
         raise BillingError("Geçerli bir e-posta adresi gir.")
     _validate_password(password)
-    selected_first_name = _normalize_name(first_name, "Ad")
-    selected_last_name = _normalize_name(last_name, "Soyad")
+    selected_first_name = _normalize_optional_name(first_name, "Ad")
+    selected_last_name = _normalize_optional_name(last_name, "Soyad")
     selected_phone = _normalize_phone(phone)
     selected_country = country_code.strip().upper()[:2] if len(country_code.strip()) >= 2 else "TR"
     salt = secrets.token_bytes(16)
@@ -572,6 +600,21 @@ def register_user(
                 verification_code,
                 expires_at,
             )
+            guest_claim = "not_provided"
+            if guest_user_id:
+                # The caller has already verified the signed guest session.
+                # Moving the work waits for email verification of this account.
+                connection.execute(
+                    AUTH_TOKENS.insert().values(
+                        token_hash=_guest_claim_pending_hash(values["id"]),
+                        user_id=guest_user_id,
+                        purpose=GUEST_CLAIM_PENDING_PURPOSE,
+                        expires_at=expires_at,
+                        consumed_at=None,
+                        created_at=now,
+                    )
+                )
+                guest_claim = "pending"
             # Referral failure must not prevent account creation. Attribution
             # itself is still inside this new-account transaction, never late.
             referral_status = "not_provided"
@@ -591,7 +634,7 @@ def register_user(
         "email": normalized,
         "first_name": selected_first_name,
         "last_name": selected_last_name,
-        "name": f"{selected_first_name} {selected_last_name}",
+        "name": " ".join(part for part in (selected_first_name, selected_last_name) if part),
         "phone": selected_phone,
         "country_code": selected_country,
         "email_verified": False,
@@ -602,6 +645,139 @@ def register_user(
         "verification_token": verification_token,
         "verification_code": verification_code,
         "expires_at": expires_at,
+        "referral_status": referral_status,
+        "guest_claim": guest_claim,
+    }
+
+
+def sign_in_with_google(
+    email: str,
+    *,
+    given_name: str = "",
+    family_name: str = "",
+    country_code: str = "TR",
+    referral_code: str = "",
+) -> dict:
+    """Sign in, or create a verified account, for an email Google verified.
+
+    The caller must already have verified the Google ID token (signature,
+    audience, issuer, expiry and email_verified). An existing unverified
+    account is verified here and its password is replaced with a random one,
+    so somebody who pre-registered this address cannot keep a password to it.
+    """
+    init_billing_database()
+    normalized = email.strip().casefold()
+    if (
+        "@" not in normalized
+        or "." not in normalized.rsplit("@", 1)[-1]
+        or len(normalized) > 320
+        or normalized.endswith(("@guest.lecturesift.invalid", "@users.invalid"))
+    ):
+        raise BillingAuthenticationError("Google hesabının e-posta adresi kullanılamıyor.")
+    now = utcnow()
+    with ENGINE.begin() as connection:
+        row = connection.execute(
+            select(USERS).where(USERS.c.email == normalized).with_for_update()
+        ).first()
+        if row:
+            profile = _profile_for(connection, row.id)
+            if profile and profile.email_verified_at is None:
+                salt = secrets.token_bytes(16)
+                connection.execute(
+                    update(USERS)
+                    .where(USERS.c.id == row.id)
+                    .values(
+                        password_salt=salt.hex(),
+                        password_hash=_hash_password(secrets.token_urlsafe(48), salt),
+                    )
+                )
+                connection.execute(
+                    update(USER_PROFILES)
+                    .where(USER_PROFILES.c.user_id == row.id)
+                    .values(
+                        email_verified_at=now,
+                        session_version=USER_PROFILES.c.session_version + 1,
+                        updated_at=now,
+                    )
+                )
+                connection.execute(
+                    update(AUTH_TOKENS)
+                    .where(
+                        AUTH_TOKENS.c.user_id == row.id,
+                        AUTH_TOKENS.c.purpose.in_(("verify_email", "verify_email_code", "reset_password")),
+                        AUTH_TOKENS.c.consumed_at.is_(None),
+                    )
+                    .values(consumed_at=now)
+                )
+                row = connection.execute(select(USERS).where(USERS.c.id == row.id)).first()
+                profile = _profile_for(connection, row.id)
+    if row:
+        session_version = int(profile.session_version) if profile else 1
+        return {
+            "user": _public_user(row, profile),
+            "token": issue_session(row.id, row.email, session_version),
+            "created": False,
+            "referral_status": "not_provided",
+        }
+
+    def optional_name(value: str, label: str) -> str:
+        # A Google profile name is the person's own data. Drop one that does
+        # not fit the account name rules instead of failing the sign-in.
+        try:
+            return _normalize_optional_name(value, label)
+        except BillingError:
+            return ""
+
+    selected_first_name = optional_name(given_name, "Ad")
+    selected_last_name = optional_name(family_name, "Soyad")
+    selected_country = country_code.strip().upper()[:2] if len(country_code.strip()) >= 2 else "TR"
+    salt = secrets.token_bytes(16)
+    user_id = str(uuid.uuid4())
+    try:
+        with ENGINE.begin() as connection:
+            connection.execute(
+                USERS.insert().values(
+                    id=user_id,
+                    email=normalized,
+                    password_salt=salt.hex(),
+                    password_hash=_hash_password(secrets.token_urlsafe(48), salt),
+                    credit_minutes=0,
+                    created_at=now,
+                )
+            )
+            connection.execute(
+                USER_PROFILES.insert().values(
+                    user_id=user_id,
+                    first_name=selected_first_name,
+                    last_name=selected_last_name,
+                    phone=None,
+                    country_code=selected_country,
+                    email_verified_at=now,
+                    phone_verified_at=None,
+                    session_version=1,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            referral_status = "not_provided"
+            if referral_code:
+                try:
+                    with connection.begin_nested():
+                        from .referrals import attach_at_registration
+                        referral_status = attach_at_registration(
+                            connection, user_id, normalized, referral_code, now,
+                        )
+                except Exception:
+                    referral_status = "unavailable"
+            row = connection.execute(select(USERS).where(USERS.c.id == user_id)).first()
+            profile = _profile_for(connection, user_id)
+    except IntegrityError as exc:
+        # A parallel sign-in created the same account first.
+        raise BillingError("Hesap hazırlanırken bir çakışma oldu. Tekrar dene.") from exc
+    return {
+        "user": _public_user(row, profile),
+        "token": issue_session(user_id, normalized, 1),
+        "created": True,
         "referral_status": referral_status,
     }
 

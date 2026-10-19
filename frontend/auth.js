@@ -273,12 +273,139 @@ function verificationNext(user) {
   return fallback;
 }
 
+// The guest trial token lives only in this tab (see rollout.js). Sending it
+// lets the server move that guest's result into the account; the device id
+// alone is never enough.
+const GUEST_TOKEN_KEY = "lecturesift-guest-token";
+function guestSessionToken() {
+  try {
+    const token = sessionStorage.getItem(GUEST_TOKEN_KEY) || "";
+    return token.length <= 4096 && !/\s/.test(token) ? token : "";
+  } catch (_) { return ""; }
+}
+
+function finishGuestSession() {
+  try { sessionStorage.removeItem(GUEST_TOKEN_KEY); } catch (_) {}
+}
+
+const strongPassword = value => value.length >= 10 && /\p{Lu}/u.test(value) && /\p{Ll}/u.test(value) && /\p{Nd}/u.test(value);
+
+let authConfigRequest = null;
+function loadAuthConfig() {
+  // A backend without this endpoint predates the short signup and still
+  // requires names; null means the options are unknown right now.
+  authConfigRequest ||= fetch(`${API}/billing/auth-config`, {cache:"no-store"}).then(async response => {
+    if (response.status === 404) return {legacy:true, google:{enabled:false}};
+    const body = response.ok ? await response.json().catch(() => null) : null;
+    return body?.ok === true ? body : null;
+  }, () => null);
+  return authConfigRequest;
+}
+
+function setupPasswordToggle(button, input) {
+  if (!button || !input) return;
+  const render = () => {
+    const visible = input.type === "text";
+    button.textContent = visible ? t("auth.hidePassword", "Gizle") : t("auth.showPassword", "Göster");
+    button.setAttribute("aria-pressed", String(visible));
+    button.setAttribute("aria-label", visible ? t("auth.hidePasswordLabel", "Parolayı gizle") : t("auth.showPasswordLabel", "Parolayı göster"));
+  };
+  button.addEventListener("click", () => {
+    input.type = input.type === "password" ? "text" : "password";
+    render();
+    input.focus();
+  });
+  render();
+}
+
+const GOOGLE_CLIENT_SCRIPT = "https://accounts.google.com/gsi/client";
+function loadGoogleClient() {
+  if (window.google?.accounts?.id) return Promise.resolve(window.google.accounts.id);
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = GOOGLE_CLIENT_SCRIPT;
+    script.async = true;
+    script.onload = () => window.google?.accounts?.id ? resolve(window.google.accounts.id) : reject(new Error("google"));
+    script.onerror = () => reject(new Error("google"));
+    document.head.append(script);
+  });
+}
+
+let googleSignInBusy = false;
+async function completeGoogleSignIn(credential, fallbackNext) {
+  if (googleSignInBusy || typeof credential !== "string" || !credential || credential.length > 4096) return;
+  googleSignInBusy = true;
+  try {
+    const guestToken = guestSessionToken();
+    const referral = page === "register" ? referralCode($("referralCode")?.value) : "";
+    const body = await request("/billing/google", {
+      method: "POST",
+      body: JSON.stringify({
+        credential,
+        country_code: selectedCountry(),
+        ...(guestToken ? {guest_token: guestToken} : {}),
+        ...(referral ? {referral_code: referral} : {}),
+      }),
+    });
+    localStorage.setItem(TOKEN_KEY, sessionTokenFrom(body));
+    finishGuestSession();
+    if (body.created === true) {
+      // Give the consented tag queue a moment before leaving the page.
+      await Promise.race([
+        Promise.all([recordAnalytics("event", "sign_up", {method: "google"}), recordAnalytics("conversion", "signup", {})]),
+        new Promise(resolve => setTimeout(resolve, 1200)),
+      ]);
+    }
+    location.replace(safeNext(fallbackNext));
+  } catch (error) {
+    showNotice(error.message || t("auth.googleFailed", "Google ile giriş tamamlanamadı. Tekrar dene."), true);
+  } finally { googleSignInBusy = false; }
+}
+
+async function setupGoogleSignIn(config, fallbackNext) {
+  const container = $("googleSignIn");
+  const target = $("googleButton");
+  const clientId = config?.google?.enabled === true ? String(config.google.client_id || "") : "";
+  // Off unless the backend publishes a Google OAuth web client id.
+  if (!container || !target || !/^[0-9A-Za-z._-]{8,200}\.apps\.googleusercontent\.com$/.test(clientId)) return;
+  try {
+    const identity = await loadGoogleClient();
+    identity.initialize({
+      client_id: clientId,
+      callback: response => completeGoogleSignIn(response?.credential, fallbackNext),
+      context: page === "register" ? "signup" : "signin",
+      ux_mode: "popup",
+      itp_support: true,
+    });
+    if ($("registerForm")?.hidden) return;
+    container.hidden = false;
+    identity.renderButton(target, {
+      type: "standard",
+      theme: document.documentElement.dataset.theme === "light" ? "outline" : "filled_black",
+      size: "large",
+      text: "continue_with",
+      shape: "pill",
+      width: Math.round(Math.min(400, Math.max(200, target.clientWidth || 320))),
+      locale: I18N.language,
+    });
+  } catch (_) { container.hidden = true; }
+}
+
 async function initRegister() {
   preserveAuthLinks();
-  populateCountrySelect($("countryCode"), selectedCountry());
+  setupPasswordToggle($("passwordToggle"), $("password"));
   const referralInput = $("referralCode");
+  const referralToggle = $("referralToggle");
+  const showReferral = () => {
+    $("referralRow").hidden = false;
+    referralToggle.hidden = true;
+    referralToggle.setAttribute?.("aria-expanded", "true");
+  };
+  referralToggle.addEventListener("click", () => { showReferral(); referralInput.focus?.(); });
+  const legacyNames = $("legacyNameFields");
   const queryReferral = new URLSearchParams(location.search).get("ref");
   if (queryReferral !== null) {
+    showReferral();
     const normalized = referralCode(queryReferral);
     if (normalized) {
       referralInput.value = normalized;
@@ -296,25 +423,27 @@ async function initRegister() {
     const password = $("password").value;
     const rawReferral = referralInput.value.trim();
     const normalizedReferral = referralCode(rawReferral);
-    if (password !== $("passwordConfirm").value) return showNotice(t("auth.passwordMismatch", "Parolalar birbiriyle eşleşmiyor."), true);
+    if (!strongPassword(password)) return showNotice(t("auth.passwordRule", "En az 10 karakter; büyük harf, küçük harf ve rakam içermeli."), true);
     if (!$("terms").checked) return showNotice(t("auth.acceptRequired", "Devam etmek için kullanım ve gizlilik koşullarını kabul et."), true);
     if (rawReferral && !normalizedReferral) return showNotice(rt("registerInvalid", "Davet kodu geçerli biçimde değil."), true);
     setBusy(button, true, t("auth.preparing", "Hesap hazırlanıyor…"));
     try {
+      const guestToken = guestSessionToken();
       const body = await request("/billing/register", {
         method: "POST",
         body: JSON.stringify({
-          first_name: $("firstName").value.trim(),
-          last_name: $("lastName").value.trim(),
           email: $("email").value.trim(),
-          phone: $("phone").value.trim(),
-          country_code: $("countryCode").value,
+          country_code: selectedCountry(),
           password,
+          // Shown only for a backend that still requires names at signup.
+          ...(legacyNames.hidden ? {} : {first_name: $("firstName").value.trim(), last_name: $("lastName").value.trim()}),
+          ...(guestToken ? {guest_token: guestToken} : {}),
           ...(normalizedReferral ? {referral_code: normalizedReferral} : {}),
         }),
       });
       if (typeof body.user?.email !== "string" || !body.user.email) throw new Error(t("error.request", "İstek tamamlanamadı."));
       $("registerForm").hidden = true;
+      $("googleSignIn").hidden = true;
       $("successBox").hidden = false;
       $("successEmail").textContent = body.user.email;
       const next = safeNext("/workspace.html");
@@ -329,6 +458,7 @@ async function initRegister() {
           : body.referral_status === "invalid" ? "registerRejected" : "registerUnconfirmed";
         referralResult.textContent = rt(statusKey);
       }
+      $("registerGuestNote").hidden = body.guest_claim?.status !== "pending";
       localStorage.setItem("lecturesift-country", body.user.country_code);
       const suggestedCurrency = LOCALE_DATA.currencyForCountry[body.user.country_code];
       if (suggestedCurrency) localStorage.setItem("lecturesift-currency", suggestedCurrency);
@@ -337,6 +467,13 @@ async function initRegister() {
     } catch (error) { showNotice(error.message, true); }
     finally { setBusy(button, false, t("auth.create", "Hesap oluştur")); }
   });
+  const config = await loadAuthConfig();
+  if (config?.legacy) {
+    legacyNames.hidden = false;
+    $("firstName").required = true;
+    $("lastName").required = true;
+  }
+  await setupGoogleSignIn(config, "/workspace.html");
 }
 
 async function initLogin() {
@@ -347,11 +484,13 @@ async function initLogin() {
     const button = $("loginSubmit");
     setBusy(button, true, t("auth.signingIn", "Giriş yapılıyor…"));
     try {
+      const guestToken = guestSessionToken();
       const body = await request("/billing/login", {
         method: "POST",
-        body: JSON.stringify({email: $("email").value.trim(), password: $("password").value}),
+        body: JSON.stringify({email: $("email").value.trim(), password: $("password").value, ...(guestToken ? {guest_token: guestToken} : {})}),
       });
       localStorage.setItem(TOKEN_KEY, sessionTokenFrom(body));
+      finishGuestSession();
       location.replace(safeNext());
     } catch (error) { showNotice(error.message, true); }
     finally { setBusy(button, false, t("auth.signIn", "Giriş yap")); }
@@ -364,6 +503,7 @@ async function initLogin() {
       showNotice(body.message);
     } catch (error) { showNotice(error.message, true); }
   });
+  await setupGoogleSignIn(await loadAuthConfig(), "/account.html");
 }
 
 async function initVerify() {
@@ -373,8 +513,11 @@ async function initVerify() {
   $("verifyEmail").value = email;
   const complete = body => {
     localStorage.setItem(TOKEN_KEY, sessionTokenFrom(body));
+    finishGuestSession();
     $("verifyTitle").textContent = t("auth.emailVerified", "E-posta doğrulandı");
-    $("verifyText").textContent = t("auth.accountActive", "Hesabın etkin. Kaldığın yerden devam edebilirsin.");
+    $("verifyText").textContent = body.guest_claim?.status === "claimed"
+      ? t("auth.guestResultSaved", "Misafir sonucun hesabına kaydedildi. Kaldığın yerden devam edebilirsin.")
+      : t("auth.accountActive", "Hesabın etkin. Kaldığın yerden devam edebilirsin.");
     $("verifyCodeForm").hidden = true;
     $("verifyAction").href = verificationNext(body.user);
     $("verifyAction").textContent = t("auth.continue", "Devam et");

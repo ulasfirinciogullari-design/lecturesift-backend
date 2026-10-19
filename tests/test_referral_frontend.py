@@ -134,12 +134,14 @@ if (start < 0 || end < start) throw Error('registration handler missing');
   for (const [status, withCode] of [['accepted',true],['disabled',true],['invalid',true],['unavailable',true],['not_provided',true],[undefined,true],['unknown',true],['accepted',false]]) {
     const nodes = {}, handlers = {};
     const get = id => nodes[id] ||= {value:'',checked:true,hidden:false,textContent:'',classList:{add(){}},addEventListener:(event,handler)=>handlers[`${id}:${event}`]=handler};
-    for (const id of ['password','passwordConfirm']) get(id).value = 'Synthetic123';
+    get('password').value = 'Synthetic123';
     get('referralCode').value = withCode ? 'LSR-' + 'A'.repeat(24) : '';
     get('successBox').hidden = true;
     get('registerReferralStatus').hidden = true;
     const context = {
       $:get, populateCountrySelect(){}, selectedCountry:()=> 'TR',
+      setupPasswordToggle(){}, strongPassword:()=>true, guestSessionToken:()=> '',
+      loadAuthConfig:async()=>null, setupGoogleSignIn:async()=>{},
       preserveAuthLinks(){}, safeNext:()=>'/workspace.html', rememberSignupContinuation(){}, localizedAuthPath:path=>path,
       location:{search:''}, URLSearchParams, encodeURIComponent,
       referralCode:value=>/^LSR-[A-F0-9]{24}$/.test(value) ? value : '',

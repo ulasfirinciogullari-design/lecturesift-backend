@@ -29,6 +29,8 @@ const stubs = new Map([
   ['/billing/plans?currency=TRY', {plans: [], selected_currency: 'TRY'}],
   ['/billing/me/rollout', {guest_trial: null, rewarded_ads: {enabled: false}}],
   ['/billing/me/referrals', {enabled: false}],
+  // Google sign-in stays off unless a test explicitly routes a client id.
+  ['/billing/auth-config', {ok: true, registration: {required_fields: ['email', 'password'], password_min_length: 10}, google: {enabled: false, client_id: null}}],
   ['/ads/config', {enabled: false, provider: 'off'}],
   ['/analytics/config', {enabled: false, google_ads: {enabled: false}}],
   ['/assistant/catalog', {available: false}],
