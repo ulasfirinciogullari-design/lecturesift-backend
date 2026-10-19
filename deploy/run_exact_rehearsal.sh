@@ -377,6 +377,7 @@ chmod 0600 "$staging_base/.exact-rehearsal.lock"
 flock -n 7 || fail another-exact-rehearsal-active
 
 production_root=/opt/lecturesift
+production_datastores_started=false
 production_datastores_healthy() {
   local service identity
   for service in postgres redis; do
@@ -385,6 +386,18 @@ production_datastores_healthy() {
       "lecturesift-$service-1" 2>/dev/null)" || return 1
     [[ "$identity" == "lecturesift|$service|true|healthy" ]] || return 1
   done
+}
+
+# Promotion moves /opt/lecturesift aside, but a running container keeps the
+# bind mounts (such as deploy/redis.conf) of the tree that started it, and a
+# later `compose up` with unchanged configuration keeps that container. What
+# this rehearsal starts it therefore stops again on every exit, so the next
+# core start mounts the files of the promoted release.
+stop_production_datastores() {
+  env -i PATH="$PATH" HOME=/root LANG=C.UTF-8 \
+    docker compose --project-directory "$production_root" \
+    --file "$production_root/compose.yaml" \
+    stop --timeout 600 redis postgres >/dev/null
 }
 
 # After the provider cutover lecturesift.service owns PostgreSQL and Redis, so
@@ -400,6 +413,10 @@ ensure_production_datastores() {
      "$(stat -c '%u' -- "$production_root")" == "0" && \
      -f "$production_root/compose.yaml" && ! -L "$production_root/compose.yaml" ]] || return 1
   (( (8#$(stat -c '%a' -- "$production_root") & 8#022) == 0 )) || return 1
+  # Until outer_exit replaces this trap (and keeps the stop), any early exit
+  # stops what this run is about to start.
+  production_datastores_started=true
+  trap 'stop_production_datastores >/dev/null 2>&1 || true' EXIT
   env -i PATH="$PATH" HOME=/root LANG=C.UTF-8 \
     docker compose --project-directory "$production_root" \
     --file "$production_root/compose.yaml" \
@@ -1093,6 +1110,12 @@ outer_exit() {
     cmp --silent "$state/before.manifest.canonical" "$state/after.manifest.canonical" || post_failed=true
     cmp --silent "$state/before.manifest.schema-contract" "$state/after.manifest.schema-contract" || post_failed=true
     verify_redis "$after_epoch_ms" || post_failed=true
+  fi
+  # Stop the production data stores this run started only after the
+  # after-state matched its baseline, and before any admission exists, so a
+  # failed stop can never leave an admission behind.
+  if [[ "$production_datastores_started" == "true" ]]; then
+    stop_production_datastores || post_failed=true
   fi
   if [[ "$original_status" == "0" && "$rehearsal_succeeded" == "true" && "$post_failed" == "false" ]]; then
     if ! write_admission || ! write_handoff_completion; then

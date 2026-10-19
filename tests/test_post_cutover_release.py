@@ -750,6 +750,7 @@ def test_first_start_paths_keep_their_strict_checks_after_the_gate(tmp_path: Pat
 DATASTORE_START = (
     "up -d --no-deps --wait --wait-timeout 300 postgres redis"
 )
+DATASTORE_STOP = "stop --timeout 600 redis postgres"
 
 
 def _datastore_segment() -> str:
@@ -811,6 +812,9 @@ def _run_datastores(
         "  exit 0\n"
         "fi\n"
         'if [[ "$1" == compose ]]; then\n'
+        '  case " $* " in\n'
+        "    *\" stop \"*) printf 'stopped\\n' >\"$state\"; exit 0 ;;\n"
+        "  esac\n"
         '  case "$(cat "$compose_result")" in\n'
         "    ok) printf 'healthy\\n' >\"$state\" ;;\n"
         "    unchanged) ;;\n"
@@ -845,6 +849,7 @@ def _run_datastores(
         "}\n"
         + _datastore_segment()
         + "echo DATASTORES-READY\n"
+        + 'echo "STARTED=$production_datastores_started"\n'
     )
     environment = {
         "PATH": f"{bin_dir.as_posix()}{os.pathsep}{os.environ.get('PATH', '/usr/bin:/bin')}",
@@ -875,6 +880,16 @@ def test_rehearsal_leaves_already_healthy_production_datastores_alone(tmp_path: 
     assert "stop-gate" not in calls
     assert len(calls) == 2
     assert all(call.startswith("docker container inspect") for call in calls)
+    # Data stores this run did not start are never stopped by it.
+    assert "STARTED=false" in result.stdout
+
+
+def _compose_call(production_root: Path, arguments: str) -> str:
+    return (
+        f"docker compose --project-directory {production_root.as_posix()} "
+        f"--file {production_root.as_posix()}/compose.yaml {arguments}"
+        "|db_env=unset"
+    )
 
 
 def test_rehearsal_starts_only_production_postgres_and_redis_after_core_stop(
@@ -884,19 +899,18 @@ def test_rehearsal_starts_only_production_postgres_and_redis_after_core_stop(
 
     assert result.returncode == 0, result.stderr
     assert "DATASTORES-READY" in result.stdout
-    expected_start = (
-        f"docker compose --project-directory {production_root.as_posix()} "
-        f"--file {production_root.as_posix()}/compose.yaml {DATASTORE_START}"
-        "|db_env=unset"
-    )
+    assert "STARTED=true" in result.stdout
+    expected_start = _compose_call(production_root, DATASTORE_START)
+    expected_stop = _compose_call(production_root, DATASTORE_STOP)
     compose_calls = [call for call in calls if call.startswith("docker compose")]
     # Exactly one start, from the installed production project, with a scrubbed
-    # environment so an operator shell cannot redirect any env file.
-    assert compose_calls == [expected_start]
+    # environment so an operator shell cannot redirect any env file. An exit
+    # before outer_exit takes over stops what this run started.
+    assert compose_calls == [expected_start, expected_stop]
     start = calls.index(expected_start)
-    assert calls[start + 1 :][-1] == "stop-gate"
     assert calls.count("stop-gate") == 1
-    assert calls.index("stop-gate") > start
+    assert start < calls.index("stop-gate") < calls.index(expected_stop)
+    assert calls[-1] == expected_stop
     assert all(
         call.endswith("|db_env=/tmp/operator-shell-override.env")
         for call in calls
@@ -911,7 +925,7 @@ def test_rehearsal_starts_only_production_postgres_and_redis_after_core_stop(
 def test_rehearsal_fails_closed_when_datastores_cannot_be_proved(
     tmp_path: Path, compose: str, stop_gate: str
 ):
-    result, calls, _ = _run_datastores(
+    result, calls, production_root = _run_datastores(
         tmp_path, initial="stopped", compose=compose, stop_gate=stop_gate
     )
 
@@ -920,6 +934,8 @@ def test_rehearsal_fails_closed_when_datastores_cannot_be_proved(
     assert "DATASTORES-READY" not in result.stdout
     if compose != "ok":
         assert "stop-gate" not in calls
+    # A failed or unproven start is stopped again on exit.
+    assert calls[-1] == _compose_call(production_root, DATASTORE_STOP)
 
 
 @pytest.mark.parametrize("unsafe", ["non-root", "group-writable", "symlink", "no-compose", "compose-symlink"])
@@ -980,6 +996,11 @@ def test_rehearsal_starts_datastores_only_after_every_production_stop_proof():
     assert "systemctl" not in body
     # Exactly the two data stores, never API, worker, proxy or Caddy.
     assert DATASTORE_START + " >/dev/null || return 1" in body
+    started = body.index("production_datastores_started=true")
+    early_trap = body.index(
+        "trap 'stop_production_datastores >/dev/null 2>&1 || true' EXIT"
+    )
+    assert started < early_trap < body.index(DATASTORE_START)
     assert body.index(DATASTORE_START) < body.index(
         'bash "$root/deploy/assert_rehearsal_production_stopped.sh"'
     )
@@ -988,6 +1009,34 @@ def test_rehearsal_starts_datastores_only_after_every_production_stop_proof():
     # rehearsal has to own their start.
     core = _read("deploy/lecturesift.service")
     assert "ExecStop=/usr/bin/docker compose stop --timeout 600 worker api egress-proxy redis postgres" in core
+
+
+def test_rehearsal_stops_the_datastores_it_started_before_any_admission():
+    script = _read("deploy/run_exact_rehearsal.sh")
+    stop = script[
+        script.index("stop_production_datastores() {") : script.index(
+            "ensure_production_datastores() {"
+        )
+    ]
+    assert stop.count("docker compose") == 1
+    assert '--project-directory "$production_root"' in stop
+    assert '--file "$production_root/compose.yaml"' in stop
+    assert DATASTORE_STOP + " >/dev/null" in stop
+    assert "env -i PATH=\"$PATH\" HOME=/root LANG=C.UTF-8" in stop
+
+    outer = script[script.index("outer_exit() {") : script.index("trap outer_exit EXIT")]
+    after_state = outer.index('verify_redis "$after_epoch_ms" || post_failed=true')
+    guarded_stop = outer.index(
+        'if [[ "$production_datastores_started" == "true" ]]; then\n'
+        "    stop_production_datastores || post_failed=true"
+    )
+    admission = outer.index("if ! write_admission || ! write_handoff_completion; then")
+    removal = outer.index('rm -f -- "$admission"')
+    assert after_state < guarded_stop < admission < removal
+    # outer_exit replaces the early trap only after the stop is in place.
+    assert script.index("trap 'stop_production_datastores") < script.index(
+        "trap outer_exit EXIT"
+    )
 
 
 def test_post_cutover_release_runbook_is_linked_and_ordered():
@@ -1029,3 +1078,16 @@ def test_post_cutover_release_runbook_is_linked_and_ordered():
     assert "docker system prune" in runbook
     for section in ("## Rollback", "## Prune old images"):
         assert section in runbook
+
+    # The live cutover release still has the old verifier and probe.
+    until = runbook.index("## Until the first release with these fixes is live")
+    before_start = runbook.index("## 0. Before you start")
+    assert until < before_start
+    assert "INSTAGRAM_DAILY_AUTOMATION_ENABLED=false" in runbook[until:before_start]
+    assert "Never re-run `lecturesift-r2-retention-probe.service`" in runbook[until:before_start]
+    # Promotion must find the rehearsal-started data stores stopped.
+    stop = runbook.index(
+        "--file /opt/lecturesift/compose.yaml stop --timeout 600 redis postgres"
+    )
+    assert runbook.index("EXACT_REHEARSAL_ADMITTED") < stop
+    assert stop < runbook.index("promote_rehearsed_release.sh")

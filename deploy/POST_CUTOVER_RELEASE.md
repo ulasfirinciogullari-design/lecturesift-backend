@@ -31,6 +31,30 @@ The commands below are the existing tools. Run them on the OVH host in
 this order. Read [EXACT_REHEARSAL_SAFETY.md](EXACT_REHEARSAL_SAFETY.md) for
 the trust boundary of staging and rehearsal.
 
+## Until the first release with these fixes is live
+
+The cutover release `0739d39` that production runs today still has the old
+verifier. Until a release containing these fixes has been promoted, every
+restart, `systemctl reload lecturesift`, Docker restart or host reboot runs
+the Instagram publisher gate before the first-start check, and fails while
+Instagram automation is on. Before any of those on `0739d39`, turn all
+Instagram automation off:
+
+- set `INSTAGRAM_DAILY_AUTOMATION_ENABLED=false` in
+  `/etc/lecturesift/runtime.env` (preflight regenerates `instagram.env` from
+  it on start);
+- disable and stop `lecturesift-instagram.timer` and make sure
+  `lecturesift-instagram.service` is inactive.
+
+The same applies when step 6 restarts `0739d39` after an abandoned release.
+
+Never re-run `lecturesift-r2-retention-probe.service` after the cutover. The
+finalized provider-cutover proof binds the exact hash of
+`/var/lib/lecturesift/recovery-drills/r2-retention-lock.ok`, and every start
+re-checks it. A new probe record would stop every release from starting.
+Releases with these fixes refuse to re-probe once the cutover is final. The
+probe in `0739d39` does not refuse, so never start it by hand.
+
 ## 0. Before you start
 
 - The release revision is reviewed, merged and green in CI.
@@ -150,7 +174,31 @@ baseline is taken.
 Success prints `EXACT_REHEARSAL_ADMITTED|revision=$REVISION` and writes
 `/var/lib/lecturesift/rehearsal-admissions/$REVISION.ok`. The rehearsal also
 retags `lecturesift-backend:local` and `lecturesift-egress-proxy:local` to the
-images of `$REVISION`. PostgreSQL and Redis stay running for the next steps.
+images of `$REVISION`.
+
+On every exit, the rehearsal stops the PostgreSQL and Redis containers that it
+started. It does this after its after-state check and before it writes the
+admission, so a failed stop never leaves an admission behind. This matters
+because promotion moves `/opt/lecturesift` aside. A running container would
+keep the old tree's bind mounts, such as `deploy/redis.conf`, and a later
+`compose up` would keep that container. Stopping them means the step 6 start
+mounts the files of the promoted release.
+
+Before step 5, confirm that both are stopped. This command must print `false`
+twice:
+
+```sh
+sudo docker container inspect --format '{{.State.Running}}' \
+  lecturesift-postgres-1 lecturesift-redis-1
+```
+
+If either is still running, for example because it was already running before
+the rehearsal, stop both before you promote:
+
+```sh
+sudo docker compose --project-directory /opt/lecturesift \
+  --file /opt/lecturesift/compose.yaml stop --timeout 600 redis postgres
+```
 
 ## 5. Promote
 
@@ -248,7 +296,10 @@ If staging, rehearsal or promotion failed and promotion did not report
 
 1. Restore the local image tags with `TARGET=$CURRENT`. If the rehearsal
    never retagged them, this changes nothing.
-2. Run steps 6 and 7.
+2. If `$CURRENT` is the cutover revision `0739d39`, turn all Instagram
+   automation off first, as described under "Until the first release with
+   these fixes is live".
+3. Run steps 6 and 7. For `0739d39`, do not re-enable the Instagram timer.
 
 ### Roll back after promotion
 

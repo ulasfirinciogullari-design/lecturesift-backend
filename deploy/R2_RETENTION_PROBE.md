@@ -32,6 +32,13 @@ atomically records a root-owned mode-`0600` proof at
 the probe to the repository ID and exact repository-target hashes; neither the
 repository ID nor any credential is printed.
 
+Once `/var/lib/lecturesift/provider-cutover/provider-cutover.ok` exists, the
+tool refuses to run, before it creates any R2 object. The finalized
+provider-cutover proof binds the exact hash of this record, and every
+production start re-checks it, so replacing the record would stop every
+release from starting. Before finalization, a fresh re-probe stays allowed
+for the first-cutover seed and the finalizer.
+
 The probe deliberately survives as immutable audit evidence until the 90-day
 bucket-lock period expires. It is identified by its reserved prefix and these
 metadata fields:
