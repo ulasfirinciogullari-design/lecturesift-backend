@@ -251,7 +251,8 @@ async function api(path, options = {}) {
   const response = await fetch(`${API}${path}`, {...options, headers, cache: "no-store"});
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw Object.assign(
-    new Error(body?.detail?.message || body?.message || pt("error.request", "İstek tamamlanamadı.")),
+    new Error((PLANS_I18N.apiMessage?.(body?.detail?.message || body?.message) ?? (body?.detail?.message || body?.message))
+      || pt("error.request", "İstek tamamlanamadı.")),
     {code: body?.detail?.code, missingFields: Array.isArray(body?.detail?.missing_fields) ? body.detail.missing_fields : []},
   );
   return body;

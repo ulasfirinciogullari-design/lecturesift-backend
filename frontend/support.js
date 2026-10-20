@@ -22,7 +22,8 @@ function renderSupportConversation(data) {
 async function supportRequest(path, options = {}) {
   const response = await fetch(`${SUPPORT_API}${path}`, {cache:"no-store", ...options, headers:{"Content-Type":"application/json", ...(options.headers || {})}});
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body?.detail?.message || supportT("support.invalid", "Konuşma bağlantısı geçersiz veya kullanılamıyor."));
+  if (!response.ok) throw new Error((window.LectureSiftI18n?.apiMessage?.(body?.detail?.message) ?? body?.detail?.message)
+    || supportT("support.invalid", "Konuşma bağlantısı geçersiz veya kullanılamıyor."));
   return body;
 }
 

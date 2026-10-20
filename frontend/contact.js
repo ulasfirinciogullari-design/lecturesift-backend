@@ -7,7 +7,8 @@ function contactErrorMessage(response, body) {
   const message = typeof body?.detail === "string" ? body.detail : body?.detail?.message;
   // Translate known API validation messages while preserving other actionable details.
   if (typeof message === "string" && message.trim()) {
-    return window.LectureSiftI18n?.exact(message) || message;
+    const central = window.LectureSiftI18n;
+    return (central?.apiMessage ? central.apiMessage(message) : central?.exact(message)) || message;
   }
   if (response.status === 429) return contactText("contact.rateLimited", "Çok fazla deneme yapıldı. Lütfen biraz sonra tekrar dene.");
   if (response.status === 422) return contactText("contact.invalidForm", "Formdaki bilgileri kontrol edip tekrar dene.");

@@ -146,13 +146,16 @@ async function recordPurchaseAnalytics(purchase) {
 }
 
 function errorMessage(body, fallback) {
-  return body?.detail?.message || body?.message || fallback;
+  return apiText(body?.detail?.message || body?.message) || fallback;
 }
+
+// API messages are Turkish; show known ones in the reader's language.
+const apiText = message => I18N.apiMessage?.(message) ?? message;
 
 function showNotice(message, isError = false) {
   const node = $("authNotice");
   if (!node) return;
-  node.textContent = message;
+  node.textContent = apiText(message);
   node.classList.toggle("error", isError);
   node.hidden = false;
 }
@@ -658,7 +661,7 @@ async function initAccount() {
   setupAccountNavigation();
 
   const showFormNotice = (id, message, error = false) => {
-    const notice = $(id); notice.textContent = message; notice.classList.toggle("error", error); notice.hidden = false;
+    const notice = $(id); notice.textContent = apiText(message); notice.classList.toggle("error", error); notice.hidden = false;
   };
 
   const paymentMethodLabel = order => {

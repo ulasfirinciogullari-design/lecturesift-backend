@@ -713,6 +713,41 @@ function uploadLimitMessage(documentMode, limitMb) {
   const kind = central?.t(documentMode ? "plans.documentShort" : "plans.mediaShort", documentMode ? "belge" : "medya") || (documentMode ? "belge" : "medya");
   return `${base} ${Number(limitMb).toLocaleString(central?.locale || navigator.language)} MB ${kind}.`;
 }
+// Reads a local media file's length without uploading it. Resolves to null
+// when the browser cannot read it in time; the server check still applies.
+function mediaDurationSeconds(file, timeoutMs = 3000) {
+  return new Promise(resolve => {
+    let element = null, url = "", timer = 0, settled = false;
+    const finish = seconds => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (element) { element.onloadedmetadata = null; element.onerror = null; element.removeAttribute("src"); }
+      if (url) URL.revokeObjectURL(url);
+      resolve(Number.isFinite(seconds) && seconds > 0 ? seconds : null);
+    };
+    try {
+      element = document.createElement(VIDEO_EXTENSIONS.has(fileExtension(file)) ? "video" : "audio");
+      element.preload = "metadata";
+      element.muted = true;
+      element.onloadedmetadata = () => finish(element.duration);
+      element.onerror = () => finish(null);
+      timer = setTimeout(() => finish(null), timeoutMs);
+      url = URL.createObjectURL(file);
+      element.src = url;
+    } catch { finish(null); }
+  });
+}
+// The guest limit comes from /billing/plans (guest_trial_minutes); the
+// 0.05-minute allowance mirrors the server's own check.
+async function guestMediaOverLimit(files) {
+  const limit = Number(billingCatalog?.guest_trial_minutes);
+  if (billingAccount?.plan?.code !== "guest" || !(limit > 0) || !Number.isFinite(limit)) return null;
+  if (!files.length || !files.every(file => MEDIA_EXTENSIONS.has(fileExtension(file)))) return null;
+  const durations = await Promise.all(files.map(file => mediaDurationSeconds(file)));
+  if (durations.some(seconds => seconds == null)) return null;
+  return durations.reduce((total, seconds) => total + seconds, 0) / 60 > limit + 0.05 ? limit : null;
+}
 function selectedSourceFiles(role) {
   return classicVideos;
 }
@@ -1009,13 +1044,17 @@ function showError(message, code = "LS-SYSTEM-01", {stopProcessing = true} = {})
   const known = ERRORS.tr[code];
   const sampleOcrLimitError = code === "LS-OCR-02" && sampleSelected();
   const centralKey = sampleOcrLimitError ? "error.sampleOcrLimit" : ({"LS-URL-02":"error.url02","LS-URL-03":"error.url03","LS-URL-05":"error.url05","LS-URL-06":"error.url05","LS-AI-03":"error.ai03","LS-AI-04":"error.ai04","LS-AI-05":"error.ai05","LS-AI-06":"error.ai06","LS-AI-07":"error.ai07","LS-AI-08":"error.ai08","LS-DOC-14":"error.doc14","LS-DOC-15":"error.doc15","LS-DOC-16":"error.doc16","LS-DOC-17":"error.doc17","LS-DOC-18":"error.doc18","LS-GUEST-05":"rollout.guestUsed"})[code];
+  // Server messages are Turkish; show known ones in the reader's language.
+  const localized = window.LectureSiftI18n?.apiMessage?.(message) ?? message;
   const translated = code === "LS-UPLOAD-02" && message
-    ? message
+    ? localized
+    : code === "LS-GUEST-05" && window.LectureSiftGuestTrial?.copy
+    ? window.LectureSiftGuestTrial.copy("rollout.guestUsed", localized)
     : centralKey
-    ? window.LectureSiftI18n?.t(centralKey, message)
+    ? window.LectureSiftI18n?.t(centralKey, localized)
     : known
     ? (currentLanguage === "tr" ? known : currentLanguage === "en" ? ERRORS.en[code] : window.LectureSiftI18n?.exact(known))
-    : message || t("errorFallback");
+    : localized || t("errorFallback");
   $("errorMessage").textContent = translated || message || t("errorFallback");
   $("errorCode").textContent = `${window.LectureSiftI18n?.exact("Hata kodu") || "Hata kodu"}: ${code}`; $("errorBox").hidden = false;
   if (stopProcessing) { setJobBusy(false); clearTimeout(pollHandle); clearInterval(timerHandle); }
@@ -1066,7 +1105,7 @@ function showError(message, code = "LS-SYSTEM-01", {stopProcessing = true} = {})
     actions.append(chooseFile, replacement);
     $("errorCode").insertAdjacentElement("afterend", actions);
   }
-  if (code === "LS-BILL-10") {
+  if (code === "LS-BILL-10" || code === "LS-GUEST-04") {
     const actions = document.createElement("div");
     actions.id = "quotaRecoveryActions";
     actions.className = "quota-recovery-actions";
@@ -1083,12 +1122,17 @@ function showError(message, code = "LS-SYSTEM-01", {stopProcessing = true} = {})
     };
     actions.append(shorter);
     const link = document.createElement("a");
-    const guest = !billingAccount || billingAccount.plan?.code === "guest";
+    const guestLimit = code === "LS-GUEST-04";
+    const guest = guestLimit || !billingAccount || billingAccount.plan?.code === "guest";
     const path = guest ? "/register.html" : "/plans.html";
     link.href = window.LectureSiftI18n?.localizedPath?.(currentLanguage, path) || path;
     if (guest) link.search = new URLSearchParams({next:window.LectureSiftI18n?.localizedPath?.(currentLanguage, "/workspace.html") || "/workspace"}).toString();
     else if (currentFullDocumentNeeds) link.search = new URLSearchParams(currentFullDocumentNeeds).toString();
-    link.textContent = t(guest ? "register" : "plansNav");
+    if (guestLimit) {
+      // The guest media-length limit offers the same free-account sign-up as the other guest prompts.
+      link.id = "guestSourceLimitSignup";
+      link.textContent = window.LectureSiftI18n?.t("rollout.createFreeAccount", "Ücretsiz hesap oluştur") || "Ücretsiz hesap oluştur";
+    } else link.textContent = t(guest ? "register" : "plansNav");
     actions.append(link);
     $("errorCode").insertAdjacentElement("afterend", actions);
   }
@@ -1172,6 +1216,12 @@ $("analyzeButton").onclick = async () => {
   const uploadLimitMb = Number(documentUpload ? sourceLimits.max_document_upload_mb : sourceLimits.max_media_upload_mb);
   if (uploadFiles.reduce((total, file) => total + file.size, 0) > uploadLimitMb * 1024 ** 2) {
     showError(uploadLimitMessage(documentUpload, uploadLimitMb), "LS-UPLOAD-02"); return;
+  }
+  const guestLimitMinutes = await guestMediaOverLimit(uploadFiles);
+  if (guestLimitMinutes != null) {
+    const minutes = guestLimitMinutes.toLocaleString(window.LectureSiftI18n?.locale || navigator.language, {maximumFractionDigits:2});
+    showError(documentQuotaText("api.guestTrialMaxMinutes", "Hesapsız deneme en fazla {minutes} dakikalık bir kaynakla kullanılabilir.", {minutes}), "LS-GUEST-04");
+    return;
   }
   requestedJobLoaded = true;
   $("results").hidden = true; latestResult = null; jobId = null; configureProgressProfile(null, true); resetStages(); startTimer();
