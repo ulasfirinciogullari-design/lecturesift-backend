@@ -129,6 +129,37 @@ def test_terminal_queue_failures_and_completed_fallbacks_are_deletable(state):
         assert not path.exists() and store.metadata(job_id) is None
 
 
+def test_lessons_from_an_earlier_host_delete_without_local_files(state, monkeypatch):
+    uid = account()
+    store, root = state
+    earlier = root.parent / f'earlier-host-{uuid.uuid4().hex}'
+    monkeypatch.setattr(jobs, 'EARLIER_HOST_WORK_DIR', earlier)
+
+    def lesson(job_id, job_dir):
+        store.create(job_id, job_dir, {'billing_user_id': uid}, title='Old lesson',
+                     status='error', worker_state='unavailable', stored_bytes=0)
+
+    lesson('migrated', earlier / 'migrated')
+    workspace.delete_lesson(uid, 'migrated')
+    assert store.metadata('migrated') is None
+
+    # Only a confirmed-absent path under the earlier host's folder skips the
+    # guard. Anything else outside WORK_DIR, present or merely not visible,
+    # keeps its metadata so the files are never orphaned.
+    present = earlier / 'still-here'
+    present.mkdir(parents=True)
+    lesson('still-here', present)
+    unknown = root.parent / f'other-root-{uuid.uuid4().hex}' / 'unknown'
+    lesson('unknown', unknown)
+    renamed = earlier / 'another-name'
+    lesson('renamed', renamed)
+    for job_id in ('still-here', 'unknown', 'renamed'):
+        with pytest.raises(billing.BillingError):
+            workspace.delete_lesson(uid, job_id)
+        assert store.metadata(job_id)
+    assert present.exists()
+
+
 def test_active_and_retryable_jobs_remain_locked_and_terminal_states_are_not_recovered(state):
     uid = account()
     store = state[0]
