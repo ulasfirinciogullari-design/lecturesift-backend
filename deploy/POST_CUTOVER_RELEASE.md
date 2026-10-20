@@ -420,21 +420,25 @@ refuses to run while an alert is still being sent, which takes at most 90
 seconds.
 
 Test the alert once after the first release that contains it. This sends one
-real email and touches no other unit:
+real email to each recipient and touches no other unit. Run all three
+commands, in this order:
 
 ```sh
 sudo systemctl start lecturesift-failure-alert@lecturesift-instagram.service.service
 journalctl -u lecturesift-failure-alert@lecturesift-instagram.service.service -n 20
+sudo rm -f /var/lib/lecturesift/failure-alerts/lecturesift-instagram.service.last-sent
 ```
 
 The journal must show
 `Failure alert for lecturesift-instagram.service sent to N recipient(s).`, and
 the email must arrive. Resend accepting the request is not proof of delivery.
 The test email reports the job's real current state, so a healthy job shows
-as `inactive (dead)` with result `success`. A second start within the hour
-logs `suppressed` instead. To repeat the test
-sooner, remove the record first:
+as `inactive (dead)` with result `success`.
 
-```sh
-sudo rm -f /var/lib/lecturesift/failure-alerts/lecturesift-instagram.service.last-sent
-```
+The test writes the same hourly record that a real Instagram failure uses.
+The last command removes it, so a real failure in the next hour is still
+emailed. Run it even when the test did not work; removing a record that is
+not there does nothing. If the journal says `suppressed`, a real Instagram
+alert went out within the hour; removing its record can at most send one
+extra email for the next failure. Repeat the same three commands to test
+again.

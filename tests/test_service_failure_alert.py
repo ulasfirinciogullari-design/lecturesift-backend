@@ -967,8 +967,17 @@ def test_operator_docs_explain_the_manual_alert_test():
     deployment = _read("VPS_DEPLOYMENT.md")
 
     section = runbook.split("## Failure alerts", 1)[1]
-    assert "sudo systemctl start lecturesift-failure-alert@lecturesift-instagram.service.service" in section
-    assert "/var/lib/lecturesift/failure-alerts/" in section
-    assert "journalctl -u lecturesift-failure-alert@lecturesift-instagram.service.service" in section
+    # The manual test ends by removing the hourly record it wrote, which is
+    # the same record a real Instagram failure would be suppressed by.
+    record = alert.DEFAULT_STATE_DIR / "lecturesift-instagram.service.last-sent"
+    procedure = (
+        "```sh\n"
+        "sudo systemctl start lecturesift-failure-alert@lecturesift-instagram.service.service\n"
+        "journalctl -u lecturesift-failure-alert@lecturesift-instagram.service.service -n 20\n"
+        f"sudo rm -f {record.as_posix()}\n"
+        "```\n"
+    )
+    assert procedure in section
+    assert section.count("sudo systemctl start lecturesift-failure-alert@") == 1
     assert "no log lines" in section
     assert "lecturesift-failure-alert@.service" in deployment
