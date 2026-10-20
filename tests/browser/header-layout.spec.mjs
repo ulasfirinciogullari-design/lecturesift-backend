@@ -122,13 +122,20 @@ test('the phone assistant button does not cover the home upload button', async (
         await expect.poll(async () => intersects(await launch.boundingBox(), await upload.boundingBox()),
           {message: `${path} scrolled ${offset}px`}).toBe(false);
       } catch (error) {
-        // Record the geometry so a failure in CI explains itself.
-        console.log('launcher overlap', JSON.stringify(await page.evaluate(() => ({
+        // Record the geometry so a failure in CI explains itself, then whether
+        // a resize re-places the button (a missed trigger) or not (the rule).
+        const geometry = () => page.evaluate(() => ({
           scrollY, innerHeight, bottom: document.querySelector('body > .assistant-launch').style.bottom,
           launch: document.querySelector('body > .assistant-launch').getBoundingClientRect().toJSON(),
           upload: document.querySelector('.study-primary').getBoundingClientRect().toJSON(),
           banner: Boolean(document.querySelector('.consent-banner:not([hidden])')),
-        }))));
+        }));
+        console.log('launcher overlap', JSON.stringify(await geometry()));
+        await page.evaluate(() => new Promise(done => {
+          window.dispatchEvent(new Event('resize'));
+          requestAnimationFrame(() => requestAnimationFrame(done));
+        }));
+        console.log('launcher after resize', JSON.stringify(await geometry()));
         throw error;
       }
     }

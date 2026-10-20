@@ -48,6 +48,17 @@
   const layoutResize=new ResizeObserver(schedulePosition);
   layoutResize.observe(document.documentElement);
   layoutResize.observe(document.body);
+  // A primary action can also slide into the strip the launcher floats over
+  // without any box changing size. Watch that strip itself.
+  let actionWatch=null;
+  const watchActions = () => {
+    actionWatch?.disconnect();
+    const strip=Math.max(0,window.innerHeight-160);
+    actionWatch=new IntersectionObserver(schedulePosition,{rootMargin:`-${strip}px 0px 0px 0px`,threshold:[0,.25,.5,.75,1]});
+    document.querySelectorAll(PRIMARY_ACTIONS).forEach(node=>actionWatch.observe(node));
+  };
+  watchActions();
+  window.addEventListener('resize',watchActions);
   window.addEventListener('resize',schedulePosition);
   window.addEventListener('scroll',schedulePosition,{passive:true});
   window.addEventListener('load',schedulePosition,{once:true});
