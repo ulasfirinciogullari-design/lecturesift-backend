@@ -139,9 +139,10 @@ def test_systemd_and_recovery_paths_use_release_helper_before_compose_up():
     start_build = "ExecStartPre=/bin/bash /opt/lecturesift/deploy/release.sh build"
     start_up = "ExecStart=/usr/bin/docker compose up"
     assert service.index(start_preflight) < service.index(start_build) < service.index(start_up)
-    reload_preflight = "ExecReload=/bin/bash /opt/lecturesift/deploy/preflight.sh"
-    reload_build = "ExecReload=/bin/bash /opt/lecturesift/deploy/release.sh build"
-    reload_up = "ExecReload=/usr/bin/docker compose up"
+    reload = "ExecReload=/bin/bash /opt/lecturesift/deploy/core_reload_step.sh "
+    reload_preflight = reload + "/bin/bash /opt/lecturesift/deploy/preflight.sh"
+    reload_build = reload + "/bin/bash /opt/lecturesift/deploy/release.sh build"
+    reload_up = reload + "/usr/bin/docker compose up"
     assert service.index(reload_preflight) < service.index(reload_build) < service.index(reload_up)
     assert restore.index('"$ROOT_DIR/deploy/preflight.sh"') < restore.index(
         'bash "$ROOT_DIR/deploy/release.sh" build'

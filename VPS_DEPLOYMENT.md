@@ -247,6 +247,11 @@ systemd owners for the private core and public ingress.
    backup writes root-only evidence under `/var/lib/lecturesift/backup-alerts/`
    and systemd invokes `lecturesift-backup-alert@.service` to send a Resend/SMTP
    alert; only a later fully successful off-site backup clears that marker.
+   When the private core, the Instagram job or the ingress selector fails,
+   systemd invokes `lecturesift-failure-alert@.service`, which emails the same
+   mailbox and every address in `LECTURESIFT_ADMIN_EMAILS` at most once per
+   unit per hour. "Failure alerts" in `deploy/POST_CUTOVER_RELEASE.md` says
+   what it sends and how to test it by hand.
    Normal quarterly drills select the latest snapshot and record
    `drill_scope=current-latest`. Before deliberately restoring an older retained
    backup, run the same isolated drill with

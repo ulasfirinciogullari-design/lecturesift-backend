@@ -2,6 +2,7 @@
 Description=LectureSift Instagram studio publisher and replies
 Requires=docker.service lecturesift.service
 After=docker.service lecturesift.service network-online.target
+OnFailure=lecturesift-failure-alert@%n.service
 
 [Service]
 Type=oneshot

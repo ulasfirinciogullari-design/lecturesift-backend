@@ -371,3 +371,67 @@ sudo docker image rm "$OLD_APP_ID" "$OLD_PROXY_ID"
 `docker image rm` without `--force` refuses an image that a container still
 uses. Never add `--force`, and never remove `lecturesift-backend:local`,
 `lecturesift-egress-proxy:local` or the previous release's images.
+
+## Failure alerts
+
+From the first release that contains `lecturesift-failure-alert@.service`,
+systemd emails the operators when one of these units fails:
+
+- `lecturesift.service`, the private core, when a start, restart or stop
+  fails, including a start at boot or after a Docker restart. A failed
+  `systemctl reload lecturesift` leaves the unit active, so each reload step
+  runs through `deploy/core_reload_step.sh`, which queues the alert itself
+  and keeps the step's exit status;
+- `lecturesift-instagram.service`, the 15-minute Instagram job;
+- `lecturesift-ingress-selector.service`. Its loop retries a failed
+  reconciliation instead of exiting, so it queues the alert itself after each
+  failed attempt. `OnFailure=` also covers systemd giving up on the unit.
+
+The scheduled backup keeps its own `lecturesift-backup-alert@.service` email.
+
+The email goes to `LECTURESIFT_OPS_ALERT_EMAIL` and to every address in
+`LECTURESIFT_ADMIN_EMAILS`, through the Resend or SMTP account configured in
+`/etc/lecturesift/runtime.env`. It is short. It says which unit failed on
+which host and when, in UTC and in Turkey time. It gives the unit's state,
+result and main-process exit status as `systemctl show` reports them, and the
+command that shows the log on the server
+(`journalctl -u <unit> -n 100`). It carries no log lines, because a log
+excerpt can hold credentials or customer data; read the journal on the
+server instead. When the core or the selector is still active, the email
+says that a reload or one reconciliation attempt failed.
+
+More than ten recipients get the alert in several messages of at most ten
+each. Only addresses the provider accepted count as reached. A Resend answer
+without a message id is not a delivery, and the alert unit's journal counts
+the addresses an SMTP server refused. Sending stops after 60 seconds, well inside the alert unit's 90-second
+limit, and the journal of the alert unit says how many recipients were
+reached. Each unit gets at most one alert per hour, however many messages it
+took. The alert counts as soon as its first message is delivered. The time of
+the last one is in `/var/lib/lecturesift/failure-alerts/<unit>.last-sent`. A
+delivery failure is only logged in the alert unit's journal and never affects
+the failed unit.
+
+Stopping `lecturesift-instagram.service` while it still runs can end it as
+failed and send an alert. Step 1 already waits for it to finish. Promotion
+refuses to run while an alert is still being sent, which takes at most 90
+seconds.
+
+Test the alert once after the first release that contains it. This sends one
+real email and touches no other unit:
+
+```sh
+sudo systemctl start lecturesift-failure-alert@lecturesift-instagram.service.service
+journalctl -u lecturesift-failure-alert@lecturesift-instagram.service.service -n 20
+```
+
+The journal must show
+`Failure alert for lecturesift-instagram.service sent to N recipient(s).`, and
+the email must arrive. Resend accepting the request is not proof of delivery.
+The test email reports the job's real current state, so a healthy job shows
+as `inactive (dead)` with result `success`. A second start within the hour
+logs `suppressed` instead. To repeat the test
+sooner, remove the record first:
+
+```sh
+sudo rm -f /var/lib/lecturesift/failure-alerts/lecturesift-instagram.service.last-sent
+```
