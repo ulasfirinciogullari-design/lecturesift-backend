@@ -46,7 +46,9 @@ WATCHED_UNITS = {
 }
 RATE_LIMIT_SECONDS = 3600
 JOURNAL_LINES = 30
-MAX_RECIPIENTS = 10
+# Every recipient gets the alert; each message carries at most this many, which
+# both the Resend API and ordinary SMTP accounts accept.
+RECIPIENTS_PER_MESSAGE = 10
 DEFAULT_STATE_DIR = Path("/var/lib/lecturesift/failure-alerts")
 DEFAULT_ENV_FILES = (
     ("LECTURESIFT_ENV_FILE", "/etc/lecturesift/runtime.env"),
@@ -157,9 +159,10 @@ def load_env_files(paths: Sequence[Path]) -> tuple[dict[str, str], list[str], bo
     """Return the first file's settings, every file's secret values and completeness.
 
     The first file is the runtime configuration and must be readable. A later
-    file may be absent; one that exists but is unsafe or unreadable makes the
-    redaction set incomplete, so the caller omits the journal lines. So does a
-    line whose value cannot be decoded for certain; that key is left out.
+    file holds more secrets (database owner, Restic credentials): one that is
+    missing, unsafe or unreadable makes the redaction set incomplete, so the
+    caller omits the journal lines. So does a line whose value cannot be
+    decoded for certain; that key is left out.
     """
 
     settings: dict[str, str] = {}
@@ -167,8 +170,6 @@ def load_env_files(paths: Sequence[Path]) -> tuple[dict[str, str], list[str], bo
     complete = True
     for index, path in enumerate(paths):
         try:
-            if index > 0 and not os.path.lexists(path):
-                continue
             if not _private_file(path):
                 raise PermissionError("not a root-only regular file")
             values, undecoded = parse_env_file(path)
@@ -250,7 +251,7 @@ def redact(line: str, secrets: Iterable[str]) -> str:
 
 
 def recipients(settings: Mapping[str, str]) -> list[str]:
-    """The operations mailbox first, then each admin address, without repeats."""
+    """The operations mailbox first, then every admin address, without repeats."""
 
     found: list[str] = []
     seen: set[str] = set()
@@ -260,7 +261,7 @@ def recipients(settings: Mapping[str, str]) -> list[str]:
             if EMAIL_ADDRESS.fullmatch(address) and address.casefold() not in seen:
                 seen.add(address.casefold())
                 found.append(address)
-    return found[:MAX_RECIPIENTS]
+    return found
 
 
 def read_journal(unit: str) -> list[str]:
@@ -430,23 +431,41 @@ def run(
             log(f"The journal of {unit} could not be read; the alert is sent without it.")
     else:
         log(
-            "An environment file is unsafe or has a value that cannot be decoded for "
-            f"certain; the alert for {unit} is sent without journal lines."
+            "An environment file is missing, unsafe or has a value that cannot be decoded "
+            f"for certain; the alert for {unit} is sent without journal lines."
         )
     subject, text = compose_message(unit, host or socket.gethostname(), now, journal)
-    try:
-        sender(settings, to, subject, text)
-    except Exception as exc:  # noqa: BLE001 - never fail the alert unit over delivery
-        status = getattr(exc, "code", None) or getattr(exc, "status", None)
-        detail = f" (HTTP {status})" if isinstance(status, int) else ""
-        log(f"Failure alert for {unit} not sent: {type(exc).__name__}{detail}.")
+    delivered = 0
+    failures: list[str] = []
+    for start in range(0, len(to), RECIPIENTS_PER_MESSAGE):
+        batch = to[start : start + RECIPIENTS_PER_MESSAGE]
+        try:
+            sender(settings, batch, subject, text)
+        except Exception as exc:  # noqa: BLE001 - never fail the alert unit over delivery
+            status = getattr(exc, "code", None) or getattr(exc, "status", None)
+            detail = f" (HTTP {status})" if isinstance(status, int) else ""
+            failure = f"{type(exc).__name__}{detail}"
+            if failure not in failures:
+                failures.append(failure)
+            continue
+        delivered += len(batch)
+    if not delivered:
+        log(f"Failure alert for {unit} not sent: {', '.join(failures)}.")
         return 0
+    if failures:
+        # The operations mailbox is in the first message. Counting a partly
+        # delivered alert keeps a failing batch from re-sending to the others
+        # on every failure; the next alert after the hour tries everyone again.
+        log(
+            f"Failure alert for {unit} reached {delivered} of {len(to)} recipient(s); "
+            f"the rest failed: {', '.join(failures)}."
+        )
     try:
         record_sent(state_dir, unit, now)
     except OSError:
         log(f"Failure alert for {unit} sent, but the one-hour rate-limit state was not saved.")
         return 0
-    log(f"Failure alert for {unit} sent to {len(to)} recipient(s).")
+    log(f"Failure alert for {unit} sent to {delivered} recipient(s).")
     return 0
 
 

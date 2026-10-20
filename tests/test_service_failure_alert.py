@@ -35,6 +35,7 @@ DB_PASSWORD = "Synthetic-Db-Passw0rd-42"
 OWNER_PASSWORD = "Synthetic-Owner-Passw0rd-77"
 ADMIN_KEY = "SyntheticEmergencyAdminKey0123456789abcd"
 ACCESS_TOKEN = "SyntheticGraphAccessToken0123456789XYZ"
+RESTIC_PASSWORD = "Synthetic-Restic-Passw0rd-19"
 
 
 def _read(path: str) -> str:
@@ -78,8 +79,12 @@ def env_files(tmp_path: Path) -> list[Path]:
         tmp_path / "postgres.env",
         f"POSTGRES_USER=lecturesift_owner\nPOSTGRES_PASSWORD={OWNER_PASSWORD}\n",
     )
-    # restic.env is optional, exactly as in preflight.
-    return [runtime, database, tmp_path / "restic.env"]
+    restic = _private(
+        tmp_path / "restic.env",
+        "RESTIC_REPOSITORY=s3:https://example.r2.cloudflarestorage.com/lecturesift-backups\n"
+        f"RESTIC_PASSWORD={RESTIC_PASSWORD}\n",
+    )
+    return [runtime, database, restic]
 
 
 class FakeSender:
@@ -445,6 +450,104 @@ def test_unsafe_secondary_env_leaves_the_journal_out(env_files, tmp_path):
     assert OWNER_PASSWORD not in text
 
 
+@pytest.mark.parametrize("missing", (1, 2), ids=("postgres.env", "restic.env"))
+def test_missing_secondary_env_leaves_the_journal_out_but_still_sends(
+    env_files, tmp_path, capsys, missing
+):
+    sender = FakeSender()
+    env_files[missing].unlink()
+
+    settings, secrets, complete = alert.load_env_files(env_files)
+    assert complete is False
+    assert settings["LECTURESIFT_OPS_ALERT_EMAIL"] == "ops@example.com"
+
+    def journal(unit):
+        raise AssertionError("the journal must not be read without every redaction source")
+
+    assert _run(env_files, tmp_path / "state", sender=sender, journal=journal) == 0
+    assert len(sender.calls) == 1
+    text = sender.calls[0][3]
+    assert "journal lines were left out" in text
+    for secret in (OWNER_PASSWORD, RESTIC_PASSWORD):
+        assert secret not in text
+    logged = capsys.readouterr().err
+    assert "An environment file is missing" in logged
+    assert "sent to 2 recipient(s)" in logged
+    assert (tmp_path / "state" / "lecturesift-instagram.service.last-sent").exists()
+
+
+def _many_admins_runtime(tmp_path: Path, count: int) -> Path:
+    admins = ", ".join(f"admin{number:02d}@example.org" for number in range(count))
+    return _private(
+        tmp_path / "runtime.env",
+        "\n".join(
+            (
+                "EMAIL_PROVIDER=resend",
+                "EMAIL_FROM=noreply@example.com",
+                f"RESEND_API_KEY={RESEND_KEY}",
+                "LECTURESIFT_OPS_ALERT_EMAIL=ops@example.com",
+                # A repeat of the ops mailbox and of an admin is sent only once.
+                f'LECTURESIFT_ADMIN_EMAILS="{admins}, OPS@example.com, admin03@example.org"',
+            )
+        )
+        + "\n",
+    )
+
+
+def test_every_recipient_gets_the_alert_in_messages_of_at_most_ten(tmp_path, capsys):
+    runtime = _many_admins_runtime(tmp_path, 22)
+    expected = ["ops@example.com", *(f"admin{number:02d}@example.org" for number in range(22))]
+    sender = FakeSender()
+    state = tmp_path / "state"
+
+    assert alert.recipients(alert.parse_env_file(runtime)[0]) == expected
+    assert _run([runtime], state, sender=sender) == 0
+
+    batches = [call[1] for call in sender.calls]
+    assert [len(batch) for batch in batches] == [10, 10, 3]
+    assert [address for batch in batches for address in batch] == expected
+    assert len({call[3] for call in sender.calls}) == 1
+    assert len({call[2] for call in sender.calls}) == 1
+    logged = capsys.readouterr().err
+    assert "sent to 23 recipient(s)" in logged
+    assert "@example" not in logged
+
+    # The hourly limit counts the whole alert, not each message.
+    assert len(list(state.iterdir())) == 1
+    again = FakeSender()
+    assert _run([runtime], state, sender=again, now=NOW + 60) == 0
+    assert again.calls == []
+
+
+class FailingBatchSender(FakeSender):
+    def __init__(self, failing_call: int, error: Exception):
+        super().__init__()
+        self.failing_call = failing_call
+        self.failure = error
+
+    def __call__(self, settings, to, subject, text):
+        self.calls.append((dict(settings), list(to), subject, text))
+        if len(self.calls) == self.failing_call:
+            raise self.failure
+
+
+def test_one_failed_message_does_not_stop_the_other_recipients(tmp_path, capsys):
+    runtime = _many_admins_runtime(tmp_path, 22)
+    error = urllib.error.HTTPError("https://api.resend.com/emails", 429, "Too Many", None, None)
+    sender = FailingBatchSender(2, error)
+    state = tmp_path / "state"
+
+    assert _run([runtime], state, sender=sender) == 0
+
+    assert [len(call[1]) for call in sender.calls] == [10, 10, 3]
+    logged = capsys.readouterr().err
+    assert "reached 13 of 23 recipient(s)" in logged
+    assert "HTTPError (HTTP 429)" in logged
+    assert "@example" not in logged and RESEND_KEY not in logged
+    # Partly delivered still counts, so the delivered batches are not flooded.
+    assert (state / "lecturesift-instagram.service.last-sent").exists()
+
+
 def test_unreadable_journal_still_sends_the_alert(env_files, tmp_path):
     sender = FakeSender()
 
@@ -541,7 +644,7 @@ def test_configuration_values_are_redacted_but_plain_names_and_paths_stay(tmp_pa
 
     assert complete is True
     assert settings["EMAIL_FROM"] == "LectureSift <noreply@example.com>"
-    for secret in (RESEND_KEY, ADMIN_KEY, ACCESS_TOKEN, OWNER_PASSWORD):
+    for secret in (RESEND_KEY, ADMIN_KEY, ACCESS_TOKEN, OWNER_PASSWORD, RESTIC_PASSWORD):
         assert secret in secrets
     assert any(DB_PASSWORD in value for value in secrets)
     assert "lecturesift" not in secrets

@@ -393,10 +393,15 @@ The email goes to `LECTURESIFT_OPS_ALERT_EMAIL` and to every address in
 `LECTURESIFT_ADMIN_EMAILS`, through the Resend or SMTP account configured in
 `/etc/lecturesift/runtime.env`. It names the unit, the host and the time, and
 it carries the unit's last 30 journal lines with configuration values, tokens,
-cookies and email addresses redacted. Each unit gets at most one email per
-hour. The time of the last one is in
+cookies and email addresses redacted. The journal lines are left out when
+`runtime.env`, `postgres.env` or `restic.env` is missing, unsafe or cannot be
+decoded for certain, because their secrets could not be redacted; the alert
+itself is still sent. More than ten recipients get the alert in several
+messages of at most ten each. Each unit gets at most one alert per hour,
+however many messages it took. The time of the last one is in
 `/var/lib/lecturesift/failure-alerts/<unit>.last-sent`. A delivery failure is
-only logged in the alert unit's journal and never affects the failed unit.
+only logged in the alert unit's journal and never affects the failed unit. An
+alert that reached only some recipients still counts for the hour.
 
 Stopping `lecturesift-instagram.service` while it still runs can end it as
 failed and send an alert. Step 1 already waits for it to finish. Promotion
