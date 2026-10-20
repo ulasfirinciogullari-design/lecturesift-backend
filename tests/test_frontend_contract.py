@@ -1582,7 +1582,7 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert '"rollout.createFreeAccount"' in catalog
     assert 'error.code === "LS-GUEST-06"' in rollout
     assert '"rollout.guestLimit"' in rollout and '"rollout.guestLimit"' in catalog
-    assert 'src="./app.js?v=45"' in index
+    assert 'src="./app.js?v=46"' in index
     assert 'src="/rollout.js?v=18"' in index
     assert '$("plans").scrollIntoView' not in app
 

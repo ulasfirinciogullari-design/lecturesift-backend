@@ -378,6 +378,8 @@ function renderBillingAccount() {
     $("accountButton").href = loggedIn ? "/account.html" : "/login.html";
   }
   updateSourceLimitHelp();
+  // Entitlements can arrive after the settings are already in use.
+  syncContentChoices();
   if (!loggedIn) return;
   if ($("accountEmail")) $("accountEmail").textContent = billingAccount.user.email;
   if ($("accountPlan")) $("accountPlan").textContent = `${t("currentPlan")}: ${planCopy(billingAccount.plan.code)[0]}`;
@@ -864,6 +866,43 @@ const PACK_PRESETS = {
   exam: {summary:true, transcript:true, slides:true, quiz:true, cards:true, timestamps:false, speakers:false, quizCount:"20", cardCount:"40", formats:["pdf"]},
   transcript: {summary:false, transcript:true, slides:false, quiz:false, cards:false, timestamps:false, speakers:false, quizCount:"5", cardCount:"10", formats:[]},
 };
+// The server rejects counts above the job plan instead of lowering them, so
+// larger options are disabled and a preset uses the highest allowed count.
+// Guests, signed-out visitors and accounts still loading get the free counts.
+const COUNT_LIMITS = {
+  quizCount: {toggle:"includeQuiz", key:"quiz_questions", fallback:2, help:"api.planQuiz", text:"Planın en fazla {count} quiz sorusuna izin veriyor."},
+  cardCount: {toggle:"includeCards", key:"flashcards", fallback:3, help:"api.planCards", text:"Planın en fazla {count} bilgi kartına izin veriyor."},
+};
+let chosenPackPreset = "";
+
+function countLimit(id) {
+  const {key, fallback} = COUNT_LIMITS[id];
+  // null in an entitlement means unlimited.
+  const loaded = [billingAccount?.job_entitlements, billingAccount?.plan?.entitlements]
+    .map(entitlements => entitlements?.[key]).find(value => value === null || Number.isFinite(value));
+  return loaded !== undefined ? loaded : (PLAN_FALLBACK[billingAccount?.plan?.code] || PLAN_FALLBACK.free)[fallback];
+}
+
+function allowedCount(id, wanted) {
+  const options = [...$(id).options];
+  return (options.filter(option => !option.disabled && Number(option.value) <= Number(wanted)).at(-1) || options[0]).value;
+}
+
+function syncCountLimits() {
+  // Read the preset under the previous limits so a chosen preset follows new ones.
+  const preset = PACK_PRESETS[activePresetName()];
+  for (const [id, {toggle, help, text}] of Object.entries(COUNT_LIMITS)) {
+    const select = $(id), limit = countLimit(id);
+    [...select.options].forEach(option => { option.disabled = limit != null && Number(option.value) > limit; });
+    select.value = allowedCount(id, preset ? preset[id] : select.value);
+    // A limit below the smallest option leaves this output out entirely.
+    $(toggle).disabled = !select.querySelector("option:not(:disabled)");
+    if ($(toggle).disabled) $(toggle).checked = false;
+    select.closest(".content-choice").querySelector("small").textContent = select.querySelector("option:disabled")
+      ? documentQuotaText(help, text, {count:Number(limit).toLocaleString(window.LectureSiftI18n?.locale || currentLanguage)})
+      : t("optionalOutput");
+  }
+}
 
 function selectedFormats() {
   return [$("formatPdf"), $("formatDocx"), $("formatTxt")].filter(input => input.checked).map(input => input.value);
@@ -900,13 +939,17 @@ function activePresetName() {
     timestamps:$("transcriptTimestamps").checked, speakers:$("speakerDetection").checked,
     quizCount:$("quizCount").value, cardCount:$("cardCount").value, formats:selectedFormats(),
   };
-  return Object.entries(PACK_PRESETS).find(([, preset]) =>
-    ["summary", "transcript", "slides", "quiz", "cards", "timestamps", "speakers", "quizCount", "cardCount"].every(key => state[key] === preset[key])
+  // Clamped presets can match the same counts; the one last chosen stays active.
+  const matches = Object.entries(PACK_PRESETS).filter(([, preset]) =>
+    ["summary", "transcript", "slides", "quiz", "cards", "timestamps", "speakers"].every(key => state[key] === preset[key])
+    && ["quizCount", "cardCount"].every(key => state[key] === allowedCount(key, preset[key]))
     && state.formats.join(",") === preset.formats.join(",")
-  )?.[0] || "";
+  ).map(([name]) => name);
+  return matches.includes(chosenPackPreset) ? chosenPackPreset : matches[0] || "";
 }
 
 function syncContentChoices() {
+  syncCountLimits();
   $("quizCount").disabled = !$("includeQuiz").checked;
   $("cardCount").disabled = !$("includeCards").checked;
   $("quizCount").closest(".content-choice").classList.toggle("is-disabled", !$("includeQuiz").checked);
@@ -927,7 +970,8 @@ function applyPackPreset(name) {
   $("includeSummary").checked = preset.summary; $("includeTranscript").checked = preset.transcript;
   $("includeSlides").checked = preset.slides; $("includeQuiz").checked = preset.quiz; $("includeCards").checked = preset.cards;
   $("transcriptTimestamps").checked = preset.timestamps; $("speakerDetection").checked = preset.speakers;
-  $("quizCount").value = preset.quizCount; $("cardCount").value = preset.cardCount;
+  chosenPackPreset = name;
+  $("quizCount").value = allowedCount("quizCount", preset.quizCount); $("cardCount").value = allowedCount("cardCount", preset.cardCount);
   [$("formatPdf"), $("formatDocx"), $("formatTxt")].forEach(input => { input.checked = preset.formats.includes(input.value); });
   $("translateTranscript").checked = preset.transcript && !(sourceLanguage.value !== "auto" && sourceLanguage.value === outputLanguage.value);
   syncContentChoices();
