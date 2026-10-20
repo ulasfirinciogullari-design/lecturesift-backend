@@ -278,6 +278,12 @@ class JobStore:
         with self._lock, self._distributed_write_lock():
             self._refresh_locked()
             data = self._jobs[job_id]
+            owner_id = (data.get("options") or {}).get("billing_user_id")
+            if (owner_id and isinstance(values.get("options"), dict)
+                    and values["options"].get("billing_user_id") != owner_id):
+                # A worker rewrites its own copy of the options. Never let that
+                # copy move a job back to a guest after transfer_owner().
+                values["options"] = {**values["options"], "billing_user_id": owner_id}
             data.update(values)
             data["updated"] = time.time()
             if notify_failure:
@@ -399,6 +405,33 @@ class JobStore:
             ]
         owned.sort(key=lambda item: float(item.get("created", 0)), reverse=True)
         return owned if limit is None else owned[: max(1, min(100, int(limit)))]
+
+    def transfer_owner(self, from_user_id: str, to_user_id: str, *,
+                       retention_seconds: int | None = None) -> list[str]:
+        """Move every job of one billing user to another and return their ids.
+
+        The options dict is replaced, not mutated: a threaded worker can hold
+        the original object and must keep its own copy unchanged.
+        """
+        if not from_user_id or not to_user_id or from_user_id == to_user_id:
+            return []
+        moved: list[str] = []
+        with self._lock, self._distributed_write_lock():
+            self._refresh_locked()
+            now = time.time()
+            for job_id, data in self._jobs.items():
+                options = data.get("options") or {}
+                if options.get("billing_user_id") != from_user_id:
+                    continue
+                data["options"] = {**options, "billing_user_id": to_user_id}
+                if retention_seconds:
+                    current = int(data.get("retention_seconds") or 0)
+                    data["retention_seconds"] = max(current, int(retention_seconds))
+                data["updated"] = now
+                moved.append(job_id)
+            if moved:
+                self._flush_locked()
+        return moved
 
     def delete_owned(self, user_id: str, job_id: str) -> None:
         from .billing_service import BillingError

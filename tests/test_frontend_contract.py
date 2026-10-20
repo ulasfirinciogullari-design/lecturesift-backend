@@ -486,7 +486,7 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         expected_theme_version = "17"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
         assert "/theme.js?v=12" in content, page.name
-        expected_i18n_version = "57"
+        expected_i18n_version = "58"
         assert f"i18n.js?v={expected_i18n_version}" in content, page.name
         assert "page-i18n.js?v=12" in content, page.name
 
@@ -773,11 +773,11 @@ def test_payment_routes_are_distinct_localized_and_account_history_is_auditable(
         assert len(values) == 13, key
         assert all(str(value).strip() for value in values), key
 
-    assert 'src="/plans.js?v=31"' in plans_html
+    assert 'src="/plans.js?v=33"' in plans_html
     assert 'manualTransfer = {available:Boolean(transferBody?.available), bank:null};' in plans_js
     assert 'order.bank?.iban' in plans_js
     assert 'transferBody?.bank' not in plans_js
-    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=21"', 'href="./auth.css?v=4"'))
+    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=23"', 'href="./auth.css?v=4"'))
     assert all(value in auth_js for value in ("paymentMethodLabel", "paymentMoney", "paymentDateTime", "payment-order-meta"))
     assert all(value in admin_html for value in ('value="iyzico_card"', 'value="iyzico_bank_transfer"', 'value="manual_bank_transfer"', 'value="iyzico_legacy"'))
     assert "provider:selectedProvider" in admin_js
@@ -921,7 +921,7 @@ def test_admin_growth_reads_and_escapes_advertising_management_status():
     catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
 
     assert 'id="adminGrowthStatus" class="admin-growth-grid" aria-live="polite"' in admin
-    assert 'src="/admin.js?v=31"' in admin and 'src="/i18n.js?v=57"' in admin
+    assert 'src="/admin.js?v=31"' in admin and 'src="/i18n.js?v=58"' in admin
     assert '"/billing/admin/advertising-readiness"' in admin_script
     assert "renderAdminAdSenseSummary" in admin_script
     assert 'id="adminAdSenseSummary"' in admin
@@ -1360,7 +1360,10 @@ def test_public_pages_have_share_metadata_canonical_urls_and_structured_data():
     assert "max-image-preview:large" in seo
     assert 'url: `${PRODUCTION_ORIGIN}/`' in seo
     assert '"/distance-sales"' in seo
-    assert (FRONTEND / "og-image.png").stat().st_size > 100_000
+    assert not (FRONTEND / "og-image.png").exists()
+    assert 100_000 < (FRONTEND / "og-image.jpg").stat().st_size < 300_000
+    assert "og-image.jpg" in seo and "image/jpeg" in seo
+    assert 'content: "1200"' in seo and 'content: "630"' in seo
 
 
 def test_netlify_build_prerenders_every_public_language_with_static_seo():
@@ -1401,7 +1404,7 @@ def test_optional_analytics_and_advertising_are_consent_gated():
     assert ".consent-manage{position:fixed" not in consent_css
     assert 'analytics: false, advertising: false' in consent
     assert 'category === "necessary"' in consent
-    assert 'analyticsScript.src = "/analytics.js?v=9"' in i18n
+    assert 'analyticsScript.src = "/analytics.js?v=11"' in i18n
     assert 'window.LectureSiftConsent?.get?.()' in analytics
     assert "/analytics/config" in analytics
     assert "googletagmanager.com/gtag/js" in analytics
@@ -1460,13 +1463,14 @@ def test_banner_ads_are_opt_in_public_only_and_respect_ad_free_rights():
     admin = (FRONTEND / "admin.js").read_text(encoding="utf-8")
     blueprint = (FRONTEND.parent / "render.yaml").read_text(encoding="utf-8")
 
-    assert 'displayAdsScript.src = "/display-ads.js?v=5"' in i18n
+    assert 'displayAdsScript.src = "/display-ads.js?v=6"' in i18n
     assert 'displayAdsStyle.href = "/display-ads.css?v=2"' in i18n
     assert 'LectureSiftConsent?.allows("advertising")' in display
     assert 'body.account?.plan?.entitlements?.ad_free === true' in display
     assert 'const PUBLIC_AD_PATHS = new Set([' in display
     allowed_paths = display.split("const PUBLIC_AD_PATHS", 1)[1].split("]);", 1)[0]
     assert '"/account.html"' not in allowed_paths
+    assert '"/plans"' not in allowed_paths  # No ads on the purchase page.
     assert 'json("/ads/config")' in display
     assert "securepubads.g.doubleclick.net/tag/js/gpt.js" in display
     assert "loadAdSenseAutoAds" in display
@@ -1572,8 +1576,10 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert 'LectureSiftGuestTrial?.markUsed?.(jobId)' in app
     assert '"rollout.guestUsed"' in catalog
     assert '"rollout.createFreeAccount"' in catalog
-    assert 'src="./app.js?v=42"' in index
-    assert 'src="/rollout.js?v=15"' in index
+    assert 'error.code === "LS-GUEST-06"' in rollout
+    assert '"rollout.guestLimit"' in rollout and '"rollout.guestLimit"' in catalog
+    assert 'src="./app.js?v=44"' in index
+    assert 'src="/rollout.js?v=17"' in index
     assert '$("plans").scrollIntoView' not in app
 
 

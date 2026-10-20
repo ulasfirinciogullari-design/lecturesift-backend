@@ -121,7 +121,38 @@ def test_durable_ingress_state_freezes_until_atomic_activation(monkeypatch, tmp_
     )
     assert config.current_maintenance_mode() == "off"
 
+    # A later release of a settled cutover reads the state still bound to the
+    # cutover release; only the terminal activated status may serve it.
     fields["release_revision"] = "5" * 40
+    state.write_text(
+        "".join(f"{key}={value}\n" for key, value in sorted(fields.items())),
+        encoding="utf-8",
+    )
+    assert config.current_maintenance_mode() == "off"
+
+    for status in (
+        "provider-ingress-required",
+        "provider-ingress-handoff-in-progress",
+        "provider-ingress-awaiting-activation",
+        "provider-ingress-restore-in-progress",
+        "provider-ingress-render-restored",
+    ):
+        fields["status"] = status
+        state.write_text(
+            "".join(f"{key}={value}\n" for key, value in sorted(fields.items())),
+            encoding="utf-8",
+        )
+        assert config.current_maintenance_mode() == "freeze"
+
+    fields["status"] = "provider-ingress-activated"
+    state.write_text(
+        "".join(f"{key}={value}\n" for key, value in sorted(fields.items())),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(config, "BUILD_REVISION", "unknown")
+    assert config.current_maintenance_mode() == "freeze"
+    fields["release_revision"] = "not-a-revision"
+    monkeypatch.setattr(config, "BUILD_REVISION", "2" * 40)
     state.write_text(
         "".join(f"{key}={value}\n" for key, value in sorted(fields.items())),
         encoding="utf-8",

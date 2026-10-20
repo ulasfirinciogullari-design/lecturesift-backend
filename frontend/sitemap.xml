@@ -3044,14 +3044,14 @@
   </url>
   <url>
     <loc>https://lecturesift.com/study-guides</loc>
-    <lastmod>2026-10-08</lastmod>
+    <lastmod>2026-10-19</lastmod>
     <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/study-guides"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/study-guides"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/study-guides"/>
   </url>
   <url>
     <loc>https://lecturesift.com/en/study-guides</loc>
-    <lastmod>2026-10-08</lastmod>
+    <lastmod>2026-10-19</lastmod>
     <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/study-guides"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/study-guides"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/study-guides"/>
@@ -3139,5 +3139,75 @@
     <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/pdf-note-check"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/pdf-note-check"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/pdf-note-check"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/medicine-lecture-notes</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/medicine-lecture-notes"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/medicine-lecture-notes"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/medicine-lecture-notes"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/en/medicine-lecture-notes</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/medicine-lecture-notes"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/medicine-lecture-notes"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/medicine-lecture-notes"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/law-lecture-notes</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/law-lecture-notes"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/law-lecture-notes"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/law-lecture-notes"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/en/law-lecture-notes</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/law-lecture-notes"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/law-lecture-notes"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/law-lecture-notes"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/engineering-lecture-notes</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/engineering-lecture-notes"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/engineering-lecture-notes"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/engineering-lecture-notes"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/en/engineering-lecture-notes</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/engineering-lecture-notes"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/engineering-lecture-notes"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/engineering-lecture-notes"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/psychology-lecture-notes</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/psychology-lecture-notes"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/psychology-lecture-notes"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/psychology-lecture-notes"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/en/psychology-lecture-notes</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/psychology-lecture-notes"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/psychology-lecture-notes"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/psychology-lecture-notes"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/economics-lecture-notes</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/economics-lecture-notes"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/economics-lecture-notes"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/economics-lecture-notes"/>
+  </url>
+  <url>
+    <loc>https://lecturesift.com/en/economics-lecture-notes</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="tr" href="https://lecturesift.com/economics-lecture-notes"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://lecturesift.com/en/economics-lecture-notes"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://lecturesift.com/economics-lecture-notes"/>
   </url>
 </urlset>

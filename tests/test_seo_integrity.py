@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -22,6 +23,7 @@ SITEMAP_NAMESPACE = "http://www.sitemaps.org/schemas/sitemap/0.9"
 XHTML_NAMESPACE = "http://www.w3.org/1999/xhtml"
 STUDY_RESOURCES = json.loads((FRONTEND / "study-resources.json").read_text(encoding="utf-8"))
 STUDY_SLUGS = {page["slug"] for page in STUDY_RESOURCES["pages"]}
+COURSE_PAGES = [page for page in STUDY_RESOURCES["pages"] if page["kind"] == "course"]
 
 
 def _page_languages(location: str) -> tuple[str, ...]:
@@ -107,26 +109,34 @@ def _parse_html(path: Path) -> _SeoHeadParser:
     return parser
 
 
-@pytest.fixture(scope="module")
-def localized_output(tmp_path_factory: pytest.TempPathFactory) -> Path:
+def _build_site(sandbox: Path, operator_env: dict[str, str] | None = None) -> Path:
     node = shutil.which("node")
     assert node, "Node.js is required to validate the production SEO build"
-    sandbox = tmp_path_factory.mktemp("localized-seo-build")
     shutil.copytree(FRONTEND, sandbox / "frontend")
     (sandbox / "scripts").mkdir()
     shutil.copy2(ROOT / "scripts" / "build_localized_site.mjs", sandbox / "scripts")
+    # Seller identity is optional build input; never let a developer's shell
+    # values leak into, or change, the default build under test.
+    env = {key: value for key, value in os.environ.items() if not key.startswith("LEGAL_")}
+    env.update(operator_env or {})
     result = subprocess.run(
         [node, "scripts/build_localized_site.mjs"],
         cwd=sandbox,
+        env=env,
         text=True,
         encoding="utf-8",
         errors="replace",
         capture_output=True,
-        timeout=30,
+        timeout=60,
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     return sandbox / "dist"
+
+
+@pytest.fixture(scope="module")
+def localized_output(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return _build_site(tmp_path_factory.mktemp("localized-seo-build"))
 
 
 def test_checked_in_sitemap_matches_its_generator_exactly() -> None:
@@ -276,13 +286,84 @@ def test_landing_examples_faqs_and_dates_survive_prerendering(localized_output: 
     assert not (localized_output / "landing-pages.json").exists()
 
 
+def test_course_pages_are_turkish_english_pairs_with_trial_calls_and_faq(localized_output: Path) -> None:
+    assert [page["slug"] for page in COURSE_PAGES] == [
+        "medicine-lecture-notes", "law-lecture-notes", "engineering-lecture-notes",
+        "psychology-lecture-notes", "economics-lecture-notes",
+    ]
+    records = _sitemap_records()
+    sitemap = ElementTree.parse(FRONTEND / "sitemap.xml")
+    dates = {
+        node.findtext(f"{{{SITEMAP_NAMESPACE}}}loc"): node.findtext(f"{{{SITEMAP_NAMESPACE}}}lastmod")
+        for node in sitemap.findall(f"{{{SITEMAP_NAMESPACE}}}url")
+    }
+    for page in COURSE_PAGES:
+        slug = page["slug"]
+        pair = {"tr": f"{ORIGIN}/{slug}", "en": f"{ORIGIN}/en/{slug}"}
+        # Only the written Turkish and English editions exist; no other language is indexed.
+        assert [url for url in records if urlsplit(url).path.rsplit("/", 1)[-1] == slug] == list(pair.values())
+        assert not any((localized_output / language / f"{slug}.html").exists() for language in LANGUAGES[2:])
+        for language, location in pair.items():
+            copy = page[language]
+            prefix = "" if language == "tr" else "/en"
+            output = _output_path(localized_output, location)
+            html = output.read_text(encoding="utf-8")
+            parsed = _parse_html(output)
+            assert parsed.document_language == language
+            assert parsed.canonicals == [location]
+            assert records[location] == {**pair, "x-default": pair["tr"]}
+            assert {code: values[0] for code, values in parsed.alternates.items()} == records[location]
+            title = unescape(re.search(r"<title>(.*?)</title>", html).group(1))
+            assert title == f"{copy['title']} | LectureSift" and len(title) <= 72, location
+            assert parsed.descriptions == [copy["description"]] and 110 <= len(copy["description"]) <= 160, location
+            assert '<meta property="og:type" content="article">' in html
+
+            graph = [node for schema in parsed.structured_data for node in schema.get("@graph", [])]
+            nodes = {node["@type"]: node for node in graph}
+            assert nodes["WebPage"]["name"] == title and nodes["WebPage"]["inLanguage"] == language
+            assert nodes["Article"]["dateModified"] == page["updated"] == dates[location]
+            assert [item["item"] for item in nodes["BreadcrumbList"]["itemListElement"]] == [
+                f"{ORIGIN}{prefix}/", f"{ORIGIN}{prefix}/study-guides", location,
+            ]
+            faq_html = re.search(r'<div class="faq-list">(.*?)</div>', html, re.S).group(1)
+            visible_questions = re.findall(r"<summary>(.*?)</summary>", faq_html)
+            assert len(visible_questions) >= 4
+            assert [item["name"] for item in nodes["FAQPage"]["mainEntity"]] == visible_questions
+            # The worked output is explicitly an authored example, not a customer result.
+            assert re.search(
+                r'<section id="(?:ornek|example)"><h2>[^<]+</h2><p class="guide-note"><strong>'
+                r"(?:Bu bölüm bir örnektir\.|This section is an example\.)</strong>",
+                html,
+            ), location
+
+            trial = re.search(r'<div class="guide-hero-actions" data-guide-trial>(.*?)</div>', html).group(1)
+            assert f'href="{prefix}/workspace.html"' in trial and f'href="{prefix}/register.html"' in trial
+            subjects = re.search(r"<nav[^>]*data-guide-subjects[^>]*>(.*?)</nav>", html).group(1)
+            assert re.findall(r'href="([^"]+)"', subjects) == [
+                f"{prefix}/{other['slug']}" for other in COURSE_PAGES if other is not page
+            ]
+            for attributes, href in re.findall(r'<a\b([^>]*)\bhref="(/[^"]*)"', html):
+                if "guide-language" in attributes:
+                    assert href == (f"/en/{slug}" if language == "tr" else f"/{slug}")
+                elif language == "en":
+                    assert href.startswith("/en/") or href.startswith("/assets/"), (location, href)
+                else:
+                    assert not href.startswith("/en/"), (location, href)
+
+    # The bilingual study library makes every course page discoverable in its own language.
+    for prefix in ("", "/en"):
+        library = _output_path(localized_output, f"{ORIGIN}{prefix}/study-guides").read_text(encoding="utf-8")
+        listed = re.search(r'<ul class="guide-subjects">(.*?)</ul>', library, re.S).group(1)
+        assert re.findall(r'href="([^"]+)"', listed) == [f"{prefix}/{page['slug']}" for page in COURSE_PAGES]
+
+
 def test_guide_measurement_has_consent_controls_without_the_large_application_scripts(localized_output: Path) -> None:
     for slug in STUDY_SLUGS:
         for prefix in ["", "en/"]:
             html = (localized_output / f"{prefix}{slug}.html").read_text(encoding="utf-8")
             sources = re.findall(r'<script\b[^>]*\bsrc="([^"]+)"', html)
             assert sources.count("/consent.js?v=6") == 1
-            assert sources.count("/analytics.js?v=9") == 1
+            assert sources.count("/analytics.js?v=11") == 1
             assert "/consent.css?v=2" in html
             assert not any(re.search(r"/(?:i18n|page-i18n|app)\.js", src) for src in sources)
 
@@ -435,3 +516,52 @@ def test_runtime_seo_language_is_derived_from_the_indexable_url() -> None:
         '(document.documentElement.lang || "tr");'
     ) not in seo
     assert 'if (publicRoutes.has(basePath)) return "tr";' in i18n
+
+
+def _operator_section(html: str) -> str:
+    sections = re.findall(r'<section class="legal-operator" data-legal-operator="static">.*?</section>', html, re.S)
+    assert len(sections) == 1
+    return sections[0]
+
+
+def test_unconfigured_build_renders_no_static_seller_identity(localized_output: Path) -> None:
+    for page_path in localized_output.rglob("*.html"):
+        html = page_path.read_text(encoding="utf-8")
+        assert 'data-legal-operator="static"' not in html, page_path
+        assert "data-about-operator" not in html, page_path
+
+
+def test_configured_build_prerenders_seller_identity_without_the_api(tmp_path: Path) -> None:
+    dist = _build_site(tmp_path / "operator-build", {
+        "LEGAL_OPERATOR_NAME": "Synthetic <Seller> & Co",
+        "LEGAL_OPERATOR_ADDRESS": "Synthetic Street 1, Test City",
+        "LEGAL_OPERATOR_COUNTRY": "TR",
+        "LEGAL_OPERATOR_PHONE": "+90 500 000 00 00",
+        "LEGAL_OPERATOR_EMAIL": "seller@example.invalid",
+        "LEGAL_TAX_OFFICE": "Synthetic Office",
+    })
+
+    english = _operator_section((dist / "en" / "distance-sales.html").read_text(encoding="utf-8"))
+    assert "<h2>Service provider details</h2>" in english
+    assert "<dt>Legal name</dt><dd>Synthetic &lt;Seller&gt; &amp; Co</dd>" in english
+    assert "<dt>Registered address</dt><dd>Synthetic Street 1, Test City</dd>" in english
+    assert '<a href="tel:+905000000000">+90 500 000 00 00</a>' in english
+    assert '<a href="mailto:seller@example.invalid">seller@example.invalid</a>' in english
+    assert "<dt>Tax office</dt><dd>Synthetic Office</dd>" in english
+    assert "Tax ID" not in english and "MERSIS" not in english
+    assert "<Seller>" not in (dist / "en" / "distance-sales.html").read_text(encoding="utf-8")
+
+    turkish_contact = (dist / "contact.html").read_text(encoding="utf-8")
+    assert "<h2>Hizmet sağlayıcı bilgileri</h2>" in _operator_section(turkish_contact)
+    # The block follows the page lead so the heading order stays h1 -> h2.
+    assert turkish_contact.index('class="lead"') < turkish_contact.index("data-legal-operator")
+
+    german_about = (dist / "de" / "about.html").read_text(encoding="utf-8")
+    assert (
+        '<p class="about-operator" data-about-operator>LectureSift wird von '
+        "<strong>Synthetic &lt;Seller&gt; &amp; Co</strong> betrieben. "
+        '<a href="/de/distance-sales">' in german_about
+    )
+    assert "Synthetic Street" not in german_about
+    for unrelated in ("privacy.html", "terms.html", "index.html"):
+        assert "Synthetic" not in (dist / "en" / unrelated).read_text(encoding="utf-8")

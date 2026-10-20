@@ -6,6 +6,8 @@
   const ZERO_DECIMAL = new Set(["JPY", "KRW"]);
   let guestTrialState = null;
   let guestIdentityRequest = null;
+  const recordedTrialEvents = new Set();
+  const TRIAL_COMPLETE_KEY = "lecturesift-trial-complete-sent";
   const $ = id => document.getElementById(id);
   const rt = (key, fallback) => window.LectureSiftI18n?.t(key) || fallback || key;
   const rolloutLocale = () => window.LectureSiftI18n?.locale || navigator.language || "tr-TR";
@@ -46,6 +48,26 @@
     return value;
   }
 
+  // Guest funnel milestones, at most once each per page (a finished trial once
+  // per tab). recordFunnel (app.js) hands them to analytics.js, which drops
+  // them without analytics consent; only an accepted event counts as sent.
+  function recordTrialEvent(name, parameters = {}) {
+    const guest = typeof billingAccount !== "undefined" && billingAccount?.plan?.code === "guest";
+    const key = `${name}:${parameters.reason || ""}`;
+    let completed = false;
+    if (name === "trial_complete") {
+      try { completed = sessionStorage.getItem(TRIAL_COMPLETE_KEY) === "1"; } catch {}
+    }
+    if (!guest || completed || recordedTrialEvents.has(key) || typeof recordFunnel !== "function") return;
+    recordedTrialEvents.add(key);
+    void recordFunnel(name, parameters).then(sent => {
+      if (!sent) recordedTrialEvents.delete(key);
+      else if (name === "trial_complete") {
+        try { sessionStorage.setItem(TRIAL_COMPLETE_KEY, "1"); } catch {}
+      }
+    });
+  }
+
   function setWorkspaceIdentity(token, account, guest = false, trial = null) {
     if (typeof billingToken !== "undefined") billingToken = token;
     if (typeof billingAccount !== "undefined") billingAccount = account;
@@ -56,6 +78,7 @@
     if (typeof renderBillingAccount === "function") renderBillingAccount();
     if (typeof renderPlans === "function") renderPlans();
     updateGuestTrialUi();
+    if (guest && trial?.used === true) recordTrialEvent("trial_limit_reached", {reason: "trial_used"});
   }
 
   async function ensureGuestIdentity() {
@@ -145,6 +168,7 @@
       updateGuestTrialUi();
     },
     state() { return guestTrialState ? {...guestTrialState} : null; },
+    record: recordTrialEvent,
   };
 
   function formatCurrency(amountMinor, currency) {
@@ -182,6 +206,32 @@
     }
     node.classList.toggle("error", error);
     node.textContent = message;
+  }
+
+  function showGuestTrialLimit(error) {
+    const message = rt(
+      "rollout.guestLimit",
+      error.message || "Bugünlük hesapsız deneme hakkı doldu. Ücretsiz hesap açarak her ay 120 dakika kullanabilirsin.",
+    );
+    if (typeof showError !== "function" || !$("errorCode")) {
+      showInlineMessage(message, true);
+      return;
+    }
+    showError(message, error.code);
+    // showError removes this recovery container before showing the next error.
+    const actions = document.createElement("div");
+    actions.id = "quotaRecoveryActions";
+    actions.className = "quota-recovery-actions";
+    const language = window.LectureSiftI18n?.language || "tr";
+    const signup = document.createElement("a");
+    signup.id = "guestTrialLimitSignup";
+    signup.href = window.LectureSiftI18n?.localizedPath?.(language, "/register.html") || "/register.html";
+    signup.search = new URLSearchParams({
+      next: window.LectureSiftI18n?.localizedPath?.(language, "/workspace.html") || "/workspace",
+    }).toString();
+    signup.textContent = rt("rollout.createFreeAccount", "Ücretsiz hesap oluştur");
+    actions.append(signup);
+    $("errorCode").insertAdjacentElement("afterend", actions);
   }
 
   function installUploadSpeedProbe() {
@@ -269,14 +319,14 @@
     const minutes = entitlements.minutes ?? plan.minutes;
     const current = currentCode === plan.code;
     const actions = plan.kind === "subscription"
-      ? `<div class="rollout-plan-actions"><button data-rollout-plan="${esc(plan.code)}" data-rollout-cycle="monthly" ${current ? "disabled" : ""}>${esc(rt("rollout.chooseMonthly", "Aylık seç"))}</button><button data-rollout-plan="${esc(plan.code)}" data-rollout-cycle="annual" ${current ? "disabled" : ""}>${esc(rt("rollout.annual", "Yıllık"))} · ${esc(annual)}</button></div>`
+      ? `<div class="rollout-plan-actions"><button data-rollout-plan="${esc(plan.code)}" data-rollout-cycle="monthly" ${current ? "disabled" : ""}>${esc(rt("rollout.chooseMonthly", "30 günlük paketi seç"))}</button><button data-rollout-plan="${esc(plan.code)}" data-rollout-cycle="annual" ${current ? "disabled" : ""}>${esc(rt("rollout.annual", "Yıllık"))} · ${esc(annual)}</button></div>`
       : plan.kind === "one_time"
         ? `<div class="rollout-plan-actions"><button data-rollout-plan="${esc(plan.code)}" data-rollout-cycle="one_time">${esc(rt("rollout.chooseOnce", "Tek seferlik seç"))}</button></div>`
         : `<div class="rollout-plan-actions"><button disabled>${esc(current ? rt("plans.current", "Mevcut plan") : plan.code === "business" ? rt("plans.contact", "Bize ulaş") : rt("rollout.included", "Dahil"))}</button></div>`;
     return `<article class="plan-card ${plan.featured ? "featured" : ""}">
       ${plan.featured ? `<span class="plan-badge">${esc(rt("plans.popular", "Popüler"))}</span>` : ""}
       <h3>${esc(planName(plan.code))}</h3>
-      <div class="plan-price">${esc(monthly)} <small>${plan.kind === "subscription" ? rt("plans.perMonth", "/ ay") : plan.kind === "one_time" ? rt("plans.oneTimeShort", "tek ödeme") : ""}</small></div>
+      <div class="plan-price">${esc(monthly)} <small>${plan.kind === "subscription" ? rt("plans.thirtyDayPackageShort", "30 günlük paket") : plan.kind === "one_time" ? rt("plans.oneTimeShort", "tek ödeme") : ""}</small></div>
       <ul class="plan-features"><li>${minutes == null ? esc(rt("rollout.enterpriseCapacity", "Kurumsal kapasite")) : `${Number(minutes).toLocaleString(rolloutLocale())} ${esc(rt("plans.minuteUnit", "dakika"))}`}</li><li>${entitlements.quiz_questions ?? plan.quiz_questions ?? "∞"} ${esc(rt("plans.quizShort", "quiz"))}</li><li>${entitlements.flashcards ?? plan.flashcards ?? "∞"} ${esc(rt("plans.cardsShort", "bilgi kartı"))}</li><li>${esc((entitlements.export_formats || plan.export_formats || []).join(", ").toUpperCase())}</li></ul>
       ${actions}
     </article>`;
@@ -326,11 +376,16 @@
             rt("rollout.guestUsed", "Tek seferlik 30 dakikalık denemen kullanıldı. Devam etmek için ücretsiz hesap oluştur."),
             true,
           );
+          recordTrialEvent("trial_limit_reached", {reason: "trial_used"});
           return;
         }
         if (!activeToken()) {
           try { await ensureGuestIdentity(); }
-          catch (error) { showInlineMessage(error.message, true); return; }
+          catch (error) {
+            if (error.code === "LS-GUEST-06") showGuestTrialLimit(error);
+            else showInlineMessage(error.message, true);
+            return;
+          }
         }
         if (requestedSample && !sampleSelected()) {
           showError("", "LS-DOC-17");

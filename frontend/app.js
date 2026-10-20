@@ -50,7 +50,7 @@ const EN = {
   accountTitle: "Create an account or sign in", accountHelp: "Your plan, minutes, and payments are linked to this account.",
   remainingMinutes: "Processing minutes remaining", transferEyebrow: "Bank transfer details", transferTitle: "Your order is ready",
   orderReference: "Order reference", amount: "Amount", accountHolder: "Account holder", sendReceipt: "Email the receipt",
-  currentPlan: "Current plan", choosePlan: "Choose plan", popular: "Popular", perMonth: "/ month", oneTime: "one time",
+  currentPlan: "Current plan", choosePlan: "Choose plan", popular: "Popular", perMonth: "30-day package", oneTime: "one time",
   pendingApproval: "Pending review", loginRequired: "Sign in before choosing a plan.", accountReady: "Account is ready."
 };
 
@@ -94,7 +94,7 @@ const TR = {
   accountTitle: "Hesabını oluştur veya giriş yap", accountHelp: "Planın, dakikaların ve ödemelerin bu hesaba bağlanır.",
   remainingMinutes: "Kalan işlem dakikası", transferEyebrow: "Havale bilgileri", transferTitle: "Siparişin oluşturuldu",
   orderReference: "Sipariş referansı", amount: "Tutar", accountHolder: "Hesap sahibi", sendReceipt: "Dekontu e-postayla gönder",
-  currentPlan: "Mevcut plan", choosePlan: "Planı seç", popular: "Popüler", perMonth: "/ ay", oneTime: "tek ödeme",
+  currentPlan: "Mevcut plan", choosePlan: "Planı seç", popular: "Popüler", perMonth: "30 günlük paket", oneTime: "tek ödeme",
   pendingApproval: "Kontrol bekliyor", loginRequired: "Plan seçmeden önce giriş yap.", accountReady: "Hesabın hazır."
 };
 
@@ -102,19 +102,19 @@ const PLAN_COPY = {
   tr: {
     free: ["Ücretsiz", "LectureSift'i denemek ve kısa dersleri işlemek için.", "120 dk / ay"],
     credit: ["Dakika Paketi", "Abonelik olmadan ek işlem hakkı.", "180 dakika"],
-    lite: ["Lite", "Düzenli bireysel ders çalışması için.", "400 dk / ay"],
-    plus: ["Plus", "Yoğun ders dönemi ve çoklu kaynaklar için.", "900 dk / ay"],
-    pro: ["Pro", "Uzun kayıtlar ve öncelikli işleme için.", "2.000 dk / ay"],
-    max: ["Max", "En yüksek bireysel kullanım kapasitesi.", "4.000 dk / ay"],
+    lite: ["Lite", "Düzenli bireysel ders çalışması için.", "400 dk / 30 gün"],
+    plus: ["Plus", "Yoğun ders dönemi ve çoklu kaynaklar için.", "900 dk / 30 gün"],
+    pro: ["Pro", "Uzun kayıtlar ve öncelikli işleme için.", "2.000 dk / 30 gün"],
+    max: ["Max", "En yüksek bireysel kullanım kapasitesi.", "4.000 dk / 30 gün"],
     business: ["Business", "Ekipler, kurumlar ve özel kapasite için.", "10 kullanıcı"]
   },
   en: {
     free: ["Free", "Try LectureSift and process short lectures.", "120 min / month"],
     credit: ["Minute Pack", "Extra processing without a subscription.", "180 minutes"],
-    lite: ["Lite", "For regular individual study.", "400 min / month"],
-    plus: ["Plus", "For intensive study and multiple sources.", "900 min / month"],
-    pro: ["Pro", "For long recordings and priority processing.", "2,000 min / month"],
-    max: ["Max", "The highest individual processing capacity.", "4,000 min / month"],
+    lite: ["Lite", "For regular individual study.", "400 min / 30 days"],
+    plus: ["Plus", "For intensive study and multiple sources.", "900 min / 30 days"],
+    pro: ["Pro", "For long recordings and priority processing.", "2,000 min / 30 days"],
+    max: ["Max", "The highest individual processing capacity.", "4,000 min / 30 days"],
     business: ["Business", "For teams, institutions, and custom capacity.", "10 seats"]
   }
 };
@@ -303,7 +303,7 @@ function fallbackCatalog(currency) {
   return {selected_currency:selected, supported_currencies:Object.keys(FALLBACK_PRICES), plans:PLAN_ORDER.map((code, index) => {
     const [kind, minutes, quiz, cards, formats, summaries, priority, featured] = PLAN_FALLBACK[code];
     const amount = FALLBACK_PRICES[selected][index];
-    return {code, kind, minutes, priority, featured, display_price:amount == null ? null : {currency:selected, amount_minor:amount}, entitlements:{minutes, quiz_questions:quiz, flashcards:cards, export_formats:formats, summary_profiles:summaries, priority, limits:PLAN_SOURCE_LIMITS[code], download_enabled:code !== "free"}};
+    return {code, kind, minutes, priority, featured, display_price:amount == null ? null : {currency:selected, amount_minor:amount}, entitlements:{minutes, quiz_questions:quiz, flashcards:cards, export_formats:formats, summary_profiles:summaries, priority, limits:PLAN_SOURCE_LIMITS[code], download_enabled:true}};
   })};
 }
 
@@ -317,7 +317,9 @@ function planCopy(code) {
     ? central?.t("plans.userUnit", "kullanıcı")
     : code === "credit"
       ? central?.t("plans.minuteUnit", "dakika")
-      : central?.t("plans.minutesPerMonth", "dk / ay");
+      : PLAN_FALLBACK[code]?.[0] === "subscription"
+        ? central?.t("plans.minutesPer30Days", "dk / 30 gün")
+        : central?.t("plans.minutesPerMonth", "dk / ay");
   return [
     central?.t(`plan.${code}`, fallback[0]) || fallback[0],
     central?.t(`plan.${code}.description`, fallback[1]) || fallback[1],
@@ -405,6 +407,26 @@ async function protectedFetch(path) {
   return response;
 }
 
+// Product funnel events go through analytics.js, which sends nothing without
+// analytics consent. A call made before it loads waits in its queue.
+// The promise is true only once the tag has accepted the event.
+function recordFunnel(name, parameters = {}) {
+  try {
+    if (typeof window.lectureSiftTrack === "function") {
+      return Promise.resolve(window.lectureSiftTrack(name, parameters)).then(value => value === true, () => false);
+    }
+    window.__lecturesiftAnalyticsQueue = window.__lecturesiftAnalyticsQueue || [];
+    return new Promise(resolve => window.__lecturesiftAnalyticsQueue.push({type:"event", name, parameters, resolve}));
+  } catch (_) { return Promise.resolve(false); }
+}
+
+// Covers a guest job that finished while this page polled it and one that had
+// already finished when the guest came back; rollout.js counts it once per tab.
+function recordTrialComplete(job) {
+  if (!latestResult) return;
+  window.LectureSiftGuestTrial?.record?.("trial_complete", {source_type: String(job?.source_type || "").startsWith("document") ? "document" : "media"});
+}
+
 async function downloadProtected(path, filename) {
   try {
     const response = await protectedFetch(path);
@@ -413,6 +435,11 @@ async function downloadProtected(path, filename) {
     anchor.href = objectUrl; anchor.download = filename || "LectureSift";
     document.body.appendChild(anchor); anchor.click(); anchor.remove();
     setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    // Only the format is measured, never the file name or job.
+    void recordFunnel("result_download", {
+      content_type: path.endsWith("/download") ? "package" : "file",
+      file_extension: (/\.([a-z0-9]{1,5})$/i.exec(filename || "")?.[1] || "").toLowerCase(),
+    });
   } catch (error) { showError(error.message, error.code || "LS-NETWORK-01", {stopProcessing:false}); }
 }
 
@@ -452,7 +479,10 @@ function renderPlans() {
     };
     const priceInfo = plan.display_price || plan.manual_price;
     const price = priceInfo ? formatPrice(priceInfo.amount_minor, priceInfo.currency || billingCatalog.selected_currency) : (code === "free" ? formatPrice(0, billingCatalog.selected_currency) : (window.LectureSiftI18n?.t("plans.quote", "Teklif") || "Teklif"));
-    const suffix = plan.kind === "subscription" ? t("perMonth") : (plan.kind === "one_time" ? t("oneTime") : "");
+    // Fixed 30-day packages never renew, so they are not labelled monthly.
+    const suffix = plan.kind === "subscription"
+      ? (window.LectureSiftI18n?.t("plans.thirtyDayPackageShort", t("perMonth")) || t("perMonth"))
+      : (plan.kind === "one_time" ? t("oneTime") : "");
     const buttonLabel = current ? t("currentPlan") : (code === "business" ? (window.LectureSiftI18n?.t("plans.contact", "Bize ulaş") || "Bize ulaş") : t("choosePlan"));
     const local = (key, fallback) => window.LectureSiftI18n?.t(key, fallback) || fallback;
     return `<article class="plan-card ${plan.featured ? "featured" : ""}">
@@ -504,7 +534,7 @@ async function restoreRequestedJob() {
     if (!response.ok) { const error = await responseError(response); showError(error.message, error.code); return; }
     const job = await response.json();
     updateJobView(job);
-    if (job.status === "done") await loadResult();
+    if (job.status === "done") { await loadResult(); recordTrialComplete(job); }
     else if (job.status === "error") showError(job.error, job.error_code);
     else { startTimer(); pollJob(); }
   } catch (error) {
@@ -990,6 +1020,9 @@ function showError(message, code = "LS-SYSTEM-01", {stopProcessing = true} = {})
   $("errorCode").textContent = `${window.LectureSiftI18n?.exact("Hata kodu") || "Hata kodu"}: ${code}`; $("errorBox").hidden = false;
   if (stopProcessing) { setJobBusy(false); clearTimeout(pollHandle); clearInterval(timerHandle); }
   if (code === "LS-GUEST-05") window.LectureSiftGuestTrial?.markUsed?.();
+  if (code === "LS-GUEST-04" || code === "LS-GUEST-05") {
+    window.LectureSiftGuestTrial?.record?.("trial_limit_reached", {reason: code === "LS-GUEST-05" ? "trial_used" : "source_limit"});
+  }
   $("quotaRecoveryActions")?.remove();
   $("documentRecoveryActions")?.remove();
   if (sampleOcrLimitError || ["LS-DOC-14", "LS-DOC-15", "LS-DOC-18"].includes(code)) {
@@ -1193,6 +1226,7 @@ $("analyzeButton").onclick = async () => {
         return;
       }
       jobId = created.job_id;
+      window.LectureSiftGuestTrial?.record?.("trial_start", {source_type: documentUpload ? "document" : "media"});
       if (created.ocr_required) {
         const pageCount = Number(created.ocr_pages || 0);
         updateProgress(8, t("stageDocument"), `${pageCount} ${window.LectureSiftI18n?.exact?.("taranmış sayfa") || "taranmış sayfa"}`);
@@ -1221,7 +1255,13 @@ async function pollJob() {
     if (job.status === "processing" || job.status === "done") {
       window.LectureSiftGuestTrial?.markUsed?.(jobId);
     }
-    if (job.status === "done") { clearInterval(timerHandle); await loadResult({open:$("autoOpenResult").checked}); await refreshBillingAccount(); return; }
+    if (job.status === "done") {
+      clearInterval(timerHandle);
+      await loadResult({open:$("autoOpenResult").checked});
+      recordTrialComplete(job);
+      await refreshBillingAccount();
+      return;
+    }
     if (job.status === "error") { showError(job.error, job.error_code); return; }
     pollHandle = setTimeout(pollJob, 1300);
   } catch (error) { pollHandle = setTimeout(pollJob, 2500); }
@@ -1296,9 +1336,24 @@ function renderDocumentSampleResult(data) {
   $("documentSamplePlans").href = localized("/plans.html");
 }
 
+function renderGuestSaveResult() {
+  // A guest result is kept briefly. Signing up (or in) from here moves it to
+  // the account server-side and returns to this exact result afterwards.
+  const notice = $("guestSaveResult");
+  if (!notice) return;
+  notice.hidden = billingAccount?.plan?.code !== "guest" || !/^[A-Za-z0-9-]{8,80}$/.test(jobId || "");
+  if (notice.hidden) return;
+  const localized = path => window.LectureSiftI18n?.localizedPath?.(currentLanguage, path) || path;
+  const next = `${localized("/workspace.html")}?${new URLSearchParams({job:jobId})}`;
+  const query = `?${new URLSearchParams({next})}`;
+  $("guestSaveRegister").href = `${localized("/register.html")}${query}`;
+  $("guestSaveLogin").href = `${localized("/login.html")}${query}`;
+}
+
 function renderResult(data, {open = true} = {}) {
   $("resultHeading").textContent = data.title || "LectureSift";
   renderDocumentSampleResult(data);
+  renderGuestSaveResult();
   const utilityResult = data.job_type && data.job_type !== "study_pack";
   const options = data.options || {};
   const selected = {

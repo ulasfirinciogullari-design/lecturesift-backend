@@ -566,6 +566,43 @@ def _wait_until_ready(client: InstagramClient, container_id: str) -> None:
     raise InstagramAPIError("Instagram media processing timed out")
 
 
+def _find_marked_media(client: InstagramClient, marker: str) -> dict | None:
+    """The recent post whose caption carries this slot's idempotency marker, if Instagram lists one."""
+    recent = client.get_recent_media(limit=50).get("data", [])
+    return next((item for item in recent if marker in (item.get("caption") or "") and item.get("id")), None)
+
+
+def _publish_container(client: InstagramClient, container_id: str, marker: str) -> dict:
+    """Publish a finished container once and settle an unanswered publish by the caption marker.
+
+    Meta can create the post yet answer media_publish late or with a 5xx. Publishing again could
+    post twice, so after a transient failure the run only looks for its marker in recent media.
+    """
+    try:
+        return client.publish_media(container_id)
+    except InstagramAPIError as exc:
+        if not exc.transient:
+            raise
+        failure = exc
+    checked = False
+    for attempt in range(3):
+        if attempt:
+            time.sleep(10)  # a post Meta has just created can take a moment to be listed
+        try:
+            found = _find_marked_media(client, marker)
+        except InstagramAPIError:
+            continue
+        checked = True
+        if found:
+            print(f"Instagram media_publish did not answer ({failure}); the post is live as {found['id']}", file=sys.stderr)
+            return {"id": found["id"]}
+    state = "the post is not in recent media" if checked else "recent media could not be checked"
+    raise InstagramAPIError(
+        f"Instagram publish outcome unknown: {failure}; {state}. Not republished in this run.",
+        error_type="publish_outcome_unknown",
+    ) from failure
+
+
 def _client() -> InstagramClient:
     return InstagramClient(
         access_token=INSTAGRAM_ACCESS_TOKEN,
@@ -602,7 +639,7 @@ def publish_next_launch_post(*, only_if_none_completed: bool = False, force: boo
     media_url = f"{base_url}/instagram/launch/image/{post.index}.jpg"
     container = client.create_media_container(media_url=media_url, caption=post.caption)
     _wait_until_ready(client, container["id"])
-    published = client.publish_media(container["id"])
+    published = _publish_container(client, container["id"], post.marker)
     return {"status": "published", "kind": "launch", "index": post.index, "media_id": published.get("id")}
 
 
@@ -641,7 +678,7 @@ def publish_daily_post(day: date | None = None) -> dict:
             caption=tip.caption,
         )
     _wait_until_ready(client, container["id"])
-    published = client.publish_media(container["id"])
+    published = _publish_container(client, container["id"], daily_marker(selected_day))
     return {
         "status": "published",
         "kind": "daily",

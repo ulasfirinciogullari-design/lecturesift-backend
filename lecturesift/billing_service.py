@@ -30,7 +30,9 @@ from sqlalchemy import (
     Text,
     case,
     create_engine,
+    delete,
     func,
+    inspect,
     select,
     text,
     update,
@@ -450,6 +452,14 @@ def _normalize_name(value: str, label: str) -> str:
     return normalized
 
 
+def _normalize_optional_name(value: str, label: str) -> str:
+    # Names are collected at checkout when a payment provider needs them, so
+    # signup may leave them blank. Stored as empty strings: no schema change.
+    if not " ".join(str(value or "").split()):
+        return ""
+    return _normalize_name(str(value), label)
+
+
 def _normalize_phone(value: str) -> str | None:
     normalized = "".join(char for char in value.strip() if char.isdigit() or char == "+")
     if not normalized:
@@ -516,22 +526,69 @@ def _create_auth_token(connection, user_id: str, purpose: str, ttl: timedelta) -
     return token, expires_at
 
 
+# A guest trial claim needs no new table. AUTH_TOKENS already carries other
+# short state in its purpose column (see the admin login attempts below):
+# - pending: created at registration by the holder of a guest session and
+#   applied once the new account verifies its email (user_id = guest);
+# - claimed: a permanent marker whose primary key is derived from the guest
+#   user, so a guest identity can be claimed by exactly one account.
+GUEST_CLAIM_PENDING_PURPOSE = "guest_claim_pending"
+GUEST_CLAIMED_PURPOSE = "guest_claimed"
+
+
+def _guest_claim_pending_hash(account_user_id: str) -> str:
+    return _token_hash(f"{GUEST_CLAIM_PENDING_PURPOSE}:{account_user_id}")
+
+
+def _guest_claimed_hash(guest_user_id: str) -> str:
+    return _token_hash(f"{GUEST_CLAIMED_PURPOSE}:{guest_user_id}")
+
+
+# A Google sign-in link is stored the same way: the primary key is derived
+# from Google's stable subject id ("sub") and user_id is the linked account.
+# The row is born consumed and long-lived so the generic token clean-ups never
+# treat it as an open token. Closing an account deletes it with every other
+# auth token, and a password reset deletes it (see reset_password).
+GOOGLE_LINK_PURPOSE = "google_link"
+_GOOGLE_LINK_LIFETIME = timedelta(days=3650)
+# Google owns these mailboxes and never hands a deleted address to someone
+# else. For any other domain Google is authoritative only when the ID token's
+# hosted-domain claim ("hd", Google Workspace) is that same domain.
+GOOGLE_AUTHORITATIVE_DOMAINS = frozenset({"gmail.com", "googlemail.com"})
+_GOOGLE_EMAIL_UNUSABLE = "Google hesabının e-posta adresi kullanılamıyor."
+
+
+class GoogleAccountLinkRefused(BillingError):
+    """An account exists for the address and Google cannot vouch for its owner."""
+
+
+def _google_link_hash(sub: str) -> str:
+    return _token_hash(f"{GOOGLE_LINK_PURPOSE}:{sub}")
+
+
+def google_is_authoritative(email: str, hosted_domain: str = "") -> bool:
+    domain = email.rsplit("@", 1)[-1]
+    return domain in GOOGLE_AUTHORITATIVE_DOMAINS or (bool(hosted_domain) and hosted_domain == domain)
+
+
 def register_user(
     email: str,
     password: str,
-    first_name: str,
-    last_name: str,
+    first_name: str = "",
+    last_name: str = "",
     phone: str = "",
     country_code: str = "TR",
     referral_code: str = "",
+    *,
+    guest_user_id: str = "",
 ) -> dict:
     init_billing_database()
     normalized = email.strip().casefold()
     if "@" not in normalized or "." not in normalized.rsplit("@", 1)[-1] or len(normalized) > 320:
         raise BillingError("Geçerli bir e-posta adresi gir.")
     _validate_password(password)
-    selected_first_name = _normalize_name(first_name, "Ad")
-    selected_last_name = _normalize_name(last_name, "Soyad")
+    selected_first_name = _normalize_optional_name(first_name, "Ad")
+    selected_last_name = _normalize_optional_name(last_name, "Soyad")
     selected_phone = _normalize_phone(phone)
     selected_country = country_code.strip().upper()[:2] if len(country_code.strip()) >= 2 else "TR"
     salt = secrets.token_bytes(16)
@@ -572,6 +629,21 @@ def register_user(
                 verification_code,
                 expires_at,
             )
+            guest_claim = "not_provided"
+            if guest_user_id:
+                # The caller has already verified the signed guest session.
+                # Moving the work waits for email verification of this account.
+                connection.execute(
+                    AUTH_TOKENS.insert().values(
+                        token_hash=_guest_claim_pending_hash(values["id"]),
+                        user_id=guest_user_id,
+                        purpose=GUEST_CLAIM_PENDING_PURPOSE,
+                        expires_at=expires_at,
+                        consumed_at=None,
+                        created_at=now,
+                    )
+                )
+                guest_claim = "pending"
             # Referral failure must not prevent account creation. Attribution
             # itself is still inside this new-account transaction, never late.
             referral_status = "not_provided"
@@ -591,7 +663,7 @@ def register_user(
         "email": normalized,
         "first_name": selected_first_name,
         "last_name": selected_last_name,
-        "name": f"{selected_first_name} {selected_last_name}",
+        "name": " ".join(part for part in (selected_first_name, selected_last_name) if part),
         "phone": selected_phone,
         "country_code": selected_country,
         "email_verified": False,
@@ -603,6 +675,239 @@ def register_user(
         "verification_code": verification_code,
         "expires_at": expires_at,
         "referral_status": referral_status,
+        "guest_claim": guest_claim,
+    }
+
+
+def _reclaim_unverified_account(connection, user_id: str, country_code: str, now: datetime) -> None:
+    """Hand a never-verified registration to the address's verified owner.
+
+    Whoever registered first may not have owned the address, so nothing they
+    set up survives: the password and open tokens, a pending guest claim
+    (it would move their guest results into this library), a referral
+    attribution (they would become the inviter) and the profile details
+    (they would prefill checkout).
+    """
+    salt = secrets.token_bytes(16)
+    connection.execute(
+        update(USERS)
+        .where(USERS.c.id == user_id)
+        .values(
+            password_salt=salt.hex(),
+            password_hash=_hash_password(secrets.token_urlsafe(48), salt),
+        )
+    )
+    connection.execute(
+        update(USER_PROFILES)
+        .where(USER_PROFILES.c.user_id == user_id)
+        .values(
+            first_name="",
+            last_name="",
+            phone=None,
+            phone_verified_at=None,
+            country_code=country_code,
+            email_verified_at=now,
+            session_version=USER_PROFILES.c.session_version + 1,
+            updated_at=now,
+        )
+    )
+    connection.execute(
+        update(AUTH_TOKENS)
+        .where(
+            AUTH_TOKENS.c.user_id == user_id,
+            AUTH_TOKENS.c.purpose.in_(("verify_email", "verify_email_code", "reset_password")),
+            AUTH_TOKENS.c.consumed_at.is_(None),
+        )
+        .values(consumed_at=now)
+    )
+    # The pending claim row is owned by the guest and keyed by this account.
+    connection.execute(
+        delete(AUTH_TOKENS).where(
+            AUTH_TOKENS.c.token_hash == _guest_claim_pending_hash(user_id),
+            AUTH_TOKENS.c.purpose == GUEST_CLAIM_PENDING_PURPOSE,
+        )
+    )
+    from .referrals import REWARDS
+
+    # The referral schema is installed explicitly, never by startup.
+    if inspect(connection).has_table(REWARDS.name):
+        connection.execute(delete(REWARDS).where(REWARDS.c.invitee_user_id == user_id))
+
+
+def sign_in_with_google(
+    email: str,
+    *,
+    sub: str,
+    hosted_domain: str = "",
+    given_name: str = "",
+    family_name: str = "",
+    country_code: str = "TR",
+    referral_code: str = "",
+) -> dict:
+    """Sign in, link, or create a verified account for a Google identity.
+
+    The caller must already have verified the Google ID token (signature,
+    audience, issuer, expiry and email_verified). A Google subject that is
+    already linked signs in to its account. Otherwise an existing account for
+    the address is linked only when Google is authoritative for the address
+    (google_is_authoritative); a never-verified registration is then
+    reclaimed. For any other address the person signs in with the password.
+    The result's "google_link" is "existing", "linked" or "created".
+    """
+    init_billing_database()
+    raw_email = str(email or "").strip()
+    # Reject before casefold(): casefolding non-ASCII text can turn one
+    # address into another (for example "ß" becomes "ss").
+    if not raw_email.isascii():
+        raise BillingAuthenticationError(_GOOGLE_EMAIL_UNUSABLE)
+    normalized = raw_email.casefold()
+    if (
+        "@" not in normalized
+        or "." not in normalized.rsplit("@", 1)[-1]
+        or len(normalized) > 320
+        or normalized.endswith(("@guest.lecturesift.invalid", "@users.invalid"))
+    ):
+        raise BillingAuthenticationError(_GOOGLE_EMAIL_UNUSABLE)
+    selected_sub = str(sub or "").strip()
+    if not selected_sub or len(selected_sub) > 255 or not selected_sub.isascii() or not selected_sub.isprintable():
+        raise BillingAuthenticationError("Google hesabı doğrulanamadı.")
+    selected_hd = str(hosted_domain or "").strip()
+    selected_hd = selected_hd.casefold() if selected_hd.isascii() else ""
+    selected_country = country_code.strip().upper()[:2] if len(country_code.strip()) >= 2 else "TR"
+    link_hash = _google_link_hash(selected_sub)
+    now = utcnow()
+    row = profile = None
+    google_link = "existing"
+    try:
+        with ENGINE.begin() as connection:
+            link = connection.execute(
+                select(AUTH_TOKENS.c.user_id).where(
+                    AUTH_TOKENS.c.token_hash == link_hash,
+                    AUTH_TOKENS.c.purpose == GOOGLE_LINK_PURPOSE,
+                )
+            ).first()
+            if link:
+                row = connection.execute(
+                    select(USERS).where(USERS.c.id == link.user_id).with_for_update()
+                ).first()
+                profile = _profile_for(connection, row.id) if row else None
+                if (
+                    not row
+                    or (profile is not None and profile.email_verified_at is None)
+                    or row.email.endswith(("@guest.lecturesift.invalid", "@users.invalid"))
+                ):
+                    # Closing an account deletes its links; never trust a stale one.
+                    connection.execute(delete(AUTH_TOKENS).where(AUTH_TOKENS.c.token_hash == link_hash))
+                    row = profile = None
+            if row is None:
+                row = connection.execute(
+                    select(USERS).where(USERS.c.email == normalized).with_for_update()
+                ).first()
+                if row:
+                    if not google_is_authoritative(normalized, selected_hd):
+                        raise GoogleAccountLinkRefused(
+                            "Bu e-posta adresiyle zaten bir LectureSift hesabı var. Google bu adresin bugünkü "
+                            "sahibini doğrulayamadığı için hesabı Google'a bağlayamıyoruz. E-posta adresin ve "
+                            "parolanla giriş yap; parolanı hatırlamıyorsan parola yenileme bağlantısı iste."
+                        )
+                    profile = _profile_for(connection, row.id)
+                    if profile and profile.email_verified_at is None:
+                        _reclaim_unverified_account(connection, row.id, selected_country, now)
+                    connection.execute(
+                        AUTH_TOKENS.insert().values(
+                            token_hash=link_hash,
+                            user_id=row.id,
+                            purpose=GOOGLE_LINK_PURPOSE,
+                            expires_at=now + _GOOGLE_LINK_LIFETIME,
+                            consumed_at=now,
+                            created_at=now,
+                        )
+                    )
+                    google_link = "linked"
+                    row = connection.execute(select(USERS).where(USERS.c.id == row.id)).first()
+                    profile = _profile_for(connection, row.id)
+    except IntegrityError as exc:
+        # A parallel sign-in linked the same Google account first.
+        raise BillingError("Hesap hazırlanırken bir çakışma oldu. Tekrar dene.") from exc
+    if row:
+        session_version = int(profile.session_version) if profile else 1
+        return {
+            "user": _public_user(row, profile),
+            "token": issue_session(row.id, row.email, session_version),
+            "created": False,
+            "referral_status": "not_provided",
+            "google_link": google_link,
+        }
+
+    def optional_name(value: str, label: str) -> str:
+        # A Google profile name is the person's own data. Drop one that does
+        # not fit the account name rules instead of failing the sign-in.
+        try:
+            return _normalize_optional_name(value, label)
+        except BillingError:
+            return ""
+
+    selected_first_name = optional_name(given_name, "Ad")
+    selected_last_name = optional_name(family_name, "Soyad")
+    salt = secrets.token_bytes(16)
+    user_id = str(uuid.uuid4())
+    try:
+        with ENGINE.begin() as connection:
+            connection.execute(
+                USERS.insert().values(
+                    id=user_id,
+                    email=normalized,
+                    password_salt=salt.hex(),
+                    password_hash=_hash_password(secrets.token_urlsafe(48), salt),
+                    credit_minutes=0,
+                    created_at=now,
+                )
+            )
+            connection.execute(
+                USER_PROFILES.insert().values(
+                    user_id=user_id,
+                    first_name=selected_first_name,
+                    last_name=selected_last_name,
+                    phone=None,
+                    country_code=selected_country,
+                    email_verified_at=now,
+                    phone_verified_at=None,
+                    session_version=1,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            referral_status = "not_provided"
+            if referral_code:
+                try:
+                    with connection.begin_nested():
+                        from .referrals import attach_at_registration
+                        referral_status = attach_at_registration(
+                            connection, user_id, normalized, referral_code, now,
+                        )
+                except Exception:
+                    referral_status = "unavailable"
+            connection.execute(
+                AUTH_TOKENS.insert().values(
+                    token_hash=link_hash,
+                    user_id=user_id,
+                    purpose=GOOGLE_LINK_PURPOSE,
+                    expires_at=now + _GOOGLE_LINK_LIFETIME,
+                    consumed_at=now,
+                    created_at=now,
+                )
+            )
+            row = connection.execute(select(USERS).where(USERS.c.id == user_id)).first()
+            profile = _profile_for(connection, user_id)
+    except IntegrityError as exc:
+        # A parallel sign-in created the same account first.
+        raise BillingError("Hesap hazırlanırken bir çakışma oldu. Tekrar dene.") from exc
+    return {
+        "user": _public_user(row, profile),
+        "token": issue_session(user_id, normalized, 1),
+        "created": True,
+        "referral_status": referral_status,
+        "google_link": "created",
     }
 
 
@@ -878,6 +1183,14 @@ def reset_password(token: str, new_password: str) -> None:
             update(USER_PROFILES)
             .where(USER_PROFILES.c.user_id == auth_token.user_id)
             .values(session_version=USER_PROFILES.c.session_version + 1, updated_at=now)
+        )
+        # Resetting through the mailbox revokes Google links as well, so a
+        # former owner of a recycled address loses a linked Google sign-in.
+        connection.execute(
+            delete(AUTH_TOKENS).where(
+                AUTH_TOKENS.c.user_id == auth_token.user_id,
+                AUTH_TOKENS.c.purpose == GOOGLE_LINK_PURPOSE,
+            )
         )
         connection.execute(
             update(AUTH_TOKENS)
@@ -1442,6 +1755,14 @@ def account_status(user_id: str) -> dict:
     paid_credit_access = credit_minutes > 0 and paid_credit_purchases > 0
     download_enabled = bool(plan.download_enabled or paid_credit_access)
     effective_job_plan = PLAN_BY_CODE["credit"] if plan.code == "free" and paid_credit_access else plan
+    # Paid credit on the free plan also unlocks the minute pack's job limits;
+    # _effective_job_plan reads this source, so report it before the plan.
+    if effective_job_plan is not plan:
+        download_access_source = "credit"
+    elif plan.download_enabled:
+        download_access_source = "plan"
+    else:
+        download_access_source = "credit" if paid_credit_access else None
     public_plan = plan.public()
     job_entitlements = effective_job_plan.public()["entitlements"]
     if permanent_ad_free:
@@ -1473,9 +1794,7 @@ def account_status(user_id: str) -> dict:
         "download_enabled": download_enabled,
         "permanent_ad_free": permanent_ad_free,
         "job_entitlements": job_entitlements,
-        "download_access_source": (
-            "plan" if plan.download_enabled else "credit" if paid_credit_access else None
-        ),
+        "download_access_source": download_access_source,
         "is_admin": False,
         "manual_orders": [_public_manual_order(order) for order in orders],
         "payment_orders": [_public_payment_order(order) for order in payment_orders],
@@ -1668,8 +1987,8 @@ def require_download_entitlement(user_id: str) -> dict:
     status = account_status(user_id)
     if not status["download_enabled"]:
         raise BillingError(
-            "Dosya indirmek için tek kullanımlık dakika paketi veya ücretli plan seç. "
-            "Ücretsiz hesapta sonuçları sitede önizleyebilirsin."
+            "Bu hesap hakkı dosya indirmeyi içermiyor. Sonuçları sitede görüntüleyebilir "
+            "veya dakika paketi ya da ücretli plan seçebilirsin."
         )
     return status
 
@@ -1751,7 +2070,7 @@ def validate_job_features(
 ) -> dict:
     status = require_job_entitlement(user_id)
     if job_type in {"audio_export", "download_video"} and not status["download_enabled"]:
-        raise BillingError("MP3 ve dosya indirme araçları dakika paketi veya ücretli plan gerektirir.")
+        raise BillingError("MP3 dışa aktarma ve dosya indirme bu hesap hakkına dahil değil.")
     plan = _effective_job_plan(status)
     if plan.quiz_questions is not None and quiz_count > plan.quiz_questions:
         raise BillingError(f"Planın en fazla {plan.quiz_questions} quiz sorusuna izin veriyor.")
@@ -2253,7 +2572,10 @@ def complete_payment_order(
             _complete_unsettled_payment(connection, order, succeeded, provider_amount_minor,
                                         failure_code, failure_message, reference, now)
     _reconcile_referral_order(reference)
-    return payment_order(reference)
+    result = payment_order(reference)
+    if result["status"] == "paid":
+        _send_order_confirmation(reference)
+    return result
 
 
 def _reconcile_referral_order(reference: str) -> None:
@@ -2262,6 +2584,18 @@ def _reconcile_referral_order(reference: str) -> None:
         after_order_change(reference)
     except Exception:
         # Never undo/obscure a committed payment due to optional referral code.
+        pass
+
+
+def _send_order_confirmation(reference: str) -> None:
+    # Called only after the paid transaction has committed. Duplicate provider
+    # callbacks reach this again; the notifier records each order's delivery
+    # and never emails the same order twice.
+    try:
+        from .order_notifications import notify_paid_order
+        notify_paid_order(reference)
+    except Exception:
+        # Never undo/obscure a committed payment due to email delivery.
         pass
 
 
@@ -2702,6 +3036,7 @@ def approve_manual_order(reference: str) -> dict:
                 now=now,
             )
     _reconcile_referral_order(reference)
+    _send_order_confirmation(reference)
     return account_status(order.user_id)
 
 

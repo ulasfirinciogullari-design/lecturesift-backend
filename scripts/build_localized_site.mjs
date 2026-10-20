@@ -26,6 +26,9 @@ const STUDY_RESOURCES = JSON.parse(await readFile(path.join(SOURCE, "study-resou
 const LANDING_PAGES = JSON.parse(await readFile(path.join(SOURCE, "landing-pages.json"), "utf8"));
 const STUDY_PAGES = new Map(STUDY_RESOURCES.pages.map(page => [`/${page.slug}.html`, page]));
 const pageLanguages = publicPath => STUDY_PAGES.has(publicPath) ? STUDY_RESOURCES.languages : LANGUAGES;
+// Subject (course) pages are authored TR/EN articles that also carry a visible FAQ.
+const COURSE_PAGES = STUDY_RESOURCES.pages.filter(page => page.kind === "course");
+const studyArticle = publicPath => ["article", "course"].includes(STUDY_PAGES.get(publicPath)?.kind);
 for (const publicPath of STUDY_PAGES.keys()) PUBLIC_PATH_SET.add(publicPath);
 
 const pageCopySource = await readFile(path.join(SOURCE, "page-i18n.js"), "utf8");
@@ -205,6 +208,46 @@ function deferNonCriticalScripts(html) {
   });
 }
 
+// plans.html writes its static plan numbers in Turkish format ("₺1.199",
+// "4.000"). Reformat them for each language so a reader or crawler never sees
+// ₺1.199 as about one lira; plans.js later replaces them with live catalog data.
+function localizeStaticPlanValues(html, language) {
+  if (language === "tr") return html;
+  const locale = OG_LOCALES[language].replace("_", "-");
+  const number = new Intl.NumberFormat(locale);
+  const lira = new Intl.NumberFormat(locale, {
+    style: "currency", currency: "TRY", currencyDisplay: "narrowSymbol",
+    minimumFractionDigits: 0, maximumFractionDigits: 0,
+  });
+  return html.replace(/(<span\b[^>]*\bdata-plan-value="[^"]+"[^>]*>)([^<>]*)(<\/span>)/gi, (match, open, value, close) => {
+    const text = value.trim();
+    const price = text.startsWith("₺");
+    const digits = price ? text.slice(1) : text;
+    if (!/^\d{1,3}(?:\.\d{3})*$/.test(digits)) return match;
+    const amount = Number(digits.replaceAll(".", ""));
+    const formatted = price
+      ? lira.formatToParts(amount).map(part => part.type === "currency" ? "₺" : part.value).join("")
+      : number.format(amount);
+    return `${open}${formatted}${close}`;
+  });
+}
+
+// Static sign-in links carry a continuation target such as next=/plans.html?...
+// Keep the reader on their language after sign-in.
+function localizeContinuationTargets(html, language) {
+  if (language === "tr") return html;
+  return html.replace(/<a\b[^>]*>/gi, tag => tag.replace(/\bhref="([^"]*[?&]next=)([^"&#]*)/i, (match, prefix, encoded) => {
+    let next;
+    try { next = decodeURIComponent(encoded); } catch { return match; }
+    if (!next.startsWith("/") || next.startsWith("//")) return match;
+    const boundary = next.search(/[?#]/);
+    const pathname = boundary >= 0 ? next.slice(0, boundary) : next;
+    const suffix = boundary >= 0 ? next.slice(boundary) : "";
+    if (!PUBLIC_PATH_SET.has(pathname)) return match;
+    return `href="${prefix}${encodeURIComponent(localizedPath(language, pathname) + suffix)}`;
+  }));
+}
+
 function removeStaticTranslationCatalog(html) {
   // Public pages are already translated before they are written to dist. The
   // 1.1 MB all-language fallback catalog is still required by authenticated
@@ -271,7 +314,7 @@ function structuredData(html, language, publicPath, canonical, title, descriptio
       "@type": "WebPage", "@id": webpageId, name: title, url: canonical, description,
       inLanguage: language, isPartOf: {"@id": websiteId}, about: {"@id": applicationId},
       ...(publicPath !== "/" ? {breadcrumb: {"@id": `${canonical}#breadcrumb`}} : {}),
-      primaryImageOfPage: {"@type": "ImageObject", url: image, width: 1731, height: 909},
+      primaryImageOfPage: {"@type": "ImageObject", url: image, width: 1200, height: 630},
     },
     {
       "@type": "SoftwareApplication", "@id": applicationId, name: "LectureSift", url: `${ORIGIN}/`,
@@ -299,7 +342,7 @@ function structuredData(html, language, publicPath, canonical, title, descriptio
       itemListElement: items,
     });
   }
-  if (GUIDE_PATHS.has(publicPath) || STUDY_PAGES.get(publicPath)?.kind === "article") {
+  if (GUIDE_PATHS.has(publicPath) || studyArticle(publicPath)) {
     graph.push({
       "@type": "Article", "@id": `${canonical}#article`, headline: title, description, image,
       inLanguage: language, dateModified: LANDING_PAGES.pages[publicPath]?.[language] ? LANDING_PAGES.updated : STUDY_PAGES.has(publicPath) ? (STUDY_PAGES.get(publicPath).updated || STUDY_RESOURCES.updated) : "2026-08-29", mainEntityOfPage: {"@id": webpageId},
@@ -313,7 +356,8 @@ function structuredData(html, language, publicPath, canonical, title, descriptio
       acceptedAnswer: {"@type": "Answer", text: plainText(match[2])},
     }))
     .filter(item => item.name && item.acceptedAnswer.text);
-  if (questions.length && !STUDY_PAGES.has(publicPath)) {
+  // Guide exercises use <details> for answers, so only course pages' faq-list is a FAQ.
+  if (questions.length && (!STUDY_PAGES.has(publicPath) || STUDY_PAGES.get(publicPath).kind === "course")) {
     graph.push({"@type": "FAQPage", "@id": `${canonical}#faq`, mainEntity: questions});
   }
   return JSON.stringify({"@context": "https://schema.org", "@graph": graph}).replaceAll("</", "<\\/");
@@ -328,7 +372,7 @@ function staticSeo(html, language, publicPath) {
   const alternates = pageLanguages(publicPath).map(alternate =>
     `  <link rel="alternate" hreflang="${alternate}" href="${ORIGIN}${localizedPath(alternate, publicPath)}">`
   ).join("\n");
-  const image = `${ORIGIN}/og-image.png`;
+  const image = `${ORIGIN}/og-image.jpg`;
   const alt = escapeAttribute(title);
   const schema = structuredData(html, language, publicPath, canonical, title, description, image);
   const staticDescription = /<meta\s+name="description"/i.test(html)
@@ -340,16 +384,16 @@ ${staticDescription}
   <link rel="canonical" href="${canonical}">
 ${alternates}
   <link rel="alternate" hreflang="x-default" href="${ORIGIN}${localizedPath("tr", publicPath)}">
-  <meta property="og:type" content="${ARTICLE_PATHS.has(publicPath) || STUDY_PAGES.get(publicPath)?.kind === "article" ? "article" : "website"}">
+  <meta property="og:type" content="${ARTICLE_PATHS.has(publicPath) || studyArticle(publicPath) ? "article" : "website"}">
   <meta property="og:site_name" content="LectureSift">
   <meta property="og:title" content="${escapeAttribute(title)}">
   <meta property="og:description" content="${escapeAttribute(description)}">
   <meta property="og:url" content="${canonical}">
   <meta property="og:locale" content="${OG_LOCALES[language]}">
   <meta property="og:image" content="${image}">
-  <meta property="og:image:type" content="image/png">
-  <meta property="og:image:width" content="1731">
-  <meta property="og:image:height" content="909">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="${alt}">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${escapeAttribute(title)}">
@@ -359,6 +403,73 @@ ${alternates}
   <script type="application/ld+json" data-lecturesift-seo>${schema}</script>
 `;
   return html.replace(/<\/head>/i, `${metadata}</head>`);
+}
+
+// Seller identity is rendered into the static HTML so it stays visible without
+// JavaScript or the API. Values come from the Netlify build environment under
+// the backend's names: they are never committed or sent to a translation
+// service. Like /billing/operator, nothing is rendered until every required
+// field is set; legal-operator.js still refreshes the block from the API.
+const buildEnv = name => String(process.env[name] || "").trim();
+const OPERATOR = {
+  operatorName: buildEnv("LEGAL_OPERATOR_NAME"),
+  address: buildEnv("LEGAL_OPERATOR_ADDRESS"),
+  country: buildEnv("LEGAL_OPERATOR_COUNTRY"),
+  phone: buildEnv("LEGAL_OPERATOR_PHONE"),
+  // Only keys listed in netlify.toml SECRETS_SCAN_OMIT_KEYS may reach dist/;
+  // the literal default matches the backend's final fallback address.
+  email: buildEnv("LEGAL_OPERATOR_EMAIL") || "support@lecturesift.com",
+  taxId: buildEnv("LEGAL_TAX_ID"),
+  taxOffice: buildEnv("LEGAL_TAX_OFFICE"),
+  registrationId: buildEnv("LEGAL_REGISTRATION_ID"),
+  mersisId: buildEnv("LEGAL_MERSIS_ID"),
+  tradeRegistry: buildEnv("LEGAL_TRADE_REGISTRY"),
+  kepAddress: buildEnv("LEGAL_KEP_ADDRESS"),
+  chamberName: buildEnv("LEGAL_CHAMBER_NAME"),
+};
+const OPERATOR_CONFIGURED = ["operatorName", "address", "country", "phone", "email"].every(field => OPERATOR[field]);
+const OPERATOR_PAGES = new Set(["/distance-sales.html", "/contact.html"]);
+
+function keyedCopy(key, language) {
+  const row = keyCatalog[key];
+  const value = row?.[LANGUAGES.indexOf(language)] || row?.[1];
+  if (!value) throw new Error(`Missing operator copy: ${language}/${key}`);
+  return value;
+}
+
+function insertAfterLead(html, addition, publicPath) {
+  const lead = /<article\b[^>]*\bclass="legal-card"[^>]*>[\s\S]*?<p\b[^>]*\bclass="lead"[^>]*>[\s\S]*?<\/p>/i;
+  if (!lead.test(html)) throw new Error(`${publicPath} has no legal lead paragraph`);
+  return html.replace(lead, match => `${match}${addition}`);
+}
+
+function injectOperatorIdentity(html, language, publicPath) {
+  if (!OPERATOR_CONFIGURED) return html;
+  const e = escapeAttribute;
+  const title = e(keyedCopy("legal.operatorTitle", language));
+  if (OPERATOR_PAGES.has(publicPath)) {
+    const rows = [
+      ["operatorName"], ["address"], ["country"],
+      ["phone", `tel:${OPERATOR.phone.replace(/[^+\d]/g, "")}`],
+      ["email", `mailto:${OPERATOR.email}`],
+      ["taxId"], ["taxOffice"], ["registrationId"], ["mersisId"], ["tradeRegistry"],
+      ["kepAddress", `mailto:${OPERATOR.kepAddress}`],
+      ["chamberName"],
+    ].filter(([field]) => OPERATOR[field]).map(([field, href]) => {
+      const value = e(OPERATOR[field]);
+      const detail = href ? `<a href="${e(href)}">${value}</a>` : value;
+      return `<div><dt>${e(keyedCopy(`legal.${field}`, language))}</dt><dd>${detail}</dd></div>`;
+    }).join("");
+    const block = `<section class="legal-operator" data-legal-operator="static"><h2>${title}</h2><dl>${rows}</dl></section>`;
+    return insertAfterLead(html, block, publicPath);
+  }
+  if (publicPath === "/about.html") {
+    const name = `<strong>${e(OPERATOR.operatorName)}</strong>`;
+    const sentence = e(keyedCopy("about.operator", language)).replace("{name}", () => name);
+    const link = `<a href="${localizedPath(language, "/distance-sales.html")}">${title}</a>`;
+    return insertAfterLead(html, `<p class="about-operator" data-about-operator>${sentence} ${link}</p>`, publicPath);
+  }
+  return html;
 }
 
 function validateLocalizedPage(html, language, publicPath) {
@@ -401,7 +512,10 @@ for (const language of LANGUAGES) {
     const sourceName = publicPath === "/" ? "index.html" : publicPath.slice(1);
     let html = await readFile(path.join(SOURCE, sourceName), "utf8");
     html = translateDocument(html, language);
+    html = localizeStaticPlanValues(html, language);
+    html = localizeContinuationTargets(html, language);
     html = enrichLandingPage(html, language, publicPath);
+    html = injectOperatorIdentity(html, language, publicPath);
     html = canonicalizePublicLinks(html);
     html = removeStaticTranslationCatalog(html);
     html = html.replace(/src="\/i18n\.js(?:\?[^\"]*)?"/g, `src="${runtimePath}"`);
@@ -421,6 +535,7 @@ function studyDocument(page, language) {
   if (!copy?.title || !copy?.description || !copy?.body) throw new Error(`Missing ${language} study resource: ${page.slug}`);
   const tr = language === "tr";
   const library = page.slug === "study-guides";
+  const course = page.kind === "course";
   const prefix = tr ? "" : "/en";
   const alternate = tr ? `/en/${page.slug}` : `/${page.slug}`;
   const toc = [...copy.body.matchAll(/<section id="([^"]+)"[^>]*>\s*<h2>([^<]+)<\/h2>/g)]
@@ -431,17 +546,20 @@ function studyDocument(page, language) {
   const minutes = Math.max(2, Math.ceil(plainText(copy.body).split(/\s+/).length / 190));
   const brand = `<span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>Lecture<span>Sift</span></span>`;
   const preview = `<figure class="guide-preview"><figcaption><span class="guide-preview-dot" aria-hidden="true"></span>${tr ? "Örnek dersin içinden" : "Inside the example lesson"}</figcaption><h2>${tr ? "Aynı veri.<br>İki farklı bakış." : "Same data.<br>Two ways to see it."}</h2><p>${tr ? "Okula gidiş süresi · dakika" : "Journey to school · minutes"}</p><div class="guide-preview-data" aria-label="${tr ? "18, 20, 20, 22 ve 70 dakika" : "18, 20, 20, 22, and 70 minutes"}"><span>18</span><span>20</span><span class="guide-median">20</span><span>22</span><span>70</span></div><dl><div><dt>${tr ? "Ortalama" : "Mean"}</dt><dd>30 <small>${tr ? "dk" : "min"}</small></dd></div><div><dt>${tr ? "Medyan" : "Median"}</dt><dd>20 <small>${tr ? "dk" : "min"}</small></dd></div></dl><a href="${prefix}/study-pack-example">${tr ? "Neden farklılar? Örnekte keşfet" : "Why the difference? Explore the example"} <span aria-hidden="true">↗</span></a></figure>`;
-  const hero = `<header class="guide-intro${library ? " guide-hero" : ""}"><div><p class="guide-eyebrow">${tr ? "LectureSift · Öğrenme kütüphanesi" : "LectureSift · Learning library"}</p><h1>${escapeAttribute(copy.title)}</h1><p class="guide-lead">${escapeAttribute(copy.description)}</p>${library ? `<div class="guide-hero-actions"><a class="guide-button guide-button-primary" href="${prefix}/study-pack-example">${tr ? "Örnek dersi aç" : "Try the example lesson"} <span aria-hidden="true">→</span></a><a class="guide-text-link" href="#${tr ? "basla" : "start"}">${tr ? "Rehber seç" : "Choose a guide"} ↓</a></div><p class="guide-access">${tr ? "Ücretsiz rehberler · Hesap veya kredi gerekmez" : "Free guides · No account or credits needed"}</p>` : `<p class="guide-byline"><span>LectureSift</span><span>${minutes} ${tr ? "dk okuma" : "min read"}</span><time datetime="${page.updated || STUDY_RESOURCES.updated}">${updated}</time></p>`}</div>${library ? preview : ""}</header>`;
-  const products = library
+  // Course pages open with the free guest trial and the free account, with no fixed limits copied here.
+  const trial = course ? `<div class="guide-hero-actions" data-guide-trial><a class="guide-button guide-button-primary" href="${prefix}/workspace.html">${tr ? "Misafir olarak ücretsiz dene" : "Try it free as a guest"} <span aria-hidden="true">→</span></a><a class="guide-button" href="${prefix}/register.html">${tr ? "Ücretsiz hesap oluştur" : "Create a free account"}</a></div><p class="guide-access">${tr ? "Misafir denemesi için hesap gerekmez · Güncel sınırlar çalışma alanında ve Planlar sayfasında" : "No account needed for the guest trial · Current limits are shown in the workspace and on the Plans page"}</p>` : "";
+  const eyebrow = course ? (tr ? "LectureSift · Bölüme göre çalışma" : "LectureSift · Study by subject") : (tr ? "LectureSift · Öğrenme kütüphanesi" : "LectureSift · Learning library");
+  const hero = `<header class="guide-intro${library ? " guide-hero" : ""}"><div><p class="guide-eyebrow">${eyebrow}</p><h1>${escapeAttribute(copy.title)}</h1><p class="guide-lead">${escapeAttribute(copy.description)}</p>${library ? `<div class="guide-hero-actions"><a class="guide-button guide-button-primary" href="${prefix}/study-pack-example">${tr ? "Örnek dersi aç" : "Try the example lesson"} <span aria-hidden="true">→</span></a><a class="guide-text-link" href="#${tr ? "basla" : "start"}">${tr ? "Rehber seç" : "Choose a guide"} ↓</a></div><p class="guide-access">${tr ? "Ücretsiz rehberler · Hesap veya kredi gerekmez" : "Free guides · No account or credits needed"}</p>` : `<p class="guide-byline"><span>LectureSift</span><span>${minutes} ${tr ? "dk okuma" : "min read"}</span><time datetime="${page.updated || STUDY_RESOURCES.updated}">${updated}</time></p>${trial}`}</div>${library ? preview : ""}</header>`;
+  const products = library || course
     ? ["/document-summary.html", "/lecture-video-summary.html", "/quiz-flashcards.html"]
     : page.slug === "cornell-notes" ? ["/lecture-video-summary.html", "/document-summary.html"]
     : [page.slug === "active-recall" ? "/quiz-flashcards.html" : "/document-summary.html"];
   const productLinks = `<nav class="guide-related" data-guide-products aria-label="${tr ? "Kendi kaynaklarınla çalış" : "Study with your own sources"}"><strong>${tr ? "Kendi dersinle uygula" : "Apply it to your own course"}</strong>${products.map(route => `<a href="${localizedPath(language, route)}">${escapeAttribute(LANDING_PAGES.pages[route][language].action)} <span aria-hidden="true">→</span></a>`).join("")}</nav>`;
-  const related = (library ? "" : `<nav class="guide-related" aria-label="${tr ? "Diğer çalışma rehberleri" : "More study guides"}"><strong>${tr ? "Çalışmaya devam et" : "Keep learning"}</strong>${STUDY_RESOURCES.pages.filter(item => item.kind === "article" && item.slug !== page.slug && item.slug !== "about-study-guides").map(item => `<a href="${prefix}/${item.slug}">${escapeAttribute(item[language].title)} <span aria-hidden="true">→</span></a>`).join("")}</nav>`) + productLinks;
+  const related = (library ? "" : course ? `<nav class="guide-related" data-guide-subjects aria-label="${tr ? "Diğer bölümler" : "Other subjects"}"><strong>${tr ? "Diğer bölümler" : "Other subjects"}</strong>${COURSE_PAGES.filter(item => item.slug !== page.slug).map(item => `<a href="${prefix}/${item.slug}">${escapeAttribute(item[language].title)} <span aria-hidden="true">→</span></a>`).join("")}</nav>` : `<nav class="guide-related" aria-label="${tr ? "Diğer çalışma rehberleri" : "More study guides"}"><strong>${tr ? "Çalışmaya devam et" : "Keep learning"}</strong>${STUDY_RESOURCES.pages.filter(item => item.kind === "article" && item.slug !== page.slug && item.slug !== "about-study-guides").map(item => `<a href="${prefix}/${item.slug}">${escapeAttribute(item[language].title)} <span aria-hidden="true">→</span></a>`).join("")}</nav>`) + productLinks;
   return `<!doctype html><html lang="${language}" dir="ltr"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeAttribute(copy.title)} | LectureSift</title><meta name="description" content="${escapeAttribute(copy.description)}">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css?v=12"><link rel="stylesheet" href="/theme.css?v=17"><link rel="stylesheet" href="/product-layout.css?v=4"><link rel="stylesheet" href="/study-guides.css?v=2"><script src="/theme.js?v=12"></script></head>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css?v=12"><link rel="stylesheet" href="/theme.css?v=17"><link rel="stylesheet" href="/product-layout.css?v=6"><link rel="stylesheet" href="/study-guides.css?v=3"><script src="/theme.js?v=12"></script></head>
 <body class="guide-page"><a class="skip-link guide-skip" href="#content">${tr ? "İçeriğe geç" : "Skip to content"}</a>
 <header class="guide-header"><div class="guide-header-inner"><a class="brand guide-brand" href="${prefix}/" aria-label="LectureSift ${tr ? "ana sayfa" : "home"}">${brand}</a><nav aria-label="${tr ? "Ana menü" : "Main navigation"}"><a href="${prefix}/study-guides" aria-label="${tr ? "Çalışma rehberleri" : "Study guides"}"${library ? ' aria-current="page"' : ""}><span class="guide-nav-full">${tr ? "Çalışma rehberleri" : "Study guides"}</span><span class="guide-nav-compact" aria-hidden="true">${tr ? "Rehberler" : "Guides"}</span></a><a href="${prefix}/about-study-guides" aria-label="${tr ? "Rehberler hakkında" : "About the guides"}"${page.slug === "about-study-guides" ? ' aria-current="page"' : ""}><span class="guide-nav-full">${tr ? "Rehberler hakkında" : "About the guides"}</span><span class="guide-nav-compact" aria-hidden="true">${tr ? "Hakkında" : "About"}</span></a><a class="guide-language" href="${alternate}" hreflang="${tr ? "en" : "tr"}" lang="${tr ? "en" : "tr"}">${tr ? "English" : "Türkçe"}</a></nav><a class="guide-button guide-button-primary guide-header-cta" href="${prefix}/workspace.html">${tr ? "Çalışma alanı" : "Workspace"} <span aria-hidden="true">↗</span></a></div></header>
 <main class="guide-layout${library ? " guide-library" : ""}" id="content">${library ? "" : `<nav class="guide-breadcrumb" aria-label="${tr ? "Sayfa konumu" : "Breadcrumb"}"><a href="${prefix}/study-guides">← ${tr ? "Çalışma rehberleri" : "Study guides"}</a><span aria-hidden="true">/</span><span>${escapeAttribute(copy.title)}</span></nav>`}<article class="guide-article">${hero}${copy.body}${related}</article>${library ? "" : `<aside class="guide-toc" aria-label="${tr ? "İçindekiler" : "Contents"}"><details><summary>${tr ? "Bu sayfada" : "On this page"}</summary><ol>${toc}</ol></details><a class="guide-toc-home" href="${prefix}/study-guides">${tr ? "Tüm rehberler →" : "All guides →"}</a></aside>`}</main>
@@ -451,7 +569,7 @@ function studyDocument(page, language) {
 for (const [publicPath, page] of STUDY_PAGES) {
   for (const language of STUDY_RESOURCES.languages) {
     let html = studyDocument(page, language);
-    html = html.replace("</head>", '<link rel="stylesheet" href="/consent.css?v=2"><script defer src="/consent.js?v=6"></script><script defer src="/analytics.js?v=9"></script></head>');
+    html = html.replace("</head>", '<link rel="stylesheet" href="/consent.css?v=2"><script defer src="/consent.js?v=6"></script><script defer src="/analytics.js?v=11"></script></head>');
     html = staticSeo(html, language, publicPath);
     validateLocalizedPage(html, language, publicPath);
     const target = path.join(OUTPUT, language === "tr" ? "" : language, `${page.slug}.html`);

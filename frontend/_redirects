@@ -38,6 +38,9 @@ https://clever-horse-22b1a8.netlify.app/* https://lecturesift.com/:splat 301!
 /refund.html                        /refund                   301!
 /:lang/refund.html                  /:lang/refund             301!
 
+# Link previews cached before the JPEG re-encode still point at the PNG.
+/og-image.png                       /og-image.jpg             301!
+
 # Study resources have Turkish and English editions.
 /pdf-note-check.html /pdf-note-check 301!
 /:lang/pdf-note-check.html /:lang/pdf-note-check 301!
@@ -133,6 +136,73 @@ https://clever-horse-22b1a8.netlify.app/* https://lecturesift.com/:splat 301!
 /ja/active-recall /en/active-recall 301!
 /ko/active-recall /en/active-recall 301!
 /hi/active-recall /en/active-recall 301!
+
+# Subject (course) pages have Turkish and English editions only.
+/medicine-lecture-notes.html /medicine-lecture-notes 301!
+/:lang/medicine-lecture-notes.html /:lang/medicine-lecture-notes 301!
+/de/medicine-lecture-notes /en/medicine-lecture-notes 301!
+/fr/medicine-lecture-notes /en/medicine-lecture-notes 301!
+/es/medicine-lecture-notes /en/medicine-lecture-notes 301!
+/it/medicine-lecture-notes /en/medicine-lecture-notes 301!
+/pt/medicine-lecture-notes /en/medicine-lecture-notes 301!
+/ru/medicine-lecture-notes /en/medicine-lecture-notes 301!
+/ar/medicine-lecture-notes /en/medicine-lecture-notes 301!
+/zh/medicine-lecture-notes /en/medicine-lecture-notes 301!
+/ja/medicine-lecture-notes /en/medicine-lecture-notes 301!
+/ko/medicine-lecture-notes /en/medicine-lecture-notes 301!
+/hi/medicine-lecture-notes /en/medicine-lecture-notes 301!
+/law-lecture-notes.html /law-lecture-notes 301!
+/:lang/law-lecture-notes.html /:lang/law-lecture-notes 301!
+/de/law-lecture-notes /en/law-lecture-notes 301!
+/fr/law-lecture-notes /en/law-lecture-notes 301!
+/es/law-lecture-notes /en/law-lecture-notes 301!
+/it/law-lecture-notes /en/law-lecture-notes 301!
+/pt/law-lecture-notes /en/law-lecture-notes 301!
+/ru/law-lecture-notes /en/law-lecture-notes 301!
+/ar/law-lecture-notes /en/law-lecture-notes 301!
+/zh/law-lecture-notes /en/law-lecture-notes 301!
+/ja/law-lecture-notes /en/law-lecture-notes 301!
+/ko/law-lecture-notes /en/law-lecture-notes 301!
+/hi/law-lecture-notes /en/law-lecture-notes 301!
+/engineering-lecture-notes.html /engineering-lecture-notes 301!
+/:lang/engineering-lecture-notes.html /:lang/engineering-lecture-notes 301!
+/de/engineering-lecture-notes /en/engineering-lecture-notes 301!
+/fr/engineering-lecture-notes /en/engineering-lecture-notes 301!
+/es/engineering-lecture-notes /en/engineering-lecture-notes 301!
+/it/engineering-lecture-notes /en/engineering-lecture-notes 301!
+/pt/engineering-lecture-notes /en/engineering-lecture-notes 301!
+/ru/engineering-lecture-notes /en/engineering-lecture-notes 301!
+/ar/engineering-lecture-notes /en/engineering-lecture-notes 301!
+/zh/engineering-lecture-notes /en/engineering-lecture-notes 301!
+/ja/engineering-lecture-notes /en/engineering-lecture-notes 301!
+/ko/engineering-lecture-notes /en/engineering-lecture-notes 301!
+/hi/engineering-lecture-notes /en/engineering-lecture-notes 301!
+/psychology-lecture-notes.html /psychology-lecture-notes 301!
+/:lang/psychology-lecture-notes.html /:lang/psychology-lecture-notes 301!
+/de/psychology-lecture-notes /en/psychology-lecture-notes 301!
+/fr/psychology-lecture-notes /en/psychology-lecture-notes 301!
+/es/psychology-lecture-notes /en/psychology-lecture-notes 301!
+/it/psychology-lecture-notes /en/psychology-lecture-notes 301!
+/pt/psychology-lecture-notes /en/psychology-lecture-notes 301!
+/ru/psychology-lecture-notes /en/psychology-lecture-notes 301!
+/ar/psychology-lecture-notes /en/psychology-lecture-notes 301!
+/zh/psychology-lecture-notes /en/psychology-lecture-notes 301!
+/ja/psychology-lecture-notes /en/psychology-lecture-notes 301!
+/ko/psychology-lecture-notes /en/psychology-lecture-notes 301!
+/hi/psychology-lecture-notes /en/psychology-lecture-notes 301!
+/economics-lecture-notes.html /economics-lecture-notes 301!
+/:lang/economics-lecture-notes.html /:lang/economics-lecture-notes 301!
+/de/economics-lecture-notes /en/economics-lecture-notes 301!
+/fr/economics-lecture-notes /en/economics-lecture-notes 301!
+/es/economics-lecture-notes /en/economics-lecture-notes 301!
+/it/economics-lecture-notes /en/economics-lecture-notes 301!
+/pt/economics-lecture-notes /en/economics-lecture-notes 301!
+/ru/economics-lecture-notes /en/economics-lecture-notes 301!
+/ar/economics-lecture-notes /en/economics-lecture-notes 301!
+/zh/economics-lecture-notes /en/economics-lecture-notes 301!
+/ja/economics-lecture-notes /en/economics-lecture-notes 301!
+/ko/economics-lecture-notes /en/economics-lecture-notes 301!
+/hi/economics-lecture-notes /en/economics-lecture-notes 301!
 
 /tr             /               301!
 /tr/*           /:splat         301!

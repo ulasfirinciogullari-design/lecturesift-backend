@@ -366,6 +366,8 @@ iframe#nl-hud-frame,iframe[src^="https://app.netlify.com/cdp/"]{display:none!imp
 .document-sample-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
 .document-sample-actions a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;max-width:100%;padding:9px 12px;border:1px solid var(--line-strong);border-radius:9px;color:var(--text);font-size:12px;font-weight:700;line-height:1.5;text-align:center}
 .document-sample-actions a:hover{background:var(--panel-soft,var(--panel))}
+.guest-save-result .document-sample-actions a.guest-save-primary{border-color:transparent;background:var(--ui-action,var(--blue));color:var(--ui-action-ink,#fff)}
+.guest-save-result .document-sample-actions a.guest-save-primary:hover{background:var(--ui-action-hover,var(--ui-action,var(--blue)))}
 .document-sample-option :is(input,a):focus-visible,.document-sample-actions a:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
 .library-lesson-copy .document-sample-badge{display:inline-block;margin:6px 0;padding:4px 8px;border:1px solid var(--line-strong);border-radius:6px;color:var(--text);font-size:11px;font-weight:700;line-height:1.5}
 .error-box .quota-recovery-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}

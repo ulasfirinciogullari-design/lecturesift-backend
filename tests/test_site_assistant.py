@@ -127,7 +127,9 @@ def test_topup_payment_is_idempotent_and_grants_no_minutes_or_downloads(state):
     status = billing.account_status(user_id)
     assert status["plan"]["code"] == "free"
     assert status["credit_minutes"] == 0
-    assert status["download_enabled"] is False
+    # Free-plan PDF downloads stay as they were; the top-up adds nothing.
+    assert status["download_access_source"] == "plan"
+    assert status["job_entitlements"]["export_formats"] == ["pdf"]
 
 
 def test_unpaid_topups_have_no_credits(state):

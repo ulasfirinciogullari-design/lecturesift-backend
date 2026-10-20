@@ -4,6 +4,7 @@ from io import BytesIO
 import json
 
 from PIL import Image
+import pytest
 
 import lecturesift.daily_social as daily_social
 from lecturesift.daily_social import daily_tip, render_daily_image, render_daily_reel_cover
@@ -152,3 +153,70 @@ def test_editorial_cycle_uses_fresh_reel_after_a_recent_lesson(monkeypatch):
     import lecturesift.generated_reels as generated_reels
     monkeypatch.setattr(generated_reels, "publish_generated_reel", lambda day: {"status": "published", "kind": "generated_reel", "date": day.isoformat()})
     assert daily_social.publish_daily_post(selected_day)["kind"] == "generated_reel"
+
+
+def _unavailable():
+    return daily_social.InstagramAPIError("Instagram API is temporarily unavailable", transient=True)
+
+
+def test_unanswered_publish_looks_again_for_a_post_that_is_listed_late(monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(daily_social.time, "sleep", sleeps.append)
+
+    class Graph:
+        looks = 0
+
+        def publish_media(self, _container_id):
+            raise _unavailable()
+
+        def get_recent_media(self, limit=25):
+            self.looks += 1
+            if self.looks == 1:
+                raise _unavailable()
+            return {"data": [{"id": "media-3", "caption": "Hook\nLectureSift · reel · 2026-10-19"}]}
+
+    marker = "LectureSift · reel · 2026-10-19"
+    assert daily_social._publish_container(Graph(), "container-1", marker) == {"id": "media-3"}
+    assert sleeps == [10]
+
+
+def test_unanswered_publish_with_unreachable_media_list_is_reported_unknown(monkeypatch):
+    monkeypatch.setattr(daily_social.time, "sleep", lambda _seconds: None)
+    calls = []
+
+    class Graph:
+        def publish_media(self, container_id):
+            calls.append(container_id)
+            raise _unavailable()
+
+        def get_recent_media(self, limit=25):
+            raise _unavailable()
+
+    with pytest.raises(daily_social.InstagramAPIError) as caught:
+        daily_social._publish_container(Graph(), "container-1", "LectureSift · reel · 2026-10-19")
+    assert caught.value.error_type == "publish_outcome_unknown"
+    assert "could not be checked" in str(caught.value)
+    assert calls == ["container-1"]
+
+
+def test_deploy_repair_never_retries_an_unanswered_publish(monkeypatch):
+    from lecturesift import launch_once
+
+    class Graph:
+        def get_recent_media(self, limit=25):
+            return {"data": []}
+
+    statuses, publishes = [], []
+    monkeypatch.setattr(launch_once.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(launch_once, "_write_status", statuses.append)
+    monkeypatch.setattr(launch_once, "_client", Graph)
+    monkeypatch.setattr(launch_once, "completed_indices", lambda _recent: list(range(1, 9)))
+
+    def publish(**kwargs):
+        publishes.append(kwargs)
+        raise daily_social.InstagramAPIError("Instagram publish outcome unknown", error_type="publish_outcome_unknown")
+
+    monkeypatch.setattr(launch_once, "publish_next_launch_post", publish)
+    assert launch_once.main() == 1
+    assert len(publishes) == 1
+    assert statuses[-1]["status"] == "error"

@@ -45,6 +45,11 @@ EXPECTED_RETENTION_DAYS = "90"
 CONFIRMATION = "CREATE-ONE-IMMUTABLE-R2-PROBE"
 EVIDENCE_ROOT = Path("/var/lib/lecturesift/recovery-drills")
 EVIDENCE_NAME = "r2-retention-lock.ok"
+# Once this proof exists it hash-binds the retention record above, and every
+# production start re-hashes that record.
+PROVIDER_CUTOVER_FINAL_PROOF = Path(
+    "/var/lib/lecturesift/provider-cutover/provider-cutover.ok"
+)
 _ACCOUNT_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 _PROBE_KEY_RE = re.compile(
     r"^restic/data/[.]lecturesift-retention-probes/v1/"
@@ -392,13 +397,33 @@ def _current_repository_id_sha256() -> str:
     return _sha256_hex(repository_id.encode("ascii"))
 
 
+def refuse_after_provider_cutover(final_proof: Path | None = None) -> None:
+    """Never replace the retention record once the provider cutover is final.
+
+    The finalized provider-cutover proof binds the exact SHA-256 of this
+    record, and validate_final re-checks it on every production start. A
+    later re-probe would therefore stop every release from starting. Before
+    finalization a fresh re-probe stays allowed, because the first-cutover
+    seed and finalizer require a recent record.
+    """
+
+    proof = PROVIDER_CUTOVER_FINAL_PROOF if final_proof is None else final_proof
+    if proof.exists() or proof.is_symlink():
+        raise ProbeError(
+            "The finalized provider cutover binds the existing R2 retention record; "
+            "it is never replaced."
+        )
+
+
 def _write_evidence(
     result: Mapping[str, str],
     *,
     target: RepositoryTarget,
     repository_id_sha256: str,
     root: Path = EVIDENCE_ROOT,
+    final_proof: Path | None = None,
 ) -> Path:
+    refuse_after_provider_cutover(final_proof)
     if not re.fullmatch(r"[0-9a-f]{64}", repository_id_sha256):
         raise ProbeError("The Restic repository identity hash is invalid.")
     if not root.parent.is_dir() or root.parent.is_symlink():
@@ -464,6 +489,8 @@ def main(argv: list[str] | None = None) -> int:
             raise ProbeError("Explicit immutable-probe confirmation did not match.")
         if not hasattr(os, "geteuid") or os.geteuid() != 0:
             raise ProbeError("The R2 retention probe must run as root on the backup host.")
+        # Refuse before creating an immutable R2 object that could not be used.
+        refuse_after_provider_cutover()
         repository = os.environ.get("RESTIC_REPOSITORY", "")
         target = parse_repository(repository)
         client = CloudflareR2Client(

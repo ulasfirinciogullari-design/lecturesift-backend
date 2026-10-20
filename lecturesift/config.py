@@ -112,7 +112,15 @@ def _ingress_cutover_mode() -> str | None:
         or not re.fullmatch(r"[0-9a-f]{32}", fields.get("cutover_id", ""))
         or not _SHA256_PATTERN.fullmatch(fields.get("final_proof_sha256", ""))
         or not _FULL_BUILD_REVISION.fullmatch(fields.get("release_revision", ""))
-        or fields.get("release_revision") != BUILD_REVISION
+        or not _FULL_BUILD_REVISION.fullmatch(BUILD_REVISION)
+        # The state stays bound to the cutover release. Only its terminal
+        # activated status may serve a later release: the host preflight
+        # starts one only after re-proving the finalized cutover chain, the
+        # consumed first start and this activation for the cutover revision.
+        or (
+            fields.get("release_revision") != BUILD_REVISION
+            and fields.get("status") != "provider-ingress-activated"
+        )
         or (
             source_revision != "unbound"
             and not _FULL_BUILD_REVISION.fullmatch(source_revision)
@@ -249,6 +257,9 @@ BILLING_PROTECTED_EMAILS = {
     for email in os.getenv("BILLING_PROTECTED_EMAILS", "").split(",")
     if email.strip()
 }
+# Public OAuth web client id for "Google ile devam et". Empty keeps Google
+# sign-in disabled: the button stays hidden and /billing/google returns 404.
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "").strip()
 BILLING_BANK_IBAN = os.getenv("BILLING_BANK_IBAN", "").replace(" ", "").upper()
 BILLING_BANK_ACCOUNT_HOLDER = os.getenv("BILLING_BANK_ACCOUNT_HOLDER", "").strip()
 BILLING_BANK_NAME = os.getenv("BILLING_BANK_NAME", "").strip()
@@ -307,6 +318,13 @@ OCR_MIN_NATIVE_CHARACTERS = max(1, int(os.getenv("LECTURESIFT_OCR_MIN_NATIVE_CHA
 OCR_ESTIMATED_WORDS_PER_PAGE = max(50, int(os.getenv("LECTURESIFT_OCR_ESTIMATED_WORDS_PER_PAGE", "400")))
 JOB_TTL_SECONDS = int(os.getenv("LECTURESIFT_JOB_TTL_SECONDS", str(6 * 60 * 60)))
 GUEST_TRIAL_MAX_MINUTES = float(os.getenv("LECTURESIFT_GUEST_TRIAL_MINUTES", "30"))
+# New anonymous trials per client address and across the service per UTC day.
+# Resuming an existing trial is never counted. A global limit of 0 pauses new
+# guest trials without affecting registered accounts.
+GUEST_TRIAL_IP_DAILY_LIMIT = max(1, int(os.getenv("LECTURESIFT_GUEST_TRIAL_IP_DAILY_LIMIT", "3")))
+GUEST_TRIAL_GLOBAL_DAILY_LIMIT = max(
+    0, int(os.getenv("LECTURESIFT_GUEST_TRIAL_GLOBAL_DAILY_LIMIT", "100"))
+)
 PDF_SAMPLE_MAX_PAGES = 10
 PDF_SAMPLE_MAX_WORDS = 2000
 PDF_SAMPLE_MAX_OCR_PAGES = 5

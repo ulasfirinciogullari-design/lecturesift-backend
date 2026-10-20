@@ -14,7 +14,15 @@ from zoneinfo import ZoneInfo
 from openai import OpenAI, OpenAIError
 
 from .config import INSTAGRAM_DAILY_AUTOMATION_ENABLED, OPENAI_API_KEY, PUBLIC_BASE_URL
-from .daily_social import DailyTip, _TIPS, _assert_target_account, _client, _wait_until_ready, render_tip_image
+from .daily_social import (
+    DailyTip,
+    _TIPS,
+    _assert_target_account,
+    _client,
+    _publish_container,
+    _wait_until_ready,
+    render_tip_image,
+)
 from .instagram import InstagramAPIError, InstagramConfigurationError
 from .social_storage import read_json, recent_json, write_json
 
@@ -257,7 +265,7 @@ def publish_evergreen_post(day: date | None = None) -> dict:
         caption=post["caption"],
     )
     _wait_until_ready(client, container["id"])
-    published = client.publish_media(container["id"])
+    published = _publish_container(client, container["id"], marker)
     write_json(_key(selected_day), {**post, "published_media_id": published.get("id")})
     return {"status": "published", "kind": "evergreen", "date": selected_day.isoformat(), "media_id": published.get("id")}
 

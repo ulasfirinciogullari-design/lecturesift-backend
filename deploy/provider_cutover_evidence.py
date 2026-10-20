@@ -1666,6 +1666,70 @@ def transition_ingress_state(
     return target_name
 
 
+# Read-only production gates that every later core start, reload and reboot
+# of a settled cutover passes again. Every other command, including all
+# mutating cutover steps, stays pinned to the exact cutover release.
+POST_CUTOVER_READ_ONLY_COMMANDS = frozenset(
+    {"validate-final", "first-start-status", "ensure-ingress-freeze", "ingress-status"}
+)
+
+
+def cutover_revision_for_release(
+    evidence_root: Path, state_root: Path, *, release_revision: str
+) -> str:
+    """Return the revision that read-only gates validate for this release.
+
+    The cutover revision is the finalized proof's own ``release_revision``.
+    The cutover release itself is returned unchanged and validated exactly as
+    before. A later release is accepted only once the cutover is settled: the
+    complete final chain validates against its own revision, the one-time
+    first start is consumed and valid, and the durable ingress state is
+    ``activated``. Anything else fails closed. Per-release identity remains
+    the job of the exact rehearsal admission and the health revision gates.
+    """
+
+    if not _REVISION.fullmatch(release_revision):
+        raise EvidenceError("expected release revision is invalid")
+    root = _ensure_evidence_root(evidence_root)
+    if (root / IN_PROGRESS_NAME).exists() or (root / IN_PROGRESS_NAME).is_symlink():
+        raise EvidenceError("provider cutover is still in progress")
+    cutover_revision = _load(root / FINAL_PROOF_NAME).get("release_revision", "")
+    if not _REVISION.fullmatch(cutover_revision):
+        raise EvidenceError("provider cutover final proof names no valid release")
+    if release_revision == cutover_revision:
+        return cutover_revision
+    validate_final(root, expected_revision=cutover_revision)
+    if first_start_status(root, expected_revision=cutover_revision) != "consumed":
+        raise EvidenceError(
+            "a later release requires the consumed provider first start"
+        )
+    if ingress_status(root, state_root, expected_revision=cutover_revision) != "activated":
+        raise EvidenceError("a later release requires activated provider ingress")
+    return cutover_revision
+
+
+def read_only_release_gate(
+    command: str, evidence_root: Path, state_root: Path, *, release_revision: str
+) -> str:
+    """Run one read-only gate for the running release of a cutover."""
+
+    if command not in POST_CUTOVER_READ_ONLY_COMMANDS:
+        raise EvidenceError("command is not a read-only release gate")
+    revision = cutover_revision_for_release(
+        evidence_root, state_root, release_revision=release_revision
+    )
+    if command == "validate-final":
+        validate_final(evidence_root, expected_revision=revision)
+        return ""
+    if command == "first-start-status":
+        return first_start_status(evidence_root, expected_revision=revision)
+    if command == "ensure-ingress-freeze":
+        return ensure_ingress_freeze(
+            evidence_root, state_root, expected_revision=revision
+        )
+    return ingress_status(evidence_root, state_root, expected_revision=revision)
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -1886,17 +1950,18 @@ def main(argv: list[str] | None = None) -> int:
                 target_redis_manifest_sha256=args.target_redis_manifest_sha256,
                 schema_contract_version=args.schema_contract_version,
             )
-        elif args.command == "validate-final":
-            validate_final(EVIDENCE_ROOT, expected_revision=args.expected_revision)
+        elif args.command in POST_CUTOVER_READ_ONLY_COMMANDS:
+            result = read_only_release_gate(
+                args.command,
+                EVIDENCE_ROOT,
+                INGRESS_STATE_ROOT,
+                release_revision=args.expected_revision,
+            )
+            if result:
+                print(result)
         elif args.command == "final-schema-contract-version":
             print(
                 final_schema_contract_version(
-                    EVIDENCE_ROOT, expected_revision=args.expected_revision
-                )
-            )
-        elif args.command == "first-start-status":
-            print(
-                first_start_status(
                     EVIDENCE_ROOT, expected_revision=args.expected_revision
                 )
             )
@@ -1926,22 +1991,6 @@ def main(argv: list[str] | None = None) -> int:
                     postgres_role_login_probe_sha256=args.postgres_role_login_probe_sha256,
                     postgres_security_manifest_sha256=args.postgres_security_manifest_sha256,
                     target_redis_manifest_sha256=args.target_redis_manifest_sha256,
-                )
-            )
-        elif args.command == "ensure-ingress-freeze":
-            print(
-                ensure_ingress_freeze(
-                    EVIDENCE_ROOT,
-                    INGRESS_STATE_ROOT,
-                    expected_revision=args.expected_revision,
-                )
-            )
-        elif args.command == "ingress-status":
-            print(
-                ingress_status(
-                    EVIDENCE_ROOT,
-                    INGRESS_STATE_ROOT,
-                    expected_revision=args.expected_revision,
                 )
             )
         elif args.command == "ingress-source-revision":
