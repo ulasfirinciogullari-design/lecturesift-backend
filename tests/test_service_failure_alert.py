@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shutil
+import smtplib
 import stat
 import subprocess
 import sys
@@ -88,21 +89,34 @@ def env_file(tmp_path: Path) -> Path:
 
 
 class FakeSender:
+    """Records one call per message; each message goes to exactly one address."""
+
     def __init__(self, error: Exception | None = None):
-        self.calls: list[tuple[dict, list[str], str, str]] = []
+        self.calls: list[tuple[dict, str, str, str]] = []
         self.timeouts: list[float] = []
         self.error = error
 
-    def __call__(self, settings, to, subject, text, timeout):
-        self.calls.append((dict(settings), list(to), subject, text))
+    def __call__(self, settings, address, subject, text, timeout):
+        assert isinstance(address, str)
+        self.calls.append((dict(settings), address, subject, text))
         self.timeouts.append(timeout)
         if self.error is not None:
             raise self.error
-        return len(to)
+
+    def addresses(self) -> list[str]:
+        return [call[1] for call in self.calls]
+
+    def alerts(self) -> int:
+        # The operations mailbox is first in every alert.
+        return self.addresses().count("ops@example.com")
+
+
+def _no_pause(seconds: float) -> None:
+    return None
 
 
 def _run(env_file, state_dir, *, unit="lecturesift-instagram.service", now=NOW, sender=None,
-         state=None, clock=None):
+         state=None, clock=None, pause=None):
     return alert.run(
         unit,
         env_file=env_file,
@@ -112,6 +126,7 @@ def _run(env_file, state_dir, *, unit="lecturesift-instagram.service", now=NOW, 
         state_reader=state or (lambda name: dict(FAILED_STATE)),
         sender=sender,
         clock=clock or time.monotonic,
+        pause=pause or _no_pause,
     )
 
 
@@ -283,9 +298,10 @@ def test_alert_is_short_and_names_unit_host_times_and_systemd_state(env_file, tm
 
     assert _run(env_file, tmp_path / "state", sender=sender) == 0
 
-    assert len(sender.calls) == 1
-    settings, to, subject, text = sender.calls[0]
-    assert to == ["ops@example.com", "owner@example.org"]
+    # One message per recipient, the operations mailbox first, all identical.
+    assert sender.addresses() == ["ops@example.com", "owner@example.org"]
+    assert len({(call[2], call[3]) for call in sender.calls}) == 1
+    settings, _address, subject, text = sender.calls[0]
     assert settings["EMAIL_PROVIDER"] == "resend"
     assert subject == "[LectureSift] lecturesift-instagram.service failed on ovh-prod"
     assert text.splitlines() == [
@@ -349,6 +365,7 @@ def test_the_state_comes_from_one_bounded_systemctl_show_query(env_file, tmp_pat
         now=NOW,
         host="ovh-prod",
         sender=sender,
+        pause=_no_pause,
     ) == 0
 
     assert len(calls) == 1
@@ -440,7 +457,7 @@ def test_an_unreadable_state_still_sends_the_alert(env_file, tmp_path, capsys, e
         raise error
 
     assert _run(env_file, tmp_path / "state", sender=sender, state=state) == 0
-    assert len(sender.calls) == 1
+    assert sender.addresses() == ["ops@example.com", "owner@example.org"]
     text = sender.calls[0][3]
     assert "State now: unknown" in text and "systemd result: unknown" in text
     assert "could not be read" in capsys.readouterr().err
@@ -457,6 +474,7 @@ def test_an_unusual_host_name_is_not_put_in_the_subject(env_file, tmp_path):
         host="evil\nBcc: someone@example.com",
         state_reader=lambda unit: {},
         sender=sender,
+        pause=_no_pause,
     ) == 0
     assert sender.calls[0][2] == (
         "[LectureSift] lecturesift-instagram.service failed on the production host"
@@ -471,14 +489,14 @@ def test_one_email_per_unit_per_hour(env_file, tmp_path, capsys):
     # The 15-minute timer fails again: suppressed.
     assert _run(env_file, state, sender=sender, now=NOW + 900) == 0
     assert _run(env_file, state, sender=sender, now=NOW + 3599) == 0
-    assert len(sender.calls) == 1
+    assert sender.alerts() == 1 and len(sender.calls) == 2
     assert "suppressed" in capsys.readouterr().err
     # The limit is per unit.
     assert _run(env_file, state, sender=sender, now=NOW + 900, unit="lecturesift.service") == 0
-    assert len(sender.calls) == 2
+    assert sender.alerts() == 2
     # After an hour the next failure is emailed again.
     assert _run(env_file, state, sender=sender, now=NOW + 3600) == 0
-    assert len(sender.calls) == 3
+    assert sender.alerts() == 3 and len(sender.calls) == 6
 
     record = state / "lecturesift-instagram.service.last-sent"
     assert record.read_text(encoding="ascii") == f"{int(NOW + 3600)}\n"
@@ -493,7 +511,7 @@ def test_a_clock_moved_backwards_does_not_silence_alerts(env_file, tmp_path):
 
     assert _run(env_file, state, sender=sender, now=NOW) == 0
     assert _run(env_file, state, sender=sender, now=NOW - 60) == 0
-    assert len(sender.calls) == 2
+    assert sender.alerts() == 2
 
 
 @pytest.mark.parametrize(
@@ -519,7 +537,7 @@ def test_failed_delivery_exits_zero_and_is_retried_by_the_next_failure(
     assert not (state / "lecturesift-instagram.service.last-sent").exists()
     working = FakeSender()
     assert _run(env_file, state, sender=working, now=NOW + 900) == 0
-    assert len(working.calls) == 1
+    assert working.addresses() == ["ops@example.com", "owner@example.org"]
 
 
 def test_http_status_is_logged_without_the_response(env_file, tmp_path, capsys):
@@ -576,7 +594,7 @@ def test_hand_started_instance_without_the_suffix_shares_the_unit_rate_limit(env
     assert _run(env_file, state, sender=sender, unit="lecturesift-instagram") == 0
     assert _run(env_file, state, sender=sender, now=NOW + 60) == 0
 
-    assert len(sender.calls) == 1
+    assert sender.alerts() == 1
     assert sender.calls[0][2] == "[LectureSift] lecturesift-instagram.service failed on ovh-prod"
     assert [path.name for path in state.iterdir()] == ["lecturesift-instagram.service.last-sent"]
 
@@ -664,7 +682,7 @@ def _many_admins_runtime(tmp_path: Path, count: int) -> Path:
     )
 
 
-def test_every_recipient_gets_the_alert_in_messages_of_at_most_ten(tmp_path, capsys):
+def test_every_recipient_gets_a_message_of_their_own(tmp_path, capsys):
     runtime = _many_admins_runtime(tmp_path, 22)
     expected = ["ops@example.com", *(f"admin{number:02d}@example.org" for number in range(22))]
     sender = FakeSender()
@@ -673,11 +691,11 @@ def test_every_recipient_gets_the_alert_in_messages_of_at_most_ten(tmp_path, cap
     assert alert.recipients(alert.load_settings(runtime)[0]) == expected
     assert _run(runtime, state, sender=sender) == 0
 
-    batches = [call[1] for call in sender.calls]
-    assert [len(batch) for batch in batches] == [10, 10, 3]
-    assert [address for batch in batches for address in batch] == expected
-    assert len({call[3] for call in sender.calls}) == 1
-    assert len({call[2] for call in sender.calls}) == 1
+    # One message per address, in order, so nobody sees another recipient.
+    assert sender.addresses() == expected
+    assert len({(call[2], call[3]) for call in sender.calls}) == 1
+    for _settings, address, _subject, text in sender.calls:
+        assert "@" not in text
     logged = capsys.readouterr().err
     assert "sent to 23 recipient(s)" in logged
     assert "@example" not in logged
@@ -689,70 +707,105 @@ def test_every_recipient_gets_the_alert_in_messages_of_at_most_ten(tmp_path, cap
     assert again.calls == []
 
 
-class FailingBatchSender(FakeSender):
-    def __init__(self, failing_call: int, error: Exception):
+class RefusingSender(FakeSender):
+    """Fails the messages to the given addresses with the given error."""
+
+    def __init__(self, refused: set[str], error: Exception):
         super().__init__()
-        self.failing_call = failing_call
+        self.refused = refused
         self.failure = error
 
-    def __call__(self, settings, to, subject, text, timeout):
-        accepted = super().__call__(settings, to, subject, text, timeout)
-        if len(self.calls) == self.failing_call:
+    def __call__(self, settings, address, subject, text, timeout):
+        super().__call__(settings, address, subject, text, timeout)
+        if address in self.refused:
             raise self.failure
-        return accepted
 
 
-def test_one_failed_message_does_not_stop_the_other_recipients(tmp_path, capsys):
+def test_refused_recipients_are_counted_and_the_others_still_get_the_alert(tmp_path, capsys):
     runtime = _many_admins_runtime(tmp_path, 22)
-    error = urllib.error.HTTPError("https://api.resend.com/emails", 429, "Too Many", None, None)
-    sender = FailingBatchSender(2, error)
+    refusal = smtplib.SMTPRecipientsRefused({"admin04@example.org": (550, b"5.1.1 No such user")})
+    sender = RefusingSender({"admin04@example.org", "admin17@example.org"}, refusal)
     state = tmp_path / "state"
 
     assert _run(runtime, state, sender=sender) == 0
 
-    assert [len(call[1]) for call in sender.calls] == [10, 10, 3]
+    assert len(sender.calls) == 23
     logged = capsys.readouterr().err
-    assert "reached 13 of 23 recipient(s)" in logged
-    assert "HTTPError (HTTP 429)" in logged
+    assert (
+        "reached 21 of 23 recipient(s); refused or failed: 2 (SMTPRecipientsRefused x2); "
+        "not tried: 0." in logged
+    )
+    assert "sent to 21 recipient(s)" in logged
     assert "@example" not in logged and RESEND_KEY not in logged
-    # Partly delivered still counts, so the delivered batches are not flooded.
+    # Partly delivered still counts, so the others are not sent a copy again.
     assert (state / "lecturesift-instagram.service.last-sent").exists()
 
 
+def test_an_alert_every_recipient_refused_is_not_counted_and_is_retried(env_file, tmp_path, capsys):
+    state = tmp_path / "state"
+    error = urllib.error.HTTPError("https://api.resend.com/emails", 429, "Too Many", None, None)
+
+    assert _run(env_file, state, sender=FakeSender(error)) == 0
+
+    logged = capsys.readouterr().err
+    assert (
+        "not sent: reached 0 of 2 recipient(s); refused or failed: 2 (HTTPError (HTTP 429) x2)"
+        in logged
+    )
+    assert not (state / "lecturesift-instagram.service.last-sent").exists()
+    working = FakeSender()
+    assert _run(env_file, state, sender=working, now=NOW + 900) == 0
+    assert working.alerts() == 1
+
+
 def test_the_delivery_deadline_stops_sending_and_reports_who_was_reached(tmp_path, capsys):
-    runtime = _many_admins_runtime(tmp_path, 34)
+    runtime = _many_admins_runtime(tmp_path, 4)
     state = tmp_path / "state"
     record = state / "lecturesift-instagram.service.last-sent"
     moment = [1000.0]
     recorded_before = []
     sender = FakeSender()
 
-    def slow_provider(settings, to, subject, text, timeout):
+    def slow_provider(settings, address, subject, text, timeout):
         recorded_before.append(record.exists())
-        accepted = sender(settings, to, subject, text, timeout)
+        sender(settings, address, subject, text, timeout)
         # Each request takes 25 seconds of the 60-second delivery time.
         moment[0] += 25
-        return accepted
 
     assert _run(runtime, state, sender=slow_provider, clock=lambda: moment[0]) == 0
 
-    # 35 recipients: three messages fit before the deadline, the fourth is not tried.
-    assert [len(call[1]) for call in sender.calls] == [10, 10, 10]
+    # Five recipients: three sends fit before the deadline, two are not tried.
+    assert sender.addresses() == ["ops@example.com", "admin00@example.org", "admin01@example.org"]
     assert sender.timeouts == [alert.REQUEST_SECONDS, alert.REQUEST_SECONDS, 10]
-    # The alert is counted as soon as the first message is delivered, so a
+    # The alert is counted as soon as the first message is accepted, so a
     # stop at any later point cannot make the next failure resend it.
     assert recorded_before == [False, True, True]
     logged = capsys.readouterr().err
-    assert "reached 30 of 35 recipient(s)" in logged
-    assert f"the {alert.DELIVERY_SECONDS}-second delivery limit was reached" in logged
+    assert (
+        "reached 3 of 5 recipient(s); refused or failed: 0; not tried: 2 "
+        f"(the {alert.DELIVERY_SECONDS}-second delivery limit was reached)." in logged
+    )
     assert "@example" not in logged
+
+
+def test_sends_are_paced_under_the_resend_request_rate(tmp_path):
+    runtime = _many_admins_runtime(tmp_path, 4)
+    pauses = []
+    sender = FakeSender()
+
+    assert _run(runtime, tmp_path / "state", sender=sender, pause=pauses.append) == 0
+
+    assert len(sender.calls) == 5
+    # No pause before the first send; Resend allows two requests per second.
+    assert pauses == [alert.SEND_INTERVAL_SECONDS] * 4
+    assert alert.SEND_INTERVAL_SECONDS >= 0.5
 
 
 def test_a_hung_request_is_abandoned_at_its_time_limit(env_file, tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(alert, "REQUEST_SECONDS", 0.2)
     release = threading.Event()
 
-    def hung_provider(settings, to, subject, text, timeout):
+    def hung_provider(settings, address, subject, text, timeout):
         release.wait(10)
 
     state = tmp_path / "state"
@@ -763,7 +816,9 @@ def test_a_hung_request_is_abandoned_at_its_time_limit(env_file, tmp_path, monke
         release.set()
 
     assert time.monotonic() - started < 5
-    assert "not sent: DeliveryTimeout" in capsys.readouterr().err
+    assert "not sent: reached 0 of 2 recipient(s); refused or failed: 2 (DeliveryTimeout x2)" in (
+        capsys.readouterr().err
+    )
     assert not (state / "lecturesift-instagram.service.last-sent").exists()
 
 
@@ -789,7 +844,7 @@ class FakeResendResponse:
         return self.body
 
 
-def test_resend_request_uses_the_existing_configuration(monkeypatch):
+def test_resend_request_goes_to_one_address_with_the_existing_configuration(monkeypatch):
     captured = {}
 
     def fake_urlopen(request, timeout):
@@ -800,16 +855,13 @@ def test_resend_request_uses_the_existing_configuration(monkeypatch):
         return FakeResendResponse()
 
     monkeypatch.setattr(alert.urllib.request, "urlopen", fake_urlopen)
-    accepted = alert.send_email(
-        RESEND_SETTINGS, ["ops@example.com", "owner@example.org"], "subject", "body", 7
-    )
+    assert alert.send_email(RESEND_SETTINGS, "ops@example.com", "subject", "body", 7) is None
 
-    assert accepted == 2
     assert captured["url"] == "https://api.resend.com/emails"
     assert captured["headers"]["Authorization"] == f"Bearer {RESEND_KEY}"
     assert captured["body"] == {
         "from": "LectureSift <noreply@example.com>",
-        "to": ["ops@example.com", "owner@example.org"],
+        "to": ["ops@example.com"],
         "subject": "subject",
         "text": "body",
     }
@@ -831,7 +883,7 @@ def test_a_resend_answer_without_a_message_id_is_not_a_delivery(monkeypatch, res
     monkeypatch.setattr(alert.urllib.request, "urlopen", lambda request, timeout: response)
 
     with pytest.raises(alert.DeliveryRejected) as rejected:
-        alert.send_email(RESEND_SETTINGS, ["ops@example.com"], "s", "t", 7)
+        alert.send_email(RESEND_SETTINGS, "ops@example.com", "s", "t", 7)
     assert rejected.value.status == status
 
 
@@ -844,7 +896,7 @@ SMTP_SETTINGS = {
 }
 
 
-def _fake_smtp(monkeypatch, events, refused=None):
+def _fake_smtp(monkeypatch, events, answer=None):
     class FakeSMTP:
         def __init__(self, host, port, timeout):
             events.append(("connect", host, port, timeout))
@@ -863,94 +915,51 @@ def _fake_smtp(monkeypatch, events, refused=None):
 
         def send_message(self, message, to_addrs=None):
             events.append(("send", message["To"], to_addrs))
-            return dict(refused or {})
+            if isinstance(answer, Exception):
+                raise answer
+            return dict(answer or {})
 
     monkeypatch.setattr(alert.smtplib, "SMTP", FakeSMTP)
 
 
-def test_smtp_uses_the_app_tls_switch_and_the_request_time_limit(monkeypatch):
+def test_smtp_sends_to_one_address_with_the_app_tls_switch_and_time_limit(monkeypatch):
     events = []
     _fake_smtp(monkeypatch, events)
 
-    accepted = alert.send_email(SMTP_SETTINGS, ["a@example.com", "b@example.com"], "s", "t", 7)
-    assert accepted == 2
+    assert alert.send_email(SMTP_SETTINGS, "a@example.com", "s", "t", 7) is None
     assert events == [
         ("connect", "smtp.example.com", 587, 7),
         ("starttls",),
         ("login", "mailer"),
-        ("send", "a@example.com, b@example.com", ["a@example.com", "b@example.com"]),
+        ("send", "a@example.com", ["a@example.com"]),
     ]
 
     # Like lecturesift.config, only the literal "true" turns STARTTLS on.
     events.clear()
     alert.send_email(
-        {**SMTP_SETTINGS, "SMTP_USE_TLS": "1", "SMTP_PORT": "2525"}, ["a@example.com"], "s", "t", 7
+        {**SMTP_SETTINGS, "SMTP_USE_TLS": "1", "SMTP_PORT": "2525"}, "a@example.com", "s", "t", 7
     )
     assert events[0] == ("connect", "smtp.example.com", 2525, 7)
     assert ("starttls",) not in events
 
 
-def test_smtp_counts_only_the_recipients_the_server_accepted(monkeypatch):
-    events = []
-    _fake_smtp(monkeypatch, events, refused={"b@example.com": (550, b"5.1.1 No such user")})
+def test_a_refused_smtp_recipient_is_not_a_delivery(monkeypatch):
+    refusal = smtplib.SMTPRecipientsRefused({"a@example.com": (550, b"5.1.1 No such user")})
+    _fake_smtp(monkeypatch, [], answer=refusal)
+    with pytest.raises(smtplib.SMTPRecipientsRefused):
+        alert.send_email(SMTP_SETTINGS, "a@example.com", "s", "t", 7)
 
-    accepted = alert.send_email(
-        SMTP_SETTINGS, ["a@example.com", "b@example.com", "c@example.com"], "s", "t", 7
-    )
-
-    assert accepted == 2
-
-
-def test_smtp_with_every_recipient_refused_is_not_a_delivery(monkeypatch):
-    events = []
-    refused = {address: (550, b"5.1.1 No such user") for address in ("a@example.com", "b@example.com")}
-    _fake_smtp(monkeypatch, events, refused=refused)
-
+    # A refusal map returned instead of raised is treated the same way.
+    _fake_smtp(monkeypatch, [], answer={"a@example.com": (550, b"5.1.1 No such user")})
     with pytest.raises(alert.DeliveryRejected):
-        alert.send_email(SMTP_SETTINGS, ["a@example.com", "b@example.com"], "s", "t", 7)
-
-
-def test_refused_recipients_are_counted_and_logged_but_not_as_reached(tmp_path, capsys):
-    runtime = _many_admins_runtime(tmp_path, 22)
-    state = tmp_path / "state"
-    sender = FakeSender()
-
-    def partly_refusing(settings, to, subject, text, timeout):
-        sender(settings, to, subject, text, timeout)
-        # The SMTP server refuses two addresses of the second message.
-        return len(to) - 2 if len(sender.calls) == 2 else len(to)
-
-    assert _run(runtime, state, sender=partly_refusing) == 0
-
-    logged = capsys.readouterr().err
-    assert "reached 21 of 23 recipient(s)" in logged
-    assert "the mail server refused 2 recipient(s)" in logged
-    assert "sent to 21 recipient(s)" in logged
-    assert "@example" not in logged
-    assert (state / "lecturesift-instagram.service.last-sent").exists()
-
-
-@pytest.mark.parametrize("answer", (0, None, False, -1, "10"))
-def test_a_message_nobody_accepted_is_not_counted_and_is_retried(env_file, tmp_path, capsys, answer):
-    state = tmp_path / "state"
-
-    def accepting_nobody(settings, to, subject, text, timeout):
-        return answer
-
-    assert _run(env_file, state, sender=accepting_nobody) == 0
-
-    assert "not sent: DeliveryRejected" in capsys.readouterr().err
-    assert not (state / "lecturesift-instagram.service.last-sent").exists()
-    working = FakeSender()
-    assert _run(env_file, state, sender=working, now=NOW + 900) == 0
-    assert len(working.calls) == 1
+        alert.send_email(SMTP_SETTINGS, "a@example.com", "s", "t", 7)
 
 
 def test_unconfigured_provider_raises_for_run_to_log():
     with pytest.raises(RuntimeError):
-        alert.send_email({"EMAIL_PROVIDER": "none", "EMAIL_FROM": "a@example.com"}, ["b@example.com"], "s", "t", 5)
+        alert.send_email({"EMAIL_PROVIDER": "none", "EMAIL_FROM": "a@example.com"}, "b@example.com", "s", "t", 5)
     with pytest.raises(RuntimeError):
-        alert.send_email({"EMAIL_PROVIDER": "resend", "EMAIL_FROM": "a@example.com"}, ["b@example.com"], "s", "t", 5)
+        alert.send_email({"EMAIL_PROVIDER": "resend", "EMAIL_FROM": "a@example.com"}, "b@example.com", "s", "t", 5)
 
 
 def test_operator_docs_explain_the_manual_alert_test():
@@ -958,8 +967,17 @@ def test_operator_docs_explain_the_manual_alert_test():
     deployment = _read("VPS_DEPLOYMENT.md")
 
     section = runbook.split("## Failure alerts", 1)[1]
-    assert "sudo systemctl start lecturesift-failure-alert@lecturesift-instagram.service.service" in section
-    assert "/var/lib/lecturesift/failure-alerts/" in section
-    assert "journalctl -u lecturesift-failure-alert@lecturesift-instagram.service.service" in section
+    # The manual test ends by removing the hourly record it wrote, which is
+    # the same record a real Instagram failure would be suppressed by.
+    record = alert.DEFAULT_STATE_DIR / "lecturesift-instagram.service.last-sent"
+    procedure = (
+        "```sh\n"
+        "sudo systemctl start lecturesift-failure-alert@lecturesift-instagram.service.service\n"
+        "journalctl -u lecturesift-failure-alert@lecturesift-instagram.service.service -n 20\n"
+        f"sudo rm -f {record.as_posix()}\n"
+        "```\n"
+    )
+    assert procedure in section
+    assert section.count("sudo systemctl start lecturesift-failure-alert@") == 1
     assert "no log lines" in section
     assert "lecturesift-failure-alert@.service" in deployment

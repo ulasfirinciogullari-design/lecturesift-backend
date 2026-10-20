@@ -400,16 +400,19 @@ excerpt can hold credentials or customer data; read the journal on the
 server instead. When the core or the selector is still active, the email
 says that a reload or one reconciliation attempt failed.
 
-More than ten recipients get the alert in several messages of at most ten
-each. Only addresses the provider accepted count as reached. A Resend answer
-without a message id is not a delivery, and the alert unit's journal counts
-the addresses an SMTP server refused. Sending stops after 60 seconds, well inside the alert unit's 90-second
-limit, and the journal of the alert unit says how many recipients were
-reached. Each unit gets at most one alert per hour, however many messages it
-took. The alert counts as soon as its first message is delivered. The time of
-the last one is in `/var/lib/lecturesift/failure-alerts/<unit>.last-sent`. A
-delivery failure is only logged in the alert unit's journal and never affects
-the failed unit.
+Every recipient gets a message of their own, with only their address in it,
+so nobody sees who else was alerted. The messages go out 0.6 seconds apart,
+under Resend's default limit of two requests per second. A message counts as
+delivered only when
+the provider accepts it. For Resend that means a 2xx answer with a message
+id; an SMTP server must not refuse the address. Sending stops after 60
+seconds, well inside the alert unit's 90-second limit. The alert unit's
+journal then says how many recipients were reached, how many were refused or
+failed, and how many were not tried. Each unit gets at most one alert per
+hour, however many messages it took. The alert counts as soon as its first
+message is accepted. The time of the last one is in
+`/var/lib/lecturesift/failure-alerts/<unit>.last-sent`. A delivery failure is
+only logged in the alert unit's journal and never affects the failed unit.
 
 Stopping `lecturesift-instagram.service` while it still runs can end it as
 failed and send an alert. Step 1 already waits for it to finish. Promotion
@@ -417,21 +420,25 @@ refuses to run while an alert is still being sent, which takes at most 90
 seconds.
 
 Test the alert once after the first release that contains it. This sends one
-real email and touches no other unit:
+real email to each recipient and touches no other unit. Run all three
+commands, in this order:
 
 ```sh
 sudo systemctl start lecturesift-failure-alert@lecturesift-instagram.service.service
 journalctl -u lecturesift-failure-alert@lecturesift-instagram.service.service -n 20
+sudo rm -f /var/lib/lecturesift/failure-alerts/lecturesift-instagram.service.last-sent
 ```
 
 The journal must show
 `Failure alert for lecturesift-instagram.service sent to N recipient(s).`, and
 the email must arrive. Resend accepting the request is not proof of delivery.
 The test email reports the job's real current state, so a healthy job shows
-as `inactive (dead)` with result `success`. A second start within the hour
-logs `suppressed` instead. To repeat the test
-sooner, remove the record first:
+as `inactive (dead)` with result `success`.
 
-```sh
-sudo rm -f /var/lib/lecturesift/failure-alerts/lecturesift-instagram.service.last-sent
-```
+The test writes the same hourly record that a real Instagram failure uses.
+The last command removes it, so a real failure in the next hour is still
+emailed. Run it even when the test did not work; removing a record that is
+not there does nothing. If the journal says `suppressed`, a real Instagram
+alert went out within the hour; removing its record can at most send one
+extra email for the next failure. Repeat the same three commands to test
+again.
