@@ -98,6 +98,7 @@ class FakeSender:
         self.timeouts.append(timeout)
         if self.error is not None:
             raise self.error
+        return len(to)
 
 
 def _run(env_file, state_dir, *, unit="lecturesift-instagram.service", now=NOW, sender=None,
@@ -695,9 +696,10 @@ class FailingBatchSender(FakeSender):
         self.failure = error
 
     def __call__(self, settings, to, subject, text, timeout):
-        super().__call__(settings, to, subject, text, timeout)
+        accepted = super().__call__(settings, to, subject, text, timeout)
         if len(self.calls) == self.failing_call:
             raise self.failure
+        return accepted
 
 
 def test_one_failed_message_does_not_stop_the_other_recipients(tmp_path, capsys):
@@ -727,9 +729,10 @@ def test_the_delivery_deadline_stops_sending_and_reports_who_was_reached(tmp_pat
 
     def slow_provider(settings, to, subject, text, timeout):
         recorded_before.append(record.exists())
-        sender(settings, to, subject, text, timeout)
+        accepted = sender(settings, to, subject, text, timeout)
         # Each request takes 25 seconds of the 60-second delivery time.
         moment[0] += 25
+        return accepted
 
     assert _run(runtime, state, sender=slow_provider, clock=lambda: moment[0]) == 0
 
@@ -764,35 +767,44 @@ def test_a_hung_request_is_abandoned_at_its_time_limit(env_file, tmp_path, monke
     assert not (state / "lecturesift-instagram.service.last-sent").exists()
 
 
+RESEND_SETTINGS = {
+    "EMAIL_PROVIDER": "resend",
+    "EMAIL_FROM": "LectureSift <noreply@example.com>",
+    "RESEND_API_KEY": RESEND_KEY,
+}
+
+
+class FakeResendResponse:
+    def __init__(self, status=200, body=b'{"id": "4ef9a417-02e9-4d39-ad75-9611e0fcc33c"}'):
+        self.status = status
+        self.body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self, limit=-1):
+        return self.body
+
+
 def test_resend_request_uses_the_existing_configuration(monkeypatch):
     captured = {}
-
-    class Response:
-        status = 200
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *exc):
-            return False
 
     def fake_urlopen(request, timeout):
         captured["url"] = request.full_url
         captured["headers"] = dict(request.header_items())
         captured["body"] = json.loads(request.data.decode())
         captured["timeout"] = timeout
-        return Response()
+        return FakeResendResponse()
 
     monkeypatch.setattr(alert.urllib.request, "urlopen", fake_urlopen)
-    alert.send_email(
-        {"EMAIL_PROVIDER": "resend", "EMAIL_FROM": "LectureSift <noreply@example.com>",
-         "RESEND_API_KEY": RESEND_KEY},
-        ["ops@example.com", "owner@example.org"],
-        "subject",
-        "body",
-        7,
+    accepted = alert.send_email(
+        RESEND_SETTINGS, ["ops@example.com", "owner@example.org"], "subject", "body", 7
     )
 
+    assert accepted == 2
     assert captured["url"] == "https://api.resend.com/emails"
     assert captured["headers"]["Authorization"] == f"Bearer {RESEND_KEY}"
     assert captured["body"] == {
@@ -804,9 +816,35 @@ def test_resend_request_uses_the_existing_configuration(monkeypatch):
     assert captured["timeout"] == 7
 
 
-def test_smtp_uses_the_app_tls_switch_and_the_request_time_limit(monkeypatch):
-    events = []
+@pytest.mark.parametrize(
+    ("response", "status"),
+    (
+        # urlopen hands back a redirect it did not follow; it is not a delivery.
+        (FakeResendResponse(status=302, body=b""), 302),
+        (FakeResendResponse(body=b'{"name": "validation_error", "message": "bad"}'), 200),
+        (FakeResendResponse(body=b'{"id": ""}'), 200),
+        (FakeResendResponse(body=b"<html>gateway</html>"), 200),
+        (FakeResendResponse(body=b'["4ef9a417"]'), 200),
+    ),
+)
+def test_a_resend_answer_without_a_message_id_is_not_a_delivery(monkeypatch, response, status):
+    monkeypatch.setattr(alert.urllib.request, "urlopen", lambda request, timeout: response)
 
+    with pytest.raises(alert.DeliveryRejected) as rejected:
+        alert.send_email(RESEND_SETTINGS, ["ops@example.com"], "s", "t", 7)
+    assert rejected.value.status == status
+
+
+SMTP_SETTINGS = {
+    "EMAIL_PROVIDER": "smtp",
+    "EMAIL_FROM": "noreply@example.com",
+    "SMTP_HOST": "smtp.example.com",
+    "SMTP_USERNAME": "mailer",
+    "SMTP_PASSWORD": "synthetic-smtp-password",
+}
+
+
+def _fake_smtp(monkeypatch, events, refused=None):
     class FakeSMTP:
         def __init__(self, host, port, timeout):
             events.append(("connect", host, port, timeout))
@@ -823,31 +861,89 @@ def test_smtp_uses_the_app_tls_switch_and_the_request_time_limit(monkeypatch):
         def login(self, username, password):
             events.append(("login", username))
 
-        def send_message(self, message):
-            events.append(("send", message["To"]))
+        def send_message(self, message, to_addrs=None):
+            events.append(("send", message["To"], to_addrs))
+            return dict(refused or {})
 
     monkeypatch.setattr(alert.smtplib, "SMTP", FakeSMTP)
-    settings = {
-        "EMAIL_PROVIDER": "smtp",
-        "EMAIL_FROM": "noreply@example.com",
-        "SMTP_HOST": "smtp.example.com",
-        "SMTP_USERNAME": "mailer",
-        "SMTP_PASSWORD": "synthetic-smtp-password",
-    }
 
-    alert.send_email(settings, ["a@example.com", "b@example.com"], "s", "t", 7)
+
+def test_smtp_uses_the_app_tls_switch_and_the_request_time_limit(monkeypatch):
+    events = []
+    _fake_smtp(monkeypatch, events)
+
+    accepted = alert.send_email(SMTP_SETTINGS, ["a@example.com", "b@example.com"], "s", "t", 7)
+    assert accepted == 2
     assert events == [
         ("connect", "smtp.example.com", 587, 7),
         ("starttls",),
         ("login", "mailer"),
-        ("send", "a@example.com, b@example.com"),
+        ("send", "a@example.com, b@example.com", ["a@example.com", "b@example.com"]),
     ]
 
     # Like lecturesift.config, only the literal "true" turns STARTTLS on.
     events.clear()
-    alert.send_email({**settings, "SMTP_USE_TLS": "1", "SMTP_PORT": "2525"}, ["a@example.com"], "s", "t", 7)
+    alert.send_email(
+        {**SMTP_SETTINGS, "SMTP_USE_TLS": "1", "SMTP_PORT": "2525"}, ["a@example.com"], "s", "t", 7
+    )
     assert events[0] == ("connect", "smtp.example.com", 2525, 7)
     assert ("starttls",) not in events
+
+
+def test_smtp_counts_only_the_recipients_the_server_accepted(monkeypatch):
+    events = []
+    _fake_smtp(monkeypatch, events, refused={"b@example.com": (550, b"5.1.1 No such user")})
+
+    accepted = alert.send_email(
+        SMTP_SETTINGS, ["a@example.com", "b@example.com", "c@example.com"], "s", "t", 7
+    )
+
+    assert accepted == 2
+
+
+def test_smtp_with_every_recipient_refused_is_not_a_delivery(monkeypatch):
+    events = []
+    refused = {address: (550, b"5.1.1 No such user") for address in ("a@example.com", "b@example.com")}
+    _fake_smtp(monkeypatch, events, refused=refused)
+
+    with pytest.raises(alert.DeliveryRejected):
+        alert.send_email(SMTP_SETTINGS, ["a@example.com", "b@example.com"], "s", "t", 7)
+
+
+def test_refused_recipients_are_counted_and_logged_but_not_as_reached(tmp_path, capsys):
+    runtime = _many_admins_runtime(tmp_path, 22)
+    state = tmp_path / "state"
+    sender = FakeSender()
+
+    def partly_refusing(settings, to, subject, text, timeout):
+        sender(settings, to, subject, text, timeout)
+        # The SMTP server refuses two addresses of the second message.
+        return len(to) - 2 if len(sender.calls) == 2 else len(to)
+
+    assert _run(runtime, state, sender=partly_refusing) == 0
+
+    logged = capsys.readouterr().err
+    assert "reached 21 of 23 recipient(s)" in logged
+    assert "the mail server refused 2 recipient(s)" in logged
+    assert "sent to 21 recipient(s)" in logged
+    assert "@example" not in logged
+    assert (state / "lecturesift-instagram.service.last-sent").exists()
+
+
+@pytest.mark.parametrize("answer", (0, None, False, -1, "10"))
+def test_a_message_nobody_accepted_is_not_counted_and_is_retried(env_file, tmp_path, capsys, answer):
+    state = tmp_path / "state"
+
+    def accepting_nobody(settings, to, subject, text, timeout):
+        return answer
+
+    assert _run(env_file, state, sender=accepting_nobody) == 0
+
+    assert "not sent: DeliveryRejected" in capsys.readouterr().err
+    assert not (state / "lecturesift-instagram.service.last-sent").exists()
+    working = FakeSender()
+    assert _run(env_file, state, sender=working, now=NOW + 900) == 0
+    assert len(working.calls) == 1
 
 
 def test_unconfigured_provider_raises_for_run_to_log():

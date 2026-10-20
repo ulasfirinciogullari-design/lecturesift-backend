@@ -93,6 +93,14 @@ class DeliveryTimeout(Exception):
     """A provider request did not finish within its share of the delivery time."""
 
 
+class DeliveryRejected(RuntimeError):
+    """The provider answered, but did not accept the message for anyone."""
+
+    def __init__(self, message: str, status: int | None = None):
+        super().__init__(message)
+        self.status = status
+
+
 def log(message: str) -> None:
     print(message, file=sys.stderr, flush=True)
 
@@ -238,8 +246,12 @@ def compose_message(
 
 def send_email(
     settings: Mapping[str, str], to: list[str], subject: str, text: str, timeout: float
-) -> None:
-    """Send one plain-text email through the configured Resend or SMTP account."""
+) -> int:
+    """Send one plain-text email through the configured Resend or SMTP account.
+
+    Returns how many of ``to`` the provider accepted, and raises when it
+    accepted none of them.
+    """
 
     provider = settings.get("EMAIL_PROVIDER", "").strip().lower()
     sender = settings.get("EMAIL_FROM", "").strip()
@@ -259,10 +271,22 @@ def send_email(
             },
             method="POST",
         )
+        # urlopen raises HTTPError for error statuses; anything else that is not
+        # a 2xx answer carrying the new message's id is not a delivery either.
         with urllib.request.urlopen(request, timeout=timeout) as response:
-            if not 200 <= response.status < 300:
-                raise RuntimeError(f"Resend answered HTTP {response.status}")
-        return
+            status = response.status
+            body = response.read(65536)
+        if not 200 <= status < 300:
+            raise DeliveryRejected("Resend did not accept the message", status)
+        try:
+            answer = json.loads(body.decode("utf-8"))
+        except (UnicodeError, ValueError):
+            answer = None
+        message_id = answer.get("id") if isinstance(answer, dict) else None
+        if not isinstance(message_id, str) or not message_id.strip():
+            raise DeliveryRejected("Resend did not confirm the message", status)
+        # Resend accepts one message for every address in "to" or none at all.
+        return len(to)
     if provider == "smtp":
         host = settings.get("SMTP_HOST", "")
         username = settings.get("SMTP_USERNAME", "")
@@ -280,43 +304,51 @@ def send_email(
             if use_tls:
                 client.starttls(context=ssl.create_default_context())
             client.login(username, password)
-            client.send_message(message)
-        return
+            # smtplib raises only when every recipient is refused; otherwise it
+            # returns the refused ones, which must not count as reached.
+            refused = client.send_message(message, to_addrs=to) or {}
+        accepted = sum(1 for address in to if address not in refused)
+        if not accepted:
+            raise DeliveryRejected("the SMTP server refused every recipient")
+        return accepted
     raise RuntimeError("no supported EMAIL_PROVIDER is configured")
 
 
 def _send_within(
-    sender: Callable[..., None],
+    sender: Callable[..., int],
     settings: Mapping[str, str],
     batch: list[str],
     subject: str,
     text: str,
     limit: float,
-) -> None:
-    """Run one provider request, giving up on it after ``limit`` seconds.
+) -> int:
+    """Run one provider request and return how many recipients it accepted.
 
-    The request runs in a daemon thread, so a slow DNS lookup or a stalled SMTP
-    exchange cannot hold the script past its deadline; the thread ends with the
-    process.
+    The request runs in a daemon thread and is abandoned after ``limit``
+    seconds, so a slow DNS lookup or a stalled SMTP exchange cannot hold the
+    script past its deadline; the thread ends with the process.
     """
 
-    outcome: list[BaseException | None] = []
+    outcome: list[tuple[bool, object]] = []
 
     def deliver() -> None:
         try:
-            sender(settings, batch, subject, text, limit)
+            outcome.append((True, sender(settings, batch, subject, text, limit)))
         except BaseException as exc:  # noqa: BLE001 - handed to the waiting thread
-            outcome.append(exc)
-        else:
-            outcome.append(None)
+            outcome.append((False, exc))
 
     worker = threading.Thread(target=deliver, name="failure-alert-delivery", daemon=True)
     worker.start()
     worker.join(limit)
     if not outcome:
         raise DeliveryTimeout()
-    if outcome[0] is not None:
-        raise outcome[0]
+    succeeded, value = outcome[0]
+    if not succeeded:
+        raise value  # type: ignore[misc]
+    # Count only what the provider reported as accepted, never the whole batch.
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise DeliveryRejected("the provider accepted no recipient")
+    return min(value, len(batch))
 
 
 def _failure_name(exc: BaseException) -> str:
@@ -361,7 +393,7 @@ def run(
     now: float | None = None,
     host: str | None = None,
     state_reader: Callable[[str], Mapping[str, str]] | None = None,
-    sender: Callable[..., None] | None = None,
+    sender: Callable[..., int] | None = None,
     clock: Callable[[], float] = time.monotonic,
 ) -> int:
     """Send at most one alert for this unit per hour. Returns the exit status."""
@@ -408,6 +440,7 @@ def run(
 
     deadline = clock() + DELIVERY_SECONDS
     delivered = 0
+    refused = 0
     failures: list[str] = []
     stopped = False
     for start in range(0, len(to), RECIPIENTS_PER_MESSAGE):
@@ -417,7 +450,9 @@ def run(
             break
         batch = to[start : start + RECIPIENTS_PER_MESSAGE]
         try:
-            _send_within(sender, settings, batch, subject, text, min(REQUEST_SECONDS, remaining))
+            accepted = _send_within(
+                sender, settings, batch, subject, text, min(REQUEST_SECONDS, remaining)
+            )
         except Exception as exc:  # noqa: BLE001 - never fail the alert unit over delivery
             failure = _failure_name(exc)
             if failure not in failures:
@@ -430,9 +465,12 @@ def run(
                 record_sent(state_dir, unit, now)
             except OSError:
                 log(f"Failure alert for {unit} sent, but the one-hour rate-limit state was not saved.")
-        delivered += len(batch)
+        delivered += accepted
+        refused += len(batch) - accepted
 
     reasons = list(failures)
+    if refused:
+        reasons.append(f"the mail server refused {refused} recipient(s)")
     if stopped:
         reasons.append(f"the {DELIVERY_SECONDS}-second delivery limit was reached")
     if not delivered:

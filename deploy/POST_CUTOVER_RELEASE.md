@@ -401,7 +401,9 @@ server instead. When the core or the selector is still active, the email
 says that a reload or one reconciliation attempt failed.
 
 More than ten recipients get the alert in several messages of at most ten
-each. Sending stops after 60 seconds, well inside the alert unit's 90-second
+each. Only addresses the provider accepted count as reached. A Resend answer
+without a message id is not a delivery, and the alert unit's journal counts
+the addresses an SMTP server refused. Sending stops after 60 seconds, well inside the alert unit's 90-second
 limit, and the journal of the alert unit says how many recipients were
 reached. Each unit gets at most one alert per hour, however many messages it
 took. The alert counts as soon as its first message is delivered. The time of
