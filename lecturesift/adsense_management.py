@@ -48,6 +48,7 @@ _SITE_STATES = frozenset(
     {"STATE_UNSPECIFIED", "REQUIRES_REVIEW", "GETTING_READY", "READY", "NEEDS_ATTENTION"}
 )
 _ALERT_SEVERITIES = frozenset({"SEVERITY_UNSPECIFIED", "INFO", "WARNING", "SEVERE"})
+_SEVERITY_RANK = {"SEVERITY_UNSPECIFIED": 0, "INFO": 1, "WARNING": 2, "SEVERE": 3}
 _POLICY_ACTIONS = frozenset(
     {
         "ENFORCEMENT_ACTION_UNSPECIFIED",
@@ -377,18 +378,25 @@ def _site_summary(sites: list[dict[str, Any]], settings: _Settings) -> dict[str,
 
 def _alert_summary(alerts: list[dict[str, Any]]) -> dict[str, Any]:
     counts = {"info": 0, "warning": 0, "severe": 0}
-    alert_types: set[str] = set()
+    # The most severe level seen for each alert type. The daily status email
+    # compares these, so a type that turns from WARNING to SEVERE is reported.
+    severities: dict[str, str] = {}
     for alert in alerts:
-        severity = _enum(alert.get("severity"), _ALERT_SEVERITIES).lower()
-        if severity in counts:
-            counts[severity] += 1
+        severity = _enum(alert.get("severity"), _ALERT_SEVERITIES)
+        if severity.lower() in counts:
+            counts[severity.lower()] += 1
         alert_type = str(alert.get("type") or "")
-        if _ALERT_TYPE.fullmatch(alert_type):
-            alert_types.add(alert_type)
+        if not _ALERT_TYPE.fullmatch(alert_type):
+            continue
+        previous = severities.get(alert_type)
+        if previous is None or _SEVERITY_RANK[severity] > _SEVERITY_RANK[previous]:
+            severities[alert_type] = severity
+    types = sorted(severities)[:25]
     return {
         "total": len(alerts),
         **counts,
-        "types": sorted(alert_types)[:25],
+        "types": types,
+        "severities": {alert_type: severities[alert_type] for alert_type in types},
     }
 
 

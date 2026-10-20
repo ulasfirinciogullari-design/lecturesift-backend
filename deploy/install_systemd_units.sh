@@ -35,6 +35,8 @@ units=(
   lecturesift-failure-alert@.service
   lecturesift-instagram.service
   lecturesift-instagram.timer
+  lecturesift-adsense-status.service
+  lecturesift-adsense-status.timer
   lecturesift-r2-retention-probe.service
 )
 obsolete_units=(caddy.service lecturesift-api.service lecturesift-worker.service)
@@ -59,7 +61,8 @@ systemd_query_unit() {
       printf '%s\n' \
         'lecturesift-failure-alert@lecturesift.service.service' \
         'lecturesift-failure-alert@lecturesift-ingress-selector.service.service' \
-        'lecturesift-failure-alert@lecturesift-instagram.service.service'
+        'lecturesift-failure-alert@lecturesift-instagram.service.service' \
+        'lecturesift-failure-alert@lecturesift-adsense-status.service.service'
       ;;
     *@.*)
       return 1
@@ -150,7 +153,7 @@ for unit in "${units[@]}"; do
 done
 for unit in lecturesift.service lecturesift-ingress.service \
   lecturesift-caddy-staging.service lecturesift-backup.timer \
-  lecturesift-instagram.timer; do
+  lecturesift-instagram.timer lecturesift-adsense-status.timer; do
   systemctl is-enabled --quiet "$unit" && fail "$unit must be disabled before installation"
 done
 for unit in "${obsolete_units[@]}"; do

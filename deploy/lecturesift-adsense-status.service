@@ -1,0 +1,24 @@
+[Unit]
+Description=Email the operators when the LectureSift AdSense status changes
+Documentation=file:/opt/lecturesift/deploy/POST_CUTOVER_RELEASE.md
+# Ordering only: a check never starts the core. While the core is stopped the
+# check counts as unreadable and sends nothing until three in a row fail.
+After=docker.service lecturesift.service network-online.target
+Wants=network-online.target
+OnFailure=lecturesift-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+# The script reads only the email settings from runtime.env. The AdSense
+# credentials stay in the api container, where the status is read with
+# docker compose exec; no role file is opened or generated here.
+Environment=LECTURESIFT_ENV_FILE=/etc/lecturesift/runtime.env
+ExecStart=/usr/bin/python3 -I /opt/lecturesift/deploy/adsense_status_alert.py
+TimeoutStartSec=300
+UMask=0077
+StateDirectory=lecturesift/adsense-status
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+Nice=10

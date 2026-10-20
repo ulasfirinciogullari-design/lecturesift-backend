@@ -175,6 +175,7 @@ def test_readonly_status_is_reduced_to_safe_summary_and_cached():
             "warning": 1,
             "severe": 1,
             "types": ["payment-hold", "policy-warning"],
+            "severities": {"payment-hold": "WARNING", "policy-warning": "SEVERE"},
         },
         "policy_issues": {
             "total": 3,
@@ -620,7 +621,7 @@ def test_concurrent_cold_checks_share_one_provider_call(monkeypatch):
             "state": "READY",
             "auto_ads_enabled": None,
         },
-        "alerts": {"total": 0, "info": 0, "warning": 0, "severe": 0, "types": []},
+        "alerts": {"total": 0, "info": 0, "warning": 0, "severe": 0, "types": [], "severities": {}},
         "policy_issues": {
             "total": 0,
             "warned": 0,

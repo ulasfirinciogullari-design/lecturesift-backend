@@ -1,0 +1,13 @@
+[Unit]
+Description=Check the LectureSift AdSense status daily
+
+[Timer]
+# 03:10 UTC is 06:10 in Turkey: after the 02:15 UTC backup and its random
+# delay, and far from the 10:00 UTC carousel and the 17:00 UTC Reel.
+OnCalendar=*-*-* 03:10:00 UTC
+Persistent=true
+RandomizedDelaySec=60
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

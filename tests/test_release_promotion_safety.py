@@ -267,7 +267,7 @@ def test_failure_alert_probe_covers_every_tracked_on_failure_instance(path: str)
         for line in unit_path.read_text(encoding="utf-8").splitlines():
             if line.startswith("OnFailure=") and "lecturesift-failure-alert@" in line:
                 expected.append(line.removeprefix("OnFailure=").replace("%n", unit_path.name))
-    assert len(expected) == 3
+    assert len(expected) == 4
 
     result = _run_systemd_safety_functions(
         path,

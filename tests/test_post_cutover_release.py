@@ -1048,6 +1048,7 @@ def test_post_cutover_release_runbook_is_linked_and_ordered():
         "sudo systemctl disable --now lecturesift-instagram.timer",
         "sudo systemctl stop lecturesift-instagram.service",
         "sudo systemctl disable --now lecturesift-backup.timer",
+        "sudo systemctl disable --now lecturesift-adsense-status.timer",
         "generate_stage_release_wrapper.py",
         "sudo bash -p <path-to>/stage_exact_release_$REVISION.sh",
         "sudo docker builder prune -f",
@@ -1063,6 +1064,7 @@ def test_post_cutover_release_runbook_is_linked_and_ordered():
         "sudo bash /opt/lecturesift/deploy/verify_production_ingress.sh activated",
         "sudo systemctl enable --now lecturesift-backup.timer",
         "sudo systemctl enable --now lecturesift-instagram.timer",
+        "sudo systemctl enable --now lecturesift-adsense-status.timer",
     ]
     position = 0
     for command in ordered:
