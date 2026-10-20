@@ -287,6 +287,23 @@ def test_landing_examples_faqs_and_dates_survive_prerendering(localized_output: 
     assert not (localized_output / "landing-pages.json").exists()
 
 
+def test_payment_marks_and_plan_minutes_are_translated_when_prerendered(localized_output: Path) -> None:
+    for language in LANGUAGES[1:]:
+        for route in ("/", "/plans"):
+            html = _output_path(localized_output, f"{ORIGIN}/{language}{route}").read_text(encoding="utf-8")
+            assert 'alt="iyzico ile Öde' not in html, (language, route)
+            assert 'alt="Mastercard, Visa, American Express ve TROY"' not in html, (language, route)
+    english_home = _output_path(localized_output, f"{ORIGIN}/en/").read_text(encoding="utf-8")
+    assert 'alt="Pay with iyzico, Mastercard, Visa, American Express and TROY"' in english_home
+    # "dakika" means minutes of media, never meeting minutes ("Protokoll").
+    german_plans = _output_path(localized_output, f"{ORIGIN}/de/plans").read_text(encoding="utf-8")
+    assert "Vergleichen Sie Minuten, Quizze, Lernkarten" in german_plans
+    assert "Protokoll" not in german_plans
+    german_sales = _output_path(localized_output, f"{ORIGIN}/de/distance-sales").read_text(encoding="utf-8")
+    assert "Die Minuten-, Quiz-, Lernkarten-" in german_sales
+    assert "Protokoll" not in german_sales
+
+
 def test_course_pages_are_turkish_english_pairs_with_trial_calls_and_faq(localized_output: Path) -> None:
     assert [page["slug"] for page in COURSE_PAGES] == [
         "medicine-lecture-notes", "law-lecture-notes", "engineering-lecture-notes",

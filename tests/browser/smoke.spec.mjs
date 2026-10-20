@@ -571,6 +571,7 @@ test('official white payment marks remain visible in both themes', async ({page}
   const band = page.locator('.footer-payment-band');
   await band.scrollIntoViewIfNeeded();
   await expect(band).toBeVisible();
+  await expect(band).toHaveAttribute('alt', 'Pay with iyzico, Mastercard, Visa, American Express and TROY');
   await expect(band).toHaveCSS('background-color', 'rgb(17, 35, 59)');
   await expect.poll(() => band.evaluate(img => img.complete && img.naturalWidth === 912)).toBe(true);
   const box = await band.boundingBox();
