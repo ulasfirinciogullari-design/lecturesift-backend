@@ -289,7 +289,7 @@ def test_public_navigation_is_consistent_localized_and_session_aware():
     )
     for page in public_pages:
         content = (FRONTEND / page).read_text(encoding="utf-8")
-        assert "/site-shell.js?v=7" in content, page
+        assert "/site-shell.js?v=8" in content, page
         assert "/rollout.css?v=9" in content, page
 
     shell = (FRONTEND / "site-shell.js").read_text(encoding="utf-8")
@@ -302,10 +302,15 @@ def test_public_navigation_is_consistent_localized_and_session_aware():
     assert 'account.href = pathFor(signedIn ? "/account.html" : "/login.html")' in shell
     assert 'anchor.setAttribute("aria-current", "page")' in shell
     assert 'https://www.instagram.com/lecturesift/' in shell
-    for key in ("menu", "home", "workspace", "features", "plans", "about", "login", "account", "instagram"):
+    for key in ("menu", "home", "workspace", "features", "plans", "about", "login", "account", "instagram", "tryFree"):
         row = re.search(rf'^\s*{key}: \[(.*?)\],?$', shell, re.MULTILINE)
         assert row, key
-        assert len(json.loads(f"[{row.group(1)}]")) == 13
+        values = json.loads(f"[{row.group(1)}]")
+        assert len(values) == 13 and all(value.strip() for value in values), key
+    # The signed-out trial action opens the guest upload and is hidden on the
+    # workspace and for signed-in visitors.
+    assert 'tryFree.href = `${pathFor("/workspace.html")}?source=upload`' in shell
+    assert "tryFree.hidden = signedIn || onWorkspace" in shell
 
     rollout = (FRONTEND / "rollout.css").read_text(encoding="utf-8")
     assert ".public-header-tools" in rollout
@@ -485,7 +490,7 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         content = page.read_text(encoding="utf-8")
         expected_theme_version = "17"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
-        assert "/theme.js?v=12" in content, page.name
+        assert "/theme.js?v=13" in content, page.name
         expected_i18n_version = "59"
         assert f"i18n.js?v={expected_i18n_version}" in content, page.name
         assert "page-i18n.js?v=12" in content, page.name

@@ -187,3 +187,5 @@
 @media(max-width:480px){.assistant-dialog .assistant-emblem{display:none}.assistant-mode button{font-size:11px}.assistant-limit{font-size:10px}.assistant-suggestions{padding-bottom:8px}.assistant-toolbar{gap:6px}.assistant-dialog .assistant-message{margin-bottom:12px}}
 
 @media(max-width:520px){.referral-card .referral-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.referral-card .referral-stats article{padding:12px}.referral-share-box .referral-link>div{grid-template-columns:minmax(0,1fr) auto}.referral-share-box .referral-link .secondary-action{width:auto}}
+/* On phones the floating launcher is a round icon button; its aria-label still names it. */
+@media(max-width:600px){body:not(.plans-page)>.assistant-launch{width:48px;min-width:48px;height:48px;min-height:48px;padding:0;justify-content:center;border-radius:50%}body:not(.plans-page)>.assistant-launch>span{display:none}}
