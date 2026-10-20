@@ -391,17 +391,23 @@ The scheduled backup keeps its own `lecturesift-backup-alert@.service` email.
 
 The email goes to `LECTURESIFT_OPS_ALERT_EMAIL` and to every address in
 `LECTURESIFT_ADMIN_EMAILS`, through the Resend or SMTP account configured in
-`/etc/lecturesift/runtime.env`. It names the unit, the host and the time, and
-it carries the unit's last 30 journal lines with configuration values, tokens,
-cookies and email addresses redacted. The journal lines are left out when
-`runtime.env`, `postgres.env` or `restic.env` is missing, unsafe or cannot be
-decoded for certain, because their secrets could not be redacted; the alert
-itself is still sent. More than ten recipients get the alert in several
-messages of at most ten each. Each unit gets at most one alert per hour,
-however many messages it took. The time of the last one is in
-`/var/lib/lecturesift/failure-alerts/<unit>.last-sent`. A delivery failure is
-only logged in the alert unit's journal and never affects the failed unit. An
-alert that reached only some recipients still counts for the hour.
+`/etc/lecturesift/runtime.env`. It is short. It says which unit failed on
+which host and when, in UTC and in Turkey time. It gives the unit's state,
+result and main-process exit status as `systemctl show` reports them, and the
+command that shows the log on the server
+(`journalctl -u <unit> -n 100`). It carries no log lines, because a log
+excerpt can hold credentials or customer data; read the journal on the
+server instead. When the core or the selector is still active, the email
+says that a reload or one reconciliation attempt failed.
+
+More than ten recipients get the alert in several messages of at most ten
+each. Sending stops after 60 seconds, well inside the alert unit's 90-second
+limit, and the journal of the alert unit says how many recipients were
+reached. Each unit gets at most one alert per hour, however many messages it
+took. The alert counts as soon as its first message is delivered. The time of
+the last one is in `/var/lib/lecturesift/failure-alerts/<unit>.last-sent`. A
+delivery failure is only logged in the alert unit's journal and never affects
+the failed unit.
 
 Stopping `lecturesift-instagram.service` while it still runs can end it as
 failed and send an alert. Step 1 already waits for it to finish. Promotion
@@ -419,7 +425,9 @@ journalctl -u lecturesift-failure-alert@lecturesift-instagram.service.service -n
 The journal must show
 `Failure alert for lecturesift-instagram.service sent to N recipient(s).`, and
 the email must arrive. Resend accepting the request is not proof of delivery.
-A second start within the hour logs `suppressed` instead. To repeat the test
+The test email reports the job's real current state, so a healthy job shows
+as `inactive (dead)` with result `success`. A second start within the hour
+logs `suppressed` instead. To repeat the test
 sooner, remove the record first:
 
 ```sh

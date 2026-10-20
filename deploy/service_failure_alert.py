@@ -2,14 +2,18 @@
 """Email the operators when a watched LectureSift systemd unit fails.
 
 systemd starts ``lecturesift-failure-alert@<unit>.service`` from the watched
-unit's ``OnFailure=``; the ingress selector also queues it after a failed
-reconciliation, because its loop retries instead of exiting. One email names
-the unit, host and time and carries the unit's last journal lines with
-configuration values, tokens, cookies and email addresses redacted.
+unit's ``OnFailure=``. The ingress selector and the core's reload steps also
+queue it, because a failed reconciliation or reload leaves their unit active.
 
-At most one email per unit is sent per hour, so a timer that fails every
+The email is short: which unit failed on which host, when (UTC and Turkey
+time), the unit's state and result as systemd reports them, and the command
+that shows its log on the server. It carries no log lines. A log excerpt can
+hold credentials or customer data, and whoever investigates reads the journal
+on the server anyway.
+
+At most one alert per unit is sent per hour, so a timer that fails every
 15 minutes cannot flood the mailbox. Alerting must never affect the watched
-unit: every delivery problem is logged to the journal and the script still
+unit: every problem is logged to the alert unit's journal and the script still
 exits 0. The scheduled backup keeps its own lecturesift-backup-alert@ unit.
 """
 
@@ -26,76 +30,67 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
-from typing import Callable, Iterable, Mapping, Sequence
-from urllib.parse import unquote
+from typing import Callable, Mapping, Sequence
 
 
 WATCHED_UNITS = {
     "lecturesift.service": (
         "the private production core (PostgreSQL, Redis, egress proxy, API and worker)"
     ),
-    "lecturesift-ingress-selector.service": (
-        "the public ingress selector; a reconciliation attempt failed or systemd gave up on it"
-    ),
+    "lecturesift-ingress-selector.service": "the public ingress selector",
     "lecturesift-instagram.service": "the scheduled Instagram studio and replies job",
 }
 RATE_LIMIT_SECONDS = 3600
-JOURNAL_LINES = 30
 # Every recipient gets the alert; each message carries at most this many, which
 # both the Resend API and ordinary SMTP accounts accept.
 RECIPIENTS_PER_MESSAGE = 10
+# The template stops this script after TimeoutStartSec=90. The systemd state
+# query and every delivery attempt are bounded so that all of it, including
+# saving the hourly record, ends well before that.
+STATE_QUERY_SECONDS = 10
+DELIVERY_SECONDS = 60
+REQUEST_SECONDS = 20
+MIN_REQUEST_SECONDS = 5
+# Turkey has kept UTC+3 all year since 2016.
+TURKEY_TIME = timezone(timedelta(hours=3))
 DEFAULT_STATE_DIR = Path("/var/lib/lecturesift/failure-alerts")
-DEFAULT_ENV_FILES = (
-    ("LECTURESIFT_ENV_FILE", "/etc/lecturesift/runtime.env"),
-    ("LECTURESIFT_DB_ENV_FILE", "/etc/lecturesift/postgres.env"),
-    ("LECTURESIFT_RESTIC_ENV_FILE", "/etc/lecturesift/restic.env"),
-)
+ENV_FILE_VARIABLE = "LECTURESIFT_ENV_FILE"
+DEFAULT_ENV_FILE = Path("/etc/lecturesift/runtime.env")
 
 ASSIGNMENT = re.compile(r"^[ \t]*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
-EMAIL_ADDRESS = re.compile(r"^[^\s@,]+@[^\s@,]+\.[^\s@,]+$")
-# Every value of a key with one of these name parts is a secret, whatever it
-# looks like and however short. Other values are redacted by shape (see
-# _is_secret_value).
-SECRET_KEY_PARTS = (
-    "PASSWORD", "SECRET", "TOKEN", "KEY", "SALT", "CREDENTIAL", "PRIVATE",
-    "COOKIE", "SERVICE_ACCOUNT", "DATABASE_URL", "REDIS_URL", "BROKER_URL",
-    "REPOSITORY", "ADMIN_ADMIN",
-)
-PLAIN_VALUE = re.compile(r"^[a-z._-]+$")
-URL_PASSWORD = re.compile(r"://[^/\s:@]*:([^/\s@]+)@")
-# Secrets shorter than this are replaced only as whole tokens, so a one-letter
-# password cannot blank out that letter everywhere in the journal.
-SHORT_SECRET = 4
-REDACTED = "[redacted]"
+EMAIL_ADDRESS = re.compile(r"^[^\s@,<>\"]+@[^\s@,<>\"]+\.[^\s@,<>\"]+$")
+HOST_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$")
+STATE_PROPERTIES = ("ActiveState", "SubState", "Result", "ExecMainCode", "ExecMainStatus")
+# systemd reports these as fixed words and numbers; anything else is dropped.
+STATE_VALUE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
+# ExecMainCode is the waitid() si_code of the main process.
+MAIN_PROCESS_ENDINGS = {
+    "1": "exited with status {}",
+    "2": "was killed by signal {}",
+    "3": "dumped core after signal {}",
+}
+STILL_ACTIVE = {"active", "reloading", "activating"}
+# These two queue the alert themselves while their unit stays active.
+STILL_ACTIVE_NOTES = {
+    "lecturesift.service": (
+        "The core is still active, so this was a failed reload "
+        "(systemctl reload lecturesift)."
+    ),
+    "lecturesift-ingress-selector.service": (
+        "The selector is still active and keeps retrying, so one reconciliation "
+        "attempt failed."
+    ),
+}
 
-ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
-CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
-URL_USERINFO = re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://)[^/\s@]+@")
-SECRET_HEADER = re.compile(
-    r"(?i)\b(authorization|proxy-authorization|set-cookie|cookie|x-api-key)\b(\s*[:=]\s*).*"
-)
-BEARER = re.compile(r"(?i)\b(bearer)\s+[A-Za-z0-9._~+/=-]+")
-SECRET_FIELD = re.compile(
-    r"(?i)([\w.-]*(?:token|secret|passw(?:or)?d|pwd|api[_-]?key|access[_-]?key|"
-    r"private[_-]?key|credential|signature|session|cookie|auth)[\w.-]*[\"']?\s*[:=]\s*)"
-    r"(\"[^\"]*\"|'[^']*'|[^\s,;&}]+)"
-)
-EMAIL_IN_TEXT = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-# The only address-shaped text kept: an instance of one of the two alert
-# templates for a LectureSift unit, e.g.
-# lecturesift-failure-alert@lecturesift-instagram.service.service.
-ALERT_INSTANCE = re.compile(
-    r"lecturesift-(?:failure|backup)-alert@lecturesift(?:-[a-z]+)*\.service(?:\.service)?"
-)
-HEX_RUN = re.compile(r"\b[0-9A-Fa-f]{32,}\b")
-OPAQUE_RUN = re.compile(r"[A-Za-z0-9_+/=.-]{24,}")
-MAX_SCANNED_LINE = 2000
-MAX_SHOWN_LINE = 400
+
+class DeliveryTimeout(Exception):
+    """A provider request did not finish within its share of the delivery time."""
 
 
 def log(message: str) -> None:
@@ -138,116 +133,32 @@ def decode_value(rhs: str) -> str | None:
     return words[0] if len(words) == 1 else None
 
 
-def parse_env_file(path: Path) -> tuple[dict[str, str], int]:
-    """Decode the assignments; also count lines that cannot be decoded for certain."""
+def load_settings(path: Path) -> tuple[dict[str, str], int]:
+    """Decode the runtime file's assignments; also count the undecodable ones.
 
+    The file must be root-only. A key whose last assignment cannot be decoded
+    for certain is left out, never served from an earlier assignment, because
+    the shell would not use that earlier value either.
+    """
+
+    if not _private_file(path):
+        raise PermissionError("not a root-only regular file")
     values: dict[str, str] = {}
     undecoded = 0
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         match = ASSIGNMENT.fullmatch(line)
-        value = decode_value(match.group(2)) if match else None
+        if match is None:
+            undecoded += 1
+            continue
+        value = decode_value(match.group(2))
         if value is None:
             undecoded += 1
+            values.pop(match.group(1), None)
             continue
         values[match.group(1)] = value
     return values, undecoded
-
-
-def load_env_files(paths: Sequence[Path]) -> tuple[dict[str, str], list[str], bool]:
-    """Return the first file's settings, every file's secret values and completeness.
-
-    The first file is the runtime configuration and must be readable. A later
-    file holds more secrets (database owner, Restic credentials): one that is
-    missing, unsafe or unreadable makes the redaction set incomplete, so the
-    caller omits the journal lines. So does a line whose value cannot be
-    decoded for certain; that key is left out.
-    """
-
-    settings: dict[str, str] = {}
-    secrets: set[str] = set()
-    complete = True
-    for index, path in enumerate(paths):
-        try:
-            if not _private_file(path):
-                raise PermissionError("not a root-only regular file")
-            values, undecoded = parse_env_file(path)
-        except (OSError, UnicodeError):
-            if index == 0:
-                raise
-            complete = False
-            continue
-        if undecoded:
-            complete = False
-        if index == 0:
-            settings = values
-        for key, value in values.items():
-            if _is_secret_value(key, value):
-                secrets.add(value)
-            # A connection URL's password can also be logged on its own.
-            for password in URL_PASSWORD.findall(value):
-                secrets.update(item for item in (password, unquote(password)) if item.strip())
-    return settings, sorted(secrets, key=len, reverse=True), complete
-
-
-def _is_secret_value(key: str, value: str) -> bool:
-    if not value.strip():
-        return False
-    if any(part in key.upper() for part in SECRET_KEY_PARTS):
-        return True
-    # Plain lowercase names (database, bucket, user names), byte limits and
-    # absolute paths stay readable; anything else long enough to be a
-    # credential is hidden.
-    return (
-        len(value) >= 8
-        and not PLAIN_VALUE.fullmatch(value)
-        and not value.isdigit()
-        and not value.startswith("/")
-    )
-
-
-def _keep_alert_instances(match: re.Match[str]) -> str:
-    text = match.group(0)
-    return text if ALERT_INSTANCE.fullmatch(text) else "[email]"
-
-
-def _hide_opaque(match: re.Match[str]) -> str:
-    """Hide token-like runs but keep paths, unit and module names readable."""
-
-    text = match.group(0)
-    has_digit = any(character.isdigit() for character in text)
-    mixed_case = any(character.isupper() for character in text) and any(
-        character.islower() for character in text
-    )
-    long_key = len(text) >= 32 and "/" not in text and "." not in text and has_digit
-    return REDACTED if (mixed_case and has_digit) or long_key else text
-
-
-def redact(line: str, secrets: Iterable[str]) -> str:
-    """Hide configuration values, credentials, cookies and email addresses."""
-
-    text = CONTROL.sub(" ", ANSI_ESCAPE.sub("", line))
-    if len(text) > MAX_SCANNED_LINE:
-        # Never keep a token cut in half: drop the partial last word.
-        text = text[:MAX_SCANNED_LINE].rsplit(" ", 1)[0] + " [truncated]"
-    for secret in secrets:
-        if len(secret) >= SHORT_SECRET:
-            text = text.replace(secret, REDACTED)
-        else:
-            text = re.sub(
-                rf"(?<![A-Za-z0-9_]){re.escape(secret)}(?![A-Za-z0-9_])", REDACTED, text
-            )
-    text = URL_USERINFO.sub(lambda match: match.group(1) + REDACTED + "@", text)
-    text = SECRET_HEADER.sub(lambda match: match.group(1) + match.group(2) + REDACTED, text)
-    text = BEARER.sub(lambda match: match.group(1) + " " + REDACTED, text)
-    text = SECRET_FIELD.sub(lambda match: match.group(1) + REDACTED, text)
-    text = EMAIL_IN_TEXT.sub(_keep_alert_instances, text)
-    text = HEX_RUN.sub(REDACTED, text)
-    text = OPAQUE_RUN.sub(_hide_opaque, text)
-    if len(text) > MAX_SHOWN_LINE:
-        text = text[:MAX_SHOWN_LINE] + " [truncated]"
-    return text
 
 
 def recipients(settings: Mapping[str, str]) -> list[str]:
@@ -264,24 +175,70 @@ def recipients(settings: Mapping[str, str]) -> list[str]:
     return found
 
 
-def read_journal(unit: str) -> list[str]:
+def read_unit_state(unit: str) -> dict[str, str]:
+    """The unit's state words and main-process ending, as systemd reports them."""
+
     result = subprocess.run(
-        [
-            "journalctl", "--unit", unit, "--lines", str(JOURNAL_LINES),
-            "--no-pager", "--quiet", "--utc", "--output", "short-iso",
-        ],
+        ["systemctl", "show", "--property=" + ",".join(STATE_PROPERTIES), "--", unit],
         check=False,
         capture_output=True,
         text=True,
         errors="replace",
-        timeout=20,
+        timeout=STATE_QUERY_SECONDS,
     )
     if result.returncode != 0:
-        raise OSError("journalctl failed")
-    return result.stdout.splitlines()[-JOURNAL_LINES:]
+        raise OSError("systemctl show failed")
+    state: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        key, separator, value = line.partition("=")
+        if separator and key in STATE_PROPERTIES and STATE_VALUE.fullmatch(value):
+            state[key] = value
+    return state
 
 
-def send_email(settings: Mapping[str, str], to: list[str], subject: str, text: str) -> None:
+def describe_state(unit: str, state: Mapping[str, str]) -> list[str]:
+    active = state.get("ActiveState")
+    sub = state.get("SubState")
+    lines = [
+        f"State now: {active} ({sub})" if active and sub else f"State now: {active or 'unknown'}",
+        f"systemd result: {state.get('Result') or 'unknown'}",
+    ]
+    code = state.get("ExecMainCode", "")
+    status = state.get("ExecMainStatus", "")
+    ending = MAIN_PROCESS_ENDINGS.get(code)
+    # A clean exit says nothing about this failure (a start step or a reload
+    # may have failed instead), so only a failing main process is shown.
+    if ending and status.isdigit() and (code != "1" or status != "0"):
+        lines.append(f"Main process: {ending.format(status)}")
+    if active in STILL_ACTIVE and unit in STILL_ACTIVE_NOTES:
+        lines.append(STILL_ACTIVE_NOTES[unit])
+    return lines
+
+
+def compose_message(
+    unit: str, host: str, now: float, state: Mapping[str, str]
+) -> tuple[str, str]:
+    moment = datetime.fromtimestamp(now, timezone.utc)
+    local = moment.astimezone(TURKEY_TIME)
+    subject = f"[LectureSift] {unit} failed on {host}"
+    lines = [
+        f"{unit} failed on {host}.",
+        f"This is {WATCHED_UNITS[unit]}.",
+        "",
+        f"Time: {moment:%Y-%m-%d %H:%M:%S} UTC ({local:%Y-%m-%d %H:%M:%S} Turkey time)",
+        *describe_state(unit, state),
+        "",
+        "To see its log, run this on the server:",
+        f"  journalctl -u {unit} -n 100",
+        "",
+        "Further failures of this unit are not emailed for one hour.",
+    ]
+    return subject, "\n".join(lines) + "\n"
+
+
+def send_email(
+    settings: Mapping[str, str], to: list[str], subject: str, text: str, timeout: float
+) -> None:
     """Send one plain-text email through the configured Resend or SMTP account."""
 
     provider = settings.get("EMAIL_PROVIDER", "").strip().lower()
@@ -302,7 +259,7 @@ def send_email(settings: Mapping[str, str], to: list[str], subject: str, text: s
             },
             method="POST",
         )
-        with urllib.request.urlopen(request, timeout=20) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             if not 200 <= response.status < 300:
                 raise RuntimeError(f"Resend answered HTTP {response.status}")
         return
@@ -317,14 +274,55 @@ def send_email(settings: Mapping[str, str], to: list[str], subject: str, text: s
         message["To"] = ", ".join(to)
         message["Subject"] = subject
         message.set_content(text)
-        use_tls = settings.get("SMTP_USE_TLS", "true").strip().lower() in {"1", "true", "yes"}
-        with smtplib.SMTP(host, int(settings.get("SMTP_PORT") or 587), timeout=20) as client:
+        # Same switch as lecturesift.config: only the literal "true" enables STARTTLS.
+        use_tls = settings.get("SMTP_USE_TLS", "true").strip().lower() == "true"
+        with smtplib.SMTP(host, int(settings.get("SMTP_PORT") or 587), timeout=timeout) as client:
             if use_tls:
                 client.starttls(context=ssl.create_default_context())
             client.login(username, password)
             client.send_message(message)
         return
     raise RuntimeError("no supported EMAIL_PROVIDER is configured")
+
+
+def _send_within(
+    sender: Callable[..., None],
+    settings: Mapping[str, str],
+    batch: list[str],
+    subject: str,
+    text: str,
+    limit: float,
+) -> None:
+    """Run one provider request, giving up on it after ``limit`` seconds.
+
+    The request runs in a daemon thread, so a slow DNS lookup or a stalled SMTP
+    exchange cannot hold the script past its deadline; the thread ends with the
+    process.
+    """
+
+    outcome: list[BaseException | None] = []
+
+    def deliver() -> None:
+        try:
+            sender(settings, batch, subject, text, limit)
+        except BaseException as exc:  # noqa: BLE001 - handed to the waiting thread
+            outcome.append(exc)
+        else:
+            outcome.append(None)
+
+    worker = threading.Thread(target=deliver, name="failure-alert-delivery", daemon=True)
+    worker.start()
+    worker.join(limit)
+    if not outcome:
+        raise DeliveryTimeout()
+    if outcome[0] is not None:
+        raise outcome[0]
+
+
+def _failure_name(exc: BaseException) -> str:
+    status = getattr(exc, "code", None) or getattr(exc, "status", None)
+    detail = f" (HTTP {status})" if isinstance(status, int) else ""
+    return f"{type(exc).__name__}{detail}"
 
 
 def _state_path(state_dir: Path, unit: str) -> Path:
@@ -355,47 +353,20 @@ def record_sent(state_dir: Path, unit: str, now: float) -> None:
         raise
 
 
-def compose_message(
-    unit: str, host: str, now: float, journal: list[str] | None
-) -> tuple[str, str]:
-    moment = datetime.fromtimestamp(now, timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    subject = f"[LectureSift] {unit} failed on {host}"
-    lines = [
-        f"{unit} failed on {host} at {moment}.",
-        "",
-        f"This is {WATCHED_UNITS[unit]}.",
-        "Further failures of this unit are not emailed for one hour.",
-        "",
-        "Inspect it on the host:",
-        f"  systemctl status {unit}",
-        f"  journalctl -u {unit} -n 200",
-        "",
-    ]
-    if journal is None:
-        lines.append("The journal lines were left out because they could not be read safely.")
-    else:
-        lines.append(
-            f"Last {len(journal)} journal lines (configuration values, tokens, cookies "
-            "and email addresses redacted):"
-        )
-        lines.append("")
-        lines.extend(journal or ["(no journal lines)"])
-    return subject, "\n".join(lines) + "\n"
-
-
 def run(
     unit: str,
     *,
-    env_files: Sequence[Path],
+    env_file: Path,
     state_dir: Path,
     now: float | None = None,
     host: str | None = None,
-    journal_reader: Callable[[str], list[str]] | None = None,
-    sender: Callable[[Mapping[str, str], list[str], str, str], None] | None = None,
+    state_reader: Callable[[str], Mapping[str, str]] | None = None,
+    sender: Callable[..., None] | None = None,
+    clock: Callable[[], float] = time.monotonic,
 ) -> int:
     """Send at most one alert for this unit per hour. Returns the exit status."""
 
-    journal_reader = journal_reader or read_journal
+    state_reader = state_reader or read_unit_state
     sender = sender or send_email
     if f"{unit}.service" in WATCHED_UNITS:
         # A hand-started lecturesift-failure-alert@lecturesift-instagram.service
@@ -412,10 +383,12 @@ def run(
         log(f"Failure alert for {unit} suppressed: one was already sent within the last hour.")
         return 0
     try:
-        settings, secrets, complete = load_env_files(env_files)
+        settings, undecoded = load_settings(env_file)
     except (OSError, UnicodeError):
         log(f"Failure alert for {unit} not sent: the runtime environment is missing or unsafe.")
         return 0
+    if undecoded:
+        log(f"{undecoded} line(s) of the runtime environment could not be decoded and were ignored.")
     to = recipients(settings)
     if not to:
         log(
@@ -423,48 +396,53 @@ def run(
             "LECTURESIFT_ADMIN_EMAILS to a valid address."
         )
         return 0
-    journal: list[str] | None = None
-    if complete:
-        try:
-            journal = [redact(line, secrets) for line in journal_reader(unit)]
-        except (OSError, subprocess.SubprocessError):
-            log(f"The journal of {unit} could not be read; the alert is sent without it.")
-    else:
-        log(
-            "An environment file is missing, unsafe or has a value that cannot be decoded "
-            f"for certain; the alert for {unit} is sent without journal lines."
-        )
-    subject, text = compose_message(unit, host or socket.gethostname(), now, journal)
+    try:
+        state = dict(state_reader(unit))
+    except (OSError, subprocess.SubprocessError):
+        log(f"The systemd state of {unit} could not be read; the alert is sent without it.")
+        state = {}
+    host = host or socket.gethostname()
+    if not HOST_NAME.fullmatch(host):
+        host = "the production host"
+    subject, text = compose_message(unit, host, now, state)
+
+    deadline = clock() + DELIVERY_SECONDS
     delivered = 0
     failures: list[str] = []
+    stopped = False
     for start in range(0, len(to), RECIPIENTS_PER_MESSAGE):
+        remaining = deadline - clock()
+        if remaining < MIN_REQUEST_SECONDS:
+            stopped = True
+            break
         batch = to[start : start + RECIPIENTS_PER_MESSAGE]
         try:
-            sender(settings, batch, subject, text)
+            _send_within(sender, settings, batch, subject, text, min(REQUEST_SECONDS, remaining))
         except Exception as exc:  # noqa: BLE001 - never fail the alert unit over delivery
-            status = getattr(exc, "code", None) or getattr(exc, "status", None)
-            detail = f" (HTTP {status})" if isinstance(status, int) else ""
-            failure = f"{type(exc).__name__}{detail}"
+            failure = _failure_name(exc)
             if failure not in failures:
                 failures.append(failure)
             continue
+        if not delivered:
+            # Count the alert as soon as anyone has it, so being stopped later
+            # cannot make the next failure send it to the same people again.
+            try:
+                record_sent(state_dir, unit, now)
+            except OSError:
+                log(f"Failure alert for {unit} sent, but the one-hour rate-limit state was not saved.")
         delivered += len(batch)
+
+    reasons = list(failures)
+    if stopped:
+        reasons.append(f"the {DELIVERY_SECONDS}-second delivery limit was reached")
     if not delivered:
-        log(f"Failure alert for {unit} not sent: {', '.join(failures)}.")
+        log(f"Failure alert for {unit} not sent: {', '.join(reasons)}.")
         return 0
-    if failures:
-        # The operations mailbox is in the first message. Counting a partly
-        # delivered alert keeps a failing batch from re-sending to the others
-        # on every failure; the next alert after the hour tries everyone again.
+    if delivered < len(to):
         log(
             f"Failure alert for {unit} reached {delivered} of {len(to)} recipient(s); "
-            f"the rest failed: {', '.join(failures)}."
+            f"the rest were not reached: {', '.join(reasons)}."
         )
-    try:
-        record_sent(state_dir, unit, now)
-    except OSError:
-        log(f"Failure alert for {unit} sent, but the one-hour rate-limit state was not saved.")
-        return 0
     log(f"Failure alert for {unit} sent to {delivered} recipient(s).")
     return 0
 
@@ -474,9 +452,9 @@ def main(argv: Sequence[str]) -> int:
         log("Usage: service_failure_alert.py <failed-unit-name>")
         return 2
     unit = argv[0]
-    env_files = [Path(os.environ.get(name) or default) for name, default in DEFAULT_ENV_FILES]
+    env_file = Path(os.environ.get(ENV_FILE_VARIABLE) or DEFAULT_ENV_FILE)
     try:
-        return run(unit, env_files=env_files, state_dir=DEFAULT_STATE_DIR)
+        return run(unit, env_file=env_file, state_dir=DEFAULT_STATE_DIR)
     except Exception as exc:  # noqa: BLE001 - the watched unit must never depend on this
         log(f"Failure alert for {unit} not sent: unexpected {type(exc).__name__}.")
         return 0
