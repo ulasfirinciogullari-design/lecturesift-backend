@@ -129,6 +129,24 @@ def test_terminal_queue_failures_and_completed_fallbacks_are_deletable(state):
         assert not path.exists() and store.metadata(job_id) is None
 
 
+def test_lessons_from_an_earlier_host_delete_without_local_files(state):
+    uid = account()
+    store, root = state
+    missing = root.parent / f'earlier-host-{uuid.uuid4().hex}' / 'migrated'
+    store.create('migrated', missing, {'billing_user_id': uid}, title='Old lesson',
+                 status='error', worker_state='unavailable', stored_bytes=0)
+    workspace.delete_lesson(uid, 'migrated')
+    assert store.metadata('migrated') is None
+
+    present = root.parent / f'other-root-{uuid.uuid4().hex}' / 'outside'
+    present.mkdir(parents=True)
+    store.create('outside', present, {'billing_user_id': uid}, title='Outside lesson',
+                 status='error', worker_state='unavailable', stored_bytes=0)
+    with pytest.raises(billing.BillingError):
+        workspace.delete_lesson(uid, 'outside')
+    assert present.exists() and store.metadata('outside')
+
+
 def test_active_and_retryable_jobs_remain_locked_and_terminal_states_are_not_recovered(state):
     uid = account()
     store = state[0]

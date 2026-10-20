@@ -444,13 +444,16 @@ class JobStore:
             if not is_job_deletable(data):
                 raise BillingError("Ders hâlâ işleniyor. İşlem bittikten sonra silebilirsin.")
             path = WORK_DIR / job_id if data.get("remote_prefix") and STORAGE.remote else Path(data.get("job_dir", WORK_DIR / job_id))
-            if path.resolve().parent != WORK_DIR.resolve() or path.is_symlink():
+            # Jobs moved from an earlier host keep that host's job_dir, which
+            # does not exist here, so there are no local files to remove.
+            outside = path.resolve().parent != WORK_DIR.resolve()
+            if path.is_symlink() or (outside and path.exists()):
                 raise BillingError("Ders dosyası konumu doğrulanamadı.")
             try:
                 # Keep metadata on failure so a partial provider deletion can
                 # be retried. Never hold the global Redis lock across S3 calls.
                 STORAGE.delete_job(job_id)
-                if path.is_dir():
+                if not outside and path.is_dir():
                     shutil.rmtree(path)
             except Exception as exc:
                 raise BillingError("Dosyalar tamamen silinemedi. Lütfen tekrar dene.") from exc
