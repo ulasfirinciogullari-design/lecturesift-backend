@@ -17,6 +17,10 @@
   // home page's upload button sits right where the launcher floats).
   const PRIMARY_ACTIONS='.study-primary,.hero-primary,.primary-button,.primary-action,.detail-actions .primary';
   const covers=(a,b)=>a.left<b.right&&b.left<a.right&&a.top<b.bottom&&b.top<a.bottom;
+  // The reduced-motion rule in theme.css gives every property a tiny
+  // transition, so after a move the launcher would still report its old box
+  // and the overlap check below would miss. It never animates, so turn that off.
+  launch.style.transitionProperty='none';
   const positionLaunch = () => {
     const banner=document.querySelector('.consent-banner:not([hidden])');
     launch.style.bottom=banner ? `${Math.max(22,window.innerHeight-banner.getBoundingClientRect().top+12)}px` : '';
@@ -48,17 +52,6 @@
   const layoutResize=new ResizeObserver(schedulePosition);
   layoutResize.observe(document.documentElement);
   layoutResize.observe(document.body);
-  // A primary action can also slide into the strip the launcher floats over
-  // without any box changing size. Watch that strip itself.
-  let actionWatch=null;
-  const watchActions = () => {
-    actionWatch?.disconnect();
-    const strip=Math.max(0,window.innerHeight-160);
-    actionWatch=new IntersectionObserver(schedulePosition,{rootMargin:`-${strip}px 0px 0px 0px`,threshold:[0,.25,.5,.75,1]});
-    document.querySelectorAll(PRIMARY_ACTIONS).forEach(node=>actionWatch.observe(node));
-  };
-  watchActions();
-  window.addEventListener('resize',watchActions);
   window.addEventListener('resize',schedulePosition);
   window.addEventListener('scroll',schedulePosition,{passive:true});
   window.addEventListener('load',schedulePosition,{once:true});
