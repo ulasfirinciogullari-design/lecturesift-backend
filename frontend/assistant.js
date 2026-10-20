@@ -43,6 +43,11 @@
   };
   document.addEventListener('lecturesift:consent-ready',observeConsent);
   document.addEventListener('lecturesift:consent',observeConsent);
+  // Late layout changes (the consent banner closing, copy settling) can move a
+  // primary action under the launcher without a scroll or resize event.
+  const layoutResize=new ResizeObserver(schedulePosition);
+  layoutResize.observe(document.documentElement);
+  layoutResize.observe(document.body);
   window.addEventListener('resize',schedulePosition);
   window.addEventListener('scroll',schedulePosition,{passive:true});
   window.addEventListener('load',schedulePosition,{once:true});
