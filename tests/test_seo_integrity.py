@@ -25,6 +25,7 @@ XHTML_NAMESPACE = "http://www.w3.org/1999/xhtml"
 STUDY_RESOURCES = json.loads((FRONTEND / "study-resources.json").read_text(encoding="utf-8"))
 STUDY_SLUGS = {page["slug"] for page in STUDY_RESOURCES["pages"]}
 COURSE_PAGES = [page for page in STUDY_RESOURCES["pages"] if page["kind"] == "course"]
+TOPIC_PAGES = [page for page in STUDY_RESOURCES["pages"] if page["kind"] == "topic"]
 
 
 def _page_languages(location: str) -> tuple[str, ...]:
@@ -304,18 +305,14 @@ def test_payment_marks_and_plan_minutes_are_translated_when_prerendered(localize
     assert "Protokoll" not in german_sales
 
 
-def test_course_pages_are_turkish_english_pairs_with_trial_calls_and_faq(localized_output: Path) -> None:
-    assert [page["slug"] for page in COURSE_PAGES] == [
-        "medicine-lecture-notes", "law-lecture-notes", "engineering-lecture-notes",
-        "psychology-lecture-notes", "economics-lecture-notes",
-    ]
+def _assert_bilingual_guide_pages(localized_output: Path, pages: list[dict], nav: str, listing: str) -> None:
     records = _sitemap_records()
     sitemap = ElementTree.parse(FRONTEND / "sitemap.xml")
     dates = {
         node.findtext(f"{{{SITEMAP_NAMESPACE}}}loc"): node.findtext(f"{{{SITEMAP_NAMESPACE}}}lastmod")
         for node in sitemap.findall(f"{{{SITEMAP_NAMESPACE}}}url")
     }
-    for page in COURSE_PAGES:
+    for page in pages:
         slug = page["slug"]
         pair = {"tr": f"{ORIGIN}/{slug}", "en": f"{ORIGIN}/en/{slug}"}
         # Only the written Turkish and English editions exist; no other language is indexed.
@@ -356,9 +353,9 @@ def test_course_pages_are_turkish_english_pairs_with_trial_calls_and_faq(localiz
 
             trial = re.search(r'<div class="guide-hero-actions" data-guide-trial>(.*?)</div>', html).group(1)
             assert f'href="{prefix}/workspace.html"' in trial and f'href="{prefix}/register.html"' in trial
-            subjects = re.search(r"<nav[^>]*data-guide-subjects[^>]*>(.*?)</nav>", html).group(1)
-            assert re.findall(r'href="([^"]+)"', subjects) == [
-                f"{prefix}/{other['slug']}" for other in COURSE_PAGES if other is not page
+            related = re.search(rf"<nav[^>]*{nav}[^>]*>(.*?)</nav>", html).group(1)
+            assert re.findall(r'href="([^"]+)"', related) == [
+                f"{prefix}/{other['slug']}" for other in pages if other is not page
             ]
             for attributes, href in re.findall(r'<a\b([^>]*)\bhref="(/[^"]*)"', html):
                 if "guide-language" in attributes:
@@ -368,11 +365,41 @@ def test_course_pages_are_turkish_english_pairs_with_trial_calls_and_faq(localiz
                 else:
                     assert not href.startswith("/en/"), (location, href)
 
-    # The bilingual study library makes every course page discoverable in its own language.
+    # The bilingual study library makes every page of this kind discoverable in its own language.
     for prefix in ("", "/en"):
         library = _output_path(localized_output, f"{ORIGIN}{prefix}/study-guides").read_text(encoding="utf-8")
-        listed = re.search(r'<ul class="guide-subjects">(.*?)</ul>', library, re.S).group(1)
-        assert re.findall(r'href="([^"]+)"', listed) == [f"{prefix}/{page['slug']}" for page in COURSE_PAGES]
+        listed = re.search(rf'<ul class="{listing}">(.*?)</ul>', library, re.S).group(1)
+        assert re.findall(r'href="([^"]+)"', listed) == [f"{prefix}/{page['slug']}" for page in pages]
+
+
+def test_course_pages_are_turkish_english_pairs_with_trial_calls_and_faq(localized_output: Path) -> None:
+    assert [page["slug"] for page in COURSE_PAGES] == [
+        "medicine-lecture-notes", "law-lecture-notes", "engineering-lecture-notes",
+        "psychology-lecture-notes", "economics-lecture-notes",
+    ]
+    _assert_bilingual_guide_pages(localized_output, COURSE_PAGES, "data-guide-subjects", "guide-subjects")
+
+
+def test_topic_pages_are_substantial_turkish_english_pairs_with_trial_calls_and_faq(localized_output: Path) -> None:
+    assert [page["slug"] for page in TOPIC_PAGES] == [
+        "yks-biology-notes", "kpss-history-notes", "engineering-formula-sheet", "english-medium-lectures",
+        "final-exam-study-plan", "long-lecture-recordings", "open-education-unit-summary",
+    ]
+    _assert_bilingual_guide_pages(localized_output, TOPIC_PAGES, "data-guide-topics", "guide-topics")
+    eyebrows = {"tr": "LectureSift · Sınava ve konuya göre çalışma", "en": "LectureSift · Study by exam and topic"}
+    for page in TOPIC_PAGES:
+        for language, prefix in (("tr", ""), ("en", "/en")):
+            # Each guide is a full worked lesson, not a thin doorway page.
+            words = re.sub(r"<[^>]+>", " ", page[language]["body"]).split()
+            assert len(words) >= 700, (page["slug"], language, len(words))
+            html = _output_path(localized_output, f"{ORIGIN}{prefix}/{page['slug']}").read_text(encoding="utf-8")
+            assert f'<p class="guide-eyebrow">{eyebrows[language]}</p>' in html
+    # Search results show a distinct title and description for every study page.
+    for language in ("tr", "en"):
+        titles = [page[language]["title"] for page in STUDY_RESOURCES["pages"]]
+        descriptions = [page[language]["description"] for page in STUDY_RESOURCES["pages"]]
+        assert len(set(titles)) == len(titles), language
+        assert len(set(descriptions)) == len(descriptions), language
 
 
 def test_guide_measurement_has_consent_controls_without_the_large_application_scripts(localized_output: Path) -> None:

@@ -11,6 +11,9 @@
     "/about-study-guides", "/cornell-notes", "/pdf-note-check",
     "/medicine-lecture-notes", "/law-lecture-notes", "/engineering-lecture-notes",
     "/psychology-lecture-notes", "/economics-lecture-notes",
+    "/yks-biology-notes", "/kpss-history-notes", "/engineering-formula-sheet",
+    "/english-medium-lectures", "/final-exam-study-plan", "/long-lecture-recordings",
+    "/open-education-unit-summary",
   ]);
   const CONTENT_PATHS = new Set([
     "/", "/document-summary", "/lecture-video-summary", "/quiz-flashcards",
@@ -18,6 +21,9 @@
     "/about-study-guides", "/cornell-notes", "/pdf-note-check",
     "/medicine-lecture-notes", "/law-lecture-notes", "/engineering-lecture-notes",
     "/psychology-lecture-notes", "/economics-lecture-notes",
+    "/yks-biology-notes", "/kpss-history-notes", "/engineering-formula-sheet",
+    "/english-medium-lectures", "/final-exam-study-plan", "/long-lecture-recordings",
+    "/open-education-unit-summary",
   ]);
   const RESOURCE_PATHS = new Set([
     "/assets/study/mean-median-tr.txt", "/assets/study/mean-median-en.txt",
