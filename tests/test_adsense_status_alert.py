@@ -499,8 +499,9 @@ SECRET_SHAPES = (
     re.compile(r"[A-Za-z0-9_-]{32,}"),
     re.compile(r"@"),
 )
-# A raw API payload or provider HTML would bring braces or tags along.
-RAW_PAYLOAD = re.compile(r"[{}\[\]<>]")
+# A raw API payload or provider HTML would bring braces or tags along. A lone
+# ">" is the panel path separator ("Siteler > lecturesift.com"); tags need "<".
+RAW_PAYLOAD = re.compile(r"[{}\[\]<]")
 
 
 def test_no_email_carries_a_secret_or_secret_looking_value(env_file, tmp_path):
