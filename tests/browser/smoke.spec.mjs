@@ -609,8 +609,11 @@ test('rebuilt study entry opens the real workspace and key screens remain usable
   await expect(page.locator('#errorBox')).toBeHidden();
   const marks=page.locator('.payment-brand-band');
   for (const mark of await marks.all()) {
+    // The marks are loading="lazy" and sit below the fold on mobile, so bring
+    // each into view and wait for it to load instead of sampling it once.
+    await mark.scrollIntoViewIfNeeded();
     await expect(mark).toHaveCSS('background-color','rgb(17, 35, 59)');
-    expect(await mark.evaluate(img=>img.complete && img.naturalWidth>0)).toBe(true);
+    await expect.poll(()=>mark.evaluate(img=>img.complete && img.naturalWidth>0)).toBe(true);
   }
   await noHorizontalOverflow(page);
   await page.locator('#plansGrid').scrollIntoViewIfNeeded();
