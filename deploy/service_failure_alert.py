@@ -57,14 +57,18 @@ DEFAULT_ENV_FILES = (
 ASSIGNMENT = re.compile(r"^[ \t]*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
 EMAIL_ADDRESS = re.compile(r"^[^\s@,]+@[^\s@,]+\.[^\s@,]+$")
 # Every value of a key with one of these name parts is a secret, whatever it
-# looks like. Other values are redacted by shape (see _is_secret_value).
+# looks like and however short. Other values are redacted by shape (see
+# _is_secret_value).
 SECRET_KEY_PARTS = (
     "PASSWORD", "SECRET", "TOKEN", "KEY", "SALT", "CREDENTIAL", "PRIVATE",
-    "COOKIE", "SESSION", "SERVICE_ACCOUNT", "DATABASE_URL", "REDIS_URL",
-    "BROKER_URL", "REPOSITORY", "ADMIN_ADMIN",
+    "COOKIE", "SERVICE_ACCOUNT", "DATABASE_URL", "REDIS_URL", "BROKER_URL",
+    "REPOSITORY", "ADMIN_ADMIN",
 )
 PLAIN_VALUE = re.compile(r"^[a-z._-]+$")
 URL_PASSWORD = re.compile(r"://[^/\s:@]*:([^/\s@]+)@")
+# Secrets shorter than this are replaced only as whole tokens, so a one-letter
+# password cannot blank out that letter everywhere in the journal.
+SHORT_SECRET = 4
 REDACTED = "[redacted]"
 
 ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
@@ -182,12 +186,12 @@ def load_env_files(paths: Sequence[Path]) -> tuple[dict[str, str], list[str], bo
                 secrets.add(value)
             # A connection URL's password can also be logged on its own.
             for password in URL_PASSWORD.findall(value):
-                secrets.update(item for item in (password, unquote(password)) if len(item) >= 4)
+                secrets.update(item for item in (password, unquote(password)) if item.strip())
     return settings, sorted(secrets, key=len, reverse=True), complete
 
 
 def _is_secret_value(key: str, value: str) -> bool:
-    if len(value) < 4:
+    if not value.strip():
         return False
     if any(part in key.upper() for part in SECRET_KEY_PARTS):
         return True
@@ -227,7 +231,12 @@ def redact(line: str, secrets: Iterable[str]) -> str:
         # Never keep a token cut in half: drop the partial last word.
         text = text[:MAX_SCANNED_LINE].rsplit(" ", 1)[0] + " [truncated]"
     for secret in secrets:
-        text = text.replace(secret, REDACTED)
+        if len(secret) >= SHORT_SECRET:
+            text = text.replace(secret, REDACTED)
+        else:
+            text = re.sub(
+                rf"(?<![A-Za-z0-9_]){re.escape(secret)}(?![A-Za-z0-9_])", REDACTED, text
+            )
     text = URL_USERINFO.sub(lambda match: match.group(1) + REDACTED + "@", text)
     text = SECRET_HEADER.sub(lambda match: match.group(1) + match.group(2) + REDACTED, text)
     text = BEARER.sub(lambda match: match.group(1) + " " + REDACTED, text)

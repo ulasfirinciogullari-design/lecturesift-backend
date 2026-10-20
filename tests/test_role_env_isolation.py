@@ -383,11 +383,16 @@ def test_preflight_and_systemd_fail_closed_on_missing_or_stale_role_files():
         assert f"Environment={variable}={path}" in backup_service
     assert "generate_role_envs.py --check" in instagram_service
     assert "generate_role_envs.py --check" in backup_service
-    reload_steps = [
+    # Each reload step runs unchanged inside the alerting wrapper, which keeps
+    # its exit status (see tests/test_service_failure_alert.py).
+    wrapper = "ExecReload=/bin/bash /opt/lecturesift/deploy/core_reload_step.sh "
+    reload_lines = [
         line
         for line in service.splitlines()
         if line.startswith("ExecReload=")
     ]
+    assert all(line.startswith(wrapper) for line in reload_lines)
+    reload_steps = ["ExecReload=" + line.removeprefix(wrapper) for line in reload_lines]
     assert reload_steps == [
         "ExecReload=/bin/bash /opt/lecturesift/deploy/preflight.sh",
         "ExecReload=/bin/bash /opt/lecturesift/deploy/release.sh build",

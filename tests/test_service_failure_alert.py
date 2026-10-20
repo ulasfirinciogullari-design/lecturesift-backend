@@ -4,7 +4,9 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import stat
+import subprocess
 import sys
 import urllib.error
 from datetime import datetime, timezone
@@ -198,6 +200,114 @@ def test_selector_queues_the_alert_after_a_failed_reconciliation_without_waiting
     )
     assert loop.count("systemctl start") == 1
     assert "Restart=always" in selector
+
+
+RELOAD_WRAPPER = "ExecReload=/bin/bash /opt/lecturesift/deploy/core_reload_step.sh "
+
+
+def test_every_core_reload_step_queues_the_alert_because_a_failed_reload_never_fails_the_unit():
+    core = _read("deploy/lecturesift.service")
+    wrapper = _read("deploy/core_reload_step.sh")
+
+    reload_lines = [line for line in core.splitlines() if line.startswith("ExecReload=")]
+    assert len(reload_lines) == 7
+    assert all(line.startswith(RELOAD_WRAPPER) for line in reload_lines)
+    # Start and stop failures put the unit in the failed state, where
+    # OnFailure= already sends the alert; only reload needs the wrapper.
+    other = [line for line in core.splitlines() if line.startswith(("ExecStart", "ExecStop"))]
+    assert other and not any("core_reload_step.sh" in line for line in other)
+
+    on_failure = next(
+        line.removeprefix("OnFailure=") for line in core.splitlines() if line.startswith("OnFailure=")
+    )
+    assert f"FAILURE_ALERT_UNIT={on_failure.replace('%n', 'lecturesift.service')}\n" in wrapper
+    assert 'systemctl start --no-block "$FAILURE_ALERT_UNIT" >/dev/null 2>&1 || true' in wrapper
+    assert 'exit "$status"' in wrapper
+    assert 'setpriv --pdeathsig KILL -- "$@" || status=$?' in wrapper
+
+
+def _run_reload_wrapper(tmp_path: Path, *command: str, systemctl_status: int = 0):
+    bash = shutil.which("bash")
+    if os.name != "posix" or bash is None:
+        pytest.skip("the reload wrapper runs on the Linux host only")
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    calls = tmp_path / "systemctl.calls"
+    fake = fake_bin / "systemctl"
+    fake.write_text(
+        f'#!/bin/sh\nprintf "%s\\n" "$*" >> "{calls}"\nexit {systemctl_status}\n',
+        encoding="utf-8",
+    )
+    fake.chmod(0o755)
+    environment = dict(os.environ, PATH=f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}")
+    result = subprocess.run(
+        [bash, str(ROOT / "deploy" / "core_reload_step.sh"), *command],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env=environment,
+    )
+    return result, calls.read_text(encoding="utf-8") if calls.exists() else ""
+
+
+def test_a_failed_reload_step_queues_the_alert_and_keeps_its_exit_status(tmp_path):
+    result, calls = _run_reload_wrapper(tmp_path, "sh", "-c", "echo step-output; exit 7")
+
+    assert result.returncode == 7
+    assert "step-output" in result.stdout
+    assert calls == "start --no-block lecturesift-failure-alert@lecturesift.service.service\n"
+
+
+def test_an_alert_that_cannot_be_queued_does_not_change_the_reload_status(tmp_path):
+    result, calls = _run_reload_wrapper(tmp_path, "sh", "-c", "exit 3", systemctl_status=1)
+
+    assert result.returncode == 3
+    assert calls.startswith("start --no-block ")
+
+
+def test_a_successful_reload_step_sends_nothing(tmp_path):
+    result, calls = _run_reload_wrapper(tmp_path, "sh", "-c", "exit 0")
+
+    assert result.returncode == 0
+    assert calls == ""
+
+
+def test_the_reload_wrapper_refuses_to_run_without_a_step(tmp_path):
+    result, calls = _run_reload_wrapper(tmp_path)
+
+    assert result.returncode == 2
+    assert calls == ""
+
+
+def test_secret_named_settings_are_redacted_at_any_length_as_whole_tokens(tmp_path):
+    runtime = _private(
+        tmp_path / "runtime.env",
+        "\n".join(
+            (
+                "LECTURESIFT_OPS_ALERT_EMAIL=ops@example.com",
+                "SMTP_PASSWORD=abc",
+                "INSTAGRAM_ADMIN_TOKEN=q",
+                "POSTGRES_DB=xyz",
+                "LECTURESIFT_REWARDED_AD_SESSION_TTL_SECONDS=120",
+            )
+        )
+        + "\n",
+    )
+
+    settings, secrets, complete = alert.load_env_files([runtime])
+
+    assert complete is True
+    assert "abc" in secrets and "q" in secrets
+    # Short values of keys not named as secret are not shape-inferred secrets.
+    assert "xyz" not in secrets and "120" not in secrets
+    assert alert.redact("authentication rejected abc", secrets) == (
+        "authentication rejected [redacted]"
+    )
+    assert alert.redact("token=q, user q failed", secrets) == "token=[redacted], user [redacted] failed"
+    # Whole tokens only: neither value blanks out letters inside other words.
+    assert alert.redact("abcdef xabc quiz queue_q2", secrets) == "abcdef xabc quiz queue_q2"
+    assert alert.redact("timeout 120 s", secrets) == "timeout 120 s"
 
 
 def test_alert_names_unit_host_and_time_and_redacts_every_secret(env_files, tmp_path, capsys):

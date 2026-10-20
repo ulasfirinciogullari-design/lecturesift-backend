@@ -378,7 +378,10 @@ From the first release that contains `lecturesift-failure-alert@.service`,
 systemd emails the operators when one of these units fails:
 
 - `lecturesift.service`, the private core, when a start, restart or stop
-  fails, including a start at boot or after a Docker restart;
+  fails, including a start at boot or after a Docker restart. A failed
+  `systemctl reload lecturesift` leaves the unit active, so each reload step
+  runs through `deploy/core_reload_step.sh`, which queues the alert itself
+  and keeps the step's exit status;
 - `lecturesift-instagram.service`, the 15-minute Instagram job;
 - `lecturesift-ingress-selector.service`. Its loop retries a failed
   reconciliation instead of exiting, so it queues the alert itself after each
