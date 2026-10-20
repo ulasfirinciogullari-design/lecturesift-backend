@@ -2,6 +2,7 @@ import {cp, mkdir, readdir, readFile, rm, writeFile} from "node:fs/promises";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {createHash} from "node:crypto";
+import {Script} from "node:vm";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SOURCE = path.join(ROOT, "frontend");
@@ -300,7 +301,7 @@ function pageCopyLoaderSource(catalogPaths) {
   };
   const routing = copyFromRuntime("const codes = ", "const rows = {", "language routing").trim();
   const choice = `${copyFromRuntime("const selected = (() => {", "})();", "language choice")}})();`;
-  return `// Generated from i18n.js by scripts/build_localized_site.mjs. Do not edit.
+  const source = `// Generated from i18n.js by scripts/build_localized_site.mjs. Do not edit.
 (function () {
   ${routing}
   ${choice}
@@ -308,6 +309,10 @@ function pageCopyLoaderSource(catalogPaths) {
   if (catalog) document.write('<script src="' + catalog + '"><\\/script>');
 })();
 `;
+  // A change in i18n.js can cut the copy short. Fail the deploy instead of
+  // publishing a loader that leaves every app page untranslated.
+  new Script(source, {filename: "page-copy-loader.js"});
+  return source;
 }
 
 async function writeContentAddressedScript(directory, name, source) {
