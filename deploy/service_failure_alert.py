@@ -155,9 +155,15 @@ def _is_secret_value(key: str, value: str) -> bool:
         return False
     if any(part in key.upper() for part in SECRET_KEY_PARTS):
         return True
-    # Plain lowercase names (database, bucket, user names) and absolute paths
-    # stay readable; anything else long enough to be a credential is hidden.
-    return len(value) >= 8 and not PLAIN_VALUE.fullmatch(value) and not value.startswith("/")
+    # Plain lowercase names (database, bucket, user names), byte limits and
+    # absolute paths stay readable; anything else long enough to be a
+    # credential is hidden.
+    return (
+        len(value) >= 8
+        and not PLAIN_VALUE.fullmatch(value)
+        and not value.isdigit()
+        and not value.startswith("/")
+    )
 
 
 def _keep_unit_names(match: re.Match[str]) -> str:

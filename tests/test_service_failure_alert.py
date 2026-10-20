@@ -66,6 +66,7 @@ def env_files(tmp_path: Path) -> list[Path]:
                 f"{DB_PASSWORD}@postgres:5432/lecturesift",
                 "POSTGRES_DB=lecturesift",
                 "LECTURESIFT_WORK_DIR=/var/lib/lecturesift",
+                "LECTURESIFT_MAX_VIDEO_BYTES=1073741824",
                 f"INSTAGRAM_ACCESS_TOKEN='{ACCESS_TOKEN}'",
             )
         )
@@ -428,6 +429,7 @@ def test_configuration_values_are_redacted_but_plain_names_and_paths_stay(tmp_pa
     assert "lecturesift" not in secrets
     assert "lecturesift_owner" not in secrets
     assert "/var/lib/lecturesift" not in secrets
+    assert "1073741824" not in secrets
     assert secrets == sorted(secrets, key=len, reverse=True)
     line = f"user lecturesift_owner at /var/lib/lecturesift used {OWNER_PASSWORD}"
     assert alert.redact(line, secrets) == (
