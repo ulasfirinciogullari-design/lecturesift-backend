@@ -34,7 +34,8 @@
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
       const detail = body.detail || body;
-      throw Object.assign(new Error(detail.message || rt("error.request", "İşlem tamamlanamadı.")), {code: detail.code});
+      const message = window.LectureSiftI18n?.apiMessage?.(detail.message) ?? detail.message;
+      throw Object.assign(new Error(message || rt("error.request", "İşlem tamamlanamadı.")), {code: detail.code});
     }
     return body;
   }
@@ -119,18 +120,33 @@
     }
   }
 
+  // The trial length comes from guest_trial_minutes in /billing/plans. Until
+  // that catalog loads, the stored 30-minute copy is shown.
+  function guestTrialCopy(key, fallback) {
+    const minutes = typeof billingCatalog !== "undefined" ? Number(billingCatalog?.guest_trial_minutes) : NaN;
+    const template = window.LectureSiftI18n?.t(`${key}Minutes`, "");
+    if (!(minutes > 0) || !Number.isFinite(minutes) || !template || template === `${key}Minutes`) return rt(key, fallback);
+    return template.split("{minutes}").join(minutes.toLocaleString(rolloutLocale(), {maximumFractionDigits: 2}));
+  }
+
+  function renderGuestTrialCopy() {
+    const note = document.querySelector(".rollout-guest-note[data-guest-trial-note]");
+    const guest = typeof billingAccount !== "undefined" && billingAccount?.plan?.code === "guest";
+    if (note) {
+      note.textContent = guest && guestTrialState?.used === true
+        ? guestTrialCopy("rollout.guestUsed", "Tek seferlik 30 dakikalık denemen kullanıldı. Devam etmek için ücretsiz hesap oluştur.")
+        : guestTrialCopy("rollout.guestNote", "Hesapsız kullanım: bu cihazda tek seferlik, en fazla 30 dakikalık kaynak. Daha uzun işlemler için ücretsiz hesap oluştur.");
+    }
+    if (guest && $("accountPlan")) $("accountPlan").textContent = guestTrialCopy("rollout.singleUse", "Tek kullanımlık 30 dakika");
+  }
+
   function updateGuestTrialUi() {
     const button = $("analyzeButton");
     const note = document.querySelector(".rollout-guest-note");
     const guest = typeof billingAccount !== "undefined" && billingAccount?.plan?.code === "guest";
     const used = guest && guestTrialState?.used === true;
     if (button && used) button.disabled = true;
-    if (note && used) {
-      note.textContent = rt(
-        "rollout.guestUsed",
-        "Tek seferlik 30 dakikalık denemen kullanıldı. Devam etmek için ücretsiz hesap oluştur.",
-      );
-    }
+    renderGuestTrialCopy();
     let signup = $("guestTrialSignup");
     if (used && note && !signup) {
       signup = document.createElement("a");
@@ -169,6 +185,7 @@
     },
     state() { return guestTrialState ? {...guestTrialState} : null; },
     record: recordTrialEvent,
+    copy: guestTrialCopy,
   };
 
   function formatCurrency(amountMinor, currency) {
@@ -373,7 +390,7 @@
         if (typeof billingAccount !== "undefined" && billingAccount?.plan?.code === "guest" && guestTrialState?.used) {
           updateGuestTrialUi();
           showInlineMessage(
-            rt("rollout.guestUsed", "Tek seferlik 30 dakikalık denemen kullanıldı. Devam etmek için ücretsiz hesap oluştur."),
+            guestTrialCopy("rollout.guestUsed", "Tek seferlik 30 dakikalık denemen kullanıldı. Devam etmek için ücretsiz hesap oluştur."),
             true,
           );
           recordTrialEvent("trial_limit_reached", {reason: "trial_used"});
@@ -396,7 +413,8 @@
       button.dataset.guestWrapped = "1";
       const note = document.createElement("p");
       note.className = "rollout-guest-note";
-      note.textContent = rt("rollout.guestNote", "Hesapsız kullanım: bu cihazda tek seferlik, en fazla 30 dakikalık kaynak. Daha uzun işlemler için ücretsiz hesap oluştur.");
+      note.dataset.guestTrialNote = "1";
+      note.textContent = guestTrialCopy("rollout.guestNote", "Hesapsız kullanım: bu cihazda tek seferlik, en fazla 30 dakikalık kaynak. Daha uzun işlemler için ücretsiz hesap oluştur.");
       button.insertAdjacentElement("afterend", note);
       updateGuestTrialUi();
     }
@@ -404,10 +422,11 @@
       const originalRender = renderBillingAccount;
       renderBillingAccount = function() {
         originalRender();
+        // Re-render the guest copy here too: this runs again once the plans catalog loads.
+        renderGuestTrialCopy();
         if (typeof billingAccount !== "undefined" && billingAccount?.plan?.code === "guest") {
           if ($("accountButton")) $("accountButton").textContent = rt("rollout.guestTrial", "Misafir deneme");
           if ($("accountEmail")) $("accountEmail").textContent = rt("rollout.noAccountTrial", "Hesapsız deneme");
-          if ($("accountPlan")) $("accountPlan").textContent = rt("rollout.singleUse", "Tek kullanımlık 30 dakika");
         } else if ($("accountStatus") && !$("rolloutAccountLink")) {
           const link = document.createElement("a");
           link.id = "rolloutAccountLink";

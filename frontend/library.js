@@ -21,7 +21,7 @@
     if (!token) throw new Error(t('library.login'));
     const response = await fetch(`https://api.lecturesift.com${path}`, {...options, headers: {Authorization:`Bearer ${token}`, 'Content-Type':'application/json'}, cache:'no-store'});
     const body = await response.json().catch(() => null);
-    if (!response.ok) throw new Error(body?.detail?.message || t('library.error'));
+    if (!response.ok) throw new Error((window.LectureSiftI18n?.apiMessage?.(body?.detail?.message) ?? body?.detail?.message) || t('library.error'));
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error(t('library.error'));
     return body;
   }
