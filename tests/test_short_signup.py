@@ -14,7 +14,7 @@ from sqlalchemy.pool import StaticPool
 
 import lecturesift.app as app_module
 from lecturesift import billing_service as billing
-from lecturesift import config, google_signin, guest_claim, jobs, payments, referrals, security
+from lecturesift import config, google_signin, guest_claim, jobs, payments, referrals, rollout_routes, security
 from lecturesift import rollout_service as rollout
 from lecturesift import workspace_state as workspace
 from main import app
@@ -34,6 +34,12 @@ def state(monkeypatch, tmp_path):
     monkeypatch.setattr(billing, "_INITIALIZED", True)
     monkeypatch.setattr(config, "REQUIRE_DURABLE_PROCESSING", False)
     monkeypatch.setattr(config, "GOOGLE_CLIENT_ID", "")
+    # Every guest here comes from the test client's address. A fresh limiter
+    # keeps guest trials opened by earlier test modules from using up its
+    # daily per-IP quota for new guest trials.
+    guest_limiter = security.RateLimiter()
+    guest_limiter._redis = None
+    monkeypatch.setattr(rollout_routes, "RATE_LIMITER", guest_limiter)
     monkeypatch.setattr(jobs, "WORK_DIR", tmp_path)
     monkeypatch.setattr(jobs, "REDIS_URL", "")
     store = jobs.JobStore()
