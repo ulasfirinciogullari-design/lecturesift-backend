@@ -197,6 +197,8 @@ test('plan buttons keep one-line labels and the account strip uses the button st
   await noHorizontalOverflow(page);
   await page.locator('#accountPanel').scrollIntoViewIfNeeded();
   await page.screenshot({path: testInfo.outputPath('polish-plans-layout.jpg'), quality: 75});
+  await actions.last().scrollIntoViewIfNeeded();
+  await page.screenshot({path: testInfo.outputPath('polish-plus-layout.jpg'), quality: 75});
 });
 
 test('signed-out public pages offer a compact free trial next to sign-in', async ({page, isMobile}, testInfo) => {
