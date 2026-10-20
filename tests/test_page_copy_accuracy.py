@@ -1,9 +1,11 @@
+import json
 import re
 from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
 
+from lecturesift import config
 from lecturesift.billing import PLAN_BY_CODE
 from scripts import sync_static_i18n as translations
 
@@ -118,3 +120,47 @@ def test_homepage_upload_deletion_describes_the_cleanup_that_actually_runs():
     row = CATALOG[HOME_SOURCE_DELETION]
     assert all(value.strip() for value in row)
     assert not any(re.search(r"\b6\b", value) for value in row)
+
+
+def test_topic_guides_quote_the_trial_and_free_plan_limits_the_code_enforces():
+    # The exam and topic guides quote these allowances in their FAQ and
+    # LectureSift sections. If a plan changes, update the guides with it.
+    free = PLAN_BY_CODE["free"]
+    assert config.GUEST_TRIAL_MAX_MINUTES == 30
+    assert (free.minutes, free.history_days, free.max_minutes_per_job, free.max_files_per_job) == (120, 7, 60, 3)
+    assert free.export_formats == ("pdf",)
+    # "Paid plans allow longer jobs, more files and Word/TXT export."
+    for code in ("credit", "lite", "plus", "pro", "max"):
+        plan = PLAN_BY_CODE[code]
+        assert plan.max_minutes_per_job > free.max_minutes_per_job, code
+        assert plan.max_files_per_job > free.max_files_per_job, code
+        assert {"docx", "txt"} <= set(plan.export_formats), code
+    resources = json.loads((FRONTEND / "study-resources.json").read_text(encoding="utf-8"))
+    topics = [page for page in resources["pages"] if page["kind"] == "topic"]
+    assert len(topics) == 7
+    required = {"tr": ("30 dakikaya kadar", "her ay 120 dakika"), "en": ("up to 30 minutes", "120 minutes each month")}
+    retention = {"tr": r"(\d+) gün saklanır", "en": r"kept for (\d+) days"}
+    for page in topics:
+        for language, phrases in required.items():
+            body = page[language]["body"]
+            for phrase in phrases:
+                assert phrase in body, (page["slug"], language, phrase)
+            assert set(re.findall(retention[language], body)) <= {str(free.history_days)}, page["slug"]
+    long_tr = next(page for page in topics if page["slug"] == "long-lecture-recordings")["tr"]["body"]
+    long_en = next(page for page in topics if page["slug"] == "long-lecture-recordings")["en"]["body"]
+    assert "tek bir iş en fazla 60 dakika ve 3 kaynak" in long_tr
+    assert "at most 60 minutes long and contain up to 3 sources" in long_en
+    # Source cleanup is best-effort (see the homepage test above), so the
+    # guide carries the same fallback instead of an unconditional promise.
+    assert "başarısız olsa bile silinir; silme aksarsa dosya, ders silindiğinde veya süresi dolduğunda" in long_tr
+    assert "even if processing fails; if that deletion fails, the file is removed with the lesson" in long_en
+    assert "iş bittiğinde silinir" not in long_tr and "deleted when the job ends" not in long_en
+    # The Exam preset asks for 20 questions and 40 cards; free and Lite cap them
+    # lower, so the finals guide quotes those caps instead of a flat 20/40.
+    assert (free.quiz_questions, free.flashcards) == (10, 20)
+    assert (PLAN_BY_CODE["lite"].quiz_questions, PLAN_BY_CODE["lite"].flashcards) == (10, 20)
+    finals = next(page for page in topics if page["slug"] == "final-exam-study-plan")
+    assert "ücretsiz hesapta ve Lite planında sınır 10 soru ve 20 karttır" in finals["tr"]["body"]
+    assert "free accounts and the Lite plan are limited to 10 questions and 20 cards" in finals["en"]["body"]
+    assert "planının sınırına göre ayarlanır" not in finals["tr"]["body"]
+    assert "adjusted to your plan's limits" not in finals["en"]["body"]

@@ -10,6 +10,9 @@
     "/active-recall", "/about-study-guides", "/cornell-notes", "/pdf-note-check",
     "/medicine-lecture-notes", "/law-lecture-notes", "/engineering-lecture-notes",
     "/psychology-lecture-notes", "/economics-lecture-notes",
+    "/yks-biology-notes", "/kpss-history-notes", "/engineering-formula-sheet",
+    "/english-medium-lectures", "/final-exam-study-plan", "/long-lecture-recordings",
+    "/open-education-unit-summary",
   ]);
   const path = location.pathname.replace(/^\/(tr|en|de|fr|es|it|pt|ru|ar|zh|ja|ko|hi)(?=\/|$)/, "")
     .replace(/\.html$/, "").replace(/\/$/, "") || "/";

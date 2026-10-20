@@ -1,6 +1,7 @@
 import {test, expect} from './fixtures.mjs';
 
 const COURSE_SLUGS = ['medicine-lecture-notes', 'law-lecture-notes', 'engineering-lecture-notes', 'psychology-lecture-notes', 'economics-lecture-notes'];
+const TOPIC_SLUGS = ['yks-biology-notes', 'kpss-history-notes', 'engineering-formula-sheet', 'english-medium-lectures', 'final-exam-study-plan', 'long-lecture-recordings', 'open-education-unit-summary'];
 
 test('localized home links to an actual guide edition after client localization', async ({page}, testInfo) => {
   await page.goto('/de/');
@@ -122,6 +123,42 @@ test.describe('open learning material without JavaScript', () => {
       }
     }
   });
+
+  // One test per language keeps each run well inside the per-test timeout.
+  for (const prefix of ['', '/en']) {
+    test(`exam and topic guides are reachable from the ${prefix ? 'English' : 'Turkish'} library with a worked example and FAQ`, async ({page}, testInfo) => {
+      await page.goto(`${prefix}/study-guides`);
+      await expect(page.locator('.guide-topics a')).toHaveCount(TOPIC_SLUGS.length);
+      await page.locator(`.guide-topics a[href="${prefix}/kpss-history-notes"]`).click();
+      await expect(page).toHaveURL(`${prefix}/kpss-history-notes`);
+      for (const slug of TOPIC_SLUGS) {
+        await page.goto(`${prefix}/${slug}`);
+        await expect(page.locator('html')).toHaveAttribute('lang', prefix ? 'en' : 'tr');
+        await expect(page.locator('.guide-article h1')).toHaveCount(1);
+        const trial = page.locator('[data-guide-trial] a');
+        await expect(trial.first()).toHaveAttribute('href', `${prefix}/workspace.html`);
+        await expect(trial.nth(1)).toHaveAttribute('href', `${prefix}/register.html`);
+        const example = page.locator(prefix ? '#example' : '#ornek');
+        await expect(example.locator('.guide-note')).toContainText(prefix ? 'This section is an example.' : 'Bu bölüm bir örnektir.');
+        await expect(example.locator('blockquote, table').first()).toBeVisible();
+        const answer = example.locator('details').first();
+        await expect(answer.locator('p')).toBeHidden();
+        await answer.locator('summary').click();
+        await expect(answer.locator('p')).toBeVisible();
+        const question = page.locator('.faq-list details').first();
+        await expect(question.locator('p')).toBeHidden();
+        await question.locator('summary').click();
+        await expect(question.locator('p')).toBeVisible();
+        await expect(page.locator('[data-guide-topics] a')).toHaveCount(TOPIC_SLUGS.length - 1);
+        expect(await page.locator('.guide-toc a[href^="#"]').evaluateAll(links => links.length >= 5 && links.every(link => document.getElementById(link.hash.slice(1))))).toBe(true);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+        if (!prefix && slug === 'yks-biology-notes' && ['desktop-light', 'mobile-light'].includes(testInfo.project.name)) {
+          await page.evaluate(() => scrollTo(0, 0));
+          await page.screenshot({path: testInfo.outputPath('topic-page-layout.jpg'), fullPage: true, type: 'jpeg', quality: 65});
+        }
+      }
+    });
+  }
 
   test('PDF checking exercise and worksheet work without an account or JavaScript', async ({page}) => {
     for (const prefix of ['', '/en']) {

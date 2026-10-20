@@ -78,12 +78,12 @@
 .guide-card p{font-size:14px;line-height:1.8;margin:0 0 24px;color:var(--ui-muted)}
 .guide-card strong{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px;font-weight:650;margin-top:auto;padding-top:18px;border-top:1px solid var(--ui-line)}
 .guide-card strong span{font-size:20px}
-.guide-subjects{list-style:none;padding:0;margin:24px 0 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:14px}
-.guide-page .guide-subjects li{margin:0;padding:0}
-.guide-subjects a{display:flex;flex-direction:column;gap:6px;height:100%;padding:18px 20px;border:1px solid var(--ui-line);border-radius:14px;background:var(--ui-surface);text-decoration:none!important;transition:border-color .18s}
-.guide-subjects a:hover{border-color:var(--ui-action)}
-.guide-subjects strong{font-size:17px;line-height:1.4;color:var(--ui-ink)}
-.guide-subjects span{font-size:14px;line-height:1.7;color:var(--ui-muted)}
+.guide-subjects,.guide-topics{list-style:none;padding:0;margin:24px 0 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:14px}
+.guide-page .guide-subjects li,.guide-page .guide-topics li{margin:0;padding:0}
+.guide-subjects a,.guide-topics a{display:flex;flex-direction:column;gap:6px;height:100%;padding:18px 20px;border:1px solid var(--ui-line);border-radius:14px;background:var(--ui-surface);text-decoration:none!important;transition:border-color .18s}
+.guide-subjects a:hover,.guide-topics a:hover{border-color:var(--ui-action)}
+.guide-subjects strong,.guide-topics strong{font-size:17px;line-height:1.4;color:var(--ui-ink)}
+.guide-subjects span,.guide-topics span{font-size:14px;line-height:1.7;color:var(--ui-muted)}
 .guide-button{display:inline-flex;align-items:center;justify-content:center;gap:16px;min-height:46px;padding:11px 18px;border:1px solid var(--ui-line);border-radius:9px;font-size:14px;font-weight:650;line-height:1.5;text-decoration:none!important;text-align:center}
 .guide-page .guide-button-primary{background:var(--ui-action);color:var(--ui-action-ink);border-color:var(--ui-action)}
 .guide-page .guide-button-primary:hover{background:var(--ui-action-hover);border-color:var(--ui-action-hover)}
@@ -103,6 +103,8 @@
 .guide-related>strong{margin-bottom:12px;color:var(--ui-ink);font-size:16px}
 .guide-related a{display:flex;align-items:baseline;justify-content:space-between;gap:20px;padding:12px 0}
 .guide-related a+a{border-top:1px solid var(--ui-line)}
+.guide-page blockquote{margin:16px 0;padding:18px 22px;border:1px solid var(--ui-line);border-inline-start:4px solid var(--ui-action);border-radius:0 12px 12px 0;background:var(--ui-surface);font-size:15px}
+.guide-page blockquote p{margin:0}
 .guide-note{padding:18px 22px;background:var(--ui-green-wash);border-inline-start:4px solid var(--ui-green);border-radius:0 12px 12px 0;font-size:15px}
 .guide-table-wrap{width:100%;overflow-x:auto;border:1px solid var(--ui-line);border-radius:12px;margin:24px 0}
 .guide-page table{border-collapse:collapse;width:100%;font-size:15px;line-height:1.65;text-align:start}
@@ -124,5 +126,5 @@
 @media(max-width:1000px){.guide-header-inner{flex-wrap:wrap;gap:12px 24px}.guide-header nav{order:3;width:100%;justify-content:flex-start;margin:0;border-top:1px solid var(--ui-line);padding-top:8px}.guide-header .guide-language{margin-inline-start:auto}.guide-header-cta{margin-inline-start:auto}.guide-hero{gap:32px}.guide-layout{column-gap:28px;grid-template-columns:minmax(0,1fr) 210px}.guide-grid{gap:14px}.guide-card-copy{padding:20px}.guide-card-art{padding:20px}.guide-steps{grid-template-columns:1fr;gap:22px}}
 @media(max-width:760px){.guide-layout{grid-template-columns:minmax(0,1fr);gap:24px;padding-top:24px}.guide-toc{position:static;grid-row:2;padding:16px}.guide-breadcrumb{grid-row:1}.guide-article{grid-row:3}.guide-hero{grid-template-columns:minmax(0,1fr);padding:20px 0 12px;gap:28px}.guide-hero h1{max-width:none;font-size:44px}.guide-preview{max-width:480px;width:100%;justify-self:center}.guide-grid{grid-template-columns:1fr;gap:18px}.guide-card{display:grid;grid-template-columns:110px minmax(0,1fr)}.guide-card-art{min-height:0;padding:20px 16px;justify-content:flex-start;gap:20px}.guide-card-art>span:last-child{font-size:10px;line-height:1.8}.guide-card h3{font-size:20px}.guide-card-copy{padding:20px}.guide-card p{margin-bottom:18px}.guide-workspace-cta,.study-resource-entry{grid-template-columns:minmax(0,1fr);padding:24px;gap:20px}.guide-workspace-cta .guide-button,.study-resource-entry>a{justify-self:start}.guide-footer-top{flex-direction:column;gap:24px}.guide-footer nav{width:100%}.guide-library section{margin-top:36px}.guide-library section:first-of-type{margin-top:28px}}
 @media(max-width:480px){.guide-nav-full{display:none}.guide-nav-compact{display:inline}.guide-header-inner,.guide-layout,.guide-footer{width:calc(100% - 36px)}.guide-page{font-size:16px}.guide-header-inner{gap:10px}.guide-header nav{gap:8px 14px;font-size:12px}.guide-header nav a{min-height:38px}.guide-header-cta{padding:9px 12px;font-size:12px;min-height:40px;gap:8px}.guide-brand{gap:8px}.guide-page h1{font-size:34px}.guide-hero h1{font-size:42px}.guide-page .guide-lead{font-size:16px;line-height:1.8}.guide-hero-actions{gap:16px}.guide-hero-actions .guide-button{width:100%}.guide-preview{padding:22px}.guide-page .guide-preview h2{font-size:25px}.guide-preview-data{gap:6px}.guide-card{display:flex}.guide-card-art{flex-direction:row;align-items:center;justify-content:space-between;min-height:84px;padding:20px}.guide-card-art>span:last-child{font-size:11px;max-width:20ch;text-align:end}.guide-art-number{font-size:32px}.guide-page th,.guide-page td{padding:12px 10px}.guide-note{padding:14px 16px}.guide-page section{margin-top:30px}.guide-workspace-cta .guide-button{width:100%}.guide-workspace-cta{padding:22px}.guide-page .guide-byline{gap:8px 14px}.guide-breadcrumb>span:last-child{display:none}}
-@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.guide-card,.guide-subjects a{transition:none}.guide-card:hover{transform:none}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.guide-card,.guide-subjects a,.guide-topics a{transition:none}.guide-card:hover{transform:none}}
 @media print{.guide-page{background:white!important;color:black!important;font-size:11pt}.guide-header,.guide-toc,.guide-skip,.guide-footer,.guide-breadcrumb,.guide-related,.guide-hero-actions,.guide-workspace-cta{display:none}.guide-layout{display:block;width:100%;padding:0}.guide-article{max-width:none}.guide-page details>*{display:block!important}.guide-page details{break-inside:avoid}.guide-page a{color:inherit}.guide-page section{margin-top:20px}.guide-page h1{font-size:26pt}.guide-page th,.guide-page td{padding:8px}.guide-note,.guide-template{background:white;border:1px solid #aaa}}
