@@ -8,6 +8,9 @@ https://clever-horse-22b1a8.netlify.app/* https://lecturesift.com/:splat 301!
 # use the complete runtime without changing script order or refreshing the page.
 # Match one segment only so unrelated/nested missing assets remain 404s.
 /assets/i18n/:bundle                 /i18n.js                 200
+# The same holds for the app pages' page-copy loader and language catalogs:
+# a missing one is served the complete all-language catalog instead.
+/assets/page-i18n/:bundle            /page-i18n.js            200
 
 # One public content item has one crawlable URL. Netlify serves clean URLs, so
 # legacy .html aliases are permanent redirects rather than duplicate 200 pages.

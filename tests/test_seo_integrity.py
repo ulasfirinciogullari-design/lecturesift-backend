@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -368,7 +369,7 @@ def test_guide_measurement_has_consent_controls_without_the_large_application_sc
             assert not any(re.search(r"/(?:i18n|page-i18n|app)\.js", src) for src in sources)
 
 
-def test_public_pages_use_small_language_specific_runtime_but_private_pages_keep_full_catalog(localized_output: Path) -> None:
+def test_public_pages_use_small_language_specific_runtime_but_private_pages_keep_full_runtime(localized_output: Path) -> None:
     original = (FRONTEND / "i18n.js").read_bytes()
     for language in LANGUAGES:
         prefix = "" if language == "tr" else f"/{language}"
@@ -382,6 +383,98 @@ def test_public_pages_use_small_language_specific_runtime_but_private_pages_keep
             assert f'src="{source}"' in _output_path(localized_output, url).read_text()
     assert (localized_output / "i18n.js").read_bytes() == original
     assert re.search(r'src="(?:\./|/)?i18n\.js\?', (localized_output / "workspace.html").read_text())
+
+
+def _resolve_page_copy(rows: dict[str, list[str | None]], source: str, index: int) -> str:
+    # i18n.js exact(): row[index] || row[1] || source.
+    row = rows.get(source) or []
+    return next((value for value in row[index:index + 1] + row[1:2] if value), source)
+
+
+# Runs the generated loader as a page would, then every catalog it writes.
+PAGE_COPY_HARNESS = r"""
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const [dist, loader, scenarios] = [process.argv[1], process.argv[2], JSON.parse(process.argv[3])];
+const results = scenarios.map(([pathname, saved, browser]) => {
+  const written = [];
+  const context = {
+    location: {pathname}, navigator: {language: browser}, window: {},
+    localStorage: {getItem: key => key === 'lecturesift-ui' ? saved : null},
+    document: {write: markup => written.push(markup)},
+  };
+  vm.runInNewContext(fs.readFileSync(path.join(dist, loader), 'utf8'), context);
+  const sources = written.map(markup => {
+    const match = markup.match(/^<script src="([^"]+)"><\/script>$/);
+    if (!match) throw new Error(`Unexpected loader output: ${markup}`);
+    return match[1];
+  });
+  for (const source of sources) vm.runInNewContext(fs.readFileSync(path.join(dist, source), 'utf8'), context);
+  return {sources, rows: context.window.LECTURESIFT_PAGE_COPY || {}};
+});
+process.stdout.write(JSON.stringify(results));
+"""
+
+
+def test_app_pages_load_only_the_readers_page_copy_catalog(localized_output: Path) -> None:
+    full_source = (FRONTEND / "page-i18n.js").read_text(encoding="utf-8")
+    full = json.loads(full_source.split("window.LECTURESIFT_PAGE_COPY=", 1)[1].rstrip(";\n"))
+    generated = localized_output / "assets" / "page-i18n"
+    for asset in generated.iterdir():
+        name, digest = re.fullmatch(r"([a-z]+)-([a-f0-9]{12})\.js", asset.name).groups()
+        assert hashlib.sha256(asset.read_bytes()).hexdigest()[:12] == digest, asset.name
+        limit = 4_000 if name == "loader" else len(full_source.encode()) // 4
+        assert asset.stat().st_size < limit, (asset.name, asset.stat().st_size)
+
+    loaders = set()
+    for filename in (*NONINDEXABLE_HTML, "404.html"):
+        html = (localized_output / filename).read_text(encoding="utf-8")
+        assert "page-i18n.js" not in html, filename
+        tag, = re.findall(r'<script\b[^>]*/assets/page-i18n/[^>]*>', html)
+        # document.write only runs from a parser-blocking script, before i18n.js.
+        loader, = re.fullmatch(r'<script src="(/assets/page-i18n/loader-[a-f0-9]{12}\.js)">', tag).groups()
+        assert html.index(tag) < re.search(r'src="(?:\./|/)?i18n\.js\?v=', html).start(), filename
+        loaders.add(loader)
+    loader, = loaders
+    for page_path in localized_output.rglob("*.html"):
+        assert not re.search(r'src="[^"]*page-i18n\.js', page_path.read_text(encoding="utf-8")), page_path
+
+    # (pathname, saved language, browser language) -> language i18n.js selects.
+    scenarios = [
+        ("/workspace.html", None, "en-US", "en"),
+        ("/workspace.html", "de", "en-US", "de"),
+        ("/workspace", "xx", "fr-CA", "fr"),
+        ("/account.html", None, "nl-NL", "tr"),
+        ("/account.html", "tr", "en-US", "tr"),
+        ("/en/workspace.html", "de", "fr-FR", "en"),
+        ("/zh/login", None, "en-US", "zh"),
+        ("/features", "de", "de-DE", "tr"),
+        ("/index.html", "ja", "ja-JP", "tr"),
+        *((f"/{language}/support.html", "tr", "tr-TR", language) for language in LANGUAGES[1:]),
+    ]
+    node = shutil.which("node")
+    assert node
+    result = subprocess.run(
+        [node, "-e", PAGE_COPY_HARNESS, str(localized_output), loader.lstrip("/"),
+         json.dumps([scenario[:3] for scenario in scenarios])],
+        text=True, encoding="utf-8", capture_output=True, timeout=60, check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    for (pathname, saved, browser, language), loaded in zip(scenarios, json.loads(result.stdout), strict=True):
+        if language == "tr" and all(row[0] == source for source, row in full.items()):
+            # Turkish page copy is its own source text: Turkish readers load no catalog.
+            assert loaded["sources"] == [], pathname
+        else:
+            source, = loaded["sources"]
+            assert re.fullmatch(rf"/assets/page-i18n/{language}-[a-f0-9]{{12}}\.js", source), (pathname, source)
+            if language != "tr":
+                assert loaded["rows"].keys() == full.keys(), pathname
+        index = LANGUAGES.index(language)
+        assert all(
+            _resolve_page_copy(loaded["rows"], source, index) == _resolve_page_copy(full, source, index)
+            for source in full
+        ), (pathname, saved, browser)
 
 
 NONINDEXABLE_HTML = tuple(
@@ -441,13 +534,14 @@ def test_locale_rewrites_only_serve_noindex_app_pages_and_real_assets(localized_
     lines = (localized_output / "_redirects").read_text(encoding="utf-8").splitlines()
     rules = [line.split() for line in lines if line.strip() and not line.startswith("#")]
     assert len(rules) < 2000
-    # The one non-locale rewrite recovers a retired JS bundle. It must stay
+    # The non-locale rewrites recover retired JS bundles. They must stay
     # unforced and single-segment; all app/asset locale routes remain exact.
-    fallback = "/assets/i18n/:bundle"
-    assert [rule for rule in rules if rule[0] == fallback] == [[fallback, "/i18n.js", "200"]]
-    assert (localized_output / "i18n.js").read_bytes() == (FRONTEND / "i18n.js").read_bytes()
+    fallbacks = {"/assets/i18n/:bundle": "/i18n.js", "/assets/page-i18n/:bundle": "/page-i18n.js"}
+    for fallback, target in fallbacks.items():
+        assert [rule for rule in rules if rule[0] == fallback] == [[fallback, target, "200"]]
+        assert (localized_output / target.lstrip("/")).read_bytes() == (FRONTEND / target.lstrip("/")).read_bytes()
     rewrites = {source: target for source, target, status in rules
-                if status == "200" and source != fallback}
+                if status == "200" and source not in fallbacks}
     assert rewrites
     for source, target in rewrites.items():
         assert "*" not in source and ":" not in source, source
