@@ -25,6 +25,10 @@ MEETING_MINUTES = {
     "ko": r"회의록|통화 시간",
 }
 PRIVACY_TOPIC = "KVKK / gizlilik başvurusu"
+HOME_SOURCE_DELETION = (
+    "Orijinal video, ses veya belge dosyan, işlem bittiğinde, başarısız olsa bile silinir. "
+    "Silme aksarsa dosya, ders silindiğinde veya süresi dolduğunda dersle birlikte kaldırılır."
+)
 
 
 def _mentions_minutes(source: str) -> bool:
@@ -103,8 +107,14 @@ def test_workspace_offer_copy_matches_the_free_plan():
     assert "<span>✓ PDF; ücretli planlarda Word ve TXT</span>" in workspace
 
 
-def test_homepage_upload_deletion_repeats_the_privacy_retention_limit():
-    assert "İşlem tamamlandıktan sonra varsayılan en fazla 6 saat" in _page("privacy.html")
+def test_homepage_upload_deletion_describes_the_cleanup_that_actually_runs():
+    # Sources are deleted when a job ends, on success and on failure. Failed
+    # object-storage deletes are not retried, so the homepage must not promise
+    # a fixed deadline; leftovers go with the lesson's own deletion or expiry.
     home = _page("index.html")
-    assert "işlem bittikten sonra en geç 6 saat içinde otomatik olarak silinir" in home
+    assert f"<li>{HOME_SOURCE_DELETION}</li>" in home
+    assert "6 saat" not in home
     assert "işlem başarıyla tamamlanınca silinir" not in home
+    row = CATALOG[HOME_SOURCE_DELETION]
+    assert all(value.strip() for value in row)
+    assert not any(re.search(r"\b6\b", value) for value in row)
