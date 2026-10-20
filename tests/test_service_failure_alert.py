@@ -60,7 +60,7 @@ def env_files(tmp_path: Path) -> list[Path]:
                 'EMAIL_FROM="LectureSift <noreply@example.com>"',
                 f"RESEND_API_KEY={RESEND_KEY}",
                 "LECTURESIFT_OPS_ALERT_EMAIL=ops@example.com",
-                "LECTURESIFT_ADMIN_EMAILS=owner@example.org, OPS@example.com,not-an-address",
+                'LECTURESIFT_ADMIN_EMAILS="owner@example.org, OPS@example.com,not-an-address"',
                 f"ADMIN_ADMIN={ADMIN_KEY}",
                 "DATABASE_URL=postgresql+psycopg://lecturesift_app:"
                 f"{DB_PASSWORD}@postgres:5432/lecturesift",
@@ -394,6 +394,11 @@ def test_main_never_fails_the_alert_unit_on_an_unexpected_error(monkeypatch, cap
         ("image sha256:" + "ab" * 32, "ab" * 32, "image sha256:[redacted]"),
         ("token MixedCaseOpaque0123456789abcXYZ end", "MixedCaseOpaque0123456789abcXYZ", " end"),
         ("mail Jane.Doe+x@example.co.uk now", "Jane.Doe+x@example.co.uk", "mail [email] now"),
+        # Address-shaped text ending in a unit suffix is still an address.
+        ("reply to customer@example.service failed", "customer@example.service",
+         "reply to [email] failed"),
+        ("cc ops@lecturesift.service.service", "ops@lecturesift", "cc [email]"),
+        ("from lecturesift-failure-alert@example.service", "@example.service", "from [email]"),
         ("\x1b[31mred\x1b[0m bell\x07", "\x1b", "red bell"),
     ),
 )
@@ -410,6 +415,9 @@ def test_redaction_hides_credentials_and_addresses(line, hidden, kept):
         "lecturesift-instagram.service: Main process exited, code=exited, status=1/FAILURE",
         'File "/usr/local/lib/python3.12/site-packages/lecturesift/daily_social.py", line 704',
         "Triggering lecturesift-failure-alert@lecturesift-instagram.service.service",
+        "lecturesift-failure-alert@lecturesift-ingress-selector.service.service: Deactivated.",
+        "Started lecturesift-failure-alert@lecturesift-instagram.service by hand",
+        "lecturesift-backup-alert@lecturesift-backup.service.service: Succeeded.",
         "/opt/lecturesift/deploy/preflight.sh: Missing required environment values: OPENAI_API_KEY",
         "Ingress reconciliation attempt failed; durable state remains fail-closed.",
     ),
@@ -435,6 +443,77 @@ def test_configuration_values_are_redacted_but_plain_names_and_paths_stay(tmp_pa
     assert alert.redact(line, secrets) == (
         "user lecturesift_owner at /var/lib/lecturesift used [redacted]"
     )
+
+
+def test_env_values_are_decoded_with_shell_quoting_before_use_and_redaction(tmp_path, capsys):
+    escaped_password = 'Synthetic\\"Quote-Passw0rd'
+    decoded_password = 'Synthetic"Quote-Passw0rd'
+    runtime = _private(
+        tmp_path / "runtime.env",
+        "\n".join(
+            (
+                "EMAIL_PROVIDER=smtp",
+                'EMAIL_FROM="LectureSift \\"Ops\\" <noreply@example.com>"',
+                f'SMTP_PASSWORD="{escaped_password}"',
+                "SMTP_USERNAME=lecturesift\\ mailer",
+                "RESEND_API_KEY='Synth$Key-0123456789'",
+                "LECTURESIFT_OPS_ALERT_EMAIL=ops@example.com",
+            )
+        )
+        + "\n",
+    )
+
+    settings, secrets, complete = alert.load_env_files([runtime])
+
+    assert complete is True
+    assert settings["EMAIL_FROM"] == 'LectureSift "Ops" <noreply@example.com>'
+    assert settings["SMTP_PASSWORD"] == decoded_password
+    assert settings["SMTP_USERNAME"] == "lecturesift mailer"
+    assert settings["RESEND_API_KEY"] == "Synth$Key-0123456789"
+    assert decoded_password in secrets
+    assert escaped_password not in secrets
+    assert alert.redact(f"smtp login {decoded_password} refused", secrets) == (
+        "smtp login [redacted] refused"
+    )
+
+    sender = FakeSender()
+    journal = [f"smtp login {decoded_password} refused"]
+    assert _run([runtime], tmp_path / "state", sender=sender, journal=lambda unit: journal) == 0
+    assert sender.calls[0][0]["SMTP_PASSWORD"] == decoded_password
+    assert "smtp login [redacted] refused" in sender.calls[0][3]
+    assert decoded_password not in sender.calls[0][3]
+
+
+@pytest.mark.parametrize(
+    "line",
+    (
+        'SMTP_PASSWORD="unterminated',
+        "SMTP_PASSWORD=$HOME-derived",
+        'SMTP_PASSWORD="prefix-$(command)"',
+        "SMTP_PASSWORD=two words",
+        "SMTP_PASSWORD= leading-space",
+        "set -a",
+    ),
+)
+def test_undecodable_values_are_left_out_and_so_is_the_journal(tmp_path, line):
+    runtime = _private(
+        tmp_path / "runtime.env",
+        f"EMAIL_PROVIDER=resend\nLECTURESIFT_OPS_ALERT_EMAIL=ops@example.com\n{line}\n",
+    )
+
+    settings, secrets, complete = alert.load_env_files([runtime])
+
+    assert complete is False
+    assert "SMTP_PASSWORD" not in settings
+    assert settings["LECTURESIFT_OPS_ALERT_EMAIL"] == "ops@example.com"
+
+    sender = FakeSender()
+
+    def journal(unit):
+        raise AssertionError("the journal must not be read with an incomplete redaction set")
+
+    assert _run([runtime], tmp_path / "state", sender=sender, journal=journal) == 0
+    assert "journal lines were left out" in sender.calls[0][3]
 
 
 def test_long_lines_are_cut_without_leaving_half_a_secret():

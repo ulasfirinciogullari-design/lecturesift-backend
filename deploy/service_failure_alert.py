@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import smtplib
 import socket
 import ssl
@@ -79,7 +80,12 @@ SECRET_FIELD = re.compile(
     r"(\"[^\"]*\"|'[^']*'|[^\s,;&}]+)"
 )
 EMAIL_IN_TEXT = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-UNIT_SUFFIXES = (".service", ".timer", ".target", ".socket", ".mount", ".slice", ".scope")
+# The only address-shaped text kept: an instance of one of the two alert
+# templates for a LectureSift unit, e.g.
+# lecturesift-failure-alert@lecturesift-instagram.service.service.
+ALERT_INSTANCE = re.compile(
+    r"lecturesift-(?:failure|backup)-alert@lecturesift(?:-[a-z]+)*\.service(?:\.service)?"
+)
 HEX_RUN = re.compile(r"\b[0-9A-Fa-f]{32,}\b")
 OPAQUE_RUN = re.compile(r"[A-Za-z0-9_+/=.-]{24,}")
 MAX_SCANNED_LINE = 2000
@@ -101,19 +107,46 @@ def _private_file(path: Path) -> bool:
     return True
 
 
-def parse_env_file(path: Path) -> dict[str, str]:
-    """Read simple dotenv assignments without evaluating any shell syntax."""
+def decode_value(rhs: str) -> str | None:
+    """Decode one right-hand side the way the sourcing shell does, or None.
+
+    Same rule as generate_rehearsal_envs.parse_dotenv_text: the value must be
+    exactly one POSIX shell word. Expansions outside single quotes are refused
+    because the shell would have replaced them with something else.
+    """
+
+    if not rhs.strip():
+        return ""
+    if rhs[0] in " \t":
+        return None
+    single_quoted = len(rhs) >= 2 and rhs[0] == rhs[-1] == "'" and rhs.count("'") == 2
+    if ("$" in rhs or "`" in rhs) and not single_quoted:
+        return None
+    lexer = shlex.shlex(rhs, posix=True)
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    try:
+        words = list(lexer)
+    except ValueError:
+        return None
+    return words[0] if len(words) == 1 else None
+
+
+def parse_env_file(path: Path) -> tuple[dict[str, str], int]:
+    """Decode the assignments; also count lines that cannot be decoded for certain."""
 
     values: dict[str, str] = {}
+    undecoded = 0
     for line in path.read_text(encoding="utf-8").splitlines():
-        match = ASSIGNMENT.fullmatch(line)
-        if not match:
+        if not line.strip() or line.lstrip().startswith("#"):
             continue
-        key, raw = match.group(1), match.group(2).strip()
-        if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in {"'", '"'}:
-            raw = raw[1:-1]
-        values[key] = raw
-    return values
+        match = ASSIGNMENT.fullmatch(line)
+        value = decode_value(match.group(2)) if match else None
+        if value is None:
+            undecoded += 1
+            continue
+        values[match.group(1)] = value
+    return values, undecoded
 
 
 def load_env_files(paths: Sequence[Path]) -> tuple[dict[str, str], list[str], bool]:
@@ -121,7 +154,8 @@ def load_env_files(paths: Sequence[Path]) -> tuple[dict[str, str], list[str], bo
 
     The first file is the runtime configuration and must be readable. A later
     file may be absent; one that exists but is unsafe or unreadable makes the
-    redaction set incomplete, so the caller omits the journal lines.
+    redaction set incomplete, so the caller omits the journal lines. So does a
+    line whose value cannot be decoded for certain; that key is left out.
     """
 
     settings: dict[str, str] = {}
@@ -133,12 +167,14 @@ def load_env_files(paths: Sequence[Path]) -> tuple[dict[str, str], list[str], bo
                 continue
             if not _private_file(path):
                 raise PermissionError("not a root-only regular file")
-            values = parse_env_file(path)
+            values, undecoded = parse_env_file(path)
         except (OSError, UnicodeError):
             if index == 0:
                 raise
             complete = False
             continue
+        if undecoded:
+            complete = False
         if index == 0:
             settings = values
         for key, value in values.items():
@@ -166,9 +202,9 @@ def _is_secret_value(key: str, value: str) -> bool:
     )
 
 
-def _keep_unit_names(match: re.Match[str]) -> str:
+def _keep_alert_instances(match: re.Match[str]) -> str:
     text = match.group(0)
-    return text if text.endswith(UNIT_SUFFIXES) else "[email]"
+    return text if ALERT_INSTANCE.fullmatch(text) else "[email]"
 
 
 def _hide_opaque(match: re.Match[str]) -> str:
@@ -196,7 +232,7 @@ def redact(line: str, secrets: Iterable[str]) -> str:
     text = SECRET_HEADER.sub(lambda match: match.group(1) + match.group(2) + REDACTED, text)
     text = BEARER.sub(lambda match: match.group(1) + " " + REDACTED, text)
     text = SECRET_FIELD.sub(lambda match: match.group(1) + REDACTED, text)
-    text = EMAIL_IN_TEXT.sub(_keep_unit_names, text)
+    text = EMAIL_IN_TEXT.sub(_keep_alert_instances, text)
     text = HEX_RUN.sub(REDACTED, text)
     text = OPAQUE_RUN.sub(_hide_opaque, text)
     if len(text) > MAX_SHOWN_LINE:
@@ -383,6 +419,11 @@ def run(
             journal = [redact(line, secrets) for line in journal_reader(unit)]
         except (OSError, subprocess.SubprocessError):
             log(f"The journal of {unit} could not be read; the alert is sent without it.")
+    else:
+        log(
+            "An environment file is unsafe or has a value that cannot be decoded for "
+            f"certain; the alert for {unit} is sent without journal lines."
+        )
     subject, text = compose_message(unit, host or socket.gethostname(), now, journal)
     try:
         sender(settings, to, subject, text)
