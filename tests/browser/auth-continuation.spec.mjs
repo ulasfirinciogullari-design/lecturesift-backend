@@ -54,9 +54,15 @@ test('a selected plan survives sign-in links, registration and code verification
   const forgot = page.locator('a[data-auth-route="/forgot-password.html"]');
   expect(new URL(await forgot.getAttribute('href'), page.url()).searchParams.get('next')).toBe(next);
   await forgot.click();
-  await page.locator('a[data-auth-route="/login.html"]').click();
+  // A click only waits for the navigation to commit. auth.js adds the
+  // continuation to these links when it runs, after the i18n scripts.
+  const login = page.locator('a[data-auth-route="/login.html"]');
+  await expect(login).toHaveAttribute('href', /[?&]next=/);
+  await login.click();
   expect(new URL(page.url()).searchParams.get('next')).toBe(next);
-  await page.locator('a[data-auth-route="/register.html"]').click();
+  const signup = page.locator('a[data-auth-route="/register.html"]');
+  await expect(signup).toHaveAttribute('href', /[?&]next=/);
+  await signup.click();
   expect(new URL(page.url()).pathname).toBe('/en/register.html');
   expect(new URL(page.url()).searchParams.get('next')).toBe(next);
   await register(page);
