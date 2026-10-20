@@ -6,7 +6,7 @@ const limits = {max_files_per_job:1, max_media_upload_mb:150, max_document_uploa
   max_minutes_per_job:30, max_document_pages:40, max_ocr_pages:8};
 const pdf = name => ({name, mimeType:'application/pdf', buffer:Buffer.from('Synthetic PDF transport fixture; no extraction.')});
 
-async function prepare(page, {advertised = limits, actual = limits, locale = 'en', waitForAllowance = true} = {}) {
+async function prepare(page, {advertised = limits, actual = limits, locale = 'en', waitForAllowance = true, minutes = 30} = {}) {
   let identities = 0;
   await page.addInitScript(locale => {
     localStorage.setItem('lecturesift-ui', locale);
@@ -23,7 +23,7 @@ async function prepare(page, {advertised = limits, actual = limits, locale = 'en
     };
   }, locale);
   await page.route(`${API}/billing/plans?currency=TRY`, route => route.fulfill({headers, json:{
-    plans:[], selected_currency:'TRY', guest_trial_minutes:30, document_words_per_credit_minute:200,
+    plans:[], selected_currency:'TRY', guest_trial_minutes:minutes, document_words_per_credit_minute:200,
     ...(advertised == null ? {} : {guest_trial_limits:advertised}),
     document_sample:{enabled:true, max_words:2000, max_pages:10, max_ocr_pages:5, supports_ocr:true, native_text_only:false, formats:['pdf']},
   }}));
@@ -196,6 +196,55 @@ test('an older guest catalog keeps the one-source fallback and unchanged PDF sam
   await expect(page.locator('#errorCode')).toContainText('LS-UPLOAD-04');
   await expect(page.locator('#classicFileList .source-file-row')).toHaveCount(1);
   expect(identities()).toBe(0);
+});
+
+// 8 kHz, 8-bit mono PCM silence (8 KB per second), so the browser can read its length.
+function wav(name, seconds) {
+  const rate = 8000, samples = rate * seconds, buffer = Buffer.alloc(44 + samples, 128);
+  buffer.write('RIFF', 0, 'ascii'); buffer.writeUInt32LE(36 + samples, 4); buffer.write('WAVE', 8, 'ascii');
+  buffer.write('fmt ', 12, 'ascii'); buffer.writeUInt32LE(16, 16); buffer.writeUInt16LE(1, 20); buffer.writeUInt16LE(1, 22);
+  buffer.writeUInt32LE(rate, 24); buffer.writeUInt32LE(rate, 28); buffer.writeUInt16LE(1, 32); buffer.writeUInt16LE(8, 34);
+  buffer.write('data', 36, 'ascii'); buffer.writeUInt32LE(samples, 40);
+  return {name, mimeType:'audio/wav', buffer};
+}
+
+test('a guest media file longer than the server trial limit stops before upload with a free-account link', async ({page}) => {
+  // 0.05 minutes is 3 seconds; the server also allows 0.05 minutes of tolerance, so 12 seconds is over.
+  const identities = await prepare(page, {minutes:0.05});
+  await expect(page.locator('.rollout-guest-note')).toContainText('up to 0.05 minutes');
+  await page.locator('#classicFiles').setInputFiles(wav('long-lecture.wav', 12));
+  await page.locator('#analyzeButton').click();
+  await expect(page.locator('#errorCode')).toContainText('LS-GUEST-04');
+  await expect(page.locator('#errorMessage')).toHaveText('The no-account trial accepts a source of up to 0.05 minutes.');
+  await expect(page.locator('#guestSourceLimitSignup')).toHaveText('Create a free account');
+  await expect(page.locator('#guestSourceLimitSignup')).toHaveAttribute('href', /\/en\/register\.html\?next=/);
+  await expect(page.locator('#analyzeButton')).toBeEnabled();
+  expect(await page.evaluate(() => window.LectureSiftGuestTrial.state().used)).toBe(false);
+  expect(await page.evaluate(() => window.syntheticGuestUploadCount || 0)).toBe(0);
+  expect(identities()).toBe(1);
+  // A file the browser cannot read uploads as before and the server decides.
+  await page.locator('#closeError').click();
+  await page.locator('[data-action="remove"]').click();
+  await page.locator('#classicFiles').setInputFiles({name:'unreadable.mp3', mimeType:'audio/mpeg', buffer:Buffer.from('Synthetic unreadable audio.')});
+  await page.locator('#analyzeButton').click();
+  await expect.poll(() => page.evaluate(() => window.syntheticGuestUploadCount || 0)).toBe(1);
+  expect(identities()).toBe(1);
+});
+
+test('a Turkish server error is shown in English with its numbers kept', async ({page}) => {
+  await prepare(page);
+  await page.locator('#classicFiles').setInputFiles(pdf('chapter.pdf'));
+  await page.locator('#analyzeButton').click();
+  await expect.poll(() => page.evaluate(() => window.syntheticGuestUploadCount || 0)).toBe(1);
+  await page.evaluate(() => {
+    const xhr = window.syntheticGuestUpload;
+    Object.defineProperty(xhr, 'status', {value:402});
+    Object.defineProperty(xhr, 'responseText', {value:JSON.stringify({detail:{code:'LS-GUEST-04',
+      message:'Bu belge için 42 dakika kullanım hakkı gerekiyor; guest planında tek iş sınırı 30 dakikadır. Belgeyi böl veya planını yükselt.'}})});
+    xhr.dispatchEvent(new ProgressEvent('load'));
+  });
+  await expect(page.locator('#errorMessage')).toHaveText('This document needs 42 minutes of allowance; the guest plan allows 30 minutes per job. Split the document or upgrade your plan.');
+  await expect(page.locator('#guestSourceLimitSignup')).toHaveAttribute('href', /\/en\/register\.html\?next=/);
 });
 
 for (const stricter of ['file count', 'file size']) {
