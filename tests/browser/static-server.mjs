@@ -14,8 +14,10 @@ const redirectRules = (await readFile(path.join(root, '_redirects'), 'utf8'))
 const sharedRewrites = new Map(redirectRules
   .filter(([from, to, status]) => status === '200' && from.startsWith('/') && !/[*:]/.test(from) && to.startsWith('/'))
   .map(([from, to]) => [from, to]));
-const localeRuntimeFallback = redirectRules.some(([from, to, status]) =>
-  from === '/assets/i18n/:bundle' && to === '/i18n.js' && status === '200');
+// Unforced single-segment bundle recoveries, e.g. /assets/i18n/:bundle -> /i18n.js.
+const bundleFallbacks = redirectRules
+  .filter(([from, to, status]) => status === '200' && /^\/assets\/[\w-]+\/:bundle$/.test(from) && /^\/[\w-]+\.js$/.test(to))
+  .map(([from, to]) => [from.slice(0, -':bundle'.length), to]);
 
 http.createServer(async (request, response) => {
   if (!['GET', 'HEAD'].includes(request.method)) {
@@ -29,10 +31,12 @@ http.createServer(async (request, response) => {
     const rewritten = destination ? path.resolve(root, `.${destination}`) : null;
     const candidates = [requested, requested + '.html', path.join(requested, 'index.html')];
     if (rewritten) candidates.push(rewritten, rewritten + '.html');
-    // Only the deployed, unforced single-segment rule is supported here. Static
+    // Only the deployed, unforced single-segment rules are supported here. Static
     // files must win, as they do on Netlify, and unrelated 404s stay visible.
-    if (localeRuntimeFallback && /^\/assets\/i18n\/[^/]+$/.test(pathname)) {
-      candidates.push(path.join(root, 'i18n.js'));
+    for (const [prefix, target] of bundleFallbacks) {
+      if (pathname.startsWith(prefix) && /^[^/]+$/.test(pathname.slice(prefix.length))) {
+        candidates.push(path.join(root, target.slice(1)));
+      }
     }
     // Canonical /en/features and /features map to the actual generated .html files.
     for (const candidate of candidates) {
