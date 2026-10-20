@@ -11,10 +11,12 @@ that shows its log on the server. It carries no log lines. A log excerpt can
 hold credentials or customer data, and whoever investigates reads the journal
 on the server anyway.
 
-At most one alert per unit is sent per hour, so a timer that fails every
-15 minutes cannot flood the mailbox. Alerting must never affect the watched
-unit: every problem is logged to the alert unit's journal and the script still
-exits 0. The scheduled backup keeps its own lecturesift-backup-alert@ unit.
+Each recipient gets a message of their own, so nobody sees another
+recipient's address. At most one alert per unit is sent per hour, so a timer
+that fails every 15 minutes cannot flood the mailbox. Alerting must never
+affect the watched unit: every problem is logged to the alert unit's journal
+and the script still exits 0. The scheduled backup keeps its own
+lecturesift-backup-alert@ unit.
 """
 
 from __future__ import annotations
@@ -47,16 +49,16 @@ WATCHED_UNITS = {
     "lecturesift-instagram.service": "the scheduled Instagram studio and replies job",
 }
 RATE_LIMIT_SECONDS = 3600
-# Every recipient gets the alert; each message carries at most this many, which
-# both the Resend API and ordinary SMTP accounts accept.
-RECIPIENTS_PER_MESSAGE = 10
 # The template stops this script after TimeoutStartSec=90. The systemd state
-# query and every delivery attempt are bounded so that all of it, including
-# saving the hourly record, ends well before that.
+# query and every send are bounded so that all of it, including saving the
+# hourly record, ends well before that.
 STATE_QUERY_SECONDS = 10
 DELIVERY_SECONDS = 60
 REQUEST_SECONDS = 20
 MIN_REQUEST_SECONDS = 5
+# Resend allows two API requests per second by default; the pause between two
+# sends keeps one message per recipient under that.
+SEND_INTERVAL_SECONDS = 0.6
 # Turkey has kept UTC+3 all year since 2016.
 TURKEY_TIME = timezone(timedelta(hours=3))
 DEFAULT_STATE_DIR = Path("/var/lib/lecturesift/failure-alerts")
@@ -94,7 +96,7 @@ class DeliveryTimeout(Exception):
 
 
 class DeliveryRejected(RuntimeError):
-    """The provider answered, but did not accept the message for anyone."""
+    """The provider answered, but did not accept the message."""
 
     def __init__(self, message: str, status: int | None = None):
         super().__init__(message)
@@ -245,12 +247,13 @@ def compose_message(
 
 
 def send_email(
-    settings: Mapping[str, str], to: list[str], subject: str, text: str, timeout: float
-) -> int:
-    """Send one plain-text email through the configured Resend or SMTP account.
+    settings: Mapping[str, str], address: str, subject: str, text: str, timeout: float
+) -> None:
+    """Send one plain-text email to one address through Resend or SMTP.
 
-    Returns how many of ``to`` the provider accepted, and raises when it
-    accepted none of them.
+    Each recipient gets a message of their own, so no recipient sees another
+    one's address. Returning normally means the provider accepted it; every
+    other outcome raises.
     """
 
     provider = settings.get("EMAIL_PROVIDER", "").strip().lower()
@@ -263,7 +266,9 @@ def send_email(
             raise RuntimeError("RESEND_API_KEY is not configured")
         request = urllib.request.Request(
             "https://api.resend.com/emails",
-            data=json.dumps({"from": sender, "to": to, "subject": subject, "text": text}).encode(),
+            data=json.dumps(
+                {"from": sender, "to": [address], "subject": subject, "text": text}
+            ).encode(),
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
@@ -285,8 +290,7 @@ def send_email(
         message_id = answer.get("id") if isinstance(answer, dict) else None
         if not isinstance(message_id, str) or not message_id.strip():
             raise DeliveryRejected("Resend did not confirm the message", status)
-        # Resend accepts one message for every address in "to" or none at all.
-        return len(to)
+        return
     if provider == "smtp":
         host = settings.get("SMTP_HOST", "")
         username = settings.get("SMTP_USERNAME", "")
@@ -295,7 +299,7 @@ def send_email(
             raise RuntimeError("SMTP is not configured")
         message = EmailMessage()
         message["From"] = sender
-        message["To"] = ", ".join(to)
+        message["To"] = address
         message["Subject"] = subject
         message.set_content(text)
         # Same switch as lecturesift.config: only the literal "true" enables STARTTLS.
@@ -304,51 +308,46 @@ def send_email(
             if use_tls:
                 client.starttls(context=ssl.create_default_context())
             client.login(username, password)
-            # smtplib raises only when every recipient is refused; otherwise it
-            # returns the refused ones, which must not count as reached.
-            refused = client.send_message(message, to_addrs=to) or {}
-        accepted = sum(1 for address in to if address not in refused)
-        if not accepted:
-            raise DeliveryRejected("the SMTP server refused every recipient")
-        return accepted
+            # With one recipient, smtplib raises SMTPRecipientsRefused when the
+            # server refuses it; a non-empty refusal map is treated the same.
+            if client.send_message(message, to_addrs=[address]):
+                raise DeliveryRejected("the SMTP server refused the recipient")
+        return
     raise RuntimeError("no supported EMAIL_PROVIDER is configured")
 
 
 def _send_within(
-    sender: Callable[..., int],
+    sender: Callable[..., None],
     settings: Mapping[str, str],
-    batch: list[str],
+    address: str,
     subject: str,
     text: str,
     limit: float,
-) -> int:
-    """Run one provider request and return how many recipients it accepted.
+) -> None:
+    """Run one provider request, giving up on it after ``limit`` seconds.
 
-    The request runs in a daemon thread and is abandoned after ``limit``
-    seconds, so a slow DNS lookup or a stalled SMTP exchange cannot hold the
-    script past its deadline; the thread ends with the process.
+    The request runs in a daemon thread, so a slow DNS lookup or a stalled SMTP
+    exchange cannot hold the script past its deadline; the thread ends with the
+    process.
     """
 
-    outcome: list[tuple[bool, object]] = []
+    outcome: list[BaseException | None] = []
 
     def deliver() -> None:
         try:
-            outcome.append((True, sender(settings, batch, subject, text, limit)))
+            sender(settings, address, subject, text, limit)
         except BaseException as exc:  # noqa: BLE001 - handed to the waiting thread
-            outcome.append((False, exc))
+            outcome.append(exc)
+        else:
+            outcome.append(None)
 
     worker = threading.Thread(target=deliver, name="failure-alert-delivery", daemon=True)
     worker.start()
     worker.join(limit)
     if not outcome:
         raise DeliveryTimeout()
-    succeeded, value = outcome[0]
-    if not succeeded:
-        raise value  # type: ignore[misc]
-    # Count only what the provider reported as accepted, never the whole batch.
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-        raise DeliveryRejected("the provider accepted no recipient")
-    return min(value, len(batch))
+    if outcome[0] is not None:
+        raise outcome[0]
 
 
 def _failure_name(exc: BaseException) -> str:
@@ -393,8 +392,9 @@ def run(
     now: float | None = None,
     host: str | None = None,
     state_reader: Callable[[str], Mapping[str, str]] | None = None,
-    sender: Callable[..., int] | None = None,
+    sender: Callable[..., None] | None = None,
     clock: Callable[[], float] = time.monotonic,
+    pause: Callable[[float], None] = time.sleep,
 ) -> int:
     """Send at most one alert for this unit per hour. Returns the exit status."""
 
@@ -439,49 +439,44 @@ def run(
     subject, text = compose_message(unit, host, now, state)
 
     deadline = clock() + DELIVERY_SECONDS
-    delivered = 0
-    refused = 0
-    failures: list[str] = []
-    stopped = False
-    for start in range(0, len(to), RECIPIENTS_PER_MESSAGE):
+    reached = 0
+    failures: dict[str, int] = {}
+    not_tried = 0
+    for index, address in enumerate(to):
+        if index:
+            pause(SEND_INTERVAL_SECONDS)
         remaining = deadline - clock()
         if remaining < MIN_REQUEST_SECONDS:
-            stopped = True
+            not_tried = len(to) - index
             break
-        batch = to[start : start + RECIPIENTS_PER_MESSAGE]
         try:
-            accepted = _send_within(
-                sender, settings, batch, subject, text, min(REQUEST_SECONDS, remaining)
-            )
+            _send_within(sender, settings, address, subject, text, min(REQUEST_SECONDS, remaining))
         except Exception as exc:  # noqa: BLE001 - never fail the alert unit over delivery
             failure = _failure_name(exc)
-            if failure not in failures:
-                failures.append(failure)
+            failures[failure] = failures.get(failure, 0) + 1
             continue
-        if not delivered:
+        if not reached:
             # Count the alert as soon as anyone has it, so being stopped later
             # cannot make the next failure send it to the same people again.
             try:
                 record_sent(state_dir, unit, now)
             except OSError:
                 log(f"Failure alert for {unit} sent, but the one-hour rate-limit state was not saved.")
-        delivered += accepted
-        refused += len(batch) - accepted
+        reached += 1
 
-    reasons = list(failures)
-    if refused:
-        reasons.append(f"the mail server refused {refused} recipient(s)")
-    if stopped:
-        reasons.append(f"the {DELIVERY_SECONDS}-second delivery limit was reached")
-    if not delivered:
-        log(f"Failure alert for {unit} not sent: {', '.join(reasons)}.")
+    refused = sum(failures.values())
+    summary = f"reached {reached} of {len(to)} recipient(s); refused or failed: {refused}"
+    if failures:
+        summary += " (" + ", ".join(f"{name} x{count}" for name, count in failures.items()) + ")"
+    summary += f"; not tried: {not_tried}"
+    if not_tried:
+        summary += f" (the {DELIVERY_SECONDS}-second delivery limit was reached)"
+    if not reached:
+        log(f"Failure alert for {unit} not sent: {summary}.")
         return 0
-    if delivered < len(to):
-        log(
-            f"Failure alert for {unit} reached {delivered} of {len(to)} recipient(s); "
-            f"the rest were not reached: {', '.join(reasons)}."
-        )
-    log(f"Failure alert for {unit} sent to {delivered} recipient(s).")
+    if reached < len(to):
+        log(f"Failure alert for {unit} {summary}.")
+    log(f"Failure alert for {unit} sent to {reached} recipient(s).")
     return 0
 
 

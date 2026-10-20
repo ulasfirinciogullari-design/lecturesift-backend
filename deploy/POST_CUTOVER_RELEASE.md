@@ -400,16 +400,19 @@ excerpt can hold credentials or customer data; read the journal on the
 server instead. When the core or the selector is still active, the email
 says that a reload or one reconciliation attempt failed.
 
-More than ten recipients get the alert in several messages of at most ten
-each. Only addresses the provider accepted count as reached. A Resend answer
-without a message id is not a delivery, and the alert unit's journal counts
-the addresses an SMTP server refused. Sending stops after 60 seconds, well inside the alert unit's 90-second
-limit, and the journal of the alert unit says how many recipients were
-reached. Each unit gets at most one alert per hour, however many messages it
-took. The alert counts as soon as its first message is delivered. The time of
-the last one is in `/var/lib/lecturesift/failure-alerts/<unit>.last-sent`. A
-delivery failure is only logged in the alert unit's journal and never affects
-the failed unit.
+Every recipient gets a message of their own, with only their address in it,
+so nobody sees who else was alerted. The messages go out 0.6 seconds apart,
+under Resend's default limit of two requests per second. A message counts as
+delivered only when
+the provider accepts it. For Resend that means a 2xx answer with a message
+id; an SMTP server must not refuse the address. Sending stops after 60
+seconds, well inside the alert unit's 90-second limit. The alert unit's
+journal then says how many recipients were reached, how many were refused or
+failed, and how many were not tried. Each unit gets at most one alert per
+hour, however many messages it took. The alert counts as soon as its first
+message is accepted. The time of the last one is in
+`/var/lib/lecturesift/failure-alerts/<unit>.last-sent`. A delivery failure is
+only logged in the alert unit's journal and never affects the failed unit.
 
 Stopping `lecturesift-instagram.service` while it still runs can end it as
 failed and send an alert. Step 1 already waits for it to finish. Promotion
