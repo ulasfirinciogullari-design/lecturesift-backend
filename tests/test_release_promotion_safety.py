@@ -46,9 +46,16 @@ def _systemd_safety_functions(path: str) -> str:
 
 
 def _run_systemd_safety_functions(
-    path: str, body: str, *, listed: bool = False, state: str = "inactive"
+    path: str,
+    body: str,
+    *,
+    listed: bool = False,
+    state: str = "inactive",
+    template: str = "lecturesift-backup-alert@.service",
 ) -> subprocess.CompletedProcess[str]:
     bash = _usable_bash()
+    pattern = template.replace("@.service", "@*.service")
+    probe = template.replace("@.service", "@probe.service")
     harness = f"""\
 set -Eeuo pipefail
 {_systemd_safety_functions(path)}
@@ -57,15 +64,15 @@ systemctl() {{
     list-units)
       [[ "$#" == 6 && "$2" == --all && "$3" == --type=service && \
          "$4" == --no-legend && "$5" == --plain && \
-         "$6" == 'lecturesift-backup-alert@*.service' ]] || return 91
+         "$6" == '{pattern}' ]] || return 91
       if [[ "${{FAKE_LISTED:-0}}" == 1 ]]; then
         printf '%s loaded active running test instance\\n' \
-          'lecturesift-backup-alert@probe.service'
+          '{probe}'
       fi
       ;;
     show)
       [[ "$#" == 4 && "$2" == --property=ActiveState && "$3" == --value && \
-         "$4" == lecturesift-backup-alert@probe.service ]] || return 92
+         "$4" == {probe} ]] || return 92
       printf '%s\\n' "$FAKE_ACTIVE_STATE"
       ;;
     *)
@@ -142,7 +149,10 @@ def test_systemd_install_uses_atomic_fragments_secure_lock_and_noop_retry():
     assert "assert_unit_inactive()" in script
     assert "systemctl list-units --all --type=service --no-legend --plain" in script
     assert "systemctl show --property=ActiveState --value" in script
-    assert "'lecturesift-backup-alert@*.service'" in script
+    assert "lecturesift-backup-alert@.service|lecturesift-failure-alert@.service)" in script
+    assert '"${unit%.service}*.service"' in script
+    assert "  lecturesift-failure-alert@.service\n" in script
+    assert 'done <<<"$query_units"' in script
     assert 'systemctl is-active --quiet "$unit"' in script
     assert 'systemctl is-active --quiet "$query_unit"' not in script
     assert 'systemctl show --property=FragmentPath --value "$query_unit"' in script
@@ -162,7 +172,10 @@ def test_systemd_install_uses_atomic_fragments_secure_lock_and_noop_retry():
     assert "assert_unit_inactive()" in promotion
     assert "systemctl list-units --all --type=service --no-legend --plain" in promotion
     assert "systemctl show --property=ActiveState --value" in promotion
-    assert "'lecturesift-backup-alert@*.service'" in promotion
+    assert "lecturesift-backup-alert@.service|lecturesift-failure-alert@.service)" in promotion
+    assert '"${unit%.service}*.service"' in promotion
+    assert "  lecturesift-failure-alert@.service\n" in promotion
+    assert 'done <<<"$query_units"' in promotion
     assert 'systemctl is-active --quiet "$unit"' in promotion
     assert 'systemctl is-active --quiet "$query_unit"' not in promotion
     assert 'systemctl show --property=FragmentPath --value "$query_unit"' in promotion
@@ -171,41 +184,49 @@ def test_systemd_install_uses_atomic_fragments_secure_lock_and_noop_retry():
     assert 'systemctl show --property=NeedDaemonReload --value "$unit"' not in promotion
 
 
+ALERT_TEMPLATES = ("lecturesift-backup-alert@.service", "lecturesift-failure-alert@.service")
+
+
 @pytest.mark.parametrize(
     "path",
     ("deploy/install_systemd_units.sh", "deploy/promote_rehearsed_release.sh"),
 )
+@pytest.mark.parametrize("template", ALERT_TEMPLATES)
 @pytest.mark.parametrize("state", ("active", "activating", "reloading", "deactivating"))
 def test_template_inactivity_gate_rejects_live_and_transitioning_instances(
-    path: str, state: str
+    path: str, template: str, state: str
 ):
     result = _run_systemd_safety_functions(
         path,
-        "assert_unit_inactive lecturesift-backup-alert@.service",
+        f"assert_unit_inactive {template}",
         listed=True,
         state=state,
+        template=template,
     )
 
     assert result.returncode != 0
-    assert "lecturesift-backup-alert@probe.service must be inactive" in result.stderr
+    probe = template.replace("@.service", "@probe.service")
+    assert f"{probe} must be inactive" in result.stderr
 
 
 @pytest.mark.parametrize(
     "path",
     ("deploy/install_systemd_units.sh", "deploy/promote_rehearsed_release.sh"),
 )
+@pytest.mark.parametrize("template", ALERT_TEMPLATES)
 @pytest.mark.parametrize(
     ("listed", "state"),
     ((False, "inactive"), (True, "inactive"), (True, "failed")),
 )
 def test_template_inactivity_gate_accepts_only_stopped_instances(
-    path: str, listed: bool, state: str
+    path: str, template: str, listed: bool, state: str
 ):
     result = _run_systemd_safety_functions(
         path,
-        "assert_unit_inactive lecturesift-backup-alert@.service\nprintf 'ACCEPTED\\n'",
+        f"assert_unit_inactive {template}\nprintf 'ACCEPTED\\n'",
         listed=listed,
         state=state,
+        template=template,
     )
 
     assert result.returncode == 0, result.stderr or result.stdout
@@ -232,6 +253,29 @@ def test_template_property_probe_matches_the_tracked_on_failure_instance(path: s
 
     assert result.returncode == 0, result.stderr or result.stdout
     assert result.stdout.strip() == expected_instance
+
+
+@pytest.mark.parametrize(
+    "path",
+    ("deploy/install_systemd_units.sh", "deploy/promote_rehearsed_release.sh"),
+)
+def test_failure_alert_probe_covers_every_tracked_on_failure_instance(path: str):
+    # Every unit that names the failure-alert template gets its own instance;
+    # the exactness checks must inspect each one for instance-specific drop-ins.
+    expected = []
+    for unit_path in sorted((ROOT / "deploy").glob("lecturesift*.service")):
+        for line in unit_path.read_text(encoding="utf-8").splitlines():
+            if line.startswith("OnFailure=") and "lecturesift-failure-alert@" in line:
+                expected.append(line.removeprefix("OnFailure=").replace("%n", unit_path.name))
+    assert len(expected) == 3
+
+    result = _run_systemd_safety_functions(
+        path,
+        "systemd_query_unit lecturesift-failure-alert@.service",
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+    assert sorted(result.stdout.splitlines()) == sorted(expected)
 
 
 def test_exact_rehearsal_promotion_step_is_explicit_and_matches_tool_contract():

@@ -1,0 +1,28 @@
+[Unit]
+Description=Email the operators about a failed LectureSift unit (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=LECTURESIFT_ENV_FILE=/etc/lecturesift/runtime.env
+Environment=LECTURESIFT_DB_ENV_FILE=/etc/lecturesift/postgres.env
+Environment=LECTURESIFT_RESTIC_ENV_FILE=/etc/lecturesift/restic.env
+ExecStart=/usr/bin/python3 -I /opt/lecturesift/deploy/service_failure_alert.py %i
+TimeoutStartSec=90
+UMask=0077
+StateDirectory=lecturesift/failure-alerts
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/lecturesift/failure-alerts
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native

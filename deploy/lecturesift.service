@@ -6,6 +6,7 @@ PartOf=docker.service
 After=docker.service network-online.target
 Wants=network-online.target
 Before=lecturesift-ingress.service lecturesift-ingress-selector.service
+OnFailure=lecturesift-failure-alert@%n.service
 
 [Service]
 Type=oneshot

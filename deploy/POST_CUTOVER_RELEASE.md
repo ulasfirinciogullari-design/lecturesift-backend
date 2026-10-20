@@ -371,3 +371,49 @@ sudo docker image rm "$OLD_APP_ID" "$OLD_PROXY_ID"
 `docker image rm` without `--force` refuses an image that a container still
 uses. Never add `--force`, and never remove `lecturesift-backend:local`,
 `lecturesift-egress-proxy:local` or the previous release's images.
+
+## Failure alerts
+
+From the first release that contains `lecturesift-failure-alert@.service`,
+systemd emails the operators when one of these units fails:
+
+- `lecturesift.service`, the private core, when a start, restart or stop
+  fails, including a start at boot or after a Docker restart;
+- `lecturesift-instagram.service`, the 15-minute Instagram job;
+- `lecturesift-ingress-selector.service`. Its loop retries a failed
+  reconciliation instead of exiting, so it queues the alert itself after each
+  failed attempt. `OnFailure=` also covers systemd giving up on the unit.
+
+The scheduled backup keeps its own `lecturesift-backup-alert@.service` email.
+
+The email goes to `LECTURESIFT_OPS_ALERT_EMAIL` and to every address in
+`LECTURESIFT_ADMIN_EMAILS`, through the Resend or SMTP account configured in
+`/etc/lecturesift/runtime.env`. It names the unit, the host and the time, and
+it carries the unit's last 30 journal lines with configuration values, tokens,
+cookies and email addresses redacted. Each unit gets at most one email per
+hour. The time of the last one is in
+`/var/lib/lecturesift/failure-alerts/<unit>.last-sent`. A delivery failure is
+only logged in the alert unit's journal and never affects the failed unit.
+
+Stopping `lecturesift-instagram.service` while it still runs can end it as
+failed and send an alert. Step 1 already waits for it to finish. Promotion
+refuses to run while an alert is still being sent, which takes at most 90
+seconds.
+
+Test the alert once after the first release that contains it. This sends one
+real email and touches no other unit:
+
+```sh
+sudo systemctl start lecturesift-failure-alert@lecturesift-instagram.service.service
+journalctl -u lecturesift-failure-alert@lecturesift-instagram.service.service -n 20
+```
+
+The journal must show
+`Failure alert for lecturesift-instagram.service sent to N recipient(s).`, and
+the email must arrive. Resend accepting the request is not proof of delivery.
+A second start within the hour logs `suppressed` instead. To repeat the test
+sooner, remove the record first:
+
+```sh
+sudo rm -f /var/lib/lecturesift/failure-alerts/lecturesift-instagram.service.last-sent
+```
