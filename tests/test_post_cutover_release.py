@@ -1050,6 +1050,7 @@ def test_post_cutover_release_runbook_is_linked_and_ordered():
         "sudo systemctl disable --now lecturesift-backup.timer",
         "generate_stage_release_wrapper.py",
         "sudo bash -p <path-to>/stage_exact_release_$REVISION.sh",
+        "sudo docker builder prune -f",
         "sudo systemctl stop lecturesift-ingress-selector.service",
         "sudo systemctl stop lecturesift-ingress.service lecturesift.service",
         "sudo systemctl disable lecturesift.service",
