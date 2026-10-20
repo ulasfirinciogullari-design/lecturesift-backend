@@ -365,7 +365,11 @@
       try {
         currency = selector?.value || currency;
         const body = await api(`/billing/plans?currency=${encodeURIComponent(currency)}`, {}, "");
-        if (typeof billingCatalog !== "undefined") billingCatalog = body;
+        if (typeof billingCatalog !== "undefined") {
+          billingCatalog = body;
+          // This loader can be the first to deliver the catalog, so refresh the guest copy now.
+          renderGuestTrialCopy();
+        }
         const currentCode = typeof billingAccount !== "undefined" ? billingAccount?.plan?.code : "";
         grid.innerHTML = (body.plans || []).map(plan => workspacePlanCard(plan, currency, currentCode)).join("");
         grid.querySelectorAll("[data-rollout-plan]").forEach(button => {

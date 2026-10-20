@@ -207,6 +207,27 @@ vm.runInContext(app.slice(mediaBegin, mediaEnd), mediaContext);
   assert.equal(await over(['long.mp3'], {guest_trial_minutes:'none'}), null);
   assert.equal(await over(['notes.pdf'], {guest_trial_minutes:30}), null);
   assert.equal(created.length - before, reads, 'no media read without a guest limit or media file');
+
+  // The workspace plans loader can be the first to deliver the catalog; it refreshes the guest copy then.
+  const plansBegin = rollout.indexOf('  async function installWorkspacePlans() {');
+  const plansEnd = rollout.indexOf('\n  async function installWorkspace()', plansBegin);
+  assert.ok(plansBegin >= 0 && plansEnd > plansBegin, 'installWorkspacePlans extraction');
+  const plansErrors = [];
+  const plansContext = vm.createContext({
+    $:id => id === 'plansGrid' ? {innerHTML:'', querySelectorAll:() => []} : null,
+    document:{querySelector:() => ({})},
+    selectedCurrency:() => 'TRY',
+    api:async () => ({plans:[], guest_trial_minutes:12}),
+    rt:(key, fallback) => fallback || key,
+    workspacePlanCard:() => '', openLocalizedCheckout:() => {},
+    showInlineMessage:message => plansErrors.push(message),
+  });
+  const plans = vm.runInContext(`let billingCatalog = null, billingAccount = {plan:{code:'guest'}}; const rendered = [];
+    function renderGuestTrialCopy() { rendered.push(billingCatalog?.guest_trial_minutes ?? null); }
+    ${rollout.slice(plansBegin, plansEnd)}; ({install:installWorkspacePlans, rendered})`, plansContext);
+  await plans.install();
+  assert.deepEqual(plansErrors, []);
+  assert.deepEqual(plans.rendered, [12], 'guest copy re-rendered with the catalog from the workspace plans loader');
   console.log(JSON.stringify({languages:checked, apiRows:apiKeys.length, guestCopy}));
 })().catch(error => { console.error(error); process.exit(1); });
 """
