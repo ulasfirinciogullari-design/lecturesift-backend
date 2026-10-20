@@ -130,6 +130,27 @@ Staging creates `/var/lib/lecturesift/release-candidates/$REVISION.ok` and the
 `lecturesift-egress-proxy:staged-$REVISION` images. It does not touch the
 running production containers.
 
+Staging leaves its build cache behind. The core start in step 6 refuses to
+run unless the Docker filesystem keeps the 10 GiB host reserve, one
+maximum-size job (8 GiB) and one maximum upload (1 GiB with the default video
+limit) free: `20401094656` bytes, about 20.4 GB. Check it now, while
+production still serves:
+
+```sh
+df -B1 --output=avail "$(sudo docker info --format '{{.DockerRootDir}}')"
+```
+
+If it prints less than `20401094656`, remove the unused build cache:
+
+```sh
+sudo docker builder prune -f
+```
+
+This removes build cache only, never images, so the current release stays
+restorable. If space is still short, remove the images of revisions older
+than `CURRENT` as described in "Prune old images" before you go on. They
+belong to neither of the two releases you keep.
+
 ## 3. Stop production
 
 Public traffic stops here. Stop the selector first so that it cannot restart
