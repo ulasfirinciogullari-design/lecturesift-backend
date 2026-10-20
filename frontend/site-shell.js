@@ -12,6 +12,7 @@
     about: ["Hakkımızda", "About", "Über uns", "À propos", "Nosotros", "Chi siamo", "Sobre", "О нас", "من نحن", "关于我们", "私たちについて", "소개", "हमारे बारे में"],
     login: ["Giriş", "Sign in", "Anmelden", "Connexion", "Iniciar sesión", "Accedi", "Entrar", "Войти", "تسجيل الدخول", "登录", "ログイン", "로그인", "साइन इन"],
     account: ["Hesabım", "My account", "Mein Konto", "Mon compte", "Mi cuenta", "Il mio account", "Minha conta", "Мой аккаунт", "حسابي", "我的账户", "マイアカウント", "내 계정", "मेरा खाता"],
+    tryFree: ["Ücretsiz dene", "Try free", "Kostenlos testen", "Essai gratuit", "Prueba gratis", "Prova gratis", "Teste grátis", "Начать бесплатно", "جرّب مجانًا", "免费试用", "無料で試す", "무료 체험", "मुफ़्त आज़माएँ"],
     instagram: ["LectureSift Instagram hesabı", "LectureSift on Instagram", "LectureSift auf Instagram", "LectureSift sur Instagram", "LectureSift en Instagram", "LectureSift su Instagram", "LectureSift no Instagram", "LectureSift в Instagram", "حساب LectureSift على Instagram", "LectureSift 的 Instagram 账户", "LectureSiftのInstagram", "LectureSift Instagram 계정", "Instagram पर LectureSift"],
   };
 
@@ -79,7 +80,18 @@
   account.dataset.sessionState = "loading";
   nav.append(account);
 
-  if (existingPicker) tools.append(existingPicker);
+  // Signed-out visitors get one compact primary action next to sign-in. It
+  // leads to the workspace, so the workspace itself does not repeat it.
+  const onWorkspace = currentBasePath === "/workspace";
+  const tryFree = document.createElement("a");
+  tryFree.className = "public-try-link";
+  tryFree.href = `${pathFor("/workspace.html")}?source=upload`;
+  tryFree.textContent = label("tryFree");
+  tryFree.hidden = true;
+  nav.append(tryFree);
+
+  const picker = compactLanguagePicker(existingPicker);
+  if (picker) tools.append(picker);
   const menuButton = document.createElement("button");
   menuButton.type = "button";
   menuButton.className = "public-menu-toggle";
@@ -109,11 +121,48 @@
   tools.append(nav);
   header.append(tools);
 
+  // The inline bar fits the trial button in most languages and widths. Where
+  // it would push the navigation past the header, it is left out of the bar
+  // instead of overflowing; the collapsed menu (1100px and below) lists it.
+  const inlineNavigation = window.matchMedia("(min-width: 1101px)");
+  const fitTrial = () => {
+    header.classList.remove("public-try-overflow");
+    if (!tryFree.hidden && inlineNavigation.matches && nav.scrollWidth > nav.clientWidth + 1) {
+      header.classList.add("public-try-overflow");
+    }
+  };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fitTrial, {once: true});
+  window.addEventListener("load", fitTrial, {once: true});
+  window.addEventListener("resize", fitTrial);
+
   const setSessionState = signedIn => {
     account.dataset.sessionState = signedIn ? "signed-in" : "signed-out";
     account.textContent = label(signedIn ? "account" : "login");
     account.href = pathFor(signedIn ? "/account.html" : "/login.html");
+    tryFree.hidden = signedIn || onWorkspace;
+    fitTrial();
   };
+
+  // Narrow bars show the interface language as its code ("TR", "EN"), so no
+  // translated name is clipped. The native select stays on top of the code,
+  // transparent, so its accessible name, keyboard use and system picker remain.
+  function compactLanguagePicker(existing) {
+    const select = existing?.matches("select") ? existing : existing?.querySelector("select");
+    if (!select) return existing;
+    const host = select === existing ? document.createElement("span") : existing;
+    if (host !== existing) host.append(select);
+    host.classList.add("language-compact");
+    const code = document.createElement("span");
+    code.className = "language-code";
+    code.setAttribute("aria-hidden", "true");
+    const sync = () => { code.textContent = (select.value || language).toUpperCase(); };
+    select.addEventListener("change", sync);
+    // app.js rebuilds the workspace picker's options after this runs.
+    new MutationObserver(sync).observe(select, {childList: true});
+    sync();
+    host.append(code);
+    return host;
+  }
 
   const rebuildInformationNavigation = () => {
     const aside = document.querySelector(".legal-nav");
