@@ -212,8 +212,10 @@ vm.runInContext(app.slice(mediaBegin, mediaEnd), mediaContext);
   const plansBegin = rollout.indexOf('  async function installWorkspacePlans() {');
   const plansEnd = rollout.indexOf('\n  async function installWorkspace()', plansBegin);
   assert.ok(plansBegin >= 0 && plansEnd > plansBegin, 'installWorkspacePlans extraction');
-  const plansErrors = [];
+  // Both arrays live in this realm so strict deepEqual compares their contents.
+  const plansErrors = [], rendered = [];
   const plansContext = vm.createContext({
+    rendered,
     $:id => id === 'plansGrid' ? {innerHTML:'', querySelectorAll:() => []} : null,
     document:{querySelector:() => ({})},
     selectedCurrency:() => 'TRY',
@@ -222,12 +224,12 @@ vm.runInContext(app.slice(mediaBegin, mediaEnd), mediaContext);
     workspacePlanCard:() => '', openLocalizedCheckout:() => {},
     showInlineMessage:message => plansErrors.push(message),
   });
-  const plans = vm.runInContext(`let billingCatalog = null, billingAccount = {plan:{code:'guest'}}; const rendered = [];
+  const install = vm.runInContext(`let billingCatalog = null, billingAccount = {plan:{code:'guest'}};
     function renderGuestTrialCopy() { rendered.push(billingCatalog?.guest_trial_minutes ?? null); }
-    ${rollout.slice(plansBegin, plansEnd)}; ({install:installWorkspacePlans, rendered})`, plansContext);
-  await plans.install();
+    ${rollout.slice(plansBegin, plansEnd)}; installWorkspacePlans`, plansContext);
+  await install();
   assert.deepEqual(plansErrors, []);
-  assert.deepEqual(plans.rendered, [12], 'guest copy re-rendered with the catalog from the workspace plans loader');
+  assert.deepEqual(rendered, [12], 'guest copy re-rendered with the catalog from the workspace plans loader');
   console.log(JSON.stringify({languages:checked, apiRows:apiKeys.length, guestCopy}));
 })().catch(error => { console.error(error); process.exit(1); });
 """
