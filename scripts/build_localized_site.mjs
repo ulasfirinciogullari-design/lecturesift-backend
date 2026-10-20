@@ -289,10 +289,11 @@ function pageCopyCatalogSource(language) {
 `;
 }
 
-// The loader runs i18n.js's own routing and language-choice code, copied
-// verbatim so the two cannot disagree, then writes the chosen catalog as a
-// parser-blocking script that still runs before i18n.js reads it.
-function pageCopyLoaderSource(catalogPaths) {
+// A loader runs i18n.js's own routing and language-choice code, copied
+// verbatim so it cannot disagree with i18n.js, then writes the chosen script
+// as a parser-blocking script that still runs before the next tag on the page.
+// The page-copy and runtime loaders are both generated here from that copy.
+function languageLoaderSource(scriptPaths, filename) {
   const copyFromRuntime = (start, end, label) => {
     const from = dynamicCopySource.indexOf(start);
     const to = from < 0 ? -1 : dynamicCopySource.indexOf(end, from);
@@ -305,13 +306,13 @@ function pageCopyLoaderSource(catalogPaths) {
 (function () {
   ${routing}
   ${choice}
-  const catalog = ${JSON.stringify(catalogPaths)}[selected];
-  if (catalog) document.write('<script src="' + catalog + '"><\\/script>');
+  const script = ${JSON.stringify(scriptPaths)}[selected];
+  if (script) document.write('<script src="' + script + '"><\\/script>');
 })();
 `;
   // A change in i18n.js can cut the copy short. Fail the deploy instead of
   // publishing a loader that leaves every app page untranslated.
-  new Script(source, {filename: "page-copy-loader.js"});
+  new Script(source, {filename});
   return source;
 }
 
@@ -324,17 +325,26 @@ async function writeContentAddressedScript(directory, name, source) {
 }
 
 const PAGE_COPY_SCRIPT = /<script\b[^>]*\bsrc="(?:\.\/|\/)?page-i18n\.js(?:\?[^"]*)?"[^>]*><\/script>/gi;
+const RUNTIME_SCRIPT = /<script\b[^>]*\bsrc="(?:\.\/|\/)?i18n\.js(?:\?[^"]*)?"[^>]*><\/script>/gi;
+const FULL_RUNTIME_REFERENCE = /\bsrc="(?:[^"]*\/)?i18n\.js\b/i;
+// App pages that deliberately keep the all-language /i18n.js, each with its
+// reason. None needs it today: app scripts read the runtime only through t()
+// and exact() in the reader's language, and every language switch loads the
+// page again. The one switch app.js also applies in place is to Turkish on the
+// unprefixed URL, and Turkish is the source text every runtime file keeps.
+const FULL_RUNTIME_PAGES = new Map();
 
-async function loadReaderPageCopy(loaderPath) {
+// Swaps an all-language script on every app page for its generated loader.
+async function loadReaderLanguage(pattern, name, loaderPath, keep = new Map()) {
   for (const entry of await readdir(SOURCE, {withFileTypes: true})) {
     if (!entry.isFile() || !entry.name.endsWith(".html")) continue;
-    if (entry.name === "index.html" || PUBLIC_PATH_SET.has(`/${entry.name}`)) continue;
+    if (entry.name === "index.html" || PUBLIC_PATH_SET.has(`/${entry.name}`) || keep.has(entry.name)) continue;
     const target = path.join(OUTPUT, entry.name);
     const html = await readFile(target, "utf8");
-    const updated = html.replace(PAGE_COPY_SCRIPT, tag => {
+    const updated = html.replace(pattern, tag => {
       // document.write is ignored when it comes from a deferred or async script.
       if (!/^<script src="[^"]+"><\/script>$/.test(tag)) {
-        throw new Error(`${entry.name} must load page-i18n.js as a plain blocking script`);
+        throw new Error(`${entry.name} must load ${name} as a plain blocking script`);
       }
       return `<script src="${loaderPath}"></script>`;
     });
@@ -593,15 +603,25 @@ for (const language of LANGUAGES) {
   pageCopyPaths[language] = await writeContentAddressedScript("page-i18n", language, source);
   pageCopySizes[language] = Buffer.byteLength(source);
 }
-const pageCopyLoader = pageCopyLoaderSource(pageCopyPaths);
-await loadReaderPageCopy(await writeContentAddressedScript("page-i18n", "loader", pageCopyLoader));
+const pageCopyLoader = languageLoaderSource(pageCopyPaths, "page-copy-loader.js");
+await loadReaderLanguage(PAGE_COPY_SCRIPT, "page-i18n.js",
+  await writeContentAddressedScript("page-i18n", "loader", pageCopyLoader));
+
+// Public pages and app pages share one runtime file per language. App pages
+// reach theirs through a loader, because one app page serves every language.
+const runtimePaths = {};
+const runtimeSizes = {};
+for (const language of LANGUAGES) {
+  const source = publicRuntimeSource(language);
+  runtimePaths[language] = await writeContentAddressedScript("i18n", language, source);
+  runtimeSizes[language] = Buffer.byteLength(source);
+}
+const runtimeLoader = languageLoaderSource(runtimePaths, "runtime-loader.js");
+await loadReaderLanguage(RUNTIME_SCRIPT, "i18n.js",
+  await writeContentAddressedScript("i18n", "loader", runtimeLoader), FULL_RUNTIME_PAGES);
 
 for (const language of LANGUAGES) {
-  const runtimeSource = publicRuntimeSource(language);
-  const runtimeHash = createHash("sha256").update(runtimeSource).digest("hex").slice(0, 12);
-  const runtimePath = `/assets/i18n/${language}-${runtimeHash}.js`;
-  await mkdir(path.join(OUTPUT, "assets/i18n"), {recursive: true});
-  await writeFile(path.join(OUTPUT, runtimePath.slice(1)), runtimeSource, "utf8");
+  const runtimePath = runtimePaths[language];
   for (const publicPath of PUBLIC_PATHS) {
     const sourceName = publicPath === "/" ? "index.html" : publicPath.slice(1);
     let html = await readFile(path.join(SOURCE, sourceName), "utf8");
@@ -703,16 +723,27 @@ const sharedRewrites = LANGUAGES.filter(language => language !== "tr").flatMap(l
 );
 const redirects = await readFile(path.join(SOURCE, "_redirects"), "utf8");
 await writeFile(path.join(OUTPUT, "_redirects"), `${redirects}\n${sharedRewrites.join("\n")}\n`, "utf8");
-async function assertNoFullPageCopy(directory) {
+async function assertNoFullCatalogs(directory) {
   for (const entry of await readdir(directory, {withFileTypes: true})) {
     const target = path.join(directory, entry.name);
-    if (entry.isDirectory()) await assertNoFullPageCopy(target);
-    else if (entry.name.endsWith(".html") && /\bsrc="[^"]*page-i18n\.js\b/i.test(await readFile(target, "utf8"))) {
-      throw new Error(`${path.relative(OUTPUT, target)} still loads the all-language page-i18n.js`);
+    if (entry.isDirectory()) {
+      await assertNoFullCatalogs(target);
+      continue;
+    }
+    if (!entry.name.endsWith(".html")) continue;
+    const page = path.relative(OUTPUT, target);
+    const html = await readFile(target, "utf8");
+    if (/\bsrc="[^"]*page-i18n\.js\b/i.test(html)) {
+      throw new Error(`${page} still loads the all-language page-i18n.js`);
+    }
+    if (FULL_RUNTIME_REFERENCE.test(html) && !FULL_RUNTIME_PAGES.has(page)) {
+      throw new Error(`${page} still loads the all-language i18n.js`);
     }
   }
 }
-await assertNoFullPageCopy(OUTPUT);
+await assertNoFullCatalogs(OUTPUT);
 console.log(`Page copy: page-i18n.js ${Buffer.byteLength(pageCopySource)} bytes; loader ${Buffer.byteLength(pageCopyLoader)} bytes; ${
   LANGUAGES.map(language => `${language} ${pageCopySizes[language] || 0}`).join(", ")} bytes per language catalog`);
+console.log(`Runtime: i18n.js ${Buffer.byteLength(dynamicCopySource)} bytes; loader ${Buffer.byteLength(runtimeLoader)} bytes; ${
+  LANGUAGES.map(language => `${language} ${runtimeSizes[language]}`).join(", ")} bytes per language runtime`);
 console.log(`Built ${LANGUAGES.length * PUBLIC_PATHS.length + STUDY_PAGES.size * STUDY_RESOURCES.languages.length} indexable pages in ${OUTPUT}`);

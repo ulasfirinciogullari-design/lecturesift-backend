@@ -1377,8 +1377,10 @@ def test_netlify_build_prerenders_every_public_language_with_static_seo():
     assert '"@type": "Article"' in builder
     assert "deferNonCriticalScripts" in builder
     assert "removeStaticTranslationCatalog" in builder
-    # App pages swap the all-language page-i18n.js for the reader's generated catalog.
-    assert "loadReaderPageCopy" in builder and "pageCopyCatalogSource" in builder
+    # App pages swap the all-language page-i18n.js and i18n.js for loaders of
+    # the reader's generated catalog and runtime.
+    assert "loadReaderLanguage" in builder and "pageCopyCatalogSource" in builder
+    assert "languageLoaderSource(runtimePaths" in builder
     assert 'staticDescription' in builder
     assert 'validateLocalizedPage' in builder
     assert 'meta name="robots" content="index,follow' not in builder
