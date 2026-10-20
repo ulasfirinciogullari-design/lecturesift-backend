@@ -41,6 +41,7 @@ managed_units=(
   lecturesift-backup.service
   lecturesift-backup.timer
   lecturesift-backup-alert@.service
+  lecturesift-failure-alert@.service
   lecturesift-instagram.service
   lecturesift-instagram.timer
   lecturesift-r2-retention-probe.service
@@ -52,13 +53,20 @@ fail() {
 }
 
 # Bare systemd templates are fragment names, not valid systemctl invocations.
-# Inspect the fixed instance used by the tracked OnFailure contract so an
-# operational instance-specific drop-in cannot evade the exactness check.
+# Inspect every fixed instance used by the tracked OnFailure contracts, one per
+# line, so an operational instance-specific drop-in cannot evade the exactness
+# check.
 systemd_query_unit() {
   local unit="$1"
   case "$unit" in
     lecturesift-backup-alert@.service)
       printf '%s\n' 'lecturesift-backup-alert@lecturesift-backup.service.service'
+      ;;
+    lecturesift-failure-alert@.service)
+      printf '%s\n' \
+        'lecturesift-failure-alert@lecturesift.service.service' \
+        'lecturesift-failure-alert@lecturesift-ingress-selector.service.service' \
+        'lecturesift-failure-alert@lecturesift-instagram.service.service'
       ;;
     *@.*)
       return 1
@@ -72,9 +80,9 @@ systemd_query_unit() {
 assert_unit_inactive() {
   local unit="$1" instances instance remainder state
   case "$unit" in
-    lecturesift-backup-alert@.service)
+    lecturesift-backup-alert@.service|lecturesift-failure-alert@.service)
       instances="$(systemctl list-units --all --type=service --no-legend --plain \
-        'lecturesift-backup-alert@*.service')" || \
+        "${unit%.service}*.service")" || \
         fail "could not inspect loaded instances for $unit"
       while read -r instance remainder; do
         [[ -n "$instance" ]] || continue
@@ -314,7 +322,7 @@ rollback_promotion() {
 }
 
 promoted_code_and_units_are_exact() {
-  local unit query_unit destination
+  local unit query_units query_unit destination
   [[ -d "$TARGET_ROOT" && ! -L "$TARGET_ROOT" && \
      "$(git -C "$TARGET_ROOT" rev-parse --verify 'HEAD^{commit}' 2>/dev/null)" == \
      "$revision" && \
@@ -324,18 +332,20 @@ promoted_code_and_units_are_exact() {
     --root "$TARGET_ROOT" --expected-revision "$revision" >/dev/null 2>&1 || return 1
   bash "$TARGET_ROOT/deploy/release.sh" verify >/dev/null 2>&1 || return 1
   for unit in "${managed_units[@]}"; do
-    query_unit="$(systemd_query_unit "$unit")" || return 1
+    query_units="$(systemd_query_unit "$unit")" || return 1
     destination="/etc/systemd/system/$unit"
     [[ -f "$destination" && ! -L "$destination" && \
        "$(stat -c '%u:%g:%a:%h' -- "$destination" 2>/dev/null)" == \
        "0:0:644:1" ]] || return 1
     cmp --silent "$TARGET_ROOT/deploy/$unit" "$destination" || return 1
-    [[ "$(systemctl show --property=FragmentPath --value "$query_unit" 2>/dev/null)" == \
-       "$destination" ]] || return 1
-    [[ -z "$(systemctl show --property=DropInPaths --value "$query_unit" 2>/dev/null)" ]] || \
-      return 1
-    [[ "$(systemctl show --property=NeedDaemonReload --value "$query_unit" 2>/dev/null)" == \
-       "no" ]] || return 1
+    while IFS= read -r query_unit; do
+      [[ "$(systemctl show --property=FragmentPath --value "$query_unit" 2>/dev/null)" == \
+         "$destination" ]] || return 1
+      [[ -z "$(systemctl show --property=DropInPaths --value "$query_unit" 2>/dev/null)" ]] || \
+        return 1
+      [[ "$(systemctl show --property=NeedDaemonReload --value "$query_unit" 2>/dev/null)" == \
+         "no" ]] || return 1
+    done <<<"$query_units"
   done
 }
 

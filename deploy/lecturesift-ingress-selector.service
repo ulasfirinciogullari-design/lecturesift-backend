@@ -4,6 +4,7 @@ Requires=docker.service
 PartOf=docker.service
 After=docker.service network-online.target lecturesift.service
 Wants=network-online.target lecturesift.service
+OnFailure=lecturesift-failure-alert@%n.service
 
 [Service]
 Type=simple

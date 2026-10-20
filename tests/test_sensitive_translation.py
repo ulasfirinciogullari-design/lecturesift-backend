@@ -9,7 +9,7 @@ FRONTEND = Path(__file__).resolve().parents[1] / "frontend"
 WARNINGS = {
     "tr": "Kart numarası, parola veya doğrulama kodu gönderme.",
     "en": "Do not send card numbers, passwords or verification codes.",
-    "de": "Sende keine Kartennummern, Passwörter oder Bestätigungscodes.",
+    "de": "Senden Sie keine Kartennummern, Passwörter oder Bestätigungscodes.",
     "fr": "N’envoyez pas de numéros de carte, de mots de passe ni de codes de vérification.",
     "es": "No envíes números de tarjeta, contraseñas ni códigos de verificación.",
     "it": "Non inviare numeri di carta, password o codici di verifica.",

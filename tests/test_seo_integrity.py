@@ -287,6 +287,23 @@ def test_landing_examples_faqs_and_dates_survive_prerendering(localized_output: 
     assert not (localized_output / "landing-pages.json").exists()
 
 
+def test_payment_marks_and_plan_minutes_are_translated_when_prerendered(localized_output: Path) -> None:
+    for language in LANGUAGES[1:]:
+        for route in ("/", "/plans"):
+            html = _output_path(localized_output, f"{ORIGIN}/{language}{route}").read_text(encoding="utf-8")
+            assert 'alt="iyzico ile Öde' not in html, (language, route)
+            assert 'alt="Mastercard, Visa, American Express ve TROY"' not in html, (language, route)
+    english_home = _output_path(localized_output, f"{ORIGIN}/en/").read_text(encoding="utf-8")
+    assert 'alt="Pay with iyzico, Mastercard, Visa, American Express and TROY"' in english_home
+    # "dakika" means minutes of media, never meeting minutes ("Protokoll").
+    german_plans = _output_path(localized_output, f"{ORIGIN}/de/plans").read_text(encoding="utf-8")
+    assert "Vergleichen Sie Minuten, Quizze, Lernkarten" in german_plans
+    assert "Protokoll" not in german_plans
+    german_sales = _output_path(localized_output, f"{ORIGIN}/de/distance-sales").read_text(encoding="utf-8")
+    assert "Die Minuten-, Quiz-, Lernkarten-" in german_sales
+    assert "Protokoll" not in german_sales
+
+
 def test_course_pages_are_turkish_english_pairs_with_trial_calls_and_faq(localized_output: Path) -> None:
     assert [page["slug"] for page in COURSE_PAGES] == [
         "medicine-lecture-notes", "law-lecture-notes", "engineering-lecture-notes",
@@ -369,7 +386,7 @@ def test_guide_measurement_has_consent_controls_without_the_large_application_sc
             assert not any(re.search(r"/(?:i18n|page-i18n|app)\.js", src) for src in sources)
 
 
-def test_public_pages_use_small_language_specific_runtime_but_private_pages_keep_full_runtime(localized_output: Path) -> None:
+def test_public_pages_use_small_language_specific_runtime(localized_output: Path) -> None:
     original = (FRONTEND / "i18n.js").read_bytes()
     for language in LANGUAGES:
         prefix = "" if language == "tr" else f"/{language}"
@@ -382,7 +399,6 @@ def test_public_pages_use_small_language_specific_runtime_but_private_pages_keep
             url = f"{ORIGIN}{prefix}{route}"
             assert f'src="{source}"' in _output_path(localized_output, url).read_text()
     assert (localized_output / "i18n.js").read_bytes() == original
-    assert re.search(r'src="(?:\./|/)?i18n\.js\?', (localized_output / "workspace.html").read_text())
 
 
 def _resolve_page_copy(rows: dict[str, list[str | None]], source: str, index: int) -> str:
@@ -391,12 +407,13 @@ def _resolve_page_copy(rows: dict[str, list[str | None]], source: str, index: in
     return next((value for value in row[index:index + 1] + row[1:2] if value), source)
 
 
-# Runs the generated loader as a page would, then every catalog it writes.
-PAGE_COPY_HARNESS = r"""
+# Runs a generated loader as a page would and, with "execute", every catalog it writes.
+LOADER_HARNESS = r"""
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const [dist, loader, scenarios] = [process.argv[1], process.argv[2], JSON.parse(process.argv[3])];
+const execute = process.argv[4] === 'execute';
 const results = scenarios.map(([pathname, saved, browser]) => {
   const written = [];
   const context = {
@@ -410,11 +427,37 @@ const results = scenarios.map(([pathname, saved, browser]) => {
     if (!match) throw new Error(`Unexpected loader output: ${markup}`);
     return match[1];
   });
-  for (const source of sources) vm.runInNewContext(fs.readFileSync(path.join(dist, source), 'utf8'), context);
+  if (execute) for (const source of sources) vm.runInNewContext(fs.readFileSync(path.join(dist, source), 'utf8'), context);
   return {sources, rows: context.window.LECTURESIFT_PAGE_COPY || {}};
 });
 process.stdout.write(JSON.stringify(results));
 """
+
+# (pathname, saved language, browser language) -> language i18n.js selects.
+LOADER_SCENARIOS = [
+    ("/workspace.html", None, "en-US", "en"),
+    ("/workspace.html", "de", "en-US", "de"),
+    ("/workspace", "xx", "fr-CA", "fr"),
+    ("/account.html", None, "nl-NL", "tr"),
+    ("/account.html", "tr", "en-US", "tr"),
+    ("/en/workspace.html", "de", "fr-FR", "en"),
+    ("/zh/login", None, "en-US", "zh"),
+    ("/features", "de", "de-DE", "tr"),
+    ("/index.html", "ja", "ja-JP", "tr"),
+    *((f"/{language}/support.html", "tr", "tr-TR", language) for language in LANGUAGES[1:]),
+]
+
+
+def _run_loader(dist: Path, loader: str, *, execute: bool) -> list[dict]:
+    node = shutil.which("node")
+    assert node
+    result = subprocess.run(
+        [node, "-e", LOADER_HARNESS, str(dist), loader.lstrip("/"),
+         json.dumps([scenario[:3] for scenario in LOADER_SCENARIOS]), "execute" if execute else "list"],
+        text=True, encoding="utf-8", capture_output=True, timeout=60, check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
 
 
 def test_app_pages_load_only_the_readers_page_copy_catalog(localized_output: Path) -> None:
@@ -432,36 +475,16 @@ def test_app_pages_load_only_the_readers_page_copy_catalog(localized_output: Pat
         html = (localized_output / filename).read_text(encoding="utf-8")
         assert "page-i18n.js" not in html, filename
         tag, = re.findall(r'<script\b[^>]*/assets/page-i18n/[^>]*>', html)
-        # document.write only runs from a parser-blocking script, before i18n.js.
+        # document.write only runs from a parser-blocking script, before the runtime.
         loader, = re.fullmatch(r'<script src="(/assets/page-i18n/loader-[a-f0-9]{12}\.js)">', tag).groups()
-        assert html.index(tag) < re.search(r'src="(?:\./|/)?i18n\.js\?v=', html).start(), filename
+        assert html.index(tag) < html.index('<script src="/assets/i18n/loader-'), filename
         loaders.add(loader)
     loader, = loaders
     for page_path in localized_output.rglob("*.html"):
         assert not re.search(r'src="[^"]*page-i18n\.js', page_path.read_text(encoding="utf-8")), page_path
 
-    # (pathname, saved language, browser language) -> language i18n.js selects.
-    scenarios = [
-        ("/workspace.html", None, "en-US", "en"),
-        ("/workspace.html", "de", "en-US", "de"),
-        ("/workspace", "xx", "fr-CA", "fr"),
-        ("/account.html", None, "nl-NL", "tr"),
-        ("/account.html", "tr", "en-US", "tr"),
-        ("/en/workspace.html", "de", "fr-FR", "en"),
-        ("/zh/login", None, "en-US", "zh"),
-        ("/features", "de", "de-DE", "tr"),
-        ("/index.html", "ja", "ja-JP", "tr"),
-        *((f"/{language}/support.html", "tr", "tr-TR", language) for language in LANGUAGES[1:]),
-    ]
-    node = shutil.which("node")
-    assert node
-    result = subprocess.run(
-        [node, "-e", PAGE_COPY_HARNESS, str(localized_output), loader.lstrip("/"),
-         json.dumps([scenario[:3] for scenario in scenarios])],
-        text=True, encoding="utf-8", capture_output=True, timeout=60, check=False,
-    )
-    assert result.returncode == 0, result.stderr
-    for (pathname, saved, browser, language), loaded in zip(scenarios, json.loads(result.stdout), strict=True):
+    loaded_scenarios = _run_loader(localized_output, loader, execute=True)
+    for (pathname, saved, browser, language), loaded in zip(LOADER_SCENARIOS, loaded_scenarios, strict=True):
         if language == "tr" and all(row[0] == source for source, row in full.items()):
             # Turkish page copy is its own source text: Turkish readers load no catalog.
             assert loaded["sources"] == [], pathname
@@ -475,6 +498,68 @@ def test_app_pages_load_only_the_readers_page_copy_catalog(localized_output: Pat
             _resolve_page_copy(loaded["rows"], source, index) == _resolve_page_copy(full, source, index)
             for source in full
         ), (pathname, saved, browser)
+
+
+# One catalog row of i18n.js, matched as the build's publicRuntimeSource matches it.
+RUNTIME_ROW = re.compile(r"""^(\s*,?["']([^"']+)["']\s*:\s*)(\[[^\r\n]+\])(\s*,?)$""", re.MULTILINE)
+FULL_RUNTIME_REFERENCE = re.compile(r'\bsrc="(?:[^"]*/)?i18n\.js\b', re.IGNORECASE)
+
+
+def _runtime_parts(source: str) -> tuple[str, dict[str, list[str | None]]]:
+    # The runtime code with every catalog row emptied, and the rows by key.
+    rows: dict[str, list[str | None]] = {}
+
+    def empty(match: re.Match[str]) -> str:
+        rows[match.group(2)] = json.loads(match.group(3))
+        return f"{match.group(1)}[]{match.group(4)}"
+
+    return RUNTIME_ROW.sub(empty, source), rows
+
+
+def test_app_pages_load_only_the_readers_runtime(localized_output: Path) -> None:
+    full_source = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
+    full_code, full_rows = _runtime_parts(full_source)
+    runtimes = {}
+    for asset in (localized_output / "assets" / "i18n").iterdir():
+        name, digest = re.fullmatch(r"([a-z]+)-([a-f0-9]{12})\.js", asset.name).groups()
+        assert hashlib.sha256(asset.read_bytes()).hexdigest()[:12] == digest, asset.name
+        limit = 4_000 if name == "loader" else len(full_source.encode()) // 2
+        assert asset.stat().st_size < limit, (asset.name, asset.stat().st_size)
+        if name != "loader":
+            runtimes[name] = f"/assets/i18n/{asset.name}"
+    assert sorted(runtimes) == sorted(LANGUAGES)
+
+    # i18n.js t()/exact(): row[index] || row[1].
+    resolve = lambda row, index: next((value for value in row[index:index + 1] + row[1:2] if value), None)
+    for language, source in runtimes.items():
+        code, rows = _runtime_parts((localized_output / source.lstrip("/")).read_text(encoding="utf-8"))
+        # Only other languages' values are dropped: the same code, keys and
+        # Turkish source text, and the same value for the reader's language.
+        assert code == full_code, language
+        assert rows.keys() == full_rows.keys(), language
+        index = LANGUAGES.index(language)
+        for key, row in full_rows.items():
+            assert rows[key][0] == row[0] and resolve(rows[key], index) == resolve(row, index), (language, key)
+
+    loaders = set()
+    for filename in (*NONINDEXABLE_HTML, "404.html"):
+        html = (localized_output / filename).read_text(encoding="utf-8")
+        tag, = re.findall(r'<script\b[^>]*/assets/i18n/[^>]*>', html)
+        loader, = re.fullmatch(r'<script src="(/assets/i18n/loader-[a-f0-9]{12}\.js)">', tag).groups()
+        loaders.add(loader)
+    loader, = loaders
+    # No page keeps the all-language runtime; it stays deployed only as the fallback.
+    for page_path in localized_output.rglob("*.html"):
+        assert not FULL_RUNTIME_REFERENCE.search(page_path.read_text(encoding="utf-8")), page_path
+    assert (localized_output / "i18n.js").read_bytes() == full_source.encode()
+
+    # Both app-page loaders run the same copied language choice; only their file maps differ.
+    choice = lambda path: re.sub(r"const script = \{[^}]*\}\[selected\];", "", path.read_text(encoding="utf-8"))
+    page_copy_loader, = (localized_output / "assets" / "page-i18n").glob("loader-*.js")
+    assert choice(page_copy_loader) == choice(localized_output / loader.lstrip("/"))
+    loaded_scenarios = _run_loader(localized_output, loader, execute=False)
+    for (pathname, saved, browser, language), loaded in zip(LOADER_SCENARIOS, loaded_scenarios, strict=True):
+        assert loaded["sources"] == [runtimes[language]], (pathname, saved, browser)
 
 
 NONINDEXABLE_HTML = tuple(
