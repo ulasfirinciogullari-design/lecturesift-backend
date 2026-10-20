@@ -119,3 +119,24 @@ html[dir="rtl"] .workspace-page>.page-shell{margin:0 252px 60px 30px}
 .plans-page #plansGrid{grid-template-columns:repeat(3,minmax(0,1fr))!important}.plans-page a.plan-action{display:inline-flex;align-items:center;justify-content:center;text-align:center;text-decoration:none}
 .more-plans{margin-top:20px}.more-plans>summary{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px 12px;min-height:56px;padding:12px 20px;border:1px solid var(--ui-line);border-radius:14px;background:var(--ui-surface);color:var(--ui-ink);font-size:16px;font-weight:700;text-align:center;cursor:pointer;list-style:none}.more-plans>summary::-webkit-details-marker{display:none}.more-plans>summary::after{content:"";width:8px;height:8px;border:solid currentColor;border-width:0 2px 2px 0;transform:translateY(-2px) rotate(45deg)}.more-plans[open]>summary::after{transform:translateY(2px) rotate(-135deg)}.more-plans>summary small{color:var(--ui-muted);font-size:13px;font-weight:500}.more-plans>summary:hover{border-color:var(--ui-action)}.more-plans>summary:focus-visible{outline:3px solid var(--ui-action);outline-offset:3px}.more-plans>.plans-grid{margin-top:16px}
 @media(max-width:900px){.plans-page #plansGrid{grid-template-columns:minmax(0,1fr)!important}}
+
+/* Header: one compact primary action for signed-out visitors. */
+.public-try-link{display:inline-flex;align-items:center;justify-content:center;min-height:42px;margin-inline-start:6px;padding:10px 16px;border:1px solid var(--ui-action);border-radius:9px;background:var(--ui-action);color:var(--ui-action-ink)!important;font-size:13px;font-weight:650;line-height:1.2;text-decoration:none;white-space:nowrap}
+.public-try-link:hover{border-color:var(--ui-action-hover);background:var(--ui-action-hover);color:var(--ui-action-ink)!important}
+.public-try-link:focus-visible{outline:3px solid var(--ui-action);outline-offset:2px}
+.public-header-tools .public-nav .public-try-link[hidden],.public-try-overflow .public-header-tools .public-nav .public-try-link{display:none!important}
+@media(max-width:1100px){.public-menu-open .public-header-tools .public-nav .public-try-link{flex:1 0 100%;margin:4px 0 0;padding:12px}}
+/* Narrow bars show the language as a code; the transparent native select on top keeps its name and picker. */
+.language-compact{display:inline-flex;flex:0 0 auto;margin:0}
+.language-code{display:none}
+@media(max-width:1100px){
+.public-header-tools>.language-compact{position:relative;width:auto;max-width:none}
+.public-header-tools>.language-compact>select{position:absolute;inset:0;width:100%!important;max-width:none!important;height:100%;min-height:0!important;margin:0;padding:0!important;opacity:0;cursor:pointer;font-size:16px!important;-webkit-appearance:none;appearance:none!important}
+.public-header-tools>.language-compact>.language-code{display:inline-flex;align-items:center;gap:7px;min-height:40px;padding:0 11px;border:1px solid var(--ui-line-strong);border-radius:7px;background:var(--ui-surface);color:var(--ui-ink);font:700 13px/1 var(--ui-font);letter-spacing:.04em;white-space:nowrap}
+.public-header-tools>.language-compact>.language-code::after{content:"";width:6px;height:6px;border:solid currentColor;border-width:0 1.5px 1.5px 0;transform:translateY(-2px) rotate(45deg)}
+.public-header-tools>.language-compact:hover>.language-code{border-color:var(--ui-ink)}
+.public-header-tools>.language-compact:focus-within>.language-code{outline:3px solid var(--ui-action);outline-offset:2px}
+}
+/* Plans: package buttons stack so each label stays on one line; the account strip link gets the secondary button size. */
+.plans-page .plan-card-actions{grid-template-columns:minmax(0,1fr)}
+.account-status .cta-login{display:inline-flex;align-items:center;justify-content:center;min-height:41px;padding:0 14px;font-size:10px;font-weight:820;line-height:1.2;text-decoration:none;white-space:nowrap}

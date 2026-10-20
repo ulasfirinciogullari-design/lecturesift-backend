@@ -7,14 +7,32 @@
   const token = () => localStorage.getItem('lecturesift-billing-token') || '';
   const path = value => window.LectureSiftI18n?.localizedPath?.(language(), value) || value;
   const format = (key, count) => t(key).replace('{count}', Number(count).toLocaleString(language()));
-  if (!document.querySelector('link[rel="stylesheet"][href="/assistant.css?v=4"]')) {
-    const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/assistant.css?v=4'; document.head.append(css);
+  if (!document.querySelector('link[rel="stylesheet"][href="/assistant.css?v=5"]')) {
+    const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/assistant.css?v=5'; document.head.append(css);
   }
   const spark = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 6.3L21 12l-6.3 2.7L12 21l-2.7-6.3L3 12l6.3-2.7Z"/></svg>';
   const launch = document.createElement('button'); launch.className = 'assistant-launch'; launch.innerHTML = spark; const launchLabel=document.createElement('span');launchLabel.textContent=t('nav');launch.append(launchLabel);launch.setAttribute('aria-label',t('title')); launch.type = 'button'; launch.setAttribute('aria-haspopup', 'dialog'); if(!pageRoot)document.body.append(launch);
+  // The floating launcher moves up rather than away: above the consent banner,
+  // and above a primary page action it would otherwise cover (on a phone the
+  // home page's upload button sits right where the launcher floats).
+  const PRIMARY_ACTIONS='.study-primary,.hero-primary,.primary-button,.primary-action,.detail-actions .primary';
+  const covers=(a,b)=>a.left<b.right&&b.left<a.right&&a.top<b.bottom&&b.top<a.bottom;
   const positionLaunch = () => {
     const banner=document.querySelector('.consent-banner:not([hidden])');
     launch.style.bottom=banner ? `${Math.max(22,window.innerHeight-banner.getBoundingClientRect().top+12)}px` : '';
+    if(!launch.isConnected||getComputedStyle(launch).position!=='fixed') return;
+    const actions=[...document.querySelectorAll(PRIMARY_ACTIONS)].map(node=>node.getBoundingClientRect()).filter(box=>box.width&&box.height);
+    for(let pass=0;pass<actions.length;pass+=1){
+      const box=launch.getBoundingClientRect();
+      const action=actions.find(item=>covers(box,item));
+      // Never push the launcher off the top of the screen.
+      if(!action||action.top<box.height+16) break;
+      launch.style.bottom=`${window.innerHeight-action.top+12}px`;
+    }
+  };
+  let positionFrame=0;
+  const schedulePosition = () => {
+    if(!positionFrame) positionFrame=requestAnimationFrame(()=>{positionFrame=0;positionLaunch();});
   };
   let observedBanner=null;
   const consentResize=new ResizeObserver(positionLaunch);
@@ -25,7 +43,11 @@
   };
   document.addEventListener('lecturesift:consent-ready',observeConsent);
   document.addEventListener('lecturesift:consent',observeConsent);
-  window.addEventListener('resize',positionLaunch);observeConsent();
+  window.addEventListener('resize',schedulePosition);
+  window.addEventListener('scroll',schedulePosition,{passive:true});
+  window.addEventListener('load',schedulePosition,{once:true});
+  document.querySelector('link[rel="stylesheet"][href="/assistant.css?v=5"]')?.addEventListener('load',schedulePosition,{once:true});
+  observeConsent();
   const dialog = document.createElement(pageRoot ? 'section' : 'dialog'); dialog.className = `assistant-surface ${pageRoot ? 'assistant-page-chat' : 'assistant-dialog'}`; dialog.setAttribute('aria-labelledby', 'assistantTitle');
   dialog.innerHTML = `<div class="assistant-layout">
     <header class="assistant-header"><span class="assistant-emblem">${spark}</span><div class="assistant-heading"><h2 id="assistantTitle"></h2></div><button type="button" class="assistant-clear"></button><a class="assistant-expand" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-8 8M10 4H4v16h16v-6"/></svg></a><button type="button" class="assistant-close">×</button></header>
