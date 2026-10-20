@@ -150,3 +150,8 @@ def test_topic_guides_quote_the_trial_and_free_plan_limits_the_code_enforces():
     long_en = next(page for page in topics if page["slug"] == "long-lecture-recordings")["en"]["body"]
     assert "tek bir iş en fazla 60 dakika ve 3 kaynak" in long_tr
     assert "at most 60 minutes long and contain up to 3 sources" in long_en
+    # Source cleanup is best-effort (see the homepage test above), so the
+    # guide carries the same fallback instead of an unconditional promise.
+    assert "başarısız olsa bile silinir; silme aksarsa dosya, ders silindiğinde veya süresi dolduğunda" in long_tr
+    assert "even if processing fails; if that deletion fails, the file is removed with the lesson" in long_en
+    assert "iş bittiğinde silinir" not in long_tr and "deleted when the job ends" not in long_en
