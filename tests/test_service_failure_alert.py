@@ -30,6 +30,7 @@ WATCHED = (
     "lecturesift.service",
     "lecturesift-ingress-selector.service",
     "lecturesift-instagram.service",
+    "lecturesift-adsense-status.service",
 )
 NOW = datetime(2026, 10, 20, 2, 17, 5, tzinfo=timezone.utc).timestamp()
 # Synthetic values only; none has the shape of a real provider credential.

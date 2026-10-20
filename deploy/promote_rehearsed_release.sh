@@ -44,6 +44,8 @@ managed_units=(
   lecturesift-failure-alert@.service
   lecturesift-instagram.service
   lecturesift-instagram.timer
+  lecturesift-adsense-status.service
+  lecturesift-adsense-status.timer
   lecturesift-r2-retention-probe.service
 )
 
@@ -66,7 +68,8 @@ systemd_query_unit() {
       printf '%s\n' \
         'lecturesift-failure-alert@lecturesift.service.service' \
         'lecturesift-failure-alert@lecturesift-ingress-selector.service.service' \
-        'lecturesift-failure-alert@lecturesift-instagram.service.service'
+        'lecturesift-failure-alert@lecturesift-instagram.service.service' \
+        'lecturesift-failure-alert@lecturesift-adsense-status.service.service'
       ;;
     *@.*)
       return 1

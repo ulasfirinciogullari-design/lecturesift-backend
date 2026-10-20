@@ -47,6 +47,7 @@ WATCHED_UNITS = {
     ),
     "lecturesift-ingress-selector.service": "the public ingress selector",
     "lecturesift-instagram.service": "the scheduled Instagram studio and replies job",
+    "lecturesift-adsense-status.service": "the daily AdSense status check and its email",
 }
 RATE_LIMIT_SECONDS = 3600
 # The template stops this script after TimeoutStartSec=90. The systemd state
@@ -356,6 +357,57 @@ def _failure_name(exc: BaseException) -> str:
     return f"{type(exc).__name__}{detail}"
 
 
+def deliver(
+    settings: Mapping[str, str],
+    to: Sequence[str],
+    subject: str,
+    text: str,
+    *,
+    sender: Callable[..., None],
+    clock: Callable[[], float] = time.monotonic,
+    pause: Callable[[float], None] = time.sleep,
+    on_first_delivery: Callable[[], None] | None = None,
+) -> tuple[int, str]:
+    """Send the message to each address in turn, within DELIVERY_SECONDS.
+
+    Returns how many recipients the provider accepted and a summary for the
+    journal that names no address. ``on_first_delivery`` runs as soon as the
+    first message is accepted, before the next one is sent, so what it
+    records survives the sender being stopped later. The daily AdSense status
+    email (adsense_status_alert.py) sends through this too.
+    """
+
+    deadline = clock() + DELIVERY_SECONDS
+    reached = 0
+    failures: dict[str, int] = {}
+    not_tried = 0
+    for index, address in enumerate(to):
+        if index:
+            pause(SEND_INTERVAL_SECONDS)
+        remaining = deadline - clock()
+        if remaining < MIN_REQUEST_SECONDS:
+            not_tried = len(to) - index
+            break
+        try:
+            _send_within(sender, settings, address, subject, text, min(REQUEST_SECONDS, remaining))
+        except Exception as exc:  # noqa: BLE001 - never fail the caller over delivery
+            failure = _failure_name(exc)
+            failures[failure] = failures.get(failure, 0) + 1
+            continue
+        if not reached and on_first_delivery is not None:
+            on_first_delivery()
+        reached += 1
+
+    refused = sum(failures.values())
+    summary = f"reached {reached} of {len(to)} recipient(s); refused or failed: {refused}"
+    if failures:
+        summary += " (" + ", ".join(f"{name} x{count}" for name, count in failures.items()) + ")"
+    summary += f"; not tried: {not_tried}"
+    if not_tried:
+        summary += f" (the {DELIVERY_SECONDS}-second delivery limit was reached)"
+    return reached, summary
+
+
 def _state_path(state_dir: Path, unit: str) -> Path:
     return state_dir / f"{unit}.last-sent"
 
@@ -438,39 +490,18 @@ def run(
         host = "the production host"
     subject, text = compose_message(unit, host, now, state)
 
-    deadline = clock() + DELIVERY_SECONDS
-    reached = 0
-    failures: dict[str, int] = {}
-    not_tried = 0
-    for index, address in enumerate(to):
-        if index:
-            pause(SEND_INTERVAL_SECONDS)
-        remaining = deadline - clock()
-        if remaining < MIN_REQUEST_SECONDS:
-            not_tried = len(to) - index
-            break
+    def count_alert() -> None:
+        # Count the alert as soon as anyone has it, so being stopped later
+        # cannot make the next failure send it to the same people again.
         try:
-            _send_within(sender, settings, address, subject, text, min(REQUEST_SECONDS, remaining))
-        except Exception as exc:  # noqa: BLE001 - never fail the alert unit over delivery
-            failure = _failure_name(exc)
-            failures[failure] = failures.get(failure, 0) + 1
-            continue
-        if not reached:
-            # Count the alert as soon as anyone has it, so being stopped later
-            # cannot make the next failure send it to the same people again.
-            try:
-                record_sent(state_dir, unit, now)
-            except OSError:
-                log(f"Failure alert for {unit} sent, but the one-hour rate-limit state was not saved.")
-        reached += 1
+            record_sent(state_dir, unit, now)
+        except OSError:
+            log(f"Failure alert for {unit} sent, but the one-hour rate-limit state was not saved.")
 
-    refused = sum(failures.values())
-    summary = f"reached {reached} of {len(to)} recipient(s); refused or failed: {refused}"
-    if failures:
-        summary += " (" + ", ".join(f"{name} x{count}" for name, count in failures.items()) + ")"
-    summary += f"; not tried: {not_tried}"
-    if not_tried:
-        summary += f" (the {DELIVERY_SECONDS}-second delivery limit was reached)"
+    reached, summary = deliver(
+        settings, to, subject, text,
+        sender=sender, clock=clock, pause=pause, on_first_delivery=count_alert,
+    )
     if not reached:
         log(f"Failure alert for {unit} not sent: {summary}.")
         return 0

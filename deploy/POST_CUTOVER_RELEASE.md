@@ -78,18 +78,20 @@ cutover is settled on the running release:
 REVISION=<exact-40-hex-reviewed-commit>
 CURRENT="$(sudo sed -n 's/^LECTURESIFT_EXPECTED_BUILD_REVISION=//p' /run/lecturesift/release.env)"
 systemctl is-enabled lecturesift.service lecturesift-ingress-selector.service \
-  lecturesift-backup.timer lecturesift-instagram.timer
+  lecturesift-backup.timer lecturesift-instagram.timer lecturesift-adsense-status.timer
 sudo bash /opt/lecturesift/deploy/verify_production_ingress.sh activated
 ```
 
 `CURRENT` is the release you return to if this release is abandoned or rolled
 back. Keep the `is-enabled` output so you restore exactly what was enabled.
+Before the first release that adds `lecturesift-adsense-status.timer`,
+`is-enabled` reports that this timer does not exist; that is expected.
 
 ## 1. Pause scheduled jobs
 
 Instagram job containers and the backup's worker restart would change the
 container state that staging compares before and after its builds. The unit
-installer that promotion runs also requires both timers to be disabled.
+installer that promotion runs also requires these timers to be disabled.
 
 ```sh
 sudo systemctl disable --now lecturesift-instagram.timer
@@ -97,12 +99,17 @@ systemctl is-active lecturesift-instagram.service
 sudo systemctl stop lecturesift-instagram.service
 sudo systemctl disable --now lecturesift-backup.timer
 systemctl is-active lecturesift-backup.service
+sudo systemctl disable --now lecturesift-adsense-status.timer
+systemctl is-active lecturesift-adsense-status.service
 ```
 
 If `lecturesift-instagram.service` is still running a publication, wait until
 `is-active` prints `inactive` or `failed` before you stop it. Never stop a
 running backup. Wait until `lecturesift-backup.service` is `inactive` or
-`failed`.
+`failed`. The AdSense status check ends within five minutes; wait until
+`lecturesift-adsense-status.service` is `inactive` or `failed`. Before the
+first release that adds it, both AdSense commands report that the unit does
+not exist and change nothing.
 
 ## 2. Stage the candidate (production keeps serving)
 
@@ -271,7 +278,12 @@ Then re-enable only the timers that step 0 recorded as enabled:
 ```sh
 sudo systemctl enable --now lecturesift-backup.timer
 sudo systemctl enable --now lecturesift-instagram.timer
+sudo systemctl enable --now lecturesift-adsense-status.timer
 ```
+
+On the first release that adds `lecturesift-adsense-status.timer`, step 0
+recorded no such timer. Follow "First release with the AdSense status email"
+below instead of enabling it here.
 
 ## Rollback
 
@@ -341,6 +353,9 @@ only while all Instagram automation is off:
 - `lecturesift-instagram.timer` stays disabled for as long as it runs. Do not
   re-enable it in step 7.
 
+A rollback target without `deploy/adsense_status_alert.py` has no AdSense
+status check. Keep `lecturesift-adsense-status.timer` disabled while it runs.
+
 ## Prune old images
 
 Prune only after the new release has passed step 7. Keep two releases: the
@@ -385,7 +400,11 @@ systemd emails the operators when one of these units fails:
 - `lecturesift-instagram.service`, the 15-minute Instagram job;
 - `lecturesift-ingress-selector.service`. Its loop retries a failed
   reconciliation instead of exiting, so it queues the alert itself after each
-  failed attempt. `OnFailure=` also covers systemd giving up on the unit.
+  failed attempt. `OnFailure=` also covers systemd giving up on the unit;
+- `lecturesift-adsense-status.service`, the daily AdSense status check, when
+  an email it had to send reached nobody, its state could not be saved or it
+  ran out of time. An AdSense status that cannot be read is not a unit
+  failure: the check emails that itself (see "AdSense status email").
 
 The scheduled backup keeps its own `lecturesift-backup-alert@.service` email.
 
@@ -442,3 +461,82 @@ not there does nothing. If the journal says `suppressed`, a real Instagram
 alert went out within the hour; removing its record can at most send one
 extra email for the next failure. Repeat the same three commands to test
 again.
+
+## AdSense status email
+
+Every day at 03:10 UTC (06:10 in Turkey), `lecturesift-adsense-status.timer`
+starts `lecturesift-adsense-status.service`. That is after the 02:15 UTC
+backup and far from the 10:00 UTC carousel and the 17:00 UTC Reel. The
+service runs `deploy/adsense_status_alert.py` on the host, which reads the
+status inside the running api container:
+
+```sh
+docker compose exec -T api python -m lecturesift.adsense_status_snapshot
+```
+
+The read-only AdSense OAuth refresh token stays in the api role's
+environment, where the admin panel already uses it. The host reads only the
+email settings from `/etc/lecturesift/runtime.env`, like the failure alert.
+No new environment variable or file is needed, and no container is created.
+The check never starts the core. While the core is stopped, the read fails
+and counts as unreadable.
+
+The check compares the site state of lecturesift.com, the account state, the
+alert types and their severities, the number of policy issues and auto ads
+with the snapshot from the last check. It emails the operators only when one
+of them changed. The email is in Turkish. It says what changed, old → new,
+what each new state means and what to do, the time in UTC and in Turkey time,
+and links to <https://lecturesift.com/admin.html>. It holds no token, client
+id, account id or provider text. It goes to the same recipients, through the
+same Resend or SMTP account and with the same per-recipient delivery and
+60-second limit as the failure alert.
+
+The first successful check saves the snapshot and sends one baseline email,
+"AdSense durum takibi başladı". A check that cannot read every compared field
+never emails a change and leaves the snapshot alone. After three such checks
+in a row, the operators get one "AdSense durumu okunamıyor" email with the
+reason. It is sent again only after a successful check has reset the count.
+
+The state is `/var/lib/lecturesift/adsense-status/state.json`, a root-only
+file with the compared fields, the time of the last successful check and the
+failure count. An email that reached nobody keeps the old snapshot, so the
+next check sends it again, and fails the unit. The failure alert then reports
+the unit. The unit's journal shows each check's result:
+
+```sh
+journalctl -u lecturesift-adsense-status.service -n 20
+```
+
+### First release with the AdSense status email
+
+After step 7, run the test once, then enable the timer:
+
+```sh
+sudo python3 -I /opt/lecturesift/deploy/adsense_status_alert.py --manual-test
+sudo systemctl enable --now lecturesift-adsense-status.timer
+systemctl list-timers lecturesift-adsense-status.timer
+```
+
+No snapshot exists yet, so the test does what the first daily check would
+do. It reads the status, saves the snapshot and sends the baseline email. It
+must print `AdSense baseline email sent to N recipient(s).`, and the email
+must arrive. Resend accepting the request is not proof of delivery. If it
+prints `could not be read`, it sent nothing and saved nothing: fix the reason
+it names and run it again. `list-timers` must show the next run at 03:10 UTC.
+
+### Testing again
+
+Run the same command at any time:
+
+```sh
+sudo python3 -I /opt/lecturesift/deploy/adsense_status_alert.py --manual-test
+```
+
+Once a snapshot exists, it emails "AdSense durum kontrolü testi" with the
+current status and whether it differs from the saved snapshot. It ends with
+the saved state exactly as it was: the snapshot, the time of the last check
+and the failure count are not changed. The next daily check therefore still
+reports any change as old → new. A failed read sends nothing and changes
+nothing. The command ends within three minutes: the status read is limited
+to 90 seconds and sending to 60 seconds. While the daily check is running,
+it does nothing and says so; run it again a few minutes later.
