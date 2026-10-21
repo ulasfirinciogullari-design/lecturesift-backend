@@ -82,6 +82,7 @@ class FakeIyzico:
         self.tamper = tamper
         self.card = card
         self.fraud_status = fraud_status
+        self.callback_fraud_status = None
         self.paid = set()
         self.detail_calls = []
 
@@ -126,13 +127,16 @@ class FakeIyzico:
             return _Response(self.detail(reference))
         assert url.endswith(payments.IYZICO_RETRIEVE_PATH)
         values = ["SUCCESS", "payment-777", "TRY", reference, reference, "599", "599", TOKEN]
-        return _Response({
+        body = {
             "status": "success", "paymentStatus": "SUCCESS", "paymentId": "payment-777",
             "currency": "TRY", "basketId": reference, "conversationId": reference,
             "paidPrice": "599.00", "price": "599.0", "token": TOKEN,
             "cardType": "CREDIT_CARD", "cardAssociation": "VISA", "lastFourDigits": CARD_DIGITS,
             "signature": _signature(values),
-        })
+        }
+        if self.callback_fraud_status is not None:
+            body["fraudStatus"] = self.callback_fraud_status
+        return _Response(body)
 
 
 def _paid_checkout_without_callback(monkeypatch, fake: FakeIyzico) -> tuple[TestClient, str, str]:
@@ -243,6 +247,22 @@ def test_payment_under_fraud_review_stays_pending_until_approved(monkeypatch, fr
     fake.detail_calls.clear()
     assert payments.reconcile_iyzico_orders(later)["settled"] >= 1
     assert reference in fake.detail_calls
+    assert _order(reference).status == "paid" and _subscription_count(order.user_id) == 1
+
+
+@pytest.mark.parametrize("fraud_status", [0, -1])
+def test_callback_under_fraud_review_grants_nothing_until_approved(monkeypatch, fraud_status):
+    fake = FakeIyzico(fraud_status=fraud_status)
+    fake.callback_fraud_status = fraud_status
+    client, _, reference = _paid_checkout_without_callback(monkeypatch, fake)
+    callback = client.post(f"/billing/iyzico/callback?order={reference}", data={"token": TOKEN}, follow_redirects=False)
+    assert callback.status_code == 303
+    order = _order(reference)
+    assert order.status == "pending" and _subscription_count(order.user_id) == 0
+
+    # The hourly reconciliation settles it once iyzico approves the payment.
+    fake.fraud_status = 1
+    assert payments.reconcile_iyzico_orders(utcnow() + timedelta(minutes=20))["settled"] >= 1
     assert _order(reference).status == "paid" and _subscription_count(order.user_id) == 1
 
 

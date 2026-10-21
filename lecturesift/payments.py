@@ -778,6 +778,12 @@ def _settle_iyzico_payment(
         # notification will re-run the authoritative retrieve with a method
         # hint and finish the order idempotently.
         return mark_payment_order_pending(order_reference)
+    fraud_status = body.get("fraudStatus")
+    if payment_status == "SUCCESS" and fraud_status is not None and str(fraud_status) != "1":
+        # iyzico holds fulfilment while fraud review is open (0) and rejects
+        # with -1. Keep the order open without access; the hourly
+        # reconciliation settles it once iyzico approves the payment.
+        return mark_payment_order_pending(order_reference)
     succeeded = payment_status == "SUCCESS"
     failure_code, failure_message = ("", "") if succeeded else _iyzico_failure(body)
     return complete_payment_order(
