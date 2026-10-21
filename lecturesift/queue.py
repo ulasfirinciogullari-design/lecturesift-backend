@@ -6,21 +6,23 @@ from celery import Celery
 
 from .billing import LEGACY_PLANS, PLAN_BY_CODE
 from .config import CELERY_BROKER_URL, CELERY_VISIBILITY_TIMEOUT_SECONDS, REDIS_URL
-from .job_eta import BASELINE_SECONDS_PER_MEDIA_MINUTE, SUMMARY_STYLE_MULTIPLIERS, eta_seconds
+from .job_eta import MAX_SECONDS_PER_MEDIA_MINUTE, SUMMARY_STYLE_MULTIPLIERS, eta_seconds
 
 
 def _longest_legitimate_job_seconds() -> int:
-    """The ETA model's no-data estimate for the largest job any plan admits.
+    """The ETA model's longest estimate for the largest job any plan admits.
 
     That is the longest per-job media allowance of every current or legacy
-    plan (purchase snapshots are copies of these), at the largest upload size
-    and with the slowest summary style.
+    plan (purchase snapshots are copies of these), at the largest upload size,
+    with the slowest summary style and at the slowest processing rate the
+    model accepts as a learned median. A job the user is shown an ETA for can
+    therefore never outlive it.
     """
     plans = (*PLAN_BY_CODE.values(), *LEGACY_PLANS)
     media_minutes = max(plan.max_minutes_per_job for plan in plans)
     upload_bytes = max(plan.max_media_upload_mb for plan in plans) * 1024 * 1024
     slowest_style = max(SUMMARY_STYLE_MULTIPLIERS, key=SUMMARY_STYLE_MULTIPLIERS.__getitem__)
-    return eta_seconds(media_minutes, upload_bytes, BASELINE_SECONDS_PER_MEDIA_MINUTE, summary_style=slowest_style)
+    return eta_seconds(media_minutes, upload_bytes, MAX_SECONDS_PER_MEDIA_MINUTE, summary_style=slowest_style)
 
 
 # The soft limit raises SoftTimeLimitExceeded inside the job, which then fails

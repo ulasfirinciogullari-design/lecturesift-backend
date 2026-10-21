@@ -849,6 +849,11 @@ def _reconcile_iyzico_order(order_reference: str) -> str:
         # payments only; the transfer waits for its signed webhook or manual
         # settlement and is reported for follow-up.
         return "unverified"
+    if str(body.get("fraudStatus")) != "1":
+        # iyzico holds fulfilment while fraud review is open (0) and rejects
+        # with -1: keep the order open, without access, and ask again next run.
+        mark_payment_order_pending(order_reference)
+        return "pending"
     result = _settle_iyzico_payment(order_reference, order, body, expected_token=None)
     return "settled" if result["status"] == "paid" else "pending"
 
@@ -857,9 +862,11 @@ def reconcile_iyzico_orders(now: datetime | None = None) -> dict:
     """Settle paid iyzico orders whose browser callback and webhook never came.
 
     Looks at orders still created/pending from the last 48 hours (at least 15
-    minutes old, newest first) and settles a paid card payment through the
-    same path the callback uses. A paid order without card evidence (a
-    protected bank transfer) is left untouched and logged for follow-up.
+    minutes old, newest first) and settles a paid card payment that passed
+    iyzico's fraud review through the same path the callback uses. A payment
+    still under review stays pending and is asked about again next run. A
+    paid order without card evidence (a protected bank transfer) is left
+    untouched and logged for follow-up.
     Logs carry only order references and counts, never provider bodies,
     card fields or credentials.
     """

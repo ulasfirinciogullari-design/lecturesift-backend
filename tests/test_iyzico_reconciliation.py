@@ -77,10 +77,11 @@ class _Response:
 class FakeIyzico:
     """Answers initialize, Checkout Form retrieve and Retrieve Payment calls."""
 
-    def __init__(self, payment_status="SUCCESS", *, tamper=False, card=True):
+    def __init__(self, payment_status="SUCCESS", *, tamper=False, card=True, fraud_status=1):
         self.payment_status = payment_status
         self.tamper = tamper
         self.card = card
+        self.fraud_status = fraud_status
         self.paid = set()
         self.detail_calls = []
 
@@ -98,6 +99,7 @@ class FakeIyzico:
             **card,
             "status": "success",
             "paymentStatus": self.payment_status,
+            "fraudStatus": self.fraud_status,
             "paymentId": "payment-777",
             "currency": "TRY",
             "basketId": reference,
@@ -224,6 +226,24 @@ def test_paid_order_without_card_evidence_is_reported_not_settled(monkeypatch, c
     assert order.status == "created" and order.provider == intent
     assert _subscription_count(order.user_id) == 0
     assert f"without card evidence; it needs manual review reference={reference}" in caplog.text
+
+
+@pytest.mark.parametrize("fraud_status", [0, -1, None])
+def test_payment_under_fraud_review_stays_pending_until_approved(monkeypatch, fraud_status):
+    fake = FakeIyzico(fraud_status=fraud_status)
+    _, _, reference = _paid_checkout_without_callback(monkeypatch, fake)
+    later = utcnow() + timedelta(minutes=20)
+    summary = payments.reconcile_iyzico_orders(later)
+    assert reference in fake.detail_calls and summary["pending"] >= 1
+    order = _order(reference)
+    assert order.status == "pending" and _subscription_count(order.user_id) == 0
+
+    # Still in the reconciliation set: once iyzico approves it, the next run settles it.
+    fake.fraud_status = 1
+    fake.detail_calls.clear()
+    assert payments.reconcile_iyzico_orders(later)["settled"] >= 1
+    assert reference in fake.detail_calls
+    assert _order(reference).status == "paid" and _subscription_count(order.user_id) == 1
 
 
 def test_order_without_any_payment_is_left_untouched(monkeypatch):

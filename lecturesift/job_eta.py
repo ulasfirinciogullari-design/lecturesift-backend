@@ -6,7 +6,7 @@ from __future__ import annotations
 # measured yet. Learned rates are clamped to the bounds below.
 BASELINE_SECONDS_PER_MEDIA_MINUTE = 30.0
 _MIN_SECONDS_PER_MEDIA_MINUTE = 8.0
-_MAX_SECONDS_PER_MEDIA_MINUTE = 180.0
+MAX_SECONDS_PER_MEDIA_MINUTE = 180.0
 _FIXED_OVERHEAD_SECONDS = 45.0
 _TRANSFER_BYTES_PER_SECOND = 40 * 1024 * 1024
 JOB_TYPE_MULTIPLIERS = {
@@ -32,7 +32,7 @@ def eta_seconds(
     source_kind: str = "media",
 ) -> int:
     processing = _FIXED_OVERHEAD_SECONDS + media_minutes * max(
-        _MIN_SECONDS_PER_MEDIA_MINUTE, min(seconds_per_minute, _MAX_SECONDS_PER_MEDIA_MINUTE)
+        _MIN_SECONDS_PER_MEDIA_MINUTE, min(seconds_per_minute, MAX_SECONDS_PER_MEDIA_MINUTE)
     )
     type_multiplier = JOB_TYPE_MULTIPLIERS.get(str(job_type or "study_pack"), 1.0)
     source_multiplier = DOCUMENT_SOURCE_MULTIPLIER if source_kind == "document" else 1.0

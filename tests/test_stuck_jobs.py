@@ -16,7 +16,7 @@ import lecturesift.queue as queue
 import lecturesift.tasks as tasks_module
 from lecturesift import config
 from lecturesift.billing import LEGACY_PLANS, PLAN_BY_CODE
-from lecturesift.job_eta import BASELINE_SECONDS_PER_MEDIA_MINUTE, eta_seconds
+from lecturesift.job_eta import BASELINE_SECONDS_PER_MEDIA_MINUTE, MAX_SECONDS_PER_MEDIA_MINUTE, eta_seconds
 
 SOURCE_KEY = "jobs/stuck/audio_001.mp3"
 
@@ -77,10 +77,13 @@ def test_time_limits_are_derived_from_the_longest_plan_job():
     longest_minutes = max(plan.max_minutes_per_job for plan in plans)
     assert longest_minutes == PLAN_BY_CODE["business"].max_minutes_per_job == 1440
     largest_upload = max(plan.max_media_upload_mb for plan in plans) * 1024 * 1024
-    for style in ("standard", "detailed", "exam"):
-        estimate = eta_seconds(longest_minutes, largest_upload, BASELINE_SECONDS_PER_MEDIA_MINUTE, summary_style=style)
-        assert estimate <= queue.JOB_SOFT_TIME_LIMIT_SECONDS
-    assert queue.JOB_SOFT_TIME_LIMIT_SECONDS == 14 * 3600
+    # Every ETA the model can show for an admitted job, whatever median it has
+    # learned (it clamps learned rates), fits under the soft limit.
+    for rate in (BASELINE_SECONDS_PER_MEDIA_MINUTE, MAX_SECONDS_PER_MEDIA_MINUTE, 10 * MAX_SECONDS_PER_MEDIA_MINUTE):
+        for style in ("standard", "detailed", "exam"):
+            estimate = eta_seconds(longest_minutes, largest_upload, rate, summary_style=style)
+            assert estimate <= queue.JOB_SOFT_TIME_LIMIT_SECONDS
+    assert queue.JOB_SOFT_TIME_LIMIT_SECONDS == 83 * 3600
     assert queue.JOB_HARD_TIME_LIMIT_SECONDS == queue.JOB_SOFT_TIME_LIMIT_SECONDS + 600
     assert queue.celery_app.conf.task_soft_time_limit == queue.JOB_SOFT_TIME_LIMIT_SECONDS
     assert queue.celery_app.conf.task_time_limit == queue.JOB_HARD_TIME_LIMIT_SECONDS
