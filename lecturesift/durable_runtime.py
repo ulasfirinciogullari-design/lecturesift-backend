@@ -32,11 +32,13 @@ def sweep_stuck_jobs(now: float | None = None) -> int:
     """Fail queued/working jobs that can no longer finish on their own.
 
     A started job qualifies once its own deadline (its delivery's hard time
-    limit) and the broker's redelivery window have passed; a queued one, or a
-    record from before per-job deadlines, once it has recorded nothing for
-    STUCK_JOB_AFTER_SECONDS. No delivery can then still be running or coming
-    for it. It then fails through the standard terminal path (state, failure
-    email, source cleanup). Returns how many jobs this call failed.
+    limit) and the broker's redelivery window have passed. A queued job waits
+    on the single worker behind every unfinished job queued before it, so it
+    qualifies only after all of their hard limits, its own and the redelivery
+    window, counted from when it was queued. No delivery can then still be
+    running or coming for it. It then fails through the standard terminal path
+    (state, failure email, source cleanup). Returns how many jobs this call
+    failed.
     """
     if os.getenv("LECTURESIFT_WORKER") == "1" or config.current_maintenance_mode() != "off":
         return 0
@@ -44,9 +46,10 @@ def sweep_stuck_jobs(now: float | None = None) -> int:
 
     now = time.time() if now is None else now
     failed = 0
-    for data in JOBS.recoverable():
+    unfinished = JOBS.recoverable()
+    for data in unfinished:
         job_id = str(data.get("job_id") or "")
-        if not job_id or not _stuck(data, now):
+        if not job_id or not _stuck(data, now, unfinished):
             continue
         # A delivery holds this lock from before it records its start, so a
         # job whose lock is taken is left to that delivery. A job updated
@@ -58,19 +61,40 @@ def sweep_stuck_jobs(now: float | None = None) -> int:
     return failed
 
 
-def _stuck(data: dict, now: float) -> bool:
+def _hard_limit(data: dict) -> float:
+    """A job's own hard limit, or the global worst case for a record without one."""
+    from .queue import JOB_HARD_TIME_LIMIT_SECONDS
+
+    limits = stored_time_limits(data)
+    return float(limits[1] if limits else JOB_HARD_TIME_LIMIT_SECONDS)
+
+
+def _queued_at(data: dict) -> float:
+    return float(data.get("queued_at") or data.get("updated") or 0)
+
+
+def _stuck(data: dict, now: float, unfinished: list[dict]) -> bool:
     """Whether a queued/working job can no longer finish on its own."""
     from .queue import JOB_REDELIVERY_WINDOW_SECONDS, STUCK_JOB_AFTER_SECONDS
 
-    deadline = data.get("processing_deadline")
-    if data.get("status") == "working" and deadline:
-        # Its delivery started with its own hard limit. Past that, and the
-        # window in which the broker redelivers a lost worker's message, no
-        # delivery can be running or coming for it.
-        return now >= float(deadline) + JOB_REDELIVERY_WINDOW_SECONDS
-    # Not started yet (it may wait behind the longest admitted job on the
-    # single worker), or a record from before per-job deadlines.
-    return float(data.get("updated") or 0) < now - STUCK_JOB_AFTER_SECONDS
+    if data.get("status") == "working":
+        deadline = data.get("processing_deadline")
+        if deadline:
+            # Its delivery started with its own hard limit. Past that, and the
+            # window in which the broker redelivers a lost worker's message,
+            # no delivery can be running or coming for it.
+            return now >= float(deadline) + JOB_REDELIVERY_WINDOW_SECONDS
+        # A record from before per-job deadlines.
+        return float(data.get("updated") or 0) < now - STUCK_JOB_AFTER_SECONDS
+    # Queued: the single worker runs every unfinished job queued before it
+    # first, each for at most its hard limit.
+    queued_at = _queued_at(data)
+    ahead = sum(
+        _hard_limit(other)
+        for other in unfinished
+        if other.get("job_id") != data.get("job_id") and _queued_at(other) <= queued_at
+    )
+    return now >= queued_at + ahead + _hard_limit(data) + JOB_REDELIVERY_WINDOW_SECONDS
 
 
 async def stuck_job_loop() -> None:
@@ -388,6 +412,7 @@ def install_durable_runtime() -> None:
                     worker_state="queued",
                     source_keys={"audio": audio_keys, "visual": visual_keys},
                     time_limits=list(time_limits),
+                    queued_at=time.time(),
                 )
                 task = _enqueue_uploaded_job(
                     process_uploaded_job, job_id, audio_keys, options, visual_keys, time_limits,
@@ -494,6 +519,7 @@ def install_durable_runtime() -> None:
                     worker_state="requeued",
                     celery_task_id=task.id,
                     recovered_at=time.time(),
+                    queued_at=time.time(),
                 )
             except Exception as exc:
                 JOBS.update(job_id, recovery_error=str(exc))

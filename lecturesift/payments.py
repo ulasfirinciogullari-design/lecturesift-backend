@@ -60,8 +60,9 @@ IYZICO_RECONCILE_LOOKBACK = timedelta(hours=48)
 IYZICO_RECONCILE_PENDING_LOOKBACK = timedelta(days=14)
 # Leave fresh checkouts to the browser callback and webhook.
 IYZICO_RECONCILE_MIN_AGE = timedelta(minutes=15)
-# Newest first: a just-abandoned tab is the likeliest paid-but-unsettled order,
-# and abandoned checkouts that stay "created" must not starve it.
+# Per status, newest first: a just-abandoned tab is the likeliest
+# paid-but-unsettled order, and abandoned checkouts that stay "created" must
+# not starve it or any pending payment.
 IYZICO_RECONCILE_BATCH_SIZE = 200
 IYZICO_RECONCILE_INTERVAL_SECONDS = 60 * 60
 IYZICO_CURRENCIES = ("TRY", "USD", "EUR", "GBP", "NOK", "CHF")

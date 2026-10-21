@@ -40,9 +40,9 @@ JOB_HARD_TIME_LIMIT_SECONDS = JOB_SOFT_TIME_LIMIT_SECONDS + JOB_HARD_LIMIT_GRACE
 # By the visibility timeout the broker has redelivered a message a lost worker
 # held; the margin covers the redelivered message reaching the worker.
 JOB_REDELIVERY_WINDOW_SECONDS = CELERY_VISIBILITY_TIMEOUT_SECONDS + 30 * 60
-# A queued job may wait behind the longest admitted job on the single worker,
-# so one that has recorded nothing for longer than that and the redelivery
-# window can no longer start on its own. A started job uses its own deadline.
+# A started job from before per-job deadlines that has recorded nothing for
+# longer than any delivery may run plus the redelivery window can no longer
+# finish on its own. Started and queued jobs otherwise use their own deadlines.
 STUCK_JOB_AFTER_SECONDS = JOB_HARD_TIME_LIMIT_SECONDS + JOB_REDELIVERY_WINDOW_SECONDS
 # A job's own limit: its ETA at the slowest rate the model accepts plus this
 # margin, and never under the floor, since short files and documents still

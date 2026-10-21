@@ -322,3 +322,18 @@ def test_reconciliation_is_off_without_iyzico_or_during_maintenance(monkeypatch)
     monkeypatch.setattr(config, "IYZICO_SECRET_KEY", "")
     assert payments.reconcile_iyzico_orders(later)["disabled"] == "unconfigured"
     assert fake.detail_calls == [] and _order(reference).status == "created"
+
+
+def test_newer_abandoned_checkouts_never_crowd_out_a_pending_payment(monkeypatch):
+    monkeypatch.setattr(payments, "IYZICO_RECONCILE_BATCH_SIZE", 1)
+    fake = FakeIyzico(fraud_status=0)
+    _, _, pending = _paid_checkout_without_callback(monkeypatch, fake)
+    payments.reconcile_iyzico_orders(utcnow() + timedelta(minutes=20))
+    assert _order(pending).status == "pending"
+    _, _, abandoned = _paid_checkout_without_callback(monkeypatch, fake)
+    fake.paid.discard(abandoned)
+
+    fake.detail_calls.clear()
+    payments.reconcile_iyzico_orders(utcnow() + timedelta(minutes=20))
+    # One of each status per run: the newer created order does not take the only slot.
+    assert pending in fake.detail_calls and abandoned in fake.detail_calls
