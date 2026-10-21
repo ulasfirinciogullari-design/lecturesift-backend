@@ -28,10 +28,11 @@ MEETING_MINUTES = {
 }
 PRIVACY_TOPIC = "KVKK / gizlilik başvurusu"
 HOME_SOURCE_DELETION = (
-    "Orijinal video, ses veya belge dosyan işlem bittiğinde silinir; işlem başarısız olsa da silinir."
+    "Orijinal video, ses veya belge dosyan işlem bittiğinde, başarısız olsa bile, en kısa sürede silinir; "
+    "her durumda en geç ders silindiğinde veya süresi dolduğunda dersle birlikte kaldırılır."
 )
 HOME_RESULT_RETENTION = (
-    "Sonuçlar planına göre saklanır: misafir denemede 1 gün, ücretsiz hesapta 7 gün, ücretli planlarda 30–365 gün. "
+    "Sonuçlar planına göre saklanır: misafir denemede 1 gün, ücretsiz hesapta 7 gün, ücretli planlarda 30 günden 2 yıla kadar. "
     "Süresi dolan ders dosyalarıyla birlikte otomatik silinir; istediğin dersi Çalışma Alanı’ndan daha önce de silebilirsin."
 )
 
@@ -122,14 +123,18 @@ def test_homepage_upload_deletion_describes_the_cleanup_that_actually_runs():
     assert "6 saat" not in home
     assert "işlem başarıyla tamamlanınca silinir" not in home
     assert "Silme aksarsa" not in home
-    # Retention follows the plan catalog: guest 1 day, free 7, and 30-365
-    # days across the paid plans the homepage shows (rollout_service
-    # registers the hidden guest plan).
+    # Retention follows the plan catalog: guest 1 day, free 7, and from 30
+    # days up to 2 years (730) across every paid plan, since the homepage
+    # links to all plans (rollout_service registers the hidden guest plan).
     from lecturesift import rollout_service  # noqa: F401
     assert PLAN_BY_CODE["guest"].history_days == 1
     assert PLAN_BY_CODE["free"].history_days == 7
-    paid = [PLAN_BY_CODE[code].history_days for code in ("credit", "lite", "pro")]
-    assert min(paid) == 30 and max(paid) == 365
+    # Assistant credit and ad-free purchases keep no lessons, so only plans
+    # that process minutes (and the quoted Business plan) count here.
+    paid = [plan.history_days for code, plan in PLAN_BY_CODE.items()
+            if plan.kind in {"one_time", "subscription", "quote"} and code != "test"
+            and (plan.minutes or plan.kind == "quote")]
+    assert min(paid) == 30 and max(paid) == 730
     for sentence in (HOME_SOURCE_DELETION, HOME_RESULT_RETENTION):
         row = CATALOG[sentence]
         assert all(value.strip() for value in row)

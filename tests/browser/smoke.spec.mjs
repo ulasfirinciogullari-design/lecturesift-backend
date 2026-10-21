@@ -658,6 +658,16 @@ test('rebuilt study entry opens the real workspace and key screens remain usable
 
 test('mobile price cards keep their rows inside the card and the trial button on one line', async ({page, isMobile}, testInfo) => {
   test.skip(!isMobile, 'Regression concerns the narrow price-card layout');
+  // A synthetic catalog fills the cards so their real rows are measured.
+  const entitlements = (minutes, docx, adFree, priority) => ({minutes, export_formats: docx ? ['pdf', 'docx', 'txt'] : ['pdf'], ad_free: adFree, priority, history_days: 30, limits: {}});
+  const catalog = {selected_currency: 'TRY', guest_trial_minutes: 30, plans: [
+    {code: 'free', kind: 'free', featured: false, display_price: {currency: 'TRY', amount_minor: 0}, entitlements: entitlements(120, false, false, 'standard')},
+    {code: 'credit', kind: 'one_time', featured: false, display_price: {currency: 'TRY', amount_minor: 19900}, entitlements: entitlements(300, true, false, 'standard')},
+    {code: 'lite', kind: 'subscription', featured: true, display_price: {currency: 'TRY', amount_minor: 14900}, entitlements: entitlements(600, true, true, 'standard')},
+    {code: 'pro', kind: 'subscription', featured: false, display_price: {currency: 'TRY', amount_minor: 44900}, entitlements: entitlements(1500, true, true, 'priority')},
+  ]};
+  await page.route(url => url.pathname === '/billing/plans', route => route.fulfill({status: 200, contentType: 'application/json',
+    headers: {'Access-Control-Allow-Origin': 'http://127.0.0.1:4173'}, body: JSON.stringify(catalog)}));
   for (const width of [320, 390]) {
     await page.setViewportSize({width, height:844});
     for (const locale of ['tr', 'ar']) {
@@ -677,23 +687,28 @@ test('mobile price cards keep their rows inside the card and the trial button on
       expect(primaryBox.x + primaryBox.width).toBeLessThanOrEqual(width);
       const cards = page.locator('.home-pricing .price-card');
       await expect(cards).toHaveCount(3);
-      await expect(page.locator('[data-home-pricing]')).toHaveAttribute('data-pricing-source', 'fallback');
+      await expect(page.locator('[data-home-pricing]')).toHaveAttribute('data-pricing-source', 'live');
       await expect(cards.nth(1)).toHaveClass(/featured/);
       await expect(cards.nth(1).locator('.price-badge')).toBeVisible();
       await expect(cards.nth(2).locator('.price-badge')).toBeHidden();
+      for (const card of await cards.all()) {
+        await expect(card.locator('[data-home-live]')).toBeVisible();
+        await expect(card.locator('.price-link')).toBeHidden();
+      }
       if (locale === 'tr') {
-        await expect(cards.nth(0).locator('[data-plan-value="minutes"]')).toHaveText('120');
-        await expect(cards.nth(1).locator('[data-plan-value="price"]')).toHaveText('₺149');
-        await expect(cards.nth(2).locator('[data-plan-value="price"]')).toHaveText('₺449');
-        await expect(cards.nth(2).locator('[data-plan-value="minutes"]')).toHaveText('1.500');
-        await expect(page.locator('.pricing-pack [data-plan-value="price"]')).toHaveText('₺199');
+        await expect(cards.nth(0).locator('[data-home-minutes]')).toHaveText('120');
+        await expect(cards.nth(1).locator('[data-home-price]')).toHaveText('₺149');
+        await expect(cards.nth(2).locator('[data-home-price]')).toHaveText('₺449');
+        await expect(cards.nth(2).locator('[data-home-minutes]')).toHaveText('1.500');
+        await expect(page.locator('.pricing-pack [data-home-price]')).toHaveText('₺199');
       }
       await cards.first().scrollIntoViewIfNeeded();
       for (const card of await cards.all()) {
         const bounds = await card.boundingBox();
         let previousBottom = bounds.y;
-        // The "most popular" pill intentionally sits on the card's top edge.
-        for (const child of await card.locator(':scope > :not(.price-badge)').all()) {
+        // The "most popular" pill intentionally sits on the card's top edge;
+        // the rows live inside the catalog-filled block.
+        for (const child of await card.locator(':scope > h3, :scope > .price-live > *').all()) {
           const box = await child.boundingBox();
           expect(box.x).toBeGreaterThanOrEqual(bounds.x);
           expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width + 1);

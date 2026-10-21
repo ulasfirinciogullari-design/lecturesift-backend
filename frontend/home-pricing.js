@@ -1,9 +1,12 @@
-/* Homepage price cards: the static markup carries the TRY list prices as a
-   fallback; the live catalog (GET /billing/plans) replaces price, minutes and
-   the entitlement bullets so the homepage never shows stale prices. */
+/* Homepage price cards. The markup carries no prices: price, minutes, the
+   "most popular" badge and the entitlement bullets come from GET /billing/plans
+   at runtime, so the homepage can never show a stale list price. A card whose
+   plan is missing from the catalog, or every card when the request fails,
+   shows only the plan name and a link to the plans page. */
 (function () {
   const host = document.querySelector('.home-page [data-home-pricing]');
   if (!host) return;
+  host.dataset.pricingSource = 'loading';
   const API = 'https://api.lecturesift.com';
   const LOCALE_DATA = window.LECTURESIFT_LOCALE_DATA || {currencies: ['TRY', 'USD', 'EUR', 'GBP'], currencyForCountry: {}};
   const ZERO_DECIMAL_CURRENCIES = new Set(['JPY', 'KRW']);
@@ -35,60 +38,72 @@
   const formatMinutes = minutes => new Intl.NumberFormat(locale).format(minutes);
   const setHidden = (node, hidden) => { if (node) node.hidden = hidden; };
 
-  const applyPlan = (card, plan) => {
-    let applied = false;
+  // Each block is a price card or the one-line minute pack. `live` holds the
+  // catalog-filled content, `offline` the name-only fallback link.
+  const blocks = [...host.querySelectorAll('[data-home-plan]')].map(node => ({
+    node,
+    code: node.dataset.homePlan,
+    live: node.hasAttribute('data-home-live') ? node : node.querySelector('[data-home-live]'),
+    offline: node.querySelector('[data-home-offline]'),
+    applied: false,
+  }));
+
+  const fill = (block, plan) => {
+    if (!plan || !block.live) return false;
     const price = plan.display_price;
-    const priceNode = card.querySelector('[data-plan-value="price"]');
-    if (priceNode && price && Number.isFinite(price.amount_minor) && typeof price.currency === 'string') {
-      priceNode.textContent = formatPrice(price.amount_minor, price.currency.toUpperCase());
-      applied = true;
-    }
     const entitlements = plan.entitlements || {};
     const minutes = entitlements.minutes ?? plan.minutes;
-    const minutesNode = card.querySelector('[data-plan-value="minutes"]');
-    if (minutesNode && Number.isFinite(minutes)) {
-      minutesNode.textContent = formatMinutes(minutes);
-      applied = true;
-    }
+    const priced = price && Number.isFinite(price.amount_minor) && typeof price.currency === 'string';
+    if (!priced || !Number.isFinite(minutes)) return false;
+    block.live.querySelector('[data-home-price]').textContent = formatPrice(price.amount_minor, price.currency.toUpperCase());
+    block.live.querySelector('[data-home-minutes]').textContent = formatMinutes(minutes);
     if (Array.isArray(entitlements.export_formats)) {
       const docx = entitlements.export_formats.includes('docx');
-      setHidden(card.querySelector('[data-home-export="docx"]'), !docx);
-      setHidden(card.querySelector('[data-home-export="pdf"]'), docx);
+      setHidden(block.live.querySelector('[data-home-export="docx"]'), !docx);
+      setHidden(block.live.querySelector('[data-home-export="pdf"]'), docx);
     }
     if (typeof entitlements.ad_free === 'boolean') {
-      setHidden(card.querySelector('[data-home-ad-free]'), !entitlements.ad_free);
-      setHidden(card.querySelector('[data-home-ads]'), entitlements.ad_free);
+      setHidden(block.live.querySelector('[data-home-ad-free]'), !entitlements.ad_free);
+      setHidden(block.live.querySelector('[data-home-ads]'), entitlements.ad_free);
     }
     if (typeof entitlements.priority === 'string') {
-      setHidden(card.querySelector('[data-home-priority]'), entitlements.priority !== 'priority');
+      setHidden(block.live.querySelector('[data-home-priority]'), entitlements.priority !== 'priority');
     }
-    return applied;
+    return true;
+  };
+
+  const show = (block, live) => {
+    block.applied = live;
+    setHidden(block.live, !live);
+    setHidden(block.offline, live);
   };
 
   const apply = catalog => {
     const plans = new Map((catalog?.plans || []).filter(plan => plan && plan.code).map(plan => [plan.code, plan]));
-    let applied = 0;
-    host.querySelectorAll('[data-home-plan]').forEach(card => {
-      const plan = plans.get(card.dataset.homePlan);
-      if (plan && applyPlan(card, plan)) applied += 1;
-    });
-    // "Most popular" follows the catalog only when the featured subscription
-    // is one of the cards shown here; otherwise the static highlight stays.
+    blocks.forEach(block => show(block, fill(block, plans.get(block.code))));
+    // "Most popular" follows the catalog's featured subscription when that plan
+    // is one of the cards shown here and has live data.
     const featured = [...plans.values()].find(plan => plan.featured && plan.kind === 'subscription')?.code;
-    const cards = [...host.querySelectorAll('.price-card[data-home-plan]')];
-    if (featured && cards.some(card => card.dataset.homePlan === featured)) {
+    const cards = blocks.filter(block => block.node.classList.contains('price-card'));
+    if (cards.some(card => card.code === featured && card.applied)) {
       cards.forEach(card => {
-        const popular = card.dataset.homePlan === featured;
-        card.classList.toggle('featured', popular);
-        setHidden(card.querySelector('[data-home-popular]'), !popular);
+        const popular = card.code === featured;
+        card.node.classList.toggle('featured', popular);
+        setHidden(card.node.querySelector('[data-home-popular]'), !popular);
       });
     }
-    host.dataset.pricingSource = applied ? 'live' : 'fallback';
+    const applied = blocks.some(block => block.applied);
+    host.dataset.pricingSource = applied ? 'live' : 'unavailable';
     if (applied) host.dataset.pricingCurrency = String(catalog?.selected_currency || currency).toUpperCase();
+  };
+
+  const unavailable = () => {
+    blocks.forEach(block => show(block, false));
+    host.dataset.pricingSource = 'unavailable';
   };
 
   fetch(`${API}/billing/plans?currency=${encodeURIComponent(currency)}`, {cache: 'no-store'})
     .then(response => response.ok ? response.json() : Promise.reject(new Error(`plans-${response.status}`)))
     .then(apply)
-    .catch(() => { host.dataset.pricingSource = 'fallback'; });
+    .catch(unavailable);
 })();

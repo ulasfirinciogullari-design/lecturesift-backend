@@ -194,11 +194,15 @@ def test_homepage_shows_price_cards_without_duplicating_plan_checkout():
     workspace = (FRONTEND / "workspace.html").read_text(encoding="utf-8")
     assert 'id="pricing"' in homepage and "data-home-pricing" in homepage
     assert 'id="campaigns"' not in homepage
-    # Three cards plus the one-line minute pack, each carrying the TRY list
-    # price the live catalog overrides; Lite/Plus/Max are not on the homepage.
-    cards = re.findall(r'data-home-plan="([a-z]+)" data-price-try-minor="(\d+)"', homepage)
-    assert cards == [("free", "0"), ("lite", "14900"), ("pro", "44900"), ("credit", "19900")]
+    # Three cards plus the one-line minute pack. Every price and minute figure
+    # comes from GET /billing/plans at runtime, so the markup carries none;
+    # a card without catalog data shows its name and a link to the plans page.
+    assert re.findall(r'data-home-plan="([a-z]+)"', homepage) == ["free", "lite", "pro", "credit"]
     assert homepage.count('class="price-card') == 3
+    assert homepage.count("<span data-home-price></span>") == 4
+    assert homepage.count("<span data-home-minutes></span>") == 4
+    assert homepage.count("data-home-live hidden") == 4 and homepage.count("data-home-offline") == 3
+    assert "data-price-try-minor" not in homepage and "data-plan-value" not in homepage and "₺" not in homepage
     assert "data-home-popular" in homepage
     assert '<script src="/home-pricing.js?v=1"></script>' in homepage
     assert "plan-action" not in homepage and 'data-plan-card=' not in homepage

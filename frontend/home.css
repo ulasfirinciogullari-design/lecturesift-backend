@@ -24,6 +24,14 @@
 .price-amount{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px;margin:12px 0 0;font-size:34px;line-height:1.1;font-weight:700;letter-spacing:-.03em;color:var(--ui-ink)}
 .price-term{font-size:13px;font-weight:500;letter-spacing:0;color:var(--ui-muted)}
 .price-minutes{margin:6px 0 16px;font-size:14px;font-weight:600;color:var(--ui-ink)}
+.price-live{display:flex;flex:1 1 auto;flex-direction:column;min-width:0}
+.price-live[hidden]{display:none}
+.price-link{margin:12px 0 0;font-size:14px;line-height:1.5}
+.price-link[hidden]{display:none}
+.price-link a{font-weight:650;color:var(--ui-action);text-underline-offset:4px}
+/* Until the catalog request settles, neither the numbers nor the fallback link show. */
+.home-pricing[data-pricing-source="loading"] .price-link{visibility:hidden}
+.pricing-pack[hidden]{display:none}
 .price-card ul{list-style:none;margin:auto 0 0;padding:0;display:grid;gap:8px;font-size:13px;line-height:1.55;color:var(--ui-muted)}
 .price-card li{display:flex;gap:8px;align-items:flex-start}
 .price-card li::before{content:"✓";flex:0 0 auto;color:var(--ui-green);font-weight:700}
