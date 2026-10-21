@@ -273,6 +273,32 @@ starting. This gate checks identity, revision and readiness only. It is not
 proof that payments, email or every media format work. Run the release's own
 acceptance checks for the areas it changed.
 
+Then prove that a large upload body is parsed. Starlette spools every file
+part over 1 MB to the API temp directory, which must be
+`TMPDIR=/var/lib/lecturesift/tmp` on the `api_work` volume, not the 128 MB
+`/tmp` tmpfs. Send about 200 MB without a session and with an unsupported
+extension:
+
+```sh
+sudo docker compose --project-directory /opt/lecturesift exec -T api printenv TMPDIR
+check="$(mktemp -d)"
+truncate -s 200M "$check/body.bin"
+curl -sS --max-time 600 -o "$check/response.json" -w '%{http_code}\n' \
+  -F "files=@$check/body.bin;filename=large-body-check.unsupported" \
+  https://api.lecturesift.com/jobs
+cat "$check/response.json"; echo
+rm -rf "$check"
+```
+
+`printenv` must print `/var/lib/lecturesift/tmp`. The API reads the whole
+form before it checks the session, so the request must end with `401` and
+code `LS-BILL-01`: the body was parsed and nothing was stored or processed.
+`400` with `There was an error parsing the body` means the parts were spooled
+to a temp directory too small for them. Stop and check `TMPDIR` in the
+running `api` container. `413` means Caddy's `request_body` limit is below
+the plan maximum. `503` with `LS-MAINT-01` means the maintenance fence is
+still up, which proves nothing. Rerun once it is lifted.
+
 Then re-enable only the timers that step 0 recorded as enabled:
 
 ```sh

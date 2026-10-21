@@ -22,6 +22,7 @@ from .storage import STORAGE
 
 
 _INSTALLED = False
+start_durable_recovery = None
 
 
 def _start_durable_recovery(recover) -> None:
@@ -399,9 +400,12 @@ def install_durable_runtime() -> None:
                 JOBS.update(job_id, recovery_error=str(exc))
 
     app_module.process_job = dispatch
-    app_module.app.add_event_handler(
-        "startup",
-        lambda: _start_durable_recovery(recover_durable_jobs),
-    )
+    # Starlette 1.x removed add_event_handler. The startup handler registered
+    # here before never ran: Starlette ignores on_startup handlers when the app
+    # has a lifespan, which it has had since the assistant maintenance loop.
+    # Keep that behaviour (no automatic requeue on every API restart) and leave
+    # the routine callable for an operator until startup recovery is decided.
+    global start_durable_recovery
+    start_durable_recovery = lambda: _start_durable_recovery(recover_durable_jobs)  # noqa: E731
     app_module._lecturesift_durable_dispatch_installed = True
     _INSTALLED = True

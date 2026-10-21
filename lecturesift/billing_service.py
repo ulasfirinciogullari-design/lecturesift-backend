@@ -938,6 +938,25 @@ def login_user(email: str, password: str) -> dict:
     }
 
 
+PRODUCTION_SESSION_SECRET_MIN_LENGTH = 32
+
+
+def require_production_session_secret() -> None:
+    """Refuse to start production while sessions would use the derived fallback.
+
+    The fallback below keeps tests and local development working without a
+    configured secret; on the OVH deployment it would make every session
+    token depend on the database URL, so the API must not start.
+    """
+    if config.DEPLOYMENT_PROVIDER != "ovh":
+        return
+    if len(config.BILLING_SESSION_SECRET.strip()) < PRODUCTION_SESSION_SECRET_MIN_LENGTH:
+        raise RuntimeError(
+            "BILLING_SESSION_SECRET must be set to at least "
+            f"{PRODUCTION_SESSION_SECRET_MIN_LENGTH} characters in production"
+        )
+
+
 def _token_secret() -> bytes:
     explicit = config.BILLING_SESSION_SECRET.encode("utf-8")
     if explicit:

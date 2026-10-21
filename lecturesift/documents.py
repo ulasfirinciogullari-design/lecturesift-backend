@@ -43,6 +43,12 @@ from .errors import LectureSiftError
 
 
 _IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff"}
+# Pillow picks a decoder from the file's content, not its name. Only the
+# formats behind the accepted extensions may be parsed, so a renamed PSD or
+# other exotic file never reaches its decoder.
+_UPLOADED_IMAGE_FORMATS = ("PNG", "JPEG", "WEBP", "TIFF")
+# Raster formats PowerPoint stores for inserted pictures.
+_PPTX_PICTURE_FORMATS = ("PNG", "JPEG", "GIF", "BMP", "TIFF", "WEBP")
 _OCR_LANGUAGES = {
     "tr": "tur+eng",
     "en": "eng",
@@ -741,7 +747,7 @@ def _extract_image(
             413,
         )
     try:
-        with Image.open(path) as source:
+        with Image.open(path, formats=_UPLOADED_IMAGE_FORMATS) as source:
             _validate_image_dimensions(source)
             if not enable_ocr:
                 return "", {
@@ -849,7 +855,7 @@ def _pptx_picture_blob(shape: Any) -> bytes:
 
 def _load_pptx_picture_image(blob: bytes) -> Image.Image:
     try:
-        with Image.open(BytesIO(blob)) as source:
+        with Image.open(BytesIO(blob), formats=_PPTX_PICTURE_FORMATS) as source:
             _validate_image_dimensions(source)
             return source.copy()
     except (Image.DecompressionBombError, UnidentifiedImageError, OSError) as exc:

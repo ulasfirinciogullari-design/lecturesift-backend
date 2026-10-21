@@ -1,3 +1,5 @@
+import {execFileSync} from "node:child_process";
+import {realpathSync} from "node:fs";
 import {cp, mkdir, readdir, readFile, rm, writeFile} from "node:fs/promises";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
@@ -589,8 +591,72 @@ function validateLocalizedPage(html, language, publicPath) {
   }
 }
 
+// Sitemap lastmod for the core pages is the date of the last commit that
+// touched the page's source file, read from git history at build time
+// (Netlify builds from a full clone). Without usable history (no git, a
+// shallow clone that would date every file to its one commit, a copy outside
+// the repository) those entries carry no lastmod: no date beats a wrong one.
+function git(args) {
+  return execFileSync("git", args, {
+    cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 30000,
+  }).trim();
+}
+
+function coreSourceDates() {
+  try {
+    // Only this checkout's history counts, never that of an enclosing repository.
+    if (realpathSync(git(["rev-parse", "--show-toplevel"])) !== realpathSync(ROOT)) return null;
+    if (git(["rev-parse", "--is-shallow-repository"]) !== "false") return null;
+  } catch {
+    return null;
+  }
+  const dates = new Map();
+  for (const publicPath of PUBLIC_PATHS) {
+    const source = `frontend/${publicPath === "/" ? "index.html" : publicPath.slice(1)}`;
+    try {
+      const date = git(["log", "-1", "--date=short", "--format=%cd", "--", source]);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) dates.set(publicPath, date);
+    } catch {
+      // An unreadable history leaves only this page undated.
+    }
+  }
+  return dates;
+}
+
+function datedSitemap(sitemap, dates) {
+  if (!dates) {
+    console.warn("Sitemap: git history is unavailable or shallow; core pages are published without lastmod");
+    return sitemap;
+  }
+  let dated = 0;
+  for (const language of LANGUAGES) {
+    for (const publicPath of PUBLIC_PATHS) {
+      // Landing editions are dated by landing-pages.json, like their Article.
+      if (LANDING_PAGES.pages[publicPath]?.[language] || !dates.has(publicPath)) continue;
+      const loc = `<loc>${ORIGIN}${localizedPath(language, publicPath)}</loc>`;
+      const at = sitemap.indexOf(loc);
+      if (at < 0 || sitemap.indexOf(loc, at + 1) >= 0) throw new Error(`Sitemap entry is missing or repeated: ${loc}`);
+      const lineEnd = sitemap.indexOf("\n", at) + 1;
+      if (!lineEnd || /^\s*<lastmod>/.test(sitemap.slice(lineEnd, lineEnd + 64))) {
+        throw new Error(`Sitemap entry is already dated: ${loc}`);
+      }
+      const indent = sitemap.slice(sitemap.lastIndexOf("\n", at) + 1, at);
+      const newline = sitemap[lineEnd - 2] === "\r" ? "\r\n" : "\n";
+      sitemap = `${sitemap.slice(0, lineEnd)}${indent}<lastmod>${dates.get(publicPath)}</lastmod>${newline}${sitemap.slice(lineEnd)}`;
+      dated += 1;
+    }
+  }
+  console.log(`Sitemap: ${dated} core entries dated from git history`);
+  return sitemap;
+}
+
 await rm(OUTPUT, {recursive: true, force: true});
 await cp(SOURCE, OUTPUT, {recursive: true});
+await writeFile(
+  path.join(OUTPUT, "sitemap.xml"),
+  datedSitemap(await readFile(path.join(SOURCE, "sitemap.xml"), "utf8"), coreSourceDates()),
+  "utf8",
+);
 // Editorial translations are published only in the languages actually written.
 // Do not index copies of Turkish content under unrelated language paths.
 await rm(path.join(OUTPUT, "study-resources.json"));

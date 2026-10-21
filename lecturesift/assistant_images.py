@@ -117,7 +117,7 @@ def generate(user_id, payload: ImageRequest):
         if not isinstance(encoded, str) or len(encoded) > 1_500_000:
             raise ValueError('Image exceeds response budget')
         raw = base64.b64decode(encoded, validate=True)
-        with Image.open(io.BytesIO(raw)) as picture:
+        with Image.open(io.BytesIO(raw), formats=('JPEG',)) as picture:
             if picture.format != 'JPEG' or picture.size != (1024, 1024):
                 raise ValueError('Unexpected output format')
             picture.verify()

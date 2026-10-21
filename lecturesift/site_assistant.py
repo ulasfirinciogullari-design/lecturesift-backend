@@ -138,7 +138,7 @@ def _image_url(value):
         if prefix not in {"data:image/jpeg;base64", "data:image/png;base64", "data:image/webp;base64"}:
             raise ValueError("Unsupported media")
         raw = base64.b64decode(encoded, validate=True)
-        with Image.open(io.BytesIO(raw)) as source:
+        with Image.open(io.BytesIO(raw), formats=("JPEG", "PNG", "WEBP")) as source:
             if source.format not in {"JPEG", "PNG", "WEBP"} or source.width * source.height > 4_000_000:
                 raise ValueError("Unsupported image dimensions")
             if getattr(source, "n_frames", 1) != 1:

@@ -184,9 +184,9 @@ def isolated_dispatch(tmp_path, monkeypatch, guest_quota):
     monkeypatch.setattr(durable_runtime, "_upload_job_sources", upload)
     monkeypatch.setattr(tasks, "process_uploaded_job", SimpleNamespace(delay=enqueue))
     # The install function intentionally captures the pipeline once. Register
-    # restoration before installing our isolated closure; suppress startup hooks.
+    # restoration before installing our isolated closure and recovery hook.
     monkeypatch.setattr(app, "process_job", app.process_job)
-    monkeypatch.setattr(app.app, "add_event_handler", lambda *a, **kw: None)
+    monkeypatch.setattr(durable_runtime, "start_durable_recovery", durable_runtime.start_durable_recovery)
     monkeypatch.setattr(pipeline, "process_job", local)
     monkeypatch.setattr(durable_runtime, "install_pipeline_enhancements", lambda: None)
     monkeypatch.setattr(durable_runtime, "_INSTALLED", False)
