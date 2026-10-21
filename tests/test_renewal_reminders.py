@@ -297,6 +297,85 @@ def test_email_reads_plan_name_price_and_language_at_send_time(state, monkeypatc
     assert "Nothing is charged automatically" in pro_text
 
 
+def test_annual_package_that_ended_earlier_today_reports_its_final_period(state):
+    # Started 06:00 Türkiye on 2025-10-20; the 365-day period ended at 06:00
+    # today, before the 10:00 run. The last allowance window ran from
+    # 2026-09-20, so only usage inside it counts.
+    user = _user(language="en")
+    starts_at = datetime(2025, 10, 20, 3, 0, tzinfo=timezone.utc)
+    _subscription(user, ends_at=starts_at + timedelta(days=365), plan_code="pro", interval="annual",
+                  starts_at=starts_at)
+    with billing.ENGINE.begin() as connection:
+        for job, minutes, occurred_at in (("final", 1200, datetime(2026, 10, 1, 9, 0, tzinfo=timezone.utc)),
+                                          ("earlier", 500, datetime(2026, 8, 25, 9, 0, tzinfo=timezone.utc))):
+            connection.execute(billing.USAGE_EVENTS.insert().values(
+                id=str(uuid.uuid4()), user_id=user, job_id=job, plan_code="pro", minutes=minutes,
+                occurred_at=occurred_at))
+    assert _run()["kinds"]["expiry"]["sent"] == 1
+    (args, _), = state
+    # Legacy terms resolve to the frozen legacy Pro allowance of 5000 minutes a month.
+    assert "Minutes left in this period: 3800 minutes" in args[3]
+    assert "Package: Pro · annual period" in args[3]
+
+
+def test_a_package_replaced_between_selection_and_claim_is_not_emailed(state, monkeypatch):
+    renewing = _user()
+    old = _subscription(renewing, ends_at=THREE_DAYS)
+    cancelling = _user()
+    cancelled = _subscription(cancelling, ends_at=THREE_DAYS)
+    untouched = _subscription(_user(), ends_at=THREE_DAYS)
+    prepare = reminders._prepare
+
+    def buy_between_selection_and_claim(subscription, kind, now):
+        prepared = prepare(subscription, kind, now)
+        with billing.ENGINE.begin() as connection:
+            if subscription.id == old:
+                # The purchase path marks the period replaced and adds the new one.
+                connection.execute(update(billing.SUBSCRIPTIONS).where(
+                    billing.SUBSCRIPTIONS.c.id == old).values(status="replaced"))
+                connection.execute(billing.SUBSCRIPTIONS.insert().values(
+                    id=str(uuid.uuid4()), user_id=renewing, plan_code="plus", interval="monthly",
+                    status="active", starts_at=now, ends_at=now + timedelta(days=30),
+                    source_reference=f"LS{uuid.uuid4().hex[:20].upper()}", created_at=now))
+            if subscription.id == cancelled:
+                connection.execute(update(billing.SUBSCRIPTIONS).where(
+                    billing.SUBSCRIPTIONS.c.id == cancelled).values(status="cancelled"))
+        return prepared
+
+    monkeypatch.setattr(reminders, "_prepare", buy_between_selection_and_claim)
+    summary = _run()
+    assert summary["kinds"]["3_days"] == {**summary["kinds"]["3_days"], "due": 3, "superseded": 2, "sent": 1}
+    assert summary["kinds"]["3_days"]["ids"] == {"superseded": [old, cancelled], "sent": [untouched]} or \
+        summary["kinds"]["3_days"]["ids"] == {"superseded": [cancelled, old], "sent": [untouched]}
+    assert len(state) == 1
+    events = _events()
+    assert reminders.event_id(old, "3_days") not in events
+    assert reminders.event_id(cancelled, "3_days") not in events
+    assert reminders.event_id(untouched, "3_days") in events
+
+
+def test_a_retry_reclaim_also_rechecks_that_the_period_is_still_due(state, monkeypatch):
+    subscription = _subscription(_user(), ends_at=THREE_DAYS)
+    with billing.ENGINE.begin() as connection:
+        connection.execute(EVENTS.insert().values(
+            id=reminders.event_id(subscription, "3_days"), subject_user_id="x", subject_email="x@example.com",
+            action="renewal_reminder_3_days_retry", summary="failed earlier", actor="system",
+            created_at=NOW - timedelta(minutes=15)))
+    prepare = reminders._prepare
+
+    def replace_after_prepare(row, kind, now):
+        prepared = prepare(row, kind, now)
+        with billing.ENGINE.begin() as connection:
+            connection.execute(update(billing.SUBSCRIPTIONS).where(
+                billing.SUBSCRIPTIONS.c.id == subscription).values(status="replaced"))
+        return prepared
+
+    monkeypatch.setattr(reminders, "_prepare", replace_after_prepare)
+    assert _run()["kinds"]["3_days"]["superseded"] == 1
+    assert state == []
+    assert _events()[reminders.event_id(subscription, "3_days")].action == "renewal_reminder_3_days_retry"
+
+
 def test_dry_run_reports_without_sending_or_recording(state, capsys):
     pending = _subscription(_user(), ends_at=THREE_DAYS)
     done = _subscription(_user(), ends_at=TODAY)

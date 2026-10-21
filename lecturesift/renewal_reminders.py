@@ -176,7 +176,10 @@ def _remaining_minutes(connection, subscription, now: datetime) -> int | None:
         return None
     if plan.minutes is None:
         return None
-    period_start = billing._subscription_usage_period_start(subscription, now)
+    # An annual period that already ended earlier today must not advance to a
+    # thirteenth allowance window: measure at the last instant of the period.
+    moment = min(_utc(now), _utc(subscription.ends_at) - timedelta(seconds=1))
+    period_start = billing._subscription_usage_period_start(subscription, moment)
     used = connection.execute(
         select(func.coalesce(func.sum(billing.USAGE_EVENTS.c.minutes), 0)).where(
             billing.USAGE_EVENTS.c.user_id == subscription.user_id,
@@ -215,16 +218,41 @@ def _summary(kind: str, state: str, subscription_id: str) -> str:
     return f"{_SUMMARIES[state]} ({_KIND_LABELS[kind]}): {subscription_id}"
 
 
-def _claim(events, subscription_id: str, kind: str, user_id: str, email: str) -> bool:
-    key = event_id(subscription_id, kind)
+def _still_due(connection, subscription) -> bool:
+    """Re-check, inside the claim transaction, that nothing replaced the period."""
+    subscriptions = billing.SUBSCRIPTIONS
+    current = connection.execute(
+        select(subscriptions.c.status, subscriptions.c.ends_at).where(subscriptions.c.id == subscription.id)
+    ).first()
+    if (current is None or current.status not in ACTIVE_STATUSES
+            or _utc(current.ends_at) != _utc(subscription.ends_at)):
+        return False
+    newer = connection.execute(select(subscriptions.c.id).where(
+        subscriptions.c.user_id == subscription.user_id,
+        subscriptions.c.id != subscription.id,
+        subscriptions.c.status.in_(ACTIVE_STATUSES),
+        subscriptions.c.ends_at > subscription.ends_at,
+    ).limit(1)).first()
+    return newer is None
+
+
+def _claim(events, subscription, kind: str, email: str) -> str:
+    """Claim one (period, kind) delivery: ``claimed``, ``duplicate`` or ``superseded``.
+
+    A customer may buy a replacement between selection and this claim, so the
+    eligibility check runs again in the same transaction as the claim row.
+    """
+    key = event_id(subscription.id, kind)
     now = billing.utcnow()
     values = {"subject_email": email[:320], "action": event_action(kind, PENDING),
-              "summary": _summary(kind, PENDING, subscription_id), "created_at": now}
+              "summary": _summary(kind, PENDING, subscription.id), "created_at": now}
     try:
         with billing.ENGINE.begin() as connection:
+            if not _still_due(connection, subscription):
+                return "superseded"
             connection.execute(events.insert().values(
-                id=key, subject_user_id=user_id, actor=ACTOR, **values))
-        return True
+                id=key, subject_user_id=subscription.user_id, actor=ACTOR, **values))
+        return "claimed"
     except IntegrityError:
         pass
     # Sent and ambiguous deliveries stay closed, and so does a live claim.
@@ -232,14 +260,16 @@ def _claim(events, subscription_id: str, kind: str, user_id: str, email: str) ->
     # a definite failure or a stale claim left by a crashed sender may be
     # claimed again; the conditional update lets only one caller win.
     if config.EMAIL_PROVIDER != "resend":
-        return False
+        return "duplicate"
     reclaimable = or_(
         events.c.action == event_action(kind, RETRY),
         and_(events.c.action == event_action(kind, PENDING), events.c.created_at < now - STALE_CLAIM),
     )
     with billing.ENGINE.begin() as connection:
+        if not _still_due(connection, subscription):
+            return "superseded"
         result = connection.execute(update(events).where(events.c.id == key, reclaimable).values(**values))
-    return result.rowcount == 1
+    return "claimed" if result.rowcount == 1 else "duplicate"
 
 
 def _finish(events, subscription_id: str, kind: str, state: str) -> None:
@@ -262,8 +292,9 @@ def _deliver(events, subscription, kind: str, now: datetime) -> str:
     if prepared is None:
         return "ineligible"
     recipient, message = prepared["recipient"], prepared["message"]
-    if not _claim(events, subscription.id, kind, subscription.user_id, recipient["email"]):
-        return "duplicate"
+    claim = _claim(events, subscription, kind, recipient["email"])
+    if claim != "claimed":
+        return claim
     try:
         send_transactional_email(recipient["email"], message["subject"], message["html"], message["text"],
             reply_to=config.BILLING_SUPPORT_EMAIL, idempotency_key=idempotency_key(subscription.id, kind))
@@ -303,7 +334,8 @@ def run_once(now: datetime | None = None, *, dry_run: bool = False) -> dict:
         with billing.ENGINE.connect() as connection:
             due = due_subscriptions(connection, kind, day)
             recorded = {row.id: _recorded(connection, ADMIN_ACCOUNT_EVENTS, row.id, kind) for row in due}
-        counts = {"due": len(due), "sent": 0, "duplicate": 0, "ineligible": 0, RETRY: 0, UNKNOWN: 0}
+        counts = {"due": len(due), "sent": 0, "duplicate": 0, "superseded": 0, "ineligible": 0,
+                  RETRY: 0, UNKNOWN: 0}
         acted: dict[str, list[str]] = {}
         for subscription in due:
             if dry_run:
@@ -325,9 +357,10 @@ def run_once(now: datetime | None = None, *, dry_run: bool = False) -> dict:
         summary["kinds"][kind] = {"day": day.isoformat(), **counts,
                                   "ids": {state: ids for state, ids in acted.items() if state != "duplicate"}}
         if not dry_run and due:
-            LOGGER.info("Renewal reminders (%s, %s): due=%d sent=%d retry=%d unknown=%d duplicate=%d ineligible=%d",
-                        kind, day.isoformat(), counts["due"], counts["sent"], counts[RETRY],
-                        counts[UNKNOWN], counts["duplicate"], counts["ineligible"])
+            LOGGER.info("Renewal reminders (%s, %s): due=%d sent=%d retry=%d unknown=%d duplicate=%d "
+                        "superseded=%d ineligible=%d", kind, day.isoformat(), counts["due"], counts["sent"],
+                        counts[RETRY], counts[UNKNOWN], counts["duplicate"], counts["superseded"],
+                        counts["ineligible"])
     return summary
 
 
