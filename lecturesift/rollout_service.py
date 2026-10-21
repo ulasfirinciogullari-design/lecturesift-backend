@@ -59,6 +59,7 @@ from .billing_service import (
     utcnow,
 )
 from .mailer import EmailDeliveryError, email_delivery_configured, send_transactional_email
+from .job_feedback import JOB_FEEDBACK
 
 
 GUEST_TRIALS = Table(
@@ -256,6 +257,7 @@ def init_rollout_database() -> None:
         REFUND_REQUESTS,
         CONTACT_MESSAGES,
         CONTACT_REPLIES,
+        JOB_FEEDBACK,
     ):
         table.create(bind=ENGINE, checkfirst=True)
 

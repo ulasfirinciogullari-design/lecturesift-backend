@@ -55,6 +55,8 @@
   window.addEventListener('resize',schedulePosition);
   window.addEventListener('scroll',schedulePosition,{passive:true});
   window.addEventListener('load',schedulePosition,{once:true});
+  // Page code announces a fixed bar it shows or hides (the workspace's phone upload bar).
+  document.addEventListener('lecturesift:layout',schedulePosition);
   document.querySelector('link[rel="stylesheet"][href="/assistant.css?v=5"]')?.addEventListener('load',schedulePosition,{once:true});
   observeConsent();
   const dialog = document.createElement(pageRoot ? 'section' : 'dialog'); dialog.className = `assistant-surface ${pageRoot ? 'assistant-page-chat' : 'assistant-dialog'}`; dialog.setAttribute('aria-labelledby', 'assistantTitle');
