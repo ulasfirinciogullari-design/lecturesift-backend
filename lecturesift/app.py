@@ -35,6 +35,7 @@ from .billing_service import (
     create_password_reset_token,
     create_verification_token,
     create_manual_order,
+    link_google_account,
     login_user,
     logout_user,
     manual_transfer_details,
@@ -46,6 +47,7 @@ from .billing_service import (
     reset_password,
     sign_in_with_google,
     start_admin_login,
+    unlink_google_account,
     update_account_preferences,
     update_account_profile,
     validate_job_features,
@@ -358,6 +360,15 @@ class BillingGoogleRequest(BaseModel):
     referral_code: str = Field("", max_length=64)
 
 
+class BillingGoogleLinkRequest(BaseModel):
+    credential: str = Field(min_length=1, max_length=4096)
+    current_password: str = Field(max_length=1024)
+
+
+class BillingGoogleUnlinkRequest(BaseModel):
+    current_password: str = Field(max_length=1024)
+
+
 class BillingEmailRequest(BaseModel):
     email: str
 
@@ -496,23 +507,53 @@ def _send_password_reset_email(email: str, token: str) -> None:
     )
 
 
-def _send_google_link_email(email: str) -> None:
+# change: (subject, heading, what happened, what the reset does, extra advice)
+_GOOGLE_LINK_EMAILS = {
+    "linked": (
+        "LectureSift hesabına Google ile giriş eklendi",
+        "Google ile giriş eklendi",
+        "LectureSift hesabın bir Google hesabına bağlandı. Bu Google hesabıyla artık parola girmeden "
+        "oturum açılabilir.",
+        "Parola yenileme Google bağlantısını da kaldırır ve açık oturumları kapatır.",
+        "",
+    ),
+    "unlinked": (
+        "LectureSift hesabından Google ile giriş kaldırıldı",
+        "Google ile giriş kaldırıldı",
+        "LectureSift hesabındaki Google ile giriş bağlantısı kaldırıldı. Bu hesaba artık e-posta adresin "
+        "ve parolanla giriş yapabilirsin.",
+        "Parola yenileme açık oturumları kapatır.",
+        "",
+    ),
+    "moved_away": (
+        "LectureSift hesabındaki Google ile giriş başka bir hesaba taşındı",
+        "Google ile giriş başka bir hesaba taşındı",
+        "Bu LectureSift hesabına bağlı Google ile giriş başka bir LectureSift hesabına taşındı. Aynı Google "
+        "hesabıyla giriş yapıldığında artık o hesap açılır. Bu hesap ve içindeki kayıtlar yerinde kalır.",
+        "Parola yenileme açık oturumları kapatır ve bu hesaba e-posta adresinle yeniden girmeni sağlar.",
+        "Taşıma Google hesabına girilerek yapıldı. Bunu sen yapmadıysan Google hesabının güvenliğini de "
+        "kontrol et ve iletişim sayfasından bize yaz.",
+    ),
+}
+
+
+def _send_google_link_email(email: str, change: str = "linked") -> None:
     reset_link = f"{FRONTEND_BASE_URL}/forgot-password.html"
+    subject, heading, summary, reset_effect, advice = _GOOGLE_LINK_EMAILS[change]
     send_transactional_email(
         email,
-        "LectureSift hesabına Google ile giriş eklendi",
+        subject,
         (
-            "<h1>Google ile giriş eklendi</h1>"
-            "<p>LectureSift hesabın bir Google hesabına bağlandı. Bu Google hesabıyla artık parola "
-            "girmeden oturum açılabilir.</p>"
-            f'<p>Bunu sen yapmadıysan hemen <a href="{reset_link}">parolanı yenile</a>. '
-            "Parola yenileme Google bağlantısını da kaldırır ve açık oturumları kapatır.</p>"
+            f"<h1>{heading}</h1>"
+            f"<p>{summary}</p>"
+            f'<p>Bunu sen yapmadıysan hemen <a href="{reset_link}">parolanı yenile</a>. {reset_effect}</p>'
+            + (f"<p>{advice}</p>" if advice else "")
         ),
         (
-            "LectureSift hesabın bir Google hesabına bağlandı. Bu Google hesabıyla artık parola girmeden "
-            "oturum açılabilir.\n"
+            f"{summary}\n"
             f"Bunu sen yapmadıysan hemen parolanı yenile: {reset_link}\n"
-            "Parola yenileme Google bağlantısını da kaldırır ve açık oturumları kapatır."
+            f"{reset_effect}"
+            + (f"\n{advice}" if advice else "")
         ),
     )
 
@@ -724,6 +765,10 @@ AUTH_ABUSE_LIMITS = {
     "forgot-password-email": (5, 60 * 60),
     "verify-code-ip": (60, 15 * 60),
     "verify-code-email": (20, 24 * 60 * 60),
+    # Linking and unlinking Google check the current password, so both share
+    # one budget per signed-in account from any IP and one per network.
+    "google-link-ip": (30, 15 * 60),
+    "google-link-account": (10, 15 * 60),
 }
 VERIFY_CODE_EMAIL_DAILY_LIMIT = AUTH_ABUSE_LIMITS["verify-code-email"][0]
 
@@ -1143,15 +1188,105 @@ def billing_google_sign_in(payload: BillingGoogleRequest, request: Request) -> d
         raise HTTPException(401, detail={"code": "LS-GOOGLE-01", "message": str(exc)}) from exc
     except BillingError as exc:
         raise HTTPException(400, detail={"code": "LS-GOOGLE-03", "message": str(exc)}) from exc
-    if result.get("google_link") == "linked" and email_delivery_configured():
+    if result.get("google_link") == "linked":
         # Tell the owner whenever Google is first linked to an existing account.
         # The sign-in itself does not depend on the notice being delivered.
-        try:
-            _send_google_link_email(result["user"]["email"])
-        except EmailDeliveryError:
-            pass
+        _notify_google_link_change(result["user"]["email"], "linked")
     guest_claim = claim_guest_work(result["user"]["id"], payload.guest_token)
     return {"ok": True, **result, "guest_claim": guest_claim, "account": account_status(result["user"]["id"])}
+
+
+def _google_link_limits(request: Request, user: dict) -> None:
+    limit, window = AUTH_ABUSE_LIMITS["google-link-ip"]
+    _rate_limit_network(request, "google-link-ip", limit=limit, window_seconds=window)
+    limit, window = AUTH_ABUSE_LIMITS["google-link-account"]
+    _rate_limit(request, "google-link-account", user["id"], limit=limit, window_seconds=window, per_client=False)
+
+
+def _notify_google_link_change(email: str | None, change: str) -> None:
+    # The change is already saved; a notice that cannot be delivered does not undo it.
+    if not email or not email_delivery_configured():
+        return
+    try:
+        _send_google_link_email(email, change)
+    except EmailDeliveryError:
+        pass
+
+
+def _google_link_failure(exc: Exception) -> None:
+    if isinstance(exc, GoogleSignInUnavailable):
+        raise HTTPException(503, detail={"code": "LS-GOOGLE-02", "message": str(exc)}) from exc
+    if isinstance(exc, BillingConfigurationError):
+        raise HTTPException(503, detail={"code": "LS-BILL-00", "message": str(exc)}) from exc
+    if isinstance(exc, BillingAuthenticationError):
+        # The session is valid; a wrong password or Google credential must not
+        # look like an expired session to the account page.
+        raise HTTPException(400, detail={"code": "LS-GOOGLE-05", "message": str(exc)}) from exc
+    raise HTTPException(400, detail={"code": "LS-GOOGLE-06", "message": str(exc)}) from exc
+
+
+GOOGLE_LINK_MESSAGES = {
+    "existing": "Bu Google hesabı zaten bu hesaba bağlı.",
+    "linked": "Google hesabın bu hesaba bağlandı. Artık Google ile giriş yaptığında bu hesap açılır.",
+    "moved": "Google hesabın başka bir LectureSift hesabından bu hesaba taşındı. Artık Google ile giriş "
+    "yaptığında bu hesap açılır.",
+}
+
+
+@app.post("/billing/me/google/link")
+def billing_google_link(
+    payload: BillingGoogleLinkRequest,
+    request: Request,
+    user: dict = Depends(_billing_user),
+) -> dict:
+    if not google_client_id():
+        raise HTTPException(404, detail={"code": "LS-GOOGLE-00", "message": "Google ile giriş etkin değil."})
+    _google_link_limits(request, user)
+    _rate_limit(
+        request, "google-sign-in-all", "all",
+        limit=GOOGLE_SIGN_IN_GLOBAL_LIMIT, window_seconds=15 * 60, per_client=False,
+    )
+    try:
+        identity = verify_google_id_token(payload.credential)
+        result = link_google_account(user["id"], payload.current_password, sub=identity["sub"])
+    except BillingError as exc:
+        _google_link_failure(exc)
+    if result["google_link"] != "existing":
+        record_account_activity(user["id"], "google_link", _client_ip(request), request.headers.get("user-agent", ""))
+        _notify_google_link_change(result["email"], "linked")
+        _notify_google_link_change(result["previous_email"], "moved_away")
+    return {
+        "ok": True,
+        "google_link": result["google_link"],
+        "message": GOOGLE_LINK_MESSAGES[result["google_link"]],
+        "account": account_status(user["id"]),
+    }
+
+
+@app.post("/billing/me/google/unlink")
+def billing_google_unlink(
+    payload: BillingGoogleUnlinkRequest,
+    request: Request,
+    user: dict = Depends(_billing_user),
+) -> dict:
+    _google_link_limits(request, user)
+    try:
+        result = unlink_google_account(user["id"], payload.current_password)
+    except BillingError as exc:
+        _google_link_failure(exc)
+    if result["removed"]:
+        record_account_activity(user["id"], "google_unlink", _client_ip(request), request.headers.get("user-agent", ""))
+        _notify_google_link_change(result["email"], "unlinked")
+    return {
+        "ok": True,
+        "removed": result["removed"] > 0,
+        "message": (
+            "Google ile giriş bu hesaptan kaldırıldı."
+            if result["removed"]
+            else "Bu hesaba bağlı bir Google girişi yok."
+        ),
+        "account": account_status(user["id"]),
+    }
 
 
 @app.post("/billing/logout")

@@ -523,7 +523,7 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         expected_theme_version = "18"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
         assert "/theme.js?v=15" in content, page.name
-        expected_i18n_version = "61"
+        expected_i18n_version = "62"
         assert f"i18n.js?v={expected_i18n_version}" in content, page.name
         assert "page-i18n.js?v=14" in content, page.name
 
@@ -814,7 +814,7 @@ def test_payment_routes_are_distinct_localized_and_account_history_is_auditable(
     assert 'manualTransfer = {available:Boolean(transferBody?.available), bank:null};' in plans_js
     assert 'order.bank?.iban' in plans_js
     assert 'transferBody?.bank' not in plans_js
-    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=26"', 'href="./auth.css?v=5"'))
+    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=27"', 'href="./auth.css?v=5"'))
     assert all(value in auth_js for value in ("paymentMethodLabel", "paymentMoney", "paymentDateTime", "payment-order-meta"))
     assert all(value in admin_html for value in ('value="iyzico_card"', 'value="iyzico_bank_transfer"', 'value="manual_bank_transfer"', 'value="iyzico_legacy"'))
     assert "provider:selectedProvider" in admin_js
@@ -960,7 +960,7 @@ def test_admin_growth_reads_and_escapes_advertising_management_status():
     catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
 
     assert 'id="adminGrowthStatus" class="admin-growth-grid" aria-live="polite"' in admin
-    assert 'src="/admin.js?v=32"' in admin and 'src="/i18n.js?v=61"' in admin
+    assert 'src="/admin.js?v=32"' in admin and 'src="/i18n.js?v=62"' in admin
     assert '"/billing/admin/advertising-readiness"' in admin_script
     assert "renderAdminAdSenseSummary" in admin_script
     assert 'id="adminAdSenseSummary"' in admin

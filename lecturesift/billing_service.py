@@ -918,6 +918,101 @@ def sign_in_with_google(
     }
 
 
+def _google_link_owner(connection, user_id: str, current_password: str):
+    """Lock a signed-in account and confirm its current password.
+
+    Linking or unlinking Google is confirmed with the current password, as a
+    password change or account closure is, so a stolen session alone cannot
+    attach an attacker's Google login. An account created through Google has
+    a random password: its owner first sets one with the emailed password
+    reset, which also removes its Google links, and then links again here.
+    """
+    row = connection.execute(select(USERS).where(USERS.c.id == user_id).with_for_update()).first()
+    profile = _profile_for(connection, user_id) if row else None
+    if not row or (profile is not None and profile.email_verified_at is None):
+        raise BillingAuthenticationError("Hesap bulunamadı.")
+    if row.email.endswith(("@guest.lecturesift.invalid", "@users.invalid")):
+        raise BillingError("Google hesabını bağlamak için ücretsiz hesap oluştur.")
+    candidate = _hash_password(str(current_password or ""), bytes.fromhex(row.password_salt))
+    if not hmac.compare_digest(candidate, row.password_hash):
+        raise BillingAuthenticationError("Mevcut parola hatalı.")
+    return row
+
+
+def link_google_account(user_id: str, current_password: str, *, sub: str) -> dict:
+    """Link a verified Google identity to a signed-in account.
+
+    The caller must already have verified the Google ID token exactly as for
+    sign-in; the Google address does not have to match the account's. A
+    Google identity linked to another account moves here, because the person
+    has just proved both the session and the Google account; a stale link to
+    a closed or unverified account is simply replaced. The result's
+    "google_link" is "existing", "linked" or "moved"; "previous_email" names
+    the account a link moved away from.
+    """
+    init_billing_database()
+    selected_sub = str(sub or "").strip()
+    if not selected_sub or len(selected_sub) > 255 or not selected_sub.isascii() or not selected_sub.isprintable():
+        raise BillingAuthenticationError("Google hesabı doğrulanamadı.")
+    link_hash = _google_link_hash(selected_sub)
+    now = utcnow()
+    previous_email = None
+    try:
+        with ENGINE.begin() as connection:
+            row = _google_link_owner(connection, user_id, current_password)
+            link = connection.execute(
+                select(AUTH_TOKENS.c.user_id)
+                .where(AUTH_TOKENS.c.token_hash == link_hash, AUTH_TOKENS.c.purpose == GOOGLE_LINK_PURPOSE)
+                .with_for_update()
+            ).first()
+            if link and link.user_id == row.id:
+                return {"google_link": "existing", "email": row.email, "previous_email": None}
+            google_link = "linked"
+            if link:
+                other = connection.execute(select(USERS).where(USERS.c.id == link.user_id)).first()
+                other_profile = _profile_for(connection, other.id) if other else None
+                if (
+                    other
+                    and (other_profile is None or other_profile.email_verified_at is not None)
+                    and not other.email.endswith(("@guest.lecturesift.invalid", "@users.invalid"))
+                ):
+                    google_link, previous_email = "moved", other.email
+                connection.execute(
+                    delete(AUTH_TOKENS).where(
+                        AUTH_TOKENS.c.token_hash == link_hash,
+                        AUTH_TOKENS.c.purpose == GOOGLE_LINK_PURPOSE,
+                    )
+                )
+            connection.execute(
+                AUTH_TOKENS.insert().values(
+                    token_hash=link_hash,
+                    user_id=row.id,
+                    purpose=GOOGLE_LINK_PURPOSE,
+                    expires_at=now + _GOOGLE_LINK_LIFETIME,
+                    consumed_at=now,
+                    created_at=now,
+                )
+            )
+    except IntegrityError as exc:
+        # A parallel request linked the same Google account first.
+        raise BillingError("Hesap hazırlanırken bir çakışma oldu. Tekrar dene.") from exc
+    return {"google_link": google_link, "email": row.email, "previous_email": previous_email}
+
+
+def unlink_google_account(user_id: str, current_password: str) -> dict:
+    """Remove every Google sign-in link of a signed-in account."""
+    init_billing_database()
+    with ENGINE.begin() as connection:
+        row = _google_link_owner(connection, user_id, current_password)
+        removed = connection.execute(
+            delete(AUTH_TOKENS).where(
+                AUTH_TOKENS.c.user_id == row.id,
+                AUTH_TOKENS.c.purpose == GOOGLE_LINK_PURPOSE,
+            )
+        ).rowcount
+    return {"removed": int(removed or 0), "email": row.email}
+
+
 def login_user(email: str, password: str) -> dict:
     init_billing_database()
     normalized = email.strip().casefold()
@@ -1784,6 +1879,11 @@ def account_status(user_id: str) -> dict:
             select(USER_PREFERENCES).where(USER_PREFERENCES.c.user_id == user_id)
         ).first()
         permanent_ad_free = _has_permanent_ad_free(connection, user_id)
+        google_linked = connection.execute(
+            select(AUTH_TOKENS.c.token_hash)
+            .where(AUTH_TOKENS.c.user_id == user_id, AUTH_TOKENS.c.purpose == GOOGLE_LINK_PURPOSE)
+            .limit(1)
+        ).first() is not None
         subscription = _active_subscription(connection, user_id, now)
         open_periods = _open_subscription_periods(connection, user_id, now) if subscription else []
         queued = [period for period in open_periods if _as_utc(period.starts_at) > now]
@@ -1892,6 +1992,8 @@ def account_status(user_id: str) -> dict:
         "can_create_job": remaining is None or remaining > 0,
         "download_enabled": download_enabled,
         "permanent_ad_free": permanent_ad_free,
+        # A Google login opens this account (see link_google_account).
+        "google_linked": google_linked,
         "job_entitlements": job_entitlements,
         "download_access_source": download_access_source,
         "is_admin": False,
