@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from . import config
-from .billing_service import require_duration_entitlement
+from .billing_service import require_duration_entitlement, usage_multiplier_for
 from .config import CELERY_BROKER_URL, REQUIRE_DURABLE_PROCESSING, STORAGE_TRANSFER_PARALLELISM
 from .duration import media_duration_seconds
 from .documents import extract_documents
@@ -230,6 +230,7 @@ def install_durable_runtime() -> None:
                     document_mode=document_mode,
                     document_pages=int(options.get("document_pages") or 0),
                     ocr_pages=int(options.get("document_ocr_pages") or 0),
+                    usage_multiplier=usage_multiplier_for(options),
                 )
                 # Durable media reserves on the worker after source download
                 # and validation. Upload/dispatch failure must not consume the
@@ -337,6 +338,7 @@ def install_durable_runtime() -> None:
                     document_mode=False,
                     document_pages=0,
                     ocr_pages=0,
+                    usage_multiplier=usage_multiplier_for(options),
                 )
                 reserve_guest_job(user_id, job_id, media_minutes)
             except BillingError as exc:

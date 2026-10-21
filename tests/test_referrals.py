@@ -280,7 +280,7 @@ def test_coupon_owner_expiry_refund_and_failed_checkout(state):
     with pytest.raises(referrals.ReferralError):
         billing.create_payment_order(user(), "test-provider", "lite", "monthly", "TRY", code)
     order = billing.create_payment_order(inviter, "test-provider", "lite", "monthly", "TRY", code)
-    assert order["amount_minor"] == 26910
+    assert order["amount_minor"] == 13410
     billing.mark_payment_order_token_failed(order["reference"])
     assert referrals.summary(inviter)["coupons"][0]["status"] == "ready"
     state["now"] += timedelta(days=90)

@@ -46,7 +46,7 @@ def test_billing_reuses_worker_duration_without_another_probe(monkeypatch):
     monkeypatch.setattr(
         pipeline,
         "record_usage",
-        lambda user_id, job_id, seconds: recorded.append((user_id, job_id, seconds)),
+        lambda user_id, job_id, seconds, usage_multiplier=1: recorded.append((user_id, job_id, seconds, usage_multiplier)),
     )
 
     pipeline._record_billing_usage(
@@ -55,7 +55,7 @@ def test_billing_reuses_worker_duration_without_another_probe(monkeypatch):
         [Path("source.mp4")],
     )
 
-    assert recorded == [("user-fast", "job-fast", 125.5)]
+    assert recorded == [("user-fast", "job-fast", 125.5, 1)]
 
 
 def test_transcription_cost_reuses_chunk_duration_without_another_probe(monkeypatch):
@@ -78,7 +78,7 @@ def test_billing_uses_same_longest_source_duration_as_worker_quota(monkeypatch):
     monkeypatch.setattr(
         pipeline,
         "record_usage",
-        lambda user_id, job_id, seconds: recorded.append((user_id, job_id, seconds)),
+        lambda user_id, job_id, seconds, usage_multiplier=1: recorded.append((user_id, job_id, seconds, usage_multiplier)),
     )
     options = tasks._pipeline_options_with_durations(
         {"billing_user_id": "user-visual"},
@@ -88,7 +88,7 @@ def test_billing_uses_same_longest_source_duration_as_worker_quota(monkeypatch):
 
     pipeline._record_billing_usage("job-visual", options, [Path("source.mp4")])
 
-    assert recorded == [("user-visual", "job-visual", 180.0)]
+    assert recorded == [("user-visual", "job-visual", 180.0, 1)]
 
 
 def test_single_audio_chunk_reuses_worker_duration_for_timeline(tmp_path, monkeypatch):

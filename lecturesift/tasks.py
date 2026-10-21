@@ -7,7 +7,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from .billing_service import BillingError, require_duration_entitlement
+from .billing_service import BillingError, require_duration_entitlement, usage_multiplier_for
 from .config import MEDIA_EXTENSIONS, SOURCE_DOWNLOAD_PARALLELISM, WORK_DIR
 from .duration import media_duration_seconds
 from .documents import extract_documents
@@ -66,10 +66,10 @@ def _download_job_sources(
     return downloaded[:split_at], downloaded[split_at:]
 
 
-def _enforce_minutes(user_id: str, job_id: str, duration: float) -> None:
+def _enforce_minutes(user_id: str, job_id: str, duration: float, *, usage_multiplier: int = 1) -> None:
     if not user_id:
         return
-    require_duration_entitlement(user_id, duration)
+    require_duration_entitlement(user_id, duration, usage_multiplier=usage_multiplier)
     if is_guest_user(user_id):
         reserve_guest_job(user_id, job_id, max(0.1, duration / 60.0))
 
@@ -144,6 +144,7 @@ def _enforce_uploaded_job_quota(
     document_mode: bool,
     document_pages: int,
     ocr_pages: int,
+    usage_multiplier: int = 1,
 ) -> None:
     """Apply the worker-side estimate without consuming a guest document trial early.
 
@@ -160,6 +161,7 @@ def _enforce_uploaded_job_quota(
         document_mode=document_mode,
         document_pages=document_pages,
         ocr_pages=ocr_pages,
+        usage_multiplier=usage_multiplier,
     )
     # A rejected source must leave the anonymous trial available. Reservation
     # remains atomic and happens before the worker starts paid processing.
@@ -468,6 +470,7 @@ def process_uploaded_job(
                     document_mode=bool(options.get("document_mode")),
                     document_pages=int(options.get("document_pages") or 0),
                     ocr_pages=int(options.get("document_ocr_pages") or 0),
+                    usage_multiplier=usage_multiplier_for(options),
                 )
             except BillingError as exc:
                 return _quota_error(

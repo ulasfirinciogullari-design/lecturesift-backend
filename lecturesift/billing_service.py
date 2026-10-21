@@ -40,7 +40,14 @@ from sqlalchemy import (
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from . import config
-from .billing import LEGACY_PLAN_BY_CODE, PLAN_BY_CODE, REGIONAL_PRICES, Plan
+from .billing import (
+    LEGACY_PLAN_BY_CODE,
+    PLAN_BY_CODE,
+    PRECISE_TRANSCRIPT_PLAN_CODES,
+    PRECISE_TRANSCRIPT_USAGE_MULTIPLIER,
+    REGIONAL_PRICES,
+    Plan,
+)
 
 
 class BillingError(Exception):
@@ -1988,6 +1995,40 @@ def _effective_job_plan(status: dict):
     return plan
 
 
+# Translated by the frontend through its exact-message catalog, like the quiz
+# and flashcard limit messages above.
+PRECISE_TRANSCRIPT_PLAN_MESSAGE = (
+    "Hassas zaman damgaları ve konuşmacı ayrımı Pro planına dahildir. "
+    "Bu seçenekleri kapat veya Pro planına geç."
+)
+
+
+def precise_transcript_requested(options: dict | None) -> bool:
+    """True when a job asked for the diarization transcription path."""
+    options = options or {}
+    return bool(options.get("transcript_timestamps") or options.get("speaker_detection"))
+
+
+def usage_multiplier_for(options: dict | None) -> int:
+    """Diarized or timestamped media minutes count several times against the quota."""
+    return PRECISE_TRANSCRIPT_USAGE_MULTIPLIER if precise_transcript_requested(options) else 1
+
+
+def plan_allows_precise_transcript(plan_code: str) -> bool:
+    return plan_code in PRECISE_TRANSCRIPT_PLAN_CODES
+
+
+def require_precise_transcript_plan(
+    plan_code: str,
+    *,
+    transcript_timestamps: bool = False,
+    speaker_detection: bool = False,
+) -> None:
+    """Refuse the diarization path for plans that do not include it."""
+    if (transcript_timestamps or speaker_detection) and not plan_allows_precise_transcript(plan_code):
+        raise BillingError(PRECISE_TRANSCRIPT_PLAN_MESSAGE)
+
+
 def require_download_entitlement(user_id: str) -> dict:
     status = account_status(user_id)
     if not status["download_enabled"]:
@@ -2007,11 +2048,19 @@ def require_duration_entitlement(
     document_mode: bool = False,
     document_pages: int = 0,
     ocr_pages: int = 0,
+    usage_multiplier: int = 1,
 ) -> dict:
-    """Reject sources that exceed the account's remaining or per-job limits."""
+    """Reject sources that exceed the account's remaining or per-job limits.
+
+    ``usage_multiplier`` is how many times the media minutes count against the
+    quota (precise timestamps / speaker detection); the per-job length limit
+    still applies to the source's real minutes.
+    """
     status = require_job_entitlement(user_id)
     plan = _effective_job_plan(status)
-    required_minutes = max(1, int(math.ceil(max(0.0, duration_seconds) / 60)))
+    source_minutes = max(1, int(math.ceil(max(0.0, duration_seconds) / 60)))
+    multiplier = max(1, int(usage_multiplier))
+    required_minutes = source_minutes * multiplier
     remaining = status["remaining_minutes"]
     notification_context = {
         "required_minutes": required_minutes, "remaining_minutes": remaining,
@@ -2025,12 +2074,19 @@ def require_duration_entitlement(
                 "Daha kısa bir belge yükle veya dakika hakkını artır.",
                 notification_context=notification_context,
             )
+        if multiplier > 1:
+            raise BillingError(
+                f"Bu kaynak yaklaşık {source_minutes} dakika; hassas zaman damgası veya konuşmacı "
+                f"ayrımı açık olduğu için {required_minutes} dakika sayılır. Hesabında {int(remaining)} "
+                "dakika kaldı. Bu seçenekleri kapat, daha kısa bir kaynak yükle veya dakika hakkını artır.",
+                notification_context=notification_context,
+            )
         raise BillingError(
             f"Bu kaynak yaklaşık {required_minutes} dakika; hesabında {int(remaining)} dakika kaldı. "
             "Daha kısa bir kaynak yükle veya dakika hakkını artır.",
             notification_context=notification_context,
         )
-    if required_minutes > plan.max_minutes_per_job:
+    if source_minutes > plan.max_minutes_per_job:
         if document_mode:
             raise BillingError(
                 f"Bu belge için {required_minutes} dakika kullanım hakkı gerekiyor; "
@@ -2039,7 +2095,7 @@ def require_duration_entitlement(
                 notification_context=notification_context,
             )
         raise BillingError(
-            f"Bu iş yaklaşık {required_minutes} dakika; {plan.code} planında tek iş sınırı "
+            f"Bu iş yaklaşık {source_minutes} dakika; {plan.code} planında tek iş sınırı "
             f"{plan.max_minutes_per_job} dakikadır. Kaynağı böl veya planını yükselt.",
             notification_context=notification_context,
         )
@@ -2072,11 +2128,18 @@ def validate_job_features(
     output_formats: list[str],
     summary_style: str,
     job_type: str = "study_pack",
+    transcript_timestamps: bool = False,
+    speaker_detection: bool = False,
 ) -> dict:
     status = require_job_entitlement(user_id)
     if job_type in {"audio_export", "download_video"} and not status["download_enabled"]:
         raise BillingError("MP3 dışa aktarma ve dosya indirme bu hesap hakkına dahil değil.")
     plan = _effective_job_plan(status)
+    require_precise_transcript_plan(
+        plan.code,
+        transcript_timestamps=transcript_timestamps,
+        speaker_detection=speaker_detection,
+    )
     if plan.quiz_questions is not None and quiz_count > plan.quiz_questions:
         raise BillingError(f"Planın en fazla {plan.quiz_questions} quiz sorusuna izin veriyor.")
     if plan.flashcards is not None and flashcard_count > plan.flashcards:
@@ -2089,8 +2152,16 @@ def validate_job_features(
     return {**status, "job_plan": plan.public()}
 
 
-def record_usage(user_id: str, job_id: str, duration_seconds: float) -> None:
-    minutes = max(1, int(math.ceil(max(0.0, duration_seconds) / 60)))
+def record_usage(
+    user_id: str,
+    job_id: str,
+    duration_seconds: float,
+    *,
+    usage_multiplier: int = 1,
+) -> None:
+    # Precise timestamps / speaker detection bill the media minutes several
+    # times over (PRECISE_TRANSCRIPT_USAGE_MULTIPLIER); plain jobs bill once.
+    minutes = max(1, int(math.ceil(max(0.0, duration_seconds) / 60))) * max(1, int(usage_multiplier))
     now = utcnow()
     init_billing_database()
     try:
