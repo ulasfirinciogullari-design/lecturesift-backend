@@ -86,7 +86,7 @@ def test_scheduled_pruning_clears_idle_private_data_without_altering_ledger(stat
         assert old.response_json is None
         assert old.charged == 1 and old.state == "complete" and old.fingerprint == "old-hash"
         assert connection.execute(select(wallet.REQUESTS.c.response_json).where(wallet.REQUESTS.c.id == recent)).scalar_one()
-        assert connection.execute(select(wallet.GRANTS.c.remaining)).scalar_one() == 48
+        assert connection.execute(select(wallet.GRANTS.c.remaining)).scalar_one() == 98
         days = connection.execute(select(wallet.BUDGET.c.day)).scalars().all()
         assert "2026-09-08" in days and "2026-09-11" in days
         assert "trial:2026-09-08:old-guest" not in days
@@ -112,8 +112,8 @@ def test_cache_pruning_is_bounded_and_does_not_bypass_schema_capability(state, m
 
 def test_welcome_is_once_and_requires_verified_owner(state):
     user_id = user()
-    assert wallet.status(user_id)["balance"] == 50
-    assert wallet.status(user_id)["balance"] == 50
+    assert wallet.status(user_id)["balance"] == 100
+    assert wallet.status(user_id)["balance"] == 100
     with pytest.raises(LectureSiftError):
         wallet.status(user(False))
 
@@ -122,8 +122,8 @@ def test_topup_payment_is_idempotent_and_grants_no_minutes_or_downloads(state):
     user_id = user()
     order = paid(user_id, "ai_1000")
     billing.complete_payment_order(order["reference"], succeeded=True, provider_amount_minor=order["amount_minor"])
-    assert wallet.status(user_id)["balance"] == 1050
-    assert wallet.status(user_id)["balance"] == 1050
+    assert wallet.status(user_id)["balance"] == 1100
+    assert wallet.status(user_id)["balance"] == 1100
     status = billing.account_status(user_id)
     assert status["plan"]["code"] == "free"
     assert status["credit_minutes"] == 0
@@ -135,28 +135,28 @@ def test_topup_payment_is_idempotent_and_grants_no_minutes_or_downloads(state):
 def test_unpaid_topups_have_no_credits(state):
     user_id = user()
     billing.create_payment_order(user_id, "test-provider", "ai_1000", "one_time", "USD")
-    assert wallet.status(user_id)["balance"] == 50
+    assert wallet.status(user_id)["balance"] == 100
 
 
 def test_topup_does_not_replace_subscription_and_monthly_credits_do_not_stack(state):
     user_id = user()
     paid(user_id, "plus", "monthly")
-    assert wallet.status(user_id)["balance"] == 1550
+    assert wallet.status(user_id)["balance"] == 1600
     paid(user_id, "ai_1000")
-    assert wallet.status(user_id)["balance"] == 2550
+    assert wallet.status(user_id)["balance"] == 2600
     assert billing.account_status(user_id)["plan"]["code"] == "plus"
     paid(user_id, "lite", "monthly")
-    assert wallet.status(user_id)["balance"] == 1550
+    assert wallet.status(user_id)["balance"] == 2100
 
 
 def test_annual_grant_renews_monthly_not_all_at_once(state):
     user_id = user()
     paid(user_id, "lite", "annual")
-    assert wallet.status(user_id)["balance"] == 550
+    assert wallet.status(user_id)["balance"] == 1100
     key, _ = wallet.reserve(user_id, "first", "hash", 100)
     wallet.settle(user_id, key, input_tokens=100000, response={"answer":"done"})
     state["now"] += timedelta(days=31)
-    assert wallet.status(user_id)["balance"] == 550
+    assert wallet.status(user_id)["balance"] == 1100
 
 
 def test_reservation_blocks_parallel_requests_and_replays_without_double_charge(state):
@@ -164,9 +164,9 @@ def test_reservation_blocks_parallel_requests_and_replays_without_double_charge(
     key, _ = wallet.reserve(user_id, "request-1", "same", 20)
     with pytest.raises(LectureSiftError):
         wallet.reserve(user_id, "request-2", "second", 20)
-    assert wallet.status(user_id)["balance"] == 30
+    assert wallet.status(user_id)["balance"] == 80
     wallet.settle(user_id, key, input_tokens=1000, output_tokens=500, response={"answer":"ok"})
-    assert wallet.status(user_id)["balance"] == 46
+    assert wallet.status(user_id)["balance"] == 96
     _, replay = wallet.reserve(user_id, "request-1", "same", 20)
     assert replay["charged_credits"] == 4
     with pytest.raises(LectureSiftError):
@@ -177,7 +177,7 @@ def test_failure_refunds_once_but_unknown_cost_remains_in_platform_budget(state)
     user_id = user()
     key, _ = wallet.reserve(user_id, "request", "hash", 20)
     wallet.settle(user_id, key, unknown_cost=True)
-    assert wallet.status(user_id)["balance"] == 50
+    assert wallet.status(user_id)["balance"] == 100
     with pytest.raises(LectureSiftError):
         wallet.settle(user_id, key)
     with billing.ENGINE.connect() as connection:
@@ -188,7 +188,7 @@ def test_lost_worker_reservation_expires_without_rebilling(state):
     user_id = user()
     key, _ = wallet.reserve(user_id, "request", "hash", 20)
     state["now"] += timedelta(minutes=3)
-    assert wallet.status(user_id)["balance"] == 50
+    assert wallet.status(user_id)["balance"] == 100
     with pytest.raises(LectureSiftError):
         wallet.settle(user_id, key, response={"answer":"late"})
 
@@ -196,28 +196,28 @@ def test_lost_worker_reservation_expires_without_rebilling(state):
 def test_global_budget_and_insufficient_wallet_prevent_provider_work(state, monkeypatch):
     user_id = user()
     with pytest.raises(LectureSiftError) as exc:
-        wallet.reserve(user_id, "request", "hash", 51)
+        wallet.reserve(user_id, "request", "hash", 101)
     assert exc.value.status_code == 402
     monkeypatch.setattr(wallet, "DAILY_CREDIT_CEILING", 1)
     with pytest.raises(LectureSiftError) as exc:
         wallet.reserve(user_id, "request", "hash", 20)
     assert exc.value.code == "LS-ASSIST-05"
-    assert wallet.status(user_id)["balance"] == 50
+    assert wallet.status(user_id)["balance"] == 100
 
 
 def test_refund_freezes_only_purchased_credits_and_rejection_restores_unused_balance(state):
     user_id = user()
     order = paid(user_id, "ai_1000")
-    assert wallet.status(user_id)["balance"] == 1050
+    assert wallet.status(user_id)["balance"] == 1100
     with billing.ENGINE.begin() as connection:
         connection.execute(rollout_service.REFUND_REQUESTS.insert().values(
             id="refund-test", user_id=user_id, order_reference=order["reference"], provider="test-provider",
             reason="Synthetic refund test", status="requested", created_at=billing.utcnow(), updated_at=billing.utcnow(),
         ))
-    assert wallet.status(user_id)["balance"] == 50
+    assert wallet.status(user_id)["balance"] == 100
     with billing.ENGINE.begin() as connection:
         connection.execute(update(rollout_service.REFUND_REQUESTS).values(status="rejected"))
-    assert wallet.status(user_id)["balance"] == 1050
+    assert wallet.status(user_id)["balance"] == 1100
 
 
 def test_cross_account_settlement_and_export_are_isolated(state):
@@ -243,7 +243,7 @@ def test_catalog_has_all_currencies_and_preserves_prior_snapshot_rights(state):
     from dataclasses import asdict
     from lecturesift.billing import PLAN_BY_CODE, SUPPORTED_CURRENCIES
     assert set(catalog.PRICES) == set(SUPPORTED_CURRENCIES)
-    assert catalog.offers("JPY")["packs"][0]["amount_minor"] == 600
+    assert catalog.offers("JPY")["packs"][0]["amount_minor"] == 300
     snapshot = asdict(PLAN_BY_CODE["plus"])
     snapshot.pop("assistant_credits")
     assert billing._plan_from_snapshot(snapshot, "plus").assistant_credits == 0
@@ -285,7 +285,7 @@ def test_chat_uses_owned_context_actual_tokens_and_safe_action_schema(state, mon
     payload = assistant.ChatRequest(request_id="synthetic-request-1", message="My account?", language="en")
     answer = assistant.chat(user_id, payload)
     assert answer["charged_credits"] == 2
-    assert answer["balance"] == 48
+    assert answer["balance"] == 98
     assert answer["path"] == "/account.html"
     assert captured["store"] is False and "tools" not in captured
     assert captured["text"]["format"]["strict"] is True
@@ -293,9 +293,9 @@ def test_chat_uses_owned_context_actual_tokens_and_safe_action_schema(state, mon
     assert user_id in captured["input"][0]["content"][0]["text"]
     assert answer["account_summary"]["plan_code"] == "free"
     assert answer["account_summary"]["remaining_minutes"] == 120
-    assert answer["account_summary"]["assistant_credits"] == 48
+    assert answer["account_summary"]["assistant_credits"] == 98
     assert "user" not in answer["account_summary"] and "payment_orders" not in answer["account_summary"]
-    assert assistant.chat(user_id, payload)["balance"] == 48
+    assert assistant.chat(user_id, payload)["balance"] == 98
 
 
 def test_post_settlement_metadata_failure_still_delivers_and_replays_once(state, monkeypatch):
@@ -328,9 +328,9 @@ def test_post_settlement_metadata_failure_still_delivers_and_replays_once(state,
     assert first["path"] == second["path"] == "/account.html"
     assert "account_summary" not in first and "account_summary" not in second
     assert first["charged_credits"] == second["charged_credits"] == 2
-    assert first["balance"] == second["balance"] == 48
+    assert first["balance"] == second["balance"] == 98
     assert calls["provider"] == 1
-    assert wallet.status(user_id)["balance"] == 48
+    assert wallet.status(user_id)["balance"] == 98
 
 
 def test_assistant_action_contract_has_exact_preferences_and_rejects_model_targets():
@@ -395,7 +395,7 @@ def test_postgres_parallel_reservations_cannot_overspend(monkeypatch):
     monkeypatch.setattr(catalog, "SCHEMA_RECOVERY_RELEASE_READY", True)
     monkeypatch.setenv("ASSISTANT_ENABLED", "true")
     user_id = user()
-    assert wallet.status(user_id)["balance"] == 50
+    assert wallet.status(user_id)["balance"] == 100
     def attempt(index):
         try:
             return wallet.reserve(user_id, f"parallel-{index}", "same", 30)[0]
@@ -405,9 +405,9 @@ def test_postgres_parallel_reservations_cannot_overspend(monkeypatch):
         with ThreadPoolExecutor(max_workers=8) as pool:
             keys = [key for key in pool.map(attempt, range(8)) if key]
         assert len(keys) == 1
-        assert wallet.status(user_id)["balance"] == 20
+        assert wallet.status(user_id)["balance"] == 70
         wallet.settle(user_id, keys[0], input_tokens=1000, output_tokens=100, response={"answer":"ok"})
-        assert wallet.status(user_id)["balance"] == 48
+        assert wallet.status(user_id)["balance"] == 98
     finally:
         engine.dispose()
 
@@ -449,7 +449,7 @@ def test_image_fixed_price_replay_and_provider_budget_are_distinct(image_provide
     paid(owner, 'ai_1000')
     payload = images.ImageRequest(request_id='synthetic-image-123', prompt='Water cycle illustration')
     result = images.generate(owner, payload)
-    assert result['charged_credits'] == 200 and result['balance'] == 850
+    assert result['charged_credits'] == 200 and result['balance'] == 900
     assert result['image'].startswith('data:image/jpeg;base64,')
     assert images.generate(owner, payload) == result
     assert len(captured['calls']) == 1 and len(captured['costs']) == 3
@@ -486,7 +486,7 @@ def test_image_usage_without_a_safe_output_split_keeps_conservative_budget(image
     result = images.generate(
         owner, images.ImageRequest(request_id='synthetic-image-fallback', prompt='Water cycle'),
     )
-    assert result['charged_credits'] == 200 and result['balance'] == 850
+    assert result['charged_credits'] == 200 and result['balance'] == 900
     assert len(captured['costs']) == 2
     fallback = captured['costs'][1]
     assert fallback['unit'] == 'image' and fallback['quantity'] == 1
@@ -508,7 +508,7 @@ def test_failed_image_refunds_user_but_retains_unknown_platform_cost(image_provi
         images.generate(owner, payload)
     assert error.value.code == 'LS-ASSIST-07'
     assert 'private-provider-error' not in str(error.value)
-    assert wallet.status(owner)['balance'] == 1050
+    assert wallet.status(owner)["balance"] == 1100
     with billing.ENGINE.connect() as connection:
         assert connection.execute(select(wallet.BUDGET.c.credits)).scalar_one() == 200
     with pytest.raises(LectureSiftError):
@@ -533,7 +533,7 @@ def test_image_switch_and_utf8_limit_prevent_any_charge(image_provider, monkeypa
     with pytest.raises(LectureSiftError) as error:
         images.generate(owner, images.ImageRequest(request_id='synthetic-disabled', prompt='Diagram'))
     assert error.value.status_code == 503
-    assert captured['calls'] == [] and wallet.status(owner)['balance'] == 1050
+    assert captured['calls'] == [] and wallet.status(owner)["balance"] == 1100
 
 
 def test_image_endpoint_requires_authentication_and_sanitizes_large_bodies(image_provider):

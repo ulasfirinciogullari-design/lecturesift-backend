@@ -41,6 +41,7 @@ from .billing_service import (
     reject_manual_order,
     register_user,
     require_download_entitlement,
+    require_precise_transcript_plan,
     reset_password,
     sign_in_with_google,
     start_admin_login,
@@ -2013,6 +2014,16 @@ async def create_job(
         _validate_document_job_type(options, document_mode=document_mode)
     except LectureSiftError as exc:
         _raise_public(exc)
+    # Documents never transcribe, so the Pro-and-up check runs after the
+    # document branch has cleared the timestamp and speaker flags.
+    try:
+        require_precise_transcript_plan(
+            str((entitlement.get("job_plan") or {}).get("code") or ""),
+            transcript_timestamps=bool(options["transcript_timestamps"]),
+            speaker_detection=bool(options["speaker_detection"]),
+        )
+    except BillingError as exc:
+        raise HTTPException(402, detail={"code": "LS-BILL-10", "message": str(exc)}) from exc
 
     if document_sample:
         from .document_samples import sample_request

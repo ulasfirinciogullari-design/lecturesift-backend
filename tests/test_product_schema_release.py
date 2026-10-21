@@ -358,7 +358,7 @@ def test_postgres_account_erasure_removes_private_assistant_rows_with_feature_of
     peer = product_user(referrals.create_code(owner)['referral_code'])
     key, _ = assistant_wallet.reserve(owner, 'synthetic-request', 'synthetic-hash', 20)
     assistant_wallet.settle(owner, key, input_tokens=1000, response={'answer': 'synthetic-private-answer'})
-    assert assistant_wallet.status(peer)['balance'] == 50
+    assert assistant_wallet.status(peer)['balance'] == 100
     exported = rollout_service.export_account_data(owner)
     assert 'synthetic-private-answer' not in str(exported)
     with billing.ENGINE.connect() as connection:

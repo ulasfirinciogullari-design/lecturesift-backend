@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from .ai import empty_study_pack, make_study_pack, transcribe, transcribe_timed, translate_transcript
-from .billing_service import BillingError, record_usage, require_duration_entitlement
+from .billing_service import BillingError, record_usage, require_duration_entitlement, usage_multiplier_for
 from .config import (
     APP_VERSION,
     DOCUMENT_EXTENSIONS,
@@ -147,6 +147,8 @@ def _record_billing_usage(
                 if measured is not None
                 else _source_duration_seconds(paths)
             ),
+            # Precise timestamps / speaker detection bill the minutes 4x.
+            usage_multiplier=usage_multiplier_for(options),
         )
     except Exception:
         # The completed study pack remains available if metering is temporarily unavailable.

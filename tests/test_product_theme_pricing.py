@@ -53,7 +53,9 @@ def test_every_regional_fallback_price_and_paid_limit_matches_backend():
     catalogs = _frontend_catalogs()
     for name, include_test in (("p", True), ("a", False)):
         catalog = catalogs[name]
-        plans = [p for p in PLANS if include_test or p.code != "test"]
+        # plans.js keeps the unlisted Plus and Max terms for deep links; the
+        # workspace only carries the listed plans.
+        plans = [p for p in PLANS if (include_test or p.code != "test") and (name == "p" or p.listed)]
         for currency in SUPPORTED_CURRENCIES:
             assert catalog["prices"][currency] == [REGIONAL_PRICES.get(p.code, {}).get(currency) for p in plans]
         for plan in plans:
@@ -64,6 +66,8 @@ def test_every_regional_fallback_price_and_paid_limit_matches_backend():
                 assert ent["quiz_questions"] == plan.quiz_questions
                 assert ent["flashcards"] == plan.flashcards
                 assert ent["history_days"] == plan.history_days
+                assert raw.get("listed", True) is plan.listed
+                assert raw["featured"] is plan.featured
                 limits = ent["limits"]
             else:
                 assert raw[1:4] == [plan.minutes, plan.quiz_questions, plan.flashcards]
@@ -86,7 +90,7 @@ def test_compact_plan_details_and_translations_remain_available():
 class _StaticPlanCards(HTMLParser):
     """Collect the plan cards that plans.html shows before any API answers."""
 
-    GRIDS = ("plansGrid", "morePlansGrid")
+    GRIDS = ("plansGrid", "sidePlansGrid")
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
@@ -148,17 +152,28 @@ def _turkish_try(amount_minor):
 
 
 def test_static_plan_cards_match_the_backend_try_catalog():
+    html = (FRONTEND / "plans.html").read_text(encoding="utf-8")
+    script = (FRONTEND / "plans.js").read_text(encoding="utf-8")
     parser = _StaticPlanCards()
-    parser.feed((FRONTEND / "plans.html").read_text(encoding="utf-8"))
-    sellable = [plan for plan in PLANS if plan.code != "test"]
-    assert set(parser.cards) == {plan.code for plan in sellable}
+    parser.feed(html)
+    # Cards: the listed, self-service plans. Business is a quote plan reached
+    # through the contact link; Plus and Max are hidden, not removed.
+    sellable = [plan for plan in PLANS if plan.code != "test" and plan.listed and plan.kind != "quote"]
+    assert set(parser.cards) == {plan.code for plan in sellable} == {"free", "credit", "lite", "pro"}
+    assert [plan.code for plan in PLANS if not plan.listed] == ["plus", "max"]
 
     popular = [plan.code for plan in sellable if plan.featured and plan.kind == "subscription"]
-    assert popular == ["plus"]
-    highlighted = ["free", "credit", *popular]
-    assert parser.order["plansGrid"] == highlighted
-    assert parser.order["morePlansGrid"] == [plan.code for plan in sellable if plan.code not in highlighted]
-    assert 'const HIGHLIGHTED_PLANS = ["free", "credit"];' in (FRONTEND / "plans.js").read_text(encoding="utf-8")
+    assert popular == ["lite"]
+    assert parser.order["plansGrid"] == ["free", "lite", "pro"]
+    assert parser.order["sidePlansGrid"] == ["credit"]
+    assert 'const SIDE_PLANS = ["credit"];' in script
+    assert 'const UNCARDED_PLANS = ["test", "business"];' in script
+    assert "morePlans" not in html and "morePlans" not in script
+    assert 'data-plan-card="plus"' not in html and 'data-plan-card="max"' not in html
+    assert 'id="plansTeamLink"' in html and 'href="/contact.html" data-i18n="plans.teamContact"' in html
+    assert "plans.mostPopular" in parser.cards["lite"]["keys"]
+    assert "plans.noSubscriptionEyebrow" in parser.cards["credit"]["keys"]
+    assert parser.cards["credit"]["price_try_minor"] == "19900"
 
     for plan in sellable:
         card = parser.cards[plan.code]
@@ -197,7 +212,7 @@ def test_static_plan_cards_match_the_backend_try_catalog():
         if price_suffix:
             assert price_suffix in card["keys"], plan.code
         if plan.kind == "subscription":
-            assert {"plans.minutesPer30Days", "rollout.chooseMonthly"} <= card["keys"], plan.code
+            assert {"plans.minutesPer30Days", "rollout.chooseMonthly", "rollout.annual", "plans.twoMonthsFree"} <= card["keys"], plan.code
         assert "plans.perMonth" not in card["keys"], plan.code
 
 
@@ -208,6 +223,8 @@ def test_workspace_plan_cards_name_fixed_terms_as_30_day_packages():
         if plan.kind == "subscription":
             assert re.search(rf'\b{plan.code}: \[[^\n]* dk / 30 gün"\]', plan_copy), plan.code
             assert re.search(rf'\b{plan.code}: \[[^\n]* min / 30 days"\]', plan_copy), plan.code
+    assert 'lite: ["Öğrenci", "Dönem boyunca her ders için.", "600 dk / 30 gün"]' in plan_copy
+    assert 'lite: ["Student", "For every lecture, all term.", "600 min / 30 days"]' in plan_copy
     # Free keeps its calendar-month quota wording.
     assert '"120 dk / ay"' in plan_copy and '"120 min / month"' in plan_copy
     assert 'perMonth: "/ ay"' not in app and 'perMonth: "/ month"' not in app

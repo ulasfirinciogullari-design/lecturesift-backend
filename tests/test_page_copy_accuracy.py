@@ -155,12 +155,13 @@ def test_topic_guides_quote_the_trial_and_free_plan_limits_the_code_enforces():
     assert "başarısız olsa bile silinir; silme aksarsa dosya, ders silindiğinde veya süresi dolduğunda" in long_tr
     assert "even if processing fails; if that deletion fails, the file is removed with the lesson" in long_en
     assert "iş bittiğinde silinir" not in long_tr and "deleted when the job ends" not in long_en
-    # The Exam preset asks for 20 questions and 40 cards; free and Lite cap them
-    # lower, so the finals guide quotes those caps instead of a flat 20/40.
+    # The Exam preset asks for 20 questions and 40 cards; only the free plan
+    # caps them lower, so the finals guide quotes that cap instead of a flat 20/40.
     assert (free.quiz_questions, free.flashcards) == (10, 20)
-    assert (PLAN_BY_CODE["lite"].quiz_questions, PLAN_BY_CODE["lite"].flashcards) == (10, 20)
+    assert (PLAN_BY_CODE["lite"].quiz_questions, PLAN_BY_CODE["lite"].flashcards) == (20, 40)
     finals = next(page for page in topics if page["slug"] == "final-exam-study-plan")
-    assert "ücretsiz hesapta ve Lite planında sınır 10 soru ve 20 karttır" in finals["tr"]["body"]
-    assert "free accounts and the Lite plan are limited to 10 questions and 20 cards" in finals["en"]["body"]
+    assert "ücretsiz hesapta sınır 10 soru ve 20 karttır" in finals["tr"]["body"]
+    assert "free accounts are limited to 10 questions and 20 cards" in finals["en"]["body"]
+    assert "Lite" not in finals["tr"]["body"] and "Lite" not in finals["en"]["body"]
     assert "planının sınırına göre ayarlanır" not in finals["tr"]["body"]
     assert "adjusted to your plan's limits" not in finals["en"]["body"]

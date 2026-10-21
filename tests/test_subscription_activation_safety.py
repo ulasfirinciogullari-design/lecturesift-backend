@@ -91,7 +91,7 @@ def test_new_monthly_purchase_replaces_longer_old_term_and_survives_retries(
 
     account = billing.account_status(owner["id"])
     assert account["plan"]["code"] == "pro"
-    assert account["remaining_minutes"] == 2000
+    assert account["remaining_minutes"] == 1500
     assert account["subscription"]["interval"] == "monthly"
     assert account["subscription"]["cancel_at_period_end"] is False
     rows = subscription_rows(owner["id"])
