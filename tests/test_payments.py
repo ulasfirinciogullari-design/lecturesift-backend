@@ -122,7 +122,7 @@ def test_paytr_checkout_and_callback_are_signed_and_idempotent(monkeypatch):
     exported = export_response.json()["export"]
     consent = exported["payment_consents"][0]
     assert consent["order_reference"] == reference
-    assert billing_service.PAYMENT_CONSENT_TERMS_VERSION == "MSS-2026-09-13-v3"
+    assert billing_service.PAYMENT_CONSENT_TERMS_VERSION == "MSS-2026-10-21-v4"
     assert billing_service.PAYMENT_CONSENT_PRIVACY_VERSION == "2.4-2026-09-13"
     assert consent["terms_version"] == billing_service.PAYMENT_CONSENT_TERMS_VERSION
     assert consent["privacy_version"] == billing_service.PAYMENT_CONSENT_PRIVACY_VERSION

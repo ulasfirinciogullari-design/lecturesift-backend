@@ -788,3 +788,36 @@ def test_redemption_currencies_use_only_active_preferred_checkout(monkeypatch, s
         "configured": status != "pending_credentials", "status": status, "currencies": ["USD", "EUR"],
     })
     assert referrals.redemption_currencies() == expected
+
+
+def test_renewal_reward_survives_a_further_early_renewal_of_the_same_package(state):
+    inviter, invitee, _, _ = released(state, "minutes")
+    source = pay(invitee)  # Queued after the first term, which is still running.
+    renewal = renewal_for(source["reference"])
+    referrals.choose_reward(inviter, renewal.id, "minutes")
+    pay(invitee)  # Renewed early again: the rewarded period now has a successor.
+    state["now"] += timedelta(days=14)
+    assert referrals.release_reward(
+        renewal.id, provider_reconciled=True, evidence_reference="renewal-proof-123",
+    )["status"] == "released"
+    assert credit(inviter) == 90 and credit(invitee) == 30
+
+
+@pytest.mark.parametrize("cancelled", [False, True])
+def test_first_purchase_reward_survives_an_early_renewal_but_not_a_cancellation(state, cancelled):
+    inviter, invitee = pair()
+    pay(invitee)
+    row = reward(invitee)
+    referrals.choose_reward(inviter, row.id, "minutes")
+    state["now"] += timedelta(days=1)
+    pay(invitee)  # Renewed early within the hold: queued after the first term.
+    if cancelled:
+        billing.cancel_active_subscription(invitee)
+    state["now"] += timedelta(days=13)
+    result = referrals.release_reward(row.id, provider_reconciled=True, evidence_reference="provider-review-123")
+    if cancelled:
+        assert result["status"] == "blocked"
+        assert credit(inviter) == credit(invitee) == 0
+    else:
+        assert result["status"] == "released"
+        assert credit(inviter) == 60 and credit(invitee) == 30

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
 import threading
 import time
@@ -9,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from . import config
-from .billing_service import require_duration_entitlement, usage_multiplier_for
+from .billing_service import job_minutes_cap, require_duration_entitlement, usage_multiplier_for
 from .config import CELERY_BROKER_URL, REQUIRE_DURABLE_PROCESSING, STORAGE_TRANSFER_PARALLELISM
 from .duration import media_duration_seconds
 from .documents import extract_documents
@@ -23,6 +25,60 @@ from .storage import STORAGE
 
 _INSTALLED = False
 start_durable_recovery = None
+LOGGER = logging.getLogger(__name__)
+STUCK_JOB_SWEEP_INTERVAL_SECONDS = 10 * 60
+
+
+def sweep_stuck_jobs(now: float | None = None) -> int:
+    """Fail started jobs that can no longer finish on their own.
+
+    A "working" job qualifies once its delivery's own deadline (start plus
+    its hard time limit) and the broker's redelivery window have passed and
+    no delivery holds its lock: none can then still be running or coming for
+    it. It fails through the standard terminal path (state, failure email,
+    source cleanup). A "queued" job is never failed here: its broker message
+    is still valid however long it waits behind other jobs. Returns how many
+    jobs this call failed.
+    """
+    if os.getenv("LECTURESIFT_WORKER") == "1" or config.current_maintenance_mode() != "off":
+        return 0
+    from .tasks import fail_unfinished_job
+
+    now = time.time() if now is None else now
+    failed = 0
+    for data in JOBS.recoverable():
+        job_id = str(data.get("job_id") or "")
+        if not job_id or not _past_deadline(data, now):
+            continue
+        # A delivery holds this lock from before it records its start, so a
+        # job whose lock is taken is left to that delivery. A job updated
+        # since it was read here is left for the next sweep.
+        updated = float(data.get("updated") or 0)
+        with JOBS.processing_lock(job_id) as acquired:
+            if acquired and fail_unfinished_job(job_id, "stuck_job_sweep", stale_before=updated + 0.001):
+                failed += 1
+    return failed
+
+
+def _past_deadline(data: dict, now: float) -> bool:
+    """Whether a started job's delivery deadline and the redelivery window have passed."""
+    from .queue import JOB_REDELIVERY_WINDOW_SECONDS
+
+    deadline = data.get("processing_deadline")
+    if data.get("status") != "working" or not deadline:
+        return False
+    return now >= float(deadline) + JOB_REDELIVERY_WINDOW_SECONDS
+
+
+async def stuck_job_loop() -> None:
+    while True:
+        await asyncio.sleep(STUCK_JOB_SWEEP_INTERVAL_SECONDS)
+        try:
+            failed = await asyncio.to_thread(sweep_stuck_jobs)
+            if failed:
+                LOGGER.warning("Stuck-job sweep failed %d unfinished job(s)", failed)
+        except Exception:
+            LOGGER.error("Stuck-job sweep unavailable")
 
 
 def _start_durable_recovery(recover) -> None:
@@ -167,6 +223,24 @@ def _preflight_documents(job_id: str, paths: list[Path], options: dict) -> float
     return float(document_data["credit_seconds"])
 
 
+def stored_time_limits(data: dict) -> tuple[int, int] | None:
+    """The job's own (soft, hard) limits; None for records enqueued without them."""
+    try:
+        soft, hard = (int(value) for value in data.get("time_limits") or ())
+    except (TypeError, ValueError):
+        return None
+    return (soft, hard) if 0 < soft < hard else None
+
+
+def _enqueue_uploaded_job(task, job_id, audio_keys, options, visual_keys, time_limits):
+    """Send a job with its own time limits; its retries and redeliveries keep them."""
+    args = (job_id, audio_keys, options, visual_keys or None)
+    if time_limits is None:
+        return task.delay(*args)
+    soft, hard = time_limits
+    return task.apply_async(args, soft_time_limit=soft, time_limit=hard)
+
+
 def install_durable_runtime() -> None:
     global _INSTALLED
     if _INSTALLED:
@@ -215,6 +289,7 @@ def install_durable_runtime() -> None:
         )
         user_id = str(options.get("billing_user_id", ""))
         guest_user = False
+        entitlement = None
         try:
             if user_id:
                 guest_user = is_guest_user(user_id)
@@ -223,7 +298,7 @@ def install_durable_runtime() -> None:
                     if document_mode and bool(options.get("document_estimated"))
                     else duration
                 )
-                require_duration_entitlement(
+                entitlement = require_duration_entitlement(
                     user_id,
                     entitlement_duration,
                     source_file_count=len(audio_paths) + len(visual_paths),
@@ -261,6 +336,21 @@ def install_durable_runtime() -> None:
                 source_kind="document" if document_mode else "media",
             )
         )
+        from .queue import LONGEST_JOB_MINUTES, job_time_limits
+
+        # The worker re-checks a document it inspects against the account's
+        # per-job minute limit, so that limit bounds its size until then.
+        limit_minutes = media_minutes
+        if worker_document_preflight:
+            cap = job_minutes_cap(entitlement) if isinstance(entitlement, dict) else None
+            limit_minutes = cap or LONGEST_JOB_MINUTES
+        time_limits = job_time_limits(
+            limit_minutes,
+            size_bytes,
+            job_type=str(options.get("job_type") or "study_pack"),
+            summary_style=str(options.get("summary_style") or "standard"),
+            source_kind="document" if document_mode else "media",
+        )
         JOBS.update(
             job_id,
             media_minutes=None if worker_document_preflight else round(media_minutes, 2),
@@ -294,8 +384,11 @@ def install_durable_runtime() -> None:
                     queue_mode="celery",
                     worker_state="queued",
                     source_keys={"audio": audio_keys, "visual": visual_keys},
+                    time_limits=list(time_limits),
                 )
-                task = process_uploaded_job.delay(job_id, audio_keys, options, visual_keys or None)
+                task = _enqueue_uploaded_job(
+                    process_uploaded_job, job_id, audio_keys, options, visual_keys, time_limits,
+                )
                 JOBS.update(job_id, celery_task_id=task.id)
                 # The durable R2 copy is authoritative from this point on.
                 # Releasing the web instance's temporary copies immediately
@@ -383,7 +476,10 @@ def install_durable_runtime() -> None:
             visual_keys = list(source_keys.get("visual") or [])
             try:
                 if audio_keys:
-                    task = process_uploaded_job.delay(job_id, audio_keys, options, visual_keys or None)
+                    task = _enqueue_uploaded_job(
+                        process_uploaded_job, job_id, audio_keys, options, visual_keys,
+                        stored_time_limits(data),
+                    )
                 elif data.get("source_type") == "url" and data.get("source_url"):
                     task = process_url_job.delay(job_id, str(data["source_url"]), options)
                 else:

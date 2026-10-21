@@ -362,12 +362,27 @@ def _blocked(connection, reward) -> bool:
     if not subscription:
         return True
     if _reward_table(reward.id) is REWARDS:
-        # Preserve the original first-purchase conditions exactly.
-        if subscription.status != "active" or _utc(subscription.ends_at) <= _utc(billing.utcnow()):
+        # Preserve the original first-purchase conditions: the period must
+        # still be running and not cancelled. A period followed by an early
+        # renewal of the same package counts as active while that renewal
+        # chain is (the buyer's own cancellation would end it).
+        stacked_end = (
+            billing.stacked_renewal_end(connection, subscription)
+            if subscription.status == "cancel_at_end"
+            else None
+        )
+        if not (
+            subscription.status == "active"
+            or (stacked_end is not None and stacked_end.status == "active")
+        ) or _utc(subscription.ends_at) <= _utc(billing.utcnow()):
             return True
-    elif subscription.status not in {"active", "replaced", "expired"}:
-        # Ordinary renewal/replacement or time passing does not erase a real
-        # settled renewal payment. Explicit cancellation remains conservative.
+    elif subscription.status not in {"active", "replaced", "expired"} and not (
+        subscription.status == "cancel_at_end"
+        and billing.stacked_renewal_end(connection, subscription) is not None
+    ):
+        # Ordinary renewal/replacement (including an early renewal queued after
+        # this period) or time passing does not erase a real settled renewal
+        # payment. Explicit cancellation remains conservative.
         return True
     if _reward_table(reward.id) is RENEWAL_REWARDS and not connection.execute(select(REWARDS.c.id).where(
         REWARDS.c.id == reward.referral_id, REWARDS.c.inviter_user_id == reward.inviter_user_id,

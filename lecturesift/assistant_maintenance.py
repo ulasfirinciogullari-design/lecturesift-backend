@@ -74,7 +74,9 @@ async def _temp_cleanup_loop():
 async def lifespan(app):
     from .api_temp import prepare_api_temp_dir
     from .billing_service import require_production_session_secret
+    from .durable_runtime import stuck_job_loop
     from .job_notifications import delivery_loop
+    from .payments import iyzico_reconciliation_loop
     from .renewal_reminders import reminder_loop
 
     # Both checks raise before the API accepts a request: a production API
@@ -88,6 +90,8 @@ async def lifespan(app):
         asyncio.create_task(_temp_cleanup_loop(), name='api-temp-cleanup'),
         asyncio.create_task(delivery_loop(), name='job-failure-notifications'),
         asyncio.create_task(reminder_loop(), name='renewal-reminders'),
+        asyncio.create_task(stuck_job_loop(), name='stuck-job-sweep'),
+        asyncio.create_task(iyzico_reconciliation_loop(), name='iyzico-reconciliation'),
     ]
     try:
         yield

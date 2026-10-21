@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -17,7 +18,6 @@ from typing import Any, Callable
 
 from docx import Document
 from PIL import Image, ImageOps, UnidentifiedImageError
-from pypdf import PdfReader
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 
@@ -82,6 +82,21 @@ _PDF_SAMPLE_MAX_WORDS = PDF_SAMPLE_MAX_WORDS
 _PDF_SAMPLE_CHUNK_CHARACTERS = 1024
 _PDF_SAMPLE_MAX_CHARACTERS = 100_000
 _DOCUMENT_WORD_PATTERN = re.compile(r"[^\W_]+", flags=re.UNICODE)
+_PDF_READER_CHILD = Path(__file__).with_name("pdf_reader_child.py")
+_PDF_READER_TIMEOUT_SECONDS = 180
+# Address-space caps: 384 MiB still reads a maximum-size (100 MB) PDF, and a
+# reader never gets more than half of the worker container above that floor.
+_PDF_READER_MIN_MEMORY_BYTES = 384 * 1024 * 1024
+_PDF_READER_MAX_MEMORY_BYTES = 768 * 1024 * 1024
+
+
+def _pdf_reader_max_output_bytes(max_pages: int) -> int:
+    """Largest JSON the reader can write for text within MAX_DOCUMENT_CHARACTERS.
+
+    ASCII-escaped JSON spends at most 12 bytes per character (a surrogate
+    pair), plus a few bytes per page and a small fixed envelope.
+    """
+    return 12 * MAX_DOCUMENT_CHARACTERS + 8 * max(0, int(max_pages)) + 64 * 1024
 
 
 def _container_memory_limit_bytes() -> int | None:
@@ -370,32 +385,80 @@ def _ocr_pdf_page(path: Path, page_index: int, source_language: str) -> tuple[in
     return page_index, text, language
 
 
-def _extract_pdf_native_pages(path: Path, page_count: int) -> tuple[list[str], str]:
-    """Use PDFium's native text engine, with pypdf as a compatibility fallback."""
-    try:
-        import pypdfium2 as pdfium
+def _pdf_reader_memory_bytes() -> int:
+    limit = _container_memory_limit_bytes()
+    if limit is None:
+        return _PDF_READER_MAX_MEMORY_BYTES
+    return max(_PDF_READER_MIN_MEMORY_BYTES, min(_PDF_READER_MAX_MEMORY_BYTES, limit // 2))
 
-        document = pdfium.PdfDocument(str(path))
+
+def _read_pdf_isolated(path: Path, *, max_pages: int, with_text: bool) -> dict[str, Any]:
+    """Parse an untrusted PDF in a separate time- and memory-capped process.
+
+    pypdf and PDFium can loop or allocate without bound on a pathological
+    file. In a child process that ends as one LS-DOC-04 rejection instead of
+    a hung or OOM-killed worker. The result has ``encrypted`` and ``pages``;
+    with ``with_text`` it also has each page's normalized native ``texts`` and
+    the ``engine`` (PDFium, or pypdf as a fallback) when ``pages <= max_pages``.
+    The child stops reading text past MAX_DOCUMENT_CHARACTERS and cannot write
+    more than ``_pdf_reader_max_output_bytes``, so neither process holds more.
+    """
+    max_output_bytes = _pdf_reader_max_output_bytes(max_pages)
+    command = [
+        sys.executable, "-I", str(_PDF_READER_CHILD), str(path), str(int(max_pages)),
+        str(_pdf_reader_memory_bytes()), str(_PDF_READER_TIMEOUT_SECONDS + 5),
+        "text" if with_text else "inspect", str(MAX_DOCUMENT_CHARACTERS), str(max_output_bytes),
+    ]
+    with tempfile.TemporaryFile() as output:
         try:
-            if len(document) != page_count:
-                raise ValueError("PDF page count changed between readers")
-            parts: list[str] = []
-            for page_index in range(page_count):
-                page = document[page_index]
-                try:
-                    text_page = page.get_textpage()
-                    try:
-                        parts.append(_normalize_text(text_page.get_text_range() or ""))
-                    finally:
-                        text_page.close()
-                finally:
-                    page.close()
-            return parts, "pdfium"
-        finally:
-            document.close()
-    except Exception:
-        reader = PdfReader(str(path), strict=False)
-        return [_normalize_text(page.extract_text() or "") for page in reader.pages], "pypdf"
+            completed = subprocess.run(
+                command,
+                stdin=subprocess.DEVNULL,
+                stdout=output,
+                stderr=subprocess.DEVNULL,
+                timeout=_PDF_READER_TIMEOUT_SECONDS,
+                env={"PATH": os.environ.get("PATH", ""), "LC_ALL": "C.UTF-8"},
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise LectureSiftError("LS-DOC-04", "PDF güvenli biçimde okunamadı.", "pdf_reader_timeout", 400) from exc
+        except OSError as exc:
+            # Not the file's fault: the worker could not start a reader at all.
+            raise RuntimeError(f"PDF reader could not start: {type(exc).__name__}") from exc
+        output.seek(0)
+        payload = output.read(max_output_bytes + 1)
+    try:
+        result = json.loads(payload) if len(payload) <= max_output_bytes else None
+    except ValueError:
+        result = None
+    if isinstance(result, dict) and result.get("error") == "character_limit":
+        raise LectureSiftError(
+            "LS-DOC-13",
+            "Belgelerin toplam metni güvenli işleme sınırını aşıyor. Kaynağı bölerek yeniden yükle.",
+            f"Document character limit exceeded: {path.name}",
+            413,
+        )
+    if completed.returncode != 0 or not isinstance(result, dict) or result.get("ok") is not True:
+        reason = result.get("error") if isinstance(result, dict) else f"exit_{completed.returncode}"
+        raise LectureSiftError("LS-DOC-04", "PDF güvenli biçimde okunamadı.", f"pdf_reader_failed:{reason}", 400)
+    return result
+
+
+def _checked_pdf_page_count(result: dict[str, Any]) -> int:
+    """Apply the original-file safety rules to an isolated reader result."""
+    if result.get("encrypted"):
+        raise LectureSiftError("LS-DOC-05", "Şifreli PDF dosyaları desteklenmiyor.", "Encrypted PDF", 400)
+    pages = result.get("pages")
+    if type(pages) is not int or pages < 0:
+        raise LectureSiftError("LS-DOC-04", "PDF güvenli biçimde okunamadı.", "pdf_reader_failed:pages", 400)
+    if pages > MAX_DOCUMENT_PAGES:
+        raise LectureSiftError(
+            "LS-DOC-06",
+            f"PDF en fazla {MAX_DOCUMENT_PAGES} sayfa olabilir.",
+            f"PDF page limit exceeded: {pages}",
+            413,
+        )
+    return pages
 
 
 def _pdf_sample_error(reason: str = "no_readable_text", page: int = 1,
@@ -504,22 +567,11 @@ def _extract_pdf_sample(
     with path.open("rb") as stream:
         if stream.read(5) != b"%PDF-":
             raise LectureSiftError("LS-DOC-04", "PDF dosyası geçerli görünmüyor.", "Invalid PDF signature", 400)
-    try:
-        # Reading the page tree preserves original-file safety checks without
-        # extracting any page's text or rasterizing images.
-        reader = PdfReader(str(path), strict=False)
-        if reader.is_encrypted:
-            raise LectureSiftError("LS-DOC-05", "Şifreli PDF dosyaları desteklenmiyor.", "Encrypted PDF", 400)
-        original_pages = len(reader.pages)
-        if original_pages > MAX_DOCUMENT_PAGES:
-            raise LectureSiftError(
-                "LS-DOC-06", f"PDF en fazla {MAX_DOCUMENT_PAGES} sayfa olabilir.",
-                f"PDF page limit exceeded: {original_pages}", 413,
-            )
-    except LectureSiftError:
-        raise
-    except Exception as exc:
-        raise LectureSiftError("LS-DOC-04", "PDF güvenli biçimde okunamadı.", type(exc).__name__, 400) from exc
+    # Reading the page tree preserves original-file safety checks without
+    # extracting any page's text or rasterizing images.
+    original_pages = _checked_pdf_page_count(
+        _read_pdf_isolated(path, max_pages=MAX_DOCUMENT_PAGES, with_text=False)
+    )
     if start_page > original_pages:
         raise LectureSiftError(
             "LS-DOC-15", f"Başlangıç sayfası 1 ile {original_pages} arasında olmalı.",
@@ -659,23 +711,15 @@ def _extract_pdf(
         signature = stream.read(5)
     if signature != b"%PDF-":
         raise LectureSiftError("LS-DOC-04", "PDF dosyası geçerli görünmüyor.", f"Invalid PDF signature: {path.name}", 400)
-    try:
-        reader = PdfReader(str(path), strict=False)
-        if reader.is_encrypted:
-            raise LectureSiftError("LS-DOC-05", "Şifreli PDF dosyaları desteklenmiyor.", "Encrypted PDF", 400)
-        if len(reader.pages) > MAX_DOCUMENT_PAGES:
-            raise LectureSiftError(
-                "LS-DOC-06",
-                f"PDF en fazla {MAX_DOCUMENT_PAGES} sayfa olabilir.",
-                f"PDF page limit exceeded: {len(reader.pages)}",
-                413,
-            )
-        page_count = len(reader.pages)
-        parts, text_engine = _extract_pdf_native_pages(path, page_count)
-    except LectureSiftError:
-        raise
-    except Exception as exc:
-        raise LectureSiftError("LS-DOC-04", "PDF güvenli biçimde okunamadı.", str(exc), 400) from exc
+    reader = _read_pdf_isolated(path, max_pages=MAX_DOCUMENT_PAGES, with_text=True)
+    page_count = _checked_pdf_page_count(reader)
+    texts, text_engine = reader.get("texts"), reader.get("engine")
+    if (
+        not isinstance(texts, list) or len(texts) != page_count
+        or not all(isinstance(text, str) for text in texts) or text_engine not in {"pdfium", "pypdf"}
+    ):
+        raise LectureSiftError("LS-DOC-04", "PDF güvenli biçimde okunamadı.", "pdf_reader_failed:texts", 400)
+    parts = [_normalize_text(text) for text in texts]
     ocr_indexes = [index for index, part in enumerate(parts) if len(part) < OCR_MIN_NATIVE_CHARACTERS]
     native_text_pages = len(parts) - len(ocr_indexes)
     ocr_language = ""
@@ -721,7 +765,7 @@ def _extract_pdf(
             if not ocr_language and language:
                 ocr_language = language
     return "\n\n".join(part for part in parts if part), {
-        "pages": len(reader.pages),
+        "pages": page_count,
         "native_text_pages": native_text_pages,
         "ocr_pages": len(ocr_indexes),
         "ocr_used": bool(enable_ocr and ocr_indexes),
