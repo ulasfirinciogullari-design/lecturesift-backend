@@ -1,0 +1,78 @@
+/* Homepage sections added by the conversion rework: hero actions, steps,
+   price cards and FAQ. Tokens come from theme.css; product-layout.css keeps
+   the hero, sample pack, feature band and file-care card. */
+.study-hero .hero-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:14px 22px;margin-top:28px}
+.study-hero .study-primary{gap:0;min-height:52px;padding:13px 26px;font-size:15px;text-align:center}
+.study-hero .study-text-link{font-size:14px;font-weight:600;color:var(--ui-action)}
+.home-page .study-example{margin-bottom:72px}
+.home-page .example-intro h2{font-size:clamp(26px,3vw,34px);max-width:20ch}
+.home-steps{margin:0 0 72px}
+.home-page .home-steps .section-lead{margin-bottom:26px}
+.steps-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.steps-grid li{min-width:0;padding:24px;border:1px solid var(--ui-line);border-radius:14px;background:var(--ui-surface)}
+.steps-grid li>span{display:grid;place-items:center;width:34px;height:34px;margin-bottom:14px;border-radius:50%;background:var(--ui-terracotta-wash);color:var(--ui-action);font-size:14px;font-weight:700}
+.steps-grid h3{margin:0 0 8px;font-size:17px;line-height:1.35}
+.steps-grid p{margin:0;font-size:14px;line-height:1.7;color:var(--ui-muted)}
+.home-pricing{margin:0 0 56px}
+.home-page .home-pricing .section-lead{margin-bottom:30px}
+.pricing-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch}
+.price-card{position:relative;display:flex;flex-direction:column;min-width:0;padding:28px 24px 24px;border:1px solid var(--ui-line);border-radius:14px;background:var(--ui-surface)}
+.price-card.featured{border:2px solid var(--ui-action);background:var(--ui-terracotta-wash)}
+.price-badge{position:absolute;top:-13px;inset-inline-start:20px;margin:0;padding:5px 11px;border-radius:999px;background:var(--ui-action);color:var(--ui-action-ink);font-size:11px;font-weight:700;letter-spacing:.02em;white-space:nowrap}
+.price-badge[hidden]{display:none}
+.price-card h3{margin:0;font-size:18px;line-height:1.3}
+.price-amount{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px;margin:12px 0 0;font-size:34px;line-height:1.1;font-weight:700;letter-spacing:-.03em;color:var(--ui-ink)}
+.price-term{font-size:13px;font-weight:500;letter-spacing:0;color:var(--ui-muted)}
+.price-minutes{margin:6px 0 16px;font-size:14px;font-weight:600;color:var(--ui-ink)}
+.price-live{display:flex;flex:1 1 auto;flex-direction:column;min-width:0}
+.price-live[hidden]{display:none}
+.price-link{margin:12px 0 0;font-size:14px;line-height:1.5}
+.price-link[hidden]{display:none}
+.price-link a{font-weight:650;color:var(--ui-action);text-underline-offset:4px}
+/* Until the catalog request settles, neither the numbers nor the fallback link show. */
+.home-pricing[data-pricing-source="loading"] .price-link{visibility:hidden}
+.pricing-pack[hidden]{display:none}
+.price-card ul{list-style:none;margin:auto 0 0;padding:0;display:grid;gap:8px;font-size:13px;line-height:1.55;color:var(--ui-muted)}
+.price-card li{display:flex;gap:8px;align-items:flex-start}
+.price-card li::before{content:"✓";flex:0 0 auto;color:var(--ui-green);font-weight:700}
+.price-card li[hidden]{display:none}
+.pricing-note{margin:24px auto 0;max-width:720px;text-align:center;font-size:14px;line-height:1.7;color:var(--ui-ink)}
+.pricing-note a{display:inline-block;margin-inline-start:6px;font-weight:650;color:var(--ui-action);text-underline-offset:4px}
+.pricing-pack{margin:10px auto 0;max-width:720px;text-align:center;font-size:13px;line-height:1.7;color:var(--ui-muted)}
+.pricing-pack strong{color:var(--ui-ink)}
+/* Long German compounds ("Vorlesungszusammenfassungen") must not widen the
+   feature grid past a 320px screen. */
+.home-page .feature-band article{min-width:0}
+.home-page .feature-band h3{overflow-wrap:anywhere}
+.home-faq{max-width:860px;margin:0 auto 56px}
+.home-faq h2{margin:0 0 18px;font-size:clamp(24px,2.8vw,32px);line-height:1.25;letter-spacing:-.03em;text-align:center}
+.home-faq .faq-list{display:grid;gap:10px}
+.home-faq .faq-list details{padding:0 20px;border:1px solid var(--ui-line);border-radius:12px;background:var(--ui-surface)}
+.home-faq .faq-list summary{min-height:50px;padding:14px 0;cursor:pointer;font-size:15px;line-height:1.5;font-weight:650}
+.home-faq .faq-list p{margin:0 0 16px;font-size:14px;line-height:1.75}
+.faq-links{margin:16px 0 0;text-align:center;font-size:13px;color:var(--ui-muted)}
+.faq-links a{color:var(--ui-action);font-weight:600;text-underline-offset:4px}
+.home-page .product-companions{margin:0 0 48px;gap:14px}
+.home-page .product-companion{padding:22px 24px}
+.home-page .product-companion h2{margin:6px 0 8px;font-size:20px}
+.home-page .product-companion p{font-size:13px;margin:6px 0}
+@media(max-width:860px){
+  .steps-grid,.pricing-grid{grid-template-columns:minmax(0,1fr)}
+  .steps-grid li,.price-card{padding:22px 20px}
+  .price-card{padding-top:26px}
+  .home-page .product-companions{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:600px){
+  .study-hero .hero-actions{flex-direction:column;align-items:stretch;gap:12px;margin-top:22px}
+  .study-hero .study-primary{width:100%;min-height:50px;padding:12px 14px;font-size:14px}
+  .study-hero .study-text-link{text-align:center}
+  .home-page .study-example{margin-bottom:48px}
+  .home-steps,.home-pricing{margin-bottom:44px}
+  .price-amount{font-size:30px}
+  .home-faq{margin-bottom:40px}
+  .home-faq .faq-list details{padding:0 16px}
+  .home-faq .faq-list summary{font-size:14px}
+}
+@media(max-width:360px){
+  .study-hero .study-primary{font-size:13px;padding-inline:10px}
+}

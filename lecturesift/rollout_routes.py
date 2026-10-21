@@ -10,7 +10,7 @@ import unicodedata
 from datetime import date
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from . import config
@@ -24,6 +24,7 @@ from .billing_service import (
     authenticate_session,
 )
 from .costs import cost_overview, delete_actual_cost, save_actual_cost
+from .job_feedback import job_feedback_csv, list_job_feedback
 from .jobs import JOBS
 from .mailer import EmailDeliveryError
 from .queue import worker_health
@@ -1082,6 +1083,39 @@ def admin_contact_messages(
     except BillingError as exc:
         _billing_failure(exc, "LS-CONTACT-03")
     return {"ok": True, "messages": messages}
+
+
+@router.get("/billing/admin/feedback")
+def admin_job_feedback(
+    limit: int = Query(250, ge=1, le=500),
+    admin: dict = Depends(_admin),
+) -> dict:
+    del admin
+    try:
+        feedback = list_job_feedback(limit)
+    except BillingError as exc:
+        _billing_failure(exc, "LS-FEEDBACK-03")
+    return {"ok": True, "feedback": feedback}
+
+
+@router.get("/billing/admin/feedback.csv")
+def admin_job_feedback_csv(
+    limit: int = Query(500, ge=1, le=500),
+    admin: dict = Depends(_admin),
+) -> Response:
+    del admin
+    try:
+        body = job_feedback_csv(limit)
+    except BillingError as exc:
+        _billing_failure(exc, "LS-FEEDBACK-03")
+    return Response(
+        content=body.encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": 'attachment; filename="lecturesift-geri-bildirimler.csv"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @router.get("/billing/admin/contact-messages/{message_id}")

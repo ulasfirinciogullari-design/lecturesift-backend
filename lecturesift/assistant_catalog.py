@@ -6,26 +6,30 @@ MODEL = "gpt-5.6-luna"
 IMAGE_MODEL = "gpt-image-1.5"
 IMAGE_PRICED_MODEL = "gpt-image-1.5"
 IMAGE_CREDITS = 200
-VERSION = "2026-09-08-assistant-v1"
+VERSION = "2026-10-20-assistant-v2"
 # PG18 v4 migration/recovery, runtime roles and both real provider requests
 # were verified for the September 9 release. Runtime flags remain opt-in.
 SCHEMA_RECOVERY_RELEASE_READY = True
-INCLUDED = {"free": 50, "test": 0, "credit": 0, "lite": 500, "plus": 1500, "pro": 4000, "max": 10000, "business": 0}
+INCLUDED = {"free": 100, "test": 0, "credit": 0, "lite": 1000, "plus": 1500, "pro": 4000, "max": 10000, "business": 0}
 PACKS = {"ai_1000": 1000, "ai_3000": 3000, "ai_10000": 10000}
 # Deliberate regional price points, not a claim about today's exchange rate.
 # JPY/KRW amounts already use their zero-decimal minor units.
+# October 2026 revision: TRY, USD, EUR and GBP were set directly; every other
+# currency scales its previous packs by 199/399, 399/999 and 999/2999 and is
+# rounded to the pattern that row already used (x99 or x49 cents, whole
+# hundreds for JPY/SEK/NOK, x90 for BRL, x900 for KRW/CNY/INR/MXN).
 PRICES = {
-    "TRY": (14900, 34900, 99900), "USD": (399, 999, 2999),
-    "EUR": (399, 999, 2999), "GBP": (349, 849, 2499),
-    "CAD": (549, 1399, 3999), "AUD": (649, 1599, 4499),
-    "NZD": (699, 1799, 4999), "JPY": (600, 1500, 4500),
-    "KRW": (5900, 14900, 44900), "CNY": (2900, 6900, 19900),
-    "INR": (34900, 89900, 249900), "BRL": (2290, 5490, 15990),
-    "MXN": (7900, 19900, 59900), "CHF": (399, 999, 2999),
-    "SEK": (4500, 10900, 32900), "NOK": (4500, 10900, 32900),
-    "DKK": (2900, 7490, 21900), "PLN": (1699, 4299, 12999),
-    "AED": (1499, 3699, 10999), "SAR": (1499, 3799, 11299),
-    "SGD": (549, 1399, 3999), "HKD": (3199, 7999, 23999),
+    "TRY": (4900, 11900, 29900), "USD": (199, 399, 999),
+    "EUR": (199, 399, 999), "GBP": (179, 349, 849),
+    "CAD": (249, 599, 1299), "AUD": (349, 599, 1499),
+    "NZD": (299, 699, 1699), "JPY": (300, 600, 1500),
+    "KRW": (2900, 5900, 14900), "CNY": (1900, 2900, 6900),
+    "INR": (17900, 35900, 82900), "BRL": (1190, 2190, 5290),
+    "MXN": (3900, 7900, 19900), "CHF": (199, 399, 999),
+    "SEK": (2200, 4400, 11000), "NOK": (2200, 4400, 11000),
+    "DKK": (1400, 2990, 7300), "PLN": (799, 1699, 4299),
+    "AED": (699, 1499, 3699), "SAR": (699, 1499, 3799),
+    "SGD": (249, 599, 1299), "HKD": (1599, 3199, 7999),
 }
 
 

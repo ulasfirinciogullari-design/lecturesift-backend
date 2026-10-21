@@ -143,7 +143,7 @@ def test_all_frontend_plan_fallbacks_use_only_the_detailed_summary_profile():
     workspace_fallback = workspace.split("const PLAN_FALLBACK = {", 1)[1].split(
         "const FALLBACK_PRICES = {", 1
     )[0]
-    assert workspace_fallback.count('["detailed"]') == 7
+    assert workspace_fallback.count('["detailed"]') == 5
     assert '["short"' not in workspace_fallback
     assert '"exam"' not in workspace_fallback
     assert '"five_minute"' not in workspace_fallback
@@ -189,11 +189,23 @@ def test_public_product_copy_promises_one_detailed_summary_in_every_language():
         assert len(set(translations)) >= 10, key
 
 
-def test_homepage_promotes_campaigns_without_duplicating_plan_checkout():
+def test_homepage_shows_price_cards_without_duplicating_plan_checkout():
     homepage = (FRONTEND / "index.html").read_text(encoding="utf-8")
     workspace = (FRONTEND / "workspace.html").read_text(encoding="utf-8")
-    assert 'id="campaigns"' in homepage
-    assert "Hesapsız 30 dakika deneme" in homepage
+    assert 'id="pricing"' in homepage and "data-home-pricing" in homepage
+    assert 'id="campaigns"' not in homepage
+    # Three cards plus the one-line minute pack. Every price and minute figure
+    # comes from GET /billing/plans at runtime, so the markup carries none;
+    # a card without catalog data shows its name and a link to the plans page.
+    assert re.findall(r'data-home-plan="([a-z]+)"', homepage) == ["free", "lite", "pro", "credit"]
+    assert homepage.count('class="price-card') == 3
+    assert homepage.count("<span data-home-price></span>") == 4
+    assert homepage.count("<span data-home-minutes></span>") == 4
+    assert homepage.count("data-home-live hidden") == 4 and homepage.count("data-home-offline") == 3
+    assert "data-price-try-minor" not in homepage and "data-plan-value" not in homepage and "₺" not in homepage
+    assert "data-home-popular" in homepage
+    assert '<script src="/home-pricing.js?v=1"></script>' in homepage
+    assert "plan-action" not in homepage and 'data-plan-card=' not in homepage
     assert 'id="plansGrid"' not in homepage
     assert 'id="workspace"' not in homepage
     assert 'id="workspace"' in workspace
@@ -490,10 +502,10 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         content = page.read_text(encoding="utf-8")
         expected_theme_version = "17"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
-        assert "/theme.js?v=13" in content, page.name
-        expected_i18n_version = "59"
+        assert "/theme.js?v=14" in content, page.name
+        expected_i18n_version = "60"
         assert f"i18n.js?v={expected_i18n_version}" in content, page.name
-        assert "page-i18n.js?v=12" in content, page.name
+        assert "page-i18n.js?v=13" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
     style = (FRONTEND / "theme.css").read_text(encoding="utf-8")
@@ -778,11 +790,11 @@ def test_payment_routes_are_distinct_localized_and_account_history_is_auditable(
         assert len(values) == 13, key
         assert all(str(value).strip() for value in values), key
 
-    assert 'src="/plans.js?v=34"' in plans_html
+    assert 'src="/plans.js?v=35"' in plans_html
     assert 'manualTransfer = {available:Boolean(transferBody?.available), bank:null};' in plans_js
     assert 'order.bank?.iban' in plans_js
     assert 'transferBody?.bank' not in plans_js
-    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=24"', 'href="./auth.css?v=4"'))
+    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=25"', 'href="./auth.css?v=4"'))
     assert all(value in auth_js for value in ("paymentMethodLabel", "paymentMoney", "paymentDateTime", "payment-order-meta"))
     assert all(value in admin_html for value in ('value="iyzico_card"', 'value="iyzico_bank_transfer"', 'value="manual_bank_transfer"', 'value="iyzico_legacy"'))
     assert "provider:selectedProvider" in admin_js
@@ -840,7 +852,9 @@ def test_profile_admin_automatic_payment_and_full_comparison_interfaces_are_pres
     assert "/billing/manual-transfer" not in auth
     assert "/billing/manual-transfer" not in workspace_script
     assert "/billing/manual-transfer" not in rollout_script
-    assert 'return ORDER.filter(code => code !== "test");' in plan_script
+    # The comparison table follows the cards: listed plans only, test never.
+    assert 'return ORDER.filter(code => !UNCARDED_PLANS.includes(code) && map.has(code) && map.get(code).listed !== false);' in plan_script
+    assert "const plans = cardOrder().map(" in plan_script
     assert "adminTokenForm" in admin and "adminOrders" in admin
     assert "ADMIN_ADMIN" in admin
     assert "adminReadiness" in admin
@@ -926,7 +940,7 @@ def test_admin_growth_reads_and_escapes_advertising_management_status():
     catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
 
     assert 'id="adminGrowthStatus" class="admin-growth-grid" aria-live="polite"' in admin
-    assert 'src="/admin.js?v=31"' in admin and 'src="/i18n.js?v=59"' in admin
+    assert 'src="/admin.js?v=32"' in admin and 'src="/i18n.js?v=60"' in admin
     assert '"/billing/admin/advertising-readiness"' in admin_script
     assert "renderAdminAdSenseSummary" in admin_script
     assert 'id="adminAdSenseSummary"' in admin
@@ -1073,7 +1087,7 @@ def test_checkout_names_contact_inbox_and_mobile_plan_navigation_are_wired():
     assert "/billing/admin/contact-messages" in admin_js
     assert "adminContactDialog" in admin_html and "admin-contact-reply" in admin_js
     assert "/billing/admin/contact-messages/${encodeURIComponent(messageId)}/reply" in admin_js
-    assert 'href="/rollout.css?v=10"' in admin_html and 'src="/admin.js?v=31"' in admin_html
+    assert 'href="/rollout.css?v=10"' in admin_html and 'src="/admin.js?v=32"' in admin_html
     assert (admin_js + (FRONTEND / "admin-work.js").read_text()).count('class="admin-table admin-record-table"') >= 10
     assert all(label in admin_js for label in ('data-label="Bakiye"', 'data-label="Açıklama"'))
     assert 'data-label="Ders"' in (FRONTEND / "admin-work.js").read_text()
@@ -1587,7 +1601,7 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert '"rollout.createFreeAccount"' in catalog
     assert 'error.code === "LS-GUEST-06"' in rollout
     assert '"rollout.guestLimit"' in rollout and '"rollout.guestLimit"' in catalog
-    assert 'src="./app.js?v=46"' in index
+    assert 'src="./app.js?v=47"' in index
     assert 'src="/rollout.js?v=18"' in index
     assert '$("plans").scrollIntoView' not in app
 

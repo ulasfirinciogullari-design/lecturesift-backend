@@ -41,6 +41,7 @@ from .billing_service import (
     reject_manual_order,
     register_user,
     require_download_entitlement,
+    require_precise_transcript_plan,
     reset_password,
     sign_in_with_google,
     start_admin_login,
@@ -77,6 +78,7 @@ from .errors import LectureSiftError, normalize_error
 from .daily_social import render_daily_image, render_daily_reel, render_daily_reel_cover
 from .instagram import InstagramAPIError, InstagramClient, InstagramConfigurationError
 from .jobs import JOBS
+from .job_feedback import COMMENT_MAX_LENGTH, save_job_feedback
 from .mailer import EmailDeliveryError, email_delivery_configured, send_transactional_email
 from .pipeline import process_job
 from .provider_state import AI_PROVIDER_CIRCUIT
@@ -430,6 +432,15 @@ class ReferralReconcileRequest(BaseModel):
 
 class LessonQuestionRequest(BaseModel):
     question: str
+
+
+class JobFeedbackRequest(BaseModel):
+    rating: Literal["up", "down"]
+    # The service trims to one plain line and caps at COMMENT_MAX_LENGTH; this
+    # bound only keeps oversized bodies out.
+    comment: str = Field("", max_length=COMMENT_MAX_LENGTH * 8)
+    consent: StrictBool = False
+    locale: str = Field("tr", max_length=16)
 
 
 def _send_verification_email(email: str, token: str, code: str) -> None:
@@ -1694,6 +1705,35 @@ def ask_lesson_question(
     return {"ok": True, **answer}
 
 
+@app.post("/jobs/{job_id}/feedback")
+def submit_job_feedback(
+    job_id: str,
+    payload: JobFeedbackRequest,
+    request: Request,
+    user: dict = Depends(_billing_user),
+) -> dict:
+    """One thumb (plus an optional comment) per finished job; a repeat replaces it."""
+    data = _owned_job(job_id, user)
+    if not _job_is_publicly_complete(data):
+        raise HTTPException(409, detail={"code": "LS-JOB-02", "message": "Ders analizi henüz tamamlanmadı."})
+    _rate_limit(request, "job-feedback", user["id"], limit=20, window_seconds=60 * 60)
+    try:
+        feedback = save_job_feedback(
+            job_id,
+            user,
+            rating=payload.rating,
+            comment=payload.comment,
+            consent=payload.consent,
+            locale=payload.locale,
+        )
+    except BillingConfigurationError as exc:
+        raise HTTPException(503, detail={"code": "LS-FEEDBACK-02", "message": str(exc)}) from exc
+    except BillingError as exc:
+        # Validation messages describe the rule and never echo the comment.
+        raise HTTPException(400, detail={"code": "LS-FEEDBACK-01", "message": str(exc)}) from exc
+    return {"ok": True, "feedback": feedback}
+
+
 @app.get("/assistant/catalog")
 def assistant_catalog(currency: str = "USD") -> dict:
     from .assistant_catalog import offers
@@ -2013,6 +2053,16 @@ async def create_job(
         _validate_document_job_type(options, document_mode=document_mode)
     except LectureSiftError as exc:
         _raise_public(exc)
+    # Documents never transcribe, so the Pro-and-up check runs after the
+    # document branch has cleared the timestamp and speaker flags.
+    try:
+        require_precise_transcript_plan(
+            str((entitlement.get("job_plan") or {}).get("code") or ""),
+            transcript_timestamps=bool(options["transcript_timestamps"]),
+            speaker_detection=bool(options["speaker_detection"]),
+        )
+    except BillingError as exc:
+        raise HTTPException(402, detail={"code": "LS-BILL-10", "message": str(exc)}) from exc
 
     if document_sample:
         from .document_samples import sample_request

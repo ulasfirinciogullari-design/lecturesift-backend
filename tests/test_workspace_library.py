@@ -200,14 +200,14 @@ def test_credit_grant_replay_spending_and_expiry_preserve_minutes(state, monkeyp
     assert workspace.grant_credits(uid, 500, 30, request_id, 'Service gesture', 'admin')['replayed']
     with pytest.raises(billing.BillingError):
         workspace.grant_credits(uid, 501, 30, request_id, 'Service gesture', 'admin')
-    assert workspace.admin_entitlements(uid)['assistant_credits'] == 550
+    assert workspace.admin_entitlements(uid)['assistant_credits'] == 600
     key, _ = wallet.reserve(uid, 'image-request', 'synthetic-payload', 200)
     wallet.settle(uid, key, fixed_charge=200, response={'kind': 'image'})
-    assert workspace.admin_entitlements(uid)['assistant_credits'] == 350
+    assert workspace.admin_entitlements(uid)['assistant_credits'] == 400
     assert billing.account_status(uid)['remaining_minutes'] == before
     now = billing.utcnow()
     monkeypatch.setattr(billing, 'utcnow', lambda: now + timedelta(days=31))
-    assert workspace.admin_entitlements(uid)['assistant_credits'] == 50
+    assert workspace.admin_entitlements(uid)['assistant_credits'] == 100
 
 
 def test_manual_ad_free_does_not_replace_subscription_or_revoke_paid_ad_free(state):
@@ -242,7 +242,7 @@ def test_archive_preserves_successes_rights_and_provider_reconciliation(state):
     assert billing.account_status(uid)['remaining_minutes'] == before
     billing.complete_payment_order(pending['reference'], succeeded=True, provider_amount_minor=pending['amount_minor'])
     assert rollout.list_admin_orders_page()['pagination']['total'] == 2
-    assert billing.account_status(uid)['credit_minutes'] == 180
+    assert billing.account_status(uid)['credit_minutes'] == 300
 
 
 def test_privileged_routes_require_admin_and_reject_non_integer_credits(state):

@@ -2,9 +2,9 @@
 """Choose the exact frozen schema-contract family of a live database.
 
 The cutover, seed, finalize, first-start, rehearsal and rollback tools must
-decide between the historical v3 core inventory and the v4 product or v5
-workspace contracts from the database itself, never from an environment
-label. The public table set must equal exactly one family's EXPECTED_TABLES;
+decide between the historical v3 core inventory and the v4 product, v5
+workspace or v6 feedback contracts from the database itself, never from an
+environment label. The public table set must equal exactly one family's EXPECTED_TABLES;
 a partial, extra or unknown set is rejected. Detection only selects the
 family: every caller still strict-verifies the complete manifest with the
 selected verifier before it relies on that database.
@@ -39,6 +39,7 @@ def _sibling_verifier(version: int) -> ModuleType:
 contract_v3 = _sibling_verifier(3)
 contract_v4 = _sibling_verifier(4)
 contract_v5 = _sibling_verifier(5)
+contract_v6 = _sibling_verifier(6)
 INVENTORY_VERSION: Final = "v1"
 _TABLE_NAME = re.compile(r"[a-z][a-z0-9_]{0,62}")
 _UNSIGNED_INTEGER = re.compile(r"0|[1-9][0-9]*")
@@ -61,10 +62,12 @@ TABLE_SETS: Final = {
     3: contract_v3.EXPECTED_TABLES,
     4: contract_v4.EXPECTED_TABLES,
     5: contract_v5.EXPECTED_TABLES,
+    6: contract_v6.EXPECTED_TABLES,
 }
-# recovery_manifest_v3.sql/v4.sql are the strict recovery forms of the v4/v5
-# rehearsal manifests and therefore carry those verifier versions. The v3 core
-# family is routed only for the core-only OVH target and the rehearsal host.
+# recovery_manifest_v3.sql/v4.sql/v5.sql are the strict recovery forms of the
+# v4/v5/v6 rehearsal manifests and therefore carry those verifier versions. The
+# v3 core family is routed only for the core-only OVH target and the rehearsal
+# host.
 ROUTES: Final = {
     3: Route(
         manifest="rehearsal_manifest_v3.sql",
@@ -93,9 +96,21 @@ ROUTES: Final = {
         application_schema_compatibility="lecturesift-schema-v4",
         product_schema_version=2,
     ),
+    6: Route(
+        manifest="rehearsal_manifest_v6.sql",
+        verifier="verify_schema_transition_v6.py",
+        manifest_complete="v6",
+        recovery_manifest="recovery_manifest_v5.sql",
+        recovery_manifest_version=5,
+        application_schema_compatibility="lecturesift-schema-v5",
+        product_schema_version=3,
+    ),
 }
 # A provider cutover source must already run a product contract. The v3 core
-# family predates the deployed Render schema and is never a valid source.
+# family predates the deployed Render schema and is never a valid source. The
+# v6 feedback family is released only on the OVH database after the cutover
+# (deploy/feedback_schema_release.py), so the frozen Render source never
+# carries it and the cutover-pinned tools keep refusing it.
 PROVIDER_SOURCE_VERSIONS: Final = frozenset({4, 5})
 ALL_VERSIONS: Final = frozenset(ROUTES)
 

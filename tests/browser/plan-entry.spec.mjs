@@ -12,7 +12,7 @@ async function openPlans(page, registered = false) {
     ? route.fallback() : route.fulfill({headers, json:{
     selected_currency:'TRY', plans:[
       {code:'free', display_price:{currency:'TRY', amount_minor:0}},
-      {code:'lite', display_price:{currency:'TRY', amount_minor:29900}},
+      {code:'lite', display_price:{currency:'TRY', amount_minor:14900}},
       {code:'business'},
     ],
   }}));
@@ -39,17 +39,17 @@ test('current free plan returns a signed-in user to their workspace', async ({pa
   await expect(page).toHaveURL(/\/en\/workspace(?:\.html)?$/);
 });
 
-test('business contact action opens the localized contact page without a checkout', async ({page, isolatedNetwork}) => {
+test('the school and team link opens the localized contact page without a checkout', async ({page, isolatedNetwork}) => {
   await openPlans(page);
-  await page.locator('#morePlans > summary').click();
-  await page.locator('.plan-action[data-plan="business"]').click();
+  await expect(page.locator('[data-plan-card="business"]')).toHaveCount(0);
+  await expect(page.locator('#plansTeamLink a')).toHaveText('A school or a team? Write to us');
+  await page.locator('#plansTeamLink a').click();
   await expect(page).toHaveURL(/\/en\/contact(?:\.html)?$/);
   expect(isolatedNetwork.apiCalls.filter(call => call.includes('/billing/checkout'))).toEqual([]);
 });
 
 test('paid plan retains selected billing interval and language at login', async ({page}) => {
   await openPlans(page);
-  await page.locator('#morePlans > summary').click();
   await page.locator('.plan-action[data-plan="lite"][data-interval="annual"]').click();
   await expect(page).toHaveURL(/\/en\/login(?:\.html)?\?next=/);
   const next = new URL(new URL(page.url()).searchParams.get('next'), page.url());
@@ -58,25 +58,31 @@ test('paid plan retains selected billing interval and language at login', async 
   expect(next.searchParams.get('interval')).toBe('annual');
 });
 
-test('free, the credit pack and the popular package lead while the rest wait under Other packages', async ({page}) => {
+test('free, Student and Pro lead the grid while the minute pack sits in its own column', async ({page}) => {
   await openPlans(page);
   const lead = page.locator('#plansGrid > .plan-card');
   await expect(lead).toHaveCount(3);
-  expect(await lead.evaluateAll(cards => cards.map(card => card.dataset.planCard))).toEqual(['free', 'credit', 'plus']);
-  await expect(page.locator('#plansGrid [data-plan-card="plus"]')).toHaveClass(/featured/);
-  await expect(page.locator('#morePlans > summary')).toContainText('Other packages');
-  await expect(page.locator('#morePlansNames')).toHaveText('Lite · Pro · Max · Business');
-  const others = ['lite', 'pro', 'max', 'business'];
-  expect(await page.locator('#morePlansGrid > .plan-card').evaluateAll(cards => cards.map(card => card.dataset.planCard))).toEqual(others);
-  for (const code of others) await expect(page.locator(`[data-plan-card="${code}"]`)).toBeHidden();
-  const plus = page.locator('[data-plan-card="plus"]');
-  await expect(plus.locator('.plan-price')).toContainText('30-day package');
-  await expect(plus.locator('.plan-price')).not.toContainText('month');
-  await expect(plus).toContainText('900 min / 30 days');
-  await expect(page.locator('.plan-action[data-plan="plus"][data-interval="monthly"]')).toHaveText('Choose 30-day package');
-  await page.locator('#morePlans > summary').click();
-  for (const code of others) await expect(page.locator(`[data-plan-card="${code}"]`)).toBeVisible();
-  await expect(page.locator('[data-plan-card="lite"] .plan-price')).toContainText('30-day package');
+  expect(await lead.evaluateAll(cards => cards.map(card => card.dataset.planCard))).toEqual(['free', 'lite', 'pro']);
+  const student = page.locator('#plansGrid [data-plan-card="lite"]');
+  await expect(student).toHaveClass(/featured/);
+  await expect(student.locator('.plan-badge')).toHaveText('Most popular');
+  await expect(student.locator('h3')).toHaveText('Student');
+  await expect(student.locator('.plan-price')).toContainText('30-day package');
+  await expect(student.locator('.plan-price')).not.toContainText('month');
+  await expect(student).toContainText('600 min / 30 days');
+  await expect(student).toContainText('Ad-free use');
+  await expect(page.locator('.plan-action[data-plan="lite"][data-interval="monthly"]')).toHaveText('Choose 30-day package');
+  await expect(page.locator('.plan-action[data-plan="lite"][data-interval="annual"]')).toHaveText(/^Annual · ₺\s*1,490 · 2 months free$/);
+  const side = page.locator('#sidePlansGrid > .plan-card');
+  await expect(side).toHaveCount(1);
+  await expect(side).toHaveAttribute('data-plan-card', 'credit');
+  await expect(side.locator('.plan-eyebrow')).toHaveText('For those who don’t want a subscription');
+  await expect(side).toContainText('300 minutes');
+  // Plus and Max are hidden, not removed: no card, no comparison column.
+  for (const code of ['plus', 'max', 'business']) await expect(page.locator(`[data-plan-card="${code}"]`)).toHaveCount(0);
+  await expect(page.locator('#compareHead th')).toHaveText(['Entitlement', 'Free', 'Minute Pack', 'Student', 'Pro']);
+  await expect(page.locator('#plansTeamLink')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
 test('package cards keep list prices when the catalog and payment capabilities fail', async ({page}) => {
@@ -91,34 +97,38 @@ test('package cards keep list prices when the catalog and payment capabilities f
   await page.goto('/en/plans.html');
   await expect(page.locator('#plansGrid')).toHaveAttribute('aria-busy', 'false');
   await expect(page.locator('#errorMessage')).toHaveText('Synthetic catalog unavailable');
-  const credit = page.locator('#plansGrid [data-plan-card="credit"]');
+  const credit = page.locator('#sidePlansGrid [data-plan-card="credit"]');
   await expect(credit).toBeVisible();
   await expect(credit.locator('.plan-price')).toContainText(/₺\s*199\.00/);
-  await expect(credit).toContainText('180 minutes');
-  await expect(page.locator('[data-plan-card="plus"] .plan-price')).toContainText(/₺\s*599\.00/);
-  await expect(page.locator('[data-plan-card="plus"] .plan-price')).toContainText('30-day package');
-  await expect(page.locator('#morePlansGrid > .plan-card')).toHaveCount(4);
+  await expect(credit).toContainText('300 minutes');
+  await expect(page.locator('[data-plan-card="lite"] .plan-price')).toContainText(/₺\s*149\.00/);
+  await expect(page.locator('[data-plan-card="lite"] .plan-price')).toContainText('30-day package');
+  await expect(page.locator('[data-plan-card="pro"] .plan-price')).toContainText(/₺\s*449\.00/);
+  await expect(page.locator('#plansGrid > .plan-card')).toHaveCount(3);
   await expect(page.locator('.plan-action[data-plan="credit"]')).toBeEnabled();
 });
 
-test('a deep link to a package under Other packages opens it and its checkout', async ({page}) => {
-  await page.addInitScript(() => {
-    localStorage.setItem('lecturesift-consent-v1', JSON.stringify({version:1, analytics:false, advertising:false, updated_at:new Date().toISOString()}));
-    localStorage.setItem('lecturesift-currency', 'TRY');
-    localStorage.setItem('lecturesift-billing-token', 'synthetic-plan-owner');
+for (const [code, label] of [['lite', 'a listed package'], ['plus', 'a hidden Plus renewal link']]) {
+  test(`a deep link to ${label} opens its checkout`, async ({page}) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('lecturesift-consent-v1', JSON.stringify({version:1, analytics:false, advertising:false, updated_at:new Date().toISOString()}));
+      localStorage.setItem('lecturesift-currency', 'TRY');
+      localStorage.setItem('lecturesift-billing-token', 'synthetic-plan-owner');
+    });
+    await page.route(`${API}/billing/providers`, route => route.request().method() === 'OPTIONS'
+      ? route.fallback() : route.fulfill({headers, json:{commerce_identity:{configured:true}, providers:[{
+        code:'iyzico', configured:true, currencies:['TRY'], capabilities:['cards'],
+      }]}}));
+    await page.goto(`/en/plans.html?plan=${code}&interval=monthly`);
+    await expect(page.locator('#checkoutPanel')).toBeVisible();
+    await expect(page.locator('#checkoutPlanCode')).toHaveValue(code);
+    await expect(page.locator('#checkoutSummaryInterval')).toHaveText('30-day package');
+    await expect(page.locator('#checkoutSummaryTotal')).toContainText(code === 'plus' ? /₺\s*599\.00/ : /₺\s*149\.00/);
+    // The hidden plan stays orderable, but it never gets a card.
+    await expect(page.locator('[data-plan-card="plus"]')).toHaveCount(0);
+    await expect(page.locator('[data-plan-card="lite"]')).toBeVisible();
   });
-  await page.route(`${API}/billing/providers`, route => route.request().method() === 'OPTIONS'
-    ? route.fallback() : route.fulfill({headers, json:{commerce_identity:{configured:true}, providers:[{
-      code:'iyzico', configured:true, currencies:['TRY'], capabilities:['cards'],
-    }]}}));
-  await page.goto('/en/plans.html?plan=lite&interval=monthly');
-  await expect(page.locator('#checkoutPanel')).toBeVisible();
-  await expect(page.locator('#checkoutPlanCode')).toHaveValue('lite');
-  await expect(page.locator('#checkoutSummaryInterval')).toHaveText('30-day package');
-  await expect(page.locator('#morePlans')).toHaveAttribute('open', '');
-  await expect(page.locator('[data-plan-card="lite"]')).toBeVisible();
-  await expect(page.locator('[data-plan-card="pro"]')).toBeVisible();
-});
+}
 
 test.describe('without JavaScript', () => {
   test.use({javaScriptEnabled:false});
@@ -126,31 +136,36 @@ test.describe('without JavaScript', () => {
   test('static cards show the list prices, minutes and 30-day package names', async ({page}) => {
     await page.goto('/plans.html');
     await expect(page.locator('#plansGrid > .plan-card')).toHaveCount(3);
-    const credit = page.locator('#plansGrid [data-plan-card="credit"]');
+    await expect(page.locator('#sidePlansGrid > .plan-card')).toHaveCount(1);
+    const credit = page.locator('#sidePlansGrid [data-plan-card="credit"]');
     await expect(credit).toBeVisible();
     await expect(credit.locator('[data-plan-value="price"]')).toHaveText('₺199');
-    await expect(credit.locator('[data-plan-value="minutes"]')).toHaveText('180');
-    const plus = page.locator('#plansGrid [data-plan-card="plus"]');
-    await expect(plus.locator('[data-plan-value="price"]')).toHaveText('₺599');
-    await expect(plus.locator('.plan-price')).toContainText('30 günlük paket');
-    await expect(page.locator('[data-plan-card="lite"]')).toBeHidden();
-    await page.locator('#morePlans > summary').click();
-    await expect(page.locator('[data-plan-card="lite"] [data-plan-value="price"]')).toHaveText('₺299');
-    await expect(page.locator('[data-plan-card="max"] [data-plan-value="minutes"]')).toHaveText('4.000');
+    await expect(credit.locator('[data-plan-value="minutes"]')).toHaveText('300');
+    const student = page.locator('#plansGrid [data-plan-card="lite"]');
+    await expect(student).toHaveClass(/featured/);
+    await expect(student.locator('h3')).toHaveText('Öğrenci');
+    await expect(student.locator('[data-plan-value="price"]')).toHaveText('₺149');
+    await expect(student.locator('.plan-price')).toContainText('30 günlük paket');
+    await expect(student.locator('[data-plan-value="annual_price"]')).toHaveText('₺1.490');
+    await expect(page.locator('[data-plan-card="pro"] [data-plan-value="minutes"]')).toHaveText('1.500');
+    for (const code of ['plus', 'max', 'business']) await expect(page.locator(`[data-plan-card="${code}"]`)).toHaveCount(0);
+    await expect(page.locator('#plansTeamLink a')).toHaveAttribute('href', /contact/);
     await page.goto('/en/plans.html');
-    await expect(page.locator('#plansGrid [data-plan-card="plus"] .plan-price')).toContainText('30-day package');
-    await expect(page.locator('#plansGrid [data-plan-card="plus"]')).toContainText('min / 30 days');
-    await expect(page.locator('#morePlans > summary')).toContainText('Other packages');
+    await expect(page.locator('#plansGrid [data-plan-card="lite"] h3')).toHaveText('Student');
+    await expect(page.locator('#plansGrid [data-plan-card="lite"] .plan-price')).toContainText('30-day package');
+    await expect(page.locator('#plansGrid [data-plan-card="lite"]')).toContainText('min / 30 days');
+    await expect(page.locator('#plansGrid [data-plan-card="lite"] .plan-badge')).toHaveText('Most popular');
     // The build rewrites Turkish number formatting for each language.
-    await expect(page.locator('[data-plan-card="plus"] [data-plan-value="annual_price"]')).toHaveText('₺5,990');
-    await expect(page.locator('[data-plan-card="pro"] [data-plan-value="price"]')).toHaveText('₺1,199');
-    await expect(page.locator('[data-plan-card="pro"] [data-plan-value="minutes"]')).toHaveText('2,000');
-    await expect(page.locator('[data-plan-card="max"] [data-plan-value="max_media_upload_mb"]')).toHaveText('1,024');
-    const signIn = await page.locator('#plansGrid .plan-action[data-plan="credit"]').getAttribute('href');
+    await expect(page.locator('[data-plan-card="lite"] [data-plan-value="annual_price"]')).toHaveText('₺1,490');
+    await expect(page.locator('.plan-action[data-plan="lite"][data-interval="annual"]')).toHaveText('Annual · ₺1,490 · 2 months free');
+    await expect(page.locator('[data-plan-card="pro"] [data-plan-value="price"]')).toHaveText('₺449');
+    await expect(page.locator('[data-plan-card="pro"] [data-plan-value="minutes"]')).toHaveText('1,500');
+    await expect(page.locator('[data-plan-card="pro"] [data-plan-value="max_media_upload_mb"]')).toHaveText('1,024');
+    const signIn = await page.locator('#sidePlansGrid .plan-action[data-plan="credit"]').getAttribute('href');
     const loginUrl = new URL(signIn, page.url());
     expect(loginUrl.pathname).toBe('/en/login.html');
     expect(loginUrl.searchParams.get('next')).toBe('/en/plans?plan=credit&interval=one_time');
     await page.goto('/de/plans.html');
-    await expect(page.locator('[data-plan-card="pro"] [data-plan-value="price"]')).toHaveText(/^1\.199\s₺$/);
+    await expect(page.locator('[data-plan-card="pro"] [data-plan-value="price"]')).toHaveText(/^449\s₺$/);
   });
 });

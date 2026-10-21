@@ -101,19 +101,19 @@ const TR = {
 const PLAN_COPY = {
   tr: {
     free: ["Ücretsiz", "LectureSift'i denemek ve kısa dersleri işlemek için.", "120 dk / ay"],
-    credit: ["Dakika Paketi", "Abonelik olmadan ek işlem hakkı.", "180 dakika"],
-    lite: ["Lite", "Düzenli bireysel ders çalışması için.", "400 dk / 30 gün"],
+    credit: ["Dakika Paketi", "Abonelik olmadan ek işlem hakkı.", "300 dakika"],
+    lite: ["Öğrenci", "Dönem boyunca her ders için.", "600 dk / 30 gün"],
     plus: ["Plus", "Yoğun ders dönemi ve çoklu kaynaklar için.", "900 dk / 30 gün"],
-    pro: ["Pro", "Uzun kayıtlar ve öncelikli işleme için.", "2.000 dk / 30 gün"],
+    pro: ["Pro", "Uzun kayıtlar ve öncelikli işleme için.", "1.500 dk / 30 gün"],
     max: ["Max", "En yüksek bireysel kullanım kapasitesi.", "4.000 dk / 30 gün"],
     business: ["Business", "Ekipler, kurumlar ve özel kapasite için.", "10 kullanıcı"]
   },
   en: {
     free: ["Free", "Try LectureSift and process short lectures.", "120 min / month"],
-    credit: ["Minute Pack", "Extra processing without a subscription.", "180 minutes"],
-    lite: ["Lite", "For regular individual study.", "400 min / 30 days"],
+    credit: ["Minute Pack", "Extra processing without a subscription.", "300 minutes"],
+    lite: ["Student", "For every lecture, all term.", "600 min / 30 days"],
     plus: ["Plus", "For intensive study and multiple sources.", "900 min / 30 days"],
-    pro: ["Pro", "For long recordings and priority processing.", "2,000 min / 30 days"],
+    pro: ["Pro", "For long recordings and priority processing.", "1,500 min / 30 days"],
     max: ["Max", "The highest individual processing capacity.", "4,000 min / 30 days"],
     business: ["Business", "For teams, institutions, and custom capacity.", "10 seats"]
   }
@@ -254,47 +254,45 @@ uiLanguage.addEventListener("change", () => {
   if (!latestResult) outputLanguage.value = currentLanguage;
   syncTranslationChoice();
 });
-const PLAN_ORDER = ["free", "credit", "lite", "plus", "pro", "max", "business"];
+// Listed plans only: Plus and Max stay purchasable through the plans page for
+// existing links, but the workspace no longer offers them.
+const PLAN_ORDER = ["free", "credit", "lite", "pro", "business"];
 const PLAN_FALLBACK = {
   free: ["free", 120, 10, 20, ["pdf"], ["detailed"], "standard", false],
-  credit: ["one_time", 180, 20, 40, ["pdf", "docx", "txt"], ["detailed"], "standard", false],
-  lite: ["subscription", 400, 10, 20, ["pdf", "docx", "txt"], ["detailed"], "standard", false],
-  plus: ["subscription", 900, 20, 40, ["pdf", "docx", "txt"], ["detailed"], "standard", true],
-  pro: ["subscription", 2000, 30, 60, ["pdf", "docx", "txt"], ["detailed"], "priority", false],
-  max: ["subscription", 4000, 30, 60, ["pdf", "docx", "txt"], ["detailed"], "priority", false],
+  credit: ["one_time", 300, 20, 40, ["pdf", "docx", "txt"], ["detailed"], "standard", false],
+  lite: ["subscription", 600, 20, 40, ["pdf", "docx", "txt"], ["detailed"], "standard", true],
+  pro: ["subscription", 1500, 30, 60, ["pdf", "docx", "txt"], ["detailed"], "priority", false],
   business: ["quote", null, null, null, ["pdf", "docx", "txt"], ["detailed"], "priority", false],
 };
 const FALLBACK_PRICES = {
-  TRY: [0, 19900, 29900, 59900, 119900, 229900, null],
-  USD: [0, 499, 899, 1699, 3299, 5999, null],
-  EUR: [0, 499, 849, 1599, 3099, 5699, null],
-  GBP: [0, 399, 642, 1133, 2519, 4829, null],
-  CAD: [0, 699, 1017, 1800, 4079, 7819, null],
-  AUD: [0, 799, 1178, 2066, 4560, 8739, null],
-  NZD: [0, 899, 1285, 2267, 5040, 9659, null],
-  JPY: [0, 750, 1125, 2001, 4501, 8626, null],
-  KRW: [0, 6900, 10181, 18544, 41887, 80390, null],
-  CNY: [0, 3500, 5251, 9205, 21004, 40138, null],
-  INR: [0, 39900, 58835, 106593, 239920, 459915, null],
-  BRL: [0, 2499, 3750, 6669, 15001, 28751, null],
-  MXN: [0, 9900, 14896, 26548, 59890, 114892, null],
-  CHF: [0, 449, 642, 1133, 2639, 5059, null],
-  SEK: [0, 5299, 7822, 14006, 31204, 59803, null],
-  NOK: [0, 5499, 8251, 14673, 33004, 63253, null],
-  DKK: [0, 3499, 4822, 8937, 20402, 39101, null],
-  PLN: [0, 1999, 2892, 5335, 12001, 23000, null],
-  AED: [0, 1899, 2785, 4935, 11041, 21160, null],
-  SAR: [0, 1899, 2785, 5068, 11281, 21620, null],
-  SGD: [0, 699, 1017, 1800, 4079, 7819, null],
-  HKD: [0, 3899, 5893, 10404, 23403, 44852, null],
+  TRY: [0, 19900, 14900, 44900, null],
+  USD: [0, 499, 699, 1499, null],
+  EUR: [0, 499, 699, 1399, null],
+  GBP: [0, 399, 499, 1145, null],
+  CAD: [0, 699, 791, 1853, null],
+  AUD: [0, 799, 916, 2072, null],
+  NZD: [0, 899, 999, 2290, null],
+  JPY: [0, 750, 875, 2045, null],
+  KRW: [0, 6900, 7916, 19033, null],
+  CNY: [0, 3500, 4083, 9544, null],
+  INR: [0, 39900, 45746, 109015, null],
+  BRL: [0, 2499, 2916, 6816, null],
+  MXN: [0, 9900, 11582, 27213, null],
+  CHF: [0, 449, 499, 1199, null],
+  SEK: [0, 5299, 6082, 14178, null],
+  NOK: [0, 5499, 6415, 14996, null],
+  DKK: [0, 3499, 3749, 9270, null],
+  PLN: [0, 1999, 2249, 5453, null],
+  AED: [0, 1899, 2165, 5017, null],
+  SAR: [0, 1899, 2165, 5126, null],
+  SGD: [0, 699, 791, 1853, null],
+  HKD: [0, 3899, 4582, 10634, null],
 };
 const PLAN_SOURCE_LIMITS = {
   free: {max_files_per_job:3, max_media_upload_mb:250, max_document_upload_mb:50, max_minutes_per_job:60, max_document_pages:100, max_ocr_pages:30},
   credit: {max_files_per_job:8, max_media_upload_mb:500, max_document_upload_mb:50, max_minutes_per_job:180, max_document_pages:150, max_ocr_pages:50},
   lite: {max_files_per_job:12, max_media_upload_mb:750, max_document_upload_mb:75, max_minutes_per_job:120, max_document_pages:250, max_ocr_pages:75},
-  plus: {max_files_per_job:16, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:240, max_document_pages:350, max_ocr_pages:100},
   pro: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:360, max_document_pages:500, max_ocr_pages:150},
-  max: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:600, max_document_pages:500, max_ocr_pages:150},
   business: {max_files_per_job:24, max_media_upload_mb:1024, max_document_upload_mb:100, max_minutes_per_job:1440, max_document_pages:500, max_ocr_pages:150},
 };
 
@@ -323,7 +321,8 @@ function planCopy(code) {
   return [
     central?.t(`plan.${code}`, fallback[0]) || fallback[0],
     central?.t(`plan.${code}.description`, fallback[1]) || fallback[1],
-    `${Number(amount).toLocaleString(central?.locale || navigator.language)} ${units}`,
+    // Unlisted plans (Plus, Max) keep only their name and description here.
+    amount == null ? fallback[2] : `${Number(amount).toLocaleString(central?.locale || navigator.language)} ${units}`,
   ];
 }
 
@@ -380,10 +379,57 @@ function renderBillingAccount() {
   updateSourceLimitHelp();
   // Entitlements can arrive after the settings are already in use.
   syncContentChoices();
+  renderRenewalNudge(loggedIn);
   if (!loggedIn) return;
   if ($("accountEmail")) $("accountEmail").textContent = billingAccount.user.email;
   if ($("accountPlan")) $("accountPlan").textContent = `${t("currentPlan")}: ${planCopy(billingAccount.plan.code)[0]}`;
   if ($("accountRemaining")) $("accountRemaining").textContent = billingAccount.remaining_minutes == null ? "∞" : billingAccount.remaining_minutes.toLocaleString(currentLanguage);
+}
+
+// Paid packages are fixed periods that never renew by themselves. In the last
+// seven days the workspace shows one line with the way back to the same
+// package; the server emails the same reminder three days before and on the
+// last day. The copy is kept here in every interface language so this stays
+// one self-contained change.
+const RENEWAL_NUDGE = {
+  tr: ["Paketin {days} gün sonra bitiyor", "Paketin bugün bitiyor", "Yenile"],
+  en: ["Your package ends in {days} days", "Your package ends today", "Renew"],
+  de: ["Dein Paket endet in {days} Tagen", "Dein Paket endet heute", "Erneuern"],
+  fr: ["Votre forfait se termine dans {days} jours", "Votre forfait se termine aujourd’hui", "Renouveler"],
+  es: ["Tu paquete termina en {days} días", "Tu paquete termina hoy", "Renovar"],
+  it: ["Il tuo pacchetto termina tra {days} giorni", "Il tuo pacchetto termina oggi", "Rinnova"],
+  pt: ["Seu pacote termina em {days} dias", "Seu pacote termina hoje", "Renovar"],
+  ru: ["Ваш пакет заканчивается через {days} дн.", "Ваш пакет заканчивается сегодня", "Продлить"],
+  ar: ["تنتهي باقتك بعد {days} أيام", "تنتهي باقتك اليوم", "تجديد"],
+  zh: ["你的套餐将在 {days} 天后结束", "你的套餐今天结束", "续订"],
+  ja: ["パッケージは{days}日後に終了します", "パッケージは本日終了します", "更新"],
+  ko: ["패키지가 {days}일 후 종료됩니다", "패키지가 오늘 종료됩니다", "갱신"],
+  hi: ["आपका पैकेज {days} दिन में समाप्त हो रहा है", "आपका पैकेज आज समाप्त हो रहा है", "नवीनीकृत करें"],
+};
+function renewalDaysLeft(subscription) {
+  if (!subscription || !["monthly", "annual"].includes(subscription.interval)) return null;
+  const end = new Date(subscription.ends_at || "");
+  if (Number.isNaN(end.getTime()) || end <= new Date()) return null;
+  const endDay = new Date(end); endDay.setHours(0, 0, 0, 0);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return Math.round((endDay - today) / 86400000);
+}
+function renderRenewalNudge(loggedIn) {
+  let node = $("renewalNudge");
+  const days = loggedIn ? renewalDaysLeft(billingAccount.subscription) : null;
+  if (days === null || days > 7) { if (node) node.hidden = true; return; }
+  if (!node) {
+    const host = $("app");
+    if (!host) return;
+    node = document.createElement("a");
+    node.id = "renewalNudge"; node.className = "renewal-nudge";
+    host.prepend(node);
+  }
+  const copy = RENEWAL_NUDGE[currentLanguage] || RENEWAL_NUDGE.tr;
+  const query = new URLSearchParams({plan: billingAccount.plan?.code || "", interval: billingAccount.subscription.interval});
+  node.href = `${window.LectureSiftI18n?.localizedPath?.(currentLanguage, "/plans.html") || "/plans.html"}?${query}`;
+  node.textContent = `${days === 0 ? copy[1] : copy[0].replace("{days}", String(days))} · ${copy[2]}`;
+  node.hidden = false;
 }
 
 async function billingRequest(path, options = {}) {
@@ -917,12 +963,23 @@ function syncTranslationChoice() {
   $("translateHelp").textContent = transcriptDisabled ? t("transcriptDisabledHelp") : same ? t("sameLanguageHelp") : t("translateHelp");
 }
 
+// Precise timestamps and speaker detection run the diarizing transcription
+// model, which the server allows for Pro and up only (the hidden Plus and Max
+// plans keep it) and bills at four times the media minutes. Other plans see
+// the options disabled with a plan hint, and presets never turn them on.
+const PRECISE_TRANSCRIPT_PLANS = new Set(["plus", "pro", "max", "business"]);
+function preciseTranscriptAllowed() {
+  return PRECISE_TRANSCRIPT_PLANS.has(billingAccount?.plan?.code);
+}
+
 function syncTranscriptEnhancements() {
-  const transcriptEnabled = $("includeTranscript").checked;
+  const preciseAllowed = preciseTranscriptAllowed();
+  const transcriptEnabled = $("includeTranscript").checked && preciseAllowed;
   const timestampsEnabled = transcriptEnabled && $("transcriptTimestamps").checked;
   $("transcriptTimestamps").disabled = !transcriptEnabled;
   $("transcriptTimestampsControl").classList.toggle("is-disabled", !transcriptEnabled);
   $("transcriptEnhancements").classList.toggle("is-disabled", !transcriptEnabled);
+  if ($("transcriptPlanHint")) $("transcriptPlanHint").hidden = preciseAllowed;
   if (!transcriptEnabled) $("transcriptTimestamps").checked = false;
   $("speakerDetection").disabled = !timestampsEnabled;
   $("speakerDetectionControl").classList.toggle("is-disabled", !timestampsEnabled);
@@ -969,7 +1026,8 @@ function applyPackPreset(name) {
   if (!preset) return;
   $("includeSummary").checked = preset.summary; $("includeTranscript").checked = preset.transcript;
   $("includeSlides").checked = preset.slides; $("includeQuiz").checked = preset.quiz; $("includeCards").checked = preset.cards;
-  $("transcriptTimestamps").checked = preset.timestamps; $("speakerDetection").checked = preset.speakers;
+  $("transcriptTimestamps").checked = preset.timestamps && preciseTranscriptAllowed();
+  $("speakerDetection").checked = preset.speakers && preciseTranscriptAllowed();
   chosenPackPreset = name;
   $("quizCount").value = allowedCount("quizCount", preset.quizCount); $("cardCount").value = allowedCount("cardCount", preset.cardCount);
   [$("formatPdf"), $("formatDocx"), $("formatTxt")].forEach(input => { input.checked = preset.formats.includes(input.value); });
@@ -1101,6 +1159,7 @@ function showError(message, code = "LS-SYSTEM-01", {stopProcessing = true} = {})
     : localized || t("errorFallback");
   $("errorMessage").textContent = translated || message || t("errorFallback");
   $("errorCode").textContent = `${window.LectureSiftI18n?.exact("Hata kodu") || "Hata kodu"}: ${code}`; $("errorBox").hidden = false;
+  applyErrorTone(code);
   if (stopProcessing) { setJobBusy(false); clearTimeout(pollHandle); clearInterval(timerHandle); }
   if (code === "LS-GUEST-05") window.LectureSiftGuestTrial?.markUsed?.();
   if (code === "LS-GUEST-04" || code === "LS-GUEST-05") {
@@ -1178,10 +1237,83 @@ function showError(message, code = "LS-SYSTEM-01", {stopProcessing = true} = {})
       link.textContent = window.LectureSiftI18n?.t("rollout.createFreeAccount", "Ücretsiz hesap oluştur") || "Ücretsiz hesap oluştur";
     } else link.textContent = t(guest ? "register" : "plansNav");
     actions.append(link);
+    if (guestLimit) actions.append(...guestLimitLinks(code));
+    $("errorCode").insertAdjacentElement("afterend", actions);
+  }
+  if (code === "LS-GUEST-05") {
+    const actions = document.createElement("div");
+    actions.id = "quotaRecoveryActions";
+    actions.className = "quota-recovery-actions";
+    actions.append(...guestLimitLinks(code));
     $("errorCode").insertAdjacentElement("afterend", actions);
   }
 }
 $("closeError").onclick = () => { $("errorBox").hidden = true; };
+
+// --- Guest limits as an invitation ------------------------------------------
+// A guest who hits a trial limit (LS-GUEST-04/05/06) sees the same box in a
+// calmer tone: a title that says what to do next, and links to a free account
+// and the plans instead of a bare failure.
+const GUEST_LIMIT_CODES = new Set(["LS-GUEST-04", "LS-GUEST-05", "LS-GUEST-06"]);
+function applyErrorTone(code) {
+  const box = $("errorBox"), title = $("errorTitle");
+  const guest = GUEST_LIMIT_CODES.has(code);
+  if (guest) box.dataset.tone = "guest"; else delete box.dataset.tone;
+  if (title) title.textContent = guest ? centralText("workspace.guestLimitTitle", "Ücretsiz hesapla devam et") : t("errorTitle");
+}
+function guestLimitLinks(code) {
+  const localized = path => window.LectureSiftI18n?.localizedPath?.(currentLanguage, path) || path;
+  const links = [];
+  if (code === "LS-GUEST-05") {
+    // LS-GUEST-04 already carries #guestSourceLimitSignup above.
+    const register = document.createElement("a");
+    register.id = "guestTrialUsedSignup";
+    register.href = `${localized("/register.html")}?${new URLSearchParams({next:localized("/workspace.html")})}`;
+    register.textContent = centralText("rollout.createFreeAccount", "Ücretsiz hesap oluştur");
+    links.push(register);
+  }
+  const plans = document.createElement("a");
+  plans.id = "guestLimitPlans";
+  plans.href = localized("/plans.html");
+  plans.textContent = centralText("workspace.guestLimitPlans", "Planları incele");
+  links.push(plans);
+  return links;
+}
+function centralText(key, fallback) { return window.LectureSiftI18n?.t(key, fallback) || fallback; }
+
+// --- Phone upload shortcut ---------------------------------------------------
+// On a narrow screen a sticky "upload" bar appears once the drop zone has
+// scrolled away, and only while nothing is processing, no result is open and
+// no error or consent banner is showing. Its button carries .primary-button,
+// so the assistant launcher's overlap check (assistant.js) lifts the launcher
+// above it; the layout event makes that check run the moment the bar toggles.
+function setupMobileUploadBar() {
+  const bar = $("mobileUploadBar"), dropZone = $("classicDropZone"), results = $("results"), errorBox = $("errorBox");
+  if (!bar || !dropZone || !results || typeof IntersectionObserver !== "function") return;
+  const narrow = window.matchMedia("(max-width: 640px)");
+  let dropZoneVisible = true;
+  const sync = () => {
+    const show = narrow.matches && !dropZoneVisible && dropZone.getClientRects().length > 0
+      && !jobBusy && results.hidden && (!errorBox || errorBox.hidden)
+      && !document.querySelector(".consent-banner:not([hidden])");
+    if (bar.hidden === !show) return;
+    bar.hidden = !show;
+    document.body.classList.toggle("has-upload-bar", show);
+    document.dispatchEvent(new CustomEvent("lecturesift:layout"));
+  };
+  new IntersectionObserver(entries => { dropZoneVisible = entries.some(entry => entry.isIntersecting); sync(); }, {threshold:0.05}).observe(dropZone);
+  const hiddenChanges = new MutationObserver(sync);
+  [results, errorBox].filter(Boolean).forEach(node => hiddenChanges.observe(node, {attributes:true, attributeFilter:["hidden"]}));
+  // setJobBusy toggles the analyze button; watching it tracks processing without a hook there.
+  hiddenChanges.observe($("analyzeButton"), {attributes:true, attributeFilter:["disabled"]});
+  narrow.addEventListener?.("change", sync);
+  ["lecturesift:consent", "lecturesift:consent-ready"].forEach(name => document.addEventListener(name, sync));
+  $("mobileUploadButton").addEventListener("click", () => {
+    dropZone.scrollIntoView({block:"center", behavior:"smooth"});
+    if (!jobBusy) $("classicFiles").click();
+  });
+}
+setupMobileUploadBar();
 async function responseError(response) {
   const text = await response.text();
   try { const body = JSON.parse(text); const detail = body.detail || body; return {message: detail.message || body.message, code: detail.code || body.code}; }
@@ -1444,10 +1576,81 @@ function renderGuestSaveResult() {
   $("guestSaveLogin").href = `${localized("/login.html")}${query}`;
 }
 
+// --- Result feedback: one thumb per job, optional one-line comment ----------
+// The server keeps one row per job (a repeat replaces it). This browser
+// remembers what it sent so a reopened result does not ask again; the comment
+// itself only ever travels to the API.
+const FEEDBACK_STORAGE_PREFIX = "lecturesift-feedback:";
+const FEEDBACK_COMMENT_MAX = 280;
+let feedbackSending = false;
+function rememberedFeedback(id) {
+  try { return JSON.parse(localStorage.getItem(FEEDBACK_STORAGE_PREFIX + id) || "null") || {}; } catch (_) { return {}; }
+}
+function rememberFeedback(id, value) {
+  try { localStorage.setItem(FEEDBACK_STORAGE_PREFIX + id, JSON.stringify(value)); } catch (_) { /* storage unavailable: ask again next time */ }
+}
+function showFeedbackStatus(text, {error = false} = {}) {
+  const status = $("jobFeedbackStatus");
+  status.textContent = text || "";
+  status.hidden = !text;
+  status.classList.toggle("is-error", Boolean(text) && error);
+}
+function updateFeedbackCount() { $("jobFeedbackCount").textContent = `${$("jobFeedbackComment").value.length}/${FEEDBACK_COMMENT_MAX}`; }
+function renderJobFeedback() {
+  const panel = $("jobFeedback");
+  if (!panel) return;
+  const ready = Boolean(billingToken) && /^[A-Za-z0-9-]{8,80}$/.test(jobId || "");
+  panel.hidden = !ready;
+  if (!ready) return;
+  const remembered = rememberedFeedback(jobId);
+  panel.querySelectorAll("[data-rating]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.rating === remembered.rating)));
+  $("jobFeedbackComment").value = remembered.comment || "";
+  $("jobFeedbackConsent").checked = Boolean(remembered.consent);
+  updateFeedbackCount();
+  $("jobFeedbackForm").hidden = !remembered.rating || Boolean(remembered.commented);
+  showFeedbackStatus(remembered.commented
+    ? centralText("feedback.received", "Teşekkürler, yorumun alındı.")
+    : remembered.rating ? centralText("feedback.thanks", "Teşekkürler! İstersen kısa bir yorum da ekle.") : "");
+}
+async function sendJobFeedback(rating, {commented = false} = {}) {
+  if (feedbackSending || !rating) return;
+  const id = jobId;
+  const comment = $("jobFeedbackComment").value.slice(0, FEEDBACK_COMMENT_MAX);
+  const consent = $("jobFeedbackConsent").checked;
+  feedbackSending = true;
+  $("jobFeedbackSend").disabled = true;
+  try {
+    await billingRequest(`/jobs/${encodeURIComponent(id)}/feedback`, {method:"POST", body:JSON.stringify({rating, comment, consent, locale:currentLanguage})});
+    if (id !== jobId) return;
+    rememberFeedback(id, {rating, comment, consent, commented: commented && Boolean(comment.trim())});
+    renderJobFeedback();
+    // Only the thumb is measured, never the comment.
+    void recordFunnel("result_feedback", {rating});
+  } catch (error) {
+    if (id !== jobId) return;
+    // 503: feedback storage is not ready on this deployment; ask nothing.
+    if (error.status === 503) { $("jobFeedback").hidden = true; return; }
+    showFeedbackStatus(centralText("feedback.failed", "Geri bildirim gönderilemedi. Biraz sonra tekrar dene."), {error:true});
+  } finally {
+    feedbackSending = false;
+    $("jobFeedbackSend").disabled = false;
+  }
+}
+if ($("jobFeedback")) {
+  document.querySelectorAll("#jobFeedback [data-rating]").forEach(button => button.addEventListener("click", () => sendJobFeedback(button.dataset.rating)));
+  $("jobFeedbackComment").addEventListener("input", updateFeedbackCount);
+  $("jobFeedbackForm").addEventListener("submit", event => {
+    event.preventDefault();
+    const pressed = document.querySelector('#jobFeedback [data-rating][aria-pressed="true"]');
+    sendJobFeedback(pressed?.dataset.rating || "up", {commented:true});
+  });
+}
+
 function renderResult(data, {open = true} = {}) {
   $("resultHeading").textContent = data.title || "LectureSift";
   renderDocumentSampleResult(data);
   renderGuestSaveResult();
+  renderJobFeedback();
   const utilityResult = data.job_type && data.job_type !== "study_pack";
   const options = data.options || {};
   const selected = {

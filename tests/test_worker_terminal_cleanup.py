@@ -161,6 +161,8 @@ def test_guest_document_reservation_waits_for_actual_ocr_usage(monkeypatch):
                 "document_mode": True,
                 "document_pages": 4,
                 "ocr_pages": 4,
+                # Documents never carry the precise-transcript options.
+                "usage_multiplier": 1,
             },
         )
     ]

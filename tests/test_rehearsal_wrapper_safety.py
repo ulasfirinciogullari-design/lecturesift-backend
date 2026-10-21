@@ -216,7 +216,8 @@ def test_exact_wrapper_attests_all_base_state_without_exposing_values() -> None:
     # the provider cutover, product/workspace after) and must not change.
     snapshot = script[script.index("snapshot_manifest() {"):]
     snapshot = snapshot[: snapshot.index("\n}\n")]
-    detection = snapshot.index('--inventory "$output.inventory" --accept 3,4,5')
+    detection = snapshot.index('--inventory "$output.inventory" --accept 3,4,5,6')
+    assert '[[ "$contract_version" =~ ^[3456]$ ]] || return 1' in snapshot
     assert snapshot.index('<"$root/deploy/schema_contract_inventory.sql"') < detection
     assert detection < snapshot.index('rehearsal_manifest_v${contract_version}.sql')
     assert detection < snapshot.index('verify_schema_transition_v${contract_version}.py" current')

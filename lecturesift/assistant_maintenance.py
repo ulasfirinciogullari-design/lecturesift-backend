@@ -30,14 +30,17 @@ async def _loop():
 @asynccontextmanager
 async def lifespan(app):
     from .job_notifications import delivery_loop
-    task = asyncio.create_task(_loop(), name='assistant-retention')
-    email_task = asyncio.create_task(delivery_loop(), name='job-failure-notifications')
+    from .renewal_reminders import reminder_loop
+    tasks = [
+        asyncio.create_task(_loop(), name='assistant-retention'),
+        asyncio.create_task(delivery_loop(), name='job-failure-notifications'),
+        asyncio.create_task(reminder_loop(), name='renewal-reminders'),
+    ]
     try:
         yield
     finally:
-        task.cancel()
-        email_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await task
-        with suppress(asyncio.CancelledError):
-            await email_task
+        for task in tasks:
+            task.cancel()
+        for task in tasks:
+            with suppress(asyncio.CancelledError):
+                await task

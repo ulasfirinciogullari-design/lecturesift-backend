@@ -80,13 +80,13 @@ def test_paid_order_is_confirmed_once_and_only_after_the_payment_commits(mail, m
     duplicate = _paid(reference, 19900)
 
     assert first["status"] == duplicate["status"] == "paid"
-    assert observed == [("paid", 180)]
+    assert observed == [("paid", 300)]
     assert len(mail) == 1
     (recipient, subject, html, text), kwargs = mail[0]
     assert recipient == email
     assert subject == f"LectureSift · Siparişin onaylandı · {reference}"
     for expected in (
-        reference, "Merhaba Ayşe,", "Dakika Paketi", "199,00 TRY", "180 dakika",
+        reference, "Merhaba Ayşe,", "Dakika Paketi", "199,00 TRY", "300 dakika",
         "tek seferlik bir satın almadır", "otomatik olarak yenilenmez",
         "Hizmet sağlayıcı bilgileri", "Unvan / ad: LectureSift Test Satıcı", "Açık adres: Test Address 1",
         "https://lecturesift.com/account.html", "https://lecturesift.com/distance-sales",
@@ -100,7 +100,7 @@ def test_paid_order_is_confirmed_once_and_only_after_the_payment_commits(mail, m
     assert event.action == notifications.SENT
     assert event.actor == "system" and event.subject_user_id == user_id
     assert reference in event.summary
-    assert billing.account_status(user_id)["credit_minutes"] == 180
+    assert billing.account_status(user_id)["credit_minutes"] == 300
 
 
 def test_fixed_term_package_states_thirty_days_without_renewal_in_english(mail):
@@ -133,7 +133,7 @@ def test_checkout_language_is_used_when_no_account_language_is_saved(mail):
 
     (_, subject, _, text), _ = mail[0]
     assert "Deine Bestellung ist bestätigt" in subject
-    assert "Minutenpaket" in text and "4,99 EUR" in text and "180 Minuten" in text
+    assert "Minutenpaket" in text and "4,99 EUR" in text and "300 Minuten" in text
 
 
 def test_failed_payment_sends_no_confirmation(mail):
@@ -172,7 +172,7 @@ def test_duplicate_paytr_callbacks_send_one_confirmation_with_the_charged_amount
     assert "Tutar: 205,00 TRY" in text and "205,00 TRY" in html
     assert "199,00" not in text
     assert billing.payment_order(reference)["provider_amount_minor"] == 20500
-    assert billing.account_status(user_id)["credit_minutes"] == 180
+    assert billing.account_status(user_id)["credit_minutes"] == 300
 
 
 def test_manual_transfer_approval_confirms_once(mail, monkeypatch):
@@ -187,8 +187,8 @@ def test_manual_transfer_approval_confirms_once(mail, monkeypatch):
     assert len(mail) == 1
     (recipient, subject, _, text), _ = mail[0]
     assert recipient == email and order["reference"] in subject
-    assert "199,00 TRY" in text and "180 dakika" in text
-    assert billing.account_status(user_id)["credit_minutes"] == 180
+    assert "199,00 TRY" in text and "300 dakika" in text
+    assert billing.account_status(user_id)["credit_minutes"] == 300
 
 
 def test_payment_survives_a_failing_provider_and_a_later_callback_retries_once(mail, monkeypatch):
@@ -206,7 +206,7 @@ def test_payment_survives_a_failing_provider_and_a_later_callback_retries_once(m
     reference = order["reference"]
 
     assert _paid(reference, 19900)["status"] == "paid"
-    assert billing.account_status(user_id)["credit_minutes"] == 180
+    assert billing.account_status(user_id)["credit_minutes"] == 300
     failed = _event(reference)
     assert failed.action == notifications.RETRY
     assert "private@example.com" not in failed.summary
@@ -217,7 +217,7 @@ def test_payment_survives_a_failing_provider_and_a_later_callback_retries_once(m
     assert len(attempts) == 2
     assert attempts[0] == attempts[1]
     assert _event(reference).action == notifications.SENT
-    assert billing.account_status(user_id)["credit_minutes"] == 180
+    assert billing.account_status(user_id)["credit_minutes"] == 300
 
 
 def test_ambiguous_smtp_failure_is_never_replayed(mail, monkeypatch):
@@ -286,7 +286,7 @@ def test_a_crashing_notifier_never_fails_the_payment(mail, monkeypatch):
     assert _paid(second["reference"], 19900)["status"] == "paid"
 
     assert mail == []
-    assert billing.account_status(user_id)["credit_minutes"] == 360
+    assert billing.account_status(user_id)["credit_minutes"] == 600
 
 
 def test_orders_paid_before_the_retry_window_are_not_backfilled(mail, monkeypatch):

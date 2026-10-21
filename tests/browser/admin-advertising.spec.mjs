@@ -16,6 +16,7 @@ function adminResponses(advertisingReadiness) {
     ['/billing/admin/refund-requests', {requests:[]}],
     ['/billing/admin/credit-events?limit=250', {events:[]}],
     ['/billing/admin/contact-messages?limit=250', {messages:[]}],
+    ['/billing/admin/feedback?limit=250', {feedback:[]}],
     ['/billing/admin/jobs?limit=250', {jobs:[], counts:{}}],
     ['/billing/admin/account-events?limit=250', {events:[]}],
     ['/billing/health', {}],

@@ -100,9 +100,9 @@ media access evidence.
    cutover proof and refuse a core-only v3 source.
 5. Set private runtime `LECTURESIFT_PRODUCT_SCHEMA_VERSION=1` so normal backups
    select recovery v3. The restore and restore-rehearsal commands recognize v1
-   to v4 metadata; configuration snapshot format v4 preserves the product and
-   workspace release contracts while still verifying previous v1/v2/v3
-   snapshots.
+   to v5 metadata; configuration snapshot format v5 preserves the product,
+   workspace and feedback release contracts while still verifying previous
+   v1 to v4 snapshots.
 6. Take a product-aware backup and restore it into the dedicated rehearsal
    environment. Compare schema and all row fingerprints, including cached
    answers, in-flight reservations, old coupons and unused credits. Validate

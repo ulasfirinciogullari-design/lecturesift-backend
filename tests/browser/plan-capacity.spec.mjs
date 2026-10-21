@@ -10,7 +10,7 @@ const limits = {
 const plans = [
   {code:'credit', entitlements:{minutes:180, limits:{...limits, max_minutes_per_job:180}}},
   {code:'lite', entitlements:{minutes:400, limits:{...limits, max_minutes_per_job:120}}},
-  {code:'plus', entitlements:{minutes:900, limits}},
+  {code:'pro', entitlements:{minutes:1500, limits}},
 ];
 const status = (page, code) => page.locator(`[data-plan-card="${code}"] [data-plan-capacity]`);
 
@@ -33,8 +33,8 @@ test('measured document compares both per-job and total minutes without choosing
   await expect(page.locator('#planCapacityContext')).toContainText('198 minutes');
   await expect(status(page, 'credit')).toHaveAttribute('data-plan-capacity', 'insufficient');
   await expect(status(page, 'lite')).toHaveAttribute('data-plan-capacity', 'insufficient');
-  await expect(status(page, 'plus')).toHaveAttribute('data-plan-capacity', 'fits');
-  await expect(status(page, 'plus')).toContainText('remaining allowance');
+  await expect(status(page, 'pro')).toHaveAttribute('data-plan-capacity', 'fits');
+  await expect(status(page, 'pro')).toContainText('remaining allowance');
   await expect(page.locator('[data-plan="lite"][data-interval="monthly"]')).toBeEnabled();
   await expect(page.locator('#checkoutPanel')).toBeHidden();
   expect(isolatedNetwork.apiCalls.filter(call => call.includes('/billing/checkout'))).toEqual([]);
@@ -42,7 +42,7 @@ test('measured document compares both per-job and total minutes without choosing
   await expect(page.locator('body > .assistant-launch')).toHaveCSS('position', 'static');
   expect(await page.evaluate(() => {
     const launcher = document.querySelector('body > .assistant-launch').getBoundingClientRect();
-    return ['#planCapacityContext', '[data-plan-card="plus"]'].map(selector => {
+    return ['#planCapacityContext', '[data-plan-card="pro"]'].map(selector => {
       const content = document.querySelector(selector).getBoundingClientRect();
       return Math.min(launcher.right, content.right) > Math.max(launcher.left, content.left)
         && Math.min(launcher.bottom, content.bottom) > Math.max(launcher.top, content.top);
@@ -50,9 +50,9 @@ test('measured document compares both per-job and total minutes without choosing
   })).toEqual([false, false]);
   if (testInfo.project.name.endsWith('light')) {
     await page.locator('#planCapacityContext').screenshot({path:testInfo.outputPath('plan-requirements-layout.jpg'), type:'jpeg', quality:75});
-    await page.locator('[data-plan-card="plus"]').screenshot({path:testInfo.outputPath('plan-capacity-layout.jpg'), type:'jpeg', quality:75});
+    await page.locator('[data-plan-card="pro"]').screenshot({path:testInfo.outputPath('plan-capacity-layout.jpg'), type:'jpeg', quality:75});
   }
-  await page.locator('[data-plan="plus"][data-interval="monthly"]').click();
+  await page.locator('[data-plan="pro"][data-interval="monthly"]').click();
   await expect(page).toHaveURL(/\/en\/login(?:\.html)?\?next=/);
   const next = new URL(new URL(page.url()).searchParams.get('next'), page.url());
   expect(next.searchParams.get('need_minutes')).toBe('198');
@@ -65,23 +65,23 @@ test('page, OCR, byte and source limits can each rule out a plan', async ({page}
     {need_pages:351}, {need_ocr:101}, {need_bytes:100 * 1024 * 1024 + 1}, {need_files:17},
   ]) {
     await openPlans(page, {...requirement, ...change});
-    await expect(status(page, 'plus')).toHaveAttribute('data-plan-capacity', 'insufficient');
+    await expect(status(page, 'pro')).toHaveAttribute('data-plan-capacity', 'insufficient');
   }
 });
 
 test('missing catalog limits never inherit a false confirmation from fallback prices', async ({page}) => {
   const partialLimits = {...limits};
   delete partialLimits.max_document_pages;
-  await installCatalog(page, [{code:'plus', entitlements:{minutes:900, limits:partialLimits}}]);
+  await installCatalog(page, [{code:'pro', entitlements:{minutes:1500, limits:partialLimits}}]);
   await openPlans(page);
-  await expect(status(page, 'plus')).toHaveAttribute('data-plan-capacity', 'check');
+  await expect(status(page, 'pro')).toHaveAttribute('data-plan-capacity', 'check');
   await expect(status(page, 'credit')).toHaveAttribute('data-plan-capacity', 'check');
 });
 
 test('missing job metadata remains unknown while known violations stay visible', async ({page}) => {
   await installCatalog(page);
   await openPlans(page, {need_minutes:198});
-  await expect(status(page, 'plus')).toHaveAttribute('data-plan-capacity', 'check');
+  await expect(status(page, 'pro')).toHaveAttribute('data-plan-capacity', 'check');
   await expect(status(page, 'credit')).toHaveAttribute('data-plan-capacity', 'insufficient');
 });
 

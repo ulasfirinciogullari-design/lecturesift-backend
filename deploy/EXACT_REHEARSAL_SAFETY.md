@@ -111,7 +111,8 @@ skip the runtime gate only when a usable Bash is unavailable.
 The outer gate retains the complete manifest and verifies both the pre- and
 post-rehearsal main database. Each capture first detects the main database's
 schema family from a read-only catalog inventory (`schema_contract_state.py`):
-core v3 before the provider cutover, product v4 or workspace v5 after it. It
+core v3 before the provider cutover, product v4 or workspace v5 after it, and
+feedback v6 once the post-cutover feedback schema release has run. It
 then runs that family's `rehearsal_manifest_vN.sql` and
 `verify_schema_transition_vN.py current` with the reviewed provider-session,
 purchase-terms and preserved email-verification schema contracts, and the

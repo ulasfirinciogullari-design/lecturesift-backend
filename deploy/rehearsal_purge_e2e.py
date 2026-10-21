@@ -37,11 +37,12 @@ EMAIL_PATTERNS = (
 OWNER_ONLY_USER_FOREIGN_KEYS = frozenset(
     {("billing_email_verifications", "user_id")}
 )
-# Product (v4) and workspace (v5) tables key private rows by plain user/job
-# columns without a billing_users foreign key, so the inventory above cannot
-# find them. They exist only on product/workspace clones: an absent table is
-# skipped, while a present one is purged by user and then proven empty for
-# every rehearsal user and job. Items are removed before their folders.
+# Product (v4), workspace (v5) and feedback (v6) tables key private rows by
+# plain user/job columns without a billing_users foreign key, so the inventory
+# above cannot find them. They exist only on product/workspace/feedback clones:
+# an absent table is skipped, while a present one is purged by user and then
+# proven empty for every rehearsal user and job. Items are removed before
+# their folders. Guest feedback carries no user, so its job check fails closed.
 OPTIONAL_USER_TABLES = (
     "assistant_credit_grants_v1",
     "assistant_credit_requests_v1",
@@ -49,8 +50,9 @@ OPTIONAL_USER_TABLES = (
     "workspace_folders_v1",
     "admin_ad_free_grants_v1",
     "admin_order_archives_v1",
+    "lecturesift_job_feedback",
 )
-OPTIONAL_JOB_COLUMNS = {"workspace_items_v1": "job_id"}
+OPTIONAL_JOB_COLUMNS = {"workspace_items_v1": "job_id", "lecturesift_job_feedback": "job_id"}
 
 
 class PurgeError(RuntimeError):

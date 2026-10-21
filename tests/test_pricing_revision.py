@@ -1,6 +1,6 @@
 import json
 import uuid
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -34,9 +34,9 @@ def purchase_terms(reference: str) -> dict:
 
 def test_revised_catalog_and_regional_prices_preserve_legacy_catalog() -> None:
     expected = {
-        "lite": (400, 29900, 120, 10, 20, 30, "standard"),
+        "lite": (600, 14900, 120, 20, 40, 30, "standard"),
         "plus": (900, 59900, 240, 20, 40, 90, "standard"),
-        "pro": (2000, 119900, 360, 30, 60, 365, "priority"),
+        "pro": (1500, 44900, 360, 30, 60, 365, "priority"),
         "max": (4000, 229900, 600, 30, 60, 730, "priority"),
     }
     for code, values in expected.items():
@@ -51,11 +51,45 @@ def test_revised_catalog_and_regional_prices_preserve_legacy_catalog() -> None:
             plan.priority,
         ) == values
 
-    assert (PLAN_BY_CODE["credit"].minutes, PLAN_BY_CODE["credit"].try_amount_minor) == (180, 19900)
+    assert (PLAN_BY_CODE["credit"].minutes, PLAN_BY_CODE["credit"].try_amount_minor) == (300, 19900)
     assert (LEGACY_PLAN_BY_CODE["plus"].minutes, LEGACY_PLAN_BY_CODE["plus"].try_amount_minor) == (1800, 44900)
     assert (LEGACY_PLAN_BY_CODE["max"].minutes, LEGACY_PLAN_BY_CODE["max"].max_minutes_per_job) == (12000, 900)
-    assert [REGIONAL_PRICES[code]["USD"] for code in ("lite", "plus", "pro", "max")] == [899, 1699, 3299, 5999]
-    assert [REGIONAL_PRICES[code]["EUR"] for code in ("lite", "plus", "pro", "max")] == [849, 1599, 3099, 5699]
+    assert (LEGACY_PLAN_BY_CODE["lite"].minutes, LEGACY_PLAN_BY_CODE["lite"].try_amount_minor) == (600, 27900)
+    assert [REGIONAL_PRICES[code]["USD"] for code in ("lite", "plus", "pro", "max")] == [699, 1699, 1499, 5999]
+    assert [REGIONAL_PRICES[code]["EUR"] for code in ("lite", "plus", "pro", "max")] == [699, 1599, 1399, 5699]
+    # Scaled rows keep their previous ratios: lite x 699/899, pro x 1499/3299.
+    assert (REGIONAL_PRICES["lite"]["GBP"], REGIONAL_PRICES["pro"]["GBP"]) == (499, 1145)
+    assert (REGIONAL_PRICES["lite"]["JPY"], REGIONAL_PRICES["pro"]["JPY"]) == (875, 2045)
+    assert (REGIONAL_PRICES["lite"]["KRW"], REGIONAL_PRICES["pro"]["KRW"]) == (7916, 19033)
+    assert all(amounts[2] == REGIONAL_PRICES["credit"][currency] for currency, amounts in billing._REGIONAL_PRICE_POINTS.items())
+
+
+def test_student_and_pro_are_listed_while_plus_and_max_stay_orderable_but_hidden() -> None:
+    assert billing.LISTED_PLAN_CODES == ("free", "test", "credit", "lite", "pro", "business")
+    assert [plan.code for plan in PLAN_BY_CODE.values() if plan.listed is False] == ["plus", "max"]
+    assert PLAN_BY_CODE["lite"].featured is True and PLAN_BY_CODE["plus"].featured is False
+    assert PLAN_BY_CODE["lite"].ad_mode == PLAN_BY_CODE["pro"].ad_mode == "none"
+    assert PLAN_BY_CODE["plus"].ad_mode == "limited"
+    assert (PLAN_BY_CODE["free"].assistant_credits, PLAN_BY_CODE["lite"].assistant_credits, PLAN_BY_CODE["pro"].assistant_credits) == (100, 1000, 4000)
+    catalog = billing.public_catalog("TRY")
+    assert [plan["code"] for plan in catalog["plans"]] == ["free", "credit", "lite", "pro", "business"]
+    assert all(plan["listed"] is True for plan in catalog["plans"])
+
+    # Hidden plans are still orderable at their unchanged terms.
+    user_id = new_user()
+    for code, amount, minutes in (("plus", 59900, 900), ("max", 229900, 4000)):
+        order = billing_service.create_payment_order(user_id, "test-provider", code, "monthly", "TRY")
+        assert order["amount_minor"] == amount
+        assert purchase_terms(order["reference"])["payload"]["plan"]["minutes"] == minutes
+        assert purchase_terms(order["reference"])["payload"]["plan"]["listed"] is False
+
+
+def test_purchase_snapshots_without_a_listed_field_still_decode() -> None:
+    snapshot = json.loads(json.dumps(asdict(PLAN_BY_CODE["pro"])))
+    del snapshot["listed"]
+    decoded = billing_service._plan_from_snapshot(snapshot, "pro")
+    assert decoded.listed is True
+    assert decoded.minutes == 1500
 
 
 def test_new_monthly_payment_snapshots_full_terms_and_drives_usage() -> None:
@@ -93,22 +127,22 @@ def test_annual_order_snapshots_discounted_amount_but_resets_same_quota_monthly(
     monkeypatch.setattr(billing_service, "utcnow", lambda: clock["now"])
     user_id = new_user()
     order = billing_service.create_payment_order(user_id, "test-provider", "pro", "annual", "USD")
-    assert order["amount_minor"] == 32990
+    assert order["amount_minor"] == 14990
     terms = purchase_terms(order["reference"])["payload"]
-    assert terms["purchase"]["amount_minor"] == 32990
+    assert terms["purchase"]["amount_minor"] == 14990
     assert terms["purchase"]["interval"] == "annual"
-    assert terms["plan"]["minutes"] == 2000
+    assert terms["plan"]["minutes"] == 1500
 
     billing_service.complete_payment_order(
         order["reference"], succeeded=True, provider_amount_minor=order["amount_minor"]
     )
     billing_service.record_usage(user_id, f"annual-job-{uuid.uuid4()}", 120 * 60)
-    assert billing_service.account_status(user_id)["remaining_minutes"] == 1880
+    assert billing_service.account_status(user_id)["remaining_minutes"] == 1380
 
     clock["now"] = datetime(2026, 2, 15, 12, tzinfo=timezone.utc)
     renewed_month = billing_service.account_status(user_id)
     assert renewed_month["subscription"]["interval"] == "annual"
-    assert renewed_month["remaining_minutes"] == 2000
+    assert renewed_month["remaining_minutes"] == 1500
 
 
 def test_legacy_subscription_and_pending_order_keep_old_entitlements() -> None:
@@ -191,10 +225,10 @@ def test_manual_order_snapshot_default_free_and_cross_user_activation_are_safe(m
     assert billing_service.account_status(other_id)["remaining_minutes"] == 120
 
     manual = billing_service.create_manual_order(owner_id, "lite", "annual")
-    assert manual["amount_minor"] == 299000
+    assert manual["amount_minor"] == 149000
     terms = purchase_terms(manual["reference"])["payload"]
-    assert terms["purchase"]["amount_minor"] == 299000
-    assert terms["plan"]["minutes"] == 400
+    assert terms["purchase"]["amount_minor"] == 149000
+    assert terms["plan"]["minutes"] == 600
 
     with pytest.raises(billing_service.BillingAuthenticationError):
         with billing_service.ENGINE.begin() as connection:
@@ -210,7 +244,7 @@ def test_manual_order_snapshot_default_free_and_cross_user_activation_are_safe(m
 
     first = billing_service.approve_manual_order(manual["reference"])
     second = billing_service.approve_manual_order(manual["reference"])
-    assert first["remaining_minutes"] == second["remaining_minutes"] == 400
+    assert first["remaining_minutes"] == second["remaining_minutes"] == 600
     with billing_service.ENGINE.connect() as connection:
         count = connection.execute(
             select(func.count()).select_from(billing_service.SUBSCRIPTIONS).where(
