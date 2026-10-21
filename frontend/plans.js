@@ -190,11 +190,15 @@ function populateCurrencies() {
   select.value = LOCALE_DATA.currencies.includes(selected) ? selected : "USD";
 }
 
-function format(amount, code) {
+// whole: drop ",00" from round amounts so a button label such as
+// "Yıllık · ₺1.490 · 2 ay bedava" stays on one line.
+function format(amount, code, {whole = false} = {}) {
   const divisor = minorUnitDivisor(code);
+  const value = amount / divisor;
+  const fractionDigits = divisor === 1 || (whole && Number.isInteger(value)) ? 0 : 2;
   return new Intl.NumberFormat(PLANS_I18N.locale || navigator.language, {
-    style: "currency", currency: code, maximumFractionDigits: divisor === 1 ? 0 : 2,
-  }).formatToParts(amount / divisor).map(part =>
+    style: "currency", currency: code, minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits,
+  }).formatToParts(value).map(part =>
     part.type === "currency" ? (LOCALE_DATA.currencySymbols?.[code] || part.value) : part.value
   ).join("");
 }
@@ -435,7 +439,7 @@ function planCard(plan) {
   const monthlyAction = current ? pt("plans.newMonthlyTerm", "Yeni 30 günlük paket") : pt("rollout.chooseMonthly", "30 günlük paketi seç");
   const annualAction = current ? pt("plans.newAnnualTerm", "Yeni yıllık dönem") : pt("rollout.annual", "Yıllık");
   // A year costs ten 30-day prices, so the annual button names the two free months.
-  const annualLabel = [annualAction, price ? format(price.amount_minor * 10, price.currency || currency) : "", pt("plans.twoMonthsFree", "2 ay bedava")]
+  const annualLabel = [annualAction, price ? format(price.amount_minor * 10, price.currency || currency, {whole: true}) : "", pt("plans.twoMonthsFree", "2 ay bedava")]
     .filter(Boolean).join(" · ");
   const registered = Boolean(localStorage.getItem(TOKEN_KEY)) && account?.plan?.code !== "guest";
   const freeAction = registered ? pt("nav.workspace", "Çalışma alanına dön") : pt("auth.freeCreate", "Ücretsiz hesap oluştur");

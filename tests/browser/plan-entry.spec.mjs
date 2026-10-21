@@ -72,7 +72,7 @@ test('free, Student and Pro lead the grid while the minute pack sits in its own 
   await expect(student).toContainText('600 min / 30 days');
   await expect(student).toContainText('Ad-free use');
   await expect(page.locator('.plan-action[data-plan="lite"][data-interval="monthly"]')).toHaveText('Choose 30-day package');
-  await expect(page.locator('.plan-action[data-plan="lite"][data-interval="annual"]')).toHaveText(/^Annual · ₺\s*1,490\.00 · 2 months free$/);
+  await expect(page.locator('.plan-action[data-plan="lite"][data-interval="annual"]')).toHaveText(/^Annual · ₺\s*1,490 · 2 months free$/);
   const side = page.locator('#sidePlansGrid > .plan-card');
   await expect(side).toHaveCount(1);
   await expect(side).toHaveAttribute('data-plan-card', 'credit');

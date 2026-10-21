@@ -138,5 +138,5 @@ html[dir="rtl"] .workspace-page>.page-shell{margin:0 252px 60px 30px}
 .public-header-tools>.language-compact:focus-within>.language-code{outline:3px solid var(--ui-action);outline-offset:2px}
 }
 /* Plans: package buttons stack so each label stays on one line; the account strip link gets the secondary button size. */
-.plans-page .plan-card-actions{grid-template-columns:minmax(0,1fr)}
+.plans-page .plan-card-actions{grid-template-columns:minmax(0,1fr)}.plans-page .plan-card-actions .plan-action{padding-inline:8px}
 .account-status .cta-login{display:inline-flex;align-items:center;justify-content:center;min-height:41px;padding:0 14px;font-size:10px;font-weight:820;line-height:1.2;text-decoration:none;white-space:nowrap}
