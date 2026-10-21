@@ -590,7 +590,10 @@ function planName(code) {
 
 async function initAccount() {
   const localized = route => I18N.localizedPath ? I18N.localizedPath(I18N.language, route) : route;
-  const managedPlanCodes = ["lite", "plus", "pro", "max"];
+  // Only the listed packages are offered here. Plus and Max subscribers keep
+  // their plan until it ends and are pointed at Pro for the next term.
+  const managedPlanCodes = ["lite", "pro"];
+  const unlistedPaidPlans = new Set(["plus", "max"]);
   const planRanks = ["free", ...managedPlanCodes];
   const managedIntervals = ["monthly", "annual"];
   const safeCopyFields = new Set(["plan", "term", "current", "date", "remaining", "target"]);
@@ -882,7 +885,9 @@ async function initAccount() {
     const form = $("fixedTermPlanForm");
     const accountPlanState = `${account.plan.code}:${subscription?.interval || "none"}`;
     if (planSelect.dataset.accountState !== accountPlanState) {
-      planSelect.value = managedPlanCodes.includes(account.plan.code) ? account.plan.code : "lite";
+      planSelect.value = managedPlanCodes.includes(account.plan.code)
+        ? account.plan.code
+        : (unlistedPaidPlans.has(account.plan.code) ? "pro" : "lite");
       intervalSelect.value = subscription?.interval === "annual" ? "annual" : "monthly";
       planSelect.dataset.accountState = accountPlanState;
     }

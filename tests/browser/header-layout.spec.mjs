@@ -167,7 +167,7 @@ test('plan buttons keep one-line labels and the account strip uses the button st
   });
   await page.goto('/en/plans');
   await page.locator('[data-consent="essential"]').click();
-  const actions = page.locator('[data-plan-card="plus"] .plan-card-actions .plan-action');
+  const actions = page.locator('[data-plan-card="lite"] .plan-card-actions .plan-action');
   await expect(actions).toHaveCount(2);
   await expect(actions.first()).toHaveText('Choose 30-day package');
   const layout = await actions.evaluateAll(nodes => nodes.map(node => {

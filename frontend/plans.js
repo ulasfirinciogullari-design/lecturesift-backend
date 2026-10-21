@@ -1,8 +1,12 @@
 const API = "https://api.lecturesift.com";
 const TOKEN_KEY = "lecturesift-billing-token";
+// Every code the checkout understands. Plus and Max are no longer listed as
+// cards, but deep links such as ?plan=plus from older renewals still open them.
 const ORDER = ["free", "test", "credit", "lite", "plus", "pro", "max", "business"];
-// Shown first with the popular package; the rest stay under "Diğer paketler".
-const HIGHLIGHTED_PLANS = ["free", "credit"];
+// The one-time Dakika Paketi sits in its own narrower column; Business is a
+// quote plan offered through the contact link below the grid.
+const SIDE_PLANS = ["credit"];
+const UNCARDED_PLANS = ["test", "business"];
 const LOCALE_DATA = window.LECTURESIFT_LOCALE_DATA || {
   countries: [], currencies: ["TRY", "USD", "EUR", "GBP"], currencyForCountry: {},
 };
@@ -32,7 +36,7 @@ const COPY = {
   free: ["Ücretsiz", "Denemek ve kısa dersler için"],
   test: ["1 TL Test Paketi", "Canlı kart ödemesini küçük tutarla denemek için"],
   credit: ["Dakika Paketi", "Abonelik olmadan ek kullanım"],
-  lite: ["Lite", "Düzenli bireysel çalışma"],
+  lite: ["Öğrenci", "Dönem boyunca her ders için"],
   plus: ["Plus", "Yoğun ders dönemi ve çoklu kaynaklar"],
   pro: ["Pro", "Uzun kayıtlar ve öncelikli işleme"],
   max: ["Max", "En yüksek bireysel kapasite"],
@@ -52,36 +56,36 @@ const PLAN_LIMITS = {
 const FALLBACK_META = {
   free: {kind: "free", minutes: 120, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 120, quiz_questions: 10, flashcards: 20, export_formats: ["pdf"], summary_profiles: ALL_SUMMARIES, history_days: 7, limits: PLAN_LIMITS.free, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: true}},
   test: {kind: "one_time", minutes: 1, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 1, quiz_questions: 1, flashcards: 1, export_formats: ["pdf"], summary_profiles: ALL_SUMMARIES, history_days: 1, limits: PLAN_LIMITS.test, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: true}},
-  credit: {kind: "one_time", minutes: 180, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 180, quiz_questions: 20, flashcards: 40, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, history_days: 30, limits: PLAN_LIMITS.credit, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: true}},
-  lite: {kind: "subscription", minutes: 400, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 400, quiz_questions: 10, flashcards: 20, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, history_days: 30, limits: PLAN_LIMITS.lite, team_seats: 1, ad_free: false, ad_mode: "standard", rewarded_minutes_eligible: false, download_enabled: true}},
-  plus: {kind: "subscription", minutes: 900, priority: "standard", team_seats: 1, featured: true, entitlements: {minutes: 900, quiz_questions: 20, flashcards: 40, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, history_days: 90, limits: PLAN_LIMITS.plus, team_seats: 1, ad_free: false, ad_mode: "limited", rewarded_minutes_eligible: false, download_enabled: true}},
-  pro: {kind: "subscription", minutes: 2000, priority: "priority", team_seats: 1, featured: false, entitlements: {minutes: 2000, quiz_questions: 30, flashcards: 60, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, history_days: 365, limits: PLAN_LIMITS.pro, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
-  max: {kind: "subscription", minutes: 4000, priority: "priority", team_seats: 1, featured: false, entitlements: {minutes: 4000, quiz_questions: 30, flashcards: 60, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, history_days: 730, limits: PLAN_LIMITS.max, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
+  credit: {kind: "one_time", minutes: 300, priority: "standard", team_seats: 1, featured: false, entitlements: {minutes: 300, quiz_questions: 20, flashcards: 40, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, history_days: 30, limits: PLAN_LIMITS.credit, team_seats: 1, ad_free: false, rewarded_minutes_eligible: true, download_enabled: true}},
+  lite: {kind: "subscription", minutes: 600, priority: "standard", team_seats: 1, featured: true, entitlements: {minutes: 600, quiz_questions: 20, flashcards: 40, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, history_days: 30, limits: PLAN_LIMITS.lite, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
+  plus: {kind: "subscription", minutes: 900, priority: "standard", team_seats: 1, featured: false, listed: false, entitlements: {minutes: 900, quiz_questions: 20, flashcards: 40, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, history_days: 90, limits: PLAN_LIMITS.plus, team_seats: 1, ad_free: false, ad_mode: "limited", rewarded_minutes_eligible: false, download_enabled: true}},
+  pro: {kind: "subscription", minutes: 1500, priority: "priority", team_seats: 1, featured: false, entitlements: {minutes: 1500, quiz_questions: 30, flashcards: 60, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, history_days: 365, limits: PLAN_LIMITS.pro, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
+  max: {kind: "subscription", minutes: 4000, priority: "priority", team_seats: 1, featured: false, listed: false, entitlements: {minutes: 4000, quiz_questions: 30, flashcards: 60, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, history_days: 730, limits: PLAN_LIMITS.max, team_seats: 1, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
   business: {kind: "quote", minutes: null, priority: "priority", team_seats: 10, featured: false, entitlements: {minutes: null, quiz_questions: null, flashcards: null, export_formats: ["pdf", "docx", "txt"], summary_profiles: ALL_SUMMARIES, history_days: 730, limits: PLAN_LIMITS.business, team_seats: 10, ad_free: true, rewarded_minutes_eligible: false, download_enabled: true}},
 };
 const FALLBACK_PRICES = {
-  TRY: [0, 100, 19900, 29900, 59900, 119900, 229900, null],
-  USD: [0, null, 499, 899, 1699, 3299, 5999, null],
-  EUR: [0, null, 499, 849, 1599, 3099, 5699, null],
-  GBP: [0, null, 399, 642, 1133, 2519, 4829, null],
-  CAD: [0, null, 699, 1017, 1800, 4079, 7819, null],
-  AUD: [0, null, 799, 1178, 2066, 4560, 8739, null],
-  NZD: [0, null, 899, 1285, 2267, 5040, 9659, null],
-  JPY: [0, null, 750, 1125, 2001, 4501, 8626, null],
-  KRW: [0, null, 6900, 10181, 18544, 41887, 80390, null],
-  CNY: [0, null, 3500, 5251, 9205, 21004, 40138, null],
-  INR: [0, null, 39900, 58835, 106593, 239920, 459915, null],
-  BRL: [0, null, 2499, 3750, 6669, 15001, 28751, null],
-  MXN: [0, null, 9900, 14896, 26548, 59890, 114892, null],
-  CHF: [0, null, 449, 642, 1133, 2639, 5059, null],
-  SEK: [0, null, 5299, 7822, 14006, 31204, 59803, null],
-  NOK: [0, null, 5499, 8251, 14673, 33004, 63253, null],
-  DKK: [0, null, 3499, 4822, 8937, 20402, 39101, null],
-  PLN: [0, null, 1999, 2892, 5335, 12001, 23000, null],
-  AED: [0, null, 1899, 2785, 4935, 11041, 21160, null],
-  SAR: [0, null, 1899, 2785, 5068, 11281, 21620, null],
-  SGD: [0, null, 699, 1017, 1800, 4079, 7819, null],
-  HKD: [0, null, 3899, 5893, 10404, 23403, 44852, null],
+  TRY: [0, 100, 19900, 14900, 59900, 44900, 229900, null],
+  USD: [0, null, 499, 699, 1699, 1499, 5999, null],
+  EUR: [0, null, 499, 699, 1599, 1399, 5699, null],
+  GBP: [0, null, 399, 499, 1133, 1145, 4829, null],
+  CAD: [0, null, 699, 791, 1800, 1853, 7819, null],
+  AUD: [0, null, 799, 916, 2066, 2072, 8739, null],
+  NZD: [0, null, 899, 999, 2267, 2290, 9659, null],
+  JPY: [0, null, 750, 875, 2001, 2045, 8626, null],
+  KRW: [0, null, 6900, 7916, 18544, 19033, 80390, null],
+  CNY: [0, null, 3500, 4083, 9205, 9544, 40138, null],
+  INR: [0, null, 39900, 45746, 106593, 109015, 459915, null],
+  BRL: [0, null, 2499, 2916, 6669, 6816, 28751, null],
+  MXN: [0, null, 9900, 11582, 26548, 27213, 114892, null],
+  CHF: [0, null, 449, 499, 1133, 1199, 5059, null],
+  SEK: [0, null, 5299, 6082, 14006, 14178, 59803, null],
+  NOK: [0, null, 5499, 6415, 14673, 14996, 63253, null],
+  DKK: [0, null, 3499, 3749, 8937, 9270, 39101, null],
+  PLN: [0, null, 1999, 2249, 5335, 5453, 23000, null],
+  AED: [0, null, 1899, 2165, 4935, 5017, 21160, null],
+  SAR: [0, null, 1899, 2165, 5068, 5126, 21620, null],
+  SGD: [0, null, 699, 791, 1800, 1853, 7819, null],
+  HKD: [0, null, 3899, 4582, 10404, 10634, 44852, null],
 };
 
 let catalog = null;
@@ -93,7 +97,6 @@ let currency = "TRY";
 let catalogLoadVersion = 0;
 let catalogLoading = false;
 let catalogCapacityFresh = false;
-let capacityPlansRevealed = false;
 let checkoutSelection = null;
 let checkoutRequest = null;
 const $ = id => document.getElementById(id);
@@ -150,7 +153,7 @@ function renderDocumentNeed() {
     panel.id = "planCapacityContext";
     panel.className = "plan-capacity-context";
     panel.setAttribute("aria-labelledby", "planCapacityTitle");
-    $("plansGrid").before(panel);
+    $("plansLayout").before(panel);
   }
   panel.hidden = false;
   panel.innerHTML = `<h3 id="planCapacityTitle">${esc(pt("plans.capacityTitle", "Bu belge için hesaplanan kullanım"))}</h3><p class="plan-capacity-minutes">${esc(pt("plans.capacityMinutes", "{minutes} dakika").replace("{minutes}", documentNeed.minutes.toLocaleString(PLANS_I18N.locale)))}</p><p>${esc(pt("plans.capacityHelp", "Bu değer yüklediğin belgenin ölçülen ihtiyacıdır; kısa örnekten hesaplanmaz. Kartlar belirtilen iş sınırlarını karşılaştırır. Kalan kullanım hakkın ve diğer işleme kontrolleri ayrıca doğrulanır."))}</p>`;
@@ -234,14 +237,7 @@ function openRequestedPlan() {
   params.delete("plan");
   params.delete("interval");
   history.replaceState({}, "", `${location.pathname}${params.size ? `?${params}` : ""}${location.hash}`);
-  revealPlanCard(planCode);
   void buy(planCode, interval);
-}
-
-// Expand "Diğer paketler" when a link or measured need points at a card it holds.
-function revealPlanCard(code) {
-  const more = $("morePlans");
-  if (more && ORDER.includes(code) && more.querySelector(`[data-plan-card="${code}"]`)) more.open = true;
 }
 
 async function api(path, options = {}) {
@@ -279,14 +275,15 @@ function planLabel(code) {
   if (/^ai_(1000|3000|10000)$/.test(code)) return `${Number(code.slice(3)).toLocaleString(PLANS_I18N.locale)} ${at('credits')}`;
   return pt(`plan.${code}`, COPY[code]?.[0] || code);
 }
-function visibleOrder() { return ORDER.filter(code => code !== "test"); }
-function highlightedOrder() {
-  const popular = (catalog?.plans || []).find(plan => plan.featured && plan.kind === "subscription")?.code || "plus";
-  return [...HIGHLIGHTED_PLANS, popular];
+// Cards and the comparison table show the listed plans only. Unlisted codes
+// keep their fallback terms so deep links and older renewals still check out.
+function cardOrder() {
+  const map = new Map((catalog?.plans || []).map(plan => [plan.code, plan]));
+  return ORDER.filter(code => !UNCARDED_PLANS.includes(code) && map.has(code) && map.get(code).listed !== false);
 }
 
 function renderCompare() {
-  const plans = visibleOrder().map(code => catalog?.plans?.find(plan => plan.code === code)).filter(Boolean);
+  const plans = cardOrder().map(code => catalog?.plans?.find(plan => plan.code === code)).filter(Boolean);
   $("compareHead").innerHTML = `<tr><th>${esc(pt("plans.right", "Hak"))}</th>${plans.map(plan => `<th>${esc(planLabel(plan.code))}</th>`).join("")}</tr>`;
   const yes = pt("common.yes", "Evet"), all = pt("common.all", "Tümü"), standard = pt("priority.standard", "Standart"), priority = pt("priority.priority", "Öncelikli");
   const rows = [
@@ -412,22 +409,12 @@ function renderPlans() {
 function renderPlanCards() {
   renderDocumentNeed();
   const map = new Map((catalog?.plans || []).map(plan => [plan.code, plan]));
-  const codes = visibleOrder().filter(code => map.has(code));
-  const highlighted = highlightedOrder();
-  const others = codes.filter(code => !highlighted.includes(code));
-  $("plansGrid").innerHTML = codes.filter(code => highlighted.includes(code)).map(code => planCard(map.get(code))).join("");
-  $("morePlansGrid").innerHTML = others.map(code => planCard(map.get(code))).join("");
-  $("morePlansNames").textContent = others.map(planLabel).join(" · ");
-  $("morePlans").hidden = !others.length;
+  const codes = cardOrder();
+  $("plansGrid").innerHTML = codes.filter(code => !SIDE_PLANS.includes(code)).map(code => planCard(map.get(code))).join("");
+  $("sidePlansGrid").innerHTML = codes.filter(code => SIDE_PLANS.includes(code)).map(code => planCard(map.get(code))).join("");
   document.querySelectorAll(".plan-action[data-plan]").forEach(button => {
     button.onclick = () => buy(button.dataset.plan, button.dataset.interval);
   });
-  // A measured document that no highlighted package fits must not leave the
-  // packages that may fit it collapsed.
-  if (documentNeed && catalogCapacityFresh && !capacityPlansRevealed) {
-    capacityPlansRevealed = true;
-    if (!highlighted.some(code => map.has(code) && documentPlanCapacity(map.get(code)) === "fits")) $("morePlans").open = true;
-  }
   renderCompare();
 }
 
@@ -447,15 +434,19 @@ function planCard(plan) {
     : `${Number(minutes).toLocaleString(PLANS_I18N.locale)} ${plan.kind === "subscription" ? pt("plans.minutesPer30Days", "dk / 30 gün") : plan.kind === "free" ? pt("plans.minutesPerMonth", "dk / ay") : pt("plans.minuteUnit", "dakika")}`;
   const monthlyAction = current ? pt("plans.newMonthlyTerm", "Yeni 30 günlük paket") : pt("rollout.chooseMonthly", "30 günlük paketi seç");
   const annualAction = current ? pt("plans.newAnnualTerm", "Yeni yıllık dönem") : pt("rollout.annual", "Yıllık");
+  // A year costs ten 30-day prices, so the annual button names the two free months.
+  const annualLabel = [annualAction, price ? format(price.amount_minor * 10, price.currency || currency) : "", pt("plans.twoMonthsFree", "2 ay bedava")]
+    .filter(Boolean).join(" · ");
   const registered = Boolean(localStorage.getItem(TOKEN_KEY)) && account?.plan?.code !== "guest";
   const freeAction = registered ? pt("nav.workspace", "Çalışma alanına dön") : pt("auth.freeCreate", "Ücretsiz hesap oluştur");
   const actions = code === "free" || code === "business"
     ? `<button type="button" class="plan-action" data-plan="${esc(code)}">${esc(code === "free" ? freeAction : pt("plans.contact", "Bize ulaş"))}</button>`
     : plan.kind === "subscription"
-    ? `<div class="plan-card-actions"><button class="plan-action" data-plan="${esc(code)}" data-interval="monthly">${esc(monthlyAction)}</button><button class="plan-action" data-plan="${esc(code)}" data-interval="annual">${esc(annualAction)} · ${esc(price ? format(price.amount_minor * 10, price.currency || currency) : "")}</button></div>`
+    ? `<div class="plan-card-actions"><button class="plan-action" data-plan="${esc(code)}" data-interval="monthly">${esc(monthlyAction)}</button><button class="plan-action" data-plan="${esc(code)}" data-interval="annual">${esc(annualLabel)}</button></div>`
     : `<button class="plan-action" data-plan="${esc(code)}" data-interval="${plan.kind === "one_time" ? "one_time" : "monthly"}" ${current ? "disabled" : ""}>${esc(current ? pt("plans.current", "Mevcut plan") : pt("plans.select", "Planı seç"))}</button>`;
-  return `<article class="plan-card ${plan.featured ? "featured" : ""}" data-plan-card="${esc(code)}">
-    ${plan.featured ? `<span class="plan-badge">${esc(pt("plans.popular", "Popüler"))}</span>` : ""}
+  return `<article class="plan-card ${plan.featured ? "featured" : ""}${SIDE_PLANS.includes(code) ? " plan-card-side" : ""}" data-plan-card="${esc(code)}">
+    ${plan.featured ? `<span class="plan-badge">${esc(pt("plans.mostPopular", "En popüler"))}</span>` : ""}
+    ${SIDE_PLANS.includes(code) ? `<span class="plan-eyebrow">${esc(pt("plans.noSubscriptionEyebrow", "Abonelik istemeyenler için"))}</span>` : ""}
     <h3>${esc(planLabel(code))}</h3><p>${esc(pt(`plan.${code}.description`, COPY[code][1]))}</p>
     <div class="plan-price">${esc(priceText)} <small>${esc(suffix)}</small></div>
     ${capacityNotice(plan)}
@@ -482,7 +473,7 @@ function planCard(plan) {
 
 function renderAdFreeOffer() {
   let section = document.getElementById('adFreeAccess');
-  if (!section) {section=document.createElement('section');section.id='adFreeAccess';section.className='ad-free-offer';$('morePlans').after(section);}
+  if (!section) {section=document.createElement('section');section.id='adFreeAccess';section.className='ad-free-offer';$('plansTeamLink').after(section);}
   const offer = catalog?.ad_free;
   section.hidden = !offer?.display_price;
   section.replaceChildren();
@@ -504,7 +495,7 @@ function renderAdFreeOffer() {
 
 function renderAssistantOffers() {
   let section = document.getElementById('assistantCredits');
-  if (!section) {section=document.createElement('section');section.id='assistantCredits';section.className='assistant-credit-offers';$('morePlans').after(section);}
+  if (!section) {section=document.createElement('section');section.id='assistantCredits';section.className='assistant-credit-offers';$('plansTeamLink').after(section);}
   const offers=catalog?.assistant;
   if(!offers){section.hidden=true;return;}
   section.hidden=false;section.replaceChildren();
@@ -916,5 +907,4 @@ document.querySelectorAll("[data-copy-target]").forEach(button => {
   });
 });
 currency = detectedCurrency();
-revealPlanCard(new URLSearchParams(location.search).get("plan"));
 load();

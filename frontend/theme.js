@@ -88,7 +88,7 @@
     };
     if (window.LectureSiftAssistantCopy) {loadWidget();return;}
     const copy = document.createElement("script");
-    copy.src = "/assistant-i18n.js?v=5";
+    copy.src = "/assistant-i18n.js?v=6";
     copy.onload = loadWidget;
     document.body.append(copy);
   };

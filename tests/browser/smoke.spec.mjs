@@ -49,9 +49,9 @@ test('account shows zero-decimal payments and fixed-term package self-service', 
   const cors={'Access-Control-Allow-Origin':'http://127.0.0.1:4173','Access-Control-Allow-Methods':'GET,OPTIONS','Access-Control-Allow-Headers':'authorization,content-type'};
   const account={
     user:{email:'billing-owner@example.invalid',first_name:'Billing',last_name:'Owner',country_code:'JP',phone:null,preferred_language:'en'},
-    plan:{code:'plus',minutes:900,entitlements:{ad_free:false,ad_mode:'limited'}},
+    plan:{code:'pro',minutes:1500,entitlements:{ad_free:true,ad_mode:'none'}},
     subscription:{status:'active',interval:'monthly',starts_at:'2026-09-01T00:00:00Z',ends_at:'2026-10-01T00:00:00Z',cancel_at_period_end:false},
-    remaining_minutes:850,used_minutes:50,credit_minutes:0,permanent_ad_free:false,is_admin:false,
+    remaining_minutes:1450,used_minutes:50,credit_minutes:0,permanent_ad_free:false,is_admin:false,
     manual_orders:[{reference:'jpy-order',order_number:'LS-JPY',provider:'manual',payment_method:'bank_transfer',payment_method_confirmed:true,plan_code:'plus',amount_minor:2001,currency:'JPY',status:'paid',created_at:'2026-09-10T10:00:00Z'}],
     payment_orders:[{reference:'krw-order',order_number:'LS-KRW',provider:'manual',payment_method:'bank_transfer',payment_method_confirmed:true,plan_code:'plus',amount_minor:18544,currency:'KRW',status:'paid',created_at:'2026-09-11T10:00:00Z'}],
   };
@@ -66,16 +66,15 @@ test('account shows zero-decimal payments and fixed-term package self-service', 
   await page.goto('/en/account.html');
   await page.locator('[data-consent="essential"]').click();
   await expect(page.locator('#subscriptionState')).toContainText('Use the controls below to buy a new fixed-term package');
-  await expect(page.locator('#managePlanSelect')).toHaveValue('plus');
+  await expect(page.locator('#managePlanSelect')).toHaveValue('pro');
+  await expect(page.locator('#managePlanSelect option')).toHaveText(['Student', 'Pro']);
   await expect(page.locator('#managePlanInterval')).toHaveValue('monthly');
-  await expect(page.locator('#managePlanSummary')).toContainText('850 package minutes left');
+  await expect(page.locator('#managePlanSummary')).toContainText('1,450 package minutes left');
   await expect(page.locator('#managePlanSummary')).toContainText('do not carry over');
-  await expect(page.locator('#managePlanContinue')).toHaveText('Buy a new 30-day term for Plus');
-  await page.locator('#managePlanSelect').selectOption('pro');
-  await expect(page.locator('#managePlanContinue')).toHaveText('Upgrade to Pro');
+  await expect(page.locator('#managePlanContinue')).toHaveText('Buy a new 30-day term for Pro');
   await page.locator('#managePlanSelect').selectOption('lite');
-  await expect(page.locator('#managePlanContinue')).toHaveText('Downgrade to Lite');
-  await page.locator('#managePlanSelect').selectOption('plus');
+  await expect(page.locator('#managePlanContinue')).toHaveText('Downgrade to Student');
+  await page.locator('#managePlanSelect').selectOption('pro');
   await expect(page.locator('#cancelSubscriptionButton')).toHaveCount(0);
   await page.locator('[data-account-view-button="payments"]').click();
   await expect(page.locator('#ordersList')).toContainText('2,001');
@@ -91,19 +90,18 @@ test('account shows zero-decimal payments and fixed-term package self-service', 
   await page.locator('#managePlanContinue').click();
   await expect(page).toHaveURL(/\/en\/plans(?:\.html)?$/);
   await expect(page.locator('#checkoutPanel')).toBeVisible();
-  await expect(page.locator('#checkoutPlanCode')).toHaveValue('plus');
+  await expect(page.locator('#checkoutPlanCode')).toHaveValue('pro');
   await expect(page.locator('#checkoutInterval')).toHaveValue('monthly');
   await expect(page.locator('#checkoutFixedTermNotice')).toBeVisible();
-  await expect(page.locator('#checkoutFixedTermNotice')).toContainText('850 package minutes left');
+  await expect(page.locator('#checkoutFixedTermNotice')).toContainText('1,450 package minutes left');
   await expect(page.locator('#checkoutFixedTermNotice')).toContainText('starts immediately');
   await expect(page.locator('#checkoutFixedTermNotice')).toContainText('do not carry over');
   await expect(page.locator('#checkoutFixedTermNotice')).toContainText('There is no automatic renewal');
   await page.locator('#checkoutClose').click();
-  await expect(page.locator('.plan-action[data-plan="plus"][data-interval="monthly"]')).toBeEnabled();
-  await expect(page.locator('.plan-action[data-plan="plus"][data-interval="monthly"]')).toHaveText('New 30-day package');
+  await expect(page.locator('.plan-action[data-plan="pro"][data-interval="monthly"]')).toBeEnabled();
+  await expect(page.locator('.plan-action[data-plan="pro"][data-interval="monthly"]')).toHaveText('New 30-day package');
   await page.locator('#billingCurrency').selectOption('JPY');
   await expect(page.locator('#plansGrid')).toContainText('¥');
-  await page.locator('#morePlans > summary').click();
   await page.locator('.plan-action[data-plan="lite"][data-interval="monthly"]').click();
   await expect(page.locator('#errorBox')).toBeVisible();
   await expect(page.locator('#errorMessage')).toHaveText('iyzico is active, but card checkout does not support JPY. Choose a currency supported by the provider to pay.');
@@ -113,7 +111,7 @@ test('account shows zero-decimal payments and fixed-term package self-service', 
   await page.evaluate(()=>localStorage.setItem('lecturesift-currency','TRY'));
   await page.goto('/en/account.html');
   await expect(page.locator('#managePlanInterval')).toHaveValue('annual');
-  await expect(page.locator('#managePlanSummary')).toContainText('850 package minutes');
+  await expect(page.locator('#managePlanSummary')).toContainText('1,450 package minutes');
   await expect(page.locator('#managePlanSummary')).toContainText('only what remains in your current monthly allowance window');
   await expect(page.locator('#managePlanSummary')).toContainText('all future monthly allowances under it end');
   await page.locator('#managePlanContinue').click();

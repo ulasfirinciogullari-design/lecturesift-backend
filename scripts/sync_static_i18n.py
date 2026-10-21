@@ -137,6 +137,28 @@ SENSITIVE_TRANSLATIONS = {
 # blind machine translation.
 CURATED_TRANSLATIONS = {
     **SENSITIVE_TRANSLATIONS,
+    "Paketim bitince ne olur?": [
+        "Paketim bitince ne olur?", "What happens when my package ends?", "Was passiert, wenn mein Paket endet?",
+        "Que se passe-t-il quand mon forfait se termine ?", "¿Qué pasa cuando termina mi paquete?",
+        "Cosa succede quando il mio pacchetto finisce?", "O que acontece quando meu pacote termina?",
+        "Что происходит, когда мой пакет заканчивается?", "ماذا يحدث عند انتهاء باقتي؟", "我的套餐到期后会怎样？",
+        "パッケージが終了したらどうなりますか？", "패키지가 끝나면 어떻게 되나요?", "मेरा पैकेज खत्म होने पर क्या होता है?",
+    ],
+    "Hiçbir şey otomatik olarak tahsil edilmez. Dönem bitince hesabın Ücretsiz plana döner ve istediğin zaman yeni paket alabilirsin. Süre bitmeden e-posta ile hatırlatırız.": [
+        "Hiçbir şey otomatik olarak tahsil edilmez. Dönem bitince hesabın Ücretsiz plana döner ve istediğin zaman yeni paket alabilirsin. Süre bitmeden e-posta ile hatırlatırız.",
+        "Nothing is charged automatically. When the term ends your account returns to the Free plan and you can buy a new package whenever you like. We remind you by email before it ends.",
+        "Es wird nichts automatisch abgebucht. Nach Ablauf wechselt dein Konto zurück zum kostenlosen Tarif, und du kannst jederzeit ein neues Paket kaufen. Wir erinnern dich vor dem Ende per E-Mail.",
+        "Rien n’est prélevé automatiquement. À la fin de la période, votre compte revient au forfait Gratuit et vous pouvez acheter un nouveau forfait quand vous le souhaitez. Nous vous le rappelons par e-mail avant la fin.",
+        "No se cobra nada automáticamente. Al terminar el periodo, tu cuenta vuelve al plan Gratis y puedes comprar un nuevo paquete cuando quieras. Te lo recordamos por correo antes de que termine.",
+        "Nulla viene addebitato automaticamente. Alla fine del periodo il tuo account torna al piano Gratuito e puoi acquistare un nuovo pacchetto quando vuoi. Ti ricordiamo via e-mail prima della scadenza.",
+        "Nada é cobrado automaticamente. Ao fim do período, sua conta volta ao plano Grátis e você pode comprar um novo pacote quando quiser. Lembramos você por e-mail antes do fim.",
+        "Ничего не списывается автоматически. По окончании срока аккаунт возвращается на бесплатный план, и вы можете купить новый пакет в любое время. Мы напомним по электронной почте до окончания.",
+        "لا يُحصَّل أي مبلغ تلقائيًا. عند انتهاء المدة يعود حسابك إلى الخطة المجانية ويمكنك شراء باقة جديدة متى شئت. سنذكّرك بالبريد الإلكتروني قبل الانتهاء.",
+        "不会自动扣费。期限结束后，账户会恢复为免费套餐，你可以随时购买新套餐。到期前我们会通过邮件提醒你。",
+        "自動的に請求されることはありません。期間が終わるとアカウントは無料プランに戻り、いつでも新しいパッケージを購入できます。終了前にメールでお知らせします。",
+        "자동으로 결제되는 것은 없습니다. 기간이 끝나면 계정은 무료 플랜으로 돌아가며 원할 때 새 패키지를 구매할 수 있습니다. 종료 전에 이메일로 알려드립니다.",
+        "कुछ भी अपने आप नहीं लिया जाता। अवधि खत्म होने पर आपका खाता फ्री प्लान पर लौट जाता है और आप जब चाहें नया पैकेज खरीद सकते हैं। समाप्ति से पहले हम ईमेल से याद दिलाते हैं।",
+    ],
     "Planlar’da devam et": ["Planlar’da devam et", "Continue in Plans", "Weiter zu den Tarifen", "Continuer dans les forfaits", "Continuar en Planes", "Continua nei piani", "Continuar nos planos", "Продолжить в тарифах", "المتابعة في الخطط", "在套餐页面继续", "プランページで続ける", "요금제 페이지에서 계속", "प्लान पेज पर जारी रखें"],
     "BEKLEYEN ÖDÜLLER": ["BEKLEYEN ÖDÜLLER", "PENDING REWARDS", "AUSSTEHENDE BELOHNUNGEN", "RÉCOMPENSES EN ATTENTE", "RECOMPENSAS PENDIENTES", "RICOMPENSE IN ATTESA", "RECOMPENSAS PENDENTES", "ОЖИДАЮЩИЕ НАГРАДЫ", "المكافآت المعلقة", "待处理奖励", "保留中の報酬", "대기 중인 보상", "लंबित पुरस्कार"],
     "Bu işlem yalnız LectureSift içindeki davet kancasını yeniden çalıştırır; ödeme sağlayıcısı mutabakatını yapmaz ve tek başına ödül vermez.": ["Bu işlem yalnız LectureSift içindeki davet kancasını yeniden çalıştırır; ödeme sağlayıcısı mutabakatını yapmaz ve tek başına ödül vermez.", "This action reruns only the referral hook inside LectureSift; it does not reconcile the payment provider or grant a reward by itself.", "Diese Aktion führt nur den Empfehlungs-Hook innerhalb von LectureSift erneut aus; sie gleicht den Zahlungsanbieter nicht ab und gewährt allein keine Belohnung.", "Cette action relance uniquement le traitement de parrainage interne à LectureSift ; elle ne rapproche pas le prestataire de paiement et n’accorde aucune récompense à elle seule.", "Esta acción solo vuelve a ejecutar el proceso de referidos interno de LectureSift; no concilia el proveedor de pagos ni concede una recompensa por sí sola.", "Questa azione riesegue solo il processo di invito interno di LectureSift; non riconcilia il fornitore di pagamento e non assegna da sola alcuna ricompensa.", "Esta ação apenas executa novamente o processo de indicação interno do LectureSift; não concilia o provedor de pagamento nem concede uma recompensa por si só.", "Это действие только повторно запускает внутреннюю обработку приглашения LectureSift; оно не сверяет данные с платёжным провайдером и само по себе не выдаёт награду.", "يعيد هذا الإجراء تشغيل معالجة الدعوة الداخلية في LectureSift فقط؛ ولا يُجري مطابقة مع مزوّد الدفع ولا يمنح مكافأة بمفرده.", "此操作只会重新运行 LectureSift 内部的邀请处理；不会与支付服务商对账，也不会单独发放奖励。", "この操作は LectureSift 内部の招待処理だけを再実行します。決済事業者との照合は行わず、この操作だけで報酬を付与することもありません。", "이 작업은 LectureSift 내부 추천 처리만 다시 실행합니다. 결제 제공업체와 대사하지 않으며 이 작업만으로 보상을 지급하지 않습니다.", "यह कार्रवाई केवल LectureSift के अंदर रेफ़रल प्रक्रिया को दोबारा चलाती है; यह भुगतान प्रदाता से मिलान नहीं करती और अपने आप कोई पुरस्कार नहीं देती।"],

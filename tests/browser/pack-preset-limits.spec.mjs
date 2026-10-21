@@ -97,3 +97,33 @@ for (const [name, disabledQuiz, disabledCards] of [['plus', ['30'], ['60']], ['p
     } finally { releaseAccount(); }
   });
 }
+
+// Precise timestamps and speaker detection are Pro-and-up and bill four times
+// the minutes; other plans see them disabled, and presets never turn them on.
+test('precise transcript options stay off and disabled below Pro', async ({page}) => {
+  await openWorkspace(page, {plan:plans.free});
+  await page.waitForFunction(() => billingAccount?.plan?.code === 'free');
+  await expect(page.locator('#transcriptTimestamps')).toBeDisabled();
+  await expect(page.locator('#speakerDetection')).toBeDisabled();
+  await expect(page.locator('#transcriptPlanHint')).toHaveText('On the Pro plan');
+  await expect(page.locator('#transcriptTimestampsCost')).toHaveText('With this option on, minutes count 4×');
+  await page.evaluate(() => {
+    document.getElementById('transcriptTimestamps').checked = true;
+    applyPackPreset('exam');
+  });
+  await expect(page.locator('#transcriptTimestamps')).not.toBeChecked();
+  await expect(page.locator('#speakerDetection')).not.toBeChecked();
+});
+
+test('a pro plan can turn precise timestamps and speaker detection on', async ({page}) => {
+  await openWorkspace(page, {plan:plans.pro});
+  await page.waitForFunction(() => billingAccount?.plan?.code === 'pro');
+  await expect(page.locator('#transcriptPlanHint')).toBeHidden();
+  await expect(page.locator('#transcriptTimestamps')).toBeEnabled();
+  await expect(page.locator('#speakerDetection')).toBeDisabled();
+  await page.locator('#transcriptTimestampsControl').click();
+  await expect(page.locator('#transcriptTimestamps')).toBeChecked();
+  await expect(page.locator('#speakerDetection')).toBeEnabled();
+  await page.locator('#speakerDetectionControl').click();
+  await expect(page.locator('#speakerDetection')).toBeChecked();
+});

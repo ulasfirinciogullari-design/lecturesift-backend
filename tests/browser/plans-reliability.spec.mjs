@@ -47,8 +47,6 @@ async function openPlans(page, override) {
 
 async function choosePlan(page, code = 'lite') {
   const action = page.locator(`[data-plan="${code}"][data-interval="monthly"]`);
-  // Only free, the credit pack and the popular package are shown before "Other packages" opens.
-  if (!await action.isVisible()) await page.locator('#morePlans > summary').click();
   await action.click();
   await expect(page.locator('#checkoutPanel')).toBeVisible();
   await page.locator('#checkoutFirstName').fill('Synthetic');
@@ -162,12 +160,12 @@ test('a manual transfer rejection stays visible in checkout and permits an expli
     await expect(page.locator('#checkoutPanel')).toBeHidden();
     await expect(page.locator('#billingCurrency')).toBeEnabled();
     await refreshReceived.promise;
-    await choosePlan(page, 'plus');
+    await choosePlan(page, 'pro');
     await expect(page.locator('#checkoutCardButton')).toBeEnabled();
     const response = page.waitForResponse(`${API}/billing/me`);
     refreshPending.resolve();
     await finishResponse(page, response);
-    await expect(page.locator('#checkoutPlanCode')).toHaveValue('plus');
+    await expect(page.locator('#checkoutPlanCode')).toHaveValue('pro');
     await expect(page.locator('#checkoutCardButton')).toBeEnabled();
     expect(payloads).toHaveLength(2);
     expect(payloads[1]).toMatchObject({plan_code:'lite', interval:'monthly'});
@@ -179,7 +177,7 @@ for (const method of ['hosted', 'manual']) {
     test(`a late ${method} ${outcome} preserves a reopened checkout and blocks duplicate submissions`, async ({page}) => {
       const pending = deferred(), received = deferred(), payloads = [];
       const path = method === 'hosted' ? '/billing/checkout' : '/billing/manual-transfer/orders';
-      const nextPlan = outcome === 'success' ? 'plus' : 'lite';
+      const nextPlan = outcome === 'success' ? 'pro' : 'lite';
       await openPlans(page, async (route, url) => {
         if (![path, '/billing/checkout'].includes(url.pathname)) return false;
         payloads.push(route.request().postDataJSON());
