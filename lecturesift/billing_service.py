@@ -1405,6 +1405,11 @@ def _plan_from_snapshot(raw: object, expected_plan_code: str) -> Plan:
         if field.name == "assistant_credits" and field.name not in raw:
             values[field.name] = 0  # Purchases before the assistant keep their terms.
             continue
+        if field.name == "listed":
+            # Catalog visibility is not a purchased term; snapshots written
+            # before the field existed, and hidden plans, decode unchanged.
+            values[field.name] = bool(raw.get(field.name, True))
+            continue
         if field.name not in raw:
             raise BillingConfigurationError("Satın alma planı kaydı eksik.")
         value = raw[field.name]

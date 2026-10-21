@@ -38,6 +38,10 @@ class Plan:
     featured: bool = False
     assistant_credits: int = 0
     advertising: str = "legacy"
+    # Unlisted plans keep their code, terms and prices so existing orders,
+    # purchase snapshots and deep links keep working, but public_catalog()
+    # and the plans page no longer offer them as cards.
+    listed: bool = True
 
     @property
     def export_enabled(self) -> bool:
@@ -140,19 +144,30 @@ LEGACY_PLAN_BY_CODE = {plan.code: plan for plan in LEGACY_PLANS}
 PLANS = (
     Plan("free", "free", 120, ("pdf",), "standard", 1, 10, 20, DETAILED_SUMMARY_PROFILE, 7, 3, 250, 50, 60, 100, 30),
     Plan("test", "one_time", 1, ("pdf",), "standard", 1, 1, 1, DETAILED_SUMMARY_PROFILE, 1, 1, 25, 10, 1, 10, 5),
-    Plan("credit", "one_time", 180, ("pdf", "docx", "txt"), "standard", 1, 20, 40, ALL_SUMMARY_PROFILES, 30, 8, 500, 50, 180, 150, 50, 19900),
-    Plan("lite", "subscription", 400, ("pdf", "docx", "txt"), "standard", 1, 10, 20, ALL_SUMMARY_PROFILES, 30, 12, 750, 75, 120, 250, 75, 29900),
-    Plan("plus", "subscription", 900, ("pdf", "docx", "txt"), "standard", 1, 20, 40, ALL_SUMMARY_PROFILES, 90, 16, 1024, 100, 240, 350, 100, 59900, featured=True),
-    Plan("pro", "subscription", 2000, ("pdf", "docx", "txt"), "priority", 1, 30, 60, ALL_SUMMARY_PROFILES, 365, 24, 1024, 100, 360, 500, 150, 119900),
-    Plan("max", "subscription", 4000, ("pdf", "docx", "txt"), "priority", 1, 30, 60, ALL_SUMMARY_PROFILES, 730, 24, 1024, 100, 600, 500, 150, 229900),
+    Plan("credit", "one_time", 300, ("pdf", "docx", "txt"), "standard", 1, 20, 40, ALL_SUMMARY_PROFILES, 30, 8, 500, 50, 180, 150, 50, 19900),
+    # "lite" keeps its code; it is sold as the Student plan ("Öğrenci").
+    Plan("lite", "subscription", 600, ("pdf", "docx", "txt"), "standard", 1, 20, 40, ALL_SUMMARY_PROFILES, 30, 12, 750, 75, 120, 250, 75, 14900, featured=True),
+    # Plus and Max are hidden, not removed: still orderable by code, no longer listed.
+    Plan("plus", "subscription", 900, ("pdf", "docx", "txt"), "standard", 1, 20, 40, ALL_SUMMARY_PROFILES, 90, 16, 1024, 100, 240, 350, 100, 59900, listed=False),
+    Plan("pro", "subscription", 1500, ("pdf", "docx", "txt"), "priority", 1, 30, 60, ALL_SUMMARY_PROFILES, 365, 24, 1024, 100, 360, 500, 150, 44900),
+    Plan("max", "subscription", 4000, ("pdf", "docx", "txt"), "priority", 1, 30, 60, ALL_SUMMARY_PROFILES, 730, 24, 1024, 100, 600, 500, 150, 229900, listed=False),
     Plan("business", "quote", None, ("pdf", "docx", "txt"), "priority", 10, None, None, ALL_SUMMARY_PROFILES, 730, 24, 1024, 100, 1440, 500, 150),
 )
 
 from . import assistant_catalog
 
+# Every paid plan is ad-free ("legacy" resolves to ad_mode "none" for them);
+# the hidden Plus keeps the limited home-page ads its subscribers bought.
 PLANS = tuple(replace(plan, assistant_credits=assistant_catalog.INCLUDED.get(plan.code, 0),
-                      advertising={"lite": "standard", "plus": "limited"}.get(plan.code, "legacy"))
+                      advertising={"plus": "limited"}.get(plan.code, "legacy"))
               for plan in PLANS)
+LISTED_PLAN_CODES = tuple(plan.code for plan in PLANS if plan.listed)
+# Precise transcript timestamps and speaker detection run the diarization
+# model, which costs roughly four times plain transcription. Only these plans
+# may request them; their jobs count PRECISE_TRANSCRIPT_USAGE_MULTIPLIER times
+# the media minutes against the quota.
+PRECISE_TRANSCRIPT_PLAN_CODES = frozenset({"plus", "pro", "max", "business"})
+PRECISE_TRANSCRIPT_USAGE_MULTIPLIER = 4
 ASSISTANT_PLANS = tuple(
     replace(PLANS[1], code=code, minutes=0, assistant_credits=credits,
             try_amount_minor=assistant_catalog.PRICES["TRY"][index])
@@ -170,30 +185,36 @@ PLAN_BY_CODE = {plan.code: plan for plan in (*PLANS, *ASSISTANT_PLANS, AD_FREE_P
 # The connected checkout provider remains the source of truth for tax and the
 # final amount charged.
 _PRICE_PLAN_CODES = ("free", "test", "credit", "lite", "plus", "pro", "max")
+# October 2026 revision: lite (Student) and pro were repriced in TRY and USD;
+# credit, plus and max are unchanged. The other currencies scale lite by
+# 699/899 and pro by 1499/3299 from their previous value. Rounding follows the
+# pattern each row already used: TRY, USD and EUR list prices end in 99 (the
+# nearest x99), every other currency keeps plain minor units rounded to the
+# nearest whole unit (JPY and KRW are zero-decimal, so whole yen/won).
 _REGIONAL_PRICE_POINTS = {
-    "TRY": (0, 100, 19900, 29900, 59900, 119900, 229900),
-    "USD": (0, None, 499, 899, 1699, 3299, 5999),
-    "EUR": (0, None, 499, 849, 1599, 3099, 5699),
-    "GBP": (0, None, 399, 642, 1133, 2519, 4829),
-    "CAD": (0, None, 699, 1017, 1800, 4079, 7819),
-    "AUD": (0, None, 799, 1178, 2066, 4560, 8739),
-    "NZD": (0, None, 899, 1285, 2267, 5040, 9659),
+    "TRY": (0, 100, 19900, 14900, 59900, 44900, 229900),
+    "USD": (0, None, 499, 699, 1699, 1499, 5999),
+    "EUR": (0, None, 499, 699, 1599, 1399, 5699),
+    "GBP": (0, None, 399, 499, 1133, 1145, 4829),
+    "CAD": (0, None, 699, 791, 1800, 1853, 7819),
+    "AUD": (0, None, 799, 916, 2066, 2072, 8739),
+    "NZD": (0, None, 899, 999, 2267, 2290, 9659),
     # JPY and KRW have zero-decimal minor units; the other values use cents.
-    "JPY": (0, None, 750, 1125, 2001, 4501, 8626),
-    "KRW": (0, None, 6900, 10181, 18544, 41887, 80390),
-    "CNY": (0, None, 3500, 5251, 9205, 21004, 40138),
-    "INR": (0, None, 39900, 58835, 106593, 239920, 459915),
-    "BRL": (0, None, 2499, 3750, 6669, 15001, 28751),
-    "MXN": (0, None, 9900, 14896, 26548, 59890, 114892),
-    "CHF": (0, None, 449, 642, 1133, 2639, 5059),
-    "SEK": (0, None, 5299, 7822, 14006, 31204, 59803),
-    "NOK": (0, None, 5499, 8251, 14673, 33004, 63253),
-    "DKK": (0, None, 3499, 4822, 8937, 20402, 39101),
-    "PLN": (0, None, 1999, 2892, 5335, 12001, 23000),
-    "AED": (0, None, 1899, 2785, 4935, 11041, 21160),
-    "SAR": (0, None, 1899, 2785, 5068, 11281, 21620),
-    "SGD": (0, None, 699, 1017, 1800, 4079, 7819),
-    "HKD": (0, None, 3899, 5893, 10404, 23403, 44852),
+    "JPY": (0, None, 750, 875, 2001, 2045, 8626),
+    "KRW": (0, None, 6900, 7916, 18544, 19033, 80390),
+    "CNY": (0, None, 3500, 4083, 9205, 9544, 40138),
+    "INR": (0, None, 39900, 45746, 106593, 109015, 459915),
+    "BRL": (0, None, 2499, 2916, 6669, 6816, 28751),
+    "MXN": (0, None, 9900, 11582, 26548, 27213, 114892),
+    "CHF": (0, None, 449, 499, 1133, 1199, 5059),
+    "SEK": (0, None, 5299, 6082, 14006, 14178, 59803),
+    "NOK": (0, None, 5499, 6415, 14673, 14996, 63253),
+    "DKK": (0, None, 3499, 3749, 8937, 9270, 39101),
+    "PLN": (0, None, 1999, 2249, 5335, 5453, 23000),
+    "AED": (0, None, 1899, 2165, 4935, 5017, 21160),
+    "SAR": (0, None, 1899, 2165, 5068, 5126, 21620),
+    "SGD": (0, None, 699, 791, 1800, 1853, 7819),
+    "HKD": (0, None, 3899, 4582, 10404, 10634, 44852),
 }
 REGIONAL_PRICES = {
     plan_code: {
@@ -242,7 +263,7 @@ PROVIDERS = (
 def public_catalog(currency: str = "TRY") -> dict:
     selected_currency = currency.upper() if currency.upper() in SUPPORTED_CURRENCIES else "TRY"
     return {
-        "plans": [plan.public(selected_currency) for plan in PLANS if plan.code != "test"],
+        "plans": [plan.public(selected_currency) for plan in PLANS if plan.listed and plan.code != "test"],
         "ad_free": AD_FREE_PLAN.public(selected_currency),
         "billing_intervals": ["one_time", "monthly", "annual"],
         "supported_currencies": list(SUPPORTED_CURRENCIES),

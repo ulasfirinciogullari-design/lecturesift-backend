@@ -7,6 +7,7 @@ import lecturesift.app as app_module
 import lecturesift.billing_service as billing_service_module
 from lecturesift import config
 from lecturesift.app import app
+from lecturesift.billing import PLAN_BY_CODE
 from lecturesift.billing_service import (
     authenticate_session,
     approve_manual_order,
@@ -37,16 +38,27 @@ def test_billing_catalog_has_hybrid_plans_and_translation_keys():
     assert response.status_code == 200
     catalog = response.json()
     plans = {plan["code"]: plan for plan in catalog["plans"]}
-    assert {"free", "credit", "lite", "plus", "pro", "max", "business"} <= plans.keys()
-    assert "test" not in plans
+    assert list(plans) == ["free", "credit", "lite", "pro", "business"]
+    # Plus and Max are hidden from the public catalog, not removed: their
+    # codes still resolve for existing orders and deep links.
+    assert "test" not in plans and "plus" not in plans and "max" not in plans
+    assert {"plus", "max"} <= PLAN_BY_CODE.keys()
+    assert PLAN_BY_CODE["plus"].listed is False and PLAN_BY_CODE["max"].listed is False
     assert catalog["ad_free"]["display_price"] == {"currency": "TRY", "amount_minor": 5990}
+    assert catalog["assistant"]["version"] == "2026-10-20-assistant-v2"
+    assert catalog["assistant"]["included"]["free"] == 100
+    assert catalog["assistant"]["included"]["lite"] == 1000
+    assert [pack["amount_minor"] for pack in catalog["assistant"]["packs"]] == [4900, 11900, 29900]
     assert plans["free"]["export_enabled"] is True
     assert plans["credit"]["kind"] == "one_time"
-    assert plans["plus"]["featured"] is True
+    assert plans["lite"]["featured"] is True
+    assert plans["pro"]["featured"] is False
     assert plans["pro"]["name_key"] == "billing.plan.pro.name"
-    assert plans["plus"]["entitlements"]["quiz_questions"] == 20
-    assert plans["plus"]["entitlements"]["flashcards"] == 40
-    assert plans["plus"]["entitlements"]["export_formats"] == ["pdf", "docx", "txt"]
+    assert plans["lite"]["entitlements"]["quiz_questions"] == 20
+    assert plans["lite"]["entitlements"]["flashcards"] == 40
+    assert plans["lite"]["entitlements"]["export_formats"] == ["pdf", "docx", "txt"]
+    assert plans["lite"]["entitlements"]["assistant_credits"] == 1000
+    assert plans["pro"]["entitlements"]["assistant_credits"] == 4000
     assert all(
         plan["entitlements"]["summary_profiles"] == ["detailed"]
         for plan in plans.values()
@@ -56,16 +68,18 @@ def test_billing_catalog_has_hybrid_plans_and_translation_keys():
     assert plans["free"]["entitlements"]["download_enabled"] is True
     assert plans["free"]["entitlements"]["export_formats"] == ["pdf"]
     assert plans["credit"]["entitlements"]["download_enabled"] is True
-    assert plans["plus"]["entitlements"]["ad_free"] is False
-    assert plans["plus"]["entitlements"]["ad_mode"] == "limited"
-    assert plans["lite"]["entitlements"]["ad_mode"] == "standard"
+    # Every listed paid plan is ad-free; ads may appear only on the free plan.
+    assert plans["lite"]["entitlements"]["ad_free"] is True
+    assert plans["lite"]["entitlements"]["ad_mode"] == "none"
     assert plans["pro"]["entitlements"]["ad_free"] is True
-    assert plans["plus"]["entitlements"]["rewarded_minutes_eligible"] is False
+    assert plans["lite"]["entitlements"]["rewarded_minutes_eligible"] is False
+    assert PLAN_BY_CODE["plus"].public()["entitlements"]["ad_mode"] == "limited"
     assert plans["free"]["minutes"] == 120
-    assert plans["lite"]["minutes"] == 400
-    assert plans["plus"]["minutes"] == 900
-    assert plans["pro"]["minutes"] == 2000
-    assert plans["max"]["minutes"] == 4000
+    assert plans["credit"]["minutes"] == 300
+    assert plans["lite"]["minutes"] == 600
+    assert plans["pro"]["minutes"] == 1500
+    assert PLAN_BY_CODE["plus"].minutes == 900
+    assert PLAN_BY_CODE["max"].minutes == 4000
     assert plans["free"]["entitlements"]["limits"] == {
         "max_files_per_job": 3,
         "max_media_upload_mb": 250,
@@ -75,40 +89,42 @@ def test_billing_catalog_has_hybrid_plans_and_translation_keys():
         "max_ocr_pages": 30,
         "max_document_characters": 1_500_000,
     }
-    assert plans["plus"]["entitlements"]["limits"] == {
-        "max_files_per_job": 16,
-        "max_media_upload_mb": 1024,
-        "max_document_upload_mb": 100,
-        "max_minutes_per_job": 240,
-        "max_document_pages": 350,
-        "max_ocr_pages": 100,
+    assert plans["lite"]["entitlements"]["limits"] == {
+        "max_files_per_job": 12,
+        "max_media_upload_mb": 750,
+        "max_document_upload_mb": 75,
+        "max_minutes_per_job": 120,
+        "max_document_pages": 250,
+        "max_ocr_pages": 75,
         "max_document_characters": 1_500_000,
     }
+    assert plans["pro"]["entitlements"]["limits"]["max_minutes_per_job"] == 360
+    assert plans["pro"]["entitlements"]["limits"]["max_files_per_job"] == 24
     assert {
         code: plans[code]["entitlements"]["limits"]["max_document_upload_mb"]
-        for code in ("free", "credit", "lite", "plus", "pro", "max", "business")
+        for code in ("free", "credit", "lite", "pro", "business")
     } == {
         "free": 50,
         "credit": 50,
         "lite": 75,
-        "plus": 100,
         "pro": 100,
-        "max": 100,
         "business": 100,
     }
-    assert plans["max"]["entitlements"]["limits"]["max_minutes_per_job"] == 600
+    assert PLAN_BY_CODE["max"].public()["entitlements"]["limits"]["max_minutes_per_job"] == 600
 
     usd = TestClient(app).get("/billing/plans?currency=USD").json()
     usd_plans = {plan["code"]: plan for plan in usd["plans"]}
     assert usd["selected_currency"] == "USD"
     assert "test" not in usd_plans
     assert usd["ad_free"]["display_price"] == {"currency": "USD", "amount_minor": 149}
-    assert usd_plans["plus"]["display_price"] == {"currency": "USD", "amount_minor": 1699}
+    assert usd_plans["lite"]["display_price"] == {"currency": "USD", "amount_minor": 699}
+    assert usd_plans["pro"]["display_price"] == {"currency": "USD", "amount_minor": 1499}
+    assert [pack["amount_minor"] for pack in usd["assistant"]["packs"]] == [199, 399, 999]
 
     jpy = TestClient(app).get("/billing/plans?currency=JPY").json()
     jpy_plans = {plan["code"]: plan for plan in jpy["plans"]}
     assert jpy["selected_currency"] == "JPY"
-    assert jpy_plans["plus"]["display_price"] == {"currency": "JPY", "amount_minor": 2001}
+    assert jpy_plans["lite"]["display_price"] == {"currency": "JPY", "amount_minor": 875}
     assert {"CAD", "AUD", "INR", "BRL", "AED", "SGD"} <= set(jpy["supported_currencies"])
 
 
