@@ -33,6 +33,7 @@ async function openAdmin(page, {override, saved = false, manual = false, hash = 
     ['/billing/admin/refund-requests', {requests:[]}],
     ['/billing/admin/credit-events?limit=250', {events:[]}],
     ['/billing/admin/contact-messages?limit=250', {messages:[]}],
+    ['/billing/admin/feedback?limit=250', {feedback:[]}],
     ['/billing/admin/jobs?limit=250', {jobs:[]}],
     ['/billing/admin/account-events?limit=250', {events:[]}],
     ['/billing/health', {database:{connected:true, persistent:true}, email_delivery_configured:true, commerce_identity:{configured:true}, payments:{iyzico:{configured:true, webhook_signature:{required:true}}}}],

@@ -285,6 +285,88 @@ On the first release that adds `lecturesift-adsense-status.timer`, step 0
 recorded no such timer. Follow "First release with the AdSense status email"
 below instead of enabling it here.
 
+## Schema release: study-pack feedback (schema contract v6)
+
+The first release that contains `deploy/feedback_schema_release.py` adds one
+table, `public.lecturesift_job_feedback`, which stores the thumbs-up/down and
+optional comment a member or guest leaves under a finished study pack. The
+runtime never creates it: `init_rollout_database()` does not know the table,
+so the exact rehearsal in step 4 and the start in step 6 leave the database
+exactly as it was. Until this release has run, `POST /jobs/{id}/feedback`
+answers `503 LS-FEEDBACK-02`, the workspace hides the feedback prompt and the
+admin "Geri bildirimler" section reports that the data is not available yet.
+Nothing else in the release depends on the table.
+
+The table is the only difference between the frozen schema contract v5
+(workspace) and v6 (feedback). The live database is accepted only when its
+public table set equals exactly one of these families
+(`deploy/schema_contract_state.py`), so the table is added by one explicit,
+verified owner transaction and never by hand.
+
+Run it once, after step 7, on a database that already holds the v5 workspace
+tables. It holds `ACCESS EXCLUSIVE` locks on every public table for a few
+seconds with a 5 s lock timeout, so prefer a quiet moment; a timeout rolls
+everything back and the command can simply be repeated.
+
+```sh
+sudo env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8 bash -c '
+  set -a; . /etc/lecturesift/postgres.env; set +a
+  install -d -m 0700 /root/lecturesift-feedback-schema-v1
+  cd /opt/lecturesift
+  python3 -m deploy.feedback_schema_release --confirm-feedback-schema-v1 \
+    --postgres-container lecturesift-postgres-1 \
+    --evidence-dir /root/lecturesift-feedback-schema-v1 \
+    --api-role "$LECTURESIFT_APP_DB_USER" --worker-role "$LECTURESIFT_WORKER_DB_USER"
+'
+```
+
+The driver runs `psql` inside the production PostgreSQL container as its
+owner login (`POSTGRES_USER`), the same way the exact rehearsal reads the
+database. In one transaction it captures `rehearsal_manifest_v6.sql` with
+`LECTURESIFT_ALLOW_LEGACY_FEEDBACK_TABLES on` into `before-v6.txt`, requires
+`verify_schema_transition_v6.py` to accept it as `legacy_missing_release_tables`
+with every v5 table current, applies `deploy/feedback_tables_v1.sql`, grants
+the API login `SELECT, INSERT, UPDATE, DELETE` on the new table and revokes
+everything from the worker login, captures the strict manifest into
+`after-v6.txt` and commits only when `verify_transition` proves
+`schema_transition=legacy_to_current`: the new table matches
+`schema_contract_feedback_v1.txt` byte for byte, no other schema object
+changed and no pre-existing row changed. Like every strict capture, the pre-check refuses a database that reports any
+integrity anomaly, in any table, so a database whose scheduled backup passes
+is accepted. Any failure rolls the whole
+transaction back and removes `after-v6.txt`. It must print
+
+```text
+feedback_tables_added=1
+feedback_schema_state=current
+```
+
+Running it again prints `feedback_tables_added=0`. Keep the evidence
+directory root-only.
+
+Then tell the backup which recovery family the database is in. In
+`/etc/lecturesift/runtime.env` set
+
+```text
+LECTURESIFT_PRODUCT_SCHEMA_VERSION=3
+```
+
+and run `sudo systemctl reload lecturesift`. From now on `backup.sh` records
+`schema_manifest_version=5` and
+`application_schema_compatibility=lecturesift-schema-v5`, captures
+`recovery_manifest_v5.sql` and verifies it with
+`verify_schema_transition_v6.py`; `restore.sh` and
+`restic_restore_rehearsal.sh` accept that metadata the same way. The next
+exact rehearsal detects the live family as `6` (`--accept 3,4,5,6`) and
+captures `rehearsal_manifest_v6.sql` before and after. The configuration
+snapshot (format v5) now carries the v6 manifest, verifier, contract, DDL and
+driver, so a restored configuration can verify these backups.
+
+The provider cutover and its rollback to Render are not affected: they stay
+pinned to the cutover revision and keep accepting only the v4/v5 Render
+source. A later release that lacks the v6 contract refuses this database, as
+described under "Rollback".
+
 ## Rollback
 
 There are two cases. In both, a rollback target must be either the cutover

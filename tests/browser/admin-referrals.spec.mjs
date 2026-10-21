@@ -36,6 +36,7 @@ test('admin referral releases require live reconciliation and refresh the queue'
     ['/billing/admin/refund-requests', {requests:[]}],
     ['/billing/admin/credit-events?limit=250', {events:[]}],
     ['/billing/admin/contact-messages?limit=250', {messages:[]}],
+    ['/billing/admin/feedback?limit=250', {feedback:[]}],
     ['/billing/admin/jobs?limit=250', {jobs:[], counts:{}}],
     ['/billing/admin/account-events?limit=250', {events:[]}],
     ['/billing/health', {}],
@@ -164,7 +165,7 @@ for (const [caseName, referralPayload] of [
     const emptyPage = {page:1, page_size:50, total:0, total_pages:1};
     const allowedPaths = new Set([
       '/billing/admin/overview', '/admin/instagram-rewards', '/billing/admin/refund-requests',
-      '/billing/admin/credit-events', '/billing/admin/contact-messages', '/billing/admin/jobs',
+      '/billing/admin/credit-events', '/billing/admin/contact-messages', '/billing/admin/feedback', '/billing/admin/jobs',
       '/billing/admin/account-events', '/billing/health', '/rollout/health', '/ads/config',
       '/analytics/config', '/billing/admin/advertising-readiness', '/billing/admin/costs', '/billing/admin/referrals',
       '/billing/admin/users', '/billing/admin/orders',
@@ -191,6 +192,7 @@ for (const [caseName, referralPayload] of [
       else if (url.pathname === '/admin/instagram-rewards') json = {rewards:[]};
       else if (url.pathname === '/billing/admin/refund-requests') json = {requests:[]};
       else if (url.pathname === '/billing/admin/contact-messages') json = {messages:[]};
+      else if (url.pathname === '/billing/admin/feedback') json = {feedback:[]};
       else if (url.pathname === '/billing/admin/jobs') json = {jobs:[], counts:{}};
       else if (url.pathname === '/billing/admin/users') json = {users:[], pagination:emptyPage};
       else if (url.pathname === '/billing/admin/orders') json = {orders:[], pagination:emptyPage};

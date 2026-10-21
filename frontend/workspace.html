@@ -8,7 +8,7 @@
   <meta name="description" content="LectureSift çalışma alanında video, ses, PDF, Word ve PowerPoint kaynaklarından özet, transkript, quiz ve bilgi kartı oluştur.">
   <title>Çalışma Alanı | LectureSift</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=17">
+  <link rel="stylesheet" href="./styles.css?v=18">
 <link rel="stylesheet" href="/rollout.css?v=9"><link rel="stylesheet" href="/theme.css?v=17"><script src="/theme.js?v=14"></script><link rel="stylesheet" href="/product-layout.css?v=9"><link rel="stylesheet" href="/library.css?v=2"></head>
 <body class="workspace-page" data-page="workspace">
   <div class="ambient ambient-one"></div>
@@ -245,15 +245,14 @@
     </section>
 
     <section id="results" class="results" hidden aria-labelledby="resultHeading">
+      <aside id="guestSaveResult" class="guest-save-result" aria-labelledby="guestSaveResultTitle" hidden>
+        <div class="guest-save-copy"><strong id="guestSaveResultTitle" data-i18n="workspace.guestSaveTitle">Sonuçların 24 saat sonra silinir.</strong><p data-i18n="workspace.guestSaveHelp">Ücretsiz hesap aç: kaydet ve ayda 120 dakika kazan.</p></div>
+        <div class="guest-save-actions"><a id="guestSaveRegister" class="guest-save-primary" href="/register.html" data-i18n="workspace.guestSaveAction">Ücretsiz hesap aç</a><a id="guestSaveLogin" class="guest-save-login" href="/login.html" data-i18n="workspace.guestSaveLogin">Giriş yap</a></div>
+      </aside>
       <div class="result-header">
         <div><p class="eyebrow" data-i18n="resultEyebrow">Ders paketi hazır</p><h2 id="resultHeading">LectureSift</h2><p id="resultMeta"></p></div>
         <a id="downloadAll" class="download-button" href="#"><span data-i18n="downloadAll">Tüm paketi indir</span><b>ZIP</b></a>
       </div>
-      <aside id="guestSaveResult" class="document-sample-result guest-save-result" aria-labelledby="guestSaveResultTitle" hidden>
-        <strong id="guestSaveResultTitle" data-i18n="workspace.guestSaveTitle">Bu sonuç geçici olarak saklanıyor</strong>
-        <p data-i18n="workspace.guestSaveHelp">Ücretsiz hesap oluştur; sonucun hesabına taşınır ve e-postanı doğruladıktan sonra buraya dönersin.</p>
-        <div class="document-sample-actions"><a id="guestSaveRegister" class="guest-save-primary" href="/register.html" data-i18n="workspace.guestSaveAction">Sonucunu kaydet</a><a id="guestSaveLogin" href="/login.html" data-i18n="workspace.guestSaveLogin">Hesabım var, giriş yap</a></div>
-      </aside>
       <aside id="documentSampleResult" class="document-sample-result" aria-labelledby="documentSampleResultTitle" hidden>
         <strong id="documentSampleResultTitle" data-i18n="document.sampleResultTitle">Yalnızca bu bölüm işlendi</strong>
         <p id="documentSampleResultRange"></p>
@@ -292,7 +291,26 @@
         <article id="pane-ask" role="tabpanel" aria-labelledby="resultTab-ask" class="result-pane" hidden><div class="lesson-ask"><div><h3 data-i18n="ask.heading">Ders içeriğine dayalı yanıt al</h3><p data-i18n="ask.help">LectureSift yalnızca bu dersin özet, not ve transkriptini kullanır; destekleyen zaman damgalarını yanıtın altında gösterir.</p></div><form id="lessonQuestionForm"><textarea id="lessonQuestion" maxlength="500" required aria-label="Örneğin: Öğretmen bu kavramı hangi örnekle açıkladı?" data-i18n-aria-label="ask.placeholder" data-i18n-placeholder="ask.placeholder" placeholder="Örneğin: Öğretmen bu kavramı hangi örnekle açıkladı?"></textarea><button id="lessonQuestionButton" type="submit" data-i18n="ask.button">Derse sor</button></form><div id="lessonAnswer" class="lesson-answer" hidden aria-live="polite"></div></div></article>
         <article id="pane-files" role="tabpanel" aria-labelledby="resultTab-files" class="result-pane" hidden><div id="filesContent" class="files-grid"></div></article>
       </div>
+      <section id="jobFeedback" class="job-feedback" aria-labelledby="jobFeedbackTitle" hidden>
+        <div class="job-feedback-head">
+          <strong id="jobFeedbackTitle" data-i18n="feedback.title">Bu paket işine yaradı mı?</strong>
+          <div class="job-feedback-rating" role="group" aria-labelledby="jobFeedbackTitle">
+            <button id="jobFeedbackUp" type="button" data-rating="up" aria-pressed="false" aria-label="Evet, işime yaradı" data-i18n-aria-label="feedback.up"><span aria-hidden="true">👍</span></button>
+            <button id="jobFeedbackDown" type="button" data-rating="down" aria-pressed="false" aria-label="Hayır, işime yaramadı" data-i18n-aria-label="feedback.down"><span aria-hidden="true">👎</span></button>
+          </div>
+        </div>
+        <form id="jobFeedbackForm" class="job-feedback-form" hidden>
+          <label for="jobFeedbackComment" data-i18n="feedback.commentLabel">Kısa bir yorum ekle (isteğe bağlı)</label>
+          <div class="job-feedback-input"><input id="jobFeedbackComment" type="text" maxlength="280" autocomplete="off" placeholder="Neyi beğendin, neyi değiştirelim?" data-i18n-placeholder="feedback.commentPlaceholder"><span id="jobFeedbackCount" aria-hidden="true">0/280</span></div>
+          <label class="job-feedback-consent"><input id="jobFeedbackConsent" type="checkbox"><span data-i18n="feedback.consent">Yorumum sitede adımın baş harfleriyle gösterilebilir</span></label>
+          <button id="jobFeedbackSend" type="submit" data-i18n="feedback.send">Gönder</button>
+        </form>
+        <p id="jobFeedbackStatus" class="job-feedback-status" role="status" hidden></p>
+      </section>
     </section>
+    <div id="mobileUploadBar" class="mobile-upload-bar" hidden>
+      <button id="mobileUploadButton" class="primary-button" type="button" data-i18n="workspace.mobileUpload">Dosya yükle</button>
+    </div>
     </section>
     <section id="workspaceAssistantPanel" role="tabpanel" aria-labelledby="workspaceAssistantTab" hidden>
       <header class="workspace-assistant-intro"><div><h1 data-assistant-copy="title">LectureSift Asistan</h1><p data-assistant-copy="intro">Sorularını sor, görsel paylaş ve derslerini adım adım keşfet.</p></div><a href="/assistant.html" data-assistant-copy="openpage">Asistan sayfasını aç</a></header>

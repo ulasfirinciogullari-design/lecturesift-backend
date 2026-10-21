@@ -14,7 +14,7 @@ let adminAccessToken = sessionStorage.getItem(ADMIN_SESSION_TOKEN_KEY) || "";
 let adminAccountEmail = sessionStorage.getItem(ADMIN_SESSION_EMAIL_KEY) || "";
 let adminLoginChallenge = null;
 let adminLoading = false;
-const emptyAdminState = () => ({overview:{counts:{}}, users:[], userPagination:{page:1,total:0,total_pages:1}, orders:[], orderPagination:{page:1,total:0,total_pages:1}, rewards:[], referrals:[], referralsError:"", referralsHasMore:false, referralsLimit:100, refunds:[], credits:[], accountEvents:[], contacts:[], jobs:[], costs:null, billing:null, runtime:null, ads:null, analytics:null, advertisingReadiness:null});
+const emptyAdminState = () => ({overview:{counts:{}}, users:[], userPagination:{page:1,total:0,total_pages:1}, orders:[], orderPagination:{page:1,total:0,total_pages:1}, rewards:[], referrals:[], referralsError:"", referralsHasMore:false, referralsLimit:100, refunds:[], credits:[], accountEvents:[], contacts:[], feedback:[], jobs:[], costs:null, billing:null, runtime:null, ads:null, analytics:null, advertisingReadiness:null});
 let adminState = emptyAdminState();
 let selectedAdminUsers = new Set();
 const adminReferralDrafts = new Map();
@@ -78,14 +78,14 @@ function formatAdminRecordTables(root = admin$("adminPanel")) {
 }
 
 function renderAdminLoadProblems() {
-  const targets = {users:["adminUserList"], orders:["adminOrders"], rewards:["adminRewards"], refunds:["adminRefunds"], credits:["adminCreditEvents"], contacts:["adminContactMessages"], jobs:["adminJobs"], accountEvents:["adminAccountEvents"], costs:["adminCostMetrics", "adminCostAccuracy", "adminCostEconomics", "adminProviderCosts", "adminResourceCosts", "adminJobCosts", "adminFixedCosts", "adminActualCosts", "adminExternalCosts"]};
+  const targets = {users:["adminUserList"], orders:["adminOrders"], rewards:["adminRewards"], refunds:["adminRefunds"], credits:["adminCreditEvents"], contacts:["adminContactMessages"], feedback:["adminFeedback"], jobs:["adminJobs"], accountEvents:["adminAccountEvents"], costs:["adminCostMetrics", "adminCostAccuracy", "adminCostEconomics", "adminProviderCosts", "adminResourceCosts", "adminJobCosts", "adminFixedCosts", "adminActualCosts", "adminExternalCosts"]};
   for (const [key, problem] of adminLoadErrors) {
     for (const id of targets[key] || []) {
       const target = admin$(id);
       if (target) target.innerHTML = `<p class="admin-load-error" role="status">${adminEscape(problem.label)} yüklenemedi. ${adminEscape(problem.message)}</p>`;
     }
   }
-  for (const [key, id] of [["users", "adminExportUsers"], ["orders", "adminExportOrders"], ["contacts", "adminExportMessages"]]) {
+  for (const [key, id] of [["users", "adminExportUsers"], ["orders", "adminExportOrders"], ["contacts", "adminExportMessages"], ["feedback", "adminExportFeedback"]]) {
     if (admin$(id)) admin$(id).disabled = !adminLoadedSections.has(key) || adminLoadErrors.has(key);
   }
   const status = admin$("adminDataStatus");
@@ -705,6 +705,20 @@ function renderAdminContactMessages(messages) {
   document.querySelectorAll("[data-contact-status]").forEach(button => button.addEventListener("click", () => updateContactMessage(button)));
   document.querySelectorAll("[data-contact-delete]").forEach(button => button.addEventListener("click", () => deleteAdminContact(button.dataset.contactDelete)));
   document.querySelectorAll("[data-contact-open]").forEach(button => button.addEventListener("click", () => openContactConversation(button.dataset.contactOpen)));
+}
+
+function renderAdminFeedback(items) {
+  const planLabel = code => code === "guest" ? "Misafir" : (window.LectureSiftI18n?.t(`plan.${code}`, "") || code || "—");
+  const rows = items.map(item => `<tr><td data-label="Tarih" title="${adminEscape(adminDate(item.created_at))}">${adminEscape(adminRelativeDate(item.updated_at || item.created_at))}</td><td data-label="Oy"><span class="status-pill ${item.rating === "up" ? "paid" : ""}">${item.rating === "up" ? "👍 Beğendi" : "👎 Beğenmedi"}</span></td><td data-label="Yorum" class="admin-message-cell">${item.comment ? adminEscape(item.comment) : "<small>Yorum yok</small>"}</td><td data-label="Onay">${item.consent ? "Baş harflerle gösterilebilir" : "Yalnızca panel"}</td><td data-label="Plan">${adminEscape(planLabel(item.plan))}${item.email ? `<br><small>${adminEscape(item.email)}</small>` : ""}</td><td data-label="Dil">${adminEscape(String(item.locale || "").toUpperCase())}</td></tr>`).join("");
+  admin$("adminFeedback").innerHTML = `<table class="admin-table admin-record-table"><thead><tr><th>Tarih</th><th>Oy</th><th>Yorum</th><th>Onay</th><th>Plan</th><th>Dil</th></tr></thead><tbody>${rows || '<tr><td colspan="6">Henüz geri bildirim yok.</td></tr>'}</tbody></table>`;
+}
+
+// The server writes this CSV (UTF-8 BOM, formula-safe cells) from the stored
+// rows, so the export is not limited to the 250 rows shown in the panel.
+async function exportAdminFeedback() {
+  const blob = await adminRequest("/billing/admin/feedback.csv", {binary:true});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a"); link.href = url; link.download = "lecturesift-geri-bildirimler.csv"; link.click(); URL.revokeObjectURL(url);
 }
 
 function renderContactConversation(conversation, {draft = ""} = {}) {
@@ -1498,7 +1512,7 @@ async function loadAdmin({silent = false} = {}) {
     admin$("adminPanel").hidden = false;
     admin$("adminNotice").hidden = true;
     admin$("adminLastUpdated").textContent = `Genel bakış: ${adminDate(new Date().toISOString())} · Diğer bölümler yükleniyor…`;
-    for (const [key, id] of Object.entries({users:"adminUserList", orders:"adminOrders", rewards:"adminRewards", refunds:"adminRefunds", credits:"adminCreditEvents", contacts:"adminContactMessages", jobs:"adminJobs", accountEvents:"adminAccountEvents", referrals:"adminReferralRewards", costs:"adminCostMetrics"})) {
+    for (const [key, id] of Object.entries({users:"adminUserList", orders:"adminOrders", rewards:"adminRewards", refunds:"adminRefunds", credits:"adminCreditEvents", contacts:"adminContactMessages", feedback:"adminFeedback", jobs:"adminJobs", accountEvents:"adminAccountEvents", referrals:"adminReferralRewards", costs:"adminCostMetrics"})) {
       if (!adminLoadedSections.has(key)) admin$(id).innerHTML = '<p class="admin-loading" role="status">Yükleniyor…</p>';
     }
     renderMetrics();
@@ -1530,6 +1544,7 @@ async function loadAdmin({silent = false} = {}) {
       collection("refunds", "İade talepleri", "/billing/admin/refund-requests", "requests", () => renderAdminRefunds(adminState.refunds)),
       collection("credits", "Dakika hareketleri", "/billing/admin/credit-events?limit=250", "events", () => renderAdminCreditEvents(adminState.credits)),
       collection("contacts", "Destek mesajları", "/billing/admin/contact-messages?limit=250", "messages", refreshActivity),
+      collection("feedback", "Geri bildirimler", "/billing/admin/feedback?limit=250", "feedback", () => renderAdminFeedback(adminState.feedback)),
       refreshJobs(),
       collection("accountEvents", "Yönetici kayıtları", "/billing/admin/account-events?limit=250", "events", () => renderAdminAccountEvents(adminState.accountEvents)),
       object("billing", "Ödeme altyapısı", "/billing/health", refreshReadiness, true),
@@ -2024,6 +2039,7 @@ admin$("adminClearSelection").addEventListener("click", () => { selectedAdminUse
 syncAdminBulkFields();
 admin$("adminExportOrders").addEventListener("click", () => downloadAdminCsv("lecturesift-siparisler.csv", adminState.orders.map(item => ({siparis_no:item.order_number || item.reference, olusturma_zamani:item.created_at, son_guncelleme:item.updated_at, musteri:item.user?.name || "", eposta:item.user?.email || "", odeme_yontemi:adminPaymentMethodLabel(item), saglayici:item.provider, plan:item.plan_code, donem:item.interval, tutar_minor:item.amount_minor, para_birimi:item.currency, durum:item.status, guvenli_ag:item.user?.last_activity?.ip_network || ""}))));
 admin$("adminExportMessages").addEventListener("click", () => downloadAdminCsv("lecturesift-mesajlar.csv", adminState.contacts.map(item => ({tarih:item.created_at, ad_soyad:item.name, eposta:item.email, konu:item.topic, siparis_no:item.order_reference || "", durum:item.status, mesaj:item.message}))));
+admin$("adminExportFeedback").addEventListener("click", () => exportAdminFeedback().catch(error => adminNotice(error.message, true)));
 admin$("adminExportUsers").addEventListener("click", () => downloadAdminCsv("lecturesift-kullanicilar.csv", adminState.users.map(item => ({kayit_tarihi:item.created_at, son_guncelleme:item.updated_at, ad_soyad:item.name, eposta:item.email, telefon:item.phone || "", ulke:item.country_code || "", eposta_dogrulandi:item.email_verified ? "evet" : "hayir", plan:item.plan_code || "free", kredi_dakika:item.credit_minutes, son_guvenli_ag:item.last_activity?.ip_network || ""}))));
 setInterval(() => {
   const editingReferral = document.activeElement?.closest("[data-referral-release-form], #adminReferralReconcileForm");

@@ -137,6 +137,7 @@ case "${LECTURESIFT_PRODUCT_SCHEMA_VERSION:-0}" in
   0) ;;
   1) RECOVERY_MANIFEST_VERSION=3; RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v3.sql" ;;
   2) RECOVERY_MANIFEST_VERSION=4; RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v4.sql" ;;
+  3) RECOVERY_MANIFEST_VERSION=5; RECOVERY_MANIFEST="$ROOT_DIR/deploy/recovery_manifest_v5.sql" ;;
   *) echo "Unsupported product schema version." >&2; exit 1 ;;
 esac
 
@@ -473,9 +474,11 @@ if grep -Eq '^(TABLE_DIFF|UNVALIDATED_FK)\|' "$STAGING/rehearsal-manifest.txt" |
   echo "The backup schema/data integrity manifest failed." >&2
   exit 1
 fi
-if [[ "$RECOVERY_MANIFEST_VERSION" == "3" || "$RECOVERY_MANIFEST_VERSION" == "4" ]]; then
+if [[ "$RECOVERY_MANIFEST_VERSION" == "3" || "$RECOVERY_MANIFEST_VERSION" == "4" ||
+      "$RECOVERY_MANIFEST_VERSION" == "5" ]]; then
   schema_verifier=4
   [[ "$RECOVERY_MANIFEST_VERSION" != "4" ]] || schema_verifier=5
+  [[ "$RECOVERY_MANIFEST_VERSION" != "5" ]] || schema_verifier=6
   python3 "$ROOT_DIR/deploy/verify_schema_transition_v${schema_verifier}.py" current \
     --manifest "$STAGING/rehearsal-manifest.txt" \
     --contract "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" \
@@ -550,7 +553,9 @@ redis_version="$(docker compose exec -T redis redis-cli --raw INFO server \
 {
   printf 'format=lecturesift-backup-v2\n'
   printf 'application_identity=lecturesift-production\n'
-  if [[ "$RECOVERY_MANIFEST_VERSION" == "4" ]]; then
+  if [[ "$RECOVERY_MANIFEST_VERSION" == "5" ]]; then
+    printf 'application_schema_compatibility=lecturesift-schema-v5\n'
+  elif [[ "$RECOVERY_MANIFEST_VERSION" == "4" ]]; then
     printf 'application_schema_compatibility=lecturesift-schema-v4\n'
   elif [[ "$RECOVERY_MANIFEST_VERSION" == "3" ]]; then
     printf 'application_schema_compatibility=lecturesift-schema-v3\n'

@@ -359,6 +359,8 @@ def export_account_data(user_id: str) -> dict[str, Any]:
             .where(PAYMENT_CONSENTS.c.user_id == user_id)
             .order_by(PAYMENT_CONSENTS.c.accepted_at.desc())
         ).all()
+        from .job_feedback import export_rows as export_feedback
+        feedback = export_feedback(connection, user_id)
     return {
         "workspace": workspace_data,
         "generated_at": utcnow().isoformat(),
@@ -441,6 +443,7 @@ def export_account_data(user_id: str) -> dict[str, Any]:
             }
             for row in payment_consents
         ],
+        "feedback": feedback,
     }
 
 
@@ -475,6 +478,8 @@ def close_user_account(
         close_assistant(connection, user_id)
         from .workspace_state import erase_account_state
         erase_account_state(connection, user_id)
+        from .job_feedback import erase_rows as erase_feedback
+        erase_feedback(connection, user_id)
         anonymized_email = f"deleted+{uuid.uuid4().hex}@users.invalid"
         salt = secrets.token_bytes(16)
         connection.execute(
@@ -2345,6 +2350,8 @@ def admin_close_user_account(
         close_assistant(connection, user_id)
         from .workspace_state import erase_account_state
         erase_account_state(connection, user_id)
+        from .job_feedback import erase_rows as erase_feedback
+        erase_feedback(connection, user_id)
         anonymized_email = f"deleted+{uuid.uuid4().hex}@users.invalid"
         salt = secrets.token_bytes(16)
         connection.execute(

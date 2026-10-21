@@ -1,0 +1,22 @@
+# Frozen PostgreSQL 18 study-pack feedback schema v1.
+SCHEMA_OBJECT|C|public.lecturesift_job_feedback|1|id|character varying(36)|t|||
+SCHEMA_OBJECT|C|public.lecturesift_job_feedback|2|job_id|character varying(80)|t|||
+SCHEMA_OBJECT|C|public.lecturesift_job_feedback|3|user_id|character varying(36)|f|||
+SCHEMA_OBJECT|C|public.lecturesift_job_feedback|4|rating|character varying(8)|t|||
+SCHEMA_OBJECT|C|public.lecturesift_job_feedback|5|comment|character varying(280)|f|||
+SCHEMA_OBJECT|C|public.lecturesift_job_feedback|6|consent|boolean|t|||
+SCHEMA_OBJECT|C|public.lecturesift_job_feedback|7|locale|character varying(8)|t|||
+SCHEMA_OBJECT|C|public.lecturesift_job_feedback|8|created_at|timestamp with time zone|t|||
+SCHEMA_OBJECT|C|public.lecturesift_job_feedback|9|updated_at|timestamp with time zone|t|||
+SCHEMA_OBJECT|I|lecturesift_job_feedback|ix_lecturesift_job_feedback_user_id|CREATE INDEX ix_lecturesift_job_feedback_user_id ON public.lecturesift_job_feedback USING btree (user_id)
+SCHEMA_OBJECT|I|lecturesift_job_feedback|lecturesift_job_feedback_job_id_key|CREATE UNIQUE INDEX lecturesift_job_feedback_job_id_key ON public.lecturesift_job_feedback USING btree (job_id)
+SCHEMA_OBJECT|I|lecturesift_job_feedback|lecturesift_job_feedback_pkey|CREATE UNIQUE INDEX lecturesift_job_feedback_pkey ON public.lecturesift_job_feedback USING btree (id)
+SCHEMA_OBJECT|K|lecturesift_job_feedback|lecturesift_job_feedback_consent_not_null|t|NOT NULL consent
+SCHEMA_OBJECT|K|lecturesift_job_feedback|lecturesift_job_feedback_created_at_not_null|t|NOT NULL created_at
+SCHEMA_OBJECT|K|lecturesift_job_feedback|lecturesift_job_feedback_id_not_null|t|NOT NULL id
+SCHEMA_OBJECT|K|lecturesift_job_feedback|lecturesift_job_feedback_job_id_key|t|UNIQUE (job_id)
+SCHEMA_OBJECT|K|lecturesift_job_feedback|lecturesift_job_feedback_job_id_not_null|t|NOT NULL job_id
+SCHEMA_OBJECT|K|lecturesift_job_feedback|lecturesift_job_feedback_locale_not_null|t|NOT NULL locale
+SCHEMA_OBJECT|K|lecturesift_job_feedback|lecturesift_job_feedback_pkey|t|PRIMARY KEY (id)
+SCHEMA_OBJECT|K|lecturesift_job_feedback|lecturesift_job_feedback_rating_not_null|t|NOT NULL rating
+SCHEMA_OBJECT|K|lecturesift_job_feedback|lecturesift_job_feedback_updated_at_not_null|t|NOT NULL updated_at

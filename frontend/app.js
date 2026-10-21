@@ -1159,6 +1159,7 @@ function showError(message, code = "LS-SYSTEM-01", {stopProcessing = true} = {})
     : localized || t("errorFallback");
   $("errorMessage").textContent = translated || message || t("errorFallback");
   $("errorCode").textContent = `${window.LectureSiftI18n?.exact("Hata kodu") || "Hata kodu"}: ${code}`; $("errorBox").hidden = false;
+  applyErrorTone(code);
   if (stopProcessing) { setJobBusy(false); clearTimeout(pollHandle); clearInterval(timerHandle); }
   if (code === "LS-GUEST-05") window.LectureSiftGuestTrial?.markUsed?.();
   if (code === "LS-GUEST-04" || code === "LS-GUEST-05") {
@@ -1236,10 +1237,83 @@ function showError(message, code = "LS-SYSTEM-01", {stopProcessing = true} = {})
       link.textContent = window.LectureSiftI18n?.t("rollout.createFreeAccount", "Ücretsiz hesap oluştur") || "Ücretsiz hesap oluştur";
     } else link.textContent = t(guest ? "register" : "plansNav");
     actions.append(link);
+    if (guestLimit) actions.append(...guestLimitLinks(code));
+    $("errorCode").insertAdjacentElement("afterend", actions);
+  }
+  if (code === "LS-GUEST-05") {
+    const actions = document.createElement("div");
+    actions.id = "quotaRecoveryActions";
+    actions.className = "quota-recovery-actions";
+    actions.append(...guestLimitLinks(code));
     $("errorCode").insertAdjacentElement("afterend", actions);
   }
 }
 $("closeError").onclick = () => { $("errorBox").hidden = true; };
+
+// --- Guest limits as an invitation ------------------------------------------
+// A guest who hits a trial limit (LS-GUEST-04/05/06) sees the same box in a
+// calmer tone: a title that says what to do next, and links to a free account
+// and the plans instead of a bare failure.
+const GUEST_LIMIT_CODES = new Set(["LS-GUEST-04", "LS-GUEST-05", "LS-GUEST-06"]);
+function applyErrorTone(code) {
+  const box = $("errorBox"), title = $("errorTitle");
+  const guest = GUEST_LIMIT_CODES.has(code);
+  if (guest) box.dataset.tone = "guest"; else delete box.dataset.tone;
+  if (title) title.textContent = guest ? centralText("workspace.guestLimitTitle", "Ücretsiz hesapla devam et") : t("errorTitle");
+}
+function guestLimitLinks(code) {
+  const localized = path => window.LectureSiftI18n?.localizedPath?.(currentLanguage, path) || path;
+  const links = [];
+  if (code === "LS-GUEST-05") {
+    // LS-GUEST-04 already carries #guestSourceLimitSignup above.
+    const register = document.createElement("a");
+    register.id = "guestTrialUsedSignup";
+    register.href = `${localized("/register.html")}?${new URLSearchParams({next:localized("/workspace.html")})}`;
+    register.textContent = centralText("rollout.createFreeAccount", "Ücretsiz hesap oluştur");
+    links.push(register);
+  }
+  const plans = document.createElement("a");
+  plans.id = "guestLimitPlans";
+  plans.href = localized("/plans.html");
+  plans.textContent = centralText("workspace.guestLimitPlans", "Planları incele");
+  links.push(plans);
+  return links;
+}
+function centralText(key, fallback) { return window.LectureSiftI18n?.t(key, fallback) || fallback; }
+
+// --- Phone upload shortcut ---------------------------------------------------
+// On a narrow screen a sticky "upload" bar appears once the drop zone has
+// scrolled away, and only while nothing is processing, no result is open and
+// no error or consent banner is showing. Its button carries .primary-button,
+// so the assistant launcher's overlap check (assistant.js) lifts the launcher
+// above it; the layout event makes that check run the moment the bar toggles.
+function setupMobileUploadBar() {
+  const bar = $("mobileUploadBar"), dropZone = $("classicDropZone"), results = $("results"), errorBox = $("errorBox");
+  if (!bar || !dropZone || !results || typeof IntersectionObserver !== "function") return;
+  const narrow = window.matchMedia("(max-width: 640px)");
+  let dropZoneVisible = true;
+  const sync = () => {
+    const show = narrow.matches && !dropZoneVisible && dropZone.getClientRects().length > 0
+      && !jobBusy && results.hidden && (!errorBox || errorBox.hidden)
+      && !document.querySelector(".consent-banner:not([hidden])");
+    if (bar.hidden === !show) return;
+    bar.hidden = !show;
+    document.body.classList.toggle("has-upload-bar", show);
+    document.dispatchEvent(new CustomEvent("lecturesift:layout"));
+  };
+  new IntersectionObserver(entries => { dropZoneVisible = entries.some(entry => entry.isIntersecting); sync(); }, {threshold:0.05}).observe(dropZone);
+  const hiddenChanges = new MutationObserver(sync);
+  [results, errorBox].filter(Boolean).forEach(node => hiddenChanges.observe(node, {attributes:true, attributeFilter:["hidden"]}));
+  // setJobBusy toggles the analyze button; watching it tracks processing without a hook there.
+  hiddenChanges.observe($("analyzeButton"), {attributes:true, attributeFilter:["disabled"]});
+  narrow.addEventListener?.("change", sync);
+  ["lecturesift:consent", "lecturesift:consent-ready"].forEach(name => document.addEventListener(name, sync));
+  $("mobileUploadButton").addEventListener("click", () => {
+    dropZone.scrollIntoView({block:"center", behavior:"smooth"});
+    if (!jobBusy) $("classicFiles").click();
+  });
+}
+setupMobileUploadBar();
 async function responseError(response) {
   const text = await response.text();
   try { const body = JSON.parse(text); const detail = body.detail || body; return {message: detail.message || body.message, code: detail.code || body.code}; }
@@ -1502,10 +1576,81 @@ function renderGuestSaveResult() {
   $("guestSaveLogin").href = `${localized("/login.html")}${query}`;
 }
 
+// --- Result feedback: one thumb per job, optional one-line comment ----------
+// The server keeps one row per job (a repeat replaces it). This browser
+// remembers what it sent so a reopened result does not ask again; the comment
+// itself only ever travels to the API.
+const FEEDBACK_STORAGE_PREFIX = "lecturesift-feedback:";
+const FEEDBACK_COMMENT_MAX = 280;
+let feedbackSending = false;
+function rememberedFeedback(id) {
+  try { return JSON.parse(localStorage.getItem(FEEDBACK_STORAGE_PREFIX + id) || "null") || {}; } catch (_) { return {}; }
+}
+function rememberFeedback(id, value) {
+  try { localStorage.setItem(FEEDBACK_STORAGE_PREFIX + id, JSON.stringify(value)); } catch (_) { /* storage unavailable: ask again next time */ }
+}
+function showFeedbackStatus(text, {error = false} = {}) {
+  const status = $("jobFeedbackStatus");
+  status.textContent = text || "";
+  status.hidden = !text;
+  status.classList.toggle("is-error", Boolean(text) && error);
+}
+function updateFeedbackCount() { $("jobFeedbackCount").textContent = `${$("jobFeedbackComment").value.length}/${FEEDBACK_COMMENT_MAX}`; }
+function renderJobFeedback() {
+  const panel = $("jobFeedback");
+  if (!panel) return;
+  const ready = Boolean(billingToken) && /^[A-Za-z0-9-]{8,80}$/.test(jobId || "");
+  panel.hidden = !ready;
+  if (!ready) return;
+  const remembered = rememberedFeedback(jobId);
+  panel.querySelectorAll("[data-rating]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.rating === remembered.rating)));
+  $("jobFeedbackComment").value = remembered.comment || "";
+  $("jobFeedbackConsent").checked = Boolean(remembered.consent);
+  updateFeedbackCount();
+  $("jobFeedbackForm").hidden = !remembered.rating || Boolean(remembered.commented);
+  showFeedbackStatus(remembered.commented
+    ? centralText("feedback.received", "Teşekkürler, yorumun alındı.")
+    : remembered.rating ? centralText("feedback.thanks", "Teşekkürler! İstersen kısa bir yorum da ekle.") : "");
+}
+async function sendJobFeedback(rating, {commented = false} = {}) {
+  if (feedbackSending || !rating) return;
+  const id = jobId;
+  const comment = $("jobFeedbackComment").value.slice(0, FEEDBACK_COMMENT_MAX);
+  const consent = $("jobFeedbackConsent").checked;
+  feedbackSending = true;
+  $("jobFeedbackSend").disabled = true;
+  try {
+    await billingRequest(`/jobs/${encodeURIComponent(id)}/feedback`, {method:"POST", body:JSON.stringify({rating, comment, consent, locale:currentLanguage})});
+    if (id !== jobId) return;
+    rememberFeedback(id, {rating, comment, consent, commented: commented && Boolean(comment.trim())});
+    renderJobFeedback();
+    // Only the thumb is measured, never the comment.
+    void recordFunnel("result_feedback", {rating});
+  } catch (error) {
+    if (id !== jobId) return;
+    // 503: feedback storage is not ready on this deployment; ask nothing.
+    if (error.status === 503) { $("jobFeedback").hidden = true; return; }
+    showFeedbackStatus(centralText("feedback.failed", "Geri bildirim gönderilemedi. Biraz sonra tekrar dene."), {error:true});
+  } finally {
+    feedbackSending = false;
+    $("jobFeedbackSend").disabled = false;
+  }
+}
+if ($("jobFeedback")) {
+  document.querySelectorAll("#jobFeedback [data-rating]").forEach(button => button.addEventListener("click", () => sendJobFeedback(button.dataset.rating)));
+  $("jobFeedbackComment").addEventListener("input", updateFeedbackCount);
+  $("jobFeedbackForm").addEventListener("submit", event => {
+    event.preventDefault();
+    const pressed = document.querySelector('#jobFeedback [data-rating][aria-pressed="true"]');
+    sendJobFeedback(pressed?.dataset.rating || "up", {commented:true});
+  });
+}
+
 function renderResult(data, {open = true} = {}) {
   $("resultHeading").textContent = data.title || "LectureSift";
   renderDocumentSampleResult(data);
   renderGuestSaveResult();
+  renderJobFeedback();
   const utilityResult = data.job_type && data.job_type !== "study_pack";
   const options = data.options || {};
   const selected = {
