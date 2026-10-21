@@ -53,7 +53,7 @@ test('measured document compares both per-job and total minutes without choosing
     await page.locator('[data-plan-card="pro"]').screenshot({path:testInfo.outputPath('plan-capacity-layout.jpg'), type:'jpeg', quality:75});
   }
   await page.locator('[data-plan="pro"][data-interval="monthly"]').click();
-  await expect(page).toHaveURL(/\/en\/login(?:\.html)?\?next=/);
+  await expect(page).toHaveURL(/\/en\/register(?:\.html)?\?next=/);
   const next = new URL(new URL(page.url()).searchParams.get('next'), page.url());
   expect(next.searchParams.get('need_minutes')).toBe('198');
   expect(next.searchParams.get('need_ocr')).toBe('0');

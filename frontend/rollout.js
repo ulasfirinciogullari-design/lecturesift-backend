@@ -133,9 +133,23 @@
     const note = document.querySelector(".rollout-guest-note[data-guest-trial-note]");
     const guest = typeof billingAccount !== "undefined" && billingAccount?.plan?.code === "guest";
     if (note) {
-      note.textContent = guest && guestTrialState?.used === true
-        ? guestTrialCopy("rollout.guestUsed", "Tek seferlik 30 dakikalık denemen kullanıldı. Devam etmek için ücretsiz hesap oluştur.")
-        : guestTrialCopy("rollout.guestNote", "Hesapsız kullanım: bu cihazda tek seferlik, en fazla 30 dakikalık kaynak. Daha uzun işlemler için ücretsiz hesap oluştur.");
+      // The no-account trial note is for guests. A signed-in account sees its
+      // remaining minutes when the account data has them, and nothing otherwise.
+      const account = typeof billingAccount !== "undefined" ? billingAccount : null;
+      const remaining = account?.remaining_minutes;
+      if (!registeredToken() || guest) {
+        note.textContent = guest && guestTrialState?.used === true
+          ? guestTrialCopy("rollout.guestUsed", "Tek seferlik 30 dakikalık denemen kullanıldı. Devam etmek için ücretsiz hesap oluştur.")
+          : guestTrialCopy("rollout.guestNote", "Hesapsız kullanım: bu cihazda tek seferlik, en fazla 30 dakikalık kaynak. Daha uzun işlemler için ücretsiz hesap oluştur.");
+        note.hidden = false;
+      } else if (account && typeof remaining === "number" && Number.isFinite(remaining)) {
+        note.textContent = rt("rollout.remainingMinutes", "Kalan işleme hakkın: {minutes} dakika")
+          .split("{minutes}").join(Math.max(0, Math.floor(remaining)).toLocaleString(rolloutLocale()));
+        note.hidden = false;
+      } else {
+        note.textContent = "";
+        note.hidden = true;
+      }
     }
     if (guest && $("accountPlan")) $("accountPlan").textContent = guestTrialCopy("rollout.singleUse", "Tek kullanımlık 30 dakika");
   }
@@ -511,6 +525,7 @@
             const body = await api("/billing/me/email-change/verify", {method:"POST", body:JSON.stringify({code:$("rolloutEmailCode").value})}, token);
             localStorage.setItem(TOKEN_KEY, body.token); status.textContent = rt("rollout.emailChanged", body.message); status.hidden = false; status.classList.remove("error");
             if ($("accountEmail")) $("accountEmail").textContent = body.account.user.email;
+            if ($("accountName")?.classList.contains("account-name-email")) $("accountName").textContent = body.account.user.email;
           } catch (error) { status.textContent = error.message; status.hidden = false; status.classList.add("error"); }
         };
         $("rolloutInstagramForm").onsubmit = async event => {

@@ -302,7 +302,7 @@ def test_public_navigation_is_consistent_localized_and_session_aware():
     for page in public_pages:
         content = (FRONTEND / page).read_text(encoding="utf-8")
         assert "/site-shell.js?v=8" in content, page
-        assert "/rollout.css?v=9" in content, page
+        assert "/rollout.css?v=11" in content, page
 
     shell = (FRONTEND / "site-shell.js").read_text(encoding="utf-8")
     assert 'const TOKEN_KEY = "lecturesift-billing-token"' in shell
@@ -500,10 +500,10 @@ def test_workspace_outputs_are_individually_optional_and_mobile_ready():
 def test_every_page_supports_persistent_light_and_dark_themes():
     for page in FRONTEND.glob("*.html"):
         content = page.read_text(encoding="utf-8")
-        expected_theme_version = "17"
+        expected_theme_version = "18"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
-        assert "/theme.js?v=14" in content, page.name
-        expected_i18n_version = "60"
+        assert "/theme.js?v=15" in content, page.name
+        expected_i18n_version = "61"
         assert f"i18n.js?v={expected_i18n_version}" in content, page.name
         assert "page-i18n.js?v=13" in content, page.name
 
@@ -790,11 +790,11 @@ def test_payment_routes_are_distinct_localized_and_account_history_is_auditable(
         assert len(values) == 13, key
         assert all(str(value).strip() for value in values), key
 
-    assert 'src="/plans.js?v=35"' in plans_html
+    assert 'src="/plans.js?v=36"' in plans_html
     assert 'manualTransfer = {available:Boolean(transferBody?.available), bank:null};' in plans_js
     assert 'order.bank?.iban' in plans_js
     assert 'transferBody?.bank' not in plans_js
-    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=25"', 'href="./auth.css?v=4"'))
+    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=26"', 'href="./auth.css?v=5"'))
     assert all(value in auth_js for value in ("paymentMethodLabel", "paymentMoney", "paymentDateTime", "payment-order-meta"))
     assert all(value in admin_html for value in ('value="iyzico_card"', 'value="iyzico_bank_transfer"', 'value="manual_bank_transfer"', 'value="iyzico_legacy"'))
     assert "provider:selectedProvider" in admin_js
@@ -940,7 +940,7 @@ def test_admin_growth_reads_and_escapes_advertising_management_status():
     catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
 
     assert 'id="adminGrowthStatus" class="admin-growth-grid" aria-live="polite"' in admin
-    assert 'src="/admin.js?v=32"' in admin and 'src="/i18n.js?v=60"' in admin
+    assert 'src="/admin.js?v=32"' in admin and 'src="/i18n.js?v=61"' in admin
     assert '"/billing/admin/advertising-readiness"' in admin_script
     assert "renderAdminAdSenseSummary" in admin_script
     assert 'id="adminAdSenseSummary"' in admin
@@ -1062,7 +1062,7 @@ def test_admin_cost_reconciliation_controls_are_wired():
 def test_admin_cost_centre_has_theme_specific_readability_rules():
     admin = (FRONTEND / "admin.html").read_text(encoding="utf-8")
     theme = (FRONTEND / "theme.css").read_text(encoding="utf-8")
-    assert 'href="/theme.css?v=17"' in admin
+    assert 'href="/theme.css?v=18"' in admin
     assert "#adminCostsView" in theme
     assert 'html[data-theme="light"] #adminCostsView' in theme
     assert "--cost-warning-text:#754100" in theme
@@ -1087,7 +1087,7 @@ def test_checkout_names_contact_inbox_and_mobile_plan_navigation_are_wired():
     assert "/billing/admin/contact-messages" in admin_js
     assert "adminContactDialog" in admin_html and "admin-contact-reply" in admin_js
     assert "/billing/admin/contact-messages/${encodeURIComponent(messageId)}/reply" in admin_js
-    assert 'href="/rollout.css?v=10"' in admin_html and 'src="/admin.js?v=32"' in admin_html
+    assert 'href="/rollout.css?v=11"' in admin_html and 'src="/admin.js?v=32"' in admin_html
     assert (admin_js + (FRONTEND / "admin-work.js").read_text()).count('class="admin-table admin-record-table"') >= 10
     assert all(label in admin_js for label in ('data-label="Bakiye"', 'data-label="Açıklama"'))
     assert 'data-label="Ders"' in (FRONTEND / "admin-work.js").read_text()
@@ -1420,7 +1420,7 @@ def test_optional_analytics_and_advertising_are_consent_gated():
 
     consent_css = (FRONTEND / "consent.css").read_text(encoding="utf-8")
     assert 'consentScript.src = "/consent.js?v=6"' in i18n
-    assert 'consentStyle.href = "/consent.css?v=2"' in i18n
+    assert 'consentStyle.href = "/consent.css?v=3"' in i18n
     assert 'const STORAGE_KEY = "lecturesift-consent-v1"' in consent
     assert 'footerTarget = document.querySelector(".footer-bottom,.legal-footer,.site-footer,footer")' in consent
     assert ".consent-manage{position:static" in consent_css
@@ -1601,8 +1601,8 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert '"rollout.createFreeAccount"' in catalog
     assert 'error.code === "LS-GUEST-06"' in rollout
     assert '"rollout.guestLimit"' in rollout and '"rollout.guestLimit"' in catalog
-    assert 'src="./app.js?v=47"' in index
-    assert 'src="/rollout.js?v=18"' in index
+    assert 'src="./app.js?v=48"' in index
+    assert 'src="/rollout.js?v=19"' in index
     assert '$("plans").scrollIntoView' not in app
 
 

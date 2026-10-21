@@ -22,7 +22,7 @@ test('assistant credit choices retain amount, currency and language through sign
   await noHorizontalOverflow(page);
   await page.screenshot({path:testInfo.outputPath('assistant-credit-shop-layout.jpg'),quality:75});
   await first.click();
-  await expect(page).toHaveURL(/\/ar\/login(?:\.html)?\?next=/);
+  await expect(page).toHaveURL(/\/ar\/register(?:\.html)?\?next=/);
   expect(new URL(page.url()).searchParams.get('next')).toBe('/ar/plans?plan=ai_1000&interval=one_time');
   expect(await page.evaluate(()=>localStorage.getItem('lecturesift-currency'))).toBe('JPY');
 });
@@ -217,7 +217,7 @@ test('permanent ad-free purchase explains its scope and disappears as a repeat p
   await noHorizontalOverflow(page);
   await page.screenshot({path:testInfo.outputPath('ad-free-offer-layout.jpg'),quality:75});
   await offer.getByRole('button').click();
-  await expect(page).toHaveURL(/\/en\/login(?:\.html)?\?next=/);
+  await expect(page).toHaveURL(/\/en\/register(?:\.html)?\?next=/);
   expect(new URL(page.url()).searchParams.get('next')).toBe('/en/plans?plan=ad_free&interval=one_time');
   await page.addInitScript(()=>localStorage.setItem('lecturesift-billing-token','synthetic-ad-free-owner'));
   await page.route('https://api.lecturesift.com/billing/me',route=>route.fulfill({status:200,headers:cors,json:{account:{user:{email:'synthetic@example.invalid'},plan:{code:'free'},remaining_minutes:60,permanent_ad_free:true}}}));
@@ -611,6 +611,10 @@ test('rebuilt study entry opens the real workspace and key screens remain usable
   await expect(page.locator('#classicDropZone')).toBeVisible();
   await noHorizontalOverflow(page);
   await capture('workspace-layout');
+  // Switched-off payment methods are hidden, so turn the card provider on to
+  // check its mark next to the footer one.
+  await page.route('https://api.lecturesift.com/billing/providers', route => route.request().method() === 'OPTIONS' ? route.fallback()
+    : route.fulfill({headers:{'Access-Control-Allow-Origin':'http://127.0.0.1:4173'}, json:{commerce_identity:{configured:true}, providers:[{code:'iyzico', configured:true, currencies:['TRY'], capabilities:['cards']}]}}));
   await page.goto('/en/plans');
   await expect(page.locator('#plansGrid .plan-card').first()).toBeVisible();
   await expect(page.locator('#billingCurrency option')).toHaveCount(22);
