@@ -2504,34 +2504,26 @@ def unsettled_iyzico_order_references(
     created_after: datetime,
     created_before: datetime,
     limit: int,
-    pending_created_after: datetime | None = None,
+    status: str = "created",
+    oldest_first: bool = False,
 ) -> list[str]:
-    """Newest-first iyzico orders still pending, then created, within a window.
-
-    A "pending" order already has provider evidence of a payment (fraud review
-    or an open transfer), so it may stay eligible for longer, back to
-    ``pending_created_after``. Each status gets its own ``limit``, so newer
-    abandoned checkouts can never crowd a pending payment out of a run.
-    """
+    """iyzico orders still in ``status`` (created or pending) within a time window."""
+    if status not in {"created", "pending"}:
+        raise ValueError("Only unsettled iyzico orders can be listed.")
     init_billing_database()
-    windows = (
-        ("pending", min(created_after, pending_created_after or created_after)),
-        ("created", created_after),
-    )
-    references: list[str] = []
+    order = PAYMENT_ORDERS.c.created_at.asc() if oldest_first else PAYMENT_ORDERS.c.created_at.desc()
     with ENGINE.connect() as connection:
-        for status, after in windows:
-            references.extend(connection.execute(
-                select(PAYMENT_ORDERS.c.reference)
-                .where(
-                    PAYMENT_ORDERS.c.provider.in_(sorted(IYZICO_PAYMENT_PROVIDERS)),
-                    PAYMENT_ORDERS.c.status == status,
-                    PAYMENT_ORDERS.c.created_at >= after,
-                    PAYMENT_ORDERS.c.created_at <= created_before,
-                )
-                .order_by(PAYMENT_ORDERS.c.created_at.desc(), PAYMENT_ORDERS.c.reference)
-                .limit(max(1, int(limit)))
-            ).scalars().all())
+        references = connection.execute(
+            select(PAYMENT_ORDERS.c.reference)
+            .where(
+                PAYMENT_ORDERS.c.provider.in_(sorted(IYZICO_PAYMENT_PROVIDERS)),
+                PAYMENT_ORDERS.c.status == status,
+                PAYMENT_ORDERS.c.created_at >= created_after,
+                PAYMENT_ORDERS.c.created_at <= created_before,
+            )
+            .order_by(order, PAYMENT_ORDERS.c.reference)
+            .limit(max(1, int(limit)))
+        ).scalars().all()
     return [str(reference) for reference in references]
 
 

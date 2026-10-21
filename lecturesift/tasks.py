@@ -412,8 +412,6 @@ def _retry_or_fail(
     retries = int(getattr(task.request, "retries", 0))
     JOBS.update(
         job_id,
-        # A retry goes back to the end of the queue (see the stuck-job sweep).
-        **({"queued_at": time.time()} if retries < task.max_retries else {}),
         status="queued" if retries < task.max_retries else "error",
         stage="worker_retry" if retries < task.max_retries else "error",
         worker_state="retrying" if retries < task.max_retries else "failed",

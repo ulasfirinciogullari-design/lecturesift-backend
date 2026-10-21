@@ -87,8 +87,7 @@ def test_time_limits_are_derived_from_the_longest_plan_job():
     assert queue.JOB_HARD_TIME_LIMIT_SECONDS == queue.JOB_SOFT_TIME_LIMIT_SECONDS + 600
     assert queue.celery_app.conf.task_soft_time_limit == queue.JOB_SOFT_TIME_LIMIT_SECONDS
     assert queue.celery_app.conf.task_time_limit == queue.JOB_HARD_TIME_LIMIT_SECONDS
-    assert queue.STUCK_JOB_AFTER_SECONDS > queue.JOB_HARD_TIME_LIMIT_SECONDS
-    assert queue.STUCK_JOB_AFTER_SECONDS > config.CELERY_VISIBILITY_TIMEOUT_SECONDS
+    assert queue.JOB_REDELIVERY_WINDOW_SECONDS > config.CELERY_VISIBILITY_TIMEOUT_SECONDS
     assert tasks_module.process_uploaded_job.Request is tasks_module.JobRequest
 
 
@@ -200,11 +199,12 @@ def test_sweep_fails_only_jobs_that_can_no_longer_finish(store, tmp_path, monkey
     _job(store, tmp_path, "fresh-working")
     _job(store, tmp_path, "locked-working")
     _job(store, tmp_path, "old-done", status="done")
-    stale = time.time() - queue.STUCK_JOB_AFTER_SECONDS - 60
+    stale = time.time() - queue.JOB_HARD_TIME_LIMIT_SECONDS - queue.JOB_REDELIVERY_WINDOW_SECONDS - 60
     for job_id in ("stuck-working", "stuck-queued", "locked-working", "old-done"):
         store._jobs[job_id]["updated"] = stale
-    # Queued before every other unfinished job, so nothing runs ahead of it.
-    store._jobs["stuck-queued"]["updated"] = stale - 60
+    for job_id in ("stuck-working", "locked-working"):
+        store._jobs[job_id]["processing_deadline"] = stale + queue.JOB_HARD_TIME_LIMIT_SECONDS
+    store._jobs["fresh-working"]["processing_deadline"] = time.time() + queue.JOB_HARD_TIME_LIMIT_SECONDS
     store._flush_locked()
     real_lock = store.processing_lock
 
@@ -217,10 +217,11 @@ def test_sweep_fails_only_jobs_that_can_no_longer_finish(store, tmp_path, monkey
             yield acquired
 
     monkeypatch.setattr(store, "processing_lock", lock)
-    assert durable_runtime.sweep_stuck_jobs() == 2
-    for job_id in ("stuck-working", "stuck-queued"):
-        _assert_failed_normally(store, tmp_path, job_id)
-        assert store.metadata(job_id)["technical_error"] == "stuck_job_sweep"
+    assert durable_runtime.sweep_stuck_jobs() == 1
+    _assert_failed_normally(store, tmp_path, "stuck-working")
+    assert store.metadata("stuck-working")["technical_error"] == "stuck_job_sweep"
+    # A queued job's broker message stays valid however long it waits.
+    assert store.metadata("stuck-queued")["status"] == "queued"
     assert store.metadata("fresh-working")["status"] == "working"
     assert store.metadata("locked-working")["status"] == "working"
     assert store.metadata("old-done")["status"] == "done"
@@ -228,7 +229,7 @@ def test_sweep_fails_only_jobs_that_can_no_longer_finish(store, tmp_path, monkey
 
 
 def test_sweep_waits_during_maintenance_and_on_the_worker(store, tmp_path, monkeypatch):
-    _job(store, tmp_path, "stuck-job")
+    _job(store, tmp_path, "stuck-job", processing_deadline=1)
     store._jobs["stuck-job"]["updated"] = 0
     store._flush_locked()
     monkeypatch.setattr(config, "current_maintenance_mode", lambda: "drain")
@@ -319,27 +320,18 @@ def test_new_and_recovered_jobs_are_enqueued_with_their_own_limits():
     assert durable_runtime.stored_time_limits({"time_limits": ["bad"]}) is None
 
 
-def test_a_queued_job_behind_two_maximum_jobs_is_not_swept(store, tmp_path):
+def test_queued_jobs_are_never_swept_however_long_they_wait(store, tmp_path):
     max_limits = [queue.JOB_SOFT_TIME_LIMIT_SECONDS, queue.JOB_HARD_TIME_LIMIT_SECONDS]
-    short_limits = list(queue.job_time_limits(20))
-    queued_at = time.time() - queue.JOB_HARD_TIME_LIMIT_SECONDS - queue.JOB_REDELIVERY_WINDOW_SECONDS - 3600
-    # The first maximum job is running, the second waits, and the short one waits behind both.
-    _job(store, tmp_path, "max-running", time_limits=max_limits, queued_at=queued_at,
-         processing_deadline=time.time() + 3600)
-    _job(store, tmp_path, "max-waiting", status="queued", time_limits=max_limits, queued_at=queued_at + 1)
-    _job(store, tmp_path, "short-waiting", status="queued", time_limits=short_limits, queued_at=queued_at + 2)
+    long_ago = time.time() - 3 * (queue.JOB_HARD_TIME_LIMIT_SECONDS + queue.JOB_REDELIVERY_WINDOW_SECONDS)
+    # Two maximum jobs ahead (one running, one waiting) and a short job behind them.
+    _job(store, tmp_path, "max-running", time_limits=max_limits, processing_deadline=time.time() + 3600)
+    _job(store, tmp_path, "max-waiting", status="queued", time_limits=max_limits)
+    _job(store, tmp_path, "short-waiting", status="queued", time_limits=list(queue.job_time_limits(20)))
     for job_id in ("max-running", "max-waiting", "short-waiting"):
-        store._jobs[job_id]["updated"] = queued_at
+        store._jobs[job_id]["updated"] = long_ago
     store._flush_locked()
-    # Old enough for any single-job threshold, still valid behind the queue.
-    assert time.time() - queued_at > queue.STUCK_JOB_AFTER_SECONDS
 
     assert durable_runtime.sweep_stuck_jobs() == 0
-    for job_id in ("max-running", "max-waiting", "short-waiting"):
-        assert store.metadata(job_id)["status"] in {"queued", "working"}
-
-    # With nothing ahead any more, its own limit and the redelivery window have passed.
-    for job_id in ("max-running", "max-waiting"):
-        store.update(job_id, status="done")
-    assert durable_runtime.sweep_stuck_jobs() == 1
-    _assert_failed_normally(store, tmp_path, "short-waiting")
+    assert store.metadata("max-running")["status"] == "working"
+    for job_id in ("max-waiting", "short-waiting"):
+        assert store.metadata(job_id)["status"] == "queued"

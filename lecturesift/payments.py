@@ -60,10 +60,12 @@ IYZICO_RECONCILE_LOOKBACK = timedelta(hours=48)
 IYZICO_RECONCILE_PENDING_LOOKBACK = timedelta(days=14)
 # Leave fresh checkouts to the browser callback and webhook.
 IYZICO_RECONCILE_MIN_AGE = timedelta(minutes=15)
-# Per status, newest first: a just-abandoned tab is the likeliest
-# paid-but-unsettled order, and abandoned checkouts that stay "created" must
-# not starve it or any pending payment.
+# Created orders, newest first: a just-abandoned tab is the likeliest
+# paid-but-unsettled order, and older abandoned checkouts must not starve it.
 IYZICO_RECONCILE_BATCH_SIZE = 200
+# Every pending order is checked each run, oldest first; the cap only guards
+# against a runaway backlog, and reaching it is logged.
+IYZICO_RECONCILE_PENDING_CAP = 1000
 IYZICO_RECONCILE_INTERVAL_SECONDS = 60 * 60
 IYZICO_CURRENCIES = ("TRY", "USD", "EUR", "GBP", "NOK", "CHF")
 IYZICO_ASYNC_PAYMENT_STATUSES = {
@@ -865,8 +867,9 @@ def _reconcile_iyzico_order(order_reference: str) -> str:
 def reconcile_iyzico_orders(now: datetime | None = None) -> dict:
     """Settle paid iyzico orders whose browser callback and webhook never came.
 
-    Looks at orders still created from the last 48 hours, or pending from the
-    last 14 days (at least 15 minutes old, newest first), and settles a paid
+    Looks at every order still pending from the last 14 days (oldest first)
+    and the newest orders still created from the last 48 hours, all at least
+    15 minutes old, and settles a paid
     card payment that passed iyzico's fraud review through the same path the
     callback uses. A payment still under review stays pending and is asked
     about again next run. A paid order without card evidence (a protected
@@ -882,11 +885,22 @@ def reconcile_iyzico_orders(now: datetime | None = None) -> dict:
     if not iyzico_configured():
         return {**summary, "disabled": "unconfigured"}
     now = now or utcnow()
-    references = unsettled_iyzico_order_references(
+    pending = unsettled_iyzico_order_references(
+        status="pending",
+        created_after=now - IYZICO_RECONCILE_PENDING_LOOKBACK,
+        created_before=now - IYZICO_RECONCILE_MIN_AGE,
+        limit=IYZICO_RECONCILE_PENDING_CAP,
+        oldest_first=True,
+    )
+    if len(pending) >= IYZICO_RECONCILE_PENDING_CAP:
+        logger.warning(
+            "iyzico reconciliation reached its pending-order cap=%s; newer pending orders wait for a later run",
+            IYZICO_RECONCILE_PENDING_CAP,
+        )
+    references = pending + unsettled_iyzico_order_references(
         created_after=now - IYZICO_RECONCILE_LOOKBACK,
         created_before=now - IYZICO_RECONCILE_MIN_AGE,
         limit=IYZICO_RECONCILE_BATCH_SIZE,
-        pending_created_after=now - IYZICO_RECONCILE_PENDING_LOOKBACK,
     )
     for reference in references:
         summary["checked"] += 1

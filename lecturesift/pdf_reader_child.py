@@ -7,6 +7,8 @@ package.
 The parent enforces the wall-clock timeout; this process caps its own address
 space and CPU time before it touches the file, so a pathological PDF fails
 here instead of hanging or exhausting the worker that handles every job.
+Where ``resource`` does not exist (Windows development machines) only the
+parent's timeout applies.
 
 Usage: python -I pdf_reader_child.py <path> <max_pages> <memory_bytes> <cpu_seconds> <mode>
        <max_characters> <max_output_bytes>
@@ -21,8 +23,12 @@ from __future__ import annotations
 
 import json
 import re
-import resource
 import sys
+
+try:
+    import resource
+except ImportError:  # Not on Windows: the parent's timeout still applies.
+    resource = None
 
 
 class _CharacterLimit(Exception):
@@ -107,10 +113,11 @@ def _native_pages(path: str, page_count: int, max_characters: int) -> tuple[list
 
 def main(argv: list[str]) -> int:
     path, max_pages, memory_bytes, cpu_seconds, mode, max_characters, max_output_bytes = argv[1:8]
-    _limit(resource.RLIMIT_AS, int(memory_bytes))
-    _limit(resource.RLIMIT_CPU, int(cpu_seconds))
-    # stdout is a regular file: writing past this fails instead of growing it.
-    _limit(resource.RLIMIT_FSIZE, int(max_output_bytes))
+    if resource is not None:
+        _limit(resource.RLIMIT_AS, int(memory_bytes))
+        _limit(resource.RLIMIT_CPU, int(cpu_seconds))
+        # stdout is a regular file: writing past this fails instead of growing it.
+        _limit(resource.RLIMIT_FSIZE, int(max_output_bytes))
     try:
         from pypdf import PdfReader
 

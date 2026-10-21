@@ -324,6 +324,35 @@ def test_reconciliation_is_off_without_iyzico_or_during_maintenance(monkeypatch)
     assert fake.detail_calls == [] and _order(reference).status == "created"
 
 
+def test_every_pending_payment_is_checked_oldest_first_up_to_a_logged_cap(monkeypatch, caplog):
+    fake = FakeIyzico(fraud_status=0)
+    _, _, older = _paid_checkout_without_callback(monkeypatch, fake)
+    _, _, newer = _paid_checkout_without_callback(monkeypatch, fake)
+    payments.reconcile_iyzico_orders(utcnow() + timedelta(minutes=20))
+    assert _order(older).status == _order(newer).status == "pending"
+
+    later = utcnow() + timedelta(minutes=20)
+    fake.detail_calls.clear()
+    payments.reconcile_iyzico_orders(later)
+    assert older in fake.detail_calls and newer in fake.detail_calls
+    assert fake.detail_calls.index(older) < fake.detail_calls.index(newer)
+
+    # Far more pending orders than a run should ever see: oldest first, and logged.
+    pending_in_window = unsettled_iyzico_order_references(
+        status="pending",
+        created_after=later - payments.IYZICO_RECONCILE_PENDING_LOOKBACK,
+        created_before=later - payments.IYZICO_RECONCILE_MIN_AGE,
+        limit=10_000,
+        oldest_first=True,
+    )
+    monkeypatch.setattr(payments, "IYZICO_RECONCILE_PENDING_CAP", pending_in_window.index(older) + 1)
+    fake.detail_calls.clear()
+    with caplog.at_level(logging.WARNING, logger="lecturesift.payments"):
+        payments.reconcile_iyzico_orders(later)
+    assert older in fake.detail_calls and newer not in fake.detail_calls
+    assert "reached its pending-order cap" in caplog.text
+
+
 def test_newer_abandoned_checkouts_never_crowd_out_a_pending_payment(monkeypatch):
     monkeypatch.setattr(payments, "IYZICO_RECONCILE_BATCH_SIZE", 1)
     fake = FakeIyzico(fraud_status=0)

@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import importlib.util
+import io
+import json
+import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from pypdf import PdfWriter
@@ -131,3 +135,17 @@ def test_child_normalizes_exactly_like_the_parent():
         assert child._normalize_text(sample) == documents._normalize_text(sample)
         assert documents._normalize_text(child._normalize_text(sample)) == child._normalize_text(sample)
     assert documents.MAX_DOCUMENT_CHARACTERS * 12 < documents._pdf_reader_max_output_bytes(500)
+
+
+def test_child_runs_without_rlimits_where_resource_is_missing(tmp_path, monkeypatch):
+    path = _text_pdf(tmp_path / "lesson.pdf", ["Readable page text on a machine without rlimits."])
+    monkeypatch.setitem(sys.modules, "resource", None)  # import resource -> ImportError
+    spec = importlib.util.spec_from_file_location("pdf_reader_child_no_resource", documents._PDF_READER_CHILD)
+    child = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(child)
+    assert child.resource is None
+    output = io.BytesIO()
+    monkeypatch.setattr(sys, "stdout", SimpleNamespace(buffer=output))
+    assert child.main(["child", str(path), "10", "1", "1", "text", "1000", "100"]) == 0
+    result = json.loads(output.getvalue())
+    assert result["ok"] is True and "without rlimits" in result["texts"][0]
