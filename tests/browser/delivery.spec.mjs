@@ -29,7 +29,7 @@ test('homepage illustration selects responsive sources and reserves its space', 
   await expect(illustration).toHaveAttribute('width', '1536');
   await expect(illustration).toHaveAttribute('height', '1024');
   await expect(illustration).toHaveAttribute('loading', 'lazy');
-  await expect(illustration).toHaveAttribute('alt', '');
+  await expect(illustration).toHaveAttribute('alt', 'Study desk: an open notebook, a tablet playing a lecture video, headphones and flashcards');
   await illustration.scrollIntoViewIfNeeded();
   await expect.poll(() => illustration.evaluate(node => node.complete && node.naturalWidth > 0)).toBe(true);
   const selected = new URL(await illustration.evaluate(node => node.currentSrc));

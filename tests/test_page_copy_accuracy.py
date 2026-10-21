@@ -28,8 +28,11 @@ MEETING_MINUTES = {
 }
 PRIVACY_TOPIC = "KVKK / gizlilik başvurusu"
 HOME_SOURCE_DELETION = (
-    "Orijinal video, ses veya belge dosyan, işlem bittiğinde, başarısız olsa bile silinir. "
-    "Silme aksarsa dosya, ders silindiğinde veya süresi dolduğunda dersle birlikte kaldırılır."
+    "Orijinal video, ses veya belge dosyan işlem bittiğinde silinir; işlem başarısız olsa da silinir."
+)
+HOME_RESULT_RETENTION = (
+    "Sonuçlar planına göre saklanır: misafir denemede 1 gün, ücretsiz hesapta 7 gün, ücretli planlarda 30–365 gün. "
+    "Süresi dolan ders dosyalarıyla birlikte otomatik silinir; istediğin dersi Çalışma Alanı’ndan daha önce de silebilirsin."
 )
 
 
@@ -115,11 +118,22 @@ def test_homepage_upload_deletion_describes_the_cleanup_that_actually_runs():
     # a fixed deadline; leftovers go with the lesson's own deletion or expiry.
     home = _page("index.html")
     assert f"<li>{HOME_SOURCE_DELETION}</li>" in home
+    assert f"<li>{HOME_RESULT_RETENTION}</li>" in home
     assert "6 saat" not in home
     assert "işlem başarıyla tamamlanınca silinir" not in home
-    row = CATALOG[HOME_SOURCE_DELETION]
-    assert all(value.strip() for value in row)
-    assert not any(re.search(r"\b6\b", value) for value in row)
+    assert "Silme aksarsa" not in home
+    # Retention follows the plan catalog: guest 1 day, free 7, and 30-365
+    # days across the paid plans the homepage shows (rollout_service
+    # registers the hidden guest plan).
+    from lecturesift import rollout_service  # noqa: F401
+    assert PLAN_BY_CODE["guest"].history_days == 1
+    assert PLAN_BY_CODE["free"].history_days == 7
+    paid = [PLAN_BY_CODE[code].history_days for code in ("credit", "lite", "pro")]
+    assert min(paid) == 30 and max(paid) == 365
+    for sentence in (HOME_SOURCE_DELETION, HOME_RESULT_RETENTION):
+        row = CATALOG[sentence]
+        assert all(value.strip() for value in row)
+        assert not any(re.search(r"\b6\b", value) for value in row)
 
 
 def test_topic_guides_quote_the_trial_and_free_plan_limits_the_code_enforces():

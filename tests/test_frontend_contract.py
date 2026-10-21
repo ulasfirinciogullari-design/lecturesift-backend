@@ -189,11 +189,19 @@ def test_public_product_copy_promises_one_detailed_summary_in_every_language():
         assert len(set(translations)) >= 10, key
 
 
-def test_homepage_promotes_campaigns_without_duplicating_plan_checkout():
+def test_homepage_shows_price_cards_without_duplicating_plan_checkout():
     homepage = (FRONTEND / "index.html").read_text(encoding="utf-8")
     workspace = (FRONTEND / "workspace.html").read_text(encoding="utf-8")
-    assert 'id="campaigns"' in homepage
-    assert "Hesapsız 30 dakika deneme" in homepage
+    assert 'id="pricing"' in homepage and "data-home-pricing" in homepage
+    assert 'id="campaigns"' not in homepage
+    # Three cards plus the one-line minute pack, each carrying the TRY list
+    # price the live catalog overrides; Lite/Plus/Max are not on the homepage.
+    cards = re.findall(r'data-home-plan="([a-z]+)" data-price-try-minor="(\d+)"', homepage)
+    assert cards == [("free", "0"), ("lite", "14900"), ("pro", "44900"), ("credit", "19900")]
+    assert homepage.count('class="price-card') == 3
+    assert "data-home-popular" in homepage
+    assert '<script src="/home-pricing.js?v=1"></script>' in homepage
+    assert "plan-action" not in homepage and 'data-plan-card=' not in homepage
     assert 'id="plansGrid"' not in homepage
     assert 'id="workspace"' not in homepage
     assert 'id="workspace"' in workspace
