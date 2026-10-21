@@ -359,7 +359,8 @@ def test_real_product_and_workspace_clones_purge_only_rehearsal_rows(current, tm
                     "INSERT INTO lecturesift_job_feedback VALUES "
                     "(:id, :job, :uid, 'up', NULL, false, 'tr', now(), now())"
                 ),
-                dict(id="feedback-" + job, job=job, uid=uid),
+                # id is varchar(36): the folder label keeps the synthetic id short.
+                dict(id="feedback-" + folder, job=job, uid=uid),
             )
     with engine.begin() as connection:
         deleted = purge._purge_optional_tables(connection, USERS, JOBS)
