@@ -588,7 +588,7 @@ test('rebuilt study entry opens the real workspace and key screens remain usable
   // One primary action above the fold; the sample pack and the steps follow it.
   const primary = page.locator('.study-hero .study-primary');
   await expect(primary).toHaveCount(1);
-  await expect(primary).toHaveText('Try 30 minutes free · no account needed');
+  await expect(primary).toHaveText('Try 30 minutes free');
   await expect(primary).toHaveAttribute('href', /^\/en\/workspace(?:\.html)?\?source=upload$/);
   await expect(page.locator('.study-hero .study-text-link')).toHaveAttribute('href', '#how-it-works');
   await expect(page.locator('#exampleTitle')).toHaveText('A sample pack from one biology lecture');
