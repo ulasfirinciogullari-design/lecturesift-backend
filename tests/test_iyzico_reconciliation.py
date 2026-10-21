@@ -232,7 +232,7 @@ def test_paid_order_without_card_evidence_is_reported_not_settled(monkeypatch, c
     assert f"without card evidence; it needs manual review reference={reference}" in caplog.text
 
 
-@pytest.mark.parametrize("fraud_status", [0, -1, None])
+@pytest.mark.parametrize("fraud_status", [0, None])
 def test_payment_under_fraud_review_stays_pending_until_approved(monkeypatch, fraud_status):
     fake = FakeIyzico(fraud_status=fraud_status)
     _, _, reference = _paid_checkout_without_callback(monkeypatch, fake)
@@ -250,10 +250,9 @@ def test_payment_under_fraud_review_stays_pending_until_approved(monkeypatch, fr
     assert _order(reference).status == "paid" and _subscription_count(order.user_id) == 1
 
 
-@pytest.mark.parametrize("fraud_status", [0, -1])
-def test_callback_under_fraud_review_grants_nothing_until_approved(monkeypatch, fraud_status):
-    fake = FakeIyzico(fraud_status=fraud_status)
-    fake.callback_fraud_status = fraud_status
+def test_callback_under_fraud_review_grants_nothing_until_approved(monkeypatch):
+    fake = FakeIyzico(fraud_status=0)
+    fake.callback_fraud_status = 0
     client, _, reference = _paid_checkout_without_callback(monkeypatch, fake)
     callback = client.post(f"/billing/iyzico/callback?order={reference}", data={"token": TOKEN}, follow_redirects=False)
     assert callback.status_code == 303
@@ -264,6 +263,43 @@ def test_callback_under_fraud_review_grants_nothing_until_approved(monkeypatch, 
     fake.fraud_status = 1
     assert payments.reconcile_iyzico_orders(utcnow() + timedelta(minutes=20))["settled"] >= 1
     assert _order(reference).status == "paid" and _subscription_count(order.user_id) == 1
+
+
+def test_callback_rejected_by_fraud_review_fails_the_order(monkeypatch):
+    fake = FakeIyzico(fraud_status=-1)
+    fake.callback_fraud_status = -1
+    client, _, reference = _paid_checkout_without_callback(monkeypatch, fake)
+    callback = client.post(f"/billing/iyzico/callback?order={reference}", data={"token": TOKEN}, follow_redirects=False)
+    assert callback.status_code == 303
+    order = _order(reference)
+    assert order.status == "failed" and order.failure_code == "iyzico_fraud_rejected"
+    assert _subscription_count(order.user_id) == 0
+
+    # A failed order leaves the reconciliation set for good.
+    fake.detail_calls.clear()
+    payments.reconcile_iyzico_orders(utcnow() + timedelta(minutes=20))
+    assert reference not in fake.detail_calls
+
+
+def test_pending_order_rejected_by_fraud_review_is_failed(monkeypatch, caplog):
+    fake = FakeIyzico(fraud_status=0)
+    _, _, reference = _paid_checkout_without_callback(monkeypatch, fake)
+    later = utcnow() + timedelta(minutes=20)
+    assert payments.reconcile_iyzico_orders(later)["pending"] >= 1
+    assert _order(reference).status == "pending"
+
+    fake.fraud_status = -1
+    with caplog.at_level(logging.INFO, logger="lecturesift.payments"):
+        summary = payments.reconcile_iyzico_orders(later)
+    assert summary["failed"] >= 1
+    order = _order(reference)
+    assert order.status == "failed" and order.failure_code == "iyzico_fraud_rejected"
+    assert _subscription_count(order.user_id) == 0
+    assert f"failed an order iyzico rejected reference={reference}" in caplog.text
+
+    fake.detail_calls.clear()
+    payments.reconcile_iyzico_orders(later)
+    assert reference not in fake.detail_calls
 
 
 def test_order_without_any_payment_is_left_untouched(monkeypatch):

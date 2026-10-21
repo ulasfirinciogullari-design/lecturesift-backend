@@ -103,6 +103,15 @@ IYZICO_BASE_URLS = {
     "https://api.iyzipay.com",
     "https://sandbox-api.iyzipay.com",
 }
+# iyzico's fraudStatus: 1 approved, 0 still under review, -1 rejected. Only an
+# approved payment may grant access; a rejected one never becomes payable.
+IYZICO_FRAUD_APPROVED = "1"
+IYZICO_FRAUD_REJECTED = "-1"
+IYZICO_FRAUD_REJECTED_FAILURE = (
+    "iyzico_fraud_rejected",
+    "iyzico bu ödemeyi güvenlik kontrolünde onaylamadı, bu yüzden plan etkinleşmedi. "
+    "Bir hata olduğunu düşünüyorsan sipariş numarasıyla LectureSift desteğine yazabilirsin.",
+)
 IYZICO_PUBLIC_FAILURE_MESSAGES = {
     # iyzico documents 10208 as INVALID_MERCHANT_OR_SP: the live merchant's
     # category/MCC assignment was rejected.  It is not a signal that the
@@ -779,13 +788,24 @@ def _settle_iyzico_payment(
         # hint and finish the order idempotently.
         return mark_payment_order_pending(order_reference)
     fraud_status = body.get("fraudStatus")
-    if payment_status == "SUCCESS" and fraud_status is not None and str(fraud_status) != "1":
-        # iyzico holds fulfilment while fraud review is open (0) and rejects
-        # with -1. Keep the order open without access; the hourly
-        # reconciliation settles it once iyzico approves the payment.
+    fraud_rejected = payment_status == "SUCCESS" and str(fraud_status) == IYZICO_FRAUD_REJECTED
+    if (
+        payment_status == "SUCCESS"
+        and fraud_status is not None
+        and not fraud_rejected
+        and str(fraud_status) != IYZICO_FRAUD_APPROVED
+    ):
+        # iyzico holds fulfilment while fraud review is open (0). Keep the
+        # order open without access; the hourly reconciliation settles it
+        # once iyzico decides.
         return mark_payment_order_pending(order_reference)
-    succeeded = payment_status == "SUCCESS"
-    failure_code, failure_message = ("", "") if succeeded else _iyzico_failure(body)
+    succeeded = payment_status == "SUCCESS" and not fraud_rejected
+    if fraud_rejected:
+        # A rejected payment is final: fail the order so it leaves the
+        # reconciliation set and releases anything it reserved.
+        failure_code, failure_message = IYZICO_FRAUD_REJECTED_FAILURE
+    else:
+        failure_code, failure_message = ("", "") if succeeded else _iyzico_failure(body)
     return complete_payment_order(
         order_reference,
         succeeded=succeeded,
@@ -861,13 +881,16 @@ def _reconcile_iyzico_order(order_reference: str) -> str:
         # payments only; the transfer waits for its signed webhook or manual
         # settlement and is reported for follow-up.
         return "unverified"
-    if str(body.get("fraudStatus")) != "1":
-        # iyzico holds fulfilment while fraud review is open (0) and rejects
-        # with -1: keep the order open, without access, and ask again next run.
+    fraud_status = str(body.get("fraudStatus"))
+    if fraud_status not in {IYZICO_FRAUD_APPROVED, IYZICO_FRAUD_REJECTED}:
+        # iyzico holds fulfilment while fraud review is open (0): keep the
+        # order open, without access, and ask again next run.
         mark_payment_order_pending(order_reference)
         return "pending"
     result = _settle_iyzico_payment(order_reference, order, body, expected_token=None)
-    return "settled" if result["status"] == "paid" else "pending"
+    if result["status"] == "paid":
+        return "settled"
+    return "failed" if result["status"] == "failed" else "pending"
 
 
 def reconcile_iyzico_orders(now: datetime | None = None) -> dict:
@@ -878,13 +901,14 @@ def reconcile_iyzico_orders(now: datetime | None = None) -> dict:
     15 minutes old, and settles a paid
     card payment that passed iyzico's fraud review through the same path the
     callback uses. A payment still under review stays pending and is asked
-    about again next run. A paid order without card evidence (a protected
+    about again next run; one iyzico rejected is failed without access. A paid order without card evidence (a protected
     bank transfer) is left untouched and logged for follow-up. Logs carry
     only order references and counts, never provider bodies, card fields or
     credentials.
     """
     summary = {
-        "checked": 0, "settled": 0, "pending": 0, "unpaid": 0, "unverified": 0, "skipped": 0, "errors": 0,
+        "checked": 0, "settled": 0, "failed": 0, "pending": 0, "unpaid": 0, "unverified": 0, "skipped": 0,
+        "errors": 0,
     }
     if os.getenv("LECTURESIFT_WORKER") == "1" or config.current_maintenance_mode() != "off":
         return {**summary, "disabled": "maintenance"}
@@ -919,6 +943,8 @@ def reconcile_iyzico_orders(now: datetime | None = None) -> dict:
         summary[outcome] += 1
         if outcome == "settled":
             logger.info("iyzico reconciliation settled a paid order reference=%s", reference)
+        elif outcome == "failed":
+            logger.info("iyzico reconciliation failed an order iyzico rejected reference=%s", reference)
         elif outcome == "unverified":
             logger.warning(
                 "iyzico reconciliation found a paid order without card evidence; "
@@ -935,8 +961,9 @@ async def iyzico_reconciliation_loop() -> None:
             summary = await asyncio.to_thread(reconcile_iyzico_orders)
             if summary["checked"]:
                 logger.info(
-                    "iyzico reconciliation checked=%s settled=%s pending=%s unpaid=%s unverified=%s errors=%s",
-                    summary["checked"], summary["settled"], summary["pending"],
+                    "iyzico reconciliation checked=%s settled=%s failed=%s pending=%s unpaid=%s unverified=%s "
+                    "errors=%s",
+                    summary["checked"], summary["settled"], summary["failed"], summary["pending"],
                     summary["unpaid"], summary["unverified"], summary["errors"],
                 )
         except Exception:
