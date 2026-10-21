@@ -332,7 +332,11 @@ def test_real_product_and_workspace_clones_purge_only_rehearsal_rows(current, tm
             "assistant_credit_requests_v1": 0,
         }
 
+    # Both schema releases run on the clean database, as in production; the
+    # rehearsal rows below belong to a user the strict manifests would report
+    # as an anomaly, and every release refuses a database with one.
     assert migrate(name, tmp_path / "workspace") == 4
+    assert migrate_feedback(name, tmp_path / "feedback") == 1
     with engine.begin() as connection:
         for uid, job, folder in ((USERS[0], JOBS[0], "folder-a"), (other, "other-job", "folder-b")):
             connection.execute(
@@ -350,9 +354,6 @@ def test_real_product_and_workspace_clones_purge_only_rehearsal_rows(current, tm
                 text("INSERT INTO admin_order_archives_v1 VALUES (:ref, :uid, now())"),
                 dict(ref="LS-" + folder, uid=uid),
             )
-    assert migrate_feedback(name, tmp_path / "feedback") == 1
-    with engine.begin() as connection:
-        for uid, job in ((USERS[0], JOBS[0]), (other, "other-job")):
             connection.execute(
                 text(
                     "INSERT INTO lecturesift_job_feedback VALUES "

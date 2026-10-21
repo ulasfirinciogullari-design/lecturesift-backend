@@ -331,7 +331,9 @@ everything from the worker login, captures the strict manifest into
 `after-v6.txt` and commits only when `verify_transition` proves
 `schema_transition=legacy_to_current`: the new table matches
 `schema_contract_feedback_v1.txt` byte for byte, no other schema object
-changed and no pre-existing row changed. Any failure rolls the whole
+changed and no pre-existing row changed. Like every strict capture, the pre-check refuses a database that reports any
+integrity anomaly, in any table, so a database whose scheduled backup passes
+is accepted. Any failure rolls the whole
 transaction back and removes `after-v6.txt`. It must print
 
 ```text
