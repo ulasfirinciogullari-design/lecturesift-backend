@@ -1400,15 +1400,32 @@ def _as_utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
-def has_stacked_successor(connection, subscription) -> bool:
-    """Whether a queued renewal of the same owner starts exactly when this period ends."""
-    return connection.execute(
-        select(SUBSCRIPTIONS.c.id).where(
-            SUBSCRIPTIONS.c.user_id == subscription.user_id,
-            SUBSCRIPTIONS.c.id != subscription.id,
-            SUBSCRIPTIONS.c.starts_at == subscription.ends_at,
-        ).limit(1)
-    ).first() is not None
+def stacked_renewal_end(connection, subscription):
+    """The last open period of the early renewals queued after this one, or None.
+
+    Stacking keeps one "active" row, the newest period; the earlier ones are
+    "cancel_at_end" only so that they end on schedule. A buyer's own
+    cancellation lands on the last period, so its status tells the two apart.
+    """
+    current, seen = None, {subscription.id}
+    ends_at = subscription.ends_at
+    while True:
+        successor = connection.execute(
+            select(SUBSCRIPTIONS)
+            .where(
+                SUBSCRIPTIONS.c.user_id == subscription.user_id,
+                SUBSCRIPTIONS.c.plan_code == subscription.plan_code,
+                SUBSCRIPTIONS.c.status.in_(("active", "cancel_at_end")),
+                SUBSCRIPTIONS.c.starts_at == ends_at,
+                SUBSCRIPTIONS.c.id.not_in(sorted(seen)),
+            )
+            .order_by(SUBSCRIPTIONS.c.created_at)
+            .limit(1)
+        ).first()
+        if successor is None:
+            return current
+        seen.add(successor.id)
+        current, ends_at = successor, successor.ends_at
 
 
 _PLAN_TUPLE_FIELDS = {"export_formats", "summary_profiles"}

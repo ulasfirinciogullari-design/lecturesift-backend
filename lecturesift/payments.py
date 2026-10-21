@@ -842,6 +842,13 @@ def _reconcile_iyzico_order(order_reference: str) -> str:
             _strip_price_zeros(body.get("price")),
         ],
     )
+    if _iyzico_result_payment_method(body, requested_method=order["payment_method"]) != "card":
+        # A successful Retrieve Payment proves its method only through card
+        # fields. A protected bank transfer carries none, and an unproven
+        # method is never recorded or activated, so reconciliation covers card
+        # payments only; the transfer waits for its signed webhook or manual
+        # settlement and is reported for follow-up.
+        return "unverified"
     result = _settle_iyzico_payment(order_reference, order, body, expected_token=None)
     return "settled" if result["status"] == "paid" else "pending"
 
@@ -850,11 +857,15 @@ def reconcile_iyzico_orders(now: datetime | None = None) -> dict:
     """Settle paid iyzico orders whose browser callback and webhook never came.
 
     Looks at orders still created/pending from the last 48 hours (at least 15
-    minutes old, newest first) and settles a paid one through the same path
-    the callback uses. Logs carry only order references and counts, never provider bodies,
+    minutes old, newest first) and settles a paid card payment through the
+    same path the callback uses. A paid order without card evidence (a
+    protected bank transfer) is left untouched and logged for follow-up.
+    Logs carry only order references and counts, never provider bodies,
     card fields or credentials.
     """
-    summary = {"checked": 0, "settled": 0, "pending": 0, "unpaid": 0, "skipped": 0, "errors": 0}
+    summary = {
+        "checked": 0, "settled": 0, "pending": 0, "unpaid": 0, "unverified": 0, "skipped": 0, "errors": 0,
+    }
     if os.getenv("LECTURESIFT_WORKER") == "1" or config.current_maintenance_mode() != "off":
         return {**summary, "disabled": "maintenance"}
     if not iyzico_configured():
@@ -876,6 +887,12 @@ def reconcile_iyzico_orders(now: datetime | None = None) -> dict:
         summary[outcome] += 1
         if outcome == "settled":
             logger.info("iyzico reconciliation settled a paid order reference=%s", reference)
+        elif outcome == "unverified":
+            logger.warning(
+                "iyzico reconciliation found a paid order without card evidence; "
+                "it needs manual review reference=%s",
+                reference,
+            )
     return summary
 
 
@@ -886,9 +903,9 @@ async def iyzico_reconciliation_loop() -> None:
             summary = await asyncio.to_thread(reconcile_iyzico_orders)
             if summary["checked"]:
                 logger.info(
-                    "iyzico reconciliation checked=%s settled=%s pending=%s unpaid=%s errors=%s",
+                    "iyzico reconciliation checked=%s settled=%s pending=%s unpaid=%s unverified=%s errors=%s",
                     summary["checked"], summary["settled"], summary["pending"],
-                    summary["unpaid"], summary["errors"],
+                    summary["unpaid"], summary["unverified"], summary["errors"],
                 )
         except Exception:
             logger.error("iyzico reconciliation run unavailable")

@@ -77,9 +77,10 @@ class _Response:
 class FakeIyzico:
     """Answers initialize, Checkout Form retrieve and Retrieve Payment calls."""
 
-    def __init__(self, payment_status="SUCCESS", *, tamper=False):
+    def __init__(self, payment_status="SUCCESS", *, tamper=False, card=True):
         self.payment_status = payment_status
         self.tamper = tamper
+        self.card = card
         self.paid = set()
         self.detail_calls = []
 
@@ -87,7 +88,14 @@ class FakeIyzico:
         if reference not in self.paid:
             return {"status": "failure", "errorCode": "5115", "errorMessage": "Ödeme bulunamadı"}
         values = ["payment-777", "TRY", reference, reference, "599", "599"]
+        card = {
+            "cardType": "CREDIT_CARD",
+            "cardAssociation": "VISA",
+            "binNumber": BIN,
+            "lastFourDigits": CARD_DIGITS,
+        } if self.card else {}
         return {
+            **card,
             "status": "success",
             "paymentStatus": self.payment_status,
             "paymentId": "payment-777",
@@ -96,10 +104,6 @@ class FakeIyzico:
             "conversationId": reference,
             "paidPrice": "599.00" if not self.tamper else "1.00",
             "price": "599.0",
-            "cardType": "CREDIT_CARD",
-            "cardAssociation": "VISA",
-            "binNumber": BIN,
-            "lastFourDigits": CARD_DIGITS,
             "signature": _signature(values),
         }
 
@@ -205,6 +209,21 @@ def test_unpaid_or_unfinished_payment_is_left_for_the_callback(monkeypatch, paym
     order = _order(reference)
     assert order.status == "created" and order.failure_code is None
     assert _subscription_count(order.user_id) == 0
+
+
+def test_paid_order_without_card_evidence_is_reported_not_settled(monkeypatch, caplog):
+    # A protected bank transfer has no card fields, and Retrieve Payment does
+    # not otherwise prove the method: only the signed webhook may settle it.
+    fake = FakeIyzico(card=False)
+    _, _, reference = _paid_checkout_without_callback(monkeypatch, fake)
+    intent = _order(reference).provider
+    with caplog.at_level(logging.INFO, logger="lecturesift.payments"):
+        summary = payments.reconcile_iyzico_orders(utcnow() + timedelta(minutes=20))
+    assert reference in fake.detail_calls and summary["unverified"] >= 1
+    order = _order(reference)
+    assert order.status == "created" and order.provider == intent
+    assert _subscription_count(order.user_id) == 0
+    assert f"without card evidence; it needs manual review reference={reference}" in caplog.text
 
 
 def test_order_without_any_payment_is_left_untouched(monkeypatch):
