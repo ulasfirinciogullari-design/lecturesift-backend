@@ -206,6 +206,24 @@ test('plan buttons keep one-line labels and the account strip uses the button st
   await page.screenshot({path: testInfo.outputPath('polish-plus-layout.jpg'), quality: 75});
 });
 
+test('plan card buttons keep 14px one-line labels in every language', async ({page}) => {
+  await page.addInitScript(() => localStorage.setItem('lecturesift-currency', 'TRY'));
+  for (const code of CODES) {
+    await page.goto(code === 'tr' ? '/plans.html' : `/${code}/plans.html`);
+    await expect(page.locator('#plansGrid')).toHaveAttribute('aria-busy', 'false');
+    await expect(page.locator('[data-plan-card="lite"] .plan-card-actions .plan-action')).toHaveCount(2);
+    const buttons = await page.locator('.plan-card .plan-action').evaluateAll(nodes => nodes.map(node => {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const fontSize = parseFloat(getComputedStyle(node).fontSize);
+      return {label: node.textContent.trim(), fontSize, singleLine: range.getBoundingClientRect().height < fontSize * 1.8,
+        fits: node.scrollWidth <= node.clientWidth + 1};
+    }));
+    expect(buttons.length, code).toBeGreaterThanOrEqual(5);
+    expect(buttons.filter(button => !button.singleLine || !button.fits || button.fontSize < 14), code).toEqual([]);
+  }
+});
+
 test('signed-out public pages offer a compact free trial next to sign-in', async ({page, isMobile}, testInfo) => {
   await page.addInitScript(() => localStorage.setItem('lecturesift-currency', 'TRY'));
   await page.goto('/en/');

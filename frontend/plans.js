@@ -312,6 +312,23 @@ function renderCompare() {
     [pt("plans.adExperience", "Reklam deneyimi"), plan => plan.entitlements?.ad_free ? pt("plans.adFree", "Reklamsız kullanım") : plan.entitlements?.ad_mode === "limited" ? pt("plans.limitedAds") : pt("plans.adsMayAppear", "Reklam gösterilebilir")],
   ];
   $("compareBody").innerHTML = rows.map(([label, value]) => `<tr><td>${esc(label)}</td>${plans.map(plan => `<td>${esc(value(plan))}</td>`).join("")}</tr>`).join("");
+  updateCompareScroll();
+}
+
+// When the table is wider than the screen, a hint and an edge fade say that
+// more plans follow; the fade goes once the last column is in view.
+// scrollLeft runs negative on right-to-left pages, hence Math.abs.
+function updateCompareScroll() {
+  const wrap = document.querySelector(".compare-scroll > .compare-wrap");
+  if (!wrap) return;
+  if (!wrap.dataset.scrollTracked) {
+    wrap.dataset.scrollTracked = "1";
+    wrap.addEventListener("scroll", updateCompareScroll, {passive: true});
+    window.addEventListener("resize", updateCompareScroll);
+  }
+  const overflow = wrap.scrollWidth > wrap.clientWidth + 2;
+  document.querySelector(".compare-scroll-hint")?.toggleAttribute("hidden", !overflow);
+  wrap.parentElement.dataset.scrollEnd = String(!overflow || Math.abs(wrap.scrollLeft) + wrap.clientWidth >= wrap.scrollWidth - 2);
 }
 
 function normalizeCatalog(remote, selected) {
@@ -390,18 +407,26 @@ function pendingCardMessage() {
   return pt("payment.cardPending", "iyzico canlı ödeme anahtarları güvenli sunucu ayarına eklendiğinde kartlı ödeme açılacak.");
 }
 
+// Only switched-on methods are listed: a method that is off would only tell
+// the customer about something they cannot use.
 function renderPaymentStatus() {
   const provider = cardProviderStatus();
   if (!$('cardAvailability')) return;
-  $('cardAvailability').textContent = provider.configured
-    ? `${provider.code === "iyzico" ? "iyzico" : "PayTR"} · ${pt("payment.providerReady", "Kart ve güvenli ödeme yöntemleri kullanıma hazır.")}`
-    : pendingCardMessage();
-  $("protectedBankAvailability").textContent = automaticBankTransferStatus().configured
-    ? pt("payment.protectedAvailable", "iyzico siparişle otomatik eşleştirir; onay geldiğinde paket otomatik etkinleşir.")
-    : pt("payment.protectedNotConfigured", "iyzico Korumalı Havale/EFT henüz kullanıma açık değil.");
-  $("bankAvailability").textContent = manualTransfer.available
-    ? pt("payment.available", "Kişisel IBAN'a manuel Havale/EFT kullanılabilir; sipariş yönetim kontrolünden sonra etkinleşir.")
-    : pt("payment.notConfigured", "IBAN havale bilgileri henüz etkin değil.");
+  const methods = [
+    ["cardMethod", Boolean(provider.configured)],
+    ["protectedBankMethod", Boolean(automaticBankTransferStatus().configured)],
+    ["bankMethod", Boolean(manualTransfer.available)],
+  ];
+  $('cardAvailability').textContent = `${provider.code === "iyzico" ? "iyzico" : "PayTR"} · ${pt("payment.providerReady", "Kart ve güvenli ödeme yöntemleri kullanıma hazır.")}`;
+  $("protectedBankAvailability").textContent = pt("payment.protectedAvailable", "iyzico siparişle otomatik eşleştirir; onay geldiğinde paket otomatik etkinleşir.");
+  $("bankAvailability").textContent = pt("payment.available", "Kişisel IBAN'a manuel Havale/EFT kullanılabilir; sipariş yönetim kontrolünden sonra etkinleşir.");
+  methods.forEach(([id, available]) => { $(id).hidden = !available; });
+  const status = $("paymentMethodsStatus");
+  status.removeAttribute("data-i18n");
+  status.textContent = pt("payment.methodsNone", "Çevrim içi ödeme şu anda kullanılamıyor. Biraz sonra yeniden dene ya da bize yaz.");
+  status.hidden = methods.some(([, available]) => available);
+  const intro = document.querySelector(".payment-methods .intro");
+  if (intro) intro.hidden = !status.hidden;
 }
 
 function renderPlans() {
@@ -429,8 +454,8 @@ function planCard(plan) {
   const price = plan.display_price || plan.manual_price;
   const current = account?.plan?.code === code;
   const priceText = price
-    ? format(price.amount_minor, price.currency || currency)
-    : (code === "free" ? format(0, currency) : pt("plans.quote", "Teklif"));
+    ? format(price.amount_minor, price.currency || currency, {whole: true})
+    : (code === "free" ? format(0, currency, {whole: true}) : pt("plans.quote", "Teklif"));
   const suffix = plan.kind === "subscription" ? pt("plans.thirtyDayPackageShort", "30 günlük paket") : (plan.kind === "one_time" ? pt("plans.oneTimeShort", "tek ödeme") : "");
   const minutes = entitlements.minutes ?? plan.minutes;
   const minutesText = minutes == null
@@ -488,7 +513,7 @@ function renderAdFreeOffer() {
   const copy=document.createElement('div');copy.className='ad-free-copy';copy.append(heading);
   for (const key of ['plan.ad_free.description','plans.adFreeNoCredits','plans.adFreeScope']) {const line=document.createElement('p');line.textContent=pt(key);copy.append(line);}
   const actions=document.createElement('div');actions.className='ad-free-actions';
-  const price=document.createElement('strong');price.textContent=format(offer.display_price.amount_minor,offer.display_price.currency);
+  const price=document.createElement('strong');price.textContent=format(offer.display_price.amount_minor,offer.display_price.currency,{whole:true});
   const once=document.createElement('span');once.textContent=pt('plans.oneTime','Tek ödeme');
   const button=document.createElement('button');button.type='button';button.className='plan-action';button.dataset.plan='ad_free';button.dataset.interval='one_time';button.disabled=owned;
   button.textContent=pt(owned?'plans.adFreeActive':'plans.removeAds');
@@ -512,13 +537,35 @@ function renderAssistantOffers() {
     const card=document.createElement('article');card.className='assistant-credit-pack';
     const name=document.createElement('h3');name.textContent=Number(pack.credits).toLocaleString(PLANS_I18N.locale);
     const unit=document.createElement('p');unit.textContent=at('credits');
-    const price=document.createElement('p');price.className='assistant-pack-price';price.textContent=format(pack.amount_minor,pack.currency);
+    const price=document.createElement('p');price.className='assistant-pack-price';price.textContent=format(pack.amount_minor,pack.currency,{whole:true});
     const button=document.createElement('button');button.type='button';button.className='plan-action';button.textContent=at('buy');button.disabled=!offers.available;
     button.addEventListener('click',()=>buy(pack.code,'one_time'));card.append(name,unit,price,button);packs.append(card);
   }
   section.append(packs);
   const details=document.createElement('details');const summary=document.createElement('summary');summary.textContent=at('creditguide');const rules=document.createElement('p');rules.textContent=at('rules');details.append(summary,rules);section.append(details);
   if(location.hash==='#assistantCredits')requestAnimationFrame(()=>section.scrollIntoView({block:'start'}));
+}
+
+// The register page names the plan a guest picked here. Only the label and
+// the price shown on this page are kept, in this tab, for display.
+const CHOSEN_PLAN_KEY = "lecturesift-chosen-plan";
+function rememberChosenPlan(planCode, interval) {
+  try {
+    sessionStorage.removeItem(CHOSEN_PLAN_KEY);
+    const plan = catalog?.plans?.find(item => item.code === planCode);
+    const pack = catalog?.assistant?.packs?.find(item => item.code === planCode);
+    const price = plan ? (plan.display_price || plan.manual_price)
+      : planCode === "ad_free" ? catalog?.ad_free?.display_price
+      : pack ? {amount_minor: pack.amount_minor, currency: pack.currency} : null;
+    const name = plan || planCode === "ad_free" ? planLabel(planCode)
+      : pack ? `${Number(pack.credits).toLocaleString(PLANS_I18N.locale)} ${at("credits")}` : "";
+    if (!name) return;
+    const amount = price ? (interval === "annual" ? price.amount_minor * 10 : price.amount_minor) : null;
+    sessionStorage.setItem(CHOSEN_PLAN_KEY, JSON.stringify({
+      code: planCode, interval, name,
+      price: Number.isFinite(amount) ? format(amount, price.currency || currency, {whole: true}) : "",
+    }));
+  } catch (_) { /* The register page falls back to the plan name. */ }
 }
 
 async function buy(planCode, interval = "monthly") {
@@ -541,9 +588,11 @@ async function buy(planCode, interval = "monthly") {
     if (documentNeed) Object.entries(documentNeed).forEach(([key, value]) => {
       if (value != null) nextParams.set(`need_${key}`, String(value));
     });
+    // A visitor without an account registers first; the register page links
+    // to sign-in with the same destination for anyone who already has one.
     const next = `${localized("/plans.html")}?${nextParams}`;
-    const loginPath = PLANS_I18N.localizedPath?.(PLANS_I18N.language, '/login.html') || '/login.html';
-    location.href = `${loginPath}?next=${encodeURIComponent(next)}`;
+    rememberChosenPlan(planCode, interval);
+    location.href = `${localized("/register.html")}?next=${encodeURIComponent(next)}`;
     return;
   }
   const provider = cardProviderStatus();

@@ -28,5 +28,5 @@
 .landing-related-grid>a>span{position:absolute;right:22px;bottom:16px;color:var(--ui-action)}
 .landing-related-grid p{margin-bottom:0}
 .landing-page a:focus-visible,.landing-page summary:focus-visible{outline:2px solid var(--ui-action);outline-offset:5px}
-.landing-page .landing-updated{font-size:12px;text-align:right;margin:24px 4px 0}
-@media(max-width:720px){.landing-example-grid,.landing-steps,.landing-explain,.landing-related-grid{grid-template-columns:minmax(0,1fr)}.landing-explain{gap:0}.landing-example-grid{gap:20px}.landing-page .landing-hero{padding:30px 24px}.landing-page .landing-hero>p:not(.eyebrow){font-size:16px}.landing-source{padding:20px}.landing-steps{gap:24px}.landing-page .detail-actions a{font-size:13px;line-height:1.5}.landing-page .detail-section{padding:26px 22px}}
+.landing-page .landing-updated{font-size:13px;text-align:right;margin:24px 4px 0}
+@media(max-width:720px){.landing-example-grid,.landing-steps,.landing-explain,.landing-related-grid{grid-template-columns:minmax(0,1fr)}.landing-explain{gap:0}.landing-example-grid{gap:20px}.landing-page .landing-hero{padding:30px 24px}.landing-page .landing-hero>p:not(.eyebrow){font-size:16px}.landing-source{padding:20px}.landing-steps{gap:24px}.landing-page .detail-actions a{font-size:14px;line-height:1.5}.landing-page .detail-section{padding:26px 22px}}

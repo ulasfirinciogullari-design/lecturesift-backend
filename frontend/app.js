@@ -583,7 +583,12 @@ async function restoreRequestedJob() {
     if (!response.ok) { const error = await responseError(response); showError(error.message, error.code); return; }
     const job = await response.json();
     updateJobView(job);
-    if (job.status === "done") { await loadResult(); recordTrialComplete(job); }
+    if (job.status === "done") {
+      // A link to a finished pack opens on the pack; the upload form follows it.
+      const intro = document.querySelector(".workspace-intro");
+      if (intro) { intro.before($("results")); $("results").classList.add("results-first"); }
+      await loadResult(); recordTrialComplete(job);
+    }
     else if (job.status === "error") showError(job.error, job.error_code);
     else { startTimer(); pollJob(); }
   } catch (error) {

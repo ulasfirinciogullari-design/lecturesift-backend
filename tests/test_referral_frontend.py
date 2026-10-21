@@ -142,7 +142,7 @@ if (start < 0 || end < start) throw Error('registration handler missing');
       $:get, populateCountrySelect(){}, selectedCountry:()=> 'TR',
       setupPasswordToggle(){}, strongPassword:()=>true, guestSessionToken:()=> '',
       loadAuthConfig:async()=>null, setupGoogleSignIn:async()=>{},
-      preserveAuthLinks(){}, safeNext:()=>'/workspace.html', rememberSignupContinuation(){}, localizedAuthPath:path=>path,
+      preserveAuthLinks(){}, showChosenPlan(){}, safeNext:()=>'/workspace.html', rememberSignupContinuation(){}, localizedAuthPath:path=>path,
       location:{search:''}, URLSearchParams, encodeURIComponent,
       referralCode:value=>/^LSR-[A-F0-9]{24}$/.test(value) ? value : '',
       rt:key=>key, t:(_key,fallback)=>fallback, setBusy(){},

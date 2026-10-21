@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
   <meta name="description" content="LectureSift hesap, profil, plan, kredi ve güvenlik yönetimi.">
-  <title>Hesabım | LectureSift</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="./auth.css?v=4">
-<link rel="stylesheet" href="/rollout.css?v=9"><link rel="stylesheet" href="/theme.css?v=17"><script src="/theme.js?v=14"></script><link rel="stylesheet" href="/product-layout.css?v=9"><link rel="stylesheet" href="/assistant.css?v=5"></head>
+  <title>Hesabım | LectureSift</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="./auth.css?v=5">
+<link rel="stylesheet" href="/rollout.css?v=11"><link rel="stylesheet" href="/theme.css?v=18"><script src="/theme.js?v=15"></script><link rel="stylesheet" href="/product-layout.css?v=10"><link rel="stylesheet" href="/assistant.css?v=5"></head>
 <body data-page="account">
   <header class="auth-topbar"><a class="brand" href="/"><span class="brand-mark"><i></i><i></i><i></i></span><span>Lecture<span>Sift</span></span></a><a class="back-link" href="/workspace.html" data-i18n="nav.workspace">Çalışma alanına dön</a></header>
   <section id="accountLoadState" class="account-layout" hidden role="status">
@@ -21,7 +21,7 @@
       <button type="button" role="tab" data-account-view-button="security" aria-selected="false" tabindex="-1" data-i18n="account.navSecurity">Güvenlik ve veriler</button>
     </nav>
     <section class="account-view" data-account-view="overview" role="tabpanel"><div class="dashboard-grid">
-      <section class="dashboard-card"><h2 data-i18n="account.usageTitle">Kullanım ve krediler</h2><div class="metric"><div><small data-i18n="account.remaining">Toplam kalan dakika</small><strong id="remainingMinutes">—</strong></div><small id="usedMinutes"></small></div><div id="usageTrack" class="usage-track"><i></i></div><div class="account-meta compact"><div><span data-i18n="account.creditBalance">Ek kredi bakiyesi</span><strong id="creditMinutes">—</strong></div></div><div class="stack-actions"><a class="primary-action link-action" href="/plans.html" data-i18n="account.buyMinutes">Ek dakika satın al</a><a class="secondary-action link-action" href="/plans.html#compare" data-i18n="account.comparePlans">Planları karşılaştır</a></div></section>
+      <section class="dashboard-card"><h2 data-i18n="account.usageTitle">Kullanım ve krediler</h2><div class="metric"><div><small data-i18n="account.remaining">Toplam kalan dakika</small><strong id="remainingMinutes">—</strong></div><small id="usedMinutes"></small></div><div id="usageTrack" class="usage-track"><i></i></div><div class="account-meta compact"><div><span data-i18n="account.creditBalance">Ek kredi bakiyesi</span><strong id="creditMinutes">—</strong></div></div><div class="stack-actions"><a id="buyMinutesLink" class="primary-action link-action" href="/plans.html" data-i18n="account.buyMinutes">Ek dakika satın al</a><a class="secondary-action link-action" href="/plans.html#compare" data-i18n="account.comparePlans">Planları karşılaştır</a></div></section>
       <section class="dashboard-card"><h2 data-i18n="account.planTitle">Plan ve hesap</h2><div class="account-meta"><div><span data-i18n="account.currentPlan">Mevcut plan</span><strong id="accountPlan">—</strong></div><div id="subscriptionEndsRow" hidden><span data-i18n="account.subscriptionEnds">Dönem bitişi</span><strong id="subscriptionEnds">—</strong></div><div id="nextPeriodRow" hidden><span data-i18n="account.nextPeriod">Sonraki dönem</span><strong id="nextPeriod">—</strong></div><div><span data-i18n="account.adMode">Reklam deneyimi</span><strong id="accountAdMode">—</strong></div><div><span data-i18n="field.country">Ülke</span><strong id="accountCountry">—</strong></div><div><span data-i18n="field.phone">Telefon</span><strong id="accountPhone">—</strong></div></div><div id="subscriptionActions" class="stack-actions" hidden><p id="subscriptionState" class="empty-copy" data-i18n="account.fixedTermHelp">Aşağıdaki seçimlerden yeni bir sabit süreli paket satın alabilir veya paketini değiştirebilirsin. Bu ödemeler otomatik yenilenmez.</p><form id="fixedTermPlanForm" class="form-grid"><label class="field"><span data-i18n="account.packageToBuy">Satın alınacak paket</span><select id="managePlanSelect" required><option value="lite" data-i18n="plan.lite">Öğrenci</option><option value="pro" data-i18n="plan.pro">Pro</option></select></label><label class="field"><span data-i18n="account.termToBuy">Yeni dönem</span><select id="managePlanInterval" required><option value="monthly" data-i18n="account.monthlyTerm">30 günlük dönem</option><option value="annual" data-i18n="account.annualTerm">Yıllık dönem</option></select></label><p id="managePlanSummary" class="empty-copy" role="status"></p><button id="managePlanContinue" class="secondary-action" type="submit" data-i18n="account.continueInPlans">Planlar’da devam et</button></form></div></section>
     </div></section>
 
@@ -81,6 +81,6 @@
     </div></section>
   </main>
   <script src="./locale-data.js?v=4"></script><script src="./page-i18n.js?v=14"></script><script src="/i18n.js?v=61"></script><script src="./referral-i18n.js?v=4"></script><script src="./auth.js?v=26"></script>
-  <script src="/rollout.js?v=18"></script>
+  <script src="/rollout.js?v=19"></script>
 <script src="/product-layout.js?v=1"></script></body>
 </html>

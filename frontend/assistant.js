@@ -14,8 +14,9 @@
   const launch = document.createElement('button'); launch.className = 'assistant-launch'; launch.innerHTML = spark; const launchLabel=document.createElement('span');launchLabel.textContent=t('nav');launch.append(launchLabel);launch.setAttribute('aria-label',t('title')); launch.type = 'button'; launch.setAttribute('aria-haspopup', 'dialog'); if(!pageRoot)document.body.append(launch);
   // The floating launcher moves up rather than away: above the consent banner,
   // and above a primary page action it would otherwise cover (on a phone the
-  // home page's upload button sits right where the launcher floats).
-  const PRIMARY_ACTIONS='.study-primary,.hero-primary,.primary-button,.primary-action,.detail-actions .primary';
+  // home page's upload button sits right where the launcher floats, and on the
+  // sign-in and register cards the link to the other form sits at the bottom).
+  const PRIMARY_ACTIONS='.study-primary,.hero-primary,.primary-button,.primary-action,.detail-actions .primary,.auth-card .inline-links a';
   const covers=(a,b)=>a.left<b.right&&b.left<a.right&&a.top<b.bottom&&b.top<a.bottom;
   // The reduced-motion rule in theme.css gives every property a tiny
   // transition, so after a move the launcher would still report its old box

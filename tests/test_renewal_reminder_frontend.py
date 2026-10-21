@@ -48,6 +48,6 @@ def test_workspace_loads_the_versions_that_carry_the_nudge():
     page = (FRONTEND / "workspace.html").read_text(encoding="utf-8")
     style = (FRONTEND / "library.css").read_text(encoding="utf-8")
     assert 'src="./app.js?v=48"' in page
-    assert 'href="/library.css?v=2"' in page
+    assert 'href="/library.css?v=3"' in page
     assert ".renewal-nudge{" in style and ".renewal-nudge[hidden]{display:none}" in style
     assert 'id="renewalNudge"' not in page

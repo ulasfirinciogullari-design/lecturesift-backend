@@ -497,7 +497,7 @@ def test_guide_measurement_has_consent_controls_without_the_large_application_sc
             sources = re.findall(r'<script\b[^>]*\bsrc="([^"]+)"', html)
             assert sources.count("/consent.js?v=6") == 1
             assert sources.count("/analytics.js?v=11") == 1
-            assert "/consent.css?v=2" in html
+            assert "/consent.css?v=3" in html
             assert not any(re.search(r"/(?:i18n|page-i18n|app)\.js", src) for src in sources)
 
 
