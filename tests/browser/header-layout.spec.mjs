@@ -64,6 +64,11 @@ test('narrow headers show the language as a code without crowding the other cont
       // 390px is the supported phone width and must not scroll sideways. At
       // 320px only the header is held to that here; the page body is logged.
       await expectCompactLanguage(page, code, {wholePage: width === 390});
+      if (width === 390) {
+        const primary = await page.locator('.study-hero .study-primary').boundingBox();
+        expect(primary.height, `${code} hero button wraps at 390px`).toBeLessThanOrEqual(56);
+        expect(primary.x + primary.width, `${code} hero button overflows at 390px`).toBeLessThanOrEqual(390);
+      }
       if (width === 320) {
         const wide = await page.evaluate(() => {
           const limit = document.documentElement.clientWidth;

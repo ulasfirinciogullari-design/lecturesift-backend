@@ -583,8 +583,16 @@ test('rebuilt study entry opens the real workspace and key screens remain usable
   await context.addInitScript(() => localStorage.setItem('lecturesift-currency', 'TRY'));
   await page.goto('/en/');
   await page.locator('[data-consent="essential"]').click();
-  await expect(page.locator('.study-sources a')).toHaveCount(3);
-  await expect(page.locator('.study-launcher')).toBeVisible();
+  // One primary action above the fold; the sample pack and the steps follow it.
+  const primary = page.locator('.study-hero .study-primary');
+  await expect(primary).toHaveCount(1);
+  await expect(primary).toHaveText('Try 30 minutes free');
+  await expect(primary).toHaveAttribute('href', /^\/en\/workspace(?:\.html)?\?source=upload$/);
+  await expect(page.locator('.study-hero .study-text-link')).toHaveAttribute('href', '#how-it-works');
+  await expect(page.locator('#exampleTitle')).toHaveText('A sample pack from one biology lecture');
+  await expect(page.locator('#how-it-works .steps-grid > li')).toHaveCount(3);
+  await expect(page.locator('#faq .faq-list details')).toHaveCount(5);
+  await expect(page.locator('.study-launcher, #campaigns, .campaign-card')).toHaveCount(0);
   await noHorizontalOverflow(page);
   const capture = async name => {
     if (testInfo.project.name.endsWith('light')) await page.screenshot({path:testInfo.outputPath(name+'.jpg'), quality:75, fullPage:false});
@@ -595,8 +603,9 @@ test('rebuilt study entry opens the real workspace and key screens remain usable
   await expect.poll(() => illustration.evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true);
   await noHorizontalOverflow(page);
   await page.locator('#study-example').screenshot({path:testInfo.outputPath('study-illustration-layout.jpg'), quality:80});
-  await page.locator('.source-images').click();
-  await expect(page).toHaveURL(/workspace(?:\.html)?$/);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await primary.click();
+  await expect(page).toHaveURL(/\/en\/workspace(?:\.html)?\?source=upload$/);
   await expect(page.locator('#videoUrl, #linkTab, #linkPanel')).toHaveCount(0);
   await expect(page.locator('body')).not.toContainText('YouTube');
   await expect(page.locator('#classicDropZone')).toBeVisible();
@@ -645,8 +654,18 @@ test('rebuilt study entry opens the real workspace and key screens remain usable
 });
 
 
-test('mobile offer numbers, descriptions and links stay inside separate card rows', async ({page, isMobile}, testInfo) => {
-  test.skip(!isMobile, 'Regression concerns the narrow offer-card layout');
+test('mobile price cards keep their rows inside the card and the trial button on one line', async ({page, isMobile}, testInfo) => {
+  test.skip(!isMobile, 'Regression concerns the narrow price-card layout');
+  // A synthetic catalog fills the cards so their real rows are measured.
+  const entitlements = (minutes, docx, adFree, priority) => ({minutes, export_formats: docx ? ['pdf', 'docx', 'txt'] : ['pdf'], ad_free: adFree, priority, history_days: 30, limits: {}});
+  const catalog = {selected_currency: 'TRY', guest_trial_minutes: 30, plans: [
+    {code: 'free', kind: 'free', featured: false, display_price: {currency: 'TRY', amount_minor: 0}, entitlements: entitlements(120, false, false, 'standard')},
+    {code: 'credit', kind: 'one_time', featured: false, display_price: {currency: 'TRY', amount_minor: 19900}, entitlements: entitlements(300, true, false, 'standard')},
+    {code: 'lite', kind: 'subscription', featured: true, display_price: {currency: 'TRY', amount_minor: 14900}, entitlements: entitlements(600, true, true, 'standard')},
+    {code: 'pro', kind: 'subscription', featured: false, display_price: {currency: 'TRY', amount_minor: 44900}, entitlements: entitlements(1500, true, true, 'priority')},
+  ]};
+  await page.route(url => url.pathname === '/billing/plans', route => route.fulfill({status: 200, contentType: 'application/json',
+    headers: {'Access-Control-Allow-Origin': 'http://127.0.0.1:4173'}, body: JSON.stringify(catalog)}));
   for (const width of [320, 390]) {
     await page.setViewportSize({width, height:844});
     for (const locale of ['tr', 'ar']) {
@@ -659,17 +678,35 @@ test('mobile offer numbers, descriptions and links stay inside separate card row
       await expect(skipLink).toHaveCSS('clip-path', 'none');
       await page.keyboard.press('Tab');
       await expect(skipLink).not.toBeFocused();
-      const cards = page.locator('.campaign-card');
+      // The hero button must not wrap at phone widths in either script.
+      const primary = page.locator('.study-hero .study-primary');
+      const primaryBox = await primary.boundingBox();
+      expect(primaryBox.height, `${locale} ${width}px hero button wraps`).toBeLessThanOrEqual(56);
+      expect(primaryBox.x + primaryBox.width).toBeLessThanOrEqual(width);
+      const cards = page.locator('.home-pricing .price-card');
       await expect(cards).toHaveCount(3);
-      await expect(cards.nth(0).locator('.campaign-value')).toHaveText('30');
-      await expect(cards.nth(1).locator('.campaign-value')).toHaveText('120');
-      await expect(cards.nth(0).locator('h3')).toContainText('30');
-      await expect(cards.nth(1).locator('h3')).toContainText('120');
+      await expect(page.locator('[data-home-pricing]')).toHaveAttribute('data-pricing-source', 'live');
+      await expect(cards.nth(1)).toHaveClass(/featured/);
+      await expect(cards.nth(1).locator('.price-badge')).toBeVisible();
+      await expect(cards.nth(2).locator('.price-badge')).toBeHidden();
+      for (const card of await cards.all()) {
+        await expect(card.locator('[data-home-live]')).toBeVisible();
+        await expect(card.locator('.price-link')).toBeHidden();
+      }
+      if (locale === 'tr') {
+        await expect(cards.nth(0).locator('[data-home-minutes]')).toHaveText('120');
+        await expect(cards.nth(1).locator('[data-home-price]')).toHaveText('₺149');
+        await expect(cards.nth(2).locator('[data-home-price]')).toHaveText('₺449');
+        await expect(cards.nth(2).locator('[data-home-minutes]')).toHaveText('1.500');
+        await expect(page.locator('.pricing-pack [data-home-price]')).toHaveText('₺199');
+      }
       await cards.first().scrollIntoViewIfNeeded();
       for (const card of await cards.all()) {
         const bounds = await card.boundingBox();
         let previousBottom = bounds.y;
-        for (const child of await card.locator(':scope > *').all()) {
+        // The "most popular" pill intentionally sits on the card's top edge;
+        // the rows live inside the catalog-filled block.
+        for (const child of await card.locator(':scope > h3, :scope > .price-live > *').all()) {
           const box = await child.boundingBox();
           expect(box.x).toBeGreaterThanOrEqual(bounds.x);
           expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width + 1);
@@ -679,7 +716,7 @@ test('mobile offer numbers, descriptions and links stay inside separate card row
         }
       }
       await noHorizontalOverflow(page);
-      if (width === 320) await page.locator('.campaign-section').screenshot({path:testInfo.outputPath('offers-'+locale+'-layout.jpg'), quality:80});
+      if (width === 320) await page.locator('.home-pricing').screenshot({path:testInfo.outputPath('pricing-'+locale+'-layout.jpg'), quality:80});
     }
   }
 });
