@@ -540,3 +540,62 @@ reports any change as old → new. A failed read sends nothing and changes
 nothing. The command ends within three minutes: the status read is limited
 to 90 seconds and sending to 60 seconds. While the daily check is running,
 it does nothing and says so; run it again a few minutes later.
+
+## Package-expiry reminder emails
+
+From the first release that contains `lecturesift/renewal_reminders.py`, the
+api container emails a customer three days before a paid 30-day or annual
+package ends and again on its last day. Paid packages never renew by
+themselves, so until then nobody heard that access was about to end. The
+email names the package, its end time, the minutes left in the current
+period and the current catalog price, says that nothing is charged
+automatically, and links to the plans page with the same package
+preselected (`/plans.html?plan=<code>&interval=<monthly|annual>`; the login
+page keeps that in `?next=`). It is written in the account's interface
+language, Turkish when none is saved. Free accounts, minute packs and guest
+trials get nothing: only fixed-term packages have an end date.
+
+No new unit, environment variable, file or secret is needed. The check is
+one more loop in the api process, next to the job-failure emails: it runs
+at start and every 15 minutes, and sends only between 09:00 and 22:00
+Türkiye time, so a process that was down for the whole window skips that
+day's reminders instead of emailing at night. Each delivery is one row with
+a deterministic id in the admin account event log
+(`renewal_reminder_<kind>_<state>`, like the order confirmations), so
+restarts, a second api process and repeated runs never email the same
+period twice. A failed Resend request is retried on the next loop with the
+same idempotency key, within the same day; an ambiguous SMTP failure is
+recorded and never replayed. A period whose owner already bought a newer
+package is skipped. The api log shows one line per run with counts and
+subscription ids only, never an address:
+
+```sh
+sudo docker compose --project-directory /opt/lecturesift logs --since 24h api | grep "Renewal reminders"
+```
+
+### After the first release
+
+Check what the next run would send, then send yourself one sample. Neither
+command touches customer records:
+
+```sh
+sudo docker compose --project-directory /opt/lecturesift exec -T api \
+  python -m lecturesift.renewal_reminders --dry-run
+sudo docker compose --project-directory /opt/lecturesift exec -T api \
+  python -m lecturesift.renewal_reminders --test-to <your-address> --language tr --kind 3_days
+```
+
+`--dry-run` prints, for each kind, how many periods end on that day and
+which of them were already emailed; it sends and records nothing and works
+outside the send window. `--test-to` renders a synthetic Plus package that
+ends in three days and sends it to the given address only, without an
+idempotency key, so it can be repeated; `--preview` prints the same sample
+to the terminal instead of sending it. `--send` runs today's reminders now,
+exactly as the loop would, and is safe to repeat. The sample must arrive;
+Resend accepting the request is not proof of delivery.
+
+Plan names in the email come from `lecturesift/plan_copy.json`, a copy of
+the `plan.<code>` rows of `frontend/i18n.js`. CI fails when the two differ;
+after renaming a plan run `python -m lecturesift.plan_copy --sync` and
+commit the result. Prices come from the catalog in `lecturesift/billing.py`
+at send time.

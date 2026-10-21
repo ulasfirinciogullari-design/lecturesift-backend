@@ -380,10 +380,57 @@ function renderBillingAccount() {
   updateSourceLimitHelp();
   // Entitlements can arrive after the settings are already in use.
   syncContentChoices();
+  renderRenewalNudge(loggedIn);
   if (!loggedIn) return;
   if ($("accountEmail")) $("accountEmail").textContent = billingAccount.user.email;
   if ($("accountPlan")) $("accountPlan").textContent = `${t("currentPlan")}: ${planCopy(billingAccount.plan.code)[0]}`;
   if ($("accountRemaining")) $("accountRemaining").textContent = billingAccount.remaining_minutes == null ? "∞" : billingAccount.remaining_minutes.toLocaleString(currentLanguage);
+}
+
+// Paid packages are fixed periods that never renew by themselves. In the last
+// seven days the workspace shows one line with the way back to the same
+// package; the server emails the same reminder three days before and on the
+// last day. The copy is kept here in every interface language so this stays
+// one self-contained change.
+const RENEWAL_NUDGE = {
+  tr: ["Paketin {days} gün sonra bitiyor", "Paketin bugün bitiyor", "Yenile"],
+  en: ["Your package ends in {days} days", "Your package ends today", "Renew"],
+  de: ["Dein Paket endet in {days} Tagen", "Dein Paket endet heute", "Erneuern"],
+  fr: ["Votre forfait se termine dans {days} jours", "Votre forfait se termine aujourd’hui", "Renouveler"],
+  es: ["Tu paquete termina en {days} días", "Tu paquete termina hoy", "Renovar"],
+  it: ["Il tuo pacchetto termina tra {days} giorni", "Il tuo pacchetto termina oggi", "Rinnova"],
+  pt: ["Seu pacote termina em {days} dias", "Seu pacote termina hoje", "Renovar"],
+  ru: ["Ваш пакет заканчивается через {days} дн.", "Ваш пакет заканчивается сегодня", "Продлить"],
+  ar: ["تنتهي باقتك بعد {days} أيام", "تنتهي باقتك اليوم", "تجديد"],
+  zh: ["你的套餐将在 {days} 天后结束", "你的套餐今天结束", "续订"],
+  ja: ["パッケージは{days}日後に終了します", "パッケージは本日終了します", "更新"],
+  ko: ["패키지가 {days}일 후 종료됩니다", "패키지가 오늘 종료됩니다", "갱신"],
+  hi: ["आपका पैकेज {days} दिन में समाप्त हो रहा है", "आपका पैकेज आज समाप्त हो रहा है", "नवीनीकृत करें"],
+};
+function renewalDaysLeft(subscription) {
+  if (!subscription || !["monthly", "annual"].includes(subscription.interval)) return null;
+  const end = new Date(subscription.ends_at || "");
+  if (Number.isNaN(end.getTime()) || end <= new Date()) return null;
+  const endDay = new Date(end); endDay.setHours(0, 0, 0, 0);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return Math.round((endDay - today) / 86400000);
+}
+function renderRenewalNudge(loggedIn) {
+  let node = $("renewalNudge");
+  const days = loggedIn ? renewalDaysLeft(billingAccount.subscription) : null;
+  if (days === null || days > 7) { if (node) node.hidden = true; return; }
+  if (!node) {
+    const host = $("app");
+    if (!host) return;
+    node = document.createElement("a");
+    node.id = "renewalNudge"; node.className = "renewal-nudge";
+    host.prepend(node);
+  }
+  const copy = RENEWAL_NUDGE[currentLanguage] || RENEWAL_NUDGE.tr;
+  const query = new URLSearchParams({plan: billingAccount.plan?.code || "", interval: billingAccount.subscription.interval});
+  node.href = `${window.LectureSiftI18n?.localizedPath?.(currentLanguage, "/plans.html") || "/plans.html"}?${query}`;
+  node.textContent = `${days === 0 ? copy[1] : copy[0].replace("{days}", String(days))} · ${copy[2]}`;
+  node.hidden = false;
 }
 
 async function billingRequest(path, options = {}) {
