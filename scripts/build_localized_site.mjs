@@ -1,3 +1,5 @@
+import {execFileSync} from "node:child_process";
+import {realpathSync} from "node:fs";
 import {cp, mkdir, readdir, readFile, rm, writeFile} from "node:fs/promises";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
@@ -173,7 +175,7 @@ function enrichLandingPage(html, language, publicPath) {
   return html
     .replace(/<title[^>]*>[\s\S]*?<\/title>/i, () => `<title>${e(copy.title)}</title>`)
     .replace(/<meta\s+name="description"\s+content="[^"]*"\s*\/?\s*>/i, () => `<meta name="description" content="${e(copy.description)}">`)
-    .replace(/<\/head>/i, `<meta property="article:modified_time" content="${LANDING_PAGES.updated}"><link rel="stylesheet" href="/landing-pages.css?v=1"></head>`)
+    .replace(/<\/head>/i, `<meta property="article:modified_time" content="${LANDING_PAGES.updated}"><link rel="stylesheet" href="/landing-pages.css?v=2"></head>`)
     .replace(/<main\b[^>]*>[\s\S]*?<\/main>/i, () => main);
 }
 
@@ -589,8 +591,72 @@ function validateLocalizedPage(html, language, publicPath) {
   }
 }
 
+// Sitemap lastmod for the core pages is the date of the last commit that
+// touched the page's source file, read from git history at build time
+// (Netlify builds from a full clone). Without usable history (no git, a
+// shallow clone that would date every file to its one commit, a copy outside
+// the repository) those entries carry no lastmod: no date beats a wrong one.
+function git(args) {
+  return execFileSync("git", args, {
+    cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 30000,
+  }).trim();
+}
+
+function coreSourceDates() {
+  try {
+    // Only this checkout's history counts, never that of an enclosing repository.
+    if (realpathSync(git(["rev-parse", "--show-toplevel"])) !== realpathSync(ROOT)) return null;
+    if (git(["rev-parse", "--is-shallow-repository"]) !== "false") return null;
+  } catch {
+    return null;
+  }
+  const dates = new Map();
+  for (const publicPath of PUBLIC_PATHS) {
+    const source = `frontend/${publicPath === "/" ? "index.html" : publicPath.slice(1)}`;
+    try {
+      const date = git(["log", "-1", "--date=short", "--format=%cd", "--", source]);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) dates.set(publicPath, date);
+    } catch {
+      // An unreadable history leaves only this page undated.
+    }
+  }
+  return dates;
+}
+
+function datedSitemap(sitemap, dates) {
+  if (!dates) {
+    console.warn("Sitemap: git history is unavailable or shallow; core pages are published without lastmod");
+    return sitemap;
+  }
+  let dated = 0;
+  for (const language of LANGUAGES) {
+    for (const publicPath of PUBLIC_PATHS) {
+      // Landing editions are dated by landing-pages.json, like their Article.
+      if (LANDING_PAGES.pages[publicPath]?.[language] || !dates.has(publicPath)) continue;
+      const loc = `<loc>${ORIGIN}${localizedPath(language, publicPath)}</loc>`;
+      const at = sitemap.indexOf(loc);
+      if (at < 0 || sitemap.indexOf(loc, at + 1) >= 0) throw new Error(`Sitemap entry is missing or repeated: ${loc}`);
+      const lineEnd = sitemap.indexOf("\n", at) + 1;
+      if (!lineEnd || /^\s*<lastmod>/.test(sitemap.slice(lineEnd, lineEnd + 64))) {
+        throw new Error(`Sitemap entry is already dated: ${loc}`);
+      }
+      const indent = sitemap.slice(sitemap.lastIndexOf("\n", at) + 1, at);
+      const newline = sitemap[lineEnd - 2] === "\r" ? "\r\n" : "\n";
+      sitemap = `${sitemap.slice(0, lineEnd)}${indent}<lastmod>${dates.get(publicPath)}</lastmod>${newline}${sitemap.slice(lineEnd)}`;
+      dated += 1;
+    }
+  }
+  console.log(`Sitemap: ${dated} core entries dated from git history`);
+  return sitemap;
+}
+
 await rm(OUTPUT, {recursive: true, force: true});
 await cp(SOURCE, OUTPUT, {recursive: true});
+await writeFile(
+  path.join(OUTPUT, "sitemap.xml"),
+  datedSitemap(await readFile(path.join(SOURCE, "sitemap.xml"), "utf8"), coreSourceDates()),
+  "utf8",
+);
 // Editorial translations are published only in the languages actually written.
 // Do not index copies of Turkish content under unrelated language paths.
 await rm(path.join(OUTPUT, "study-resources.json"));
@@ -675,7 +741,7 @@ function studyDocument(page, language) {
   return `<!doctype html><html lang="${language}" dir="ltr"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeAttribute(copy.title)} | LectureSift</title><meta name="description" content="${escapeAttribute(copy.description)}">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css?v=12"><link rel="stylesheet" href="/theme.css?v=17"><link rel="stylesheet" href="/product-layout.css?v=9"><link rel="stylesheet" href="/study-guides.css?v=4"><script src="/theme.js?v=14"></script></head>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css?v=19"><link rel="stylesheet" href="/theme.css?v=18"><link rel="stylesheet" href="/product-layout.css?v=10"><link rel="stylesheet" href="/study-guides.css?v=4"><script src="/theme.js?v=15"></script></head>
 <body class="guide-page"><a class="skip-link guide-skip" href="#content">${tr ? "İçeriğe geç" : "Skip to content"}</a>
 <header class="guide-header"><div class="guide-header-inner"><a class="brand guide-brand" href="${prefix}/" aria-label="LectureSift ${tr ? "ana sayfa" : "home"}">${brand}</a><nav aria-label="${tr ? "Ana menü" : "Main navigation"}"><a href="${prefix}/study-guides" aria-label="${tr ? "Çalışma rehberleri" : "Study guides"}"${library ? ' aria-current="page"' : ""}><span class="guide-nav-full">${tr ? "Çalışma rehberleri" : "Study guides"}</span><span class="guide-nav-compact" aria-hidden="true">${tr ? "Rehberler" : "Guides"}</span></a><a href="${prefix}/about-study-guides" aria-label="${tr ? "Rehberler hakkında" : "About the guides"}"${page.slug === "about-study-guides" ? ' aria-current="page"' : ""}><span class="guide-nav-full">${tr ? "Rehberler hakkında" : "About the guides"}</span><span class="guide-nav-compact" aria-hidden="true">${tr ? "Hakkında" : "About"}</span></a><a class="guide-language" href="${alternate}" hreflang="${tr ? "en" : "tr"}" lang="${tr ? "en" : "tr"}">${tr ? "English" : "Türkçe"}</a></nav><a class="guide-button guide-button-primary guide-header-cta" href="${prefix}/workspace.html">${tr ? "Çalışma alanı" : "Workspace"} <span aria-hidden="true">↗</span></a></div></header>
 <main class="guide-layout${library ? " guide-library" : ""}" id="content">${library ? "" : `<nav class="guide-breadcrumb" aria-label="${tr ? "Sayfa konumu" : "Breadcrumb"}"><a href="${prefix}/study-guides">← ${tr ? "Çalışma rehberleri" : "Study guides"}</a><span aria-hidden="true">/</span><span>${escapeAttribute(copy.title)}</span></nav>`}<article class="guide-article">${hero}${copy.body}${related}</article>${library ? "" : `<aside class="guide-toc" aria-label="${tr ? "İçindekiler" : "Contents"}"><details><summary>${tr ? "Bu sayfada" : "On this page"}</summary><ol>${toc}</ol></details><a class="guide-toc-home" href="${prefix}/study-guides">${tr ? "Tüm rehberler →" : "All guides →"}</a></aside>`}</main>
@@ -685,7 +751,7 @@ function studyDocument(page, language) {
 for (const [publicPath, page] of STUDY_PAGES) {
   for (const language of STUDY_RESOURCES.languages) {
     let html = studyDocument(page, language);
-    html = html.replace("</head>", '<link rel="stylesheet" href="/consent.css?v=2"><script defer src="/consent.js?v=6"></script><script defer src="/analytics.js?v=11"></script></head>');
+    html = html.replace("</head>", '<link rel="stylesheet" href="/consent.css?v=3"><script defer src="/consent.js?v=6"></script><script defer src="/analytics.js?v=11"></script></head>');
     html = staticSeo(html, language, publicPath);
     validateLocalizedPage(html, language, publicPath);
     const target = path.join(OUTPUT, language === "tr" ? "" : language, `${page.slug}.html`);

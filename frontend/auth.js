@@ -394,8 +394,37 @@ async function setupGoogleSignIn(config, fallbackNext) {
   } catch (_) { container.hidden = true; }
 }
 
+// A plan picked on the plans page travels in `next`. Name it on the register
+// card so the visitor sees what they are signing up for; the price is the one
+// the plans page showed in this tab, and without it only the plan is named.
+const CHOSEN_PLAN_KEY = "lecturesift-chosen-plan";
+function showChosenPlan() {
+  const next = validatedNext(new URLSearchParams(location.search).get("next"));
+  if (!next || !$("chosenPlan")) return;
+  const url = new URL(next, location.origin);
+  const code = url.searchParams.get("plan") || "";
+  if (!/^(?:\/[a-z]{2})?\/plans(?:\.html)?$/.test(url.pathname) || !/^[a-z0-9_]{1,40}$/.test(code)) return;
+  const requested = url.searchParams.get("interval");
+  const interval = ["annual", "one_time"].includes(requested) ? requested : "monthly";
+  let saved = null;
+  try { saved = JSON.parse(sessionStorage.getItem(CHOSEN_PLAN_KEY) || "null"); } catch (_) { saved = null; }
+  const matches = saved?.code === code && saved.interval === interval;
+  const text = value => typeof value === "string" && value.length <= 80 ? value : "";
+  const name = (matches && text(saved.name)) || t(`plan.${code}`, "");
+  if (!name) return;
+  const price = matches ? text(saved.price) : "";
+  const period = interval === "annual" ? t("plans.perYear", "yıl")
+    : interval === "one_time" ? t("plans.oneTimeShort", "tek ödeme") : t("plans.perThirtyDays", "30 gün");
+  const term = !price ? (interval === "annual" ? t("rollout.annual", "Yıllık")
+      : interval === "one_time" ? period : t("plans.thirtyDayPackageShort", "30 günlük paket"))
+    : interval === "one_time" ? `${price} · ${period}` : `${price} / ${period}`;
+  $("chosenPlanName").textContent = `${name} · ${term}`;
+  $("chosenPlan").hidden = false;
+}
+
 async function initRegister() {
   preserveAuthLinks();
+  showChosenPlan();
   setupPasswordToggle($("passwordToggle"), $("password"));
   const referralInput = $("referralCode");
   const referralToggle = $("referralToggle");
@@ -866,8 +895,14 @@ async function initAccount() {
     }
     currentAccount = account;
     const user = account.user;
-    $("accountName").textContent = user.name || user.email;
-    $("accountEmail").textContent = user.email;
+    // Greet by first name when the account has one; otherwise the heading is
+    // the email and the line under it would only repeat it.
+    const firstName = typeof user.first_name === "string" ? user.first_name.trim()
+      : (typeof user.name === "string" ? user.name.trim().split(/\s+/)[0] : "");
+    $("accountName").textContent = firstName || user.email;
+    $("accountName").classList.toggle("account-name-email", !firstName);
+    $("accountEmail").textContent = firstName ? user.email : "";
+    $("accountEmail").hidden = !firstName;
     $("accountPlan").textContent = planName(account.plan.code);
     const subscription = account.subscription;
     $("subscriptionEndsRow").hidden = !subscription;
@@ -878,11 +913,29 @@ async function initAccount() {
         ? new Intl.DateTimeFormat(I18N.locale, {dateStyle:"long"}).format(end)
         : "—";
     }
+    // An early renewal of the same package is already paid and starts when
+    // the running term ends.
+    const nextPeriodStart = new Date(account.next_period?.starts_at || "");
+    const showNextPeriod = Boolean(subscription && Number.isFinite(nextPeriodStart.getTime()));
+    $("nextPeriodRow").hidden = !showNextPeriod;
+    if (showNextPeriod) {
+      $("nextPeriod").textContent = fillCopy(
+        t("account.nextPeriodStarts", "{date} tarihinde başlar"),
+        {date:new Intl.DateTimeFormat(I18N.locale, {dateStyle:"long"}).format(nextPeriodStart)},
+      );
+    }
     const planSelect = $("managePlanSelect");
     const intervalSelect = $("managePlanInterval");
     const summary = $("managePlanSummary");
     const continueButton = $("managePlanContinue");
     const form = $("fixedTermPlanForm");
+    // A free account's next step is a plan, so that button leads and the
+    // extra-minutes link steps back; paid accounts keep minutes first.
+    const freeAccount = !subscription && account.plan.code === "free";
+    continueButton.classList.toggle("primary-action", freeAccount);
+    continueButton.classList.toggle("secondary-action", !freeAccount);
+    $("buyMinutesLink")?.classList.toggle("primary-action", !freeAccount);
+    $("buyMinutesLink")?.classList.toggle("secondary-action", freeAccount);
     const accountPlanState = `${account.plan.code}:${subscription?.interval || "none"}`;
     if (planSelect.dataset.accountState !== accountPlanState) {
       planSelect.value = managedPlanCodes.includes(account.plan.code)
@@ -932,14 +985,28 @@ async function initAccount() {
         );
         return;
       }
+      const longDate = value => new Intl.DateTimeFormat(I18N.locale, {dateStyle:"long"}).format(value);
+      const renewalStart = new Date(account.renewal_starts_at || subscription.ends_at);
+      if (targetCode === account.plan.code && Number.isFinite(renewalStart.getTime())) {
+        // The same package stacks after the paid term instead of replacing it.
+        summary.textContent = fillCopy(
+          t("account.stackedRenewalDetail", "Aynı paketi erken yeniliyorsun: {target} için yeni {term} {date} tarihinde, önceki dönem bittiğinde başlar ve dakikaları o gün açılır. Mevcut dönemin kalan süresini ve paket hakkını bitişine kadar kullanmaya devam edersin. Otomatik yenileme yoktur."),
+          {target:targetPlan, term, date:longDate(renewalStart)},
+        );
+        return;
+      }
       const end = new Date(subscription.ends_at);
       const includedMinutes = Number(account.plan.minutes);
       const usedMinutes = Number(account.used_minutes);
       if (!Number.isFinite(end.getTime()) || !Number.isFinite(includedMinutes) || !Number.isFinite(usedMinutes)) {
-        summary.textContent = t("payment.fixedTermCheckout", "Bu, yeni bir sabit dönem için tek seferlik ödemedir. Onaylandığında hemen başlar; o anda aktif ücretli dönem varsa onun yerine geçer. Kullanılmamış süre ve mevcut dönemin paket hakkı aktarılmaz. Otomatik yenilenmez.");
+        summary.textContent = t("payment.fixedTermCheckout", "Bu, yeni bir sabit dönem için tek seferlik ödemedir ve otomatik yenilenmez. Aktif ücretli dönemin yoksa onaylandığında hemen başlar. Aynı paketi dönem bitmeden yenilersen yeni dönem mevcut dönemin bittiği an başlar; o zamana kadar kalan süreni kullanmaya devam edersin. Farklı bir paket ise hemen başlar ve aktif dönemin yerine geçer; kullanılmamış süre ve mevcut dönemin paket hakkı aktarılmaz.");
         return;
       }
-      const endLabel = new Intl.DateTimeFormat(I18N.locale, {dateStyle:"long"}).format(end);
+      const endLabel = longDate(end);
+      const queuedStart = new Date(account.next_period?.starts_at || "");
+      const queuedNote = Number.isFinite(queuedStart.getTime())
+        ? ` ${fillCopy(t("account.queuedPeriodReplaced", "Sırada bekleyen ve {date} tarihinde başlayacak dönemin de sona erer; aktarılmaz."), {date:longDate(queuedStart)})}`
+        : "";
       const remainingPackageMinutes = Math.max(0, Math.trunc(includedMinutes - usedMinutes));
       const replacementDetailKey = subscription.interval === "annual"
         ? "account.activeAnnualReplacementDetail"
@@ -950,7 +1017,7 @@ async function initAccount() {
       summary.textContent = fillCopy(
         t(replacementDetailKey, replacementDetailFallback),
         {current:planName(account.plan.code), date:endLabel, remaining:remainingPackageMinutes.toLocaleString(I18N.locale), term, target:targetPlan},
-      );
+      ) + queuedNote;
     };
     planSelect.onchange = updatePlanManagement;
     intervalSelect.onchange = updatePlanManagement;

@@ -389,6 +389,14 @@ def test_purchase_kinds_describe_what_was_added():
         amount_minor=750, currency="JPY", purchased_at=_PAID_AT, minutes=180,
     )["text"]
     assert "750 JPY" in yen
+    # An early renewal of the same package is queued after the running term.
+    starts = _PAID_AT + timedelta(days=3)
+    queued = text(plan_code="pro", plan_kind="subscription", interval="monthly", minutes=1500,
+                  starts_at=starts, ends_at=starts + timedelta(days=30))
+    assert "Starts: 2026-10-22 14:32" in queued and "30 days, until 2026-11-21" in queued
+    immediate = text(plan_code="pro", plan_kind="subscription", interval="monthly", minutes=1500,
+                     starts_at=_PAID_AT, ends_at=_PAID_AT + timedelta(days=30))
+    assert "Starts:" not in immediate
 
 
 def test_names_and_seller_values_are_escaped_and_missing_identity_is_omitted():

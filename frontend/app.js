@@ -416,7 +416,8 @@ function renewalDaysLeft(subscription) {
 }
 function renderRenewalNudge(loggedIn) {
   let node = $("renewalNudge");
-  const days = loggedIn ? renewalDaysLeft(billingAccount.subscription) : null;
+  // An early renewal is already queued after this term: nothing to remind.
+  const days = loggedIn && !billingAccount.next_period ? renewalDaysLeft(billingAccount.subscription) : null;
   if (days === null || days > 7) { if (node) node.hidden = true; return; }
   if (!node) {
     const host = $("app");
@@ -582,7 +583,12 @@ async function restoreRequestedJob() {
     if (!response.ok) { const error = await responseError(response); showError(error.message, error.code); return; }
     const job = await response.json();
     updateJobView(job);
-    if (job.status === "done") { await loadResult(); recordTrialComplete(job); }
+    if (job.status === "done") {
+      // A link to a finished pack opens on the pack; the upload form follows it.
+      const intro = document.querySelector(".workspace-intro");
+      if (intro) { intro.before($("results")); $("results").classList.add("results-first"); }
+      await loadResult(); recordTrialComplete(job);
+    }
     else if (job.status === "error") showError(job.error, job.error_code);
     else { startTimer(); pollJob(); }
   } catch (error) {

@@ -19,7 +19,10 @@ PATHS = (
     "/cookies.html",
     "/refund.html",
 )
-LAST_MODIFIED = "2026-09-13"
+# Core pages carry no lastmod here. scripts/build_localized_site.mjs adds each
+# page's last commit date from git history when it builds dist/sitemap.xml, and
+# leaves the entry undated when that history is unavailable or shallow. Landing
+# editions and study guides keep the editorial dates from their JSON sources.
 RESOURCES_PATH = Path(__file__).resolve().parents[1] / "frontend" / "study-resources.json"
 LANDING_PATH = RESOURCES_PATH.with_name("landing-pages.json")
 
@@ -47,8 +50,8 @@ def build_sitemap() -> str:
         for path in PATHS:
             lines.append("  <url>")
             lines.append(f"    <loc>{ORIGIN}{localized_path(language, path)}</loc>")
-            updated = landing["updated"] if language in landing["pages"].get(path, {}) else "2026-09-19" if path == "/" else LAST_MODIFIED
-            lines.append(f"    <lastmod>{updated}</lastmod>")
+            if language in landing["pages"].get(path, {}):
+                lines.append(f'    <lastmod>{landing["updated"]}</lastmod>')
             for alternate in LANGUAGES:
                 href = f"{ORIGIN}{localized_path(alternate, path)}"
                 lines.append(f'    <xhtml:link rel="alternate" hreflang="{alternate}" href="{href}"/>')

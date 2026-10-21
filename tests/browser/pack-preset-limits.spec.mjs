@@ -43,6 +43,9 @@ async function openWorkspace(page, {plan = null, accountReady = Promise.resolve(
   }
   await page.goto('/en/workspace.html');
   await page.locator('[data-consent="essential"]').click();
+  // The pack settings are folded under one optional disclosure.
+  await page.locator('#workspaceSettings > summary').click();
+  await expect(page.locator('[data-pack-preset="exam"]')).toBeVisible();
 }
 
 async function expectCounts(page, {quiz, cards, disabledQuiz, disabledCards}) {

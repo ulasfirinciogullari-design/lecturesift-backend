@@ -1,0 +1,50 @@
+name: Dependency audit
+
+# Weekly check of the pinned Python set against published advisories (PyPI's
+# vulnerability data, the source pip-audit uses by default). A known
+# vulnerability in any pin fails the run. Pull requests that change a pin are
+# checked the same way before merge.
+on:
+  schedule:
+    # Mondays, off the top of the hour when scheduled runs queue most.
+    - cron: "23 6 * * 1"
+  pull_request:
+    paths:
+      - "requirements.txt"
+      - "requirements.lock"
+      - "requirements-dev.txt"
+      - ".github/dependency-audit/requirements.txt"
+      - ".github/workflows/dependency-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pip-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the hash-pinned auditor in its own environment
+        run: |
+          python -m venv "$RUNNER_TEMP/audit"
+          "$RUNNER_TEMP/audit/bin/python" -m pip install --quiet --require-hashes --no-deps \
+            -r .github/dependency-audit/requirements.txt
+      - name: Audit the locked runtime and development pins
+        # Both files are named: pip-audit does not follow the "-r requirements.lock"
+        # include inside requirements-dev.txt. --disable-pip audits the pins as
+        # written, without resolving or installing them.
+        run: |
+          "$RUNNER_TEMP/audit/bin/python" -m pip_audit --strict --disable-pip \
+            --progress-spinner off --desc on \
+            -r requirements.lock -r requirements-dev.txt

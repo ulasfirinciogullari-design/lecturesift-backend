@@ -94,10 +94,13 @@ def _prepare(reference: str) -> tuple[str, dict | None]:
         plan, _terms_version = billing._plan_for_purchase_reference(
             connection, reference=reference, plan_code=order.plan_code, interval=order.interval,
         )
-        ends_at = None
+        starts_at = ends_at = None
         if plan.kind == "subscription":
-            ends_at = connection.execute(select(billing.SUBSCRIPTIONS.c.ends_at).where(
-                billing.SUBSCRIPTIONS.c.source_reference == reference)).scalar()
+            period = connection.execute(select(
+                billing.SUBSCRIPTIONS.c.starts_at, billing.SUBSCRIPTIONS.c.ends_at,
+            ).where(billing.SUBSCRIPTIONS.c.source_reference == reference)).first()
+            if period is not None:
+                starts_at, ends_at = period.starts_at, period.ends_at
     # Card providers may charge more than the order price (PayTR installment
     # fees), so report the provider-confirmed amount. Bank transfers have none.
     charged_minor = getattr(order, "provider_amount_minor", None) or order.amount_minor
@@ -114,6 +117,7 @@ def _prepare(reference: str) -> tuple[str, dict | None]:
         minutes=plan.minutes,
         assistant_credits=plan.assistant_credits,
         ends_at=ends_at,
+        starts_at=starts_at,
         first_name=recipient["first_name"],
         seller=billing.commerce_identity(),
         site_url=config.FRONTEND_BASE_URL,

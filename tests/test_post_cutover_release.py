@@ -1039,6 +1039,22 @@ def test_rehearsal_stops_the_datastores_it_started_before_any_admission():
     )
 
 
+def test_release_verification_proves_a_large_upload_body_is_parsed():
+    runbook = _read("deploy/POST_CUTOVER_RELEASE.md")
+    verify = runbook[
+        runbook.index("## 7. Verify and resume scheduled jobs"):
+        runbook.index("sudo systemctl enable --now lecturesift-backup.timer")
+    ]
+    assert "exec -T api printenv TMPDIR" in verify
+    assert "`TMPDIR=/var/lib/lecturesift/tmp`" in verify
+    assert "truncate -s 200M" in verify
+    assert "filename=large-body-check.unsupported" in verify
+    assert "https://api.lecturesift.com/jobs" in verify
+    assert "Authorization" not in verify
+    assert "`401`" in verify and "`LS-BILL-01`" in verify
+    assert "There was an error parsing the body" in verify
+
+
 def test_post_cutover_release_runbook_is_linked_and_ordered():
     runbook = _read("deploy/POST_CUTOVER_RELEASE.md")
     deployment = _read("VPS_DEPLOYMENT.md")

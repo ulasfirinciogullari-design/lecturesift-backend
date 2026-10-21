@@ -16,11 +16,23 @@ from .config import (
     INSTAGRAM_GRAPH_API_VERSION,
     PUBLIC_BASE_URL,
 )
-from .daily_social import daily_marker, daily_tip, media_type_for_day, reel_media_url, render_daily_image, render_daily_reel, render_daily_reel_cover
+from .daily_social import (
+    SingleFlightRenderCache,
+    daily_marker,
+    daily_tip,
+    media_type_for_day,
+    public_media_day_allowed,
+    reel_media_url,
+    render_daily_image,
+    render_daily_reel,
+    render_daily_reel_cover,
+)
 from .instagram import InstagramAPIError, InstagramClient, InstagramConfigurationError
 from .launch_social import LAUNCH_POSTS, completed_indices, next_pending_post, render_launch_image
 
 _BOOTSTRAP_STATUS_PATH = Path("/tmp/lecturesift-launch-bootstrap.json")
+# Every launch card fits in the cache, so repeated requests never re-render.
+_LAUNCH_IMAGE = SingleFlightRenderCache(render_launch_image, maxsize=len(LAUNCH_POSTS))
 
 
 def _client() -> InstagramClient:
@@ -37,6 +49,13 @@ def _parse_day(value: str) -> date:
         return date.fromisoformat(value)
     except ValueError as exc:
         raise HTTPException(404, detail={"code": "LS-IG-07", "message": "Sosyal medya içeriği bulunamadı."}) from exc
+
+
+def _public_media_day(value: str) -> date:
+    selected_day = _parse_day(value)
+    if not public_media_day_allowed(selected_day):
+        raise HTTPException(404, detail={"code": "LS-IG-07", "message": "Sosyal medya içeriği bulunamadı."})
+    return selected_day
 
 
 def _instagram_snapshot() -> tuple[dict, list[dict]]:
@@ -84,7 +103,7 @@ def install_social_routes(app: FastAPI) -> None:
     @app.get("/instagram/launch/image/{index}.jpg")
     def instagram_launch_image(index: int) -> Response:
         try:
-            content = render_launch_image(index)
+            content = _LAUNCH_IMAGE(index)
         except ValueError as exc:
             raise HTTPException(404, detail={"code": "LS-IG-06", "message": "Launch görseli bulunamadı."}) from exc
         return Response(
@@ -95,7 +114,7 @@ def install_social_routes(app: FastAPI) -> None:
 
     @app.get("/instagram/daily/image/{day}.jpg")
     def instagram_daily_image(day: str) -> Response:
-        selected_day = _parse_day(day)
+        selected_day = _public_media_day(day)
         return Response(
             content=render_daily_image(selected_day),
             media_type="image/jpeg",
@@ -104,7 +123,7 @@ def install_social_routes(app: FastAPI) -> None:
 
     @app.get("/instagram/daily/reel/{day}.jpg")
     def instagram_daily_reel_cover(day: str) -> Response:
-        selected_day = _parse_day(day)
+        selected_day = _public_media_day(day)
         return Response(
             content=render_daily_reel_cover(selected_day),
             media_type="image/jpeg",
@@ -113,7 +132,7 @@ def install_social_routes(app: FastAPI) -> None:
 
     @app.get("/instagram/daily/reel/{day}.mp4")
     def instagram_daily_reel(day: str) -> Response:
-        selected_day = _parse_day(day)
+        selected_day = _public_media_day(day)
         try:
             content = render_daily_reel(selected_day)
         except RuntimeError as exc:

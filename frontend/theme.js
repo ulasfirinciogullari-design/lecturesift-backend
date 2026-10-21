@@ -83,7 +83,7 @@
   const loadAssistant = () => {
     const loadWidget = () => {
       const assistant = document.createElement("script");
-      assistant.src = "/assistant.js?v=9";
+      assistant.src = "/assistant.js?v=10";
       document.body.append(assistant);
     };
     if (window.LectureSiftAssistantCopy) {loadWidget();return;}
@@ -94,6 +94,31 @@
   };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", loadAssistant, {once:true});
   else loadAssistant();
+
+  // Turkish upper-casing turns the brand's "i" into "İ" (LECTURESİFT). Inside
+  // upper-cased labels the brand is marked as English, so it reads LECTURESIFT.
+  const keepBrandCase = () => {
+    if (!/^tr\b/i.test(document.documentElement.lang || "") || !document.body) return;
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      if (node.nodeValue.includes("LectureSift") && !node.parentElement?.closest('span[lang="en"],script,style,title')) nodes.push(node);
+    }
+    for (const node of nodes) {
+      if (getComputedStyle(node.parentElement).textTransform !== "uppercase") continue;
+      node.replaceWith(...node.nodeValue.split("LectureSift").flatMap((part, index) => {
+        if (!index) return part ? [part] : [];
+        const brand = document.createElement("span");
+        brand.lang = "en";
+        brand.textContent = "LectureSift";
+        return part ? [brand, part] : [brand];
+      }));
+    }
+  };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", keepBrandCase, {once:true});
+  else keepBrandCase();
+  window.addEventListener("load", keepBrandCase, {once:true});
 
   systemTheme.addEventListener?.("change", event => {
     let hasSavedTheme = false;

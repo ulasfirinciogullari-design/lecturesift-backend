@@ -281,5 +281,7 @@ test('workspace option titles keep AA contrast in the light theme and their dark
     expect(metrics.theme).toBe('light');
     metrics.ratios.forEach(ratio => expect(ratio).toBeGreaterThanOrEqual(4.5));
   }
+  // The content choices sit in the folded "Settings (optional)" disclosure.
+  await page.locator('#workspaceSettings > summary').click();
   await page.locator('.content-choice-grid').screenshot({path:testInfo.outputPath('workspace-content-choices.png')});
 });

@@ -600,3 +600,33 @@ def test_release_and_rehearsal_admission_bind_the_supply_chain_digest():
     assert "supply_chain_digest" in admission
     assert "io.lecturesift.supply-chain-lock-sha256" in admission
     assert "LECTURESIFT_SUPPLY_CHAIN_LOCK_SHA256=" in admission
+
+
+def test_weekly_dependency_audit_fails_on_advisories_in_every_pinned_set():
+    import yaml
+
+    source = (ROOT / ".github/workflows/dependency-audit.yml").read_text(encoding="utf-8")
+    workflow = yaml.safe_load(source)
+    triggers = workflow[True]  # YAML 1.1 reads the bare "on" key as a boolean.
+    assert re.fullmatch(r"\d+ \d+ \* \* [0-6]", triggers["schedule"][0]["cron"])
+    assert {"requirements.txt", "requirements.lock", "requirements-dev.txt"} <= set(
+        triggers["pull_request"]["paths"]
+    )
+    assert workflow["permissions"] == {"contents": "read"}
+    job = workflow["jobs"]["pip-audit"]
+    assert "permissions" not in job
+    commands = "\n".join(step.get("run", "") for step in job["steps"])
+    assert "--require-hashes --no-deps" in commands
+    assert "-r .github/dependency-audit/requirements.txt" in commands
+    # pip-audit ignores the nested "-r requirements.lock" in the development
+    # file, so both files must be named, and no audit failure may be masked.
+    assert "pip_audit --strict --disable-pip" in commands
+    assert "-r requirements.lock -r requirements-dev.txt" in commands
+    assert "|| true" not in commands and "continue-on-error" not in source
+
+    auditor = (ROOT / ".github/dependency-audit/requirements.txt").read_text(encoding="utf-8")
+    entries = re.split(r"\n(?=[a-z0-9])", "\n".join(
+        line for line in auditor.splitlines() if not line.startswith("#")
+    ).strip())
+    assert any(entry.startswith("pip-audit==") for entry in entries)
+    assert all(re.match(r"[a-z0-9._-]+==[^\s\\]+ \\\n", entry) and "--hash=sha256:" in entry for entry in entries)

@@ -44,7 +44,7 @@ def test_registration_accepts_only_the_server_referral_format() -> None:
     script = _read("auth.js")
     assert 'pattern="LSR-[A-Fa-f0-9]{24}"' in html
     assert 'minlength="28" maxlength="28"' in html
-    assert html.index("referral-i18n.js?v=4") < html.index("auth.js?v=25")
+    assert html.index("referral-i18n.js?v=4") < html.index("auth.js?v=26")
     assert '/^LSR-[A-F0-9]{24}$/' in script
     assert 'new URLSearchParams(location.search).get("ref")' in script
     assert '...(normalizedReferral ? {referral_code: normalizedReferral} : {})' in script
@@ -55,7 +55,7 @@ def test_account_referrals_are_authenticated_and_fail_closed() -> None:
     html = _read("account.html")
     script = _read("auth.js")
     assert 'data-account-view="referrals"' in html
-    assert html.index("referral-i18n.js?v=4") < html.index("auth.js?v=25")
+    assert html.index("referral-i18n.js?v=4") < html.index("auth.js?v=26")
     assert 'request("/billing/referrals", {}, token)' in script
     assert 'request("/billing/referrals/code", {method:"POST"}, token)' in script
     assert '/billing/referrals/rewards/${encodeURIComponent(reward.dataset.referralReward)}/choice' in script
@@ -142,7 +142,7 @@ if (start < 0 || end < start) throw Error('registration handler missing');
       $:get, populateCountrySelect(){}, selectedCountry:()=> 'TR',
       setupPasswordToggle(){}, strongPassword:()=>true, guestSessionToken:()=> '',
       loadAuthConfig:async()=>null, setupGoogleSignIn:async()=>{},
-      preserveAuthLinks(){}, safeNext:()=>'/workspace.html', rememberSignupContinuation(){}, localizedAuthPath:path=>path,
+      preserveAuthLinks(){}, showChosenPlan(){}, safeNext:()=>'/workspace.html', rememberSignupContinuation(){}, localizedAuthPath:path=>path,
       location:{search:''}, URLSearchParams, encodeURIComponent,
       referralCode:value=>/^LSR-[A-F0-9]{24}$/.test(value) ? value : '',
       rt:key=>key, t:(_key,fallback)=>fallback, setBusy(){},
@@ -224,7 +224,7 @@ def test_checkout_passes_coupon_to_server_without_client_side_discount_math() ->
     script = _read("plans.js")
     assert 'id="checkoutCouponRow" hidden' in html
     assert 'pattern="LSC-[A-Fa-f0-9]{24}"' in html
-    assert html.index("referral-i18n.js?v=4") < html.index("plans.js?v=35")
+    assert html.index("referral-i18n.js?v=4") < html.index("plans.js?v=36")
     assert 'const COUPON_PLANS = new Set(["lite", "plus", "pro", "max"]);' in script
     assert 'LOCALE_DATA.currencies.includes(currency) && interval === "monthly" && COUPON_PLANS.has(planCode)' in script
     assert script.count("coupon_code: couponCode") == 2

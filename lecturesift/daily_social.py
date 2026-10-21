@@ -7,15 +7,18 @@ content, private data, follower scraping or engagement automation is used.
 
 from __future__ import annotations
 
+import functools
 import io
 import json
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
+from collections import OrderedDict
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -35,6 +38,64 @@ from .config import (
 )
 from .instagram import InstagramAPIError, InstagramClient, InstagramConfigurationError
 from .launch_social import next_pending_post
+
+
+# Public social media is fetched by Meta minutes after a publisher picks its
+# day (UTC here, Europe/Istanbul in the generated-Reel and evergreen jobs) and
+# by the production social check for the UTC day. One day either side of the
+# API's UTC date covers both clocks and a fetch that crosses midnight.
+PUBLIC_MEDIA_DAY_WINDOW = 1
+PUBLIC_MEDIA_CACHE_SIZE = 2 * PUBLIC_MEDIA_DAY_WINDOW + 1
+# At most one public social render runs at a time in the API process.
+_PUBLIC_RENDER_LOCK = threading.RLock()
+
+
+def public_media_day_allowed(day: date, today: date | None = None) -> bool:
+    current = today or datetime.now(timezone.utc).date()
+    return abs((day - current).days) <= PUBLIC_MEDIA_DAY_WINDOW
+
+
+class SingleFlightRenderCache:
+    """Cache renders by key; concurrent misses wait for one render.
+
+    The cache holds every key a public route accepts, so cycling through the
+    accepted days cannot evict an entry and force a second render.
+    """
+
+    def __init__(self, render, maxsize: int = PUBLIC_MEDIA_CACHE_SIZE) -> None:
+        self._render = render
+        self._maxsize = max(1, int(maxsize))
+        self._items: OrderedDict = OrderedDict()
+        self._items_lock = threading.Lock()
+        functools.update_wrapper(self, render)
+
+    def _lookup(self, key):
+        with self._items_lock:
+            if key not in self._items:
+                return False, None
+            self._items.move_to_end(key)
+            return True, self._items[key]
+
+    def __call__(self, key):
+        found, content = self._lookup(key)
+        if found:
+            return content
+        with _PUBLIC_RENDER_LOCK:
+            found, content = self._lookup(key)
+            if found:
+                return content
+            content = self._render(key)
+            # A missing source (None) may appear later, so it is not cached.
+            if content is not None:
+                with self._items_lock:
+                    self._items[key] = content
+                    while len(self._items) > self._maxsize:
+                        self._items.popitem(last=False)
+            return content
+
+    def cache_clear(self) -> None:
+        with self._items_lock:
+            self._items.clear()
 
 
 @dataclass(frozen=True)
@@ -386,6 +447,7 @@ def render_tip_image(tip: DailyTip) -> bytes:
     return output.getvalue()
 
 
+@SingleFlightRenderCache
 def render_daily_image(day: date) -> bytes:
     return render_tip_image(daily_tip(day))
 
@@ -428,6 +490,7 @@ def render_tip_reel_cover(tip: DailyTip) -> bytes:
     return output.getvalue()
 
 
+@SingleFlightRenderCache
 def render_daily_reel_cover(day: date) -> bytes:
     return render_tip_reel_cover(daily_tip(day))
 
@@ -475,7 +538,7 @@ def _reel_audio(day: date) -> tuple[Path, float, Path]:
     return voice, duration, music
 
 
-@lru_cache(maxsize=4)
+@SingleFlightRenderCache
 def render_daily_reel(day: date) -> bytes:
     """Render a narrated three-scene MP4 with original background music."""
     voice, voice_duration, _music = _reel_audio(day)

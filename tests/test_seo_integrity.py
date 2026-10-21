@@ -111,12 +111,17 @@ def _parse_html(path: Path) -> _SeoHeadParser:
     return parser
 
 
-def _build_site(sandbox: Path, operator_env: dict[str, str] | None = None) -> Path:
-    node = shutil.which("node")
-    assert node, "Node.js is required to validate the production SEO build"
+def _copy_build_inputs(sandbox: Path) -> None:
     shutil.copytree(FRONTEND, sandbox / "frontend")
     (sandbox / "scripts").mkdir()
     shutil.copy2(ROOT / "scripts" / "build_localized_site.mjs", sandbox / "scripts")
+
+
+def _build_site(sandbox: Path, operator_env: dict[str, str] | None = None, *, copy_inputs: bool = True) -> Path:
+    node = shutil.which("node")
+    assert node, "Node.js is required to validate the production SEO build"
+    if copy_inputs:
+        _copy_build_inputs(sandbox)
     # Seller identity is optional build input; never let a developer's shell
     # values leak into, or change, the default build under test.
     env = {key: value for key, value in os.environ.items() if not key.startswith("LEGAL_")}
@@ -148,6 +153,89 @@ def test_checked_in_sitemap_matches_its_generator_exactly() -> None:
     generator = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(generator)
     assert (FRONTEND / "sitemap.xml").read_text(encoding="utf-8") == generator.build_sitemap()
+
+
+def _sitemap_dates(path: Path) -> dict[str, str | None]:
+    return {
+        node.findtext(f"{{{SITEMAP_NAMESPACE}}}loc"): node.findtext(f"{{{SITEMAP_NAMESPACE}}}lastmod")
+        for node in ElementTree.parse(path).findall(f"{{{SITEMAP_NAMESPACE}}}url")
+    }
+
+
+def _git(repository: Path, *args: str, date: str | None = None) -> None:
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    if date:
+        env.update(GIT_AUTHOR_DATE=date, GIT_COMMITTER_DATE=date)
+    subprocess.run(
+        [
+            "git", "-c", "user.name=Sitemap Test", "-c", "user.email=sitemap@example.invalid",
+            "-c", "commit.gpgsign=false", "-c", "core.autocrlf=false", *args,
+        ],
+        cwd=repository, env=env, check=True, capture_output=True, timeout=60,
+    )
+
+
+def _core_entries(dates: dict[str, str | None]) -> dict[str, str | None]:
+    landing = json.loads((FRONTEND / "landing-pages.json").read_text(encoding="utf-8"))
+    entries = {}
+    for language in LANGUAGES:
+        prefix = "" if language == "tr" else f"/{language}"
+        for path in (
+            "/", "/features", "/document-summary", "/lecture-video-summary", "/quiz-flashcards", "/plans",
+            "/about", "/contact", "/privacy", "/terms", "/distance-sales", "/cookies", "/refund",
+        ):
+            if language in landing["pages"].get(f"{path}.html", {}):
+                continue
+            location = f"{ORIGIN}{prefix}{path}" if path != "/" else f"{ORIGIN}{prefix}/"
+            entries[location] = dates[location]
+    return entries
+
+
+def test_checked_in_sitemap_leaves_core_pages_for_the_build_to_date() -> None:
+    dates = _sitemap_dates(FRONTEND / "sitemap.xml")
+    assert set(_core_entries(dates).values()) == {None}
+    # Editorial dates stay with their JSON sources.
+    landing = json.loads((FRONTEND / "landing-pages.json").read_text(encoding="utf-8"))
+    assert dates[f"{ORIGIN}/en/document-summary"] == landing["updated"]
+    assert all(dates[f"{ORIGIN}/{page['slug']}"] for page in STUDY_RESOURCES["pages"])
+
+
+@pytest.mark.skipif(not shutil.which("git"), reason="git is required to date sitemap entries")
+def test_build_dates_core_sitemap_entries_from_git_history(tmp_path: Path) -> None:
+    repository = tmp_path / "site"
+    repository.mkdir()
+    _copy_build_inputs(repository)
+    _git(repository, "init", "-q")
+    _git(repository, "add", "-A")
+    _git(repository, "commit", "-q", "-m", "site", date="2026-01-02T12:00:00+00:00")
+    plans = repository / "frontend" / "plans.html"
+    plans.write_text(plans.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+    _git(repository, "commit", "-q", "-am", "plans", date="2026-03-04T12:00:00+00:00")
+
+    dist = _build_site(repository, copy_inputs=False)
+    dates = _sitemap_dates(dist / "sitemap.xml")
+    core = _core_entries(dates)
+    landing = json.loads((FRONTEND / "landing-pages.json").read_text(encoding="utf-8"))
+    assert len(core) == 13 * len(LANGUAGES) - sum(len(editions) for editions in landing["pages"].values())
+    plan_pages = {f"{ORIGIN}/plans"} | {f"{ORIGIN}/{language}/plans" for language in LANGUAGES[1:]}
+    assert {loc for loc, value in core.items() if value == "2026-03-04"} == plan_pages
+    assert {value for loc, value in core.items() if loc not in plan_pages} == {"2026-01-02"}
+    # Everything else in the published sitemap is the checked-in file's.
+    checked_in = _sitemap_dates(FRONTEND / "sitemap.xml")
+    assert dates.keys() == checked_in.keys()
+    assert {loc: value for loc, value in dates.items() if loc not in core} == {
+        loc: value for loc, value in checked_in.items() if loc not in core
+    }
+
+    # A shallow clone would date every page to its single commit: no dates instead.
+    shallow = tmp_path / "shallow"
+    _git(tmp_path, "clone", "-q", "--depth", "1", repository.as_uri(), str(shallow))
+    shallow_dates = _sitemap_dates(_build_site(shallow, copy_inputs=False) / "sitemap.xml")
+    assert shallow_dates == checked_in
+
+
+def test_build_without_git_history_publishes_the_checked_in_sitemap(localized_output: Path) -> None:
+    assert (localized_output / "sitemap.xml").read_bytes() == (FRONTEND / "sitemap.xml").read_bytes()
 
 
 def test_sitemap_and_prerendered_pages_are_a_closed_canonical_set(localized_output: Path) -> None:
@@ -409,7 +497,7 @@ def test_guide_measurement_has_consent_controls_without_the_large_application_sc
             sources = re.findall(r'<script\b[^>]*\bsrc="([^"]+)"', html)
             assert sources.count("/consent.js?v=6") == 1
             assert sources.count("/analytics.js?v=11") == 1
-            assert "/consent.css?v=2" in html
+            assert "/consent.css?v=3" in html
             assert not any(re.search(r"/(?:i18n|page-i18n|app)\.js", src) for src in sources)
 
 

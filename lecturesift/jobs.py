@@ -89,6 +89,23 @@ class JobStore:
                 except Exception:
                     pass
 
+    @staticmethod
+    def _processing_lock_key(job_id: str) -> str:
+        return f"lecturesift:job:{job_id}:processing"
+
+    def processing_lock_held(self, job_id: str) -> bool:
+        """Whether a live delivery holds the job; the holder renews it every minute.
+
+        Unknown (Redis unreachable) counts as held, so callers never take over
+        a job they cannot prove is free.
+        """
+        if self._redis is None:
+            return False
+        try:
+            return bool(self._redis.exists(self._processing_lock_key(job_id)))
+        except Exception:
+            return True
+
     @contextmanager
     def processing_lock(self, job_id: str) -> Iterator[bool]:
         """Keep one worker on a job while allowing fast recovery after a crash."""
@@ -98,7 +115,7 @@ class JobStore:
 
         try:
             lock = self._redis.lock(
-                f"lecturesift:job:{job_id}:processing",
+                self._processing_lock_key(job_id),
                 timeout=180,
                 blocking_timeout=0,
                 thread_local=False,
@@ -307,6 +324,29 @@ class JobStore:
             if notify_failure:
                 self._queue_failure_notification_locked(data, notification_context)
             self._flush_locked()
+
+    def fail_unfinished(self, job_id: str, *, stale_before: float | None = None,
+                        **values: Any) -> dict | None:
+        """Atomically move a job that is still queued/working to ``status="error"``.
+
+        The failure email is queued exactly as ``update(..., notify_failure=True)``
+        does. With ``stale_before`` the job must also have recorded no update
+        since then. Returns the job as it was, or None when nothing changed.
+        """
+        with self._lock, self._distributed_write_lock():
+            self._refresh_locked()
+            data = self._jobs.get(job_id)
+            if not data or data.get("status") not in {"queued", "working"}:
+                return None
+            if stale_before is not None and float(data.get("updated") or 0) >= stale_before:
+                return None
+            previous = data.copy()
+            data.update(values)
+            data["status"] = "error"
+            data["updated"] = time.time()
+            self._queue_failure_notification_locked(data)
+            self._flush_locked()
+            return previous
 
     def update_task(self, job_id: str, task: str, percent: float, stage: str) -> None:
         normalized = {

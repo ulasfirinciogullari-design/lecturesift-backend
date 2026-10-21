@@ -74,6 +74,11 @@ services:
       LECTURESIFT_REQUIRE_DURABLE_PROCESSING: "true"
       LECTURESIFT_DEPLOYMENT_PROVIDER: ovh
       LECTURESIFT_INGRESS_CUTOVER_STATE_FILE: /run/lecturesift-ingress-state/provider-ingress.state
+      # Starlette spools multipart parts over 1 MB to tempfile before the
+      # route validates them; uploads reach 1 GiB, far beyond the 128 MB /tmp
+      # tmpfs. The API creates this private directory on its work volume at
+      # startup and prunes stale entries (lecturesift/api_temp.py).
+      TMPDIR: /var/lib/lecturesift/tmp
     expose:
       - "8000"
     depends_on:

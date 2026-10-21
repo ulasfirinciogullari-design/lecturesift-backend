@@ -272,7 +272,7 @@ PAYMENT_ORDERS = Table(
 
 PURCHASE_TERMS_VERSION = "2026-09-08-v3"
 ADMIN_GRANT_TERMS_VERSION = "admin-grant-2026-09-08-v1"
-PAYMENT_CONSENT_TERMS_VERSION = "MSS-2026-09-13-v3"
+PAYMENT_CONSENT_TERMS_VERSION = "MSS-2026-10-21-v4"
 PAYMENT_CONSENT_PRIVACY_VERSION = "2.4-2026-09-13"
 PURCHASE_TERMS = Table(
     "billing_purchase_terms",
@@ -938,6 +938,25 @@ def login_user(email: str, password: str) -> dict:
     }
 
 
+PRODUCTION_SESSION_SECRET_MIN_LENGTH = 32
+
+
+def require_production_session_secret() -> None:
+    """Refuse to start production while sessions would use the derived fallback.
+
+    The fallback below keeps tests and local development working without a
+    configured secret; on the OVH deployment it would make every session
+    token depend on the database URL, so the API must not start.
+    """
+    if config.DEPLOYMENT_PROVIDER != "ovh":
+        return
+    if len(config.BILLING_SESSION_SECRET.strip()) < PRODUCTION_SESSION_SECRET_MIN_LENGTH:
+        raise RuntimeError(
+            "BILLING_SESSION_SECRET must be set to at least "
+            f"{PRODUCTION_SESSION_SECRET_MIN_LENGTH} characters in production"
+        )
+
+
 def _token_secret() -> bytes:
     explicit = config.BILLING_SESSION_SECRET.encode("utf-8")
     if explicit:
@@ -1368,6 +1387,23 @@ def authenticate_admin(authorization: str) -> dict:
 
 
 def _active_subscription(connection, user_id: str, now: datetime):
+    # An early same-package renewal is queued with a future start; it grants
+    # nothing until the period before it has ended.
+    return connection.execute(
+        select(SUBSCRIPTIONS)
+        .where(
+            SUBSCRIPTIONS.c.user_id == user_id,
+            SUBSCRIPTIONS.c.status.in_(("active", "cancel_at_end")),
+            SUBSCRIPTIONS.c.starts_at <= now,
+            SUBSCRIPTIONS.c.ends_at > now,
+        )
+        .order_by(SUBSCRIPTIONS.c.ends_at.desc())
+        .limit(1)
+    ).first()
+
+
+def _open_subscription_periods(connection, user_id: str, now: datetime):
+    """The running period and any queued renewals, earliest first."""
     return connection.execute(
         select(SUBSCRIPTIONS)
         .where(
@@ -1375,9 +1411,40 @@ def _active_subscription(connection, user_id: str, now: datetime):
             SUBSCRIPTIONS.c.status.in_(("active", "cancel_at_end")),
             SUBSCRIPTIONS.c.ends_at > now,
         )
-        .order_by(SUBSCRIPTIONS.c.ends_at.desc())
-        .limit(1)
-    ).first()
+        .order_by(SUBSCRIPTIONS.c.starts_at, SUBSCRIPTIONS.c.ends_at)
+    ).all()
+
+
+def _as_utc(value: datetime) -> datetime:
+    return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+def stacked_renewal_end(connection, subscription):
+    """The last open period of the early renewals queued after this one, or None.
+
+    Stacking keeps one "active" row, the newest period; the earlier ones are
+    "cancel_at_end" only so that they end on schedule. A buyer's own
+    cancellation lands on the last period, so its status tells the two apart.
+    """
+    current, seen = None, {subscription.id}
+    ends_at = subscription.ends_at
+    while True:
+        successor = connection.execute(
+            select(SUBSCRIPTIONS)
+            .where(
+                SUBSCRIPTIONS.c.user_id == subscription.user_id,
+                SUBSCRIPTIONS.c.plan_code == subscription.plan_code,
+                SUBSCRIPTIONS.c.status.in_(("active", "cancel_at_end")),
+                SUBSCRIPTIONS.c.starts_at == ends_at,
+                SUBSCRIPTIONS.c.id.not_in(sorted(seen)),
+            )
+            .order_by(SUBSCRIPTIONS.c.created_at)
+            .limit(1)
+        ).first()
+        if successor is None:
+            return current
+        seen.add(successor.id)
+        current, ends_at = successor, successor.ends_at
 
 
 _PLAN_TUPLE_FIELDS = {"export_formats", "summary_profiles"}
@@ -1718,6 +1785,8 @@ def account_status(user_id: str) -> dict:
         ).first()
         permanent_ad_free = _has_permanent_ad_free(connection, user_id)
         subscription = _active_subscription(connection, user_id, now)
+        open_periods = _open_subscription_periods(connection, user_id, now) if subscription else []
+        queued = [period for period in open_periods if _as_utc(period.starts_at) > now]
         plan_code = subscription.plan_code if subscription else "free"
         if subscription:
             plan, plan_terms_version = _plan_for_purchase_reference(
@@ -1793,10 +1862,28 @@ def account_status(user_id: str) -> dict:
                 "interval": subscription.interval,
                 "starts_at": subscription.starts_at.isoformat(),
                 "ends_at": subscription.ends_at.isoformat(),
-                "cancel_at_period_end": subscription.status == "cancel_at_end",
+                "cancel_at_period_end": subscription.status == "cancel_at_end" and not queued,
                 "terms_version": plan_terms_version,
             }
             if subscription
+            else None
+        ),
+        # An early renewal of the same package, already paid for, that starts
+        # when the running period ends.
+        "next_period": (
+            {
+                "plan_code": queued[0].plan_code,
+                "interval": queued[0].interval,
+                "starts_at": queued[0].starts_at.isoformat(),
+                "ends_at": queued[0].ends_at.isoformat(),
+            }
+            if queued
+            else None
+        ),
+        # Where a same-package purchase made now would start.
+        "renewal_starts_at": (
+            max(open_periods, key=lambda period: _as_utc(period.ends_at)).ends_at.isoformat()
+            if open_periods
             else None
         ),
         "used_minutes": int(used),
@@ -1819,9 +1906,14 @@ def cancel_active_subscription(user_id: str) -> dict:
     now = utcnow()
     with ENGINE.begin() as connection:
         _lock_billing_user(connection, user_id)
-        subscription = _active_subscription(connection, user_id, now)
-        if not subscription:
+        if not _active_subscription(connection, user_id, now):
             raise BillingError("İptal edilebilecek aktif bir abonelik bulunamadı.")
+        # With an early renewal queued, the last paid period is the one that
+        # would otherwise continue; earlier periods already end on schedule.
+        subscription = max(
+            _open_subscription_periods(connection, user_id, now),
+            key=lambda period: _as_utc(period.ends_at),
+        )
         if subscription.status != "cancel_at_end":
             connection.execute(
                 update(SUBSCRIPTIONS)
@@ -1993,6 +2085,14 @@ def _effective_job_plan(status: dict):
     if plan.code == "free" and status.get("download_access_source") == "credit":
         return PLAN_BY_CODE["credit"]
     return plan
+
+
+def job_minutes_cap(status: dict) -> int | None:
+    """The per-job minute limit require_duration_entitlement enforced for this status."""
+    try:
+        return int(_effective_job_plan(status).max_minutes_per_job)
+    except (KeyError, TypeError, ValueError, BillingConfigurationError):
+        return None
 
 
 # Translated by the frontend through its exact-message catalog, like the quiz
@@ -2276,14 +2376,44 @@ def _activate_purchase(
             .values(credit_minutes=USERS.c.credit_minutes + int(plan.minutes or 0))
         )
         return
-    connection.execute(
-        update(SUBSCRIPTIONS)
-        .where(
-            SUBSCRIPTIONS.c.user_id == user_id,
-            SUBSCRIPTIONS.c.status.in_(("active", "cancel_at_end")),
+    starts_at = now
+    running = _active_subscription(connection, user_id, now)
+    if running is not None and running.plan_code == plan_code:
+        # Renewing the same package early stacks the new period after every
+        # period already paid for, so no paid day or allowance is lost. The
+        # earlier periods keep access until their own end; only the newest
+        # period stays "active", so a user never has two active rows.
+        open_periods = _open_subscription_periods(connection, user_id, now)
+        starts_at = max(_as_utc(period.ends_at) for period in open_periods)
+        connection.execute(
+            update(SUBSCRIPTIONS)
+            .where(
+                SUBSCRIPTIONS.c.user_id == user_id,
+                SUBSCRIPTIONS.c.status == "active",
+                SUBSCRIPTIONS.c.ends_at > now,
+            )
+            .values(status="cancel_at_end")
         )
-        .values(status="replaced")
-    )
+        connection.execute(
+            update(SUBSCRIPTIONS)
+            .where(
+                SUBSCRIPTIONS.c.user_id == user_id,
+                SUBSCRIPTIONS.c.status.in_(("active", "cancel_at_end")),
+                SUBSCRIPTIONS.c.ends_at <= now,
+            )
+            .values(status="replaced")
+        )
+    else:
+        # A different package starts now and replaces the running period and
+        # any queued renewals.
+        connection.execute(
+            update(SUBSCRIPTIONS)
+            .where(
+                SUBSCRIPTIONS.c.user_id == user_id,
+                SUBSCRIPTIONS.c.status.in_(("active", "cancel_at_end")),
+            )
+            .values(status="replaced")
+        )
     days = 365 if interval == "annual" else 30
     connection.execute(
         SUBSCRIPTIONS.insert().values(
@@ -2292,8 +2422,8 @@ def _activate_purchase(
             plan_code=plan_code,
             interval=interval,
             status="active",
-            starts_at=now,
-            ends_at=now + timedelta(days=days),
+            starts_at=starts_at,
+            ends_at=starts_at + timedelta(days=days),
             source_reference=reference,
             created_at=now,
         )
@@ -2386,6 +2516,34 @@ def payment_order(reference: str) -> dict:
     if not order:
         raise BillingError("Ödeme siparişi bulunamadı.")
     return _public_payment_order(order)
+
+
+def unsettled_iyzico_order_references(
+    *,
+    created_after: datetime,
+    created_before: datetime,
+    limit: int,
+    status: str = "created",
+    oldest_first: bool = False,
+) -> list[str]:
+    """iyzico orders still in ``status`` (created or pending) within a time window."""
+    if status not in {"created", "pending"}:
+        raise ValueError("Only unsettled iyzico orders can be listed.")
+    init_billing_database()
+    order = PAYMENT_ORDERS.c.created_at.asc() if oldest_first else PAYMENT_ORDERS.c.created_at.desc()
+    with ENGINE.connect() as connection:
+        references = connection.execute(
+            select(PAYMENT_ORDERS.c.reference)
+            .where(
+                PAYMENT_ORDERS.c.provider.in_(sorted(IYZICO_PAYMENT_PROVIDERS)),
+                PAYMENT_ORDERS.c.status == status,
+                PAYMENT_ORDERS.c.created_at >= created_after,
+                PAYMENT_ORDERS.c.created_at <= created_before,
+            )
+            .order_by(order, PAYMENT_ORDERS.c.reference)
+            .limit(max(1, int(limit)))
+        ).scalars().all()
+    return [str(reference) for reference in references]
 
 
 def payment_order_provider_state(reference: str) -> str:
@@ -2991,6 +3149,7 @@ def admin_billing_overview(limit: int = 100) -> dict:
             .where(
                 active_user,
                 SUBSCRIPTIONS.c.status.in_(("active", "cancel_at_end")),
+                SUBSCRIPTIONS.c.starts_at <= now,
                 SUBSCRIPTIONS.c.ends_at > now,
             )
             .order_by(SUBSCRIPTIONS.c.ends_at.desc())

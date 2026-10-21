@@ -13,6 +13,7 @@ from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field, HttpUrl, StrictBool
+from starlette.concurrency import run_in_threadpool
 
 from . import config
 from .billing import public_catalog, public_providers
@@ -75,7 +76,13 @@ from .config import (
     WORK_DIR,
 )
 from .errors import LectureSiftError, normalize_error
-from .daily_social import render_daily_image, render_daily_reel, render_daily_reel_cover
+from .daily_social import (
+    SingleFlightRenderCache,
+    public_media_day_allowed,
+    render_daily_image,
+    render_daily_reel,
+    render_daily_reel_cover,
+)
 from .instagram import InstagramAPIError, InstagramClient, InstagramConfigurationError
 from .jobs import JOBS
 from .job_feedback import COMMENT_MAX_LENGTH, save_job_feedback
@@ -676,6 +683,59 @@ def _rate_limit(
         ) from exc
 
 
+def _client_network(request: Request) -> str:
+    """Public client address for IP-wide limits; an IPv6 client counts as its /64.
+
+    Returns "" when no public address is known (for example a proxy or
+    container gateway address), so one shared bucket never throttles every
+    user behind it. The per-e-mail limits still apply then.
+    """
+    try:
+        address = ipaddress.ip_address(_client_ip(request))
+    except ValueError:
+        return ""
+    if not address.is_global:
+        return ""
+    if address.version == 6:
+        return str(ipaddress.ip_network(f"{address}/64", strict=False))
+    return str(address)
+
+
+def _rate_limit_network(request: Request, scope: str, *, limit: int, window_seconds: int) -> None:
+    network = _client_network(request)
+    if network:
+        _rate_limit(request, scope, network, limit=limit, window_seconds=window_seconds, per_client=False)
+
+
+# Account abuse limits. The IP-wide numbers leave room for a classroom or a
+# campus/mobile NAT signing up and logging in together; each attempt is still
+# also limited per e-mail address from any IP. A verification code (six
+# digits, valid 24 hours) gets at most VERIFY_CODE_EMAIL_DAILY_LIMIT guesses
+# per address per UTC day; the link in the same e-mail is unaffected.
+AUTH_ABUSE_LIMITS = {
+    "register-ip": (50, 60 * 60),
+    "register-ip-day": (200, 24 * 60 * 60),
+    "register-email": (5, 60 * 60),
+    "login-ip": (60, 15 * 60),
+    "login-email": (20, 15 * 60),
+    "resend-verification-ip": (20, 60 * 60),
+    "resend-verification-email": (5, 60 * 60),
+    "forgot-password-ip": (20, 60 * 60),
+    "forgot-password-email": (5, 60 * 60),
+    "verify-code-ip": (60, 15 * 60),
+    "verify-code-email": (20, 24 * 60 * 60),
+}
+VERIFY_CODE_EMAIL_DAILY_LIMIT = AUTH_ABUSE_LIMITS["verify-code-email"][0]
+
+
+def _auth_abuse_limits(request: Request, action: str, email: str, *, ip_scopes: tuple[str, ...] = ()) -> None:
+    for scope in ip_scopes or (f"{action}-ip",):
+        limit, window = AUTH_ABUSE_LIMITS[scope]
+        _rate_limit_network(request, scope, limit=limit, window_seconds=window)
+    limit, window = AUTH_ABUSE_LIMITS[f"{action}-email"]
+    _rate_limit(request, f"{action}-email", email, limit=limit, window_seconds=window, per_client=False)
+
+
 def _upload_extension(file: UploadFile, allowed_extensions: set[str] | None = None) -> str:
     extension = Path(file.filename or "video.mp4").suffix.lower()
     allowed = allowed_extensions or MEDIA_EXTENSIONS
@@ -696,7 +756,8 @@ async def _save_upload(
     max_bytes: int = MAX_VIDEO_BYTES,
 ) -> int:
     total = bytes_used
-    with open(destination, "wb") as output:
+    output = await run_in_threadpool(open, destination, "wb")
+    try:
         # Larger application chunks reduce Python/ASGI overhead without
         # buffering the whole upload in memory. The client connection remains
         # fully streamed and can use all available bandwidth.
@@ -710,15 +771,22 @@ async def _save_upload(
                         status_code=413,
                     )
                 )
-            enforce_job_workspace(
-                destination.parent,
-                additional_bytes=len(chunk),
-                known_usage_bytes=total - len(chunk),
-                reserve_full_budget=True,
-                work_root=WORK_DIR,
-            )
-            output.write(chunk)
+            await run_in_threadpool(_write_upload_chunk, output, destination, chunk, total)
+    finally:
+        await run_in_threadpool(output.close)
     return total
+
+
+def _write_upload_chunk(output, destination: Path, chunk: bytes, total: int) -> None:
+    """Disk-capacity check and write for one chunk; runs in the thread pool."""
+    enforce_job_workspace(
+        destination.parent,
+        additional_bytes=len(chunk),
+        known_usage_bytes=total - len(chunk),
+        reserve_full_budget=True,
+        work_root=WORK_DIR,
+    )
+    output.write(chunk)
 
 
 def _validate_upload_list(
@@ -885,6 +953,7 @@ def billing_health() -> dict:
 @app.post("/billing/register")
 def billing_register(payload: BillingRegisterRequest, request: Request) -> dict:
     _rate_limit(request, "register", payload.email, limit=5, window_seconds=60 * 60)
+    _auth_abuse_limits(request, "register", payload.email, ip_scopes=("register-ip", "register-ip-day"))
     if not email_delivery_configured():
         raise HTTPException(
             503,
@@ -962,6 +1031,7 @@ def billing_verify_email(payload: BillingTokenRequest, request: Request) -> dict
 @app.post("/billing/verify-email-code")
 def billing_verify_email_code(payload: BillingVerificationCodeRequest, request: Request) -> dict:
     _rate_limit(request, "verify-code", payload.email, limit=10, window_seconds=15 * 60)
+    _auth_abuse_limits(request, "verify-code", payload.email)
     try:
         result = verify_email_code(payload.email, payload.code)
     except BillingAuthenticationError as exc:
@@ -973,6 +1043,7 @@ def billing_verify_email_code(payload: BillingVerificationCodeRequest, request: 
 @app.post("/billing/resend-verification")
 def billing_resend_verification(payload: BillingEmailRequest, request: Request) -> dict:
     _rate_limit(request, "resend-verification", payload.email, limit=5, window_seconds=60 * 60)
+    _auth_abuse_limits(request, "resend-verification", payload.email)
     if not email_delivery_configured():
         raise HTTPException(503, detail={"code": "LS-BILL-15", "message": "E-posta doğrulama hizmeti henüz etkinleştirilmemiş."})
     try:
@@ -987,6 +1058,7 @@ def billing_resend_verification(payload: BillingEmailRequest, request: Request) 
 @app.post("/billing/forgot-password")
 def billing_forgot_password(payload: BillingEmailRequest, request: Request) -> dict:
     _rate_limit(request, "forgot-password", payload.email, limit=5, window_seconds=60 * 60)
+    _auth_abuse_limits(request, "forgot-password", payload.email)
     if not email_delivery_configured():
         raise HTTPException(503, detail={"code": "LS-BILL-15", "message": "E-posta hizmeti henüz etkinleştirilmemiş."})
     try:
@@ -1013,6 +1085,7 @@ def billing_reset_password(payload: BillingPasswordResetRequest, request: Reques
 @app.post("/billing/login")
 def billing_login(payload: BillingLoginRequest, request: Request) -> dict:
     _rate_limit(request, "login", payload.email, limit=10, window_seconds=15 * 60)
+    _auth_abuse_limits(request, "login", payload.email)
     try:
         result = login_user(payload.email, payload.password)
         record_account_activity(
@@ -1531,15 +1604,48 @@ def instagram_publish_media(
     return {"ok": True, "media_id": result.get("id"), "status": "published"}
 
 
-@app.get("/instagram/daily/image/{day}.jpg")
-def instagram_daily_image(day: str) -> Response:
-    """Public deterministic image endpoint used by Instagram's media fetcher."""
+def _public_social_day(day: str, missing_message: str):
+    """Parse a public social media day; only days a publisher fetches are served."""
     from datetime import date
 
     try:
         selected_day = date.fromisoformat(day)
     except ValueError:
         raise HTTPException(400, detail={"code": "LS-IG-06", "message": "Geçersiz tarih."})
+    if not public_media_day_allowed(selected_day):
+        raise HTTPException(404, detail={"code": "LS-IG-06", "message": missing_message})
+    return selected_day
+
+
+def _evergreen_image(day):
+    from .evergreen_social import image_for_day
+
+    return image_for_day(day)
+
+
+def _generated_reel_cover(day):
+    from .generated_reels import cover_for_day
+
+    return cover_for_day(day)
+
+
+def _generated_reel_video(day):
+    from .generated_reels import video_for_day
+
+    return video_for_day(day)
+
+
+# Stored rows are rendered on demand, so these routes use the same bounded,
+# single-flight cache as the deterministic daily renders.
+_PUBLIC_EVERGREEN_IMAGE = SingleFlightRenderCache(_evergreen_image)
+_PUBLIC_GENERATED_REEL_COVER = SingleFlightRenderCache(_generated_reel_cover)
+_PUBLIC_GENERATED_REEL_VIDEO = SingleFlightRenderCache(_generated_reel_video)
+
+
+@app.get("/instagram/daily/image/{day}.jpg")
+def instagram_daily_image(day: str) -> Response:
+    """Public deterministic image endpoint used by Instagram's media fetcher."""
+    selected_day = _public_social_day(day, "Gönderi görseli bulunamadı.")
     return Response(
         content=render_daily_image(selected_day),
         media_type="image/jpeg",
@@ -1550,14 +1656,8 @@ def instagram_daily_image(day: str) -> Response:
 @app.get("/instagram/evergreen/image/{day}.jpg")
 def instagram_evergreen_image(day: str) -> Response:
     """Public, persisted study card fetched by Instagram after editorial checks."""
-    from datetime import date
-    from .evergreen_social import image_for_day
-
-    try:
-        selected_day = date.fromisoformat(day)
-    except ValueError:
-        raise HTTPException(400, detail={"code": "LS-IG-06", "message": "Geçersiz tarih."})
-    content = image_for_day(selected_day)
+    selected_day = _public_social_day(day, "Gönderi görseli bulunamadı.")
+    content = _PUBLIC_EVERGREEN_IMAGE(selected_day)
     if content is None:
         raise HTTPException(404, detail={"code": "LS-IG-08", "message": "Gönderi görseli bulunamadı."})
     return Response(content=content, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
@@ -1577,14 +1677,8 @@ def instagram_evergreen_status(day: str) -> dict:
 
 @app.get("/instagram/evergreen/reel/{day}.jpg")
 def instagram_generated_reel_cover(day: str) -> Response:
-    from datetime import date
-    from .generated_reels import cover_for_day
-
-    try:
-        selected_day = date.fromisoformat(day)
-    except ValueError:
-        raise HTTPException(400, detail={"code": "LS-IG-06", "message": "Geçersiz tarih."})
-    content = cover_for_day(selected_day)
+    selected_day = _public_social_day(day, "Gönderi kapağı bulunamadı.")
+    content = _PUBLIC_GENERATED_REEL_COVER(selected_day)
     if content is None:
         raise HTTPException(404, detail={"code": "LS-IG-08", "message": "Gönderi kapağı bulunamadı."})
     return Response(content=content, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
@@ -1592,17 +1686,9 @@ def instagram_generated_reel_cover(day: str) -> Response:
 
 @app.get("/instagram/evergreen/reel/{day}.mp4")
 def instagram_generated_reel_video(day: str) -> Response:
-    from datetime import date
-    from .generated_reels import video_for_day
-
+    selected_day = _public_social_day(day, "Gönderi videosu bulunamadı.")
     try:
-        selected_day = date.fromisoformat(day)
-        if abs((selected_day - date.today()).days) > 2:
-            raise HTTPException(404, detail={"code": "LS-IG-06", "message": "Gönderi videosu bulunamadı."})
-    except ValueError:
-        raise HTTPException(400, detail={"code": "LS-IG-06", "message": "Geçersiz tarih."})
-    try:
-        content = video_for_day(selected_day)
+        content = _PUBLIC_GENERATED_REEL_VIDEO(selected_day)
     except RuntimeError as exc:
         raise HTTPException(503, detail={"code": "LS-IG-07", "message": str(exc)}) from exc
     if content is None:
@@ -1613,12 +1699,7 @@ def instagram_generated_reel_video(day: str) -> Response:
 @app.get("/instagram/daily/reel/{day}.jpg")
 def instagram_daily_reel_cover(day: str) -> Response:
     """Public deterministic 9:16 cover fetched by Instagram."""
-    from datetime import date
-
-    try:
-        selected_day = date.fromisoformat(day)
-    except ValueError:
-        raise HTTPException(400, detail={"code": "LS-IG-06", "message": "Geçersiz tarih."})
+    selected_day = _public_social_day(day, "Gönderi kapağı bulunamadı.")
     return Response(
         content=render_daily_reel_cover(selected_day),
         media_type="image/jpeg",
@@ -1629,15 +1710,9 @@ def instagram_daily_reel_cover(day: str) -> Response:
 @app.get("/instagram/daily/reel/{day}.mp4")
 def instagram_daily_reel_video(day: str) -> Response:
     """Public deterministic MP4 fetched by Instagram for scheduled publishing."""
-    from datetime import date
-
+    selected_day = _public_social_day(day, "Gönderi videosu bulunamadı.")
     try:
-        selected_day = date.fromisoformat(day)
-        if abs((selected_day - date.today()).days) > 2:
-            raise HTTPException(404, detail={"code": "LS-IG-06", "message": "Gönderi videosu bulunamadı."})
         content = render_daily_reel(selected_day)
-    except ValueError:
-        raise HTTPException(400, detail={"code": "LS-IG-06", "message": "Geçersiz tarih."})
     except RuntimeError as exc:
         raise HTTPException(503, detail={"code": "LS-IG-07", "message": str(exc)}) from exc
     return Response(
@@ -1995,8 +2070,11 @@ async def create_job(
                 "message": "En az bir çalışma çıktısı seç: özet ve notlar, transkript, quiz veya bilgi kartı.",
             },
         )
+    # Database, Redis and disk work below runs in the thread pool so one slow
+    # upload request cannot stall the single event loop for every other user.
     try:
-        entitlement = validate_job_features(
+        entitlement = await run_in_threadpool(
+            validate_job_features,
             billing_user["id"],
             quiz_count=options["quiz_count"],
             flashcard_count=options["flashcard_count"],
@@ -2009,7 +2087,7 @@ async def create_job(
     if entitlement.get("plan", {}).get("code") == "guest":
         from .rollout_service import guest_trial_status
 
-        trial = guest_trial_status(billing_user["id"])
+        trial = await run_in_threadpool(guest_trial_status, billing_user["id"])
         if trial and trial["used"]:
             raise HTTPException(402, detail={
                 "code": "LS-GUEST-05",
@@ -2083,7 +2161,7 @@ async def create_job(
         try:
             options["pdf_sample"] = sample_request(
                 entitlement, document_start_page, config.DOCUMENT_WORDS_PER_CREDIT_MINUTE,
-                guest_trial_status(billing_user["id"]),
+                await run_in_threadpool(guest_trial_status, billing_user["id"]),
             )
         except LectureSiftError as exc:
             _raise_public(exc)
@@ -2093,9 +2171,9 @@ async def create_job(
     # Refuse a known provider billing/authentication outage before reading the
     # request body into local or remote storage. Local-only MP3 export and
     # transcript-only OCR remain available during the outage.
-    _require_ai_provider(options, document_mode=document_mode)
+    await run_in_threadpool(_require_ai_provider, options, document_mode=document_mode)
 
-    JOBS.cleanup_expired()
+    # Expired results are removed by the API maintenance loop, not here.
     job_id = str(uuid.uuid4())
     job_dir = _job_path(job_id)
     total = 0
@@ -2141,7 +2219,8 @@ async def create_job(
         if document_mode
         else ("upload_separate" if layout == "separate" else ("upload_multi" if len(audio_paths) > 1 else "upload"))
     )
-    JOBS.create(
+    await run_in_threadpool(
+        JOBS.create,
         job_id,
         job_dir,
         options,

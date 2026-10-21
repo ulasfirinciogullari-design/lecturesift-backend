@@ -21,6 +21,25 @@ def _forbidden(*args, **kwargs):
     raise AssertionError("A short sample must not use full-document extraction or OCR")
 
 
+def _inspect_only(**result):
+    """Stand in for the isolated PDF reader; a sample may only inspect the page tree."""
+    def read(path, *, max_pages, with_text):
+        if with_text:
+            _forbidden()
+        return {"ok": True, **result}
+    return read
+
+
+def _forbid_full_read(monkeypatch):
+    real = documents._read_pdf_isolated
+
+    def read(path, *, max_pages, with_text):
+        if with_text:
+            _forbidden()
+        return real(path, max_pages=max_pages, with_text=with_text)
+    monkeypatch.setattr(documents, "_read_pdf_isolated", read)
+
+
 def _fake_pdf(monkeypatch, tmp_path: Path, texts: list[str]):
     path = tmp_path / "lesson.pdf"
     path.write_bytes(b"%PDF-fake bounded native reader")
@@ -67,10 +86,9 @@ def _fake_pdf(monkeypatch, tmp_path: Path, texts: list[str]):
         def close(self):
             state.closed = True
 
-    monkeypatch.setattr(documents, "PdfReader", lambda *a, **kw: SimpleNamespace(is_encrypted=False, pages=range(len(texts))))
+    monkeypatch.setattr(documents, "_read_pdf_isolated", _inspect_only(encrypted=False, pages=len(texts)))
     monkeypatch.setitem(sys.modules, "pypdfium2", SimpleNamespace(PdfDocument=PdfDocument))
     monkeypatch.setattr(documents, "_extract_pdf", _forbidden)
-    monkeypatch.setattr(documents, "_extract_pdf_native_pages", _forbidden)
     monkeypatch.setattr(documents, "_ocr_pdf_page", _forbidden)
     return path, state
 
@@ -223,7 +241,7 @@ def test_sample_preserves_original_file_safety_limits(monkeypatch, tmp_path, gua
     elif guard == "signature":
         path.write_bytes(b"not a PDF document")
     else:
-        monkeypatch.setattr(documents, "PdfReader", lambda *a, **kw: SimpleNamespace(is_encrypted=True))
+        monkeypatch.setattr(documents, "_read_pdf_isolated", _inspect_only(encrypted=True))
     with pytest.raises(LectureSiftError) as error:
         documents.extract_documents([path], pdf_sample={"max_words": 1000})
     assert error.value.code == expected and state.opened == []
@@ -285,7 +303,7 @@ def test_real_native_pdf_sample_keeps_original_page_scope_and_small_file_can_fin
     pdf.showPage()
     pdf.drawString(72, 760, "Second chapter discusses the conservation of momentum.")
     pdf.save()
-    monkeypatch.setattr(documents, "_extract_pdf_native_pages", _forbidden)
+    _forbid_full_read(monkeypatch)
     monkeypatch.setattr(documents, "_ocr_pdf_page", _forbidden)
 
     result = documents.extract_documents([path], pdf_sample={"start_page": 2, "max_words": 200})
@@ -433,7 +451,7 @@ def test_real_pdf_with_blank_cover_preserves_cover_and_native_chapter(tmp_path, 
         calls.append(page)
         return page, "", "eng"
     monkeypatch.setattr(documents, "_ocr_pdf_page", ocr)
-    monkeypatch.setattr(documents, "_extract_pdf_native_pages", _forbidden)
+    _forbid_full_read(monkeypatch)
     result = documents.extract_documents([path], pdf_sample={"max_words": 200, "max_ocr_pages": 1})
     assert calls == [0]
     assert "second page explains" in result["text"]
@@ -467,7 +485,7 @@ def test_real_ocr_scanned_pdf_sample_reads_selected_page_only(tmp_path, monkeypa
         assert page == 1
         return original_ocr(path, page, language)
     monkeypatch.setattr(documents, "_ocr_pdf_page", bounded_ocr)
-    monkeypatch.setattr(documents, "_extract_pdf_native_pages", _forbidden)
+    _forbid_full_read(monkeypatch)
     options = {"start_page": 2, "max_pages": 1, "max_words": 200, "max_ocr_pages": 1}
     preflight = documents.extract_documents([path], enable_ocr=False, allow_ocr_pending=True, pdf_sample=options)
     assert preflight["estimated"] is True and preflight["words"] == 200 and calls == []
@@ -480,7 +498,7 @@ def test_real_ocr_scanned_pdf_sample_reads_selected_page_only(tmp_path, monkeypa
 
 def test_sample_reader_page_count_mismatch_has_distinct_safe_diagnostic(monkeypatch, tmp_path):
     path, state = _fake_pdf(monkeypatch, tmp_path, ["Readable native page text for a bounded sample."])
-    monkeypatch.setattr(documents, "PdfReader", lambda *a, **kw: SimpleNamespace(is_encrypted=False, pages=range(2)))
+    monkeypatch.setattr(documents, "_read_pdf_isolated", _inspect_only(encrypted=False, pages=2))
     with pytest.raises(LectureSiftError) as error:
         documents.extract_documents([path], pdf_sample={"max_words": 200, "max_ocr_pages": 5})
     assert error.value.code == "LS-DOC-18"

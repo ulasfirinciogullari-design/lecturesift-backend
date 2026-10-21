@@ -30,6 +30,7 @@ _COPY = {
         "term_monthly": "30 günlük dönem", "term_annual": "yıllık dönem",
         "no_charge": "Hiçbir ödeme otomatik olarak alınmaz: paket kendiliğinden yenilenmez ve kartından ücret çekilmez.",
         "after": "Dönem bittiğinde hesabın ücretsiz plana geçer. Kaldığın yerden devam etmek istersen aynı paketi tek adımda yeniden satın alabilirsin.",
+        "early": "Erken yenilemek kayıp değildir: aynı paketi dönem bitmeden satın alırsan yeni dönem mevcut dönemin bittiği an başlar ve o zamana kadar kalan süreni ve dakikalarını kullanmaya devam edersin.",
         "renew": "Paketini yenile",
         "support_text": "Bir sorun olursa bu e-postayı yanıtlayabilir veya destek ekibine yazabilirsin.",
         "support": "Destek ekibine ulaş",
@@ -47,6 +48,7 @@ _COPY = {
         "term_monthly": "30-day period", "term_annual": "annual period",
         "no_charge": "Nothing is charged automatically: the package does not renew by itself and your card is not debited.",
         "after": "When the period ends, your account moves to the free plan. To carry on where you left off, you can buy the same package again in one step.",
+        "early": "Renewing early loses nothing: if you buy the same package before this period ends, the new period starts the moment the current one ends, and you keep using your remaining time and minutes until then.",
         "renew": "Renew your package",
         "support_text": "If anything is wrong, reply to this email or contact support.",
         "support": "Contact support",
@@ -64,6 +66,7 @@ _COPY = {
         "term_monthly": "30-Tage-Zeitraum", "term_annual": "Jahreszeitraum",
         "no_charge": "Es wird nichts automatisch abgebucht: Das Paket verlängert sich nicht von selbst, und deine Karte wird nicht belastet.",
         "after": "Nach Ablauf des Zeitraums wechselt dein Konto in den kostenlosen Tarif. Um dort weiterzumachen, wo du aufgehört hast, kannst du dasselbe Paket in einem Schritt erneut kaufen.",
+        "early": "Frühzeitig zu verlängern kostet dich nichts: Kaufst du dasselbe Paket vor Ablauf dieses Zeitraums, beginnt der neue Zeitraum genau dann, wenn der aktuelle endet, und bis dahin nutzt du deine verbleibende Zeit und Minuten weiter.",
         "renew": "Paket erneuern",
         "support_text": "Falls etwas nicht stimmt, antworte auf diese E-Mail oder kontaktiere den Support.",
         "support": "Support kontaktieren",
@@ -81,6 +84,7 @@ _COPY = {
         "term_monthly": "période de 30 jours", "term_annual": "période annuelle",
         "no_charge": "Aucun paiement n’est prélevé automatiquement : le forfait ne se renouvelle pas de lui-même et votre carte n’est pas débitée.",
         "after": "À la fin de la période, votre compte passe à l’offre gratuite. Pour reprendre là où vous en étiez, vous pouvez racheter le même forfait en une étape.",
+        "early": "Renouveler en avance ne vous fait rien perdre : si vous achetez le même forfait avant la fin de cette période, la nouvelle période commence au moment où l’actuelle se termine, et vous continuez d’utiliser le temps et les minutes restants d’ici là.",
         "renew": "Renouveler mon forfait",
         "support_text": "En cas de problème, répondez à cet e-mail ou contactez l’assistance.",
         "support": "Contacter l’assistance",
@@ -98,6 +102,7 @@ _COPY = {
         "term_monthly": "periodo de 30 días", "term_annual": "periodo anual",
         "no_charge": "No se cobra nada automáticamente: el paquete no se renueva por sí solo y no se hace ningún cargo en tu tarjeta.",
         "after": "Cuando termine el periodo, tu cuenta pasará al plan gratuito. Para seguir donde lo dejaste, puedes volver a comprar el mismo paquete en un solo paso.",
+        "early": "Renovar antes no te hace perder nada: si compras el mismo paquete antes de que termine este periodo, el nuevo periodo empieza justo cuando termina el actual y hasta entonces sigues usando el tiempo y los minutos que te quedan.",
         "renew": "Renovar mi paquete",
         "support_text": "Si algo no es correcto, responde a este correo o contacta con soporte.",
         "support": "Contactar con soporte",
@@ -115,6 +120,7 @@ _COPY = {
         "term_monthly": "periodo di 30 giorni", "term_annual": "periodo annuale",
         "no_charge": "Non viene addebitato nulla automaticamente: il pacchetto non si rinnova da solo e la tua carta non viene addebitata.",
         "after": "Alla fine del periodo il tuo account passa al piano gratuito. Per riprendere da dove avevi lasciato, puoi acquistare di nuovo lo stesso pacchetto in un solo passaggio.",
+        "early": "Rinnovare in anticipo non ti fa perdere nulla: se acquisti lo stesso pacchetto prima della fine di questo periodo, il nuovo periodo inizia nel momento in cui termina quello attuale e fino ad allora continui a usare il tempo e i minuti rimanenti.",
         "renew": "Rinnova il pacchetto",
         "support_text": "Se qualcosa non va, rispondi a questa e-mail o contatta l’assistenza.",
         "support": "Contatta l’assistenza",
@@ -132,6 +138,7 @@ _COPY = {
         "term_monthly": "período de 30 dias", "term_annual": "período anual",
         "no_charge": "Nada é cobrado automaticamente: o pacote não se renova sozinho e nenhuma cobrança é feita no seu cartão.",
         "after": "Quando o período terminar, sua conta passará para o plano gratuito. Para continuar de onde parou, você pode comprar o mesmo pacote novamente em um só passo.",
+        "early": "Renovar antes não faz você perder nada: se comprar o mesmo pacote antes do fim deste período, o novo período começa no momento em que o atual termina, e até lá você continua usando o tempo e os minutos restantes.",
         "renew": "Renovar meu pacote",
         "support_text": "Se algo estiver errado, responda a este e-mail ou fale com o suporte.",
         "support": "Falar com o suporte",
@@ -149,6 +156,7 @@ _COPY = {
         "term_monthly": "период 30 дней", "term_annual": "годовой период",
         "no_charge": "Ничего не списывается автоматически: пакет не продлевается сам, и средства с вашей карты не снимаются.",
         "after": "Когда период закончится, аккаунт перейдёт на бесплатный тариф. Чтобы продолжить с того же места, вы можете снова купить тот же пакет в один шаг.",
+        "early": "Продление заранее ничего не отнимает: если купить тот же пакет до окончания этого периода, новый период начнётся в момент окончания текущего, а до тех пор вы продолжаете пользоваться оставшимся временем и минутами.",
         "renew": "Продлить пакет",
         "support_text": "Если что-то не так, ответьте на это письмо или напишите в поддержку.",
         "support": "Связаться с поддержкой",
@@ -166,6 +174,7 @@ _COPY = {
         "term_monthly": "فترة 30 يومًا", "term_annual": "فترة سنوية",
         "no_charge": "لا يُحصَّل أي مبلغ تلقائيًا: لا تتجدد الباقة من تلقاء نفسها ولا يُخصم أي مبلغ من بطاقتك.",
         "after": "عند انتهاء الفترة ينتقل حسابك إلى الخطة المجانية. لمتابعة ما توقفت عنده، يمكنك شراء الباقة نفسها مجددًا بخطوة واحدة.",
+        "early": "التجديد المبكر لا يُفقدك شيئًا: إذا اشتريت الباقة نفسها قبل انتهاء هذه الفترة، تبدأ الفترة الجديدة لحظة انتهاء الفترة الحالية، وتواصل حتى ذلك الحين استخدام الوقت والدقائق المتبقية.",
         "renew": "تجديد الباقة",
         "support_text": "إذا كانت هناك أي مشكلة، يمكنك الرد على هذه الرسالة أو التواصل مع الدعم.",
         "support": "التواصل مع الدعم",
@@ -183,6 +192,7 @@ _COPY = {
         "term_monthly": "30 天周期", "term_annual": "年度周期",
         "no_charge": "不会自动扣款：套餐不会自行续期，也不会从你的银行卡扣费。",
         "after": "周期结束后，你的账户将转为免费套餐。如需从上次停下的地方继续，你可以一步重新购买同一套餐。",
+        "early": "提前续订不会有任何损失：如果在本周期结束前购买同一套餐，新周期将在当前周期结束时开始，在此之前你可以继续使用剩余的时间和分钟数。",
         "renew": "续订套餐",
         "support_text": "如有任何问题，请回复此邮件或联系客服。",
         "support": "联系客服",
@@ -200,6 +210,7 @@ _COPY = {
         "term_monthly": "30日間の期間", "term_annual": "年間の期間",
         "no_charge": "自動的に請求されることはありません。パッケージは自動更新されず、カードから引き落とされることもありません。",
         "after": "期間が終了すると、アカウントは無料プランに切り替わります。続きから再開したい場合は、同じパッケージをワンステップで再購入できます。",
+        "early": "早めに更新しても損はありません。この期間が終わる前に同じパッケージを購入すると、新しい期間は現在の期間が終了した時点で始まり、それまでは残りの期間と時間（分）をそのまま使えます。",
         "renew": "パッケージを更新する",
         "support_text": "問題がある場合は、このメールに返信するか、サポートにお問い合わせください。",
         "support": "サポートに連絡する",
@@ -217,6 +228,7 @@ _COPY = {
         "term_monthly": "30일 기간", "term_annual": "연간 기간",
         "no_charge": "자동으로 결제되는 금액은 없습니다. 패키지는 자동 갱신되지 않으며 카드에서 금액이 청구되지 않습니다.",
         "after": "기간이 끝나면 계정은 무료 요금제로 전환됩니다. 중단한 곳에서 이어가려면 같은 패키지를 한 번에 다시 구매할 수 있습니다.",
+        "early": "미리 갱신해도 손해가 없습니다. 이 기간이 끝나기 전에 같은 패키지를 구매하면 새 기간은 현재 기간이 끝나는 시점에 시작되며, 그때까지 남은 기간과 시간(분)을 계속 사용할 수 있습니다.",
         "renew": "패키지 갱신하기",
         "support_text": "문제가 있으면 이 이메일에 답장하거나 지원팀에 문의하세요.",
         "support": "지원팀에 문의",
@@ -234,6 +246,7 @@ _COPY = {
         "term_monthly": "30 दिन की अवधि", "term_annual": "वार्षिक अवधि",
         "no_charge": "कोई भुगतान अपने आप नहीं लिया जाता: पैकेज अपने आप नवीनीकृत नहीं होता और आपके कार्ड से कोई राशि नहीं काटी जाती।",
         "after": "अवधि समाप्त होने पर आपका खाता मुफ़्त प्लान पर चला जाएगा। जहाँ छोड़ा था वहाँ से जारी रखने के लिए आप वही पैकेज एक ही चरण में दोबारा खरीद सकते हैं।",
+        "early": "जल्दी नवीनीकरण करने से कुछ नहीं खोता: अगर आप यह अवधि खत्म होने से पहले वही पैकेज खरीदते हैं, तो नई अवधि मौजूदा अवधि खत्म होते ही शुरू होगी और तब तक आप बचा हुआ समय और मिनट इस्तेमाल करते रहेंगे।",
         "renew": "पैकेज नवीनीकृत करें",
         "support_text": "कोई समस्या हो तो इस ईमेल का उत्तर दें या सहायता टीम से संपर्क करें।",
         "support": "सहायता से संपर्क करें",
@@ -352,14 +365,15 @@ def render_renewal_reminder_email(
         '<p style="margin:0 0 20px;color:#264e8a;font-size:22px;font-weight:700">LectureSift</p>'
         f'<h1 style="margin:0 0 22px;font-size:22px;line-height:1.4">{escape(title)}</h1>'
         f'{paragraph(greeting)}{paragraph(intro)}{table(rows)}'
-        f'{paragraph(copy["no_charge"])}{paragraph(copy["after"])}{button(copy["renew"], renew_url)}'
+        f'{paragraph(copy["no_charge"])}{paragraph(copy["after"])}{paragraph(copy["early"])}'
+        f'{button(copy["renew"], renew_url)}'
         f'<div style="margin-top:24px">{paragraph(copy["support_text"])}{link(copy["support"], support_url)}</div>'
         '</div></td></tr></table></body></html>'
     )
     sections = [
         "LectureSift", title, greeting, intro,
         "\n".join(f"{label}: {value}" for label, value in rows),
-        copy["no_charge"], copy["after"],
+        copy["no_charge"], copy["after"], copy["early"],
         f'{copy["renew"]}: {renew_url}',
         f'{copy["support_text"]}\n{copy["support"]}: {support_url}',
     ]
