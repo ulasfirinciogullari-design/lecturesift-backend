@@ -4,6 +4,10 @@ One row per job: a thumb (up/down), an optional one-line comment and the
 author's consent to show that comment on the site with their initials.
 Guests leave no account reference. The comment is stored as plain text,
 capped in length and never written to logs.
+
+The table belongs to the frozen v6 schema contract and is installed only by
+the explicit owner release (deploy/feedback_schema_release.py); the runtime
+never creates it and fails closed until that release has run.
 """
 from __future__ import annotations
 
@@ -14,11 +18,11 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Table, select, update
+from sqlalchemy import Boolean, Column, DateTime, MetaData, String, Table, delete, inspect, select, update
 from sqlalchemy.exc import IntegrityError
 
 from . import billing_service
-from .billing_service import METADATA, SUBSCRIPTIONS, USERS, USER_PROFILES, BillingError
+from .billing_service import SUBSCRIPTIONS, USERS, USER_PROFILES, BillingConfigurationError, BillingError
 
 LANGUAGES = ("tr", "en", "de", "fr", "es", "it", "pt", "ru", "ar", "zh", "ja", "ko", "hi")
 RATINGS = ("up", "down")
@@ -29,13 +33,16 @@ CSV_COLUMNS = (
     "plan", "locale", "job_id", "user_id", "email",
 )
 
+# Separate from the billing metadata: like the product and workspace tables it
+# keys rows by plain user/job columns and is never part of runtime create_all.
+METADATA = MetaData()
 JOB_FEEDBACK = Table(
     "lecturesift_job_feedback",
     METADATA,
     Column("id", String(36), primary_key=True),
     Column("job_id", String(80), nullable=False, unique=True),
     # NULL for guests: their trial account is temporary and must not be shown.
-    Column("user_id", String(36), ForeignKey("billing_users.id"), nullable=True, index=True),
+    Column("user_id", String(36), nullable=True, index=True),
     Column("rating", String(8), nullable=False),
     Column("comment", String(COMMENT_MAX_LENGTH), nullable=True),
     Column("consent", Boolean, nullable=False, default=False),
@@ -49,12 +56,16 @@ def _now() -> datetime:
     return billing_service.utcnow()
 
 
-def _ensure_ready() -> None:
-    # rollout_service owns table creation (and imports this table), so the
-    # import stays local to avoid a cycle.
-    from .rollout_service import init_rollout_database
+def require_schema(connection: Any) -> None:
+    """Fail closed until the explicit feedback schema release has run."""
+    if not inspect(connection).has_table(JOB_FEEDBACK.name):
+        raise BillingConfigurationError("Geri bildirim güncellemesi henüz hazır değil.")
 
-    init_rollout_database()
+
+def _ensure_ready() -> None:
+    billing_service.init_billing_database()
+    with billing_service.ENGINE.connect() as connection:
+        require_schema(connection)
 
 
 def _is_guest(user: dict[str, Any]) -> bool:
@@ -144,6 +155,36 @@ def save_job_feedback(
         "updated_at": _iso(row.updated_at),
         "updated": not created,
     }
+
+
+def export_rows(connection: Any, user_id: str) -> list[dict[str, Any]]:
+    """The member's own feedback for the account export; nothing before the release."""
+    if not inspect(connection).has_table(JOB_FEEDBACK.name):
+        return []
+    rows = connection.execute(
+        select(JOB_FEEDBACK)
+        .where(JOB_FEEDBACK.c.user_id == user_id)
+        .order_by(JOB_FEEDBACK.c.created_at.desc())
+    ).all()
+    return [
+        {
+            "job_id": row.job_id,
+            "rating": row.rating,
+            "comment": row.comment or "",
+            "consent": bool(row.consent),
+            "locale": row.locale,
+            "created_at": _iso(row.created_at),
+            "updated_at": _iso(row.updated_at),
+        }
+        for row in rows
+    ]
+
+
+def erase_rows(connection: Any, user_id: str) -> int:
+    """Remove the member's feedback when the account is closed."""
+    if not inspect(connection).has_table(JOB_FEEDBACK.name):
+        return 0
+    return int(connection.execute(delete(JOB_FEEDBACK).where(JOB_FEEDBACK.c.user_id == user_id)).rowcount or 0)
 
 
 def _active_plans(connection: Any, user_ids: set[str], now: datetime) -> dict[str, str]:

@@ -757,8 +757,9 @@ snapshot_redis() {
   docker exec lecturesift-redis-1 redis-cli --json EVAL_RO "$redis_lua" 0 "$redis_salt" >"$output"
 }
 
-# The main database is the OVH target: core (v3) before the provider cutover
-# and product (v4) or workspace (v5) after it. Each capture selects its frozen
+# The main database is the OVH target: core (v3) before the provider cutover,
+# product (v4) or workspace (v5) after it and feedback (v6) once the post-cutover
+# feedback schema release has run. Each capture selects its frozen
 # manifest/verifier family from the live catalog, never from an env label, and
 # the before/after captures must name the same family. Every step returns
 # explicitly because the after-capture runs where errexit is suspended.
@@ -770,9 +771,9 @@ snapshot_manifest() {
     >"$output.inventory" || return 1
   contract_version="$(
     python3 "$root/deploy/schema_contract_state.py" detect \
-      --inventory "$output.inventory" --accept 3,4,5
+      --inventory "$output.inventory" --accept 3,4,5,6
   )" || return 1
-  [[ "$contract_version" =~ ^[345]$ ]] || return 1
+  [[ "$contract_version" =~ ^[3456]$ ]] || return 1
   printf '%s\n' "$contract_version" >"$output.contract-version" || return 1
   # The postgres container's /tmp is a tmpfs that docker cp cannot write into,
   # so the frozen manifest is streamed on stdin like the inventory above.

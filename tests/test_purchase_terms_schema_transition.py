@@ -144,10 +144,11 @@ def test_current_recovery_and_cutover_routing_preserves_historical_files():
         for version in (4, 5):
             assert f"rehearsal_manifest_v{version}.sql" in text, name
             assert f"verify_schema_transition_v{version}.py" in text, name
-    # The OVH main database is core before the cutover and product/workspace
-    # after it, so the exact-rehearsal wrapper selects any family live.
+    # The OVH main database is core before the cutover, product/workspace after
+    # it and feedback (v6) once the post-cutover feedback release has run, so
+    # the exact-rehearsal wrapper selects any family live.
     exact = (DEPLOY / "run_exact_rehearsal.sh").read_text(encoding="utf-8")
-    assert '--inventory "$output.inventory" --accept 3,4,5' in exact
+    assert '--inventory "$output.inventory" --accept 3,4,5,6' in exact
     assert 'rehearsal_manifest_v${contract_version}.sql' in exact
     assert 'verify_schema_transition_v${contract_version}.py' in exact
     for name in ("rehearsal_restore.sh", "rollback_postgres_to_render.sh", "finalize_provider_cutover.sh",

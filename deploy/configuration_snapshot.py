@@ -24,7 +24,8 @@ from typing import Final
 LEGACY_SNAPSHOT_FORMAT: Final = "lecturesift-configuration-snapshot-v1"
 PREVIOUS_SNAPSHOT_FORMAT: Final = "lecturesift-configuration-snapshot-v2"
 PRODUCT_SNAPSHOT_FORMAT: Final = "lecturesift-configuration-snapshot-v3"
-SNAPSHOT_FORMAT: Final = "lecturesift-configuration-snapshot-v4"
+WORKSPACE_SNAPSHOT_FORMAT: Final = "lecturesift-configuration-snapshot-v4"
+SNAPSHOT_FORMAT: Final = "lecturesift-configuration-snapshot-v5"
 APPLICATION_IDENTITY: Final = "lecturesift-production"
 MANIFEST_NAME: Final = "CONFIGURATION_MANIFEST.json"
 CHECKSUM_NAME: Final = "CONFIGURATION_SHA256SUMS"
@@ -141,13 +142,25 @@ PRODUCT_IDENTITY_ALLOWLIST: Final = PREVIOUS_IDENTITY_ALLOWLIST + (
 
 # v4 adds the workspace schema family that recovery_manifest_v4 backups and
 # a schema_contract_version=5 provider cutover depend on.
-IDENTITY_ALLOWLIST: Final = PRODUCT_IDENTITY_ALLOWLIST + (
+WORKSPACE_IDENTITY_ALLOWLIST: Final = PRODUCT_IDENTITY_ALLOWLIST + (
     "deploy/rehearsal_manifest_v5.sql",
     "deploy/recovery_manifest_v4.sql",
     "deploy/verify_schema_transition_v5.py",
     "deploy/schema_contract_workspace_v1.txt",
     "deploy/workspace_tables_v1.sql",
     "deploy/workspace_schema_release.py",
+)
+
+
+# v5 adds the post-cutover feedback schema family (schema contract v6) that
+# recovery_manifest_v5 backups depend on.
+IDENTITY_ALLOWLIST: Final = WORKSPACE_IDENTITY_ALLOWLIST + (
+    "deploy/rehearsal_manifest_v6.sql",
+    "deploy/recovery_manifest_v5.sql",
+    "deploy/verify_schema_transition_v6.py",
+    "deploy/schema_contract_feedback_v1.txt",
+    "deploy/feedback_tables_v1.sql",
+    "deploy/feedback_schema_release.py",
 )
 
 
@@ -174,6 +187,8 @@ def _expected_entries(
 ) -> list[tuple[str, str, str, str]]:
     if snapshot_format == SNAPSHOT_FORMAT:
         identity_allowlist = IDENTITY_ALLOWLIST
+    elif snapshot_format == WORKSPACE_SNAPSHOT_FORMAT:
+        identity_allowlist = WORKSPACE_IDENTITY_ALLOWLIST
     elif snapshot_format == PRODUCT_SNAPSHOT_FORMAT:
         identity_allowlist = PRODUCT_IDENTITY_ALLOWLIST
     elif snapshot_format == PREVIOUS_SNAPSHOT_FORMAT:
@@ -420,6 +435,7 @@ def verify_snapshot(snapshot_root: Path, deploy_root_value: str, *, quiet: bool)
             LEGACY_SNAPSHOT_FORMAT,
             PREVIOUS_SNAPSHOT_FORMAT,
             PRODUCT_SNAPSHOT_FORMAT,
+            WORKSPACE_SNAPSHOT_FORMAT,
             SNAPSHOT_FORMAT,
         )
         or manifest["application_identity"] != APPLICATION_IDENTITY

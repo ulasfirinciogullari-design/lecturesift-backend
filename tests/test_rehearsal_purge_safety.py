@@ -271,16 +271,25 @@ def test_workspace_clone_purges_items_before_folders_and_checks_jobs():
     deletes = [sql for sql, _ in connection.calls if sql.startswith("DELETE")]
     tables = [re.search(r"public\.(\w+)", sql).group(1) for sql in deletes]
     assert tables.index("workspace_items_v1") < tables.index("workspace_folders_v1")
-    job_checks = [
-        parameters for sql, parameters in connection.calls
-        if "workspace_items_v1 WHERE job_id IN" in sql
-    ]
-    assert job_checks == [{"values": JOBS}]
+    job_checks = {
+        re.search(r"public\.(\w+) WHERE job_id IN", sql).group(1): parameters
+        for sql, parameters in connection.calls
+        if " WHERE job_id IN" in sql
+    }
+    # Items and feedback are keyed by job as well; guest feedback has no user.
+    assert job_checks == {
+        "workspace_items_v1": {"values": JOBS},
+        "lecturesift_job_feedback": {"values": JOBS},
+    }
 
 
 @pytest.mark.parametrize(
     "remaining",
-    [("admin_order_archives_v1", "user_id"), ("workspace_items_v1", "job_id")],
+    [
+        ("admin_order_archives_v1", "user_id"),
+        ("workspace_items_v1", "job_id"),
+        ("lecturesift_job_feedback", "job_id"),
+    ],
 )
 def test_optional_table_residue_fails_closed(remaining):
     connection = _OptionalTableConnection(
@@ -293,6 +302,7 @@ def test_optional_table_residue_fails_closed(remaining):
 # Real PostgreSQL 18 proof on the allocated synthetic CI service only.
 from test_product_schema_release import client, database  # noqa: E402,F401
 from test_workspace_schema_release import current, migrate  # noqa: E402,F401
+from test_feedback_schema_release import migrate as migrate_feedback  # noqa: E402
 
 
 def test_real_product_and_workspace_clones_purge_only_rehearsal_rows(current, tmp_path):
@@ -340,6 +350,16 @@ def test_real_product_and_workspace_clones_purge_only_rehearsal_rows(current, tm
                 text("INSERT INTO admin_order_archives_v1 VALUES (:ref, :uid, now())"),
                 dict(ref="LS-" + folder, uid=uid),
             )
+    assert migrate_feedback(name, tmp_path / "feedback") == 1
+    with engine.begin() as connection:
+        for uid, job in ((USERS[0], JOBS[0]), (other, "other-job")):
+            connection.execute(
+                text(
+                    "INSERT INTO lecturesift_job_feedback VALUES "
+                    "(:id, :job, :uid, 'up', NULL, false, 'tr', now(), now())"
+                ),
+                dict(id="feedback-" + job, job=job, uid=uid),
+            )
     with engine.begin() as connection:
         deleted = purge._purge_optional_tables(connection, USERS, JOBS)
     assert {table: count for table, count in deleted.items() if count} == {
@@ -347,6 +367,7 @@ def test_real_product_and_workspace_clones_purge_only_rehearsal_rows(current, tm
         "workspace_folders_v1": 1,
         "admin_ad_free_grants_v1": 1,
         "admin_order_archives_v1": 1,
+        "lecturesift_job_feedback": 1,
     }
     with engine.connect() as connection:
         for table in purge.OPTIONAL_USER_TABLES:

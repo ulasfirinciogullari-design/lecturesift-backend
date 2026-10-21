@@ -32,11 +32,11 @@ def _read(relative: str) -> str:
     return (ROOT / relative).read_text(encoding="utf-8")
 
 
-def test_routes_match_backup_product_schema_versions_one_and_two():
+def test_routes_match_backup_product_schema_versions_one_two_and_three():
     backup = _read("deploy/backup.sh")
     routing = backup[backup.index('case "${LECTURESIFT_PRODUCT_SCHEMA_VERSION:-0}" in'):]
     routing = routing[: routing.index("esac")]
-    for version in (4, 5):
+    for version in (4, 5, 6):
         route = state.ROUTES[version]
         recovery = route.recovery_manifest_version
         assert (
@@ -54,19 +54,27 @@ def test_routes_match_backup_product_schema_versions_one_and_two():
     assert "0) ;;" in routing
     assert state.ROUTES[3].product_schema_version == 0
     assert state.ROUTES[3].recovery_manifest == "recovery_manifest_v2.sql"
+    # The feedback family (v6) is released only on OVH after the cutover and is
+    # therefore never a Render provider source.
     assert state.PROVIDER_SOURCE_VERSIONS == frozenset({4, 5})
+    assert state.ROUTES[6].product_schema_version == 3
+    assert state.ROUTES[6].recovery_manifest == "recovery_manifest_v5.sql"
+    assert "application_schema_compatibility=lecturesift-schema-v5" in backup
+    assert '[[ "$RECOVERY_MANIFEST_VERSION" != "5" ]] || schema_verifier=6' in backup
     for script in ("restore.sh", "restic_restore_rehearsal.sh"):
         source = _read(f"deploy/{script}")
-        for version in (4, 5):
+        for version in (4, 5, 6):
             route = state.ROUTES[version]
             assert (
                 f"  {route.recovery_manifest_version})\n"
                 f'    RECOVERY_MANIFEST="$ROOT_DIR/deploy/{route.recovery_manifest}"\n'
                 f'    expected_schema_compatibility="{route.application_schema_compatibility}"\n'
             ) in source
-        # Recovery v3/v4 metadata is verified by the v4/v5 verifier family.
+        # Recovery v3/v4/v5 metadata is verified by the v4/v5/v6 verifier family.
         assert "  schema_verifier=4\n" in source
         assert '[[ "$metadata_manifest_version" != "4" ]] || schema_verifier=5' in source
+        assert '[[ "$metadata_manifest_version" != "5" ]] || schema_verifier=6' in source
+        assert '"$metadata_manifest_version" == "5" ]]; then' in source
 
 
 def test_seed_finalize_and_first_start_route_exactly_like_backup_and_restore():
@@ -109,18 +117,25 @@ def test_seed_finalize_and_first_start_route_exactly_like_backup_and_restore():
         assert "*) fail " in script
 
 
-@pytest.mark.parametrize("version", [3, 4, 5])
+@pytest.mark.parametrize("version", [3, 4, 5, 6])
 def test_each_exact_family_is_detected(tmp_path: Path, version: int):
     inventory = _inventory(tmp_path / "inventory.txt", state.TABLE_SETS[version])
     assert state.detect(inventory, state.ALL_VERSIONS) == version
-    assert state.main(["detect", "--inventory", str(inventory), "--accept", "3,4,5"]) == 0
+    assert state.main(["detect", "--inventory", str(inventory), "--accept", "3,4,5,6"]) == 0
+    # The exact-rehearsal wrapper accepts every family the OVH database can hold.
+    assert '--accept 3,4,5,6' in _read("deploy/run_exact_rehearsal.sh")
 
 
-def test_provider_sources_refuse_the_core_v3_family(tmp_path: Path, capsys):
+def test_provider_sources_refuse_the_core_v3_and_post_cutover_v6_families(tmp_path: Path, capsys):
     inventory = _inventory(tmp_path / "inventory.txt", state.TABLE_SETS[3])
     with pytest.raises(state.SchemaStateError, match="v3 is not accepted"):
         state.detect(inventory, state.PROVIDER_SOURCE_VERSIONS)
     assert state.main(["detect", "--inventory", str(inventory), "--accept", "4,5"]) == 1
+    assert capsys.readouterr().out == ""
+    feedback = _inventory(tmp_path / "v6.txt", state.TABLE_SETS[6])
+    with pytest.raises(state.SchemaStateError, match="v6 is not accepted"):
+        state.detect(feedback, state.PROVIDER_SOURCE_VERSIONS)
+    assert state.main(["detect", "--inventory", str(feedback), "--accept", "4,5"]) == 1
     assert capsys.readouterr().out == ""
     for version in (4, 5):
         inventory = _inventory(tmp_path / f"v{version}.txt", state.TABLE_SETS[version])
@@ -137,7 +152,11 @@ def test_provider_sources_refuse_the_core_v3_family(tmp_path: Path, capsys):
         # A workspace release with one table missing or one table early.
         state.TABLE_SETS[5] - {"workspace_items_v1"},
         state.TABLE_SETS[4] | {"admin_ad_free_grants_v1"},
+        # A feedback release on a product database, or stopped half way.
+        state.TABLE_SETS[4] | {"lecturesift_job_feedback"},
+        state.TABLE_SETS[6] - {"workspace_items_v1"},
         # Unknown extra or missing core tables.
+        state.TABLE_SETS[6] | {"unreviewed_table"},
         state.TABLE_SETS[5] | {"unreviewed_table"},
         state.TABLE_SETS[4] - {"billing_purchase_terms"},
         frozenset(),
@@ -189,12 +208,13 @@ def test_inventory_records_are_exact(tmp_path: Path):
 
 def test_manifest_completion_selects_only_accepted_contracts(tmp_path: Path):
     manifest = tmp_path / "manifest.txt"
-    for version in (3, 4, 5):
+    for version in (3, 4, 5, 6):
         manifest.write_text(f"DATABASE|18\nMANIFEST_COMPLETE|v{version}|DATABASE|1\n", encoding="utf-8")
         assert state.manifest_contract_version(manifest, state.ALL_VERSIONS) == version
-    manifest.write_text("MANIFEST_COMPLETE|v3|DATABASE|1\n", encoding="utf-8")
-    with pytest.raises(state.SchemaStateError, match="unaccepted"):
-        state.manifest_contract_version(manifest, state.PROVIDER_SOURCE_VERSIONS)
+    for version in (3, 6):
+        manifest.write_text(f"MANIFEST_COMPLETE|v{version}|DATABASE|1\n", encoding="utf-8")
+        with pytest.raises(state.SchemaStateError, match="unaccepted"):
+            state.manifest_contract_version(manifest, state.PROVIDER_SOURCE_VERSIONS)
     for text in (
         "MANIFEST_COMPLETE|v2|DATABASE|1\n",
         "DATABASE|18\n",
@@ -219,6 +239,7 @@ def test_inventory_query_is_read_only_and_privilege_independent():
 # Real PostgreSQL 18 proof on the allocated synthetic CI service only.
 from test_product_schema_release import client, database, manifest  # noqa: E402,F401
 from test_workspace_schema_release import current, migrate  # noqa: E402,F401
+from test_feedback_schema_release import migrate as migrate_feedback  # noqa: E402
 
 
 def _live_inventory(name: str, path: Path) -> Path:
@@ -261,7 +282,7 @@ def test_real_core_database_is_v3_and_never_a_provider_source(database, tmp_path
         state.detect(_live_inventory(name, tmp_path / "partial.txt"), state.ALL_VERSIONS)
 
 
-def test_real_product_and_workspace_databases_select_their_own_strict_family(current, tmp_path):
+def test_real_product_workspace_and_feedback_databases_select_their_own_strict_family(current, tmp_path):
     from sqlalchemy import text
 
     engine, name, _ = current
@@ -294,14 +315,31 @@ def test_real_product_and_workspace_databases_select_their_own_strict_family(cur
     with pytest.raises(state.contract_v4.ContractError):
         _verify(4, stale)
 
+    # The post-cutover feedback release moves the database to v6, which only
+    # the OVH-side tools accept; it is never a provider cutover source.
+    assert migrate_feedback(name, tmp_path / "feedback") == 1
+    assert state.detect(_live_inventory(name, tmp_path / "v6.txt"), state.ALL_VERSIONS) == 6
+    with pytest.raises(state.SchemaStateError, match="v6 is not accepted"):
+        state.detect(_live_inventory(name, tmp_path / "v6-source.txt"), state.PROVIDER_SOURCE_VERSIONS)
+    feedback = tmp_path / "feedback-v6.txt"
+    feedback.write_text(_strict_manifest(name, "rehearsal_manifest_v6.sql"), encoding="utf-8")
+    _verify(6, feedback)
+    feedback_recovery = tmp_path / "feedback-recovery-v5.txt"
+    feedback_recovery.write_text(_strict_manifest(name, "recovery_manifest_v5.sql"), encoding="utf-8")
+    _verify(6, feedback_recovery)
+    stale_workspace = tmp_path / "feedback-v5.txt"
+    stale_workspace.write_text(_strict_manifest(name, "rehearsal_manifest_v5.sql"), encoding="utf-8")
+    with pytest.raises(state.contract_v5.ContractError):
+        _verify(5, stale_workspace)
+
     with engine.begin() as connection:
         connection.execute(text("DROP TABLE workspace_items_v1"))
     with pytest.raises(state.SchemaStateError, match="partial"):
         state.detect(_live_inventory(name, tmp_path / "partial.txt"), state.ALL_VERSIONS)
-    broken = tmp_path / "partial-v5.txt"
-    broken.write_text(_strict_manifest(name, "rehearsal_manifest_v5.sql"), encoding="utf-8")
-    with pytest.raises(state.contract_v5.ContractError):
-        _verify(5, broken)
+    broken = tmp_path / "partial-v6.txt"
+    broken.write_text(_strict_manifest(name, "rehearsal_manifest_v6.sql"), encoding="utf-8")
+    with pytest.raises(state.contract_v6.ContractError):
+        _verify(6, broken)
 
 
 def test_rollback_runtime_acl_census_is_read_only_and_bounded():

@@ -32,6 +32,8 @@ def state(monkeypatch, tmp_path):
     engine = fresh_engine()
     billing.METADATA.create_all(engine)
     workspace.METADATA.create_all(engine)
+    # Installed in production by deploy/feedback_schema_release.py (schema v6).
+    job_feedback.METADATA.create_all(engine)
     monkeypatch.setattr(billing, "ENGINE", engine)
     monkeypatch.setattr(rollout, "ENGINE", engine)
     monkeypatch.setattr(billing, "_INITIALIZED", True)
@@ -228,15 +230,71 @@ def test_admin_listing_is_newest_first_and_csv_export_is_spreadsheet_safe(state,
     assert user_id in second
 
 
-def test_rollout_schema_init_creates_the_feedback_table(monkeypatch):
-    engine = fresh_engine()
-    monkeypatch.setattr(billing, "ENGINE", engine)
-    monkeypatch.setattr(rollout, "ENGINE", engine)
+def test_export_includes_feedback_and_closing_the_account_erases_it(state):
+    store = state
+    email = f"export-{uuid.uuid4().hex}@example.com"
+    created = billing.register_user(email, PASSWORD)
+    verified = billing.verify_email(created["verification_token"])
+    token, user_id = verified["token"], verified["user"]["id"]
+    job = finished_job(store, user_id)
+    assert send(job, token, rating="up", comment="Özet tam yerinde", consent=True, locale="tr").status_code == 200
+    guest_token, guest_id = new_guest()
+    guest_job = finished_job(store, guest_id)
+    assert send(guest_job, guest_token, rating="down").status_code == 200
+
+    exported = client.get("/billing/me/export", headers=auth(token))
+    assert exported.status_code == 200, exported.text
+    feedback = exported.json()["export"]["feedback"]
+    assert [(item["job_id"], item["rating"], item["comment"], item["consent"], item["locale"]) for item in feedback] == [
+        (job, "up", "Özet tam yerinde", True, "tr")
+    ]
+    assert feedback[0]["created_at"].endswith("+00:00")
+
+    closed = client.post(
+        "/billing/me/close-account",
+        json={"current_password": PASSWORD, "email_confirmation": email},
+        headers=auth(token),
+    )
+    assert closed.status_code == 200, closed.text
+    # Only the closed member's rows go; the guest's anonymous row is unrelated.
+    assert [row.job_id for row in rows()] == [guest_job]
+
+    # The administrator closure path erases feedback the same way.
+    other_email = f"admin-close-{uuid.uuid4().hex}@example.com"
+    other = billing.verify_email(billing.register_user(other_email, PASSWORD)["verification_token"])
+    other_job = finished_job(store, other["user"]["id"])
+    assert send(other_job, other["token"], rating="down").status_code == 200
+    rollout.admin_close_user_account(
+        other["user"]["id"], confirmation_email=other_email, reason="Synthetic closure", actor="synthetic-admin"
+    )
+    assert [row.job_id for row in rows()] == [guest_job]
+
+
+def test_runtime_never_creates_the_table_and_fails_closed_before_the_schema_release(state, monkeypatch):
+    store = state
+    # The table belongs to the explicit v6 release (deploy/feedback_schema_release.py):
+    # rollout initialisation must leave a database without it untouched.
+    job_feedback.JOB_FEEDBACK.drop(billing.ENGINE)
     monkeypatch.setattr(billing, "_INITIALIZED", False)
-    try:
-        rollout.init_rollout_database()
-        names = set(inspect(engine).get_table_names())
-    finally:
-        engine.dispose()
-    assert "lecturesift_job_feedback" in names
-    assert {"lecturesift_contact_messages", "billing_users"} <= names
+    rollout.init_rollout_database()
+    assert "lecturesift_job_feedback" not in inspect(billing.ENGINE).get_table_names()
+    assert "lecturesift_job_feedback" not in {table.name for table in billing.METADATA.sorted_tables}
+
+    email = f"pre-release-{uuid.uuid4().hex}@example.com"
+    verified = billing.verify_email(billing.register_user(email, PASSWORD)["verification_token"])
+    token, user_id = verified["token"], verified["user"]["id"]
+    job = finished_job(store, user_id)
+    blocked = send(job, token)
+    assert (blocked.status_code, blocked.json()["detail"]["code"]) == (503, "LS-FEEDBACK-02")
+    listing = client.get("/billing/admin/feedback?limit=250", headers=ADMIN)
+    assert (listing.status_code, listing.json()["detail"]["code"]) == (503, "LS-FEEDBACK-03")
+    assert client.get("/billing/admin/feedback.csv", headers=ADMIN).status_code == 503
+    # Export and closure keep working while the release is still pending.
+    exported = client.get("/billing/me/export", headers=auth(token))
+    assert exported.status_code == 200 and exported.json()["export"]["feedback"] == []
+    closed = client.post(
+        "/billing/me/close-account",
+        json={"current_password": PASSWORD, "email_confirmation": email},
+        headers=auth(token),
+    )
+    assert closed.status_code == 200, closed.text
