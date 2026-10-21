@@ -242,3 +242,76 @@ def test_sweep_never_overrides_progress_recorded_after_its_check(store, tmp_path
     stale_before = time.time() - 60
     assert tasks_module.fail_unfinished_job("racing-job", "stuck_job_sweep", stale_before=stale_before) is False
     assert store.metadata("racing-job")["status"] == "working"
+
+
+def test_each_job_gets_limits_sized_from_its_own_length():
+    short_soft, short_hard = queue.job_time_limits(20, 50 * 1024 * 1024, summary_style="detailed")
+    assert queue.JOB_MIN_SOFT_TIME_LIMIT_SECONDS < short_soft <= 2 * 3600
+    assert short_hard == short_soft + queue.JOB_HARD_LIMIT_GRACE_SECONDS
+    # Documents and very short files still get the floor for download, OCR and AI calls.
+    assert queue.job_time_limits(0.1)[0] == queue.JOB_MIN_SOFT_TIME_LIMIT_SECONDS
+    assert queue.job_time_limits(3, source_kind="document")[0] == queue.JOB_MIN_SOFT_TIME_LIMIT_SECONDS
+    # Never above the global worst case, and every ETA the model can show fits.
+    assert queue.job_time_limits(10_000, 2**40, summary_style="detailed")[0] == queue.JOB_SOFT_TIME_LIMIT_SECONDS
+    for minutes in (1, 20, 90, 600, 1440):
+        soft, _hard = queue.job_time_limits(minutes, 0, summary_style="exam")
+        assert eta_seconds(minutes, 0, 10 * MAX_SECONDS_PER_MEDIA_MINUTE, summary_style="exam") <= soft
+
+
+def test_a_started_short_job_is_swept_after_its_own_deadline(store, tmp_path):
+    soft, hard = queue.job_time_limits(20)
+    started = time.time() - 9 * 3600
+    for job_id in ("dead-short", "live-short"):
+        _job(store, tmp_path, job_id, time_limits=[soft, hard])
+        store._jobs[job_id]["updated"] = started
+    store._jobs["dead-short"]["processing_deadline"] = started + hard
+    # A delivery that started later, with the global worst-case limit.
+    store._jobs["live-short"]["processing_deadline"] = time.time() - 600 + queue.JOB_HARD_TIME_LIMIT_SECONDS
+    # Not started yet: it may wait behind the longest job, so the global threshold applies.
+    _job(store, tmp_path, "queued-short", status="queued", time_limits=[soft, hard])
+    store._jobs["queued-short"]["updated"] = started
+    store._flush_locked()
+    assert started + hard + queue.JOB_REDELIVERY_WINDOW_SECONDS < time.time()
+
+    assert durable_runtime.sweep_stuck_jobs() == 1
+    _assert_failed_normally(store, tmp_path, "dead-short")
+    assert store.metadata("dead-short")["technical_error"] == "stuck_job_sweep"
+    assert store.metadata("live-short")["status"] == "working"
+    assert store.metadata("queued-short")["status"] == "queued"
+
+
+def test_a_delivery_records_the_deadline_of_its_own_limit(store, tmp_path, monkeypatch):
+    _job(store, tmp_path, "limited-job", status="queued")
+
+    def stop(*_args):
+        raise RuntimeError("synthetic stop after the start was recorded")
+
+    monkeypatch.setattr(tasks_module, "_download_job_sources", stop)
+    monkeypatch.setattr(tasks_module, "_retry_or_fail", lambda *args, **kwargs: {"status": "stopped"})
+    task = tasks_module.process_uploaded_job
+    task.push_request(timelimit=(5400, 4800), retries=0)
+    try:
+        before = time.time()
+        task.run("limited-job", [SOURCE_KEY], {"billing_user_id": "synthetic-user"})
+    finally:
+        task.pop_request()
+    deadline = store.metadata("limited-job")["processing_deadline"]
+    assert before + 5400 <= deadline <= time.time() + 5400
+
+
+def test_new_and_recovered_jobs_are_enqueued_with_their_own_limits():
+    sent = []
+    task = SimpleNamespace(
+        apply_async=lambda args, **limits: sent.append((args, limits)) or "sent",
+        delay=lambda *args: sent.append((args, None)) or "sent",
+    )
+    durable_runtime._enqueue_uploaded_job(task, "job", ["key"], {}, [], (3600, 4200))
+    durable_runtime._enqueue_uploaded_job(
+        task, "old", ["key"], {}, [], durable_runtime.stored_time_limits({"job_id": "old"}),
+    )
+    assert sent == [
+        (("job", ["key"], {}, None), {"soft_time_limit": 3600, "time_limit": 4200}),
+        (("old", ["key"], {}, None), None),
+    ]
+    assert durable_runtime.stored_time_limits({"time_limits": [3600, 4200]}) == (3600, 4200)
+    assert durable_runtime.stored_time_limits({"time_limits": ["bad"]}) is None

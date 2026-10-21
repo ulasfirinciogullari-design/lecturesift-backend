@@ -28,11 +28,13 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    and_,
     case,
     create_engine,
     delete,
     func,
     inspect,
+    or_,
     select,
     text,
     update,
@@ -2068,6 +2070,14 @@ def _effective_job_plan(status: dict):
     return plan
 
 
+def job_minutes_cap(status: dict) -> int | None:
+    """The per-job minute limit require_duration_entitlement enforced for this status."""
+    try:
+        return int(_effective_job_plan(status).max_minutes_per_job)
+    except (KeyError, TypeError, ValueError, BillingConfigurationError):
+        return None
+
+
 # Translated by the frontend through its exact-message catalog, like the quiz
 # and flashcard limit messages above.
 PRECISE_TRANSCRIPT_PLAN_MESSAGE = (
@@ -2496,16 +2506,25 @@ def unsettled_iyzico_order_references(
     created_after: datetime,
     created_before: datetime,
     limit: int,
+    pending_created_after: datetime | None = None,
 ) -> list[str]:
-    """Newest-first iyzico orders still created/pending within a time window."""
+    """Newest-first iyzico orders still created/pending within a time window.
+
+    A "pending" order already has provider evidence of a payment (fraud review
+    or an open transfer), so it may stay eligible for longer, back to
+    ``pending_created_after``.
+    """
     init_billing_database()
+    pending_after = min(created_after, pending_created_after or created_after)
     with ENGINE.connect() as connection:
         references = connection.execute(
             select(PAYMENT_ORDERS.c.reference)
             .where(
                 PAYMENT_ORDERS.c.provider.in_(sorted(IYZICO_PAYMENT_PROVIDERS)),
-                PAYMENT_ORDERS.c.status.in_(("created", "pending")),
-                PAYMENT_ORDERS.c.created_at >= created_after,
+                or_(
+                    and_(PAYMENT_ORDERS.c.status == "created", PAYMENT_ORDERS.c.created_at >= created_after),
+                    and_(PAYMENT_ORDERS.c.status == "pending", PAYMENT_ORDERS.c.created_at >= pending_after),
+                ),
                 PAYMENT_ORDERS.c.created_at <= created_before,
             )
             .order_by(PAYMENT_ORDERS.c.created_at.desc(), PAYMENT_ORDERS.c.reference)

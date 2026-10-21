@@ -55,6 +55,9 @@ IYZICO_RETRIEVE_PATH = "/payment/iyzipos/checkoutform/auth/ecom/detail"
 # Checkout Form token is stored.
 IYZICO_PAYMENT_DETAIL_PATH = "/payment/detail"
 IYZICO_RECONCILE_LOOKBACK = timedelta(hours=48)
+# A pending order has a payment under fraud review (or an open transfer) that
+# may settle days later, after its webhook was lost too.
+IYZICO_RECONCILE_PENDING_LOOKBACK = timedelta(days=14)
 # Leave fresh checkouts to the browser callback and webhook.
 IYZICO_RECONCILE_MIN_AGE = timedelta(minutes=15)
 # Newest first: a just-abandoned tab is the likeliest paid-but-unsettled order,
@@ -861,14 +864,14 @@ def _reconcile_iyzico_order(order_reference: str) -> str:
 def reconcile_iyzico_orders(now: datetime | None = None) -> dict:
     """Settle paid iyzico orders whose browser callback and webhook never came.
 
-    Looks at orders still created/pending from the last 48 hours (at least 15
-    minutes old, newest first) and settles a paid card payment that passed
-    iyzico's fraud review through the same path the callback uses. A payment
-    still under review stays pending and is asked about again next run. A
-    paid order without card evidence (a protected bank transfer) is left
-    untouched and logged for follow-up.
-    Logs carry only order references and counts, never provider bodies,
-    card fields or credentials.
+    Looks at orders still created from the last 48 hours, or pending from the
+    last 14 days (at least 15 minutes old, newest first), and settles a paid
+    card payment that passed iyzico's fraud review through the same path the
+    callback uses. A payment still under review stays pending and is asked
+    about again next run. A paid order without card evidence (a protected
+    bank transfer) is left untouched and logged for follow-up. Logs carry
+    only order references and counts, never provider bodies, card fields or
+    credentials.
     """
     summary = {
         "checked": 0, "settled": 0, "pending": 0, "unpaid": 0, "unverified": 0, "skipped": 0, "errors": 0,
@@ -882,6 +885,7 @@ def reconcile_iyzico_orders(now: datetime | None = None) -> dict:
         created_after=now - IYZICO_RECONCILE_LOOKBACK,
         created_before=now - IYZICO_RECONCILE_MIN_AGE,
         limit=IYZICO_RECONCILE_BATCH_SIZE,
+        pending_created_after=now - IYZICO_RECONCILE_PENDING_LOOKBACK,
     )
     for reference in references:
         summary["checked"] += 1

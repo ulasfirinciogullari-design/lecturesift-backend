@@ -251,7 +251,9 @@ def test_queue_ready_document_defers_probe_and_guest_reservation_to_worker(tmp_p
 
     class ProcessUploadedJob:
         @staticmethod
-        def delay(queued_job_id, audio_keys, queued_options, visual_keys):
+        def apply_async(args, *, soft_time_limit, time_limit):
+            queued_job_id, audio_keys, queued_options, visual_keys = args
+            assert 0 < soft_time_limit < time_limit
             queued.append((queued_job_id, audio_keys, dict(queued_options), visual_keys))
             return QueuedTask()
 

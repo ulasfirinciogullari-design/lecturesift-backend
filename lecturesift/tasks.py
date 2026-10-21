@@ -20,7 +20,7 @@ from .document_samples import extraction_options, sample_metadata
 from .errors import normalize_error
 from .jobs import JOBS
 from .pipeline_enhancements import install_pipeline_enhancements
-from .queue import celery_app
+from .queue import JOB_HARD_TIME_LIMIT_SECONDS, celery_app
 from .rollout_service import estimate_eta_seconds, is_guest_user, record_runtime, reserve_guest_job
 from .resource_limits import enforce_job_workspace
 from .storage import STORAGE
@@ -299,6 +299,15 @@ class JobRequest(Request):
             LOGGER.error("Could not record a job's hard time limit; the stuck-job sweep will fail it")
 
 
+def _delivery_hard_limit(task) -> float:
+    """This delivery's hard time limit: the job's own, or the global worst case."""
+    hard, _soft = getattr(task.request, "timelimit", None) or (None, None)
+    try:
+        return float(hard) if hard and float(hard) > 0 else float(JOB_HARD_TIME_LIMIT_SECONDS)
+    except (TypeError, ValueError):
+        return float(JOB_HARD_TIME_LIMIT_SECONDS)
+
+
 def _job_locked_elsewhere(task, job_id: str) -> dict:
     """Handle a delivery that keeps finding the job's processing lock taken."""
     if int(getattr(task.request, "retries", 0)) < task.max_retries:
@@ -547,6 +556,7 @@ def process_uploaded_job(
                 status="working",
                 stage="worker_download",
                 worker_state="downloading",
+                processing_deadline=time.time() + _delivery_hard_limit(self),
             )
             audio_paths, visual_paths = _download_job_sources(
                 job_id,

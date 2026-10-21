@@ -288,6 +288,30 @@ def test_lookback_window_is_bounded(monkeypatch):
     assert created_at is not None
 
 
+def test_pending_fraud_review_stays_eligible_past_the_created_lookback(monkeypatch):
+    fake = FakeIyzico(fraud_status=0)
+    _, _, reference = _paid_checkout_without_callback(monkeypatch, fake)
+    assert payments.reconcile_iyzico_orders(utcnow() + timedelta(minutes=20))["pending"] >= 1
+    assert _order(reference).status == "pending"
+
+    # Approved only after three days: a pending order is still asked about.
+    fake.fraud_status = 1
+    fake.detail_calls.clear()
+    assert payments.reconcile_iyzico_orders(utcnow() + timedelta(days=3))["settled"] >= 1
+    assert reference in fake.detail_calls
+    assert _order(reference).status == "paid" and _subscription_count(_order(reference).user_id) == 1
+
+
+def test_pending_lookback_is_bounded_too(monkeypatch):
+    fake = FakeIyzico(fraud_status=0)
+    _, _, reference = _paid_checkout_without_callback(monkeypatch, fake)
+    payments.reconcile_iyzico_orders(utcnow() + timedelta(minutes=20))
+    assert _order(reference).status == "pending"
+    fake.detail_calls.clear()
+    payments.reconcile_iyzico_orders(utcnow() + timedelta(days=15))
+    assert reference not in fake.detail_calls
+
+
 def test_reconciliation_is_off_without_iyzico_or_during_maintenance(monkeypatch):
     fake = FakeIyzico()
     _, _, reference = _paid_checkout_without_callback(monkeypatch, fake)
