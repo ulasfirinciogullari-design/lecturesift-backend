@@ -30,7 +30,7 @@ _COPY = {
         "added": "Hesabına eklenen", "allowance": "Kullanım hakkı", "validity": "Geçerlilik",
         "minutes": "{value} dakika", "credits": "{value} asistan kredisi",
         "allowance_monthly": "30 günlük dönem boyunca {value} dakika", "allowance_annual": "Her ay {value} dakika",
-        "validity_value": "{days} gün · {end} tarihine kadar",
+        "validity_value": "{days} gün · {end} tarihine kadar", "starts": "Başlangıç",
         "fixed_term": "Bu, tek seferlik ödemeyle satın alınan {days} günlük sabit dönemli bir pakettir. Otomatik olarak yenilenmez ve senden yeniden ödeme alınmaz.",
         "one_time": "Bu, tek seferlik bir satın almadır; abonelik değildir ve otomatik olarak yenilenmez.",
         "account_text": "Paketini, kalan kullanım hakkını ve siparişlerini Hesabım sayfasında görebilirsin.",
@@ -50,7 +50,7 @@ _COPY = {
         "added": "Added to your account", "allowance": "Usage allowance", "validity": "Validity",
         "minutes": "{value} minutes", "credits": "{value} assistant credits",
         "allowance_monthly": "{value} minutes for the 30-day period", "allowance_annual": "{value} minutes per month",
-        "validity_value": "{days} days, until {end}",
+        "validity_value": "{days} days, until {end}", "starts": "Starts",
         "fixed_term": "This is a fixed {days}-day package bought with a one-time payment. It does not renew automatically, and you will not be charged again.",
         "one_time": "This is a one-time purchase, not a subscription, and it does not renew automatically.",
         "account_text": "You can see your package, remaining allowance and orders on your account page.",
@@ -70,7 +70,7 @@ _COPY = {
         "added": "Deinem Konto hinzugefügt", "allowance": "Nutzungskontingent", "validity": "Gültigkeit",
         "minutes": "{value} Minuten", "credits": "{value} Assistenten-Credits",
         "allowance_monthly": "{value} Minuten für den 30-tägigen Zeitraum", "allowance_annual": "{value} Minuten pro Monat",
-        "validity_value": "{days} Tage, bis {end}",
+        "validity_value": "{days} Tage, bis {end}", "starts": "Beginn",
         "fixed_term": "Dies ist ein Paket mit fester Laufzeit von {days} Tagen, das du mit einer Einmalzahlung gekauft hast. Es verlängert sich nicht automatisch, und es wird keine weitere Zahlung eingezogen.",
         "one_time": "Dies ist ein Einmalkauf, kein Abonnement, und er verlängert sich nicht automatisch.",
         "account_text": "Dein Paket, dein verbleibendes Kontingent und deine Bestellungen findest du in deinem Konto.",
@@ -90,7 +90,7 @@ _COPY = {
         "added": "Ajouté à votre compte", "allowance": "Quota d’utilisation", "validity": "Validité",
         "minutes": "{value} minutes", "credits": "{value} crédits assistant",
         "allowance_monthly": "{value} minutes pour la période de 30 jours", "allowance_annual": "{value} minutes par mois",
-        "validity_value": "{days} jours, jusqu’au {end}",
+        "validity_value": "{days} jours, jusqu’au {end}", "starts": "Début",
         "fixed_term": "Il s’agit d’un forfait à durée fixe de {days} jours, acheté par un paiement unique. Il ne se renouvelle pas automatiquement et aucun nouveau prélèvement ne sera effectué.",
         "one_time": "Il s’agit d’un achat unique, et non d’un abonnement ; il ne se renouvelle pas automatiquement.",
         "account_text": "Vous pouvez consulter votre forfait, votre quota restant et vos commandes sur la page de votre compte.",
@@ -110,7 +110,7 @@ _COPY = {
         "added": "Añadido a tu cuenta", "allowance": "Cuota de uso", "validity": "Validez",
         "minutes": "{value} minutos", "credits": "{value} créditos del asistente",
         "allowance_monthly": "{value} minutos para el periodo de 30 días", "allowance_annual": "{value} minutos al mes",
-        "validity_value": "{days} días, hasta el {end}",
+        "validity_value": "{days} días, hasta el {end}", "starts": "Inicio",
         "fixed_term": "Es un paquete de duración fija de {days} días adquirido con un pago único. No se renueva automáticamente y no se te volverá a cobrar.",
         "one_time": "Es una compra única, no una suscripción, y no se renueva automáticamente.",
         "account_text": "Puedes ver tu paquete, tu cuota restante y tus pedidos en la página de tu cuenta.",
@@ -130,7 +130,7 @@ _COPY = {
         "added": "Aggiunto al tuo account", "allowance": "Quota di utilizzo", "validity": "Validità",
         "minutes": "{value} minuti", "credits": "{value} crediti assistente",
         "allowance_monthly": "{value} minuti per il periodo di 30 giorni", "allowance_annual": "{value} minuti al mese",
-        "validity_value": "{days} giorni, fino al {end}",
+        "validity_value": "{days} giorni, fino al {end}", "starts": "Inizio",
         "fixed_term": "Si tratta di un pacchetto a durata fissa di {days} giorni acquistato con un pagamento unico. Non si rinnova automaticamente e non ti verrà addebitato altro.",
         "one_time": "Si tratta di un acquisto singolo, non di un abbonamento, e non si rinnova automaticamente.",
         "account_text": "Puoi vedere il tuo pacchetto, la quota rimanente e i tuoi ordini nella pagina del tuo account.",
@@ -150,7 +150,7 @@ _COPY = {
         "added": "Adicionado à sua conta", "allowance": "Cota de uso", "validity": "Validade",
         "minutes": "{value} minutos", "credits": "{value} créditos do assistente",
         "allowance_monthly": "{value} minutos para o período de 30 dias", "allowance_annual": "{value} minutos por mês",
-        "validity_value": "{days} dias, até {end}",
+        "validity_value": "{days} dias, até {end}", "starts": "Início",
         "fixed_term": "Este é um pacote de prazo fixo de {days} dias, comprado com um pagamento único. Ele não é renovado automaticamente e nenhuma nova cobrança será feita.",
         "one_time": "Esta é uma compra única, não uma assinatura, e não é renovada automaticamente.",
         "account_text": "Você pode ver seu pacote, a cota restante e seus pedidos na página da sua conta.",
@@ -170,7 +170,7 @@ _COPY = {
         "added": "Добавлено в аккаунт", "allowance": "Объём использования", "validity": "Срок действия",
         "minutes": "{value} мин.", "credits": "Кредиты ассистента: {value}",
         "allowance_monthly": "{value} мин. на 30-дневный период", "allowance_annual": "{value} мин. в месяц",
-        "validity_value": "{days} дн., до {end}",
+        "validity_value": "{days} дн., до {end}", "starts": "Начало",
         "fixed_term": "Это пакет с фиксированным сроком {days} дн., купленный разовым платежом. Он не продлевается автоматически, повторных списаний не будет.",
         "one_time": "Это разовая покупка, а не подписка; она не продлевается автоматически.",
         "account_text": "Пакет, оставшийся объём и заказы можно посмотреть на странице аккаунта.",
@@ -190,7 +190,7 @@ _COPY = {
         "added": "المضاف إلى حسابك", "allowance": "رصيد الاستخدام", "validity": "مدة الصلاحية",
         "minutes": "{value} دقيقة", "credits": "رصيد المساعد: {value}",
         "allowance_monthly": "{value} دقيقة لفترة 30 يومًا", "allowance_annual": "{value} دقيقة شهريًا",
-        "validity_value": "{days} يومًا، حتى {end}",
+        "validity_value": "{days} يومًا، حتى {end}", "starts": "البداية",
         "fixed_term": "هذه باقة محددة المدة لمدة {days} يومًا، تم شراؤها بدفعة واحدة. لا تتجدد تلقائيًا ولن يتم تحصيل أي مبلغ آخر منك.",
         "one_time": "هذه عملية شراء لمرة واحدة وليست اشتراكًا، ولا تتجدد تلقائيًا.",
         "account_text": "يمكنك الاطلاع على باقتك ورصيدك المتبقي وطلباتك في صفحة حسابك.",
@@ -210,7 +210,7 @@ _COPY = {
         "added": "已添加到账户", "allowance": "使用额度", "validity": "有效期",
         "minutes": "{value} 分钟", "credits": "{value} 助手额度",
         "allowance_monthly": "30 天期限内 {value} 分钟", "allowance_annual": "每月 {value} 分钟",
-        "validity_value": "{days} 天，至 {end}",
+        "validity_value": "{days} 天，至 {end}", "starts": "开始日期",
         "fixed_term": "这是通过一次性付款购买的 {days} 天固定期限套餐，不会自动续订，也不会再次向您收费。",
         "one_time": "这是一次性购买，不是订阅，不会自动续订。",
         "account_text": "您可以在账户页面查看套餐、剩余额度和订单。",
@@ -230,7 +230,7 @@ _COPY = {
         "added": "アカウントに追加", "allowance": "利用枠", "validity": "有効期間",
         "minutes": "{value} 分", "credits": "アシスタントクレジット {value}",
         "allowance_monthly": "30日間の期間内で {value} 分", "allowance_annual": "毎月 {value} 分",
-        "validity_value": "{days}日間（{end} まで）",
+        "validity_value": "{days}日間（{end} まで）", "starts": "開始日",
         "fixed_term": "これは一度のお支払いで購入した{days}日間の固定期間パッケージです。自動更新されず、追加で請求されることはありません。",
         "one_time": "これは1回限りの購入で、サブスクリプションではありません。自動更新されません。",
         "account_text": "パッケージ、残りの利用枠、注文履歴はアカウントページで確認できます。",
@@ -250,7 +250,7 @@ _COPY = {
         "added": "계정에 추가됨", "allowance": "사용량", "validity": "유효 기간",
         "minutes": "{value}분", "credits": "도우미 크레딧 {value}",
         "allowance_monthly": "30일 기간 동안 {value}분", "allowance_annual": "매월 {value}분",
-        "validity_value": "{days}일, {end}까지",
+        "validity_value": "{days}일, {end}까지", "starts": "시작일",
         "fixed_term": "이 패키지는 1회 결제로 구매한 {days}일 고정 기간 패키지입니다. 자동으로 갱신되지 않으며 추가 요금이 청구되지 않습니다.",
         "one_time": "이 구매는 1회성 구매로, 구독이 아니며 자동으로 갱신되지 않습니다.",
         "account_text": "패키지, 남은 사용량, 주문 내역은 내 계정 페이지에서 확인할 수 있습니다.",
@@ -270,7 +270,7 @@ _COPY = {
         "added": "आपके खाते में जोड़ा गया", "allowance": "उपयोग कोटा", "validity": "वैधता",
         "minutes": "{value} मिनट", "credits": "{value} सहायक क्रेडिट",
         "allowance_monthly": "30 दिन की अवधि के लिए {value} मिनट", "allowance_annual": "हर महीने {value} मिनट",
-        "validity_value": "{days} दिन, {end} तक",
+        "validity_value": "{days} दिन, {end} तक", "starts": "शुरुआत",
         "fixed_term": "यह एक बार के भुगतान से खरीदा गया {days} दिन की निश्चित अवधि वाला पैकेज है। यह अपने आप रिन्यू नहीं होता और आपसे दोबारा शुल्क नहीं लिया जाएगा।",
         "one_time": "यह एक बार की खरीद है, सदस्यता नहीं, और यह अपने आप रिन्यू नहीं होती।",
         "account_text": "आप अपना पैकेज, बचा हुआ कोटा और ऑर्डर अपने खाते के पेज पर देख सकते हैं।",
@@ -350,8 +350,12 @@ def _amount(amount_minor: int, currency: str, locale: str) -> str:
     return f"{minor // 100}{separator}{minor % 100:02d} {code}"
 
 
+def _utc(value: datetime) -> datetime:
+    return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
 def _when(value: datetime) -> str:
-    moment = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    moment = _utc(value)
     return moment.astimezone(_SELLER_TIME).strftime("%Y-%m-%d %H:%M") + " (UTC+03:00)"
 
 
@@ -376,6 +380,7 @@ def render_order_confirmation_email(
     minutes: int | None = None,
     assistant_credits: int = 0,
     ends_at: datetime | None = None,
+    starts_at: datetime | None = None,
     first_name: str = "",
     seller: dict | None = None,
     site_url: str = "https://lecturesift.com",
@@ -401,6 +406,9 @@ def render_order_confirmation_email(
         if minutes:
             allowance = copy["allowance_annual" if interval == "annual" else "allowance_monthly"]
             rows.append((copy["allowance"], allowance.format(value=_count(minutes))))
+        if starts_at is not None and _utc(starts_at) > _utc(purchased_at) + timedelta(minutes=1):
+            # An early renewal of the same package starts when the current period ends.
+            rows.append((copy["starts"], _when(starts_at)))
         if ends_at is not None:
             rows.append((copy["validity"], copy["validity_value"].format(days=days, end=_when(ends_at))))
         note = copy["fixed_term"].format(days=days)

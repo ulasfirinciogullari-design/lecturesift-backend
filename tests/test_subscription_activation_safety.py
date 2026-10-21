@@ -134,3 +134,115 @@ def test_account_closure_cancels_pending_transfer_before_late_completion(
     assert account["plan"]["code"] == "free"
     assert account["credit_minutes"] == 0
     assert subscription_rows(owner["id"]) == []
+
+
+def as_utc(value):
+    moment = datetime.fromisoformat(value) if isinstance(value, str) else value
+    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
+
+
+def buy(owner_id, plan_code, interval, purchase_method="payment"):
+    if purchase_method == "manual":
+        order = billing.create_manual_order(owner_id, plan_code, interval)
+        billing.approve_manual_order(order["reference"])
+        billing.approve_manual_order(order["reference"])
+    else:
+        order = billing.create_payment_order(owner_id, "synthetic-provider", plan_code, interval, "TRY")
+        settle(order)
+        settle(order)  # A retried callback never activates or stacks twice.
+    return order
+
+
+@pytest.mark.parametrize("purchase_method", ["payment", "manual"])
+def test_early_same_package_renewal_starts_when_the_paid_term_ends(state, purchase_method):
+    owner = new_user()
+    start = state["now"]
+    first = buy(owner["id"], "pro", "monthly")
+    billing.record_usage(owner["id"], "synthetic-job", 600)
+    # The "3 days left, renew" reminder.
+    state["now"] = start + timedelta(days=27)
+    renewal = buy(owner["id"], "pro", "monthly", purchase_method)
+
+    term_end = start + timedelta(days=30)
+    account = billing.account_status(owner["id"])
+    assert account["plan"]["code"] == "pro"
+    assert account["remaining_minutes"] == 1490
+    assert as_utc(account["subscription"]["ends_at"]) == term_end
+    assert account["subscription"]["cancel_at_period_end"] is False
+    assert as_utc(account["next_period"]["starts_at"]) == term_end
+    assert as_utc(account["next_period"]["ends_at"]) == term_end + timedelta(days=30)
+    assert account["next_period"]["plan_code"] == "pro"
+    assert as_utc(account["renewal_starts_at"]) == term_end + timedelta(days=30)
+    assert {row.source_reference: row.status for row in subscription_rows(owner["id"])} == {
+        first["reference"]: "cancel_at_end", renewal["reference"]: "active",
+    }
+
+    # The paid days are kept and the new minutes open when the term ends.
+    state["now"] = term_end - timedelta(minutes=1)
+    assert billing.account_status(owner["id"])["remaining_minutes"] == 1490
+    state["now"] = term_end + timedelta(minutes=1)
+    renewed = billing.account_status(owner["id"])
+    assert renewed["plan"]["code"] == "pro" and renewed["remaining_minutes"] == 1500
+    assert as_utc(renewed["subscription"]["starts_at"]) == term_end
+    assert renewed["next_period"] is None
+
+    state["now"] = term_end + timedelta(days=30, minutes=1)
+    assert billing.account_status(owner["id"])["plan"]["code"] == "free"
+
+
+def test_repeated_early_renewals_queue_in_order_with_a_single_active_row(state):
+    owner = new_user()
+    start = state["now"]
+    buy(owner["id"], "pro", "monthly")
+    state["now"] += timedelta(days=2)
+    buy(owner["id"], "pro", "annual")
+    state["now"] += timedelta(days=2)
+    last = buy(owner["id"], "pro", "monthly")
+
+    rows = sorted(subscription_rows(owner["id"]), key=lambda row: as_utc(row.starts_at))
+    assert [as_utc(row.starts_at) for row in rows] == [
+        start, start + timedelta(days=30), start + timedelta(days=395),
+    ]
+    assert [row.status for row in rows] == ["cancel_at_end", "cancel_at_end", "active"]
+    assert rows[2].source_reference == last["reference"]
+    account = billing.account_status(owner["id"])
+    assert account["subscription"]["interval"] == "monthly"
+    assert account["next_period"]["interval"] == "annual"
+    assert as_utc(account["renewal_starts_at"]) == start + timedelta(days=425)
+
+    state["now"] = start + timedelta(days=31)
+    assert billing.account_status(owner["id"])["subscription"]["interval"] == "annual"
+    state["now"] = start + timedelta(days=400)
+    account = billing.account_status(owner["id"])
+    assert account["plan"]["code"] == "pro" and account["subscription"]["interval"] == "monthly"
+
+
+def test_a_different_package_still_replaces_the_running_and_queued_terms(state):
+    owner = new_user()
+    first = buy(owner["id"], "pro", "monthly")
+    state["now"] += timedelta(days=27)
+    queued = buy(owner["id"], "pro", "monthly")
+    state["now"] += timedelta(hours=1)
+    lite = buy(owner["id"], "lite", "monthly")
+
+    account = billing.account_status(owner["id"])
+    assert account["plan"]["code"] == "lite"
+    assert as_utc(account["subscription"]["starts_at"]) == state["now"]
+    assert account["next_period"] is None
+    assert {row.source_reference: row.status for row in subscription_rows(owner["id"])} == {
+        first["reference"]: "replaced", queued["reference"]: "replaced", lite["reference"]: "active",
+    }
+
+
+def test_an_expired_term_is_never_stacked_on(state):
+    owner = new_user()
+    start = state["now"]
+    old = buy(owner["id"], "pro", "monthly")
+    state["now"] = start + timedelta(days=45)
+    fresh = buy(owner["id"], "pro", "monthly")
+    account = billing.account_status(owner["id"])
+    assert as_utc(account["subscription"]["starts_at"]) == state["now"]
+    assert account["next_period"] is None and account["remaining_minutes"] == 1500
+    assert {row.source_reference: row.status for row in subscription_rows(owner["id"])} == {
+        old["reference"]: "replaced", fresh["reference"]: "active",
+    }

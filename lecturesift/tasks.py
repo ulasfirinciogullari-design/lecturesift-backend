@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import shutil
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+from celery.exceptions import SoftTimeLimitExceeded
+from celery.worker import state as worker_state
+from celery.worker.request import Request
 
 from .billing_service import BillingError, require_duration_entitlement, usage_multiplier_for
 from .config import MEDIA_EXTENSIONS, SOURCE_DOWNLOAD_PARALLELISM, WORK_DIR
@@ -23,6 +28,9 @@ from .storage import STORAGE
 install_pipeline_enhancements()
 from .pipeline import process_job  # noqa: E402  (patched before binding)
 from .provider_state import AI_PROVIDER_CIRCUIT
+
+LOGGER = logging.getLogger(__name__)
+_UNFINISHED_STATUSES = frozenset({"queued", "working"})
 
 
 def _download_source_specs(
@@ -228,6 +236,105 @@ def _stored_job_dir(data: dict | None) -> Path | None:
     return candidate if candidate != root else None
 
 
+def fail_unfinished_job(
+    job_id: str,
+    diagnostic: str,
+    *,
+    stale_before: float | None = None,
+    job_dir: Path | None = None,
+    audio_keys: list[str] | None = None,
+    visual_keys: list[str] | None = None,
+) -> bool:
+    """Fail a job that can no longer finish, through the standard terminal path.
+
+    Used for the worker time limits, a job left without any delivery, and the
+    stuck-job sweep. The job gets the normal LS-SYSTEM-01 failure state and
+    failure email, and its sources are released like any failed job's. Nothing
+    is charged: usage is recorded only when a job completes. A job that has
+    already finished (or, with ``stale_before``, made progress since) is left
+    untouched; returns whether this call failed it.
+    """
+    error = normalize_error(RuntimeError(diagnostic))
+    previous = JOBS.fail_unfinished(
+        job_id,
+        stale_before=stale_before,
+        percent=0,
+        stage="error",
+        worker_state="failed",
+        error_code=error.code,
+        error=error.user_message,
+        technical_error=diagnostic,
+    )
+    if previous is None:
+        return False
+    _cleanup_terminal_sources(
+        job_dir or _stored_job_dir(previous),
+        data=previous,
+        audio_keys=audio_keys,
+        visual_keys=visual_keys,
+    )
+    return True
+
+
+class JobRequest(Request):
+    """Fail the stored job when the hard time limit kills its worker process.
+
+    Celery acknowledges a hard-killed task without running any more task code,
+    so without this the job would stay "working" until the stuck-job sweep.
+    This runs in the worker's main process.
+    """
+
+    def on_timeout(self, soft, timeout):
+        super().on_timeout(soft, timeout)
+        if soft or worker_state.should_terminate:
+            # A soft limit is handled inside the task; a cold shutdown leaves
+            # the job to its redelivered message.
+            return
+        job_id = str((self.args or [None])[0] or (self.kwargs or {}).get("job_id") or "")
+        if not job_id:
+            return
+        try:
+            fail_unfinished_job(job_id, f"job_hard_time_limit:{timeout}s")
+        except Exception:
+            LOGGER.error("Could not record a job's hard time limit; the stuck-job sweep will fail it")
+
+
+def _job_locked_elsewhere(task, job_id: str) -> dict:
+    """Handle a delivery that keeps finding the job's processing lock taken."""
+    if int(getattr(task.request, "retries", 0)) < task.max_retries:
+        raise task.retry(countdown=60)
+    status = (JOBS.get(job_id) or {}).get("status")
+    if status not in _UNFINISHED_STATUSES:
+        return {"job_id": job_id, "status": status or "missing"}
+    if JOBS.processing_lock_held(job_id):
+        # A live delivery still owns the job. The time limits end it within
+        # JOB_HARD_TIME_LIMIT_SECONDS and the stuck-job sweep catches the rest.
+        return {"job_id": job_id, "status": "duplicate"}
+    # No delivery holds the job any more and this one is out of retries:
+    # without a terminal state it would stay queued/working forever.
+    if fail_unfinished_job(job_id, "processing_lock_unavailable"):
+        return {"job_id": job_id, "status": "error", "error_code": "LS-SYSTEM-01"}
+    return {"job_id": job_id, "status": (JOBS.get(job_id) or {}).get("status") or "missing"}
+
+
+def _time_limit_error(
+    job_id: str,
+    *,
+    job_dir: Path | None,
+    audio_keys: list[str],
+    visual_keys: list[str],
+) -> dict:
+    """The soft time limit ends a job for good instead of retrying it."""
+    fail_unfinished_job(
+        job_id,
+        "job_soft_time_limit",
+        job_dir=job_dir,
+        audio_keys=audio_keys,
+        visual_keys=visual_keys,
+    )
+    return {"job_id": job_id, "status": "error", "error_code": "LS-SYSTEM-01"}
+
+
 def _quota_error(
     job_id: str,
     exc: BillingError,
@@ -367,7 +474,9 @@ def _resume_publish(job_id: str, data: dict) -> dict | None:
     return {"job_id": job_id, "status": "done", **remote}
 
 
-@celery_app.task(bind=True, max_retries=6, name="lecturesift.process_uploaded_job")
+@celery_app.task(
+    bind=True, max_retries=6, name="lecturesift.process_uploaded_job", Request=JobRequest,
+)
 def process_uploaded_job(
     self,
     job_id: str,
@@ -377,9 +486,7 @@ def process_uploaded_job(
 ) -> dict:
     with JOBS.processing_lock(job_id) as acquired:
         if not acquired:
-            if int(getattr(self.request, "retries", 0)) >= self.max_retries:
-                return {"job_id": job_id, "status": "duplicate"}
-            raise self.retry(countdown=60)
+            return _job_locked_elsewhere(self, job_id)
 
         data = JOBS.get(job_id)
         if not data:
@@ -397,10 +504,27 @@ def process_uploaded_job(
                 visual_keys=list(visual_keys or []),
             )
             return {"job_id": job_id, "status": "done"}
+        if data.get("status") == "error":
+            # Already failed for good (a time limit, the stuck-job sweep, or a
+            # rejection); a late or redelivered message must not restart it.
+            _cleanup_terminal_sources(
+                _stored_job_dir(data),
+                data=data,
+                audio_keys=list(audio_keys),
+                visual_keys=list(visual_keys or []),
+            )
+            return {"job_id": job_id, "status": "error"}
         try:
             resumed = _resume_publish(job_id, data)
             if resumed:
                 return resumed
+        except SoftTimeLimitExceeded:
+            return _time_limit_error(
+                job_id,
+                job_dir=_stored_job_dir(data),
+                audio_keys=list(audio_keys),
+                visual_keys=list(visual_keys or []),
+            )
         except Exception as exc:
             return _retry_or_fail(
                 self,
@@ -537,6 +661,13 @@ def process_uploaded_job(
                 **remote,
             )
             return {"job_id": job_id, "status": "done", **remote}
+        except SoftTimeLimitExceeded:
+            return _time_limit_error(
+                job_id,
+                job_dir=job_dir,
+                audio_keys=list(audio_keys),
+                visual_keys=list(visual_keys or []),
+            )
         except Exception as exc:
             return _retry_or_fail(
                 self,

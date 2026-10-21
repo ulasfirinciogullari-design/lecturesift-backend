@@ -50,7 +50,8 @@ test('account shows zero-decimal payments and fixed-term package self-service', 
   const account={
     user:{email:'billing-owner@example.invalid',first_name:'Billing',last_name:'Owner',country_code:'JP',phone:null,preferred_language:'en'},
     plan:{code:'pro',minutes:1500,entitlements:{ad_free:true,ad_mode:'none'}},
-    subscription:{status:'active',interval:'monthly',starts_at:'2026-09-01T00:00:00Z',ends_at:'2026-10-01T00:00:00Z',cancel_at_period_end:false},
+    subscription:{status:'active',interval:'monthly',starts_at:'2026-09-01T12:00:00Z',ends_at:'2026-10-01T12:00:00Z',cancel_at_period_end:false},
+    next_period:null,renewal_starts_at:'2026-10-01T12:00:00Z',
     remaining_minutes:1450,used_minutes:50,credit_minutes:0,permanent_ad_free:false,is_admin:false,
     manual_orders:[{reference:'jpy-order',order_number:'LS-JPY',provider:'manual',payment_method:'bank_transfer',payment_method_confirmed:true,plan_code:'plus',amount_minor:2001,currency:'JPY',status:'paid',created_at:'2026-09-10T10:00:00Z'}],
     payment_orders:[{reference:'krw-order',order_number:'LS-KRW',provider:'manual',payment_method:'bank_transfer',payment_method_confirmed:true,plan_code:'plus',amount_minor:18544,currency:'KRW',status:'paid',created_at:'2026-09-11T10:00:00Z'}],
@@ -69,11 +70,16 @@ test('account shows zero-decimal payments and fixed-term package self-service', 
   await expect(page.locator('#managePlanSelect')).toHaveValue('pro');
   await expect(page.locator('#managePlanSelect option')).toHaveText(['Student', 'Pro']);
   await expect(page.locator('#managePlanInterval')).toHaveValue('monthly');
-  await expect(page.locator('#managePlanSummary')).toContainText('1,450 package minutes left');
-  await expect(page.locator('#managePlanSummary')).toContainText('do not carry over');
+  await expect(page.locator('#nextPeriodRow')).toBeHidden();
+  // Renewing the same package early stacks after the paid term.
+  await expect(page.locator('#managePlanSummary')).toContainText('You are renewing the same package early');
+  await expect(page.locator('#managePlanSummary')).toContainText('starts on October 1, 2026, when the previous term ends');
   await expect(page.locator('#managePlanContinue')).toHaveText('Buy a new 30-day term for Pro');
   await page.locator('#managePlanSelect').selectOption('lite');
   await expect(page.locator('#managePlanContinue')).toHaveText('Downgrade to Student');
+  // A different package still replaces the running term.
+  await expect(page.locator('#managePlanSummary')).toContainText('1,450 package minutes left');
+  await expect(page.locator('#managePlanSummary')).toContainText('do not carry over');
   await page.locator('#managePlanSelect').selectOption('pro');
   await expect(page.locator('#cancelSubscriptionButton')).toHaveCount(0);
   await page.locator('[data-account-view-button="payments"]').click();
@@ -93,10 +99,10 @@ test('account shows zero-decimal payments and fixed-term package self-service', 
   await expect(page.locator('#checkoutPlanCode')).toHaveValue('pro');
   await expect(page.locator('#checkoutInterval')).toHaveValue('monthly');
   await expect(page.locator('#checkoutFixedTermNotice')).toBeVisible();
-  await expect(page.locator('#checkoutFixedTermNotice')).toContainText('1,450 package minutes left');
-  await expect(page.locator('#checkoutFixedTermNotice')).toContainText('starts immediately');
-  await expect(page.locator('#checkoutFixedTermNotice')).toContainText('do not carry over');
+  await expect(page.locator('#checkoutFixedTermNotice')).toContainText('You are renewing the same package early');
+  await expect(page.locator('#checkoutFixedTermNotice')).toContainText('starts on October 1, 2026');
   await expect(page.locator('#checkoutFixedTermNotice')).toContainText('There is no automatic renewal');
+  await expect(page.locator('#checkoutSummaryStart')).toHaveText('October 1, 2026');
   await page.locator('#checkoutClose').click();
   await expect(page.locator('.plan-action[data-plan="pro"][data-interval="monthly"]')).toBeEnabled();
   await expect(page.locator('.plan-action[data-plan="pro"][data-interval="monthly"]')).toHaveText('New 30-day package');
@@ -107,10 +113,13 @@ test('account shows zero-decimal payments and fixed-term package self-service', 
   await expect(page.locator('#errorMessage')).toHaveText('iyzico is active, but card checkout does not support JPY. Choose a currency supported by the provider to pay.');
 
   account.subscription.interval='annual';
-  account.subscription.ends_at='2027-09-01T00:00:00Z';
+  account.subscription.ends_at='2027-09-01T12:00:00Z';
+  account.renewal_starts_at='2027-09-01T12:00:00Z';
   await page.evaluate(()=>localStorage.setItem('lecturesift-currency','TRY'));
   await page.goto('/en/account.html');
   await expect(page.locator('#managePlanInterval')).toHaveValue('annual');
+  await expect(page.locator('#managePlanSummary')).toContainText('starts on September 1, 2027');
+  await page.locator('#managePlanSelect').selectOption('lite');
   await expect(page.locator('#managePlanSummary')).toContainText('1,450 package minutes');
   await expect(page.locator('#managePlanSummary')).toContainText('only what remains in your current monthly allowance window');
   await expect(page.locator('#managePlanSummary')).toContainText('all future monthly allowances under it end');
@@ -119,6 +128,21 @@ test('account shows zero-decimal payments and fixed-term package self-service', 
   await expect(page.locator('#checkoutInterval')).toHaveValue('annual');
   await expect(page.locator('#checkoutFixedTermNotice')).toContainText('only what remains in your current monthly allowance window');
   await expect(page.locator('#checkoutFixedTermNotice')).toContainText('all future monthly allowances under it end');
+  await expect(page.locator('#checkoutSummaryStart')).toHaveText('Immediately after payment approval');
+
+  // An early renewal that is already paid shows as the next term.
+  account.subscription.interval='monthly';
+  account.subscription.ends_at='2026-10-01T12:00:00Z';
+  account.next_period={plan_code:'pro',interval:'monthly',starts_at:'2026-10-01T12:00:00Z',ends_at:'2026-10-31T12:00:00Z'};
+  account.renewal_starts_at='2026-10-31T12:00:00Z';
+  await page.goto('/en/account.html');
+  await expect(page.locator('#nextPeriodRow')).toBeVisible();
+  await expect(page.locator('#nextPeriodRow')).toContainText('Next term');
+  await expect(page.locator('#nextPeriod')).toHaveText('Starts on October 1, 2026');
+  await expect(page.locator('#managePlanSummary')).toContainText('starts on October 31, 2026');
+  await page.locator('#managePlanSelect').selectOption('lite');
+  await expect(page.locator('#managePlanSummary')).toContainText('Your queued term that would start on October 1, 2026 also ends');
+  await noHorizontalOverflow(page);
 });
 
 test('referrals keep sharing, reward choices and coupons usable on narrow screens', async ({page}, testInfo) => {

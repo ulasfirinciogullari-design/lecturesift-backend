@@ -2,6 +2,7 @@
 
 import asyncio
 from datetime import datetime, timedelta, timezone
+from html import escape as html_escape
 from html.parser import HTMLParser
 import json
 import uuid
@@ -316,6 +317,26 @@ def test_annual_package_that_ended_earlier_today_reports_its_final_period(state)
     # Legacy terms resolve to the frozen legacy Pro allowance of 5000 minutes a month.
     assert "Minutes left in this period: 3800 minutes" in args[3]
     assert "Package: Pro · annual period" in args[3]
+
+
+def test_an_early_renewal_queued_after_the_period_suppresses_its_reminders(state):
+    renewed = _user()
+    _subscription(renewed, ends_at=THREE_DAYS, status="cancel_at_end")
+    _subscription(renewed, starts_at=THREE_DAYS, ends_at=THREE_DAYS + timedelta(days=30))
+    summary = _run()
+    assert summary["kinds"]["3_days"]["due"] == 0 and summary["kinds"]["expiry"]["due"] == 0
+    assert state == []
+
+
+@pytest.mark.parametrize("language", SUPPORTED_LANGUAGES)
+def test_reminder_explains_that_renewing_early_keeps_the_paid_days(language):
+    mail = render_renewal_reminder_email(
+        language, kind="3_days", plan_code="plus", plan_name="Plus", interval="monthly", ends_at=THREE_DAYS,
+    )
+    early = _COPY[language]["early"]
+    assert early in mail["text"]
+    assert mail["text"].index(_COPY[language]["after"]) < mail["text"].index(early)
+    assert html_escape(early) in mail["html"]
 
 
 def test_a_package_replaced_between_selection_and_claim_is_not_emailed(state, monkeypatch):

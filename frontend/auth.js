@@ -878,6 +878,17 @@ async function initAccount() {
         ? new Intl.DateTimeFormat(I18N.locale, {dateStyle:"long"}).format(end)
         : "—";
     }
+    // An early renewal of the same package is already paid and starts when
+    // the running term ends.
+    const nextPeriodStart = new Date(account.next_period?.starts_at || "");
+    const showNextPeriod = Boolean(subscription && Number.isFinite(nextPeriodStart.getTime()));
+    $("nextPeriodRow").hidden = !showNextPeriod;
+    if (showNextPeriod) {
+      $("nextPeriod").textContent = fillCopy(
+        t("account.nextPeriodStarts", "{date} tarihinde başlar"),
+        {date:new Intl.DateTimeFormat(I18N.locale, {dateStyle:"long"}).format(nextPeriodStart)},
+      );
+    }
     const planSelect = $("managePlanSelect");
     const intervalSelect = $("managePlanInterval");
     const summary = $("managePlanSummary");
@@ -932,14 +943,28 @@ async function initAccount() {
         );
         return;
       }
+      const longDate = value => new Intl.DateTimeFormat(I18N.locale, {dateStyle:"long"}).format(value);
+      const renewalStart = new Date(account.renewal_starts_at || subscription.ends_at);
+      if (targetCode === account.plan.code && Number.isFinite(renewalStart.getTime())) {
+        // The same package stacks after the paid term instead of replacing it.
+        summary.textContent = fillCopy(
+          t("account.stackedRenewalDetail", "Aynı paketi erken yeniliyorsun: {target} için yeni {term} {date} tarihinde, önceki dönem bittiğinde başlar ve dakikaları o gün açılır. Mevcut dönemin kalan süresini ve paket hakkını bitişine kadar kullanmaya devam edersin. Otomatik yenileme yoktur."),
+          {target:targetPlan, term, date:longDate(renewalStart)},
+        );
+        return;
+      }
       const end = new Date(subscription.ends_at);
       const includedMinutes = Number(account.plan.minutes);
       const usedMinutes = Number(account.used_minutes);
       if (!Number.isFinite(end.getTime()) || !Number.isFinite(includedMinutes) || !Number.isFinite(usedMinutes)) {
-        summary.textContent = t("payment.fixedTermCheckout", "Bu, yeni bir sabit dönem için tek seferlik ödemedir. Onaylandığında hemen başlar; o anda aktif ücretli dönem varsa onun yerine geçer. Kullanılmamış süre ve mevcut dönemin paket hakkı aktarılmaz. Otomatik yenilenmez.");
+        summary.textContent = t("payment.fixedTermCheckout", "Bu, yeni bir sabit dönem için tek seferlik ödemedir ve otomatik yenilenmez. Aktif ücretli dönemin yoksa onaylandığında hemen başlar. Aynı paketi dönem bitmeden yenilersen yeni dönem mevcut dönemin bittiği an başlar; o zamana kadar kalan süreni kullanmaya devam edersin. Farklı bir paket ise hemen başlar ve aktif dönemin yerine geçer; kullanılmamış süre ve mevcut dönemin paket hakkı aktarılmaz.");
         return;
       }
-      const endLabel = new Intl.DateTimeFormat(I18N.locale, {dateStyle:"long"}).format(end);
+      const endLabel = longDate(end);
+      const queuedStart = new Date(account.next_period?.starts_at || "");
+      const queuedNote = Number.isFinite(queuedStart.getTime())
+        ? ` ${fillCopy(t("account.queuedPeriodReplaced", "Sırada bekleyen ve {date} tarihinde başlayacak dönemin de sona erer; aktarılmaz."), {date:longDate(queuedStart)})}`
+        : "";
       const remainingPackageMinutes = Math.max(0, Math.trunc(includedMinutes - usedMinutes));
       const replacementDetailKey = subscription.interval === "annual"
         ? "account.activeAnnualReplacementDetail"
@@ -950,7 +975,7 @@ async function initAccount() {
       summary.textContent = fillCopy(
         t(replacementDetailKey, replacementDetailFallback),
         {current:planName(account.plan.code), date:endLabel, remaining:remainingPackageMinutes.toLocaleString(I18N.locale), term, target:targetPlan},
-      );
+      ) + queuedNote;
     };
     planSelect.onchange = updatePlanManagement;
     intervalSelect.onchange = updatePlanManagement;

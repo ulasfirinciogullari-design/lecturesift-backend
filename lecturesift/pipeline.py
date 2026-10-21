@@ -5,6 +5,8 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+from celery.exceptions import SoftTimeLimitExceeded
+
 from .ai import empty_study_pack, make_study_pack, transcribe, transcribe_timed, translate_transcript
 from .billing_service import BillingError, record_usage, require_duration_entitlement, usage_multiplier_for
 from .config import (
@@ -938,6 +940,10 @@ def _process_job(
             result_path=str(zip_path),
         )
         _record_billing_usage(job_id, options, audio_sources)
+    except SoftTimeLimitExceeded:
+        # The worker's time limit ends the job for good; recording it here as
+        # a transient system error would make the task retry it from scratch.
+        raise
     except Exception as exc:
         normalized = normalize_error(exc)
         AI_PROVIDER_CIRCUIT.trip_error(normalized)

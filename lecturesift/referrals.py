@@ -365,9 +365,12 @@ def _blocked(connection, reward) -> bool:
         # Preserve the original first-purchase conditions exactly.
         if subscription.status != "active" or _utc(subscription.ends_at) <= _utc(billing.utcnow()):
             return True
-    elif subscription.status not in {"active", "replaced", "expired"}:
-        # Ordinary renewal/replacement or time passing does not erase a real
-        # settled renewal payment. Explicit cancellation remains conservative.
+    elif subscription.status not in {"active", "replaced", "expired"} and not (
+        subscription.status == "cancel_at_end" and billing.has_stacked_successor(connection, subscription)
+    ):
+        # Ordinary renewal/replacement (including an early renewal queued after
+        # this period) or time passing does not erase a real settled renewal
+        # payment. Explicit cancellation remains conservative.
         return True
     if _reward_table(reward.id) is RENEWAL_REWARDS and not connection.execute(select(REWARDS.c.id).where(
         REWARDS.c.id == reward.referral_id, REWARDS.c.inviter_user_id == reward.inviter_user_id,

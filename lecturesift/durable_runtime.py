@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
 import threading
 import time
@@ -22,6 +24,47 @@ from .storage import STORAGE
 
 
 _INSTALLED = False
+LOGGER = logging.getLogger(__name__)
+STUCK_JOB_SWEEP_INTERVAL_SECONDS = 10 * 60
+
+
+def sweep_stuck_jobs(now: float | None = None) -> int:
+    """Fail queued/working jobs that can no longer finish on their own.
+
+    A job qualifies when it has recorded nothing for STUCK_JOB_AFTER_SECONDS:
+    longer than the worker's hard time limit and the broker's redelivery
+    window, so no delivery can still be running or coming for it. It then
+    fails through the standard terminal path (state, failure email, source
+    cleanup). Returns how many jobs this call failed.
+    """
+    if os.getenv("LECTURESIFT_WORKER") == "1" or config.current_maintenance_mode() != "off":
+        return 0
+    from .queue import STUCK_JOB_AFTER_SECONDS
+    from .tasks import fail_unfinished_job
+
+    stale_before = (time.time() if now is None else now) - STUCK_JOB_AFTER_SECONDS
+    failed = 0
+    for data in JOBS.recoverable():
+        job_id = str(data.get("job_id") or "")
+        if not job_id or float(data.get("updated") or 0) >= stale_before:
+            continue
+        # A delivery holds this lock from before it records its start, so a
+        # job whose lock is taken is left to that delivery.
+        with JOBS.processing_lock(job_id) as acquired:
+            if acquired and fail_unfinished_job(job_id, "stuck_job_sweep", stale_before=stale_before):
+                failed += 1
+    return failed
+
+
+async def stuck_job_loop() -> None:
+    while True:
+        await asyncio.sleep(STUCK_JOB_SWEEP_INTERVAL_SECONDS)
+        try:
+            failed = await asyncio.to_thread(sweep_stuck_jobs)
+            if failed:
+                LOGGER.warning("Stuck-job sweep failed %d unfinished job(s)", failed)
+        except Exception:
+            LOGGER.error("Stuck-job sweep unavailable")
 
 
 def _start_durable_recovery(recover) -> None:

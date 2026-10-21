@@ -788,3 +788,16 @@ def test_redemption_currencies_use_only_active_preferred_checkout(monkeypatch, s
         "configured": status != "pending_credentials", "status": status, "currencies": ["USD", "EUR"],
     })
     assert referrals.redemption_currencies() == expected
+
+
+def test_renewal_reward_survives_a_further_early_renewal_of_the_same_package(state):
+    inviter, invitee, _, _ = released(state, "minutes")
+    source = pay(invitee)  # Queued after the first term, which is still running.
+    renewal = renewal_for(source["reference"])
+    referrals.choose_reward(inviter, renewal.id, "minutes")
+    pay(invitee)  # Renewed early again: the rewarded period now has a successor.
+    state["now"] += timedelta(days=14)
+    assert referrals.release_reward(
+        renewal.id, provider_reconciled=True, evidence_reference="renewal-proof-123",
+    )["status"] == "released"
+    assert credit(inviter) == 90 and credit(invitee) == 30

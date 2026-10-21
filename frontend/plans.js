@@ -583,9 +583,34 @@ async function buy(planCode, interval = "monthly") {
   $("checkoutSummaryTotal").textContent = price
     ? format(price.amount_minor * multiplier, price.currency || currency)
     : pt("plans.quote", "Teklif");
+  const longDate = value => new Intl.DateTimeFormat(PLANS_I18N.locale, {dateStyle:"long"}).format(value);
+  // Renewing the same package while a term is running stacks the new term
+  // after every paid term instead of replacing the current one.
+  const renewalStart = new Date(account?.renewal_starts_at || account?.subscription?.ends_at || "");
+  const stackedRenewal = plan?.kind === "subscription"
+    && Boolean(account?.subscription)
+    && account?.plan?.code === planCode
+    && Number.isFinite(renewalStart.getTime());
+  const serviceStart = $("checkoutSummaryStart");
+  if (stackedRenewal) {
+    serviceStart.removeAttribute("data-i18n");
+    serviceStart.textContent = longDate(renewalStart);
+  } else {
+    serviceStart.setAttribute("data-i18n", "payment.immediateAfterApproval");
+    serviceStart.textContent = pt("payment.immediateAfterApproval", "Ödeme onayından hemen sonra");
+  }
   const fixedTermNotice = $("checkoutFixedTermNotice");
   fixedTermNotice.hidden = plan?.kind !== "subscription";
-  if (!fixedTermNotice.hidden) {
+  if (!fixedTermNotice.hidden && stackedRenewal) {
+    fixedTermNotice.textContent = fillCopy(
+      pt("account.stackedRenewalDetail", "Aynı paketi erken yeniliyorsun: {target} için yeni {term} {date} tarihinde, önceki dönem bittiğinde başlar ve dakikaları o gün açılır. Mevcut dönemin kalan süresini ve paket hakkını bitişine kadar kullanmaya devam edersin. Otomatik yenileme yoktur."),
+      {
+        target:planLabel(planCode),
+        term:interval === "annual" ? pt("account.annualTerm", "yıllık dönem") : pt("account.monthlyTerm", "30 günlük dönem"),
+        date:longDate(renewalStart),
+      },
+    );
+  } else if (!fixedTermNotice.hidden) {
     const currentEnd = new Date(account?.subscription?.ends_at);
     const includedMinutes = Number(account?.plan?.minutes);
     const usedMinutes = Number(account?.used_minutes);
@@ -599,18 +624,22 @@ async function buy(planCode, interval = "monthly") {
     const replacementDetailFallback = account?.subscription?.interval === "annual"
       ? "Mevcut {current} yıllık erişimin {date} tarihine kadar açık. Gösterilen {remaining} dakika yalnız şu anki aylık kota pencerende kalan paket hakkıdır. Ödeme onaylandığında {target} için yeni {term} hemen başlar; mevcut yıllık erişimin ve gelecekte açılacak aylık kota hakların sona erer. Bu ay kullanılmayan paket dakikaları aktarılmaz. Otomatik yenileme yoktur."
       : "Mevcut {current} dönemin {date} tarihine kadar açık ve bu dönemin {remaining} dakika paket hakkı kaldı. Ödeme onaylandığında {target} için yeni {term} hemen başlar. Kullanılmayan süre ve mevcut dönem paket hakkı taşınmaz. Otomatik yenileme yoktur.";
+    const queuedStart = new Date(account?.next_period?.starts_at || "");
+    const queuedNote = Number.isFinite(queuedStart.getTime())
+      ? ` ${fillCopy(pt("account.queuedPeriodReplaced", "Sırada bekleyen ve {date} tarihinde başlayacak dönemin de sona erer; aktarılmaz."), {date:longDate(queuedStart)})}`
+      : "";
     fixedTermNotice.textContent = canShowCurrentTerm
       ? fillCopy(
         pt(replacementDetailKey, replacementDetailFallback),
         {
           current:planLabel(account.plan.code),
-          date:new Intl.DateTimeFormat(PLANS_I18N.locale, {dateStyle:"long"}).format(currentEnd),
+          date:longDate(currentEnd),
           remaining:Math.max(0, Math.trunc(includedMinutes - usedMinutes)).toLocaleString(PLANS_I18N.locale),
           term:interval === "annual" ? pt("account.annualTerm", "yıllık dönem") : pt("account.monthlyTerm", "30 günlük dönem"),
           target:planLabel(planCode),
         },
-      )
-      : pt("payment.fixedTermCheckout", "Bu, yeni bir sabit dönem için tek seferlik ödemedir. Onaylandığında hemen başlar; o anda aktif ücretli dönem varsa onun yerine geçer. Kullanılmamış süre ve mevcut dönemin paket hakkı aktarılmaz. Otomatik yenilenmez.");
+      ) + queuedNote
+      : pt("payment.fixedTermCheckout", "Bu, yeni bir sabit dönem için tek seferlik ödemedir ve otomatik yenilenmez. Aktif ücretli dönemin yoksa onaylandığında hemen başlar. Aynı paketi dönem bitmeden yenilersen yeni dönem mevcut dönemin bittiği an başlar; o zamana kadar kalan süreni kullanmaya devam edersin. Farklı bir paket ise hemen başlar ve aktif dönemin yerine geçer; kullanılmamış süre ve mevcut dönemin paket hakkı aktarılmaz.");
   }
   const couponEligible = LOCALE_DATA.currencies.includes(currency) && interval === "monthly" && COUPON_PLANS.has(planCode);
   $("checkoutCouponRow").hidden = !couponEligible;

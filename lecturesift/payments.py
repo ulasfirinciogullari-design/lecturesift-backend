@@ -6,13 +6,16 @@ details never pass through LectureSift servers.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import hmac
 import json
 import logging
+import os
 import secrets
 import time
+from datetime import datetime, timedelta
 from decimal import Decimal
 from urllib.parse import urlparse
 
@@ -35,6 +38,8 @@ from .billing_service import (
     payment_order_provider_state,
     payment_order_token_digest,
     record_payment_consent,
+    unsettled_iyzico_order_references,
+    utcnow,
 )
 
 
@@ -45,6 +50,17 @@ PAYTR_CHECKOUT_BASE_URL = "https://www.paytr.com/odeme/guvenli"
 PAYTR_CURRENCIES = {"TRY": "TL", "USD": "USD", "EUR": "EUR", "GBP": "GBP"}
 IYZICO_INITIALIZE_PATH = "/payment/iyzipos/checkoutform/initialize/auth/ecom"
 IYZICO_RETRIEVE_PATH = "/payment/iyzipos/checkoutform/auth/ecom/detail"
+# Retrieve Payment: looks a payment up by our order reference, which is its
+# conversation id. Reconciliation needs it because only a digest of the
+# Checkout Form token is stored.
+IYZICO_PAYMENT_DETAIL_PATH = "/payment/detail"
+IYZICO_RECONCILE_LOOKBACK = timedelta(hours=48)
+# Leave fresh checkouts to the browser callback and webhook.
+IYZICO_RECONCILE_MIN_AGE = timedelta(minutes=15)
+# Newest first: a just-abandoned tab is the likeliest paid-but-unsettled order,
+# and abandoned checkouts that stay "created" must not starve it.
+IYZICO_RECONCILE_BATCH_SIZE = 200
+IYZICO_RECONCILE_INTERVAL_SECONDS = 60 * 60
 IYZICO_CURRENCIES = ("TRY", "USD", "EUR", "GBP", "NOK", "CHF")
 IYZICO_ASYNC_PAYMENT_STATUSES = {
     "INIT_BANK_TRANSFER",
@@ -373,6 +389,7 @@ def _iyzico_post(path: str, payload: dict) -> dict:
     operation = {
         IYZICO_INITIALIZE_PATH: "initialize",
         IYZICO_RETRIEVE_PATH: "retrieve",
+        IYZICO_PAYMENT_DETAIL_PATH: "payment_detail",
     }.get(path, "unknown")
     try:
         for attempt in range(3):
@@ -702,6 +719,29 @@ def process_iyzico_callback(
         body.get("token"),
     ]
     _verify_iyzico_response_signature(body, signature_values)
+    return _settle_iyzico_payment(
+        order_reference,
+        order,
+        body,
+        expected_token=selected_token,
+        verified_payment_method=_verified_payment_method,
+    )
+
+
+def _settle_iyzico_payment(
+    order_reference: str,
+    order: dict,
+    body: dict,
+    *,
+    expected_token: str | None,
+    verified_payment_method: str = "",
+) -> dict:
+    """Apply one signature-verified iyzico payment result to its order.
+
+    The browser callback, the signed webhook and the hourly reconciliation all
+    settle here. complete_payment_order locks the order and skips one that is
+    already settled, so a payment activates the purchase at most once.
+    """
     expected_price = Decimal(order["amount_minor"]) / Decimal(100)
     try:
         paid_price = Decimal(str(body.get("paidPrice")))
@@ -711,7 +751,7 @@ def process_iyzico_callback(
     if (
         str(body.get("conversationId") or "") != order_reference
         or str(body.get("basketId") or "") != order_reference
-        or str(body.get("token") or "") != selected_token
+        or (expected_token is not None and str(body.get("token") or "") != expected_token)
         or str(body.get("currency") or "").upper() != order["currency"]
         or paid_price != expected_price
         or basket_price != expected_price
@@ -721,7 +761,7 @@ def process_iyzico_callback(
     resolved_payment_method = _iyzico_result_payment_method(
         body,
         requested_method=order["payment_method"],
-        verified_event_method=_verified_payment_method,
+        verified_event_method=verified_payment_method,
     )
     if resolved_payment_method:
         mark_iyzico_payment_method(order_reference, resolved_payment_method)
@@ -776,6 +816,83 @@ def process_iyzico_webhook(*, payload: dict, signature: str) -> dict:
         _verified_webhook=True,
         _verified_payment_method=verified_payment_method,
     )
+
+
+def _reconcile_iyzico_order(order_reference: str) -> str:
+    """Ask iyzico about one unsettled order; settle it only when it was paid."""
+    order = payment_order(order_reference)
+    if order["provider"] != "iyzico" or order["status"] not in {"created", "pending"}:
+        return "skipped"
+    body = _iyzico_post(
+        IYZICO_PAYMENT_DETAIL_PATH,
+        {"locale": "tr", "conversationId": order_reference, "paymentConversationId": order_reference},
+    )
+    if body.get("status") != "success" or str(body.get("paymentStatus") or "").upper() != "SUCCESS":
+        # No payment yet, a decline, or a 3-D Secure step still open: the
+        # callback, the webhook or a later run decides. Never fail it here.
+        return "unpaid"
+    _verify_iyzico_response_signature(
+        body,
+        [
+            body.get("paymentId"),
+            body.get("currency"),
+            body.get("basketId"),
+            body.get("conversationId"),
+            _strip_price_zeros(body.get("paidPrice")),
+            _strip_price_zeros(body.get("price")),
+        ],
+    )
+    result = _settle_iyzico_payment(order_reference, order, body, expected_token=None)
+    return "settled" if result["status"] == "paid" else "pending"
+
+
+def reconcile_iyzico_orders(now: datetime | None = None) -> dict:
+    """Settle paid iyzico orders whose browser callback and webhook never came.
+
+    Looks at orders still created/pending from the last 48 hours (at least 15
+    minutes old, newest first) and settles a paid one through the same path
+    the callback uses. Logs carry only order references and counts, never provider bodies,
+    card fields or credentials.
+    """
+    summary = {"checked": 0, "settled": 0, "pending": 0, "unpaid": 0, "skipped": 0, "errors": 0}
+    if os.getenv("LECTURESIFT_WORKER") == "1" or config.current_maintenance_mode() != "off":
+        return {**summary, "disabled": "maintenance"}
+    if not iyzico_configured():
+        return {**summary, "disabled": "unconfigured"}
+    now = now or utcnow()
+    references = unsettled_iyzico_order_references(
+        created_after=now - IYZICO_RECONCILE_LOOKBACK,
+        created_before=now - IYZICO_RECONCILE_MIN_AGE,
+        limit=IYZICO_RECONCILE_BATCH_SIZE,
+    )
+    for reference in references:
+        summary["checked"] += 1
+        try:
+            outcome = _reconcile_iyzico_order(reference)
+        except Exception as exc:
+            summary["errors"] += 1
+            logger.warning("iyzico reconciliation failed reference=%s kind=%s", reference, type(exc).__name__)
+            continue
+        summary[outcome] += 1
+        if outcome == "settled":
+            logger.info("iyzico reconciliation settled a paid order reference=%s", reference)
+    return summary
+
+
+async def iyzico_reconciliation_loop() -> None:
+    await asyncio.sleep(5 * 60)
+    while True:
+        try:
+            summary = await asyncio.to_thread(reconcile_iyzico_orders)
+            if summary["checked"]:
+                logger.info(
+                    "iyzico reconciliation checked=%s settled=%s pending=%s unpaid=%s errors=%s",
+                    summary["checked"], summary["settled"], summary["pending"],
+                    summary["unpaid"], summary["errors"],
+                )
+        except Exception:
+            logger.error("iyzico reconciliation run unavailable")
+        await asyncio.sleep(IYZICO_RECONCILE_INTERVAL_SECONDS)
 
 
 def create_paytr_checkout(

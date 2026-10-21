@@ -416,7 +416,8 @@ function renewalDaysLeft(subscription) {
 }
 function renderRenewalNudge(loggedIn) {
   let node = $("renewalNudge");
-  const days = loggedIn ? renewalDaysLeft(billingAccount.subscription) : null;
+  // An early renewal is already queued after this term: nothing to remind.
+  const days = loggedIn && !billingAccount.next_period ? renewalDaysLeft(billingAccount.subscription) : null;
   if (days === null || days > 7) { if (node) node.hidden = true; return; }
   if (!node) {
     const host = $("app");

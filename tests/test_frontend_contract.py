@@ -71,8 +71,18 @@ def test_account_uses_fixed_term_self_service_and_zero_decimal_payment_amounts()
     assert "account?.subscription" in plan_script and "canShowCurrentTerm" in plan_script
     assert "payment.fixedTermReplacement" not in plan_script
     assert "payment.fixedTermReplacement" not in catalog
-    assert "o anda aktif ücretli dönem varsa" in plan_script
+    assert "o anda aktif ücretli dönem varsa" not in plan_script
+    assert "Aynı paketi dönem bitmeden yenilersen yeni dönem mevcut dönemin bittiği an başlar" in plan_script
     assert "mevcut dönemin paket hakkı aktarılmaz" in plan_script
+    # Renewing the same package stacks after the paid term; another package replaces it.
+    assert 'account?.plan?.code === planCode' in plan_script
+    assert 'pt("account.stackedRenewalDetail"' in plan_script and 't("account.stackedRenewalDetail"' in auth
+    assert "account.renewal_starts_at" in auth and "account?.renewal_starts_at" in plan_script
+    assert 'pt("account.queuedPeriodReplaced"' in plan_script and 't("account.queuedPeriodReplaced"' in auth
+    assert 'serviceStart.removeAttribute("data-i18n")' in plan_script
+    assert 'id="checkoutSummaryStart" data-i18n="payment.immediateAfterApproval"' in plans
+    assert 'id="nextPeriodRow" hidden' in account and 'data-i18n="account.nextPeriod"' in account
+    assert 't("account.nextPeriodStarts"' in auth and "account.next_period?.starts_at" in auth
     assert 'pt(replacementDetailKey' in plan_script
     assert 'account?.subscription?.interval === "annual"' in plan_script
     assert 'subscription.interval === "annual"' in auth
@@ -87,6 +97,9 @@ def test_account_uses_fixed_term_self_service_and_zero_decimal_payment_amounts()
         "account.activeReplacementDetail": {"current", "date", "remaining", "term", "target"},
         "account.activeAnnualReplacementDetail": {"current", "date", "remaining", "term", "target"},
         "account.firstPurchaseDetail": {"term", "target"},
+        "account.stackedRenewalDetail": {"term", "target", "date"},
+        "account.queuedPeriodReplaced": {"date"},
+        "account.nextPeriodStarts": {"date"},
         "plans.currencyUnavailable": {"provider", "currency"},
     }
     for key in (
@@ -103,6 +116,10 @@ def test_account_uses_fixed_term_self_service_and_zero_decimal_payment_amounts()
         "account.activeReplacementDetail",
         "account.activeAnnualReplacementDetail",
         "account.firstPurchaseDetail",
+        "account.stackedRenewalDetail",
+        "account.queuedPeriodReplaced",
+        "account.nextPeriod",
+        "account.nextPeriodStarts",
         "plans.subscription",
         "plans.newMonthlyTerm",
         "plans.newAnnualTerm",
@@ -395,15 +412,18 @@ def test_public_source_copy_matches_the_single_file_picker_contract():
         )
     )
     assert not any(claim in public_copy for claim in stale_claims)
-    assert 'data-i18n="legal.termsUpdated">Son güncelleme: 13 Eylül 2026<' in terms
+    assert 'data-i18n="legal.termsUpdated">Son güncelleme: 21 Ekim 2026<' in terms
     assert 'data-i18n="legal.privacyUpdated">Son güncelleme: 13 Eylül 2026 · Sürüm 2.4<' in privacy
-    assert 'data-i18n="legal.distanceSalesVersion">Sürüm: MSS-2026-09-13-v3<' in distance_sales
-    assert 'data-i18n="legal.distanceSalesHistory">Bu çerçeve metin ilk olarak 28 Ağustos 2026 tarihinde yayımlanmış, 13 Eylül 2026 tarihinde güncellenmiştir.' in distance_sales
-    assert 'data-i18n="legal.refundUpdated">Son güncelleme: 13 Eylül 2026<' in refund
+    assert 'data-i18n="legal.distanceSalesVersion">Sürüm: MSS-2026-10-21-v4<' in distance_sales
+    assert 'data-i18n="legal.distanceSalesHistory">Bu çerçeve metin ilk olarak 28 Ağustos 2026 tarihinde yayımlanmış, 13 Eylül 2026 ve 21 Ekim 2026 tarihlerinde güncellenmiştir.' in distance_sales
+    assert 'data-i18n="legal.refundUpdated">Son güncelleme: 21 Ekim 2026<' in refund
     assert 'data-i18n="legal.cookiesUpdated">Son güncelleme: 13 Eylül 2026 · Sürüm 2.4<' in cookies
     assert "gelecekte açılacak aylık kotalar da sona erer" in terms
     assert "gelecekte açılacak aylık kotalar da sona erer" in refund
     assert "gelecekte açılacak aylık kotalar da sona erer" in distance_sales
+    same_package = "mevcut dönem bitmeden yeniden satın alınırsa yeni dönem mevcut dönemin bittiği anda başlar"
+    assert all(same_package in page for page in (terms, refund, distance_sales))
+    assert "Yeni bir dönem satın alındığında ödeme onayıyla hemen başlar" not in public_copy
     assert 'data.append("source_layout", "classic")' in script
     assert 'data.append("files", file)' in script
     assert 'data.append("audio_files"' not in script
@@ -503,9 +523,9 @@ def test_every_page_supports_persistent_light_and_dark_themes():
         expected_theme_version = "17"
         assert f"/theme.css?v={expected_theme_version}" in content, page.name
         assert "/theme.js?v=14" in content, page.name
-        expected_i18n_version = "60"
+        expected_i18n_version = "61"
         assert f"i18n.js?v={expected_i18n_version}" in content, page.name
-        assert "page-i18n.js?v=13" in content, page.name
+        assert "page-i18n.js?v=14" in content, page.name
 
     script = (FRONTEND / "theme.js").read_text(encoding="utf-8")
     style = (FRONTEND / "theme.css").read_text(encoding="utf-8")
@@ -790,11 +810,11 @@ def test_payment_routes_are_distinct_localized_and_account_history_is_auditable(
         assert len(values) == 13, key
         assert all(str(value).strip() for value in values), key
 
-    assert 'src="/plans.js?v=35"' in plans_html
+    assert 'src="/plans.js?v=36"' in plans_html
     assert 'manualTransfer = {available:Boolean(transferBody?.available), bank:null};' in plans_js
     assert 'order.bank?.iban' in plans_js
     assert 'transferBody?.bank' not in plans_js
-    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=25"', 'href="./auth.css?v=4"'))
+    assert all(value in account_html for value in ('data-i18n="payment.historyHelp"', 'src="./auth.js?v=26"', 'href="./auth.css?v=4"'))
     assert all(value in auth_js for value in ("paymentMethodLabel", "paymentMoney", "paymentDateTime", "payment-order-meta"))
     assert all(value in admin_html for value in ('value="iyzico_card"', 'value="iyzico_bank_transfer"', 'value="manual_bank_transfer"', 'value="iyzico_legacy"'))
     assert "provider:selectedProvider" in admin_js
@@ -940,7 +960,7 @@ def test_admin_growth_reads_and_escapes_advertising_management_status():
     catalog = (FRONTEND / "i18n.js").read_text(encoding="utf-8")
 
     assert 'id="adminGrowthStatus" class="admin-growth-grid" aria-live="polite"' in admin
-    assert 'src="/admin.js?v=32"' in admin and 'src="/i18n.js?v=60"' in admin
+    assert 'src="/admin.js?v=32"' in admin and 'src="/i18n.js?v=61"' in admin
     assert '"/billing/admin/advertising-readiness"' in admin_script
     assert "renderAdminAdSenseSummary" in admin_script
     assert 'id="adminAdSenseSummary"' in admin
@@ -1188,7 +1208,7 @@ def test_distance_sales_contract_covers_digital_service_checkout_requirements():
     contract = (FRONTEND / "distance-sales.html").read_text(encoding="utf-8")
     operator = (FRONTEND / "legal-operator.js").read_text(encoding="utf-8")
     assert "Mesafeli Satış Sözleşmesi" in contract
-    assert "MSS-2026-09-13-v3" in contract
+    assert "MSS-2026-10-21-v4" in contract and "MSS-2026-09-13-v3" not in contract
     for topic in (
         "Taraflar",
         "Ön bilgilendirme",
@@ -1601,7 +1621,7 @@ def test_guest_trial_becomes_a_single_use_membership_gate():
     assert '"rollout.createFreeAccount"' in catalog
     assert 'error.code === "LS-GUEST-06"' in rollout
     assert '"rollout.guestLimit"' in rollout and '"rollout.guestLimit"' in catalog
-    assert 'src="./app.js?v=47"' in index
+    assert 'src="./app.js?v=48"' in index
     assert 'src="/rollout.js?v=18"' in index
     assert '$("plans").scrollIntoView' not in app
 
