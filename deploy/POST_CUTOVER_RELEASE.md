@@ -55,6 +55,97 @@ re-checks it. A new probe record would stop every release from starting.
 Releases with these fixes refuse to re-probe once the cutover is final. The
 probe in `0739d39` does not refuse, so never start it by hand.
 
+## Frozen rehearsal source
+
+Render has served nothing since the cutover on 19 October and its database
+is frozen. From the first release that contains `deploy/frozen_source_dump.py`,
+the exact rehearsal no longer reads that database. Its source is the verified
+final dump of the same database, stored on this host:
+
+- `/var/backups/lecturesift/frozen-source/render-postgres.dump`, the
+  `pg_dump` custom archive;
+- `/var/backups/lecturesift/frozen-source/render-postgres.dump.sha256`, one
+  line `<sha256>  render-postgres.dump` that pins it.
+
+Both must be single-link regular files, not symlinks, owned by `root:root`
+with mode `0400` or `0600`, in a `root:root` directory with mode `0700`. The
+rehearsal releases the dump only when its SHA-256 equals the pin. It restores
+it into a disposable PostgreSQL 18 container from the same pinned image, with
+`--network none`, no host mount and its data on tmpfs, labelled
+`lecturesift.rehearsal=true` with its run and the purpose
+`frozen-source-postgres`. It then runs the same schema inventory, family
+detection (`--accept 4,5`), before and after manifests and `pg_dump` against
+it read-only, and removes the container before the candidate stack starts.
+The restore into the rehearsal database, the verifiers and the admission are
+unchanged. The stale-state reconcile and the outer cleanup remove the
+container after an interrupted run, and production preflight refuses to
+start while it exists.
+
+### One-time install
+
+Run this once, before the rehearsal of the first release that contains
+`deploy/frozen_source_dump.py`. Set `SRC` to the directory of the verified
+final dump and list it:
+
+```sh
+SRC=/var/backups/lecturesift/render-final-<UTC-stamp>
+DST=/var/backups/lecturesift/frozen-source
+sudo ls -l "$SRC"
+```
+
+Set `SUM` to the SHA-256 file that `ls` shows next to `render-postgres.dump`,
+then prove that the dump still matches it:
+
+```sh
+SUM="$SRC/<sha256-file-name>"
+EXPECTED="$(sudo awk 'NR == 1 {print $1}' "$SUM")"
+printf '%s\n' "$EXPECTED" | grep -Ex '[0-9a-f]{64}'
+[ "$(sudo sha256sum "$SRC/render-postgres.dump" | awk '{print $1}')" = "$EXPECTED" ] &&
+  echo SOURCE_DUMP_MATCHES
+```
+
+Continue only after `SOURCE_DUMP_MATCHES`. Copy the dump and write the pin:
+
+```sh
+sudo install -d -o root -g root -m 0700 "$DST"
+sudo install -o root -g root -m 0400 "$SRC/render-postgres.dump" "$DST/render-postgres.dump"
+printf '%s  render-postgres.dump\n' "$EXPECTED" |
+  sudo tee "$DST/render-postgres.dump.sha256" >/dev/null
+sudo chown root:root "$DST/render-postgres.dump.sha256"
+sudo chmod 0400 "$DST/render-postgres.dump.sha256"
+sudo sh -c 'cd /var/backups/lecturesift/frozen-source && sha256sum -c render-postgres.dump.sha256'
+sudo stat -c '%U:%G %a %h %n' "$DST" "$DST/render-postgres.dump" "$DST/render-postgres.dump.sha256"
+```
+
+`sha256sum -c` must print `render-postgres.dump: OK`. `stat` must print
+`root:root 700` for the directory and `root:root 400 1` for both files. Keep
+the original `render-final-<UTC-stamp>` directory as it is. Once the release
+is staged in step 2, the rehearsal's own check can be run by hand:
+
+```sh
+sudo python3 -I "/srv/lecturesift/worktrees/$REVISION/deploy/frozen_source_dump.py" verify
+```
+
+It must print `FROZEN_SOURCE_DUMP_OK|sha256=<EXPECTED>|bytes=<size>`.
+
+### Deleting the Render database
+
+Release the first release that contains `deploy/frozen_source_dump.py` first,
+then delete Render. That release is itself rehearsed with the new code, so its
+admission proves the frozen source end to end while Render still exists.
+After its step 7 has passed, no step of this procedure needs the Render
+database or `/root/.lecturesift-render-source.env`, and both can be removed.
+
+After Render is gone, a release without `deploy/frozen_source_dump.py` can no
+longer be rehearsed, because its rehearsal still reads Render. Rolling back to
+such a release still works through its existing admission (see "Rollback").
+The one-time cutover tools also stop working, and no release step runs them:
+`migrate_postgres.sh`, `finalize_provider_cutover.sh`,
+`rollback_postgres_to_render.sh`, `seed_first_cutover_backup.sh`,
+`migrate_redis_state.sh`, the Render restore and rollback paths of
+`handoff_production_ingress.sh`, and the `prepare`, `source`, `staging` and
+`activation` modes of `verify_production_ingress.sh`.
+
 ## 0. Before you start
 
 - The release revision is reviewed, merged and green in CI.
@@ -67,9 +158,11 @@ probe in `0739d39` does not refuse, so never start it by hand.
   candidate-produced evidence.
 - `/etc/lecturesift/rehearsal.env` holds the dedicated non-production R2
   and OpenAI rehearsal credentials described in `VPS_DEPLOYMENT.md`.
-- The rehearsal still clones the frozen Render database named by
-  `/root/.lecturesift-render-source.env`. Keep that file and the frozen
-  Render database.
+- The pinned frozen Render dump is installed as described in "Frozen
+  rehearsal source" below. The rehearsal checks it first and fails with
+  `EXACT_REHEARSAL_FAILED|frozen-source-dump-unavailable` before it starts
+  anything when it is missing, unsafe or changed. The rehearsal never
+  connects to Render and does not read `/root/.lecturesift-render-source.env`.
 
 Record the identities and the current unit enablement, and prove that the
 cutover is settled on the running release:

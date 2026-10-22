@@ -9,10 +9,11 @@ scheduled jobs are stopped.
 The rehearsal is **not** a sandbox for hostile or unreviewed release code.
 `run_exact_rehearsal.sh` and the helpers it calls execute as root and control
 Docker; access to the Docker daemon is host-root-equivalent. They can also read
-the root-only source/production configuration needed to create isolated inputs
-and inspect live invariants. Consequently, their own evidence cannot establish
-that arbitrary candidate code was safe. The admission is meaningful only after
-an independently reviewed source tree is explicitly authorized.
+the root-only frozen source dump and production configuration needed to create
+isolated inputs and inspect live invariants. Consequently, their own evidence
+cannot establish that arbitrary candidate code was safe. The admission is
+meaningful only after an independently reviewed source tree is explicitly
+authorized.
 
 Two fixed programs form the outer boundary. The fixed
 `/usr/local/sbin/lecturesift-release-stage-controller` bounds and authenticates
@@ -117,12 +118,29 @@ then runs that family's `rehearsal_manifest_vN.sql` and
 `verify_schema_transition_vN.py current` with the reviewed provider-session,
 purchase-terms and preserved email-verification schema contracts, and the
 before and after captures must name the same family. The inner rehearsal
-detects the Render source family the same way and accepts only v4 or v5; its
-source, clone, migrated clone and post-E2E clone all use that one strict
-family, and the migration must be exactly `current_to_current`.
+detects the frozen Render source family the same way and accepts only v4 or
+v5; its source, clone, migrated clone and post-E2E clone all use that one
+strict family, and the migration must be exactly `current_to_current`.
 `TABLE_DIFF`, `SCHEMA_COMPAT`,
 `UNVALIDATED_FK`, any non-zero `ANOMALY`, a missing `SCHEMA_OBJECT`, or contract
 drift rejects admission before the canonical before/after comparison.
+
+The rehearsal never connects to Render. Its source is the verified final dump
+of the frozen Render database at the fixed root-only path
+`/var/backups/lecturesift/frozen-source/render-postgres.dump`.
+`frozen_source_dump.py` releases it only when it and its pin
+`render-postgres.dump.sha256` are canonical, single-link, root-owned regular
+files with mode `0400` or `0600` in a root-only directory, and only when the
+SHA-256 of the bytes it read equals the pin. The outer gate checks this before
+it changes anything, and the inner rehearsal checks it again before it creates
+a run directory. The dump is restored into a disposable
+`lecturesift-source-postgres-rehearsal` container from the pinned PostgreSQL
+image: `--network none`, read-only root, no capabilities, no host mount and
+data only on tmpfs, labelled with the run and the purpose
+`frozen-source-postgres`. The inventory, manifests and `pg_dump` read it with
+`default_transaction_read_only=on`, and the container is removed before the
+candidate stack starts. The `--reconcile-only` and `--reconcile-stale` modes
+need neither the dump nor any Render credential.
 
 Rehearsal containers and volumes must carry both
 `lecturesift.rehearsal=true` and `lecturesift.rehearsal.run=RUN`. Any new

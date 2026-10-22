@@ -15,18 +15,24 @@ case "${1:-}" in
 esac
 
 ROOT_DIR="${LECTURESIFT_ROOT:-/opt/lecturesift}"
-SOURCE_ENV="${LECTURESIFT_SOURCE_DB_ENV:-/root/.lecturesift-render-source.env}"
 DB_ENV="${LECTURESIFT_DB_ENV_FILE:-/etc/lecturesift/postgres.env}"
 ALLOWED_REHEARSAL_ROOT="/var/backups/lecturesift/rehearsal"
 REQUESTED_REHEARSAL_ROOT="${LECTURESIFT_REHEARSAL_ROOT:-$ALLOWED_REHEARSAL_ROOT}"
 PROVENANCE_ROOT="/var/lib/lecturesift/rehearsal-provenance"
-SOURCE_POSTGRES_TRANSPORT="$ROOT_DIR/deploy/source_postgres_transport.py"
 SCHEMA_STATE_TOOL="$ROOT_DIR/deploy/schema_contract_state.py"
-# The source family is selected from the live Render catalog before any
+# Render has been frozen since the provider cutover. The rehearsal source is
+# the verified final dump of that database at a fixed root-only path, restored
+# into a disposable, network-less PostgreSQL container whose data lives only in
+# tmpfs. Render, its credentials and the network are never used.
+FROZEN_SOURCE_DUMP_TOOL="$ROOT_DIR/deploy/frozen_source_dump.py"
+FROZEN_SOURCE_CONTAINER="lecturesift-source-postgres-rehearsal"
+FROZEN_SOURCE_DATABASE="lecturesift_frozen_source"
+POSTGRES_IMAGE="postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af"
+# The source family is selected from the frozen source catalog before any
 # manifest runs: product (v4) or workspace (v5). The core v3 family is never a
-# provider source. The restored clone is captured with the same frozen file,
-# streamed to psql on stdin because the postgres container's /tmp is a tmpfs
-# that docker cp cannot write into.
+# provider source. The source and the restored clone are captured with the
+# same frozen file, streamed to psql on stdin because the postgres container's
+# /tmp is a tmpfs that docker cp cannot write into.
 SOURCE_CONTRACT_VERSION=""
 REHEARSAL_MANIFEST=""
 REHEARSAL_MANIFEST_NAME=""
@@ -202,9 +208,8 @@ if not (
   }
 }
 
-check_private_env "$SOURCE_ENV" "Source database environment"
 check_private_env "$DB_ENV" "Target database environment"
-for path in "$SOURCE_ENV" "$DB_ENV" \
+for path in "$DB_ENV" \
   "$ROOT_DIR/deploy/schema_contract_inventory.sql" "$SCHEMA_STATE_TOOL" \
   "$ROOT_DIR/deploy/rehearsal_manifest_v4.sql" "$ROOT_DIR/deploy/rehearsal_manifest_v5.sql" \
   "$ROOT_DIR/deploy/verify_schema_transition_v4.py" "$ROOT_DIR/deploy/verify_schema_transition_v5.py" \
@@ -218,7 +223,7 @@ for path in "$SOURCE_ENV" "$DB_ENV" \
   "$ROOT_DIR/deploy/rehearsal_e2e.py" \
   "$ROOT_DIR/deploy/rehearsal_formats_e2e.py" \
   "$ROOT_DIR/deploy/rehearsal_purge_e2e.py" \
-  "$SOURCE_POSTGRES_TRANSPORT" \
+  "$FROZEN_SOURCE_DUMP_TOOL" \
   "$ROOT_DIR/deploy/schema_contract_payment_provider_sessions_v1.txt" \
   "$ROOT_DIR/deploy/schema_contract_billing_purchase_terms_v1.txt" \
   "$ROOT_DIR/deploy/schema_contract_billing_email_verifications_v1.txt"; do
@@ -298,22 +303,6 @@ fi
    "$(stat -c '%u:%g' -- "$PROVENANCE_ROOT")" == "0:0" &&
    "$(stat -c '%a' -- "$PROVENANCE_ROOT")" == "700" ]] || {
   echo "The rehearsal provenance root must be fixed, root-owned and mode 0700." >&2
-  exit 1
-}
-
-source_pg_exec() {
-  python3 "$SOURCE_POSTGRES_TRANSPORT" exec-libpq-docker \
-    --source-env "$SOURCE_ENV" -- "$@"
-}
-
-SOURCE_PG_DOCKER_ENV=(
-  --env PGHOST --env PGPORT --env PGDATABASE --env PGUSER
-  --env PGSSLMODE --env PGSSLROOTCERT
-  --env PGCONNECT_TIMEOUT
-)
-python3 "$SOURCE_POSTGRES_TRANSPORT" validate --source-env "$SOURCE_ENV" \
-  >/dev/null || {
-  echo "The Render source transport contract is invalid." >&2
   exit 1
 }
 
@@ -565,8 +554,8 @@ cleanup_rehearsal_containers() {
         return 1
       }
       [[ "$container" != "lecturesift-source-postgres-rehearsal" || \
-         "$purpose_label" == "source-postgres-client" ]] || {
-        echo "Refusing to delete a source PostgreSQL client with the wrong purpose." >&2
+         "$purpose_label" == "frozen-source-postgres" ]] || {
+        echo "Refusing to delete a frozen-source PostgreSQL container with the wrong purpose." >&2
         return 1
       }
       docker rm -f "$container" >/dev/null || return 1
@@ -965,6 +954,14 @@ if [[ "$rehearsal_mode" == "reconcile-only" ]]; then
   exit 0
 fi
 
+# Only a full run reads the frozen source. Refuse it before any run directory,
+# container or database exists when the pinned dump is missing, unsafe or not
+# the pinned content.
+python3 -I "$FROZEN_SOURCE_DUMP_TOOL" verify >/dev/null || {
+  echo "The pinned frozen Render source dump is missing, unsafe or changed." >&2
+  exit 1
+}
+
 mapfile -t rehearsal_passwords < <(
   python3 -c 'import secrets; [print(secrets.token_urlsafe(48)) for _ in range(3)]'
 )
@@ -990,21 +987,78 @@ trap cleanup_rehearsal EXIT
 
 reconcile_stale_rehearsal_state
 
-source_pg_exec docker run --rm --user 0:0 \
-  --name lecturesift-source-postgres-rehearsal \
-  --label lecturesift.rehearsal=true \
-  --label "lecturesift.rehearsal.run=$rehearsal_suffix" \
-  --label lecturesift.rehearsal.purpose=source-postgres-client \
-  "${SOURCE_PG_DOCKER_ENV[@]}" \
-  --env "PGOPTIONS=-c default_transaction_read_only=on" \
-  --volume "$run_dir:/backup" \
-  --volume "$ROOT_DIR/deploy:/probe:ro" \
-  postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af \
-  sh -ec '
-    set +x
-    psql --no-psqlrc --quiet -v ON_ERROR_STOP=1 \
-      -f /probe/schema_contract_inventory.sql > /backup/source-inventory.txt
-  '
+# The disposable source runs as the image's fixed postgres user (999, as for
+# the production service's /tmp) with no network, no host mount, no
+# capabilities and only tmpfs storage, so neither the restore nor any read can
+# reach Render, production data or the host filesystem. The verified dump is
+# streamed in on stdin and restored with the same flags as the clone below.
+start_frozen_source_postgres() {
+  local attempt isolation rehearsal_label run_label purpose_label network_mode
+  local read_only mount_types
+  docker run --detach --pull=never --network none --read-only \
+    --name "$FROZEN_SOURCE_CONTAINER" \
+    --label lecturesift.rehearsal=true \
+    --label "lecturesift.rehearsal.run=$rehearsal_suffix" \
+    --label lecturesift.rehearsal.purpose=frozen-source-postgres \
+    --user 999:999 --cap-drop ALL --security-opt no-new-privileges \
+    --pids-limit 128 --memory 1536m --memory-swap 1536m \
+    --tmpfs /var/lib/postgresql:rw,nosuid,nodev,size=1g,uid=999,gid=999,mode=0700 \
+    --tmpfs /tmp:rw,nosuid,nodev,size=64m,uid=999,gid=999,mode=0700 \
+    --entrypoint bash "$POSTGRES_IMAGE" -euo pipefail -c '
+      export PGDATA=/var/lib/postgresql/data
+      initdb --no-sync --auth-local=trust --auth-host=reject \
+        --locale=en_US.UTF8 --encoding=UTF8 >/dev/null </dev/null
+      exec postgres -c listen_addresses= -c unix_socket_directories=/tmp \
+        -c fsync=off
+    ' >/dev/null || return 1
+  isolation="$(docker container inspect --format \
+    '{{ index .Config.Labels "lecturesift.rehearsal" }}|{{ index .Config.Labels "lecturesift.rehearsal.run" }}|{{ index .Config.Labels "lecturesift.rehearsal.purpose" }}|{{.HostConfig.NetworkMode}}|{{.HostConfig.ReadonlyRootfs}}|{{range .Mounts}}{{.Type}} {{end}}' \
+    "$FROZEN_SOURCE_CONTAINER")" || return 1
+  IFS='|' read -r rehearsal_label run_label purpose_label network_mode read_only \
+    mount_types <<<"$isolation"
+  [[ "$rehearsal_label" == "true" && "$run_label" == "$rehearsal_suffix" && \
+     "$purpose_label" == "frozen-source-postgres" && \
+     "$network_mode" == "none" && "$read_only" == "true" ]] || {
+    echo "The frozen source PostgreSQL container is not labelled, read-only and network-less." >&2
+    return 1
+  }
+  [[ "$mount_types" =~ ^(tmpfs )*$ ]] || {
+    echo "The frozen source PostgreSQL container has a volume or host mount." >&2
+    return 1
+  }
+  for attempt in {1..60}; do
+    if docker exec "$FROZEN_SOURCE_CONTAINER" pg_isready --quiet --host=/tmp \
+      >/dev/null 2>&1; then
+      break
+    fi
+    (( attempt < 60 )) || {
+      echo "The frozen source PostgreSQL did not become ready." >&2
+      return 1
+    }
+    sleep 1
+  done
+  docker exec "$FROZEN_SOURCE_CONTAINER" createdb --host=/tmp --template=template0 \
+    --encoding=UTF8 --locale=en_US.UTF8 "$FROZEN_SOURCE_DATABASE" </dev/null || return 1
+  python3 -I "$FROZEN_SOURCE_DUMP_TOOL" stream | \
+    docker exec -i "$FROZEN_SOURCE_CONTAINER" pg_restore --host=/tmp \
+      --exit-on-error --single-transaction --no-owner --no-acl \
+      --dbname="$FROZEN_SOURCE_DATABASE" || return 1
+}
+
+# Every source read is read-only, as the reads of the live Render database were.
+frozen_source_read() {
+  docker exec -i --env "PGOPTIONS=-c default_transaction_read_only=on" \
+    "$FROZEN_SOURCE_CONTAINER" \
+    psql --no-psqlrc --quiet --host=/tmp --dbname="$FROZEN_SOURCE_DATABASE" \
+    -v ON_ERROR_STOP=1 -f - <"$1"
+}
+
+start_frozen_source_postgres || {
+  echo "The frozen Render source could not be restored into its disposable container." >&2
+  exit 1
+}
+frozen_source_read "$ROOT_DIR/deploy/schema_contract_inventory.sql" \
+  > "$run_dir/source-inventory.txt"
 SOURCE_CONTRACT_VERSION="$(
   python3 "$SCHEMA_STATE_TOOL" detect --inventory "$run_dir/source-inventory.txt" --accept 4,5
 )" || {
@@ -1019,22 +1073,7 @@ REHEARSAL_MANIFEST="$ROOT_DIR/deploy/rehearsal_manifest_v${SOURCE_CONTRACT_VERSI
 REHEARSAL_MANIFEST_NAME="rehearsal_manifest_v${SOURCE_CONTRACT_VERSION}.sql"
 REHEARSAL_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition_v${SOURCE_CONTRACT_VERSION}.py"
 
-source_pg_exec docker run --rm --user 0:0 \
-  --name lecturesift-source-postgres-rehearsal \
-  --label lecturesift.rehearsal=true \
-  --label "lecturesift.rehearsal.run=$rehearsal_suffix" \
-  --label lecturesift.rehearsal.purpose=source-postgres-client \
-  "${SOURCE_PG_DOCKER_ENV[@]}" \
-  --env "PGOPTIONS=-c default_transaction_read_only=on" \
-  --env "MANIFEST_NAME=$REHEARSAL_MANIFEST_NAME" \
-  --volume "$run_dir:/backup" \
-  --volume "$ROOT_DIR/deploy:/probe:ro" \
-  postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af \
-  sh -ec '
-    set +x
-    psql --no-psqlrc --quiet -v ON_ERROR_STOP=1 \
-      -f "/probe/$MANIFEST_NAME" > /backup/source-before.txt
-  '
+frozen_source_read "$REHEARSAL_MANIFEST" > "$run_dir/source-before.txt"
 
 source_database_size="$(tr -d '\r' <"$run_dir/source-before.txt" \
   | sed -n 's/^DATABASE_SIZE|//p')"
@@ -1066,47 +1105,31 @@ postgres_volume_available_bytes="$(docker compose --project-directory "$ROOT_DIR
   exit 1
 }
 
-source_pg_exec docker run --rm --user 0:0 \
-  --name lecturesift-source-postgres-rehearsal \
-  --label lecturesift.rehearsal=true \
-  --label "lecturesift.rehearsal.run=$rehearsal_suffix" \
-  --label lecturesift.rehearsal.purpose=source-postgres-client \
-  "${SOURCE_PG_DOCKER_ENV[@]}" \
-  --env "PGOPTIONS=-c default_transaction_read_only=on" \
-  --volume "$run_dir:/backup" \
-  postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af \
-  sh -ec '
-    set +x
-    pg_dump --format=custom --no-owner --no-acl \
-      --serializable-deferrable --file=/backup/render.dump
-  '
+# pg_dump writes a seekable file inside the container, as it wrote the Render
+# dump before, and that archive is copied out unchanged.
+docker exec --env "PGOPTIONS=-c default_transaction_read_only=on" \
+  "$FROZEN_SOURCE_CONTAINER" \
+  pg_dump --host=/tmp --dbname="$FROZEN_SOURCE_DATABASE" --format=custom \
+  --no-owner --no-acl --serializable-deferrable \
+  --file=/var/lib/postgresql/render.dump
+docker exec "$FROZEN_SOURCE_CONTAINER" cat /var/lib/postgresql/render.dump \
+  > "$run_dir/render.dump"
 
-source_pg_exec docker run --rm --user 0:0 \
-  --name lecturesift-source-postgres-rehearsal \
-  --label lecturesift.rehearsal=true \
-  --label "lecturesift.rehearsal.run=$rehearsal_suffix" \
-  --label lecturesift.rehearsal.purpose=source-postgres-client \
-  "${SOURCE_PG_DOCKER_ENV[@]}" \
-  --env "PGOPTIONS=-c default_transaction_read_only=on" \
-  --env "MANIFEST_NAME=$REHEARSAL_MANIFEST_NAME" \
-  --volume "$run_dir:/backup" \
-  --volume "$ROOT_DIR/deploy:/probe:ro" \
-  postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af \
-  sh -ec '
-    set +x
-    psql --no-psqlrc --quiet -v ON_ERROR_STOP=1 \
-      -f "/probe/$MANIFEST_NAME" > /backup/source-after.txt
-  '
+frozen_source_read "$REHEARSAL_MANIFEST" > "$run_dir/source-after.txt"
 
 sha256sum "$run_dir/render.dump" > "$run_dir/render.dump.sha256"
 pg_dump_size="$(stat -c '%s' "$run_dir/render.dump")"
-docker run --rm --user 0:0 \
-  --name lecturesift-source-postgres-rehearsal \
-  --label lecturesift.rehearsal=true \
-  --label "lecturesift.rehearsal.run=$rehearsal_suffix" \
-  --label lecturesift.rehearsal.purpose=source-postgres-client \
-  --volume "$run_dir:/backup:ro" postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af \
-  pg_restore --list /backup/render.dump > "$run_dir/render.dump.list"
+docker exec -i "$FROZEN_SOURCE_CONTAINER" pg_restore --list \
+  <"$run_dir/render.dump" > "$run_dir/render.dump.list"
+
+# Nothing below reads the source again. Remove its disposable container now so
+# it never runs beside the candidate stack. The EXIT trap and both stale
+# reconcile paths also remove it after an interrupted run.
+cleanup_rehearsal_containers "$rehearsal_suffix"
+if docker container inspect "$FROZEN_SOURCE_CONTAINER" >/dev/null 2>&1; then
+  echo "The frozen source PostgreSQL container could not be removed." >&2
+  exit 1
+fi
 
 if docker compose --project-directory "$ROOT_DIR" --file "$ROOT_DIR/compose.yaml" \
   exec -T postgres psql -U "$POSTGRES_USER" -d postgres -Atqc \

@@ -388,11 +388,14 @@ def test_candidate_migration_has_a_one_use_internal_postgres_only_network() -> N
         assert "lecturesift_rehearsal_migration" in script
         assert "candidate-database-migration" in script
         assert "lecturesift-source-postgres-rehearsal" in script
-        assert "source-postgres-client" in script
+        assert "frozen-source-postgres" in script
+        assert "source-postgres-client" not in script
         assert '"$driver" == "bridge"' in script
         assert '"$scope" == "local"' in script
     assert 'lecturesift.rehearsal.run=$stamp' not in restore
-    assert restore.count('lecturesift.rehearsal.run=$rehearsal_suffix') >= 4
+    # The disposable frozen-source PostgreSQL is the only container that the
+    # orchestrator itself creates; the stack creates and labels the others.
+    assert restore.count('lecturesift.rehearsal.run=$rehearsal_suffix') == 1
     assert "fixed-name candidate migration container remains" in preflight
     assert "fixed-name candidate migration network remains" in preflight
     assert 'index .NetworkSettings.Networks "lecturesift_rehearsal_migration"' in preflight
