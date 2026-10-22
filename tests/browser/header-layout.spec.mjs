@@ -114,7 +114,7 @@ test('the phone assistant button does not cover the home upload button', async (
     await page.goto(path);
     if (path === '/') await page.locator('[data-consent="essential"]').click();
     const launch = page.locator('body > .assistant-launch');
-    const upload = page.locator('.study-primary');
+    const upload = page.locator('.study-hero .study-primary');
     await expect(launch).toBeVisible();
     await expect(launch).toHaveAccessibleName(path === '/' ? /^LectureSift Asistan/ : /^LectureSift Assistant/);
     await expect(launch.locator('span')).toBeHidden();
@@ -131,7 +131,7 @@ test('the phone assistant button does not cover the home upload button', async (
         console.log('launcher overlap', JSON.stringify(await page.evaluate(() => ({
           scrollY, innerHeight, bottom: document.querySelector('body > .assistant-launch').style.bottom,
           launch: document.querySelector('body > .assistant-launch').getBoundingClientRect().toJSON(),
-          upload: document.querySelector('.study-primary').getBoundingClientRect().toJSON(),
+          upload: document.querySelector('.study-hero .study-primary').getBoundingClientRect().toJSON(),
           banner: Boolean(document.querySelector('.consent-banner:not([hidden])')),
         }))));
         throw error;
@@ -236,7 +236,7 @@ test('signed-out public pages offer a compact free trial next to sign-in', async
   await expect(trial).toHaveAttribute('href', /^\/en\/workspace(?:\.html)?\?source=upload$/);
   expect(await account.evaluate(node => node.nextElementSibling?.classList.contains('public-try-link'))).toBe(true);
   // Same primary colour as the page's own upload button.
-  const primary = await page.locator('.study-primary').evaluate(node => getComputedStyle(node).backgroundColor);
+  const primary = await page.locator('.study-hero .study-primary').evaluate(node => getComputedStyle(node).backgroundColor);
   await expect(trial).toHaveCSS('background-color', primary);
   if (isMobile) {
     await expect(trial).toBeHidden();

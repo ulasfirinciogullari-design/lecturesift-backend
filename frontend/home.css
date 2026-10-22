@@ -2,7 +2,7 @@
    price cards and FAQ. Tokens come from theme.css; product-layout.css keeps
    the hero, sample pack, feature band and file-care card. */
 .study-hero .hero-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:14px 22px;margin-top:28px}
-.study-hero .study-primary{gap:0;min-height:52px;padding:13px 26px;font-size:15px;text-align:center}
+:is(.study-hero,.home-cta) .study-primary{gap:0;min-height:52px;padding:13px 26px;font-size:15px;text-align:center}
 .study-hero .study-text-link{font-size:14px;font-weight:600;color:var(--ui-action)}
 .home-page .study-example{margin-bottom:72px}
 .home-page .example-intro h2{font-size:clamp(26px,3vw,34px);max-width:20ch}
@@ -13,6 +13,13 @@
 .steps-grid li>span{display:grid;place-items:center;width:34px;height:34px;margin-bottom:14px;border-radius:50%;background:var(--ui-terracotta-wash);color:var(--ui-action);font-size:14px;font-weight:700}
 .steps-grid h3{margin:0 0 8px;font-size:17px;line-height:1.35}
 .steps-grid p{margin:0;font-size:14px;line-height:1.7;color:var(--ui-muted)}
+/* What a finished result looks like. The capture's backdrop is transparent,
+   so the panel behind it follows the theme. */
+.home-result{margin:0 0 72px}
+.home-result h2{margin:0 0 22px;font-size:clamp(24px,2.8vw,32px);line-height:1.25;letter-spacing:-.03em;text-align:center}
+.result-shot{max-width:960px;margin:0 auto}
+.result-shot img{display:block;width:100%;height:auto;border:1px solid var(--ui-line);border-radius:16px;background:var(--ui-surface-raised)}
+.result-shot figcaption{margin:12px 0 0;text-align:center;font-size:13px;line-height:1.6;color:var(--ui-muted)}
 .home-pricing{margin:0 0 56px}
 .home-page .home-pricing .section-lead{margin-bottom:30px}
 .pricing-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch}
@@ -56,6 +63,10 @@
 .home-page .product-companion{padding:22px 24px}
 .home-page .product-companion h2{margin:6px 0 8px;font-size:20px}
 .home-page .product-companion p{font-size:13px;margin:6px 0}
+/* The closing band repeats the hero's trial action, not a new one. */
+.home-cta{display:flex;flex-direction:column;align-items:center;gap:14px;margin:0 0 56px;padding:32px 24px;border:1px solid var(--ui-line);border-radius:16px;background:var(--ui-surface);text-align:center}
+.home-cta h2{margin:0;font-size:clamp(22px,2.6vw,28px);line-height:1.25;letter-spacing:-.025em}
+.home-cta p{margin:0;font-size:13px;line-height:1.6;color:var(--ui-muted)}
 @media(max-width:860px){
   .steps-grid,.pricing-grid{grid-template-columns:minmax(0,1fr)}
   .steps-grid li,.price-card{padding:22px 20px}
@@ -64,15 +75,16 @@
 }
 @media(max-width:600px){
   .study-hero .hero-actions{flex-direction:column;align-items:stretch;gap:12px;margin-top:22px}
-  .study-hero .study-primary{width:100%;min-height:50px;padding:12px 14px;font-size:14px}
+  :is(.study-hero,.home-cta) .study-primary{width:100%;min-height:50px;padding:12px 14px;font-size:14px}
   .study-hero .study-text-link{text-align:center}
   .home-page .study-example{margin-bottom:48px}
-  .home-steps,.home-pricing{margin-bottom:44px}
+  .home-steps,.home-pricing,.home-result{margin-bottom:44px}
+  .home-cta{padding:24px 18px;margin-bottom:40px}
   .price-amount{font-size:30px}
   .home-faq{margin-bottom:40px}
   .home-faq .faq-list details{padding:0 16px}
   .home-faq .faq-list summary{font-size:14px}
 }
 @media(max-width:360px){
-  .study-hero .study-primary{font-size:13px;padding-inline:10px}
+  :is(.study-hero,.home-cta) .study-primary{font-size:13px;padding-inline:10px}
 }

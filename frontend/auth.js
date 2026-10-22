@@ -322,6 +322,12 @@ function setupPasswordToggle(button, input) {
 }
 
 const GOOGLE_CLIENT_SCRIPT = "https://accounts.google.com/gsi/client";
+// Off unless the backend publishes a Google OAuth web client id.
+function googleClientIdFrom(config) {
+  const clientId = config?.google?.enabled === true ? String(config.google.client_id || "") : "";
+  return /^[0-9A-Za-z._-]{8,200}\.apps\.googleusercontent\.com$/.test(clientId) ? clientId : "";
+}
+
 function loadGoogleClient() {
   if (window.google?.accounts?.id) return Promise.resolve(window.google.accounts.id);
   return new Promise((resolve, reject) => {
@@ -368,9 +374,8 @@ async function completeGoogleSignIn(credential, fallbackNext) {
 async function setupGoogleSignIn(config, fallbackNext) {
   const container = $("googleSignIn");
   const target = $("googleButton");
-  const clientId = config?.google?.enabled === true ? String(config.google.client_id || "") : "";
-  // Off unless the backend publishes a Google OAuth web client id.
-  if (!container || !target || !/^[0-9A-Za-z._-]{8,200}\.apps\.googleusercontent\.com$/.test(clientId)) return;
+  const clientId = googleClientIdFrom(config);
+  if (!container || !target || !clientId) return;
   try {
     const identity = await loadGoogleClient();
     identity.initialize({
@@ -382,16 +387,20 @@ async function setupGoogleSignIn(config, fallbackNext) {
     });
     if ($("registerForm")?.hidden) return;
     container.hidden = false;
-    identity.renderButton(target, {
-      type: "standard",
-      theme: document.documentElement.dataset.theme === "light" ? "outline" : "filled_black",
-      size: "large",
-      text: "continue_with",
-      shape: "pill",
-      width: Math.round(Math.min(400, Math.max(200, target.clientWidth || 320))),
-      locale: I18N.language,
-    });
+    renderGoogleButton(identity, target);
   } catch (_) { container.hidden = true; }
+}
+
+function renderGoogleButton(identity, target) {
+  identity.renderButton(target, {
+    type: "standard",
+    theme: document.documentElement.dataset.theme === "light" ? "outline" : "filled_black",
+    size: "large",
+    text: "continue_with",
+    shape: "pill",
+    width: Math.round(Math.min(400, Math.max(200, target.clientWidth || 320))),
+    locale: I18N.language,
+  });
 }
 
 // A plan picked on the plans page travels in `next`. Name it on the register
@@ -1063,12 +1072,88 @@ async function initAccount() {
       adminLink.remove();
     }
     renderOrders(account);
+    renderGoogleLink();
     $("accountPage").hidden = false;
     void loadRefundRequests();
     if (!referralLoadStarted) {
       referralLoadStarted = true;
       void loadReferralSummary();
     }
+  };
+
+  // Google sign-in link. The settings and Google's script load only for an
+  // account without a link, and the script only once the person asks to link.
+  let googleConfig = null;
+  let googleConfigRequested = false;
+  let googleButtonReady = false;
+  let googleLinkBusy = false;
+  const showGoogleNotice = (message, error = false) => showFormNotice("googleLinkNotice", message, error);
+  function renderGoogleLink() {
+    const linked = currentAccount?.google_linked;
+    if (linked === false && !googleConfigRequested) {
+      googleConfigRequested = true;
+      void loadAuthConfig().then(config => { googleConfig = config; renderGoogleLink(); });
+    }
+    // An older backend sends no flag; without Google configured there is
+    // nothing to link, but a card already shown stays for its notice.
+    const card = $("googleLinkCard");
+    const available = Boolean(googleClientIdFrom(googleConfig));
+    card.hidden = typeof linked !== "boolean" || (!linked && !available && card.hidden);
+    if (card.hidden) return;
+    $("googleLinkState").textContent = linked ? t("google.linked", "Bağlı") : t("google.notLinked", "Bağlı değil");
+    $("googleUnlinkButton").hidden = !linked;
+    $("googleLinkStart").hidden = linked || googleButtonReady || !available;
+    $("googleLinkButton").hidden = linked || !googleButtonReady;
+  }
+  const googlePassword = () => {
+    const value = $("googleLinkPassword").value;
+    if (!value) {
+      showGoogleNotice(t("google.passwordRequired", "Önce mevcut parolanı gir."), true);
+      $("googleLinkPassword").focus();
+    }
+    return value;
+  };
+  const completeGoogleLink = async credential => {
+    if (googleLinkBusy || typeof credential !== "string" || !credential || credential.length > 4096) return;
+    const password = googlePassword();
+    if (!password) return;
+    googleLinkBusy = true;
+    showGoogleNotice(t("google.linking", "Google hesabın bağlanıyor…"));
+    try {
+      const body = await request("/billing/me/google/link", {
+        method:"POST", body:JSON.stringify({credential, current_password:password}),
+      }, token);
+      $("googleLinkPassword").value = "";
+      renderAccount(body.account);
+      showGoogleNotice(body.message);
+    } catch (error) {
+      showGoogleNotice(error.message || t("auth.googleFailed", "Google ile giriş tamamlanamadı. Tekrar dene."), true);
+    } finally { googleLinkBusy = false; }
+  };
+  const startGoogleLink = async () => {
+    const clientId = googleClientIdFrom(googleConfig);
+    if (!clientId || !googlePassword()) return;
+    const button = $("googleLinkStart");
+    setBusy(button, true, t("google.opening", "Google açılıyor…"));
+    try {
+      const identity = await loadGoogleClient();
+      identity.initialize({
+        client_id: clientId,
+        callback: response => completeGoogleLink(response?.credential),
+        context: "use",
+        ux_mode: "popup",
+        itp_support: true,
+      });
+      const target = $("googleLinkButton");
+      target.hidden = false;
+      renderGoogleButton(identity, target);
+      googleButtonReady = true;
+      renderGoogleLink();
+      showGoogleNotice(t("google.chooseAccount", "Google düğmesiyle devam et ve bağlamak istediğin Google hesabını seç."));
+    } catch (_) {
+      $("googleLinkButton").hidden = true;
+      showGoogleNotice(t("google.loadFailed", "Google şu anda açılamadı. Biraz sonra tekrar dene."), true);
+    } finally { setBusy(button, false, t("google.linkButton", "Google hesabını bağla")); }
   };
 
   const reconcilePaymentRedirect = async () => {
@@ -1235,6 +1320,23 @@ async function initAccount() {
       token = sessionTokenFrom(body); localStorage.setItem(TOKEN_KEY, token); renderAccount(body.account); $("passwordForm").reset(); showFormNotice("passwordNotice", body.message);
     } catch (error) { showFormNotice("passwordNotice", error.message, true); }
     finally { setBusy(button, false, t("security.changePassword", "Parolayı değiştir")); }
+  });
+  $("googleLinkForm").addEventListener("submit", event => {
+    event.preventDefault();
+    if (currentAccount?.google_linked === false && !googleButtonReady) void startGoogleLink();
+  });
+  $("googleUnlinkButton").addEventListener("click", async () => {
+    const password = googlePassword();
+    if (!password) return;
+    const button = $("googleUnlinkButton");
+    setBusy(button, true, t("state.saving", "Kaydediliyor…"));
+    try {
+      const body = await request("/billing/me/google/unlink", {method:"POST", body:JSON.stringify({current_password:password})}, token);
+      $("googleLinkPassword").value = "";
+      renderAccount(body.account);
+      showGoogleNotice(body.message);
+    } catch (error) { showGoogleNotice(error.message, true); }
+    finally { setBusy(button, false, t("google.unlinkButton", "Bağlantıyı kaldır")); }
   });
   $("refundRequestForm").addEventListener("submit", async event => {
     event.preventDefault();

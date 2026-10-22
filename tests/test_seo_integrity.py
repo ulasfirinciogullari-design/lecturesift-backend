@@ -393,6 +393,33 @@ def test_payment_marks_and_plan_minutes_are_translated_when_prerendered(localize
     assert "Protokoll" not in german_sales
 
 
+def test_result_screenshot_and_closing_trial_band_are_prerendered_in_every_language(localized_output: Path) -> None:
+    sources = (FRONTEND / "index.html").read_text(encoding="utf-8")
+    turkish = {
+        "heading": re.search(r'<h2 id="resultPreviewTitle">([^<]+)</h2>', sources).group(1),
+        "alt": re.search(r'<img src="/assets/home/[^"]+"[^>]* alt="([^"]+)"', sources).group(1),
+        "band": re.search(r'<h2 id="homeCtaTitle">([^<]+)</h2>', sources).group(1),
+    }
+    for language in LANGUAGES:
+        html = _output_path(localized_output, f"{ORIGIN}/" + ("" if language == "tr" else f"{language}/")).read_text(encoding="utf-8")
+        section = re.search(r'<section id="result-preview" class="home-result"[^>]*>(.*?)</section>', html, re.S)
+        assert section, language
+        # Turkish gets the Turkish capture; every other language the English one.
+        capture = "tr" if language == "tr" else "en"
+        images = re.findall(r'(?:srcset|src)="(/assets/home/[^"]+)"', section.group(1))
+        assert images == [f"/assets/home/result-screen-v1-{capture}-720.webp", f"/assets/home/result-screen-v1-{capture}-1440.webp"], language
+        # Root-relative, so /en/ and /ar/ load the same published files.
+        assert all((localized_output / image.lstrip("/")).is_file() for image in images), language
+        assert 'loading="lazy"' in section.group(1) and 'width="1440" height="840"' in section.group(1), language
+        assert re.search(r' alt="[^"]+"', section.group(1)), language
+        if language != "tr":
+            assert all(copy not in html for copy in turkish.values()), language
+        band = re.search(r'<h2 id="homeCtaTitle">[^<]+</h2>\s*<a class="study-primary" href="([^"]+)">([^<]+)</a>', html)
+        hero = re.search(r'<div class="hero-actions"><a class="study-primary" href="([^"]+)">([^<]+)</a>', html)
+        assert band and band.groups() == hero.groups(), language
+        assert hero.group(1) == ("/workspace.html?source=upload" if language == "tr" else f"/{language}/workspace.html?source=upload")
+
+
 def _assert_bilingual_guide_pages(localized_output: Path, pages: list[dict], nav: str, listing: str) -> None:
     records = _sitemap_records()
     sitemap = ElementTree.parse(FRONTEND / "sitemap.xml")

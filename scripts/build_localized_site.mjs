@@ -208,6 +208,12 @@ function translateDocument(html, language) {
   return html;
 }
 
+// The homepage result screenshots exist in Turkish and English
+// (scripts/capture_home_result.mjs); the other languages show the English one.
+function localizeResultScreenshots(html, language) {
+  return language === "tr" ? html : html.replaceAll("/assets/home/result-screen-v1-tr-", "/assets/home/result-screen-v1-en-");
+}
+
 function deferNonCriticalScripts(html) {
   return html.replace(/<script\b([^>]*\bsrc="[^"]+"[^>]*)><\/script>/gi, (match, attributes) => {
     if (/\bsrc="\/theme\.js\b/i.test(attributes) || /\bdefer\b/i.test(attributes)) return match;
@@ -693,6 +699,7 @@ for (const language of LANGUAGES) {
     const sourceName = publicPath === "/" ? "index.html" : publicPath.slice(1);
     let html = await readFile(path.join(SOURCE, sourceName), "utf8");
     html = translateDocument(html, language);
+    html = localizeResultScreenshots(html, language);
     html = localizeStaticPlanValues(html, language);
     html = localizeContinuationTargets(html, language);
     html = enrichLandingPage(html, language, publicPath);
