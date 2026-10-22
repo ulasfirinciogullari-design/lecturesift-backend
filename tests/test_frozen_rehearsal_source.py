@@ -231,6 +231,9 @@ def test_stream_releases_exact_bytes_and_verify_prints_the_digest(
     directory = _install(tmp_path)
     monkeypatch.setattr(helper, "FROZEN_SOURCE_DIRECTORY", directory)
     monkeypatch.setattr(helper, "FROZEN_SOURCE_OWNER", OWNER)
+    monkeypatch.setattr(
+        helper, "finalized_source_dump_sha256", lambda: hashlib.sha256(PAYLOAD).hexdigest()
+    )
 
     assert helper.main(["stream"]) == 0
     assert capsysbinary.readouterr().out == PAYLOAD
@@ -249,11 +252,126 @@ def test_stream_writes_nothing_when_the_dump_is_refused(
     directory = _install(tmp_path, pin=f"{'f' * 64}  render-postgres.dump\n")
     monkeypatch.setattr(helper, "FROZEN_SOURCE_DIRECTORY", directory)
     monkeypatch.setattr(helper, "FROZEN_SOURCE_OWNER", OWNER)
+    monkeypatch.setattr(helper, "finalized_source_dump_sha256", lambda: "f" * 64)
 
     assert helper.main(["stream"]) == 1
     captured = capsysbinary.readouterr()
     assert captured.out == b""
     assert b"Frozen source dump rejected" in captured.err
+
+
+@pytest.mark.parametrize("mode", ["stream", "verify"])
+def test_pinned_dump_that_is_not_the_finalized_cutover_dump_is_refused(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsysbinary: pytest.CaptureFixture[bytes],
+    mode: str,
+) -> None:
+    # A stale or failed cutover run's dump can match its own colocated pin;
+    # only the digest the finalized cutover recorded is accepted.
+    helper = _module()
+    directory = _install(tmp_path)
+    monkeypatch.setattr(helper, "FROZEN_SOURCE_DIRECTORY", directory)
+    monkeypatch.setattr(helper, "FROZEN_SOURCE_OWNER", OWNER)
+    monkeypatch.setattr(helper, "finalized_source_dump_sha256", lambda: "0" * 64)
+
+    assert helper.main([mode]) == 1
+    captured = capsysbinary.readouterr()
+    assert captured.out == b""
+    assert b"not the Render dump the finalized provider cutover restored" in captured.err
+
+
+def test_cutover_evidence_failures_refuse_the_dump(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsysbinary: pytest.CaptureFixture[bytes],
+) -> None:
+    helper = _module()
+    directory = _install(tmp_path)
+    monkeypatch.setattr(helper, "FROZEN_SOURCE_DIRECTORY", directory)
+    monkeypatch.setattr(helper, "FROZEN_SOURCE_OWNER", OWNER)
+
+    def refuse() -> str:
+        raise helper.FrozenSourceError("the finalized provider cutover evidence is invalid")
+
+    monkeypatch.setattr(helper, "finalized_source_dump_sha256", refuse)
+
+    assert helper.main(["stream"]) == 1
+    captured = capsysbinary.readouterr()
+    assert captured.out == b""
+    assert b"cutover evidence is invalid" in captured.err
+
+
+class _StubEvidence:
+    class EvidenceError(RuntimeError):
+        pass
+
+    EVIDENCE_ROOT = Path("/evidence")
+    POSTGRES_PROOF_NAME = "postgres-cutover.ok"
+    FINAL_PROOF_NAME = "provider-cutover.ok"
+
+    def __init__(self, *, digest: str, proof_sha256: str = "a" * 64, invalid: bool = False):
+        self.digest = digest
+        self.proof_sha256 = proof_sha256
+        self.invalid = invalid
+        self.validated: list[tuple[Path, str]] = []
+
+    def _load(self, path: Path) -> dict[str, str]:
+        if path.name == self.FINAL_PROOF_NAME:
+            return {"release_revision": "c" * 40}
+        return {"run_id": "postgres-cutover-20261019T141500Z", "source_dump_sha256": self.digest}
+
+    def validate_final(self, root: Path, *, expected_revision: str) -> dict[str, str]:
+        self.validated.append((root, expected_revision))
+        if self.invalid:
+            raise self.EvidenceError("provider cutover is still in progress")
+        return {"postgres_proof_sha256": "a" * 64}
+
+    def sha256_file(self, path: Path) -> str:
+        assert path == self.EVIDENCE_ROOT / self.POSTGRES_PROOF_NAME
+        return self.proof_sha256
+
+
+def test_finalized_digest_comes_from_the_validated_cutover_chain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    helper = _module()
+    stub = _StubEvidence(digest="b" * 64)
+    monkeypatch.setattr(helper, "_cutover_evidence", lambda: stub)
+
+    assert helper.finalized_source_dump_sha256() == "b" * 64
+    assert stub.validated == [(Path("/evidence"), "c" * 40)]
+
+
+@pytest.mark.parametrize(
+    ("stub", "message"),
+    [
+        (_StubEvidence(digest="b" * 64, invalid=True), "cutover evidence is invalid"),
+        (_StubEvidence(digest="b" * 64, proof_sha256="d" * 64), "changed after finalization"),
+        (_StubEvidence(digest="not-a-digest"), "no valid source dump digest"),
+    ],
+)
+def test_unfinalized_or_changed_cutover_evidence_is_refused(
+    monkeypatch: pytest.MonkeyPatch, stub: _StubEvidence, message: str
+) -> None:
+    helper = _module()
+    monkeypatch.setattr(helper, "_cutover_evidence", lambda: stub)
+
+    with pytest.raises(helper.FrozenSourceError, match=message):
+        helper.finalized_source_dump_sha256()
+
+
+def test_real_cutover_evidence_tool_provides_what_the_helper_reads() -> None:
+    helper = _module()
+    evidence = helper._cutover_evidence()
+
+    assert helper.CUTOVER_EVIDENCE_TOOL == ROOT / "deploy" / "provider_cutover_evidence.py"
+    assert evidence.EVIDENCE_ROOT == Path("/var/lib/lecturesift/provider-cutover")
+    assert evidence.POSTGRES_PROOF_NAME == "postgres-cutover.ok"
+    assert evidence.FINAL_PROOF_NAME == "provider-cutover.ok"
+    for name in ("_load", "validate_final", "sha256_file", "EvidenceError"):
+        assert hasattr(evidence, name)
+    assert "source_dump_sha256" in _read("deploy/provider_cutover_evidence.py")
 
 
 def test_release_path_never_needs_render_or_its_credentials() -> None:
@@ -414,10 +532,13 @@ def test_release_docs_install_the_frozen_source_and_order_render_deletion_last()
         runbook.index("### One-time install"):runbook.index("### Deleting the Render database")
     ]
     ordered = [
-        'sudo ls -l "$SRC"',
+        "EVIDENCE=/var/lib/lecturesift/provider-cutover/postgres-cutover.ok",
+        "s/^run_id=//p",
+        "s/^source_dump_sha256=//p",
+        'SRC="/var/backups/lecturesift/postgres-cutover/$RUN_ID/render-final.dump"',
         "SOURCE_DUMP_MATCHES",
         'sudo install -d -o root -g root -m 0700 "$DST"',
-        'sudo install -o root -g root -m 0400 "$SRC/render-postgres.dump" "$DST/render-postgres.dump"',
+        'sudo install -o root -g root -m 0400 "$SRC" "$DST/render-postgres.dump"',
         "printf '%s  render-postgres.dump\\n' \"$EXPECTED\"",
         'sudo chmod 0400 "$DST/render-postgres.dump.sha256"',
         "sha256sum -c render-postgres.dump.sha256",
@@ -433,6 +554,9 @@ def test_release_docs_install_the_frozen_source_and_order_render_deletion_last()
     assert "`/root/.lecturesift-render-source.env`, and both can be removed" in deletion
     assert runbook.index("## Frozen rehearsal source") < runbook.index("## 0. Before you start")
 
+    assert "source_dump_sha256" in runbook
+    assert "render-final-<UTC-stamp>" not in runbook
+    assert "validate_final" in safety
     assert "frozen-source-postgres" in safety
     assert "`--network none`" in safety
     assert "The rehearsal never connects to Render." in safety

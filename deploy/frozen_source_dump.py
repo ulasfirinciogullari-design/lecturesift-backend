@@ -10,7 +10,9 @@ This helper is the only reader of that path. It accepts only a canonical,
 single-link, root-owned regular file with mode 0400 or 0600 in a private
 root-owned directory, checks the descriptor it actually reads, and releases
 the bytes only after their SHA-256 equals the pinned digest file beside the
-dump. Nothing is written anywhere except stdout.
+dump. That pin must also equal the `source_dump_sha256` that the finalized
+provider cutover recorded, so only the exact dump the cutover restored into
+OVH is accepted. Nothing is written anywhere except stdout.
 """
 
 from __future__ import annotations
@@ -18,11 +20,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import hmac
+import importlib.util
 import os
 from pathlib import Path
 import re
 import stat
 import sys
+from types import ModuleType
 from typing import Final
 
 
@@ -37,6 +41,10 @@ MAX_DIGEST_BYTES: Final = 4096
 # pg_dump custom-format archives start with this magic.
 CUSTOM_ARCHIVE_MAGIC: Final = b"PGDMP"
 _DIGEST_LINE: Final = re.compile(r"([0-9a-f]{64})  render-postgres\.dump\n")
+_SHA256: Final = re.compile(r"[0-9a-f]{64}")
+CUTOVER_EVIDENCE_TOOL: Final = Path(__file__).resolve().with_name(
+    "provider_cutover_evidence.py"
+)
 
 
 class FrozenSourceError(RuntimeError):
@@ -122,6 +130,41 @@ def read_verified_dump(directory: Path, *, owner: tuple[int, int]) -> tuple[byte
     return payload, digest
 
 
+def _cutover_evidence() -> ModuleType:
+    # Load the evidence tool next to this file by path, as the release gates
+    # run it, so the finalized proof is validated by the same code.
+    spec = importlib.util.spec_from_file_location(
+        "lecturesift_frozen_source_cutover_evidence", CUTOVER_EVIDENCE_TOOL
+    )
+    if spec is None or spec.loader is None:
+        raise FrozenSourceError("the provider cutover evidence tool is unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def finalized_source_dump_sha256() -> str:
+    """Return the Render dump digest bound into the finalized provider cutover."""
+
+    evidence = _cutover_evidence()
+    root = evidence.EVIDENCE_ROOT
+    postgres_path = root / evidence.POSTGRES_PROOF_NAME
+    try:
+        final_proof = evidence._load(root / evidence.FINAL_PROOF_NAME)
+        final = evidence.validate_final(
+            root, expected_revision=final_proof.get("release_revision", "")
+        )
+        postgres = evidence._load(postgres_path)
+        if final.get("postgres_proof_sha256") != evidence.sha256_file(postgres_path):
+            raise evidence.EvidenceError("PostgreSQL cutover proof changed after finalization")
+    except evidence.EvidenceError as exc:
+        raise FrozenSourceError(f"the finalized provider cutover evidence is invalid: {exc}") from exc
+    digest = postgres.get("source_dump_sha256", "")
+    if not _SHA256.fullmatch(digest):
+        raise FrozenSourceError("the finalized provider cutover names no valid source dump digest")
+    return digest
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=("verify", "stream"))
@@ -130,6 +173,10 @@ def main(argv: list[str] | None = None) -> int:
         payload, digest = read_verified_dump(
             FROZEN_SOURCE_DIRECTORY, owner=FROZEN_SOURCE_OWNER
         )
+        if not hmac.compare_digest(digest, finalized_source_dump_sha256()):
+            raise FrozenSourceError(
+                "the pinned dump is not the Render dump the finalized provider cutover restored"
+            )
     except FrozenSourceError as exc:
         print(f"Frozen source dump rejected: {exc}", file=sys.stderr)
         return 1

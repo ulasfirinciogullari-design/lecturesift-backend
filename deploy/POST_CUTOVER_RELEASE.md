@@ -59,8 +59,9 @@ probe in `0739d39` does not refuse, so never start it by hand.
 
 Render has served nothing since the cutover on 19 October and its database
 is frozen. From the first release that contains `deploy/frozen_source_dump.py`,
-the exact rehearsal no longer reads that database. Its source is the verified
-final dump of the same database, stored on this host:
+the exact rehearsal no longer reads that database. Its source is the final dump
+of the same database that the finalized provider cutover restored into OVH,
+copied on this host to:
 
 - `/var/backups/lecturesift/frozen-source/render-postgres.dump`, the
   `pg_dump` custom archive;
@@ -69,7 +70,10 @@ final dump of the same database, stored on this host:
 
 Both must be single-link regular files, not symlinks, owned by `root:root`
 with mode `0400` or `0600`, in a `root:root` directory with mode `0700`. The
-rehearsal releases the dump only when its SHA-256 equals the pin. It restores
+rehearsal releases the dump only when its SHA-256 equals the pin and the pin
+equals `source_dump_sha256` in the finalized cutover evidence
+`/var/lib/lecturesift/provider-cutover/postgres-cutover.ok`, which it checks
+through the same `validate_final` chain the release gates use. It restores
 it into a disposable PostgreSQL 18 container from the same pinned image, with
 `--network none`, no host mount and its data on tmpfs, labelled
 `lecturesift.rehearsal=true` with its run and the purpose
@@ -84,23 +88,19 @@ start while it exists.
 ### One-time install
 
 Run this once, before the rehearsal of the first release that contains
-`deploy/frozen_source_dump.py`. Set `SRC` to the directory of the verified
-final dump and list it:
+`deploy/frozen_source_dump.py`. Read the cutover run and the dump digest from
+the finalized PostgreSQL cutover evidence, and prove that the dump that run
+wrote still matches it:
 
 ```sh
-SRC=/var/backups/lecturesift/render-final-<UTC-stamp>
-DST=/var/backups/lecturesift/frozen-source
-sudo ls -l "$SRC"
-```
-
-Set `SUM` to the SHA-256 file that `ls` shows next to `render-postgres.dump`,
-then prove that the dump still matches it:
-
-```sh
-SUM="$SRC/<sha256-file-name>"
-EXPECTED="$(sudo awk 'NR == 1 {print $1}' "$SUM")"
+EVIDENCE=/var/lib/lecturesift/provider-cutover/postgres-cutover.ok
+RUN_ID="$(sudo sed -n 's/^run_id=//p' "$EVIDENCE")"
+EXPECTED="$(sudo sed -n 's/^source_dump_sha256=//p' "$EVIDENCE")"
+printf '%s\n' "$RUN_ID" | grep -Ex 'postgres-cutover-[0-9]{8}T[0-9]{6}Z'
 printf '%s\n' "$EXPECTED" | grep -Ex '[0-9a-f]{64}'
-[ "$(sudo sha256sum "$SRC/render-postgres.dump" | awk '{print $1}')" = "$EXPECTED" ] &&
+SRC="/var/backups/lecturesift/postgres-cutover/$RUN_ID/render-final.dump"
+DST=/var/backups/lecturesift/frozen-source
+[ "$(sudo sha256sum "$SRC" | awk '{print $1}')" = "$EXPECTED" ] &&
   echo SOURCE_DUMP_MATCHES
 ```
 
@@ -108,7 +108,7 @@ Continue only after `SOURCE_DUMP_MATCHES`. Copy the dump and write the pin:
 
 ```sh
 sudo install -d -o root -g root -m 0700 "$DST"
-sudo install -o root -g root -m 0400 "$SRC/render-postgres.dump" "$DST/render-postgres.dump"
+sudo install -o root -g root -m 0400 "$SRC" "$DST/render-postgres.dump"
 printf '%s  render-postgres.dump\n' "$EXPECTED" |
   sudo tee "$DST/render-postgres.dump.sha256" >/dev/null
 sudo chown root:root "$DST/render-postgres.dump.sha256"
@@ -119,14 +119,16 @@ sudo stat -c '%U:%G %a %h %n' "$DST" "$DST/render-postgres.dump" "$DST/render-po
 
 `sha256sum -c` must print `render-postgres.dump: OK`. `stat` must print
 `root:root 700` for the directory and `root:root 400 1` for both files. Keep
-the original `render-final-<UTC-stamp>` directory as it is. Once the release
-is staged in step 2, the rehearsal's own check can be run by hand:
+the cutover run directory as it is.
+Once the release is staged in step 2, and before the site is stopped, run the
+rehearsal's own check by hand:
 
 ```sh
 sudo python3 -I "/srv/lecturesift/worktrees/$REVISION/deploy/frozen_source_dump.py" verify
 ```
 
-It must print `FROZEN_SOURCE_DUMP_OK|sha256=<EXPECTED>|bytes=<size>`.
+It must print `FROZEN_SOURCE_DUMP_OK|sha256=<EXPECTED>|bytes=<size>`. If it
+does not, do not stop the site: the rehearsal would refuse the release.
 
 ### Deleting the Render database
 

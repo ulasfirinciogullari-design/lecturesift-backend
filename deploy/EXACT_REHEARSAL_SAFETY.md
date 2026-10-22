@@ -130,8 +130,10 @@ of the frozen Render database at the fixed root-only path
 `/var/backups/lecturesift/frozen-source/render-postgres.dump`.
 `frozen_source_dump.py` releases it only when it and its pin
 `render-postgres.dump.sha256` are canonical, single-link, root-owned regular
-files with mode `0400` or `0600` in a root-only directory, and only when the
-SHA-256 of the bytes it read equals the pin. The outer gate checks this before
+files with mode `0400` or `0600` in a root-only directory, only when the
+SHA-256 of the bytes it read equals the pin, and only when that pin equals the
+`source_dump_sha256` of the finalized PostgreSQL cutover evidence, validated
+through `provider_cutover_evidence.validate_final`. The outer gate checks this before
 it changes anything, and the inner rehearsal checks it again before it creates
 a run directory. The dump is restored into a disposable
 `lecturesift-source-postgres-rehearsal` container from the pinned PostgreSQL

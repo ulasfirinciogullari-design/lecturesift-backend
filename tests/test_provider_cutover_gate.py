@@ -441,6 +441,17 @@ def test_atomic_state_machine_requires_matching_postgres_redis_r2_and_revision(
     with pytest.raises(evidence.EvidenceError, match="exact release"):
         evidence.validate_final(root, expected_revision="b" * 40)
 
+    # The frozen rehearsal source accepts only the dump this finalized chain names.
+    frozen_spec = importlib.util.spec_from_file_location(
+        "frozen_source_dump_gate", ROOT / "deploy" / "frozen_source_dump.py"
+    )
+    assert frozen_spec and frozen_spec.loader
+    frozen = importlib.util.module_from_spec(frozen_spec)
+    frozen_spec.loader.exec_module(frozen)
+    monkeypatch.setattr(evidence, "EVIDENCE_ROOT", root)
+    monkeypatch.setattr(frozen, "_cutover_evidence", lambda: evidence)
+    assert frozen.finalized_source_dump_sha256() == SOURCE_DUMP
+
     ingress_root = tmp_path / "ingress-state"
     assert (
         evidence.ensure_ingress_freeze(
