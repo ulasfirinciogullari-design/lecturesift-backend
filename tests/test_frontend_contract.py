@@ -251,11 +251,20 @@ def test_homepage_shows_a_sized_lazy_result_screenshot_and_repeats_the_trial_act
     assert (phone, desktop) == ("/assets/home/result-screen-v1-tr-720.webp", "/assets/home/result-screen-v1-tr-1440.webp")
     sizes = {phone: (int(phone_width), int(phone_height)), desktop: (int(desktop_width), int(desktop_height))}
     assert sizes == {phone: (720, 1280), desktop: (1440, 840)}
+    # The opaque panels keep one even gap from the sides (24 CSS px at 1.5x on
+    # desktop, 16 at 2x on the phone) and split the height evenly above and
+    # below, so nothing touches an edge and no empty strip is left at the
+    # bottom. Shadows stay under half opacity and are not counted.
+    gaps = {phone: 32, desktop: 36}
     for language in ("tr", "en"):
         for published, size in sizes.items():
             asset = FRONTEND / published.lstrip("/").replace("-tr-", f"-{language}-")
             with Image.open(asset) as image:
                 assert (image.format, image.size) == ("WEBP", size), asset.name
+                left, top, right, bottom = image.getchannel("A").point(lambda alpha: 255 if alpha > 128 else 0).getbbox()
+            margins = (left, top, size[0] - right, size[1] - bottom)
+            gap = gaps[published]
+            assert margins[0] == margins[2] == gap and abs(margins[1] - margins[3]) <= 2 and gap <= margins[1] <= gap + 12, (asset.name, margins)
             assert asset.stat().st_size < 64 * 1024, asset.name
     # Heading, caption, alt text and the closing band are static copy that the
     # build translates into every language.

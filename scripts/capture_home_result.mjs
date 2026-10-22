@@ -23,17 +23,21 @@ const API = "https://api.lecturesift.com";
 const JOB = "home-sample-0001";
 // Turkish for the Turkish homepage, English for the other twelve.
 const LANGUAGES = ["tr", "en"];
-// Each image is laid out at `size` CSS pixels and saved at `scale` pixels per
-// CSS pixel; the file name carries its pixel width. The summary is captured at
-// one viewport and the quiz question and flashcard at another; `glimpse.zoom`
-// shrinks those two, and `layout` places all three given the summary's height.
+// Three parts of the result screen are captured: the summary panel, the quiz
+// question answered correctly and the flashcard turned to its answer. Each is
+// rendered by the workspace at its own width and drawn at one zoom per image,
+// so all text keeps the same scale. Each image is laid out at `size` CSS
+// pixels with `gap` around and between the parts, and saved at `scale` pixels
+// per CSS pixel; the file name carries its pixel width.
 const VARIANTS = [
-  // Desktop: the summary window, with the quiz and flashcard on its right.
-  {size: {width: 960, height: 560}, scale: 1.5, summary: {width: 900, mobile: false, until: ".result-body"}, glimpse: {width: 376, mobile: true, zoom: .86},
-    layout: () => ".summary{left:24px;top:56px}.quiz{right:20px;top:24px}.cards{right:44px;bottom:24px}"},
-  // Phone: the summary as a phone shows it, with the quiz and flashcard below.
-  {size: {width: 360, height: 640}, scale: 2, summary: {width: 360, mobile: true, until: "#summaryContent", extra: 16}, glimpse: {width: 376, mobile: true, zoom: .54},
-    layout: summary => `.summary{left:16px;top:16px}.quiz,.cards{top:${16 + summary.height + 8}px}.quiz{left:12px}.cards{right:12px}`},
+  // Desktop: the summary panel on the left at full height, its title on one
+  // line; the quiz question and the flashcard stacked on its right, filling
+  // the same height.
+  {size: {width: 960, height: 560}, scale: 1.5, gap: 24, arrange: columns, summaryWidth: 400},
+  // Phone: the summary panel across the top; the quiz question and the
+  // flashcard side by side below it, the same height, at the largest zoom
+  // that fits.
+  {size: {width: 360, height: 640}, scale: 2, gap: 16, arrange: rows},
 ];
 const QUALITY = 0.72;
 
@@ -53,13 +57,17 @@ try {
   for (const language of LANGUAGES) {
     const sample = await homepageSample(language);
     for (const variant of VARIANTS) {
-      const {summary} = await resultShots(language, variant.summary, variant.scale, sample, ["summary"]);
-      const {quiz, cards} = await resultShots(language, variant.glimpse, variant.scale, sample, ["quiz", "cards"]);
-      const bytes = await compose(variant, {summary, quiz, cards});
+      const plan = await variant.arrange(variant, language, sample);
+      const density = variant.scale * plan.zoom;
+      const summary = await summaryAt(language, sample, plan.summaryWidth, density);
+      const {quiz, cards} = await glimpseAt(language, sample, plan.glimpseWidth, density, plan.flashcardHeight);
+      const shots = {summary, quiz, cards};
+      const places = checkedPlaces(variant, plan.zoom, shots, plan.place(shots));
+      const bytes = await compose(variant, plan.zoom, shots, places);
       const [width, height] = [variant.size.width * variant.scale, variant.size.height * variant.scale];
       const file = path.join(OUTPUT, `result-screen-v1-${language}-${width}.webp`);
       await writeFile(file, bytes);
-      console.log(`${path.relative(ROOT, file)} ${width}x${height} ${bytes.length} bytes`);
+      console.log(`${path.relative(ROOT, file)} ${width}x${height} zoom ${plan.zoom.toFixed(3)} ${bytes.length} bytes`);
     }
   }
 } finally {
@@ -75,9 +83,9 @@ async function waitForServer() {
   throw new Error("The local static server did not start");
 }
 
-async function newContext(language, {width, mobile}, scale) {
+async function newContext(language, width, scale) {
   const context = await browser.newContext({
-    baseURL: ORIGIN, viewport: {width, height: 900}, isMobile: mobile, hasTouch: mobile, deviceScaleFactor: scale,
+    baseURL: ORIGIN, viewport: {width, height: 1000}, isMobile: true, hasTouch: true, deviceScaleFactor: scale,
     colorScheme: "light", reducedMotion: "reduce", locale: language === "tr" ? "tr-TR" : "en-US",
   });
   await context.addInitScript(language => {
@@ -90,7 +98,7 @@ async function newContext(language, {width, mobile}, scale) {
 
 // The homepage sample pack, exactly as the homepage shows it in `language`.
 async function homepageSample(language) {
-  const context = await newContext(language, {width: 1280, mobile: false}, 1);
+  const context = await newContext(language, 1280, 1);
   await context.route("**/*", route => new URL(route.request().url()).origin === ORIGIN ? route.continue() : route.abort("blockedbyclient"));
   const page = await context.newPage();
   await page.goto(language === "tr" ? "/" : `/${language}/`);
@@ -98,7 +106,6 @@ async function homepageSample(language) {
     const text = selector => host.querySelector(selector).textContent.trim();
     const choices = [...host.querySelectorAll("#demoQuiz [data-demo-answer]")];
     return {
-      course: text(".visual-bar span").split(" · ").pop(),
       topic: text(".demo-subject"),
       idea: text(".demo-concept h3"),
       insight: text(".demo-insight"),
@@ -106,23 +113,24 @@ async function homepageSample(language) {
       question: text("#demoQuiz h3"),
       choices: choices.map(button => button.textContent.trim()),
       correct: choices.findIndex(button => button.dataset.demoAnswer === "0"),
+      answer: text("#demoCardAnswer"),
     };
   });
   await context.close();
   return sample;
 }
 
-// The workspace restores a finished job and renders it as a result. `parts`
-// picks the screenshots: the summary tab, the quiz question answered
-// correctly, the first flashcard.
-async function resultShots(language, viewport, scale, sample, parts) {
+// The workspace restores a finished job and renders it as a result, in a
+// viewport `width` CSS pixels wide.
+async function openResult(language, sample, width, scale) {
   const result = {
-    title: `${sample.course} · ${sample.topic}`, job_type: "study_pack",
+    title: sample.topic, job_type: "study_pack",
     summary: `${sample.idea}\n\n${sample.insight}`,
     key_points: sample.connection.split(" · "),
     options: {include_summary: true, include_transcript: false, include_slides: false, quiz_count: 1, flashcard_count: 1},
     quiz: [{question: sample.question, options: sample.choices, answer_index: sample.correct, explanation: sample.insight}],
-    flashcards: [{front: sample.question, back: sample.choices[sample.correct]}],
+    // The homepage's own flashcard: the sample question and its answer.
+    flashcards: [{front: sample.question, back: sample.answer}],
     artifacts: [], slides: [], transcript_segments: [],
   };
   const stubs = new Map([
@@ -130,7 +138,7 @@ async function resultShots(language, viewport, scale, sample, parts) {
     [`/jobs/${JOB}`, {job_id: JOB, status: "done", stage: "done", percent: 100, source_type: "media", options: {job_type: "study_pack"}}],
     [`/jobs/${JOB}/result`, result],
   ]);
-  const context = await newContext(language, viewport, scale);
+  const context = await newContext(language, width, scale);
   await context.addInitScript(() => localStorage.setItem("lecturesift-billing-token", "local-sample-token"));
   await context.route("**/*", async route => {
     const request = route.request();
@@ -147,45 +155,175 @@ async function resultShots(language, viewport, scale, sample, parts) {
   await page.goto(`${language === "tr" ? "" : `/${language}`}/workspace.html?job=${JOB}`);
   await page.locator("#resultHeading").filter({hasText: sample.topic}).waitFor();
   await page.evaluate(() => document.fonts.ready);
-  // Screenshot of `selector`, cut off `extra` pixels below the bottom of `until`.
-  const shot = async (selector, until = selector, extra = 0) => {
-    await page.locator(selector).scrollIntoViewIfNeeded();
-    const box = await page.locator(selector).boundingBox();
-    const end = await page.locator(until).boundingBox();
-    const radius = await page.locator(selector).evaluate(node => getComputedStyle(node).borderTopLeftRadius);
-    const clip = {x: box.x, y: box.y, width: box.width, height: end.y + end.height + extra - box.y};
-    return {png: await page.screenshot({clip}), width: clip.width, height: clip.height, radius};
-  };
-  const shots = {};
-  if (parts.includes("summary")) shots.summary = await shot("#results", viewport.until, viewport.extra);
-  if (parts.includes("quiz")) {
-    await page.locator("#resultTab-quiz").click();
+  // "1 Quiz · 1 Flashcards" says little with counts of one.
+  await page.locator("#resultMeta").evaluate(meta => { meta.style.display = "none"; });
+  return {page, context};
+}
+
+// Hides the tabs from the first one that does not fit the row completely.
+async function trimTabs(page) {
+  await page.evaluate(() => {
+    const row = document.querySelector(".result-tabs");
+    const style = getComputedStyle(row);
+    const edge = row.getBoundingClientRect().right - parseFloat(style.paddingRight) - parseFloat(style.borderRightWidth);
+    let cut = false;
+    for (const tab of row.querySelectorAll(".result-tab")) {
+      if (getComputedStyle(tab).display === "none") continue;
+      cut ||= tab.getBoundingClientRect().right > edge + 0.5;
+      if (cut) tab.style.display = "none";
+    }
+  });
+}
+
+// Opens the result with the viewport chosen so that `selector` is `width`
+// CSS pixels wide; `prepare` readies the page before it is measured.
+async function openAtWidth(language, sample, selector, width, scale, prepare) {
+  let viewport = Math.round(width) + 40;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const {page, context} = await openResult(language, sample, viewport, scale);
+    await prepare(page);
+    const actual = (await page.locator(selector).boundingBox()).width;
+    if (Math.abs(actual - width) < 1) return {page, context};
+    await context.close();
+    viewport += Math.round(width - actual);
+  }
+  throw new Error(`No viewport makes ${selector} ${width}px wide`);
+}
+
+// Screenshot of `selector` down to the bottom of `until`, with its size in CSS pixels.
+async function shot(page, selector, until = selector) {
+  await page.locator(selector).scrollIntoViewIfNeeded();
+  const box = await page.locator(selector).boundingBox();
+  const end = await page.locator(until).boundingBox();
+  const radius = await page.locator(selector).evaluate(node => parseFloat(getComputedStyle(node).borderTopLeftRadius));
+  const clip = {x: box.x, y: box.y, width: box.width, height: end.y + end.height - box.y};
+  if (clip.y < 0 || clip.y + clip.height > page.viewportSize().height) throw new Error(`${selector} does not fit the viewport`);
+  return {png: await page.screenshot({clip}), width: clip.width, height: clip.height, radius};
+}
+
+// The summary panel: header, tabs, summary and key points, `width` CSS pixels
+// wide, with the number of lines its title takes.
+async function summaryAt(language, sample, width, scale) {
+  const {page, context} = await openAtWidth(language, sample, "#results", width, scale, trimTabs);
+  try {
+    const titleLines = await page.locator("#resultHeading").evaluate(heading => {
+      const range = document.createRange();
+      range.selectNodeContents(heading);
+      return new Set([...range.getClientRects()].map(line => Math.round(line.top))).size;
+    });
+    return {...await shot(page, "#results", ".result-body"), titleLines};
+  } finally {
+    await context.close();
+  }
+}
+
+// The quiz question answered correctly, `width` CSS pixels wide, and, when
+// `flashcardHeight` is given, the flashcard turned to its answer at the same
+// width and flashcardHeight(quiz height) tall.
+async function glimpseAt(language, sample, width, scale, flashcardHeight) {
+  const {page, context} = await openAtWidth(language, sample, ".quiz-item", width, scale, page => page.locator("#resultTab-quiz").click());
+  try {
     await page.locator(`.quiz-item[data-question="0"] [data-option="${sample.correct}"]`).click();
     await page.locator("#quiz-feedback-0").waitFor();
-    shots.quiz = await shot('.quiz-item[data-question="0"]');
-  }
-  if (parts.includes("cards")) {
+    const quiz = await shot(page, '.quiz-item[data-question="0"]');
+    if (!flashcardHeight) return {quiz};
     await page.locator("#resultTab-cards").click();
-    shots.cards = await shot("#activeFlash");
+    await page.locator("#activeFlash").click();
+    await page.locator("#activeFlash p").filter({hasText: sample.answer}).waitFor();
+    // The card centres its answer, so it can take any height above its content.
+    const requested = flashcardHeight(quiz.height);
+    await page.locator("#activeFlash").evaluate((card, height) => { card.style.minHeight = `${height}px`; }, requested);
+    const cards = await shot(page, "#activeFlash");
+    if (requested && Math.abs(cards.height - requested) > 1) throw new Error(`${language}: the flashcard needs ${cards.height}px, more than ${requested}px`);
+    return {quiz, cards};
+  } finally {
+    await context.close();
   }
-  await context.close();
-  return shots;
+}
+
+// Desktop: the widest summary panel, from `summaryWidth` down, whose title
+// fits on one line and which leaves room for the flashcard. The zoom makes
+// the panel fill the height; the quiz takes the rest of the width and the
+// flashcard the rest of that column.
+async function columns(variant, language, sample) {
+  const {size: {width, height}, gap} = variant;
+  for (let summaryWidth = variant.summaryWidth; summaryWidth >= variant.summaryWidth - 80; summaryWidth -= 10) {
+    const summary = await summaryAt(language, sample, summaryWidth, 1);
+    if (summary.titleLines > 1) continue;
+    const zoom = (height - 2 * gap) / summary.height;
+    const glimpseWidth = (width - 3 * gap) / zoom - summary.width;
+    const flashcard = quizHeight => (height - 3 * gap) / zoom - quizHeight;
+    // With no height set, the flashcard shows how much room its answer needs.
+    const {quiz, cards} = await glimpseAt(language, sample, glimpseWidth, 1, () => 0);
+    if (flashcard(quiz.height) < cards.height) continue;
+    return {
+      zoom, summaryWidth: summary.width, glimpseWidth, flashcardHeight: flashcard,
+      place: shots => {
+        const right = 2 * gap + zoom * shots.summary.width;
+        return {summary: [gap, gap], quiz: [right, gap], cards: [right, 2 * gap + zoom * shots.quiz.height]};
+      },
+    };
+  }
+  throw new Error(`${language}: no summary width leaves room for the flashcard`);
+}
+
+// Phone: the largest zoom at which the summary panel and the two cards below
+// it fit the height; what is left over splits evenly above and below.
+async function rows(variant, language, sample) {
+  const {size: {width, height}, gap} = variant;
+  const widths = zoom => ({summary: (width - 2 * gap) / zoom, glimpse: (width - 3 * gap) / 2 / zoom});
+  const used = async zoom => {
+    const summary = await summaryAt(language, sample, widths(zoom).summary, 1);
+    const {quiz} = await glimpseAt(language, sample, widths(zoom).glimpse, 1);
+    return 3 * gap + zoom * (summary.height + quiz.height);
+  };
+  let [low, high] = [0.4, 1];
+  if (await used(low) > height) throw new Error(`${language}: the phone image is too short even at zoom ${low}`);
+  while (high - low > 0.004) {
+    const middle = (low + high) / 2;
+    if (await used(middle) <= height) low = middle; else high = middle;
+  }
+  const zoom = low;
+  return {
+    zoom, summaryWidth: widths(zoom).summary, glimpseWidth: widths(zoom).glimpse, flashcardHeight: quizHeight => quizHeight,
+    place: shots => {
+      const top = (height - gap - zoom * (shots.summary.height + shots.quiz.height)) / 2;
+      const below = top + zoom * shots.summary.height + gap;
+      return {summary: [gap, top], quiz: [gap, below], cards: [width - gap - zoom * shots.cards.width, below]};
+    },
+  };
+}
+
+// Every part lies inside the image, at least `gap` from its edges, and no
+// part covers another.
+function checkedPlaces(variant, zoom, shots, places) {
+  const {size: {width, height}, gap} = variant;
+  const boxes = Object.entries(places).map(([name, [x, y]]) => ({name, x, y, right: x + zoom * shots[name].width, bottom: y + zoom * shots[name].height}));
+  for (const box of boxes) {
+    if (box.x < gap - 1 || box.y < gap - 1 || box.right > width - gap + 1 || box.bottom > height - gap + 1) throw new Error(`${box.name} leaves the image margins`);
+    for (const other of boxes) {
+      if (other !== box && box.x < other.right && other.x < box.right && box.y < other.bottom && other.y < box.bottom) throw new Error(`${box.name} covers ${other.name}`);
+    }
+  }
+  return places;
 }
 
 // Lays the three screenshots out on one canvas and encodes it as WebP with
 // the browser's own encoder, so no other image tooling is needed.
-async function compose(variant, shots) {
+async function compose(variant, zoom, shots, places) {
   const context = await browser.newContext({viewport: variant.size, deviceScaleFactor: variant.scale});
   const page = await context.newPage();
   const image = buffer => `data:image/png;base64,${buffer.toString("base64")}`;
-  const figure = (name, {png, width, height, radius}, zoom = 1) =>
-    `<img class="${name}" src="${image(png)}" style="width:${width * zoom}px;height:${height * zoom}px;border-radius:${parseFloat(radius) * zoom}px">`;
+  const figure = name => {
+    const {png, width, height, radius} = shots[name];
+    const [x, y] = places[name];
+    return `<img src="${image(png)}" style="left:${x}px;top:${y}px;width:${width * zoom}px;height:${height * zoom}px;border-radius:${radius * zoom}px">`;
+  };
   await page.setContent(`<!doctype html><style>
     html,body{margin:0;width:${variant.size.width}px;height:${variant.size.height}px;overflow:hidden}
     body{position:relative;background:transparent}
     img{position:absolute;display:block;box-shadow:0 2px 6px rgba(17,35,59,.12)}
-    ${variant.layout(shots.summary)}
-  </style>${figure("summary", shots.summary)}${figure("quiz", shots.quiz, variant.glimpse.zoom)}${figure("cards", shots.cards, variant.glimpse.zoom)}`);
+  </style>${figure("summary")}${figure("quiz")}${figure("cards")}`);
   await page.evaluate(() => Promise.all([...document.images].map(img => img.decode())));
   const png = await page.screenshot({omitBackground: true});
   const webp = await page.evaluate(async ({source, quality}) => {
