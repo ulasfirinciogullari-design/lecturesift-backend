@@ -35,6 +35,7 @@ from .billing_service import (
     create_password_reset_token,
     create_verification_token,
     create_manual_order,
+    google_login_linked,
     link_google_account,
     login_user,
     logout_user,
@@ -1259,7 +1260,7 @@ def billing_google_link(
         "ok": True,
         "google_link": result["google_link"],
         "message": GOOGLE_LINK_MESSAGES[result["google_link"]],
-        "account": account_status(user["id"]),
+        "account": _account_with_google_link(user["id"]),
     }
 
 
@@ -1285,7 +1286,7 @@ def billing_google_unlink(
             if result["removed"]
             else "Bu hesaba bağlı bir Google girişi yok."
         ),
-        "account": account_status(user["id"]),
+        "account": _account_with_google_link(user["id"]),
     }
 
 
@@ -1383,9 +1384,15 @@ def billing_admin_logout(request: Request, user: dict = Depends(_account_admin))
     return {"ok": True, "message": "Yönetici oturumu kapatıldı."}
 
 
+def _account_with_google_link(user_id: str) -> dict:
+    # The Google link flag is read here, under the API's database role,
+    # because account_status also runs as the worker, which cannot read it.
+    return {**account_status(user_id), "google_linked": google_login_linked(user_id)}
+
+
 @app.get("/billing/me")
 def billing_me(user: dict = Depends(_billing_user)) -> dict:
-    return {"ok": True, "account": account_status(user["id"])}
+    return {"ok": True, "account": _account_with_google_link(user["id"])}
 
 
 def _referral_response(callback, *args, **kwargs) -> dict:

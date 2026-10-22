@@ -999,6 +999,21 @@ def link_google_account(user_id: str, current_password: str, *, sub: str) -> dic
     return {"google_link": google_link, "email": row.email, "previous_email": previous_email}
 
 
+def google_login_linked(user_id: str) -> bool:
+    """Whether a Google login opens this account (see link_google_account).
+
+    Kept out of account_status: the worker's database role reads account
+    status for job entitlements but has no access to billing_auth_tokens.
+    """
+    init_billing_database()
+    with ENGINE.connect() as connection:
+        return connection.execute(
+            select(AUTH_TOKENS.c.token_hash)
+            .where(AUTH_TOKENS.c.user_id == user_id, AUTH_TOKENS.c.purpose == GOOGLE_LINK_PURPOSE)
+            .limit(1)
+        ).first() is not None
+
+
 def unlink_google_account(user_id: str, current_password: str) -> dict:
     """Remove every Google sign-in link of a signed-in account."""
     init_billing_database()
@@ -1879,11 +1894,6 @@ def account_status(user_id: str) -> dict:
             select(USER_PREFERENCES).where(USER_PREFERENCES.c.user_id == user_id)
         ).first()
         permanent_ad_free = _has_permanent_ad_free(connection, user_id)
-        google_linked = connection.execute(
-            select(AUTH_TOKENS.c.token_hash)
-            .where(AUTH_TOKENS.c.user_id == user_id, AUTH_TOKENS.c.purpose == GOOGLE_LINK_PURPOSE)
-            .limit(1)
-        ).first() is not None
         subscription = _active_subscription(connection, user_id, now)
         open_periods = _open_subscription_periods(connection, user_id, now) if subscription else []
         queued = [period for period in open_periods if _as_utc(period.starts_at) > now]
@@ -1992,8 +2002,6 @@ def account_status(user_id: str) -> dict:
         "can_create_job": remaining is None or remaining > 0,
         "download_enabled": download_enabled,
         "permanent_ad_free": permanent_ad_free,
-        # A Google login opens this account (see link_google_account).
-        "google_linked": google_linked,
         "job_entitlements": job_entitlements,
         "download_access_source": download_access_source,
         "is_admin": False,
