@@ -231,6 +231,62 @@ def test_homepage_shows_price_cards_without_duplicating_plan_checkout():
     assert 'href="/plans.html"' in homepage
 
 
+def test_homepage_shows_a_sized_lazy_result_screenshot_and_repeats_the_trial_action():
+    from PIL import Image
+
+    homepage = (FRONTEND / "index.html").read_text(encoding="utf-8")
+    catalog = json.loads((FRONTEND / "page-i18n.js").read_text(encoding="utf-8").split("window.LECTURESIFT_PAGE_COPY=", 1)[1].rstrip(";\r\n"))
+    assert '<link rel="stylesheet" href="/home.css?v=2">' in homepage
+    section = re.search(r'<section id="result-preview" class="home-result" aria-labelledby="resultPreviewTitle">(.*?)</section>', homepage, re.S)
+    assert section, "the result screenshot section is missing"
+    # Desktop and phone captures of the real result screen, each with its own
+    # size reserved before it loads, and nothing fetched until it is near.
+    picture = re.fullmatch(
+        r'<picture><source media="\(max-width: 600px\)" srcset="(/assets/home/[^"]+)" width="(\d+)" height="(\d+)">'
+        r'<img src="(/assets/home/[^"]+)" width="(\d+)" height="(\d+)" loading="lazy" decoding="async" alt="([^"]+)"></picture>',
+        re.search(r"<picture>.*?</picture>", section.group(1)).group(0),
+    )
+    assert picture, "the screenshot must be a <picture> with a sized phone <source> and a sized lazy <img>"
+    phone, phone_width, phone_height, desktop, desktop_width, desktop_height, alt = picture.groups()
+    assert (phone, desktop) == ("/assets/home/result-screen-v1-tr-720.webp", "/assets/home/result-screen-v1-tr-1440.webp")
+    sizes = {phone: (int(phone_width), int(phone_height)), desktop: (int(desktop_width), int(desktop_height))}
+    assert sizes == {phone: (720, 1280), desktop: (1440, 840)}
+    # The opaque panels keep one even gap from the sides (24 CSS px at 1.5x on
+    # desktop, 16 at 2x on the phone) and split the height evenly above and
+    # below, so nothing touches an edge and no empty strip is left at the
+    # bottom. Shadows stay under half opacity and are not counted.
+    gaps = {phone: 32, desktop: 36}
+    for language in ("tr", "en"):
+        for published, size in sizes.items():
+            asset = FRONTEND / published.lstrip("/").replace("-tr-", f"-{language}-")
+            with Image.open(asset) as image:
+                assert (image.format, image.size) == ("WEBP", size), asset.name
+                left, top, right, bottom = image.getchannel("A").point(lambda alpha: 255 if alpha > 128 else 0).getbbox()
+            margins = (left, top, size[0] - right, size[1] - bottom)
+            gap = gaps[published]
+            assert margins[0] == margins[2] == gap and abs(margins[1] - margins[3]) <= 2 and gap <= margins[1] <= gap + 12, (asset.name, margins)
+            assert asset.stat().st_size < 64 * 1024, asset.name
+    # Heading, caption, alt text and the closing band are static copy that the
+    # build translates into every language.
+    heading = re.search(r'<h2 id="resultPreviewTitle">([^<]+)</h2>', section.group(1)).group(1)
+    caption = re.search(r"<figcaption>([^<]+)</figcaption>", section.group(1)).group(1)
+    band = re.search(r'<section class="home-cta" aria-labelledby="homeCtaTitle">\s*<h2 id="homeCtaTitle">([^<]+)</h2>\s*(<a [^>]+>[^<]+</a>)\s*<p>([^<]+)</p>\s*</section>\s*</main>', homepage)
+    assert band, "the closing trial band must be the last section of <main>"
+    for copy in (heading, caption, alt, band.group(1), band.group(3)):
+        row = catalog[copy]
+        assert len(row) == 13 and all(value.strip() for value in row) and len(set(row)) >= 10, copy
+    # Same href and same label as the hero button: one action, offered twice.
+    hero = re.search(r'<div class="hero-actions">(<a class="study-primary" [^>]+>[^<]+</a>)', homepage).group(1)
+    assert hero == '<a class="study-primary" href="/workspace.html?source=upload">30 dakika ücretsiz dene</a>'
+    assert band.group(2) == hero
+    assert homepage.count('class="study-primary"') == 2
+    # No testimonials, quotes, ratings or user counts until consented ones exist.
+    assert "<blockquote" not in homepage and "★" not in homepage and "testimonial" not in homepage.casefold()
+    build = (FRONTEND.parent / "scripts" / "build_localized_site.mjs").read_text(encoding="utf-8")
+    assert '"/assets/home/result-screen-v1-tr-", "/assets/home/result-screen-v1-en-"' in build
+    assert (FRONTEND.parent / "scripts" / "capture_home_result.mjs").is_file()
+
+
 def test_lesson_history_is_owned_by_workspace():
     account = (FRONTEND / "account.html").read_text(encoding="utf-8")
     workspace = (FRONTEND / "workspace.html").read_text(encoding="utf-8")
