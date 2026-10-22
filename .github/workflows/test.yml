@@ -132,7 +132,8 @@ jobs:
           key: apt-archives-ubuntu-24.04-v1
           restore-keys: apt-archives-ubuntu-24.04-v1-
       - name: Install system dependencies
-        timeout-minutes: 10
+        # Normally under a minute; the slack is for a cold cache on a slow mirror.
+        timeout-minutes: 15
         run: |
           mkdir -p ~/.cache/apt-archives/partial
           sudo apt-get -o Acquire::Retries=3 update
@@ -141,7 +142,10 @@ jobs:
         id: apt-key
         if: always() && steps.apt-cache.outcome == 'success'
         run: |
-          sudo apt-get -o Dir::Cache::Archives="$HOME/.cache/apt-archives" autoclean
+          # A timed-out install leaves apt-get running and holding the cache lock.
+          sudo pkill -x apt-get && sleep 3 || true
+          sudo pkill -9 -x apt-get || true
+          sudo apt-get -o Dir::Cache::Archives="$HOME/.cache/apt-archives" autoclean || true
           sudo chown -R "$(id -u):$(id -g)" ~/.cache/apt-archives
           if [ -z "$(find ~/.cache/apt-archives -maxdepth 1 -name '*.deb' -print -quit)" ]; then exit 0; fi
           digest=$(find ~/.cache/apt-archives -maxdepth 1 -name '*.deb' -printf '%f\n' | sort | sha256sum | cut -c1-16)
