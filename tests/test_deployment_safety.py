@@ -191,11 +191,20 @@ def test_database_rehearsal_root_and_source_consistency_fail_closed():
     assert "TABLE|billing_payment_provider_sessions|0|0|0" not in script
     assert "verify_schema_transition_v3.py" not in script
     assert " legacy --manifest" not in script
-    inventory = script.index("-f /probe/schema_contract_inventory.sql > /backup/source-inventory.txt")
+    inventory = script.index(
+        'frozen_source_read "$ROOT_DIR/deploy/schema_contract_inventory.sql" \\\n'
+        '  > "$run_dir/source-inventory.txt"'
+    )
     detection = script.index('--inventory "$run_dir/source-inventory.txt" --accept 4,5')
-    first_source_manifest = script.index('-f "/probe/$MANIFEST_NAME" > /backup/source-before.txt')
+    first_source_manifest = script.index(
+        'frozen_source_read "$REHEARSAL_MANIFEST" > "$run_dir/source-before.txt"'
+    )
     assert inventory < detection < first_source_manifest
-    assert script.index('-f "/probe/$MANIFEST_NAME" > /backup/source-after.txt') > first_source_manifest
+    source_dump = script.index("--file=/var/lib/postgresql/render.dump")
+    source_after = script.index(
+        'frozen_source_read "$REHEARSAL_MANIFEST" > "$run_dir/source-after.txt"'
+    )
+    assert first_source_manifest < source_dump < source_after
     assert 'REHEARSAL_VERIFIER="$ROOT_DIR/deploy/verify_schema_transition_v${SOURCE_CONTRACT_VERSION}.py"' in script
     assert script.count('python3 "$REHEARSAL_VERIFIER" current') == 5
     assert "A contract-current source manifest must not contain schema compatibility evidence." in script
@@ -1455,7 +1464,7 @@ def test_rehearsal_provenance_reconcile_only_is_non_destructive_and_fail_closed(
     mode_gate = script.index('if [[ "$rehearsal_mode" == "reconcile-only" ]]')
     normal_secrets = script.index("mapfile -t rehearsal_passwords", mode_gate)
     normal_trap = script.index("trap cleanup_rehearsal EXIT", normal_secrets)
-    source_read = script.index("docker run --rm --user 0:0", normal_trap)
+    source_read = script.index("start_frozen_source_postgres || {", normal_trap)
     marker_create = script.index("create_rehearsal_provenance_marker\n", source_read)
     createdb = script.index("exec -T postgres createdb", marker_create)
     assert mode_gate < normal_secrets < normal_trap < source_read < marker_create < createdb
@@ -1476,8 +1485,10 @@ def test_rehearsal_clone_owner_and_candidate_secret_boundaries_are_structural():
     postgres_role = _read("deploy/postgres-app-role.sh")
     stack = _read("deploy/rehearsal_stack.sh")
 
-    # Source inventory, source-before manifest, dump and source-after manifest.
-    assert restore.count('--env "PGOPTIONS=-c default_transaction_read_only=on"') == 4
+    # One psql reader serves the source inventory and both source manifests;
+    # pg_dump is the other read-only source read.
+    assert restore.count('--env "PGOPTIONS=-c default_transaction_read_only=on"') == 2
+    assert restore.count("frozen_source_read ") == 3
     assert "lecturesift_rehearsal_owner_" in restore
     assert "owner_role=lecturesift_rehearsal_owner_" in restore
     assert "WHERE rolname IN (:'owner_role', :'api_role', :'worker_role')" in restore

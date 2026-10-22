@@ -352,6 +352,13 @@ validate_candidate
 [[ "$(sed -n 's/^tree_sha256=//p' "$candidate_evidence")" == \
    "$trusted_source_tree_sha256" ]] || fail trusted-handoff-tree-mismatch
 
+# The rehearsal source is the pinned frozen Render dump on this host, never the
+# Render database. Prove it is present and intact before any runtime changes.
+[[ -f "$root/deploy/frozen_source_dump.py" && \
+   ! -L "$root/deploy/frozen_source_dump.py" ]] || fail missing-frozen-source-tool
+python3 -I "$root/deploy/frozen_source_dump.py" verify >/dev/null || \
+  fail frozen-source-dump-unavailable
+
 check_provenance_residue() {
   if [[ ! -e "$provenance_root" && ! -L "$provenance_root" ]]; then
     return 0
@@ -508,7 +515,7 @@ PY
     [[ "$name" != "lecturesift-migration-rehearsal" || \
        "$purpose_label" == "candidate-database-migration" ]] || return 1
     [[ "$name" != "lecturesift-source-postgres-rehearsal" || \
-       "$purpose_label" == "source-postgres-client" ]] || return 1
+       "$purpose_label" == "frozen-source-postgres" ]] || return 1
     validate_run "$run_label" || return 1
   done
   for identifier in "${volumes[@]}"; do
@@ -588,7 +595,6 @@ run_inner_rehearsal() {
   env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8 \
     "${run_identity[@]}" \
     LECTURESIFT_ROOT="$root" \
-    LECTURESIFT_SOURCE_DB_ENV=/root/.lecturesift-render-source.env \
     LECTURESIFT_DB_ENV_FILE=/etc/lecturesift/postgres.env \
     LECTURESIFT_ENV_FILE=/etc/lecturesift/runtime.env \
     LECTURESIFT_API_ENV_FILE=/etc/lecturesift/api.env \
@@ -845,7 +851,7 @@ cleanup_labeled_residue() {
     [[ "$name" != "lecturesift-migration-rehearsal" || \
        "$purpose_label" == "candidate-database-migration" ]] || return 1
     [[ "$name" != "lecturesift-source-postgres-rehearsal" || \
-       "$purpose_label" == "source-postgres-client" ]] || return 1
+       "$purpose_label" == "frozen-source-postgres" ]] || return 1
   done
   for identifier in "${volumes[@]}"; do
     [[ -n "$identifier" ]] || continue

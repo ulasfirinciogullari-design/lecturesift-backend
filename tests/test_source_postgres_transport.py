@@ -10,9 +10,10 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 HELPER = ROOT / "deploy" / "source_postgres_transport.py"
+# The exact rehearsal reads the frozen Render dump instead of Render, so it is
+# deliberately absent here; tests/test_frozen_rehearsal_source.py pins that.
 SOURCE_SCRIPTS = (
     "deploy/migrate_postgres.sh",
-    "deploy/rehearsal_restore.sh",
     "deploy/rollback_postgres_to_render.sh",
     "deploy/finalize_provider_cutover.sh",
     "deploy/seed_first_cutover_backup.sh",
