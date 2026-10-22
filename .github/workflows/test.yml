@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   pytest:
-    # Pinned while ubuntu-latest moves to Ubuntu 26: its apt step timed out twice on 2026-10-22.
+    # Pinned so the cached apt packages below always match the runner image.
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     services:
@@ -120,9 +120,38 @@ jobs:
           for file in frontend/*.js; do
             node --check "$file"
           done
+      # The runner's Ubuntu mirror sometimes serves packages at a few KB/s, so
+      # keep the downloaded .deb files between runs instead of fetching 100 MB.
+      # The cache is saved even after a timed-out install, so the next run
+      # only has to fetch what is still missing.
+      - name: Restore cached system packages
+        id: apt-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/apt-archives
+          key: apt-archives-ubuntu-24.04-v1
+          restore-keys: apt-archives-ubuntu-24.04-v1-
       - name: Install system dependencies
         timeout-minutes: 10
-        run: sudo apt-get -o Acquire::Retries=3 update && sudo apt-get -o Acquire::Retries=3 install -y ffmpeg fonts-dejavu-core tesseract-ocr tesseract-ocr-eng tesseract-ocr-tur
+        run: |
+          mkdir -p ~/.cache/apt-archives/partial
+          sudo apt-get -o Acquire::Retries=3 update
+          sudo apt-get -o Acquire::Retries=3 -o Dir::Cache::Archives="$HOME/.cache/apt-archives" install -y ffmpeg fonts-dejavu-core tesseract-ocr tesseract-ocr-eng tesseract-ocr-tur
+      - name: Name the system package cache by its contents
+        id: apt-key
+        if: always() && steps.apt-cache.outcome == 'success'
+        run: |
+          sudo apt-get -o Dir::Cache::Archives="$HOME/.cache/apt-archives" autoclean
+          sudo chown -R "$(id -u):$(id -g)" ~/.cache/apt-archives
+          if [ -z "$(find ~/.cache/apt-archives -maxdepth 1 -name '*.deb' -print -quit)" ]; then exit 0; fi
+          digest=$(find ~/.cache/apt-archives -maxdepth 1 -name '*.deb' -printf '%f\n' | sort | sha256sum | cut -c1-16)
+          echo "key=apt-archives-ubuntu-24.04-v1-$digest" >> "$GITHUB_OUTPUT"
+      - name: Save system packages for the next run
+        if: always() && steps.apt-key.outputs.key != '' && steps.apt-key.outputs.key != steps.apt-cache.outputs.cache-matched-key
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/apt-archives
+          key: ${{ steps.apt-key.outputs.key }}
       - name: Install Python dependencies
         run: pip install --require-hashes -r requirements-dev.txt
       - name: Validate Render blueprint YAML
