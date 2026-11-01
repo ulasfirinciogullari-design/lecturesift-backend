@@ -163,6 +163,8 @@ def build_row(lesson: dict, day: date, hook: tuple | None = None) -> dict:
         f"{line1} {line2}\n\n{body}\n\n"
         "LectureSift ders kaydını, PDF'ini ya da slaytlarını özet, quiz ve flashcard'lara çevirir. "
         "Kaç saniyede bildin? Yoruma yaz 👇\n\n"
+        "🔗 Kendi dersinle dene: profildeki linkten lecturesift.com'a gir. "
+        "Hesap açmadan 30 dakikalık bir kaynak ücretsiz.\n\n"
         f"{hashtag} #DersÇalışma #AktifHatırlama #Üniversite #LectureSift\n"
         "{voice}{marker}"
     )
