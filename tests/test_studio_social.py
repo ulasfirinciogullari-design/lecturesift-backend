@@ -33,6 +33,11 @@ def test_valid_lesson_becomes_a_complete_row():
     carousel = studio._caption(row, date(2026, 10, 18), "carousel")
     assert reel.endswith("Seslendirme yapay zekâ ile üretildi.\nLectureSift · studio-reel · 2026-10-18")
     assert "Seslendirme" not in carousel and carousel.endswith("#LectureSift\nLectureSift · studio-carousel · 2026-10-18")
+    # Every post points viewers to the site and its no-account trial.
+    for caption in (reel, carousel):
+        assert "profildeki linkten lecturesift.com'a gir" in caption
+        assert "Hesap açmadan 30 dakikalık bir kaynak ücretsiz." in caption
+        assert len(caption) <= 2200
 
 
 def test_rows_stored_with_the_old_disclosure_still_caption_correctly():
