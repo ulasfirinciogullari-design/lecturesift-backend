@@ -216,6 +216,60 @@ def test_selector_queues_the_alert_after_a_failed_reconciliation_without_waiting
     assert "Restart=always" in selector
 
 
+def _backup_window(tmp_path: Path, state: str, finished_seconds_ago: float | None) -> bool:
+    loop = _read("deploy/reconcile_production_ingress.sh")
+    function = "in_backup_window() {" + loop.split("in_backup_window() {", 1)[1].split("\n}\n", 1)[0] + "\n}\n"
+    uptime = tmp_path / "uptime"
+    uptime.write_text("10000.00 5000.00\n", encoding="ascii")
+    finished = 0 if finished_seconds_ago is None else int((10000 - finished_seconds_ago) * 1_000_000)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    systemctl = bin_dir / "systemctl"
+    systemctl.write_text(
+        "#!/bin/bash\n"
+        '[[ "$1 $2 $3 $4" == "show --property=ActiveState --value lecturesift-backup.service" ]] '
+        f"&& {{ echo {state}; exit 0; }}\n"
+        '[[ "$1 $2 $3 $4" == "show --property=InactiveEnterTimestampMonotonic --value lecturesift-backup.service" ]] '
+        f"&& {{ echo {finished}; exit 0; }}\n"
+        "exit 1\n",
+        encoding="ascii",
+    )
+    systemctl.chmod(0o755)
+    script = (
+        "set -Eeuo pipefail\nBACKUP_UNIT=lecturesift-backup.service\n"
+        + function.replace("/proc/uptime", str(uptime))
+        + "if in_backup_window; then echo held; else echo emailed; fi\n"
+    )
+    result = subprocess.run(
+        ["bash", "-c", script],
+        env={**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"},
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout.strip() == "held"
+
+
+@pytest.mark.parametrize(
+    ("state", "finished_seconds_ago", "held"),
+    [
+        ("activating", None, True),
+        ("deactivating", None, True),
+        ("inactive", 60, True),
+        ("failed", 120, True),
+        ("inactive", 301, False),
+        ("failed", 3600, False),
+        ("inactive", None, False),
+    ],
+)
+def test_selector_holds_its_alert_only_during_and_just_after_the_nightly_backup(
+    tmp_path, state, finished_seconds_ago, held
+):
+    # The backup drains the API and stops the worker, so the activated ingress
+    # gate fails by design; any failure that outlives that window still emails.
+    assert _backup_window(tmp_path, state, finished_seconds_ago) is held
+
+
 RELOAD_WRAPPER = "ExecReload=/bin/bash /opt/lecturesift/deploy/core_reload_step.sh "
 
 
