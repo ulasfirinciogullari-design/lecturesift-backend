@@ -211,3 +211,14 @@ def test_release_contract_is_documented_without_runtime_secret_override():
     assert "bash /opt/lecturesift/deploy/release.sh build" in docs
     assert "LECTURESIFT_BUILD_REVISION=" not in runtime_example
     assert "LECTURESIFT_EXPECTED_BUILD_REVISION=" not in runtime_example
+
+
+def test_scheduled_social_check_verifies_the_istanbul_post_day_not_the_utc_date():
+    workflow = _read(".github/workflows/production-social-check.yml")
+    step = workflow.split("Verify today's scheduled post", 1)[1]
+
+    # GitHub starts scheduled runs hours late; a run after midnight UTC must
+    # still check the day whose 13:00 Istanbul post is already due.
+    assert "post_day=$(TZ=Europe/Istanbul date -d '13 hours 30 minutes ago' +%F)" in step
+    assert "instagram/daily/status?day=$post_day" in step
+    assert "date -u +%F" not in step
