@@ -148,8 +148,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          today=$(date -u +%F)
-          daily_status="https://api.lecturesift.com/instagram/daily/status?day=$today"
+          # Posts go out at 13:00 and 20:00 Istanbul time. GitHub often starts
+          # scheduled runs hours late, past midnight UTC, so check the latest
+          # Istanbul day whose 13:00 post is due rather than the UTC date.
+          post_day=$(TZ=Europe/Istanbul date -d '13 hours 30 minutes ago' +%F)
+          daily_status="https://api.lecturesift.com/instagram/daily/status?day=$post_day"
           for attempt in $(seq 1 20); do
             if body=$(curl --silent --show-error --fail --max-time 25 "$daily_status"); then
               echo "Daily status: $body"
@@ -159,7 +162,7 @@ jobs:
               fi
             fi
             if [ "$attempt" -eq 20 ]; then
-              echo "Today's Instagram post marker was not observed in time." >&2
+              echo "The Instagram post marker for $post_day was not observed in time." >&2
               exit 1
             fi
             sleep 30
