@@ -1886,5 +1886,5 @@ def test_frontend_uses_stable_api_hostname_during_vps_cutover():
 
     headers = (FRONTEND.parent / "netlify.toml").read_text(encoding="utf-8")
     assert "https://api.lecturesift.com" in headers
-    # Keep the old origin in CSP only during the rollback observation window.
-    assert old_origin in headers
+    # Render is gone, so the CSP no longer allows its old origin.
+    assert old_origin not in headers

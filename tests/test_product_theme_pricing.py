@@ -204,10 +204,9 @@ def test_static_plan_cards_match_the_backend_try_catalog():
         # The static card must follow the same download rule plans.js renders.
         assert ("plans.previewOnly" in card["keys"]) is (not plan.download_enabled), plan.code
 
-        ad_keys = {"none": "plans.adFree", "limited": "plans.limitedAds"}
-        ad_key = ad_keys.get(plan.ad_mode, "plans.adsMayAppear")
-        assert ad_key in card["keys"], plan.code
-        assert not ({"plans.adFree", "plans.limitedAds", "plans.adsMayAppear"} - {ad_key}) & card["keys"], plan.code
+        # Ad lines come from plans.js only while GET /ads/config says ads are
+        # on, so the static card carries none.
+        assert not {"plans.adFree", "plans.limitedAds", "plans.adsMayAppear"} & card["keys"], plan.code
         price_suffix = {"subscription": "plans.thirtyDayPackageShort", "one_time": "plans.oneTimeShort"}.get(plan.kind)
         if price_suffix:
             assert price_suffix in card["keys"], plan.code

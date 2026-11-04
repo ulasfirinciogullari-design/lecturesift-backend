@@ -101,7 +101,7 @@ const TR = {
 const PLAN_COPY = {
   tr: {
     free: ["Ücretsiz", "LectureSift'i denemek ve kısa dersleri işlemek için.", "120 dk / ay"],
-    credit: ["Dakika Paketi", "Abonelik olmadan ek işlem hakkı.", "300 dakika"],
+    credit: ["Dakika Paketi", "Tek ödemeyle planına eklenir.", "300 dakika"],
     lite: ["Öğrenci", "Dönem boyunca her ders için.", "600 dk / 30 gün"],
     plus: ["Plus", "Yoğun ders dönemi ve çoklu kaynaklar için.", "900 dk / 30 gün"],
     pro: ["Pro", "Uzun kayıtlar ve öncelikli işleme için.", "1.500 dk / 30 gün"],
@@ -110,7 +110,7 @@ const PLAN_COPY = {
   },
   en: {
     free: ["Free", "Try LectureSift and process short lectures.", "120 min / month"],
-    credit: ["Minute Pack", "Extra processing without a subscription.", "300 minutes"],
+    credit: ["Minute Pack", "One payment, added to your plan.", "300 minutes"],
     lite: ["Student", "For every lecture, all term.", "600 min / 30 days"],
     plus: ["Plus", "For intensive study and multiple sources.", "900 min / 30 days"],
     pro: ["Pro", "For long recordings and priority processing.", "1,500 min / 30 days"],
@@ -767,6 +767,23 @@ function uploadLimitMessage(documentMode, limitMb) {
   const kind = central?.t(documentMode ? "plans.documentShort" : "plans.mediaShort", documentMode ? "belge" : "medya") || (documentMode ? "belge" : "medya");
   return `${base} ${Number(limitMb).toLocaleString(central?.locale || navigator.language)} MB ${kind}.`;
 }
+// A visitor without an account who picks a file over the trial size sees the
+// same free-account invitation as the other guest limits, not a bare failure.
+function showUploadLimitError(documentMode, limitMb) {
+  showError(uploadLimitMessage(documentMode, limitMb), "LS-UPLOAD-02");
+  if (billingAccount && billingAccount.plan?.code !== "guest") return;
+  applyErrorTone("LS-GUEST-04");
+  const localized = path => window.LectureSiftI18n?.localizedPath?.(currentLanguage, path) || path;
+  const register = document.createElement("a");
+  register.id = "guestUploadLimitSignup";
+  register.href = `${localized("/register.html")}?${new URLSearchParams({next:localized("/workspace.html")})}`;
+  register.textContent = centralText("rollout.createFreeAccount", "Ücretsiz hesap oluştur");
+  const actions = document.createElement("div");
+  actions.id = "quotaRecoveryActions";
+  actions.className = "quota-recovery-actions";
+  actions.append(register, ...guestLimitLinks("LS-GUEST-04"));
+  $("errorCode").insertAdjacentElement("afterend", actions);
+}
 // Reads a local media file's length without uploading it. Resolves to null
 // when the browser cannot read it in time; the server check still applies.
 function mediaDurationSeconds(file, timeoutMs = 3000) {
@@ -855,7 +872,7 @@ function addFiles(role, incoming) {
       : Number(limits.max_media_upload_mb || DEFAULT_SOURCE_LIMITS.max_media_upload_mb);
     const projectedBytes = selected.reduce((sum, item) => sum + Number(item.size || 0), 0) + Number(file.size || 0);
     if (projectedBytes > uploadLimitMb * 1024 * 1024) {
-      showError(uploadLimitMessage(isDocumentFile(file), uploadLimitMb), "LS-UPLOAD-02");
+      showUploadLimitError(isDocumentFile(file), uploadLimitMb);
       continue;
     }
     const key = `${file.name}:${file.size}:${file.lastModified}`;
@@ -1199,7 +1216,7 @@ function showError(message, code = "LS-SYSTEM-01", {stopProcessing = true} = {})
       if (jobBusy || !file) return;
       if (fileExtension(file) !== "pdf") { showError("Bu dosya biçimi desteklenmiyor.", "LS-UPLOAD-01"); return; }
       const maxMb = Number(activeSourceLimits().max_document_upload_mb || DEFAULT_SOURCE_LIMITS.max_document_upload_mb);
-      if (file.size > maxMb * 1024 * 1024) { showError(uploadLimitMessage(true, maxMb), "LS-UPLOAD-02"); return; }
+      if (file.size > maxMb * 1024 * 1024) { showUploadLimitError(true, maxMb); return; }
       classicVideos.splice(0, classicVideos.length, file);
       renderFileList("classic");
       configureProgressProfile(null, true);
@@ -1397,7 +1414,7 @@ $("analyzeButton").onclick = async () => {
   }
   const uploadLimitMb = Number(documentUpload ? sourceLimits.max_document_upload_mb : sourceLimits.max_media_upload_mb);
   if (uploadFiles.reduce((total, file) => total + file.size, 0) > uploadLimitMb * 1024 ** 2) {
-    showError(uploadLimitMessage(documentUpload, uploadLimitMb), "LS-UPLOAD-02"); return;
+    showUploadLimitError(documentUpload, uploadLimitMb); return;
   }
   const guestLimitMinutes = await guestMediaOverLimit(uploadFiles);
   if (guestLimitMinutes != null) {

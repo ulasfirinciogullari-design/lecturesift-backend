@@ -48,7 +48,7 @@
     applied: false,
   }));
 
-  const fill = (block, plan) => {
+  const fill = (block, plan, adsEnabled) => {
     if (!plan || !block.live) return false;
     const price = plan.display_price;
     const entitlements = plan.entitlements || {};
@@ -62,9 +62,11 @@
       setHidden(block.live.querySelector('[data-home-export="docx"]'), !docx);
       setHidden(block.live.querySelector('[data-home-export="pdf"]'), docx);
     }
+    // Ad bullets exist only while LectureSift shows ads at all (GET
+    // /ads/config); with the provider off they would describe nothing.
     if (typeof entitlements.ad_free === 'boolean') {
-      setHidden(block.live.querySelector('[data-home-ad-free]'), !entitlements.ad_free);
-      setHidden(block.live.querySelector('[data-home-ads]'), entitlements.ad_free);
+      setHidden(block.live.querySelector('[data-home-ad-free]'), !adsEnabled || !entitlements.ad_free);
+      setHidden(block.live.querySelector('[data-home-ads]'), !adsEnabled || entitlements.ad_free);
     }
     if (typeof entitlements.priority === 'string') {
       setHidden(block.live.querySelector('[data-home-priority]'), entitlements.priority !== 'priority');
@@ -78,9 +80,9 @@
     setHidden(block.offline, live);
   };
 
-  const apply = catalog => {
+  const apply = ([catalog, adsEnabled]) => {
     const plans = new Map((catalog?.plans || []).filter(plan => plan && plan.code).map(plan => [plan.code, plan]));
-    blocks.forEach(block => show(block, fill(block, plans.get(block.code))));
+    blocks.forEach(block => show(block, fill(block, plans.get(block.code), adsEnabled)));
     // "Most popular" follows the catalog's featured subscription when that plan
     // is one of the cards shown here and has live data.
     const featured = [...plans.values()].find(plan => plan.featured && plan.kind === 'subscription')?.code;
@@ -102,8 +104,12 @@
     host.dataset.pricingSource = 'unavailable';
   };
 
-  fetch(`${API}/billing/plans?currency=${encodeURIComponent(currency)}`, {cache: 'no-store'})
-    .then(response => response.ok ? response.json() : Promise.reject(new Error(`plans-${response.status}`)))
-    .then(apply)
-    .catch(unavailable);
+  const plans = fetch(`${API}/billing/plans?currency=${encodeURIComponent(currency)}`, {cache: 'no-store'})
+    .then(response => response.ok ? response.json() : Promise.reject(new Error(`plans-${response.status}`)));
+  // An unreachable ads config keeps the bullets, as before this check existed.
+  const adsEnabled = fetch(`${API}/ads/config`, {cache: 'no-store'})
+    .then(response => response.ok ? response.json() : null)
+    .then(config => config?.enabled !== false)
+    .catch(() => true);
+  Promise.all([plans, adsEnabled]).then(apply).catch(unavailable);
 })();
