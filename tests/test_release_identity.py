@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -217,8 +219,26 @@ def test_scheduled_social_check_verifies_the_istanbul_post_day_not_the_utc_date(
     workflow = _read(".github/workflows/production-social-check.yml")
     step = workflow.split("Verify today's scheduled post", 1)[1]
 
-    # GitHub starts scheduled runs hours late; a run after midnight UTC must
-    # still check the day whose 13:00 Istanbul post is already due.
-    assert "post_day=$(TZ=Europe/Istanbul date -d '13 hours 30 minutes ago' +%F)" in step
     assert "instagram/daily/status?day=$post_day" in step
     assert "date -u +%F" not in step
+    lines = [line.strip() for line in step.splitlines()]
+    post_day_line = next(line for line in lines if line.startswith("post_day="))
+
+    # GitHub starts scheduled runs hours late; a run after midnight UTC must
+    # still check the day whose 13:00 Istanbul post is already due (by 13:30).
+    cases = {
+        "2026-11-03T23:40:00Z": "2026-11-03",  # 02:40 TR next day
+        "2026-11-03T01:10:57Z": "2026-11-02",  # 04:10 TR
+        "2026-11-03T18:30:00Z": "2026-11-03",  # 21:30 TR, on schedule
+        "2026-11-03T10:20:00Z": "2026-11-02",  # 13:20 TR, post may still land
+        "2026-11-03T10:40:00Z": "2026-11-03",  # 13:40 TR
+    }
+    for now, expected in cases.items():
+        epoch = subprocess.run(
+            ["date", "-d", now, "+%s"], check=True, capture_output=True, text=True
+        ).stdout.strip()
+        result = subprocess.run(
+            ["bash", "-c", f"set -euo pipefail\nnow={epoch}\n{post_day_line}\necho \"$post_day\""],
+            check=True, capture_output=True, text=True,
+        ).stdout.strip()
+        assert result == expected, (now, result)

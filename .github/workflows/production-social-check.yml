@@ -150,8 +150,11 @@ jobs:
           set -euo pipefail
           # Posts go out at 13:00 and 20:00 Istanbul time. GitHub often starts
           # scheduled runs hours late, past midnight UTC, so check the latest
-          # Istanbul day whose 13:00 post is due rather than the UTC date.
-          post_day=$(TZ=Europe/Istanbul date -d '13 hours 30 minutes ago' +%F)
+          # Istanbul day whose 13:00 post is due rather than the UTC date:
+          # the Istanbul date 13.5 hours (48600 s) ago. Plain arithmetic, since
+          # GNU date reads "13 hours 30 minutes ago" as +13 h -30 min.
+          now=$(date +%s)
+          post_day=$(TZ=Europe/Istanbul date -d "@$(( now - 48600 ))" +%F)
           daily_status="https://api.lecturesift.com/instagram/daily/status?day=$post_day"
           for attempt in $(seq 1 20); do
             if body=$(curl --silent --show-error --fail --max-time 25 "$daily_status"); then
