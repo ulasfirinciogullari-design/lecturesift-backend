@@ -1568,18 +1568,26 @@ function renderDocumentSampleResult(data) {
   $("documentSamplePlans").href = localized("/plans.html");
 }
 
-function renderGuestSaveResult() {
-  // A guest result is kept briefly. Signing up (or in) from here moves it to
-  // the account server-side and returns to this exact result afterwards.
-  const notice = $("guestSaveResult");
-  if (!notice) return;
-  notice.hidden = billingAccount?.plan?.code !== "guest" || !/^[A-Za-z0-9-]{8,80}$/.test(jobId || "");
-  if (notice.hidden) return;
+function isGuestResult() {
+  return billingAccount?.plan?.code === "guest" && /^[A-Za-z0-9-]{8,80}$/.test(jobId || "");
+}
+
+// Signing up (or in) with this link moves the guest's job to the new account
+// server-side and returns to this exact result afterwards.
+function guestResultAuthPath(page) {
   const localized = path => window.LectureSiftI18n?.localizedPath?.(currentLanguage, path) || path;
   const next = `${localized("/workspace.html")}?${new URLSearchParams({job:jobId})}`;
-  const query = `?${new URLSearchParams({next})}`;
-  $("guestSaveRegister").href = `${localized("/register.html")}${query}`;
-  $("guestSaveLogin").href = `${localized("/login.html")}${query}`;
+  return `${localized(page)}?${new URLSearchParams({next})}`;
+}
+
+function renderGuestSaveResult() {
+  // A guest result is kept briefly; the free account keeps it.
+  const notice = $("guestSaveResult");
+  if (!notice) return;
+  notice.hidden = !isGuestResult();
+  if (notice.hidden) return;
+  $("guestSaveRegister").href = guestResultAuthPath("/register.html");
+  $("guestSaveLogin").href = guestResultAuthPath("/login.html");
 }
 
 // --- Result feedback: one thumb per job, optional one-line comment ----------
@@ -1682,12 +1690,13 @@ function renderResult(data, {open = true} = {}) {
     resultDetails.push(window.LectureSiftI18n?.t("transcript.speakerLegend", "Konuşmacılar") || "Konuşmacılar");
   }
   $("resultMeta").textContent = utilityResult ? `${data.artifacts?.length || 0} ${t("tabFiles")}` : resultDetails.join(" · ");
-  const canDownload = data.download_enabled !== false;
-  const unlockText = window.LectureSiftI18n?.t("plans.unlockDownload", "Dosyaları indirmek için paket seç") || "Dosyaları indirmek için paket seç";
+  // A guest reads the whole pack on the page; downloading it asks for the free
+  // account, which also keeps the result and opens the monthly minutes.
+  const locked = lockedDownload(data);
   $("downloadAll").hidden = !selected.files;
-  $("downloadAll").href = canDownload ? "#" : (window.LectureSiftI18n?.localizedPath?.(currentLanguage, "/plans.html") || "/plans.html");
-  $("downloadAll").textContent = canDownload ? t("downloadAll") : unlockText;
-  $("downloadAll").onclick = canDownload ? (event => { event.preventDefault(); downloadProtected(`/jobs/${jobId}/download`, "LectureSift_Paketi.zip"); }) : null;
+  $("downloadAll").href = locked ? locked.path : "#";
+  $("downloadAll").textContent = locked ? locked.text : t("downloadAll");
+  $("downloadAll").onclick = !locked ? (event => { event.preventDefault(); downloadProtected(`/jobs/${jobId}/download`, "LectureSift_Paketi.zip"); }) : null;
   $("summaryContent").textContent = data.summary || t("noContent");
   $("keyPoints").innerHTML = (data.key_points || []).map(point => `<div class="key-item"><i>✦</i><span>${escapeHtml(point)}</span></div>`).join("");
   const terms = (data.important_terms || []).map(item => `<div class="note-item"><h3>${escapeHtml(item.term)}</h3><p>${escapeHtml(item.definition)}</p></div>`).join("");
@@ -1704,7 +1713,7 @@ function renderResult(data, {open = true} = {}) {
       image.src = objectUrl;
     } catch { image.alt = t("noSlides"); }
   });
-  renderQuiz(data.quiz || []); renderExamPrep(data); renderCards(); renderFiles(data.artifacts || [], canDownload);
+  renderQuiz(data.quiz || []); renderExamPrep(data); renderCards(); renderFiles(data.artifacts || [], locked);
   $("lessonQuestionForm").reset(); $("lessonAnswer").hidden = true; $("lessonAnswer").replaceChildren();
   const visiblePanes = utilityResult
     ? {files:true}
@@ -2025,10 +2034,21 @@ function renderCards() {
   $("repeatCard").onclick = () => { cardRevealed = false; renderCards(); };
 }
 
-function renderFiles(files, canDownload = true) {
-  const plansPath = window.LectureSiftI18n?.localizedPath?.(currentLanguage, "/plans.html") || "/plans.html";
-  const unlockText = window.LectureSiftI18n?.t("plans.unlockDownload", "Dosyaları indirmek için paket seç") || "Dosyaları indirmek için paket seç";
-  $("filesContent").innerHTML = files.map(file => `<div class="file-item"><div><strong>${escapeHtml(file.label)}</strong><small>${escapeHtml(file.format)} · ${formatBytes(file.size_bytes)}</small></div><a href="${canDownload ? "#" : plansPath}" ${canDownload ? `data-artifact="${encodeURIComponent(file.file)}" data-filename="${escapeHtml(file.file)}"` : ""}>${escapeHtml(canDownload ? t("download") : unlockText)}</a></div>`).join("") || `<div class="empty-state">${escapeHtml(t("noContent"))}</div>`;
+// Where a locked download leads, and what its link says; null when allowed.
+function lockedDownload(data) {
+  if (isGuestResult()) return {
+    path: guestResultAuthPath("/register.html"),
+    text: window.LectureSiftI18n?.t("workspace.guestDownloadAction", "İndirmek için ücretsiz hesap aç") || "İndirmek için ücretsiz hesap aç",
+  };
+  if (data.download_enabled !== false) return null;
+  return {
+    path: window.LectureSiftI18n?.localizedPath?.(currentLanguage, "/plans.html") || "/plans.html",
+    text: window.LectureSiftI18n?.t("plans.unlockDownload", "Dosyaları indirmek için paket seç") || "Dosyaları indirmek için paket seç",
+  };
+}
+
+function renderFiles(files, locked = null) {
+  $("filesContent").innerHTML = files.map(file => `<div class="file-item"><div><strong>${escapeHtml(file.label)}</strong><small>${escapeHtml(file.format)} · ${formatBytes(file.size_bytes)}</small></div><a href="${locked ? escapeHtml(locked.path) : "#"}" ${locked ? "" : `data-artifact="${encodeURIComponent(file.file)}" data-filename="${escapeHtml(file.file)}"`}>${escapeHtml(locked ? locked.text : t("download"))}</a></div>`).join("") || `<div class="empty-state">${escapeHtml(t("noContent"))}</div>`;
   document.querySelectorAll("a[data-artifact]").forEach(anchor => anchor.onclick = event => {
     event.preventDefault();
     downloadProtected(`/jobs/${jobId}/artifact/${anchor.dataset.artifact}`, anchor.dataset.filename);
