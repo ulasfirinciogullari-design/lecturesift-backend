@@ -254,6 +254,8 @@ test('permanent ad-free purchase explains its scope and disappears as a repeat p
   await page.unroute('https://api.lecturesift.com/ads/config');
   await page.reload();
   await expect(page.locator('#adFreeAccess button')).toHaveText('Active on your account');
+  // Back to the fixture's plain free account: no token, no permanent access.
+  await page.unroute('https://api.lecturesift.com/billing/me');
   await page.evaluate(()=>localStorage.removeItem('lecturesift-billing-token'));
   await page.reload();
   await expect(page.locator('#plansGrid')).not.toHaveAttribute('aria-busy','true');
@@ -615,7 +617,7 @@ test('rebuilt study entry opens the real workspace and key screens remain usable
   await expect(page.locator('.study-hero .study-text-link')).toHaveAttribute('href', '#how-it-works');
   await expect(page.locator('#exampleTitle')).toHaveText('A sample pack from one biology lecture');
   await expect(page.locator('#how-it-works .steps-grid > li')).toHaveCount(3);
-  await expect(page.locator('#faq .faq-list details')).toHaveCount(5);
+  await expect(page.locator('#faq .faq-list details')).toHaveCount(6);
   await expect(page.locator('.study-launcher, #campaigns, .campaign-card')).toHaveCount(0);
   await noHorizontalOverflow(page);
   const capture = async name => {
