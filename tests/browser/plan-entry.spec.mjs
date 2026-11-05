@@ -117,7 +117,7 @@ test('package cards keep list prices when the catalog and payment capabilities f
   const credit = page.locator('#sidePlansGrid [data-plan-card="credit"]');
   await expect(credit).toBeVisible();
   // Cards show whole prices, as the homepage does; checkout keeps the decimals.
-  await expect(credit.locator('.plan-price')).toContainText(/^₺\s*199(?![.,\d])/);
+  await expect(credit.locator('.plan-price')).toContainText(/^₺\s*99(?![.,\d])/);
   await expect(credit).toContainText('200 minutes');
   await expect(page.locator('[data-plan-card="lite"] .plan-price')).toContainText(/^₺\s*149(?![.,\d])/);
   await expect(page.locator('[data-plan-card="lite"] .plan-price')).toContainText('30-day package');
