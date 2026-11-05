@@ -144,7 +144,7 @@ LEGACY_PLAN_BY_CODE = {plan.code: plan for plan in LEGACY_PLANS}
 PLANS = (
     Plan("free", "free", 120, ("pdf",), "standard", 1, 10, 20, DETAILED_SUMMARY_PROFILE, 7, 3, 250, 50, 60, 100, 30),
     Plan("test", "one_time", 1, ("pdf",), "standard", 1, 1, 1, DETAILED_SUMMARY_PROFILE, 1, 1, 25, 10, 1, 10, 5),
-    Plan("credit", "one_time", 300, ("pdf", "docx", "txt"), "standard", 1, 20, 40, ALL_SUMMARY_PROFILES, 30, 8, 500, 50, 180, 150, 50, 19900),
+    Plan("credit", "one_time", 200, ("pdf", "docx", "txt"), "standard", 1, 20, 40, ALL_SUMMARY_PROFILES, 30, 8, 500, 50, 180, 150, 50, 9900),
     # "lite" keeps its code; it is sold as the Student plan ("Öğrenci").
     Plan("lite", "subscription", 600, ("pdf", "docx", "txt"), "standard", 1, 20, 40, ALL_SUMMARY_PROFILES, 30, 12, 750, 75, 120, 250, 75, 14900, featured=True),
     # Plus and Max are hidden, not removed: still orderable by code, no longer listed.
@@ -186,35 +186,38 @@ PLAN_BY_CODE = {plan.code: plan for plan in (*PLANS, *ASSISTANT_PLANS, AD_FREE_P
 # final amount charged.
 _PRICE_PLAN_CODES = ("free", "test", "credit", "lite", "plus", "pro", "max")
 # October 2026 revision: lite (Student) and pro were repriced in TRY and USD;
-# credit, plus and max are unchanged. The other currencies scale lite by
+# plus and max are unchanged. November 2026: the credit pack became
+# 200 minutes for 9900 kuruş (it was 300 for 19900, dearer per minute than the
+# Student plan); TRY, USD and EUR take the next x99 above 9900/19900 of the old
+# value so card fees stay covered, every other currency scales by that ratio. The other currencies scale lite by
 # 699/899 and pro by 1499/3299 from their previous value. Rounding follows the
 # pattern each row already used: TRY, USD and EUR list prices end in 99 (the
 # nearest x99), every other currency keeps plain minor units rounded to the
 # nearest whole unit (JPY and KRW are zero-decimal, so whole yen/won).
 _REGIONAL_PRICE_POINTS = {
-    "TRY": (0, 100, 19900, 14900, 59900, 44900, 229900),
-    "USD": (0, None, 499, 699, 1699, 1499, 5999),
-    "EUR": (0, None, 499, 699, 1599, 1399, 5699),
-    "GBP": (0, None, 399, 499, 1133, 1145, 4829),
-    "CAD": (0, None, 699, 791, 1800, 1853, 7819),
-    "AUD": (0, None, 799, 916, 2066, 2072, 8739),
-    "NZD": (0, None, 899, 999, 2267, 2290, 9659),
+    "TRY": (0, 100, 9900, 14900, 59900, 44900, 229900),
+    "USD": (0, None, 299, 699, 1699, 1499, 5999),
+    "EUR": (0, None, 299, 699, 1599, 1399, 5699),
+    "GBP": (0, None, 198, 499, 1133, 1145, 4829),
+    "CAD": (0, None, 348, 791, 1800, 1853, 7819),
+    "AUD": (0, None, 397, 916, 2066, 2072, 8739),
+    "NZD": (0, None, 447, 999, 2267, 2290, 9659),
     # JPY and KRW have zero-decimal minor units; the other values use cents.
-    "JPY": (0, None, 750, 875, 2001, 2045, 8626),
-    "KRW": (0, None, 6900, 7916, 18544, 19033, 80390),
-    "CNY": (0, None, 3500, 4083, 9205, 9544, 40138),
-    "INR": (0, None, 39900, 45746, 106593, 109015, 459915),
-    "BRL": (0, None, 2499, 2916, 6669, 6816, 28751),
-    "MXN": (0, None, 9900, 11582, 26548, 27213, 114892),
-    "CHF": (0, None, 449, 499, 1133, 1199, 5059),
-    "SEK": (0, None, 5299, 6082, 14006, 14178, 59803),
-    "NOK": (0, None, 5499, 6415, 14673, 14996, 63253),
-    "DKK": (0, None, 3499, 3749, 8937, 9270, 39101),
-    "PLN": (0, None, 1999, 2249, 5335, 5453, 23000),
-    "AED": (0, None, 1899, 2165, 4935, 5017, 21160),
-    "SAR": (0, None, 1899, 2165, 5068, 5126, 21620),
-    "SGD": (0, None, 699, 791, 1800, 1853, 7819),
-    "HKD": (0, None, 3899, 4582, 10404, 10634, 44852),
+    "JPY": (0, None, 373, 875, 2001, 2045, 8626),
+    "KRW": (0, None, 3433, 7916, 18544, 19033, 80390),
+    "CNY": (0, None, 1741, 4083, 9205, 9544, 40138),
+    "INR": (0, None, 19850, 45746, 106593, 109015, 459915),
+    "BRL": (0, None, 1243, 2916, 6669, 6816, 28751),
+    "MXN": (0, None, 4925, 11582, 26548, 27213, 114892),
+    "CHF": (0, None, 223, 499, 1133, 1199, 5059),
+    "SEK": (0, None, 2636, 6082, 14006, 14178, 59803),
+    "NOK": (0, None, 2736, 6415, 14673, 14996, 63253),
+    "DKK": (0, None, 1741, 3749, 8937, 9270, 39101),
+    "PLN": (0, None, 994, 2249, 5335, 5453, 23000),
+    "AED": (0, None, 945, 2165, 4935, 5017, 21160),
+    "SAR": (0, None, 945, 2165, 5068, 5126, 21620),
+    "SGD": (0, None, 348, 791, 1800, 1853, 7819),
+    "HKD": (0, None, 1940, 4582, 10404, 10634, 44852),
 }
 REGIONAL_PRICES = {
     plan_code: {

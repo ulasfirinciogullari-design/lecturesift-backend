@@ -51,7 +51,7 @@ def test_revised_catalog_and_regional_prices_preserve_legacy_catalog() -> None:
             plan.priority,
         ) == values
 
-    assert (PLAN_BY_CODE["credit"].minutes, PLAN_BY_CODE["credit"].try_amount_minor) == (300, 19900)
+    assert (PLAN_BY_CODE["credit"].minutes, PLAN_BY_CODE["credit"].try_amount_minor) == (200, 9900)
     assert (LEGACY_PLAN_BY_CODE["plus"].minutes, LEGACY_PLAN_BY_CODE["plus"].try_amount_minor) == (1800, 44900)
     assert (LEGACY_PLAN_BY_CODE["max"].minutes, LEGACY_PLAN_BY_CODE["max"].max_minutes_per_job) == (12000, 900)
     assert (LEGACY_PLAN_BY_CODE["lite"].minutes, LEGACY_PLAN_BY_CODE["lite"].try_amount_minor) == (600, 27900)

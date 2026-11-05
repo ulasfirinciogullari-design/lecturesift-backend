@@ -726,7 +726,7 @@ test('mobile price cards keep their rows inside the card and the trial button on
         await expect(cards.nth(1).locator('[data-home-price]')).toHaveText('₺149');
         await expect(cards.nth(2).locator('[data-home-price]')).toHaveText('₺449');
         await expect(cards.nth(2).locator('[data-home-minutes]')).toHaveText('1.500');
-        await expect(page.locator('.pricing-pack [data-home-price]')).toHaveText('₺199');
+        await expect(page.locator('.pricing-pack [data-home-price]')).toHaveText('₺99');
       }
       await cards.first().scrollIntoViewIfNeeded();
       for (const card of await cards.all()) {

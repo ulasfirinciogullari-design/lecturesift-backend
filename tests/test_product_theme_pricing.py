@@ -173,7 +173,7 @@ def test_static_plan_cards_match_the_backend_try_catalog():
     assert 'id="plansTeamLink"' in html and 'href="/contact.html" data-i18n="plans.teamContact"' in html
     assert "plans.mostPopular" in parser.cards["lite"]["keys"]
     assert "plans.noSubscriptionEyebrow" in parser.cards["credit"]["keys"]
-    assert parser.cards["credit"]["price_try_minor"] == "19900"
+    assert parser.cards["credit"]["price_try_minor"] == "9900"
 
     for plan in sellable:
         card = parser.cards[plan.code]

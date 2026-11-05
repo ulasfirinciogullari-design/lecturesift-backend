@@ -76,17 +76,17 @@ def test_paid_order_is_confirmed_once_and_only_after_the_payment_commits(mail, m
         return "synthetic-mail"
 
     monkeypatch.setattr(notifications, "send_transactional_email", deliver)
-    first = _paid(reference, 19900)
-    duplicate = _paid(reference, 19900)
+    first = _paid(reference, 9900)
+    duplicate = _paid(reference, 9900)
 
     assert first["status"] == duplicate["status"] == "paid"
-    assert observed == [("paid", 300)]
+    assert observed == [("paid", 200)]
     assert len(mail) == 1
     (recipient, subject, html, text), kwargs = mail[0]
     assert recipient == email
     assert subject == f"LectureSift · Siparişin onaylandı · {reference}"
     for expected in (
-        reference, "Merhaba Ayşe,", "Dakika Paketi", "199,00 TRY", "300 dakika",
+        reference, "Merhaba Ayşe,", "Dakika Paketi", "99,00 TRY", "200 dakika",
         "tek seferlik bir satın almadır", "otomatik olarak yenilenmez",
         "Hizmet sağlayıcı bilgileri", "Unvan / ad: LectureSift Test Satıcı", "Açık adres: Test Address 1",
         "https://lecturesift.com/account.html", "https://lecturesift.com/distance-sales",
@@ -100,7 +100,7 @@ def test_paid_order_is_confirmed_once_and_only_after_the_payment_commits(mail, m
     assert event.action == notifications.SENT
     assert event.actor == "system" and event.subject_user_id == user_id
     assert reference in event.summary
-    assert billing.account_status(user_id)["credit_minutes"] == 300
+    assert billing.account_status(user_id)["credit_minutes"] == 200
 
 
 def test_fixed_term_package_states_thirty_days_without_renewal_in_english(mail):
@@ -133,7 +133,7 @@ def test_checkout_language_is_used_when_no_account_language_is_saved(mail):
 
     (_, subject, _, text), _ = mail[0]
     assert "Deine Bestellung ist bestätigt" in subject
-    assert "Minutenpaket" in text and "4,99 EUR" in text and "300 Minuten" in text
+    assert "Minutenpaket" in text and "2,99 EUR" in text and "200 Minuten" in text
 
 
 def test_failed_payment_sends_no_confirmation(mail):
@@ -158,10 +158,10 @@ def test_duplicate_paytr_callbacks_send_one_confirmation_with_the_charged_amount
     user_id, _ = _customer()
     order = billing.create_payment_order(user_id, "paytr", "credit", "one_time", "TRY")
     # PayTR reports installment fees in total_amount; the card was charged that.
-    reference, total = order["reference"], "20500"
+    reference, total = order["reference"], "10500"
     digest = hmac.new(b"merchant-key", f"{reference}merchant-saltsuccess{total}".encode(), hashlib.sha256).digest()
     callback = {"merchant_oid": reference, "status": "success", "total_amount": total,
-                "payment_amount": "19900", "hash": base64.b64encode(digest).decode()}
+                "payment_amount": "9900", "hash": base64.b64encode(digest).decode()}
     client = TestClient(app)
 
     responses = [client.post("/billing/paytr/callback", data=callback) for _ in range(3)]
@@ -169,10 +169,10 @@ def test_duplicate_paytr_callbacks_send_one_confirmation_with_the_charged_amount
     assert [(response.status_code, response.text) for response in responses] == [(200, "OK")] * 3
     assert len(mail) == 1
     (_, _, html, text), _ = mail[0]
-    assert "Tutar: 205,00 TRY" in text and "205,00 TRY" in html
-    assert "199,00" not in text
-    assert billing.payment_order(reference)["provider_amount_minor"] == 20500
-    assert billing.account_status(user_id)["credit_minutes"] == 300
+    assert "Tutar: 105,00 TRY" in text and "105,00 TRY" in html
+    assert "99,00" not in text
+    assert billing.payment_order(reference)["provider_amount_minor"] == 10500
+    assert billing.account_status(user_id)["credit_minutes"] == 200
 
 
 def test_manual_transfer_approval_confirms_once(mail, monkeypatch):
@@ -187,8 +187,8 @@ def test_manual_transfer_approval_confirms_once(mail, monkeypatch):
     assert len(mail) == 1
     (recipient, subject, _, text), _ = mail[0]
     assert recipient == email and order["reference"] in subject
-    assert "199,00 TRY" in text and "300 dakika" in text
-    assert billing.account_status(user_id)["credit_minutes"] == 300
+    assert "99,00 TRY" in text and "200 dakika" in text
+    assert billing.account_status(user_id)["credit_minutes"] == 200
 
 
 def test_payment_survives_a_failing_provider_and_a_later_callback_retries_once(mail, monkeypatch):
@@ -205,19 +205,19 @@ def test_payment_survives_a_failing_provider_and_a_later_callback_retries_once(m
     order = billing.create_payment_order(user_id, "iyzico", "credit", "one_time", "TRY")
     reference = order["reference"]
 
-    assert _paid(reference, 19900)["status"] == "paid"
-    assert billing.account_status(user_id)["credit_minutes"] == 300
+    assert _paid(reference, 9900)["status"] == "paid"
+    assert billing.account_status(user_id)["credit_minutes"] == 200
     failed = _event(reference)
     assert failed.action == notifications.RETRY
     assert "private@example.com" not in failed.summary
 
-    _paid(reference, 19900)
-    _paid(reference, 19900)
+    _paid(reference, 9900)
+    _paid(reference, 9900)
 
     assert len(attempts) == 2
     assert attempts[0] == attempts[1]
     assert _event(reference).action == notifications.SENT
-    assert billing.account_status(user_id)["credit_minutes"] == 300
+    assert billing.account_status(user_id)["credit_minutes"] == 200
 
 
 def test_ambiguous_smtp_failure_is_never_replayed(mail, monkeypatch):
@@ -232,8 +232,8 @@ def test_ambiguous_smtp_failure_is_never_replayed(mail, monkeypatch):
     user_id, _ = _customer()
     order = billing.create_payment_order(user_id, "iyzico", "credit", "one_time", "TRY")
 
-    assert _paid(order["reference"], 19900)["status"] == "paid"
-    assert _paid(order["reference"], 19900)["status"] == "paid"
+    assert _paid(order["reference"], 9900)["status"] == "paid"
+    assert _paid(order["reference"], 9900)["status"] == "paid"
 
     assert len(attempts) == 1
     assert _event(order["reference"]).action == notifications.UNKNOWN
@@ -246,12 +246,12 @@ def test_a_claim_left_pending_by_a_crashed_sender_is_recovered_only_when_stale(m
     order = billing.create_payment_order(user_id, "iyzico", "credit", "one_time", "TRY")
     reference = order["reference"]
     monkeypatch.setattr(notifications, "email_delivery_configured", lambda: False)
-    _paid(reference, 19900)
+    _paid(reference, 9900)
     monkeypatch.setattr(notifications, "email_delivery_configured", lambda: True)
     # The process died after committing its claim and before sending.
     assert notifications._claim(rollout_service.ADMIN_ACCOUNT_EVENTS, reference, user_id, email)
 
-    _paid(reference, 19900)
+    _paid(reference, 9900)
     assert mail == []
     assert notifications.notify_paid_order(reference) == "duplicate"
 
@@ -259,8 +259,8 @@ def test_a_claim_left_pending_by_a_crashed_sender_is_recovered_only_when_stale(m
     with billing.ENGINE.begin() as connection:
         connection.execute(update(events).where(events.c.id == notifications.event_id(reference)).values(
             created_at=billing.utcnow() - notifications.STALE_CLAIM - timedelta(minutes=1)))
-    _paid(reference, 19900)
-    _paid(reference, 19900)
+    _paid(reference, 9900)
+    _paid(reference, 9900)
 
     if provider == "smtp":
         # Without an idempotency key a stale claim may already have been sent.
@@ -279,14 +279,14 @@ def test_a_crashing_notifier_never_fails_the_payment(mail, monkeypatch):
     user_id, _ = _customer()
     monkeypatch.setattr(notifications, "_prepare", crash)
     first = billing.create_payment_order(user_id, "iyzico", "credit", "one_time", "TRY")
-    assert _paid(first["reference"], 19900)["status"] == "paid"
+    assert _paid(first["reference"], 9900)["status"] == "paid"
 
     monkeypatch.setattr(notifications, "notify_paid_order", crash)
     second = billing.create_payment_order(user_id, "iyzico", "credit", "one_time", "TRY")
-    assert _paid(second["reference"], 19900)["status"] == "paid"
+    assert _paid(second["reference"], 9900)["status"] == "paid"
 
     assert mail == []
-    assert billing.account_status(user_id)["credit_minutes"] == 600
+    assert billing.account_status(user_id)["credit_minutes"] == 400
 
 
 def test_orders_paid_before_the_retry_window_are_not_backfilled(mail, monkeypatch):
@@ -294,7 +294,7 @@ def test_orders_paid_before_the_retry_window_are_not_backfilled(mail, monkeypatc
     order = billing.create_payment_order(user_id, "iyzico", "credit", "one_time", "TRY")
     reference = order["reference"]
     monkeypatch.setattr(notifications, "email_delivery_configured", lambda: False)
-    _paid(reference, 19900)
+    _paid(reference, 9900)
     assert _event(reference) is None
     with billing.ENGINE.begin() as connection:
         connection.execute(update(billing.PAYMENT_ORDERS).where(
@@ -302,7 +302,7 @@ def test_orders_paid_before_the_retry_window_are_not_backfilled(mail, monkeypatc
         ).values(updated_at=billing.utcnow() - timedelta(days=2)))
     monkeypatch.setattr(notifications, "email_delivery_configured", lambda: True)
 
-    _paid(reference, 19900)
+    _paid(reference, 9900)
 
     assert mail == []
     assert _event(reference) is None
