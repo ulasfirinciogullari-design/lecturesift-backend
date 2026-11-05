@@ -75,7 +75,7 @@ def test_billing_catalog_has_hybrid_plans_and_translation_keys():
     assert plans["lite"]["entitlements"]["rewarded_minutes_eligible"] is False
     assert PLAN_BY_CODE["plus"].public()["entitlements"]["ad_mode"] == "limited"
     assert plans["free"]["minutes"] == 120
-    assert plans["credit"]["minutes"] == 300
+    assert plans["credit"]["minutes"] == 200
     assert plans["lite"]["minutes"] == 600
     assert plans["pro"]["minutes"] == 1500
     assert PLAN_BY_CODE["plus"].minutes == 900
