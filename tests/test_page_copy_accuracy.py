@@ -27,13 +27,12 @@ MEETING_MINUTES = {
     "ko": r"회의록|통화 시간",
 }
 PRIVACY_TOPIC = "KVKK / gizlilik başvurusu"
-HOME_SOURCE_DELETION = (
-    "Orijinal video, ses veya belge dosyan işlem bittiğinde, başarısız olsa bile, en kısa sürede silinir; "
-    "her durumda en geç ders silindiğinde veya süresi dolduğunda dersle birlikte kaldırılır."
-)
-HOME_RESULT_RETENTION = (
-    "Sonuçlar planına göre saklanır: misafir denemede 1 gün, ücretsiz hesapta 7 gün, ücretli planlarda 30 günden 2 yıla kadar. "
-    "Süresi dolan ders dosyalarıyla birlikte otomatik silinir; istediğin dersi Çalışma Alanı’ndan daha önce de silebilirsin."
+HOME_TRUST_DELETION = "✓ Yüklediğin dosya işlem bitince silinir"
+HOME_FILE_FAQ = (
+    "Orijinal dosyan işlem bittiğinde, başarısız olsa bile, en kısa sürede silinir; "
+    "her durumda en geç ders silindiğinde veya süresi dolduğunda dersle birlikte kaldırılır. "
+    "Özet, quiz ve kartlar planına göre saklanır: misafir denemede 1 gün, ücretsiz hesapta 7 gün, ücretli planlarda 30 günden 2 yıla kadar. "
+    "Dersi istediğin zaman Çalışma Alanı’ndan silebilirsin."
 )
 
 
@@ -118,8 +117,9 @@ def test_homepage_upload_deletion_describes_the_cleanup_that_actually_runs():
     # object-storage deletes are not retried, so the homepage must not promise
     # a fixed deadline; leftovers go with the lesson's own deletion or expiry.
     home = _page("index.html")
-    assert f"<li>{HOME_SOURCE_DELETION}</li>" in home
-    assert f"<li>{HOME_RESULT_RETENTION}</li>" in home
+    # The hero line and the FAQ answer are the homepage's only deletion claims.
+    assert f"<span>{HOME_TRUST_DELETION}</span>" in home
+    assert f"<details><summary>Dosyalarıma ne oluyor?</summary><p>{HOME_FILE_FAQ}</p></details>" in home
     assert "6 saat" not in home
     assert "işlem başarıyla tamamlanınca silinir" not in home
     assert "Silme aksarsa" not in home
@@ -135,7 +135,7 @@ def test_homepage_upload_deletion_describes_the_cleanup_that_actually_runs():
             if plan.kind in {"one_time", "subscription", "quote"} and code != "test"
             and (plan.minutes or plan.kind == "quote")]
     assert min(paid) == 30 and max(paid) == 730
-    for sentence in (HOME_SOURCE_DELETION, HOME_RESULT_RETENTION):
+    for sentence in (HOME_TRUST_DELETION, HOME_FILE_FAQ):
         row = CATALOG[sentence]
         assert all(value.strip() for value in row)
         assert not any(re.search(r"\b6\b", value) for value in row)

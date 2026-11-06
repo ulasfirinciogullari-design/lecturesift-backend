@@ -101,7 +101,7 @@ const TR = {
 const PLAN_COPY = {
   tr: {
     free: ["Ücretsiz", "LectureSift'i denemek ve kısa dersleri işlemek için.", "120 dk / ay"],
-    credit: ["Dakika Paketi", "Abonelik olmadan ek işlem hakkı.", "300 dakika"],
+    credit: ["Dakika Paketi", "Tek ödemeyle planına eklenir.", "300 dakika"],
     lite: ["Öğrenci", "Dönem boyunca her ders için.", "600 dk / 30 gün"],
     plus: ["Plus", "Yoğun ders dönemi ve çoklu kaynaklar için.", "900 dk / 30 gün"],
     pro: ["Pro", "Uzun kayıtlar ve öncelikli işleme için.", "1.500 dk / 30 gün"],
@@ -110,7 +110,7 @@ const PLAN_COPY = {
   },
   en: {
     free: ["Free", "Try LectureSift and process short lectures.", "120 min / month"],
-    credit: ["Minute Pack", "Extra processing without a subscription.", "300 minutes"],
+    credit: ["Minute Pack", "One payment, added to your plan.", "300 minutes"],
     lite: ["Student", "For every lecture, all term.", "600 min / 30 days"],
     plus: ["Plus", "For intensive study and multiple sources.", "900 min / 30 days"],
     pro: ["Pro", "For long recordings and priority processing.", "1,500 min / 30 days"],
@@ -767,6 +767,23 @@ function uploadLimitMessage(documentMode, limitMb) {
   const kind = central?.t(documentMode ? "plans.documentShort" : "plans.mediaShort", documentMode ? "belge" : "medya") || (documentMode ? "belge" : "medya");
   return `${base} ${Number(limitMb).toLocaleString(central?.locale || navigator.language)} MB ${kind}.`;
 }
+// A visitor without an account who picks a file over the trial size sees the
+// same free-account invitation as the other guest limits, not a bare failure.
+function showUploadLimitError(documentMode, limitMb) {
+  showError(uploadLimitMessage(documentMode, limitMb), "LS-UPLOAD-02");
+  if (billingAccount && billingAccount.plan?.code !== "guest") return;
+  applyErrorTone("LS-GUEST-04");
+  const localized = path => window.LectureSiftI18n?.localizedPath?.(currentLanguage, path) || path;
+  const register = document.createElement("a");
+  register.id = "guestUploadLimitSignup";
+  register.href = `${localized("/register.html")}?${new URLSearchParams({next:localized("/workspace.html")})}`;
+  register.textContent = centralText("rollout.createFreeAccount", "Ücretsiz hesap oluştur");
+  const actions = document.createElement("div");
+  actions.id = "quotaRecoveryActions";
+  actions.className = "quota-recovery-actions";
+  actions.append(register, ...guestLimitLinks("LS-GUEST-04"));
+  $("errorCode").insertAdjacentElement("afterend", actions);
+}
 // Reads a local media file's length without uploading it. Resolves to null
 // when the browser cannot read it in time; the server check still applies.
 function mediaDurationSeconds(file, timeoutMs = 3000) {
@@ -855,7 +872,7 @@ function addFiles(role, incoming) {
       : Number(limits.max_media_upload_mb || DEFAULT_SOURCE_LIMITS.max_media_upload_mb);
     const projectedBytes = selected.reduce((sum, item) => sum + Number(item.size || 0), 0) + Number(file.size || 0);
     if (projectedBytes > uploadLimitMb * 1024 * 1024) {
-      showError(uploadLimitMessage(isDocumentFile(file), uploadLimitMb), "LS-UPLOAD-02");
+      showUploadLimitError(isDocumentFile(file), uploadLimitMb);
       continue;
     }
     const key = `${file.name}:${file.size}:${file.lastModified}`;
@@ -1199,7 +1216,7 @@ function showError(message, code = "LS-SYSTEM-01", {stopProcessing = true} = {})
       if (jobBusy || !file) return;
       if (fileExtension(file) !== "pdf") { showError("Bu dosya biçimi desteklenmiyor.", "LS-UPLOAD-01"); return; }
       const maxMb = Number(activeSourceLimits().max_document_upload_mb || DEFAULT_SOURCE_LIMITS.max_document_upload_mb);
-      if (file.size > maxMb * 1024 * 1024) { showError(uploadLimitMessage(true, maxMb), "LS-UPLOAD-02"); return; }
+      if (file.size > maxMb * 1024 * 1024) { showUploadLimitError(true, maxMb); return; }
       classicVideos.splice(0, classicVideos.length, file);
       renderFileList("classic");
       configureProgressProfile(null, true);
@@ -1397,7 +1414,7 @@ $("analyzeButton").onclick = async () => {
   }
   const uploadLimitMb = Number(documentUpload ? sourceLimits.max_document_upload_mb : sourceLimits.max_media_upload_mb);
   if (uploadFiles.reduce((total, file) => total + file.size, 0) > uploadLimitMb * 1024 ** 2) {
-    showError(uploadLimitMessage(documentUpload, uploadLimitMb), "LS-UPLOAD-02"); return;
+    showUploadLimitError(documentUpload, uploadLimitMb); return;
   }
   const guestLimitMinutes = await guestMediaOverLimit(uploadFiles);
   if (guestLimitMinutes != null) {
@@ -1568,18 +1585,26 @@ function renderDocumentSampleResult(data) {
   $("documentSamplePlans").href = localized("/plans.html");
 }
 
-function renderGuestSaveResult() {
-  // A guest result is kept briefly. Signing up (or in) from here moves it to
-  // the account server-side and returns to this exact result afterwards.
-  const notice = $("guestSaveResult");
-  if (!notice) return;
-  notice.hidden = billingAccount?.plan?.code !== "guest" || !/^[A-Za-z0-9-]{8,80}$/.test(jobId || "");
-  if (notice.hidden) return;
+function isGuestResult() {
+  return billingAccount?.plan?.code === "guest" && /^[A-Za-z0-9-]{8,80}$/.test(jobId || "");
+}
+
+// Signing up (or in) with this link moves the guest's job to the new account
+// server-side and returns to this exact result afterwards.
+function guestResultAuthPath(page) {
   const localized = path => window.LectureSiftI18n?.localizedPath?.(currentLanguage, path) || path;
   const next = `${localized("/workspace.html")}?${new URLSearchParams({job:jobId})}`;
-  const query = `?${new URLSearchParams({next})}`;
-  $("guestSaveRegister").href = `${localized("/register.html")}${query}`;
-  $("guestSaveLogin").href = `${localized("/login.html")}${query}`;
+  return `${localized(page)}?${new URLSearchParams({next})}`;
+}
+
+function renderGuestSaveResult() {
+  // A guest result is kept briefly; the free account keeps it.
+  const notice = $("guestSaveResult");
+  if (!notice) return;
+  notice.hidden = !isGuestResult();
+  if (notice.hidden) return;
+  $("guestSaveRegister").href = guestResultAuthPath("/register.html");
+  $("guestSaveLogin").href = guestResultAuthPath("/login.html");
 }
 
 // --- Result feedback: one thumb per job, optional one-line comment ----------
@@ -1682,12 +1707,13 @@ function renderResult(data, {open = true} = {}) {
     resultDetails.push(window.LectureSiftI18n?.t("transcript.speakerLegend", "Konuşmacılar") || "Konuşmacılar");
   }
   $("resultMeta").textContent = utilityResult ? `${data.artifacts?.length || 0} ${t("tabFiles")}` : resultDetails.join(" · ");
-  const canDownload = data.download_enabled !== false;
-  const unlockText = window.LectureSiftI18n?.t("plans.unlockDownload", "Dosyaları indirmek için paket seç") || "Dosyaları indirmek için paket seç";
+  // A guest reads the whole pack on the page; downloading it asks for the free
+  // account, which also keeps the result and opens the monthly minutes.
+  const locked = lockedDownload(data);
   $("downloadAll").hidden = !selected.files;
-  $("downloadAll").href = canDownload ? "#" : (window.LectureSiftI18n?.localizedPath?.(currentLanguage, "/plans.html") || "/plans.html");
-  $("downloadAll").textContent = canDownload ? t("downloadAll") : unlockText;
-  $("downloadAll").onclick = canDownload ? (event => { event.preventDefault(); downloadProtected(`/jobs/${jobId}/download`, "LectureSift_Paketi.zip"); }) : null;
+  $("downloadAll").href = locked ? locked.path : "#";
+  $("downloadAll").textContent = locked ? locked.text : t("downloadAll");
+  $("downloadAll").onclick = !locked ? (event => { event.preventDefault(); downloadProtected(`/jobs/${jobId}/download`, "LectureSift_Paketi.zip"); }) : null;
   $("summaryContent").textContent = data.summary || t("noContent");
   $("keyPoints").innerHTML = (data.key_points || []).map(point => `<div class="key-item"><i>✦</i><span>${escapeHtml(point)}</span></div>`).join("");
   const terms = (data.important_terms || []).map(item => `<div class="note-item"><h3>${escapeHtml(item.term)}</h3><p>${escapeHtml(item.definition)}</p></div>`).join("");
@@ -1704,7 +1730,7 @@ function renderResult(data, {open = true} = {}) {
       image.src = objectUrl;
     } catch { image.alt = t("noSlides"); }
   });
-  renderQuiz(data.quiz || []); renderExamPrep(data); renderCards(); renderFiles(data.artifacts || [], canDownload);
+  renderQuiz(data.quiz || []); renderExamPrep(data); renderCards(); renderFiles(data.artifacts || [], locked);
   $("lessonQuestionForm").reset(); $("lessonAnswer").hidden = true; $("lessonAnswer").replaceChildren();
   const visiblePanes = utilityResult
     ? {files:true}
@@ -2025,10 +2051,21 @@ function renderCards() {
   $("repeatCard").onclick = () => { cardRevealed = false; renderCards(); };
 }
 
-function renderFiles(files, canDownload = true) {
-  const plansPath = window.LectureSiftI18n?.localizedPath?.(currentLanguage, "/plans.html") || "/plans.html";
-  const unlockText = window.LectureSiftI18n?.t("plans.unlockDownload", "Dosyaları indirmek için paket seç") || "Dosyaları indirmek için paket seç";
-  $("filesContent").innerHTML = files.map(file => `<div class="file-item"><div><strong>${escapeHtml(file.label)}</strong><small>${escapeHtml(file.format)} · ${formatBytes(file.size_bytes)}</small></div><a href="${canDownload ? "#" : plansPath}" ${canDownload ? `data-artifact="${encodeURIComponent(file.file)}" data-filename="${escapeHtml(file.file)}"` : ""}>${escapeHtml(canDownload ? t("download") : unlockText)}</a></div>`).join("") || `<div class="empty-state">${escapeHtml(t("noContent"))}</div>`;
+// Where a locked download leads, and what its link says; null when allowed.
+function lockedDownload(data) {
+  if (isGuestResult()) return {
+    path: guestResultAuthPath("/register.html"),
+    text: window.LectureSiftI18n?.t("workspace.guestDownloadAction", "İndirmek için ücretsiz hesap aç") || "İndirmek için ücretsiz hesap aç",
+  };
+  if (data.download_enabled !== false) return null;
+  return {
+    path: window.LectureSiftI18n?.localizedPath?.(currentLanguage, "/plans.html") || "/plans.html",
+    text: window.LectureSiftI18n?.t("plans.unlockDownload", "Dosyaları indirmek için paket seç") || "Dosyaları indirmek için paket seç",
+  };
+}
+
+function renderFiles(files, locked = null) {
+  $("filesContent").innerHTML = files.map(file => `<div class="file-item"><div><strong>${escapeHtml(file.label)}</strong><small>${escapeHtml(file.format)} · ${formatBytes(file.size_bytes)}</small></div><a href="${locked ? escapeHtml(locked.path) : "#"}" ${locked ? "" : `data-artifact="${encodeURIComponent(file.file)}" data-filename="${escapeHtml(file.file)}"`}>${escapeHtml(locked ? locked.text : t("download"))}</a></div>`).join("") || `<div class="empty-state">${escapeHtml(t("noContent"))}</div>`;
   document.querySelectorAll("a[data-artifact]").forEach(anchor => anchor.onclick = event => {
     event.preventDefault();
     downloadProtected(`/jobs/${jobId}/artifact/${anchor.dataset.artifact}`, anchor.dataset.filename);

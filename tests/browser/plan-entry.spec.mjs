@@ -85,13 +85,15 @@ test('free, Student and Pro lead the grid while the minute pack sits in its own 
   await expect(student.locator('.plan-price')).toContainText('30-day package');
   await expect(student.locator('.plan-price')).not.toContainText('month');
   await expect(student).toContainText('600 min / 30 days');
-  await expect(student).toContainText('Ad-free use');
+  // The fixture's ad provider is off, so no plan claims an ad experience.
+  await expect(student).not.toContainText('Ad-free use');
+  await expect(page.locator('#compareBody')).not.toContainText('Ad experience');
   await expect(page.locator('.plan-action[data-plan="lite"][data-interval="monthly"]')).toHaveText('Choose 30-day package');
   await expect(page.locator('.plan-action[data-plan="lite"][data-interval="annual"]')).toHaveText(/^Annual · ₺\s*1,490 · 2 months free$/);
   const side = page.locator('#sidePlansGrid > .plan-card');
   await expect(side).toHaveCount(1);
   await expect(side).toHaveAttribute('data-plan-card', 'credit');
-  await expect(side.locator('.plan-eyebrow')).toHaveText('For those who don’t want a subscription');
+  await expect(side.locator('.plan-eyebrow')).toHaveText('Minutes that never expire');
   await expect(side).toContainText('300 minutes');
   // Plus and Max are hidden, not removed: no card, no comparison column.
   for (const code of ['plus', 'max', 'business']) await expect(page.locator(`[data-plan-card="${code}"]`)).toHaveCount(0);

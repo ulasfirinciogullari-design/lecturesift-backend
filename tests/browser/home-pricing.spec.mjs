@@ -83,11 +83,12 @@ test('homepage price cards render the live catalog, its featured plan and entitl
   // Bullets follow the entitlements: export formats, ads and priority.
   await expect(free.locator('[data-home-export="pdf"]')).toBeVisible();
   await expect(free.locator('[data-home-export="docx"]')).toBeHidden();
-  await expect(free.locator('[data-home-ads]')).toBeVisible();
+  // The fixture's ad provider is off, so neither ad bullet is shown.
+  await expect(free.locator('[data-home-ads]')).toBeHidden();
   await expect(free.locator('[data-home-ad-free]')).toBeHidden();
   await expect(lite.locator('[data-home-export="docx"]')).toBeVisible();
   await expect(lite.locator('[data-home-export="pdf"]')).toBeHidden();
-  await expect(lite.locator('[data-home-ad-free]')).toBeVisible();
+  await expect(lite.locator('[data-home-ad-free]')).toBeHidden();
   await expect(lite.locator('[data-home-ads]')).toBeHidden();
   await expect(pro.locator('[data-home-priority]')).toBeVisible();
   await expect(lite).toHaveClass(/featured/);
@@ -104,6 +105,16 @@ test('homepage price cards render the live catalog, its featured plan and entitl
   await expect(pro.locator('.price-badge')).toBeVisible();
   await expect(lite).not.toHaveClass(/featured/);
   await expect(lite.locator('.price-badge')).toBeHidden();
+
+  // With the ad provider on, the ad bullets follow each plan's entitlement.
+  await page.route('https://api.lecturesift.com/ads/config', route => route.fulfill({status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify({enabled: true, provider: null})}));
+  await page.reload();
+  await expect(pricing).toHaveAttribute('data-pricing-source', 'live');
+  await expect(free.locator('[data-home-ads]')).toBeVisible();
+  await expect(free.locator('[data-home-ad-free]')).toBeHidden();
+  await expect(lite.locator('[data-home-ad-free]')).toBeVisible();
+  await expect(lite.locator('[data-home-ads]')).toBeHidden();
+  await page.unroute('https://api.lecturesift.com/ads/config');
 
   // A plan missing from the catalog keeps its name and the plans link while
   // the other cards stay live.

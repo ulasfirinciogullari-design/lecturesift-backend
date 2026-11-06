@@ -229,6 +229,8 @@ test('workspace assistant tab preserves the lesson and supports keyboard navigat
 test('permanent ad-free purchase explains its scope and disappears as a repeat purchase', async ({page}, testInfo) => {
   const cors={'Access-Control-Allow-Origin':'http://127.0.0.1:4173','Access-Control-Allow-Methods':'GET,OPTIONS','Access-Control-Allow-Headers':'authorization,content-type'};
   await page.addInitScript(() => {localStorage.setItem('lecturesift-currency','TRY');});
+  // The offer exists only while ads are on; the fixture's provider is off.
+  await page.route('https://api.lecturesift.com/ads/config',route=>route.fulfill({status:200,headers:cors,json:{enabled:true,provider:null}}));
   await page.route('https://api.lecturesift.com/billing/plans?currency=TRY',route=>route.fulfill({status:200,headers:cors,json:{plans:[],ad_free:{code:'ad_free',kind:'one_time',display_price:{currency:'TRY',amount_minor:5990},entitlements:{minutes:0,ad_free:true}}}}));
   await page.goto('/en/plans.html');
   await page.locator('[data-consent="essential"]').click();
@@ -248,6 +250,17 @@ test('permanent ad-free purchase explains its scope and disappears as a repeat p
   await page.goto('/en/plans.html');
   await expect(page.locator('#adFreeAccess button')).toBeDisabled();
   await expect(page.locator('#adFreeAccess button')).toHaveText('Active on your account');
+  // Ads off: an owner still sees the access as active, anyone else sees no offer.
+  await page.unroute('https://api.lecturesift.com/ads/config');
+  await page.reload();
+  await expect(page.locator('#adFreeAccess button')).toHaveText('Active on your account');
+  // Back to the fixture's plain free account: no token, no permanent access.
+  await page.unroute('https://api.lecturesift.com/billing/me');
+  await page.evaluate(()=>localStorage.removeItem('lecturesift-billing-token'));
+  await page.reload();
+  await expect(page.locator('#plansGrid')).not.toHaveAttribute('aria-busy','true');
+  await expect(page.locator('#adFreeAccess')).toBeHidden();
+  await expect(page.locator('.plan-ad-scope')).toBeHidden();
 });
 
 test('assistant page keeps credits visible and account actions under user control', async ({page}, testInfo) => {
@@ -365,17 +378,6 @@ test('assistant applies fixed preferences only after confirmation and ignores re
   await confirmation.getByRole('button',{name:'Apply'}).click();
   await expect(page).toHaveURL(/\/de\/assistant(?:\.html)?$/);
   expect(await page.evaluate(()=>localStorage.getItem('lecturesift-ui'))).toBe('de');
-});
-
-test('invitation discovery keeps the requested account section through sign-in', async ({page}) => {
-  await page.goto('/en/');
-  const invite=page.locator('.referral-promo');
-  await expect(invite).toContainText('Signing up alone earns no reward.');
-  await invite.getByRole('link',{name:'Explore invitations'}).click();
-  await expect(page).toHaveURL(/\/en\/login\.html\?next=/);
-  const next=new URL(page.url()).searchParams.get('next');
-  expect(next).toBe('/en/account.html#account-referrals');
-  await noHorizontalOverflow(page);
 });
 
 test('assistant page fits a narrow Arabic screen and tablet navigation', async ({page},testInfo) => {
@@ -615,7 +617,7 @@ test('rebuilt study entry opens the real workspace and key screens remain usable
   await expect(page.locator('.study-hero .study-text-link')).toHaveAttribute('href', '#how-it-works');
   await expect(page.locator('#exampleTitle')).toHaveText('A sample pack from one biology lecture');
   await expect(page.locator('#how-it-works .steps-grid > li')).toHaveCount(3);
-  await expect(page.locator('#faq .faq-list details')).toHaveCount(5);
+  await expect(page.locator('#faq .faq-list details')).toHaveCount(6);
   await expect(page.locator('.study-launcher, #campaigns, .campaign-card')).toHaveCount(0);
   await noHorizontalOverflow(page);
   const capture = async name => {

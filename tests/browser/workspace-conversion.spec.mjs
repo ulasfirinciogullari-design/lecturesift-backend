@@ -50,7 +50,7 @@ test('a guest sees the save-your-result step first, wired to claim the job after
   const band = page.locator('#guestSaveResult');
   await expect(band).toBeVisible();
   await expect(band).toContainText('Sonuçların 24 saat sonra silinir.');
-  await expect(band).toContainText('Ücretsiz hesap aç: kaydet ve ayda 120 dakika kazan.');
+  await expect(band).toContainText('Ücretsiz hesap aç: paketi indir, kaydet ve ayda 120 dakika kazan. Kart gerekmez.');
   await expect(page.locator('#guestSaveRegister')).toHaveText('Ücretsiz hesap aç');
   await expect(page.locator('#guestSaveLogin')).toHaveText('Giriş yap');
   // It is the first thing in the result panel, above the download header; the
@@ -70,6 +70,48 @@ test('a guest sees the save-your-result step first, wired to claim the job after
   const primary = await page.locator('#guestSaveRegister').boundingBox();
   expect(primary.height).toBeGreaterThanOrEqual(44);
   await band.screenshot({path:testInfo.outputPath('guest-save-band.png')});
+});
+
+test('a guest reads the whole pack but downloads it after opening the free account', async ({page}) => {
+  await prepare(page, {plan:'guest'});
+  await page.route(`${API}/jobs/${JOB_ID}/result`, route => route.fulfill(route.request().method() === 'OPTIONS'
+    ? {status:204, headers:CORS} : {status:200, headers:CORS, json:{
+      title:'Synthetic guest pack', job_type:'study_pack', summary:'A deterministic local fixture.',
+      options:{include_summary:true, include_transcript:false, include_slides:false, quiz_count:0, flashcard_count:0},
+      quiz:[], flashcards:[], slides:[], transcript_segments:[], download_enabled:true,
+      artifacts:[{file:'synthetic-summary.pdf', label:'Özet', format:'PDF', size_bytes:48}],
+    }}));
+  await page.goto(`/workspace.html?job=${JOB_ID}`);
+  await expect(page.locator('#summaryContent')).toHaveText('A deterministic local fixture.');
+  // The package and each file lead to sign-up, which returns to this job.
+  const all = page.locator('#downloadAll');
+  await expect(all).toHaveText('İndirmek için ücretsiz hesap aç');
+  const file = page.locator('#filesContent .file-item a');
+  await expect(file).toHaveText('İndirmek için ücretsiz hesap aç');
+  await expect(file).not.toHaveAttribute('data-artifact', /.+/);
+  for (const link of [all, file]) {
+    const register = new URL(await link.getAttribute('href'), page.url());
+    expect(register.pathname).toBe('/register.html');
+    const back = new URL(register.searchParams.get('next'), page.url());
+    expect(back.pathname).toBe('/workspace.html');
+    expect(back.searchParams.get('job')).toBe(JOB_ID);
+  }
+});
+
+test('a free account downloads its pack directly', async ({page}) => {
+  await prepare(page, {plan:'free'});
+  await page.route(`${API}/jobs/${JOB_ID}/result`, route => route.fulfill(route.request().method() === 'OPTIONS'
+    ? {status:204, headers:CORS} : {status:200, headers:CORS, json:{
+      title:'Synthetic account pack', job_type:'study_pack', summary:'A deterministic local fixture.',
+      options:{include_summary:true, include_transcript:false, include_slides:false, quiz_count:0, flashcard_count:0},
+      quiz:[], flashcards:[], slides:[], transcript_segments:[], download_enabled:true,
+      artifacts:[{file:'synthetic-summary.pdf', label:'Özet', format:'PDF', size_bytes:48}],
+    }}));
+  await page.goto(`/workspace.html?job=${JOB_ID}`);
+  await expect(page.locator('#downloadAll')).toHaveText('Tüm paketi indir');
+  await expect(page.locator('#downloadAll')).toHaveAttribute('href', '#');
+  await expect(page.locator('#filesContent .file-item a')).toHaveText('İndir');
+  await expect(page.locator('#filesContent .file-item a')).toHaveAttribute('data-artifact', 'synthetic-summary.pdf');
 });
 
 test('guest limits read as an invitation with free-account and plans links', async ({page}, testInfo) => {

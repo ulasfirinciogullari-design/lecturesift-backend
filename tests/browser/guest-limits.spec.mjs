@@ -158,6 +158,10 @@ test('new guest media and document limits accept their boundary and reject one e
     await selectSizedFile(page, name, megabytes * 1024 ** 2 + 1);
     await expect(page.locator('#errorCode')).toContainText('LS-UPLOAD-02');
     await expect(page.locator('#errorMessage')).toContainText(`${megabytes} MB`);
+    // Over the size: the same free-account invitation as the other guest limits.
+    await expect(page.locator('#errorBox')).toHaveAttribute('data-tone', 'guest');
+    await expect(page.locator('#guestUploadLimitSignup')).toHaveAttribute('href', /register.*next=/);
+    await expect(page.locator('#guestLimitPlans')).toBeVisible();
     await expect(page.locator('#classicFileList .source-file-row')).toHaveCount(0);
     await page.locator('#closeError').click();
   }

@@ -35,7 +35,7 @@ function recordPlanAnalytics(name, parameters = {}) {
 const COPY = {
   free: ["Ücretsiz", "Denemek ve kısa dersler için"],
   test: ["1 TL Test Paketi", "Canlı kart ödemesini küçük tutarla denemek için"],
-  credit: ["Dakika Paketi", "Abonelik olmadan ek kullanım"],
+  credit: ["Dakika Paketi", "Tek ödemeyle planına eklenir"],
   lite: ["Öğrenci", "Dönem boyunca her ders için"],
   plus: ["Plus", "Yoğun ders dönemi ve çoklu kaynaklar"],
   pro: ["Pro", "Uzun kayıtlar ve öncelikli işleme"],
@@ -90,6 +90,10 @@ const FALLBACK_PRICES = {
 
 let catalog = null;
 let account = null;
+// GET /ads/config decides whether ad lines are shown at all: with the ad
+// provider off there is nothing to remove, so "ads may appear", "ad-free"
+// and the one-time ad-free purchase stay out of the page.
+let adsEnabled = true;
 let providers = [];
 let commerceIdentity = {configured: false};
 let manualTransfer = {available: false, bank: null};
@@ -309,7 +313,7 @@ function renderCompare() {
     [pt("plans.teamSeats", "Ekip kullanıcıları"), plan => plan.entitlements?.team_seats || plan.team_seats || 1],
     [pt("plans.languages", "Kaynak ve çıktı dilleri"), () => `13 ${pt("plans.languagesUnit", "dil")}`],
     [pt("plans.outputs", "Transkript, not ve zaman damgası"), () => all],
-    [pt("plans.adExperience", "Reklam deneyimi"), plan => plan.entitlements?.ad_free ? pt("plans.adFree", "Reklamsız kullanım") : plan.entitlements?.ad_mode === "limited" ? pt("plans.limitedAds") : pt("plans.adsMayAppear", "Reklam gösterilebilir")],
+    ...(adsEnabled ? [[pt("plans.adExperience", "Reklam deneyimi"), plan => plan.entitlements?.ad_free ? pt("plans.adFree", "Reklamsız kullanım") : plan.entitlements?.ad_mode === "limited" ? pt("plans.limitedAds") : pt("plans.adsMayAppear", "Reklam gösterilebilir")]] : []),
   ];
   $("compareBody").innerHTML = rows.map(([label, value]) => `<tr><td>${esc(label)}</td>${plans.map(plan => `<td>${esc(value(plan))}</td>`).join("")}</tr>`).join("");
   updateCompareScroll();
@@ -430,6 +434,7 @@ function renderPaymentStatus() {
 }
 
 function renderPlans() {
+  document.querySelector(".plan-ad-scope")?.toggleAttribute("hidden", !adsEnabled);
   renderPlanCards();
   renderAssistantOffers();
   renderAdFreeOffer();
@@ -475,7 +480,7 @@ function planCard(plan) {
     : `<button class="plan-action" data-plan="${esc(code)}" data-interval="${plan.kind === "one_time" ? "one_time" : "monthly"}" ${current ? "disabled" : ""}>${esc(current ? pt("plans.current", "Mevcut plan") : pt("plans.select", "Planı seç"))}</button>`;
   return `<article class="plan-card ${plan.featured ? "featured" : ""}${SIDE_PLANS.includes(code) ? " plan-card-side" : ""}" data-plan-card="${esc(code)}">
     ${plan.featured ? `<span class="plan-badge">${esc(pt("plans.mostPopular", "En popüler"))}</span>` : ""}
-    ${SIDE_PLANS.includes(code) ? `<span class="plan-eyebrow">${esc(pt("plans.noSubscriptionEyebrow", "Abonelik istemeyenler için"))}</span>` : ""}
+    ${SIDE_PLANS.includes(code) ? `<span class="plan-eyebrow">${esc(pt("plans.noSubscriptionEyebrow", "Süresi dolmayan dakikalar"))}</span>` : ""}
     <h3>${esc(planLabel(code))}</h3><p>${esc(pt(`plan.${code}.description`, COPY[code][1]))}</p>
     <div class="plan-price">${esc(priceText)} <small>${esc(suffix)}</small></div>
     ${capacityNotice(plan)}
@@ -486,7 +491,7 @@ function planCard(plan) {
       <li>${Number(limits.max_files_per_job || 0).toLocaleString(PLANS_I18N.locale)} ${esc(pt("plans.filesPerJobShort", "kaynak / iş"))}</li>
       <li>${entitlements.quiz_questions ?? "∞"} ${esc(pt("plans.quizShort", "quiz sorusu"))} · ${entitlements.flashcards ?? "∞"} ${esc(pt("plans.cardsShort", "bilgi kartı"))}</li>
       <li>${esc(pt("plans.historyDays", "Sonuç geçmişi (gün)"))}: ${Number(entitlements.history_days || 0).toLocaleString(PLANS_I18N.locale)}</li>
-      <li>${esc(entitlements.ad_free ? pt("plans.adFree", "Reklamsız kullanım") : entitlements.ad_mode === "limited" ? pt("plans.limitedAds") : pt("plans.adsMayAppear", "Reklam gösterilebilir"))}</li>
+      ${adsEnabled ? `<li>${esc(entitlements.ad_free ? pt("plans.adFree", "Reklamsız kullanım") : entitlements.ad_mode === "limited" ? pt("plans.limitedAds") : pt("plans.adsMayAppear", "Reklam gösterilebilir"))}</li>` : ""}
     </ul>
     <details class="plan-details"><summary>${esc(pt("plans.allLimits", "Tüm özellik ve sınırlar"))}</summary><ul class="plan-features">
       <li>${Number(limits.max_media_upload_mb || 0).toLocaleString(PLANS_I18N.locale)} MB ${esc(pt("plans.mediaShort", "medya"))} · ${Number(limits.max_document_upload_mb || 0).toLocaleString(PLANS_I18N.locale)} MB ${esc(pt("plans.documentShort", "belge"))}</li>
@@ -504,10 +509,10 @@ function renderAdFreeOffer() {
   let section = document.getElementById('adFreeAccess');
   if (!section) {section=document.createElement('section');section.id='adFreeAccess';section.className='ad-free-offer';$('plansTeamLink').after(section);}
   const offer = catalog?.ad_free;
-  section.hidden = !offer?.display_price;
+  const owned = account?.permanent_ad_free === true;
+  section.hidden = !offer?.display_price || (!adsEnabled && !owned);
   section.replaceChildren();
   if (section.hidden) return;
-  const owned = account?.permanent_ad_free === true;
   const heading=document.createElement('h2');heading.id='adFreeTitle';heading.textContent=planLabel('ad_free');
   section.setAttribute('aria-labelledby',heading.id);
   const copy=document.createElement('div');copy.className='ad-free-copy';copy.append(heading);
@@ -903,12 +908,14 @@ async function load() {
   document.querySelectorAll(".plan-action").forEach(button => { button.disabled = true; });
   // Payment capabilities are loaded alongside, but never decide whether the
   // packages themselves can be shown.
-  const [remoteResult, providerResult, transferResult] = await Promise.allSettled([
+  const [remoteResult, providerResult, transferResult, adsResult] = await Promise.allSettled([
     api(`/billing/plans?currency=${encodeURIComponent(selected)}`),
     api("/billing/providers"),
     api("/billing/manual-transfer"),
+    api("/ads/config"),
   ]);
   if (version !== catalogLoadVersion) return;
+  if (adsResult.status === "fulfilled") adsEnabled = adsResult.value?.enabled !== false;
   if (providerResult.status === "fulfilled") {
     providers = providerResult.value.providers || [];
     commerceIdentity = providerResult.value.commerce_identity || {configured:false};
