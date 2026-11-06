@@ -242,7 +242,7 @@ def test_archive_preserves_successes_rights_and_provider_reconciliation(state):
     assert billing.account_status(uid)['remaining_minutes'] == before
     billing.complete_payment_order(pending['reference'], succeeded=True, provider_amount_minor=pending['amount_minor'])
     assert rollout.list_admin_orders_page()['pagination']['total'] == 2
-    assert billing.account_status(uid)['credit_minutes'] == 300
+    assert billing.account_status(uid)['credit_minutes'] == 200
 
 
 def test_privileged_routes_require_admin_and_reject_non_integer_credits(state):

@@ -94,7 +94,7 @@ test('free, Student and Pro lead the grid while the minute pack sits in its own 
   await expect(side).toHaveCount(1);
   await expect(side).toHaveAttribute('data-plan-card', 'credit');
   await expect(side.locator('.plan-eyebrow')).toHaveText('Minutes that never expire');
-  await expect(side).toContainText('300 minutes');
+  await expect(side).toContainText('200 minutes');
   // Plus and Max are hidden, not removed: no card, no comparison column.
   for (const code of ['plus', 'max', 'business']) await expect(page.locator(`[data-plan-card="${code}"]`)).toHaveCount(0);
   await expect(page.locator('#compareHead th')).toHaveText(['Entitlement', 'Free', 'Minute Pack', 'Student', 'Pro']);
@@ -117,8 +117,8 @@ test('package cards keep list prices when the catalog and payment capabilities f
   const credit = page.locator('#sidePlansGrid [data-plan-card="credit"]');
   await expect(credit).toBeVisible();
   // Cards show whole prices, as the homepage does; checkout keeps the decimals.
-  await expect(credit.locator('.plan-price')).toContainText(/^₺\s*199(?![.,\d])/);
-  await expect(credit).toContainText('300 minutes');
+  await expect(credit.locator('.plan-price')).toContainText(/^₺\s*99(?![.,\d])/);
+  await expect(credit).toContainText('200 minutes');
   await expect(page.locator('[data-plan-card="lite"] .plan-price')).toContainText(/^₺\s*149(?![.,\d])/);
   await expect(page.locator('[data-plan-card="lite"] .plan-price')).toContainText('30-day package');
   await expect(page.locator('[data-plan-card="pro"] .plan-price')).toContainText(/^₺\s*449(?![.,\d])/);
@@ -157,8 +157,8 @@ test.describe('without JavaScript', () => {
     await expect(page.locator('#sidePlansGrid > .plan-card')).toHaveCount(1);
     const credit = page.locator('#sidePlansGrid [data-plan-card="credit"]');
     await expect(credit).toBeVisible();
-    await expect(credit.locator('[data-plan-value="price"]')).toHaveText('₺199');
-    await expect(credit.locator('[data-plan-value="minutes"]')).toHaveText('300');
+    await expect(credit.locator('[data-plan-value="price"]')).toHaveText('₺99');
+    await expect(credit.locator('[data-plan-value="minutes"]')).toHaveText('200');
     const student = page.locator('#plansGrid [data-plan-card="lite"]');
     await expect(student).toHaveClass(/featured/);
     await expect(student.locator('h3')).toHaveText('Öğrenci');
