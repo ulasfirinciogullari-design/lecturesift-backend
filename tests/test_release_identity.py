@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 
 from pathlib import Path
@@ -201,6 +202,68 @@ def test_github_social_checks_skip_pushes_and_accept_the_live_revision():
     assert "workflow_dispatch:" in triggers
     assert "ref: ${{ inputs.revision || github.sha }}" in workflow
     assert 'expected_revision="${REQUESTED_REVISION,,}"' in workflow
+
+
+def test_scheduled_social_check_accepts_an_earlier_main_commit_in_production(tmp_path):
+    # Workflow-only merges never get an OVH release, so the nightly run must not
+    # wait for main's head; it accepts the live revision when it is an ancestor
+    # of that head, and only then. A dispatched or requested revision stays exact.
+    workflow = _read(".github/workflows/production-social-check.yml")
+    wait_step = workflow.split("Wait for the production deployment and API health", 1)[1]
+    wait_step = wait_step.split("Verify Instagram connection and public media", 1)[0]
+
+    assert "fetch-depth: 0" in workflow.split("Validate source-controlled", 1)[0]
+    assert '[ "${GITHUB_EVENT_NAME:-}" = "schedule" ] && [ -z "${REQUESTED_REVISION:-}" ]' in wait_step
+    condition = next(
+        line.strip() for line in wait_step.splitlines() if "git merge-base --is-ancestor" in line
+    )
+    assert condition == '&& git merge-base --is-ancestor "$revision" "$expected_revision"; then'
+    guard = wait_step.splitlines()[
+        [i for i, line in enumerate(wait_step.splitlines()) if "git merge-base --is-ancestor" in line][0] - 1
+    ].strip()
+    assert guard == 'if [ "$accept_earlier_main" = true ] && [[ "$revision" =~ ^[0-9a-f]{40}$ ]] \\'
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    env = {
+        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com",
+        "HOME": str(tmp_path), "PATH": os.environ["PATH"],
+    }
+
+    def git(*args):
+        return subprocess.run(
+            ["git", *args], cwd=repo, env=env, check=True, capture_output=True, text=True
+        ).stdout.strip()
+
+    git("init", "-q", "-b", "main")
+    git("commit", "-q", "--allow-empty", "-m", "released")
+    released = git("rev-parse", "HEAD")
+    git("commit", "-q", "--allow-empty", "-m", "workflow only")
+    head = git("rev-parse", "HEAD")
+    git("checkout", "-q", "-b", "stray", released)
+    git("commit", "-q", "--allow-empty", "-m", "never merged")
+    stray = git("rev-parse", "HEAD")
+    git("checkout", "-q", "main")
+
+    script = (
+        "accept_earlier_main=$ACCEPT\n"
+        + guard.rstrip("\\").rstrip() + " "
+        + condition.replace("; then", "") + "; then echo accepted; else echo rejected; fi\n"
+    )
+    cases = [
+        ("true", released, head, "accepted"),
+        ("true", head, released, "rejected"),  # production ahead of main: not a release
+        ("true", stray, head, "rejected"),
+        ("true", "unknown", head, "rejected"),
+        ("false", released, head, "rejected"),  # requested revision: exact match only
+    ]
+    for accept, revision, expected, outcome in cases:
+        result = subprocess.run(
+            ["bash", "-c", script], cwd=repo, check=True, capture_output=True, text=True,
+            env={**env, "ACCEPT": accept, "revision": revision, "expected_revision": expected},
+        )
+        assert result.stdout.strip() == outcome, (accept, revision, expected, result.stdout)
 
 
 def test_release_contract_is_documented_without_runtime_secret_override():
