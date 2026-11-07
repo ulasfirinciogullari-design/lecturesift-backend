@@ -33,11 +33,13 @@ jobs:
             frontend/sitemap.xml
             frontend/345a2ecd00b720d10eba8b475bf502e6.txt
           sparse-checkout-cone-mode: false
-      - name: Wait for the key file on the live site, then submit every sitemap URL
-        # Netlify publishes the key file with the same push; the first run may
-        # wait for that deploy. Later runs find the key at once.
+      - name: Wait for Netlify to publish this commit, then submit every sitemap URL
+        # Public deploy metadata says when this exact commit is the live
+        # production deploy, so engines are never sent URLs that are still
+        # building. The key file check then proves the site serves the key.
         run: >-
           python3 scripts/indexnow_submit.py
           --sitemap frontend/sitemap.xml
           --key-file frontend/345a2ecd00b720d10eba8b475bf502e6.txt
-          --wait-for-key 600
+          --revision "$GITHUB_SHA"
+          --wait 600

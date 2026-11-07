@@ -102,7 +102,8 @@ def test_workflow_submits_the_committed_key_and_sitemap_after_frontend_pushes():
     assert command.startswith("python3 scripts/indexnow_submit.py ")
     assert "--sitemap frontend/sitemap.xml" in command
     assert f"--key-file frontend/{key_file.name}" in command
-    assert "--wait-for-key" in command
+    assert '--revision "$GITHUB_SHA"' in command
+    assert "--wait 600" in command
     assert "--dry-run" not in command
 
 
@@ -135,23 +136,55 @@ def test_checked_in_sitemap_becomes_one_indexnow_payload():
         indexnow.build_payload("lecturesift.com", key, ["https://lecturesift.com/"] * 10_001)
 
 
-def test_wait_for_key_waits_until_the_live_file_holds_the_committed_key():
+def test_wait_until_retries_through_errors_and_wrong_answers():
     opener, calls = opener_with([http_error(404), URLError("dns"), Response(b"stale-key\n"), Response(f"{KEY}\n".encode())])
     sleeps = []
-    assert indexnow.wait_for_key(KEY_URL, KEY, 600, opener=opener, sleep=sleeps.append, clock=lambda: 0.0)
+    assert indexnow.wait_until(lambda: indexnow.key_is_live(KEY_URL, KEY, opener), 600, sleep=sleeps.append, clock=lambda: 0.0)
     assert sleeps == [indexnow.POLL_SECONDS] * 3
     assert [call[0] for call in calls] == ["GET"] * 4
     assert {call[1] for call in calls} == {KEY_URL}
 
 
-def test_wait_for_key_gives_up_at_the_deadline():
+def test_wait_until_gives_up_at_the_deadline():
     opener, calls = opener_with([http_error(404), http_error(404)])
-    ticks = iter([0.0, 100.0, 700.0])
-    assert not indexnow.wait_for_key(KEY_URL, KEY, 600, opener=opener, sleep=lambda seconds: None, clock=lambda: next(ticks))
+    ticks = iter([100.0, 700.0])
+    assert not indexnow.wait_until(lambda: indexnow.key_is_live(KEY_URL, KEY, opener), 600, sleep=lambda seconds: None, clock=lambda: next(ticks))
     assert len(calls) == 2
     opener, calls = opener_with([http_error(404)])
-    assert not indexnow.wait_for_key(KEY_URL, KEY, 0, opener=opener, sleep=lambda seconds: None, clock=lambda: 0.0)
+    assert not indexnow.wait_until(lambda: indexnow.key_is_live(KEY_URL, KEY, opener), 0, sleep=lambda seconds: None, clock=lambda: 0.0)
     assert len(calls) == 1
+
+
+def deploys(*items):
+    return Response(json.dumps(list(items)).encode())
+
+
+def test_deploy_is_live_only_for_a_ready_published_production_deploy_of_the_revision():
+    revision = "b" * 40
+    live = {"context": "production", "state": "ready", "published_at": "2026-11-07T07:30:00Z", "commit_ref": revision}
+    opener, calls = opener_with([deploys(
+        {"context": "deploy-preview", "state": "ready", "published_at": None, "commit_ref": revision},
+        {"context": "production", "state": "building", "published_at": None, "commit_ref": revision},
+        {"context": "production", "state": "ready", "published_at": "2026-11-06T21:05:00Z", "commit_ref": "a" * 40},
+    )])
+    assert not indexnow.deploy_is_live(indexnow.DEPLOYS_URL, revision, opener)
+    assert calls[0][0] == "GET" and calls[0][1] == indexnow.DEPLOYS_URL
+    opener, _ = opener_with([deploys({"context": "production", "state": "ready", "published_at": "2026-11-06T21:05:00Z", "commit_ref": "a" * 40}, live)])
+    assert indexnow.deploy_is_live(indexnow.DEPLOYS_URL, revision, opener)
+    opener, _ = opener_with([http_error(503)])
+    assert not indexnow.deploy_is_live(indexnow.DEPLOYS_URL, revision, opener)
+    opener, _ = opener_with([Response(b'{"error": "not a list"}')])
+    with pytest.raises(ValueError):
+        indexnow.deploy_is_live(indexnow.DEPLOYS_URL, revision, opener)
+    opener, _ = opener_with([Response(b"<html>")])
+    with pytest.raises(ValueError):
+        indexnow.deploy_is_live(indexnow.DEPLOYS_URL, revision, opener)
+
+
+def test_workflow_deploy_url_is_the_delivery_checks_public_metadata():
+    delivery = (ROOT / "scripts" / "check_frontend_delivery.py").read_text(encoding="utf-8")
+    assert "3af04a22-7a31-44c2-8918-a79843f7ac82/deploys" in delivery
+    assert indexnow.DEPLOYS_URL.startswith("https://api.netlify.com/api/v1/sites/3af04a22-7a31-44c2-8918-a79843f7ac82/deploys")
 
 
 def test_submit_posts_the_json_payload_and_returns_the_status():
@@ -179,26 +212,57 @@ def test_main_dry_run_prints_the_payload_and_touches_no_network(tmp_path, capsys
     assert printed["urlList"] == ["https://lecturesift.com/", "https://lecturesift.com/en/", "https://lecturesift.com/plans"]
 
 
-def test_main_submits_only_a_live_key_and_fails_on_a_rejected_submission(tmp_path, capsys, monkeypatch):
+def test_main_submits_only_after_the_revision_is_live_with_the_key(tmp_path, capsys, monkeypatch):
     sitemap = tmp_path / "sitemap.xml"
     sitemap.write_text(SITEMAP, encoding="utf-8")
     key_file = tmp_path / f"{KEY}.txt"
     key_file.write_text(f"{KEY}\n", encoding="utf-8")
-    arguments = ["--sitemap", str(sitemap), "--key-file", str(key_file), "--endpoint", "https://indexnow.test/submit"]
+    revision = "c" * 40
+    live = {"context": "production", "state": "ready", "published_at": "2026-11-07T07:30:00Z", "commit_ref": revision}
+    arguments = ["--sitemap", str(sitemap), "--key-file", str(key_file), "--endpoint", "https://indexnow.test/submit",
+                 "--revision", revision, "--deploys-url", "https://deploys.test/list"]
+    monkeypatch.setattr(indexnow, "_sleep", lambda seconds: None)
 
-    opener, calls = opener_with([http_error(404)])
+    opener, calls = opener_with([deploys()])
+    monkeypatch.setattr(indexnow, "urlopen", opener)
+    assert indexnow.main(arguments) == 1
+    assert "is not the published production deploy yet" in capsys.readouterr().err
+    assert [(call[0], call[1]) for call in calls] == [("GET", "https://deploys.test/list")]
+
+    opener, calls = opener_with([deploys(live), http_error(404)])
     monkeypatch.setattr(indexnow, "urlopen", opener)
     assert indexnow.main(arguments) == 1
     assert "does not serve the committed key yet" in capsys.readouterr().err
-    assert [call[0] for call in calls] == ["GET"]
+    assert [call[0] for call in calls] == ["GET", "GET"]
 
-    opener, calls = opener_with([Response(f"{KEY}\n".encode()), Response(b"", 202)])
+    opener, calls = opener_with([deploys(live), Response(f"{KEY}\n".encode()), Response(b"", 202)])
     monkeypatch.setattr(indexnow, "urlopen", opener)
     assert indexnow.main(arguments) == 0
-    assert "IndexNow answered 202 for 3 URLs on lecturesift.com" in capsys.readouterr().out
-    assert [call[0] for call in calls] == ["GET", "POST"]
+    assert f"IndexNow answered 202 for 3 URLs on lecturesift.com at {revision[:7]}" in capsys.readouterr().out
+    assert [(call[0], call[1]) for call in calls] == [
+        ("GET", "https://deploys.test/list"), ("GET", KEY_URL), ("POST", "https://indexnow.test/submit")]
 
-    opener, calls = opener_with([Response(f"{KEY}\n".encode()), http_error(429, b"Too Many Requests")])
+    opener, calls = opener_with([deploys(live), Response(f"{KEY}\n".encode()), http_error(429, b"Too Many Requests")])
     monkeypatch.setattr(indexnow, "urlopen", opener)
     assert indexnow.main(arguments) == 1
     assert "429" in capsys.readouterr().out
+
+
+def test_main_waits_for_the_deploy_within_one_shared_deadline(tmp_path, capsys, monkeypatch):
+    sitemap = tmp_path / "sitemap.xml"
+    sitemap.write_text(SITEMAP, encoding="utf-8")
+    key_file = tmp_path / f"{KEY}.txt"
+    key_file.write_text(f"{KEY}\n", encoding="utf-8")
+    revision = "d" * 40
+    live = {"context": "production", "state": "ready", "published_at": "2026-11-07T07:30:00Z", "commit_ref": revision}
+    sleeps = []
+    monkeypatch.setattr(indexnow, "_sleep", sleeps.append)
+    ticks = iter([0.0, 10.0, 20.0, 30.0, 40.0])
+    monkeypatch.setattr(indexnow, "_clock", lambda: next(ticks))
+    opener, calls = opener_with([deploys(), http_error(503), deploys(live), Response(f"{KEY}\n".encode()), Response(b"", 200)])
+    monkeypatch.setattr(indexnow, "urlopen", opener)
+    assert indexnow.main(["--sitemap", str(sitemap), "--key-file", str(key_file), "--endpoint", "https://indexnow.test/submit",
+                          "--revision", revision, "--deploys-url", "https://deploys.test/list", "--wait", "600"]) == 0
+    assert sleeps == [indexnow.POLL_SECONDS] * 2
+    assert [call[0] for call in calls] == ["GET", "GET", "GET", "GET", "POST"]
+    assert "IndexNow answered 200" in capsys.readouterr().out
