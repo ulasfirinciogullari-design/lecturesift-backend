@@ -266,3 +266,73 @@ def test_main_waits_for_the_deploy_within_one_shared_deadline(tmp_path, capsys, 
     assert sleeps == [indexnow.POLL_SECONDS] * 2
     assert [call[0] for call in calls] == ["GET", "GET", "GET", "GET", "POST"]
     assert "IndexNow answered 200" in capsys.readouterr().out
+
+
+PENDING = b'{"errorCode":"SiteVerificationNotCompleted","message":"Site Verification is not completed. Please wait for some time for the verification to complete and try again.","details":null}'
+
+
+def test_verification_pending_is_only_indexnows_first_key_check():
+    assert indexnow.verification_pending(403, PENDING.decode())
+    assert indexnow.verification_pending(403, "SiteVerificationNotCompleted (not json)")
+    assert not indexnow.verification_pending(403, '{"errorCode":"InvalidKey"}')
+    assert not indexnow.verification_pending(403, "Forbidden")
+    assert not indexnow.verification_pending(200, PENDING.decode())
+    assert not indexnow.verification_pending(422, "")
+
+
+def prepared(tmp_path):
+    sitemap = tmp_path / "sitemap.xml"
+    sitemap.write_text(SITEMAP, encoding="utf-8")
+    key_file = tmp_path / f"{KEY}.txt"
+    key_file.write_text(f"{KEY}\n", encoding="utf-8")
+    revision = "e" * 40
+    live = {"context": "production", "state": "ready", "published_at": "2026-11-07T08:05:32Z", "commit_ref": revision}
+    arguments = ["--sitemap", str(sitemap), "--key-file", str(key_file), "--endpoint", "https://indexnow.test/submit",
+                 "--revision", revision, "--deploys-url", "https://deploys.test/list", "--wait", "600"]
+    return live, arguments
+
+
+def test_main_retries_while_indexnow_verifies_the_key_then_submits(tmp_path, capsys, monkeypatch):
+    live, arguments = prepared(tmp_path)
+    sleeps = []
+    monkeypatch.setattr(indexnow, "_sleep", sleeps.append)
+    monkeypatch.setattr(indexnow, "_clock", lambda: 0.0)
+    opener, calls = opener_with([deploys(live), Response(f"{KEY}\n".encode()),
+                                 http_error(403, PENDING), http_error(403, PENDING), Response(b"", 200)])
+    monkeypatch.setattr(indexnow, "urlopen", opener)
+    assert indexnow.main(arguments) == 0
+    assert sleeps == [indexnow.VERIFICATION_POLL_SECONDS] * 2
+    assert [call[0] for call in calls] == ["GET", "GET", "POST", "POST", "POST"]
+    out = capsys.readouterr().out
+    assert out.count("still verifying the key") == 2
+    assert "IndexNow answered 200 for 3 URLs" in out
+    assert "::warning::" not in out
+
+
+def test_main_warns_and_passes_when_verification_outlasts_the_deadline(tmp_path, capsys, monkeypatch):
+    live, arguments = prepared(tmp_path)
+    sleeps = []
+    monkeypatch.setattr(indexnow, "_sleep", sleeps.append)
+    ticks = iter([0.0, 100.0, 700.0])
+    monkeypatch.setattr(indexnow, "_clock", lambda: next(ticks))
+    opener, calls = opener_with([deploys(live), Response(f"{KEY}\n".encode()),
+                                 http_error(403, PENDING), http_error(403, PENDING)])
+    monkeypatch.setattr(indexnow, "urlopen", opener)
+    assert indexnow.main(arguments) == 0
+    assert sleeps == [indexnow.VERIFICATION_POLL_SECONDS]
+    assert [call[0] for call in calls] == ["GET", "GET", "POST", "POST"]
+    out = capsys.readouterr().out
+    assert "::warning::IndexNow has not finished verifying" in out
+    assert "3 URLs were not accepted this run" in out
+    assert "IndexNow answered" not in out
+
+
+def test_main_still_fails_on_other_403s(tmp_path, capsys, monkeypatch):
+    live, arguments = prepared(tmp_path)
+    monkeypatch.setattr(indexnow, "_sleep", lambda seconds: None)
+    monkeypatch.setattr(indexnow, "_clock", lambda: 0.0)
+    opener, calls = opener_with([deploys(live), Response(f"{KEY}\n".encode()), http_error(403, b'{"errorCode":"InvalidKey"}')])
+    monkeypatch.setattr(indexnow, "urlopen", opener)
+    assert indexnow.main(arguments) == 1
+    assert [call[0] for call in calls] == ["GET", "GET", "POST"]
+    assert "IndexNow answered 403" in capsys.readouterr().out

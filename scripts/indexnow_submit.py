@@ -38,6 +38,11 @@ SITEMAP_NAMESPACE = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
 ACCEPTED_STATUSES = {200, 202}
 MAX_URLS_PER_REQUEST = 10_000
 POLL_SECONDS = 15
+# IndexNow verifies a key the first time it sees it and answers 403 with this
+# code until that engine-side check is done; it has nothing to do with the
+# submission itself.
+VERIFICATION_PENDING = "SiteVerificationNotCompleted"
+VERIFICATION_POLL_SECONDS = 60
 
 
 def read_key(key_file):
@@ -143,6 +148,16 @@ def submit(payload, endpoint=ENDPOINT, opener=None):
     return status, response.decode("utf-8", "replace").strip()
 
 
+def verification_pending(status, response):
+    """True for IndexNow's 403 that only says the key is still being verified."""
+    if status != 403:
+        return False
+    try:
+        return json.loads(response).get("errorCode") == VERIFICATION_PENDING
+    except (ValueError, AttributeError):
+        return VERIFICATION_PENDING in response
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--sitemap", default="frontend/sitemap.xml")
@@ -175,7 +190,21 @@ def main(argv=None):
         print(f"{payload['keyLocation']} does not serve the committed key yet; "
               "nothing submitted", file=sys.stderr)
         return 1
-    status, response = submit(payload, args.endpoint)
+    while True:
+        status, response = submit(payload, args.endpoint)
+        if not verification_pending(status, response) or _clock() >= deadline:
+            break
+        print(f"IndexNow is still verifying the key for {args.host}; "
+              f"trying again in {VERIFICATION_POLL_SECONDS} s")
+        _sleep(VERIFICATION_POLL_SECONDS)
+    if verification_pending(status, response):
+        # The key file is live (checked above); only the engines' one-time
+        # verification is outstanding, which no rerun can hurry. The next
+        # frontend push submits again, so this is a warning, not a failure.
+        print(f"::warning::IndexNow has not finished verifying "
+              f"{payload['keyLocation']} yet, so {len(urls)} URLs were not "
+              "accepted this run; the next frontend push submits them again.")
+        return 0
     print(f"IndexNow answered {status} for {len(urls)} URLs on {args.host}"
           + (f" at {args.revision[:7]}" if args.revision else "")
           + (f": {response}" if response else ""))
