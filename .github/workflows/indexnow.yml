@@ -1,0 +1,45 @@
+name: IndexNow submit
+
+# Tells Bing, Yandex, Seznam and Naver which public pages exist as soon as a
+# frontend change reaches main. Free and account-less: the engines verify the
+# site by fetching the public key file from the site root. Google ignores
+# IndexNow and keeps reading the sitemap.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - "scripts/indexnow_submit.py"
+      - ".github/workflows/indexnow.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: indexnow-submit
+  cancel-in-progress: false
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/indexnow_submit.py
+            frontend/sitemap.xml
+            frontend/345a2ecd00b720d10eba8b475bf502e6.txt
+          sparse-checkout-cone-mode: false
+      - name: Wait for Netlify to publish this commit, then submit every sitemap URL
+        # Public deploy metadata says when this exact commit is the live
+        # production deploy, so engines are never sent URLs that are still
+        # building. The key file check then proves the site serves the key.
+        run: >-
+          python3 scripts/indexnow_submit.py
+          --sitemap frontend/sitemap.xml
+          --key-file frontend/345a2ecd00b720d10eba8b475bf502e6.txt
+          --revision "$GITHUB_SHA"
+          --wait 600
