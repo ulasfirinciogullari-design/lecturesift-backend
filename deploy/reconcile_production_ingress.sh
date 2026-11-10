@@ -15,6 +15,12 @@ HANDOFF="$ROOT_DIR/deploy/handoff_production_ingress.sh"
 # failed reconciliation. The alert unit sends at most one email per hour.
 FAILURE_ALERT_UNIT=lecturesift-failure-alert@lecturesift-ingress-selector.service.service
 BACKUP_UNIT=lecturesift-backup.service
+# A single failed attempt is usually a transient timeout that the next attempt,
+# 30 s later, repairs; emailing each one only teaches the reader to ignore the
+# alert. Email once the failure has persisted for this many attempts in a row
+# (about 1.5 minutes). Durable state stays fail-closed from the first failure.
+ALERT_AFTER_ATTEMPTS=3
+failed_attempts=0
 
 # The nightly backup drains the API and stops the worker, so the activated
 # gate fails by design while it runs and until the worker is healthy again.
@@ -29,20 +35,32 @@ in_backup_window() {
   (( now - finished_at < 300000000 ))
 }
 
+# One reconciliation attempt. Failures are counted while they persist, the
+# backup window included, so a failure that outlives the window is emailed on
+# the first attempt after it; a success resets the count.
+reconcile_once() {
+  if ! bash "$HANDOFF" reconcile; then
+    failed_attempts=$(( failed_attempts + 1 ))
+    echo "Ingress reconciliation attempt failed (${failed_attempts} in a row); durable state remains fail-closed." >&2
+    if in_backup_window; then
+      echo "The nightly backup holds the API in drain; not emailing for this attempt." >&2
+    elif (( failed_attempts < ALERT_AFTER_ATTEMPTS )); then
+      echo "Not emailing yet: the next attempt runs in 30 s and usually repairs a transient failure." >&2
+    else
+      # Only queue the email; reconciliation never waits for or depends on it.
+      systemctl start --no-block "$FAILURE_ALERT_UNIT" >/dev/null 2>&1 || true
+    fi
+    return 0
+  fi
+  failed_attempts=0
+}
+
 stopping=false
 stop_loop() { stopping=true; }
 trap stop_loop HUP INT TERM
 
 while [[ "$stopping" == "false" ]]; do
-  if ! bash "$HANDOFF" reconcile; then
-    echo "Ingress reconciliation attempt failed; durable state remains fail-closed." >&2
-    if in_backup_window; then
-      echo "The nightly backup holds the API in drain; not emailing for this attempt." >&2
-    else
-      # Only queue the email; reconciliation never waits for or depends on it.
-      systemctl start --no-block "$FAILURE_ALERT_UNIT" >/dev/null 2>&1 || true
-    fi
-  fi
+  reconcile_once
   sleep 30 &
   wait "$!" || true
 done

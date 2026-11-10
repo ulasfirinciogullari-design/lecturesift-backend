@@ -620,7 +620,10 @@ command that shows the log on the server
 (`journalctl -u <unit> -n 100`). It carries no log lines, because a log
 excerpt can hold credentials or customer data; read the journal on the
 server instead. When the core or the selector is still active, the email
-says that a reload or one reconciliation attempt failed.
+says that a reload failed, or that reconciliation has failed on three
+attempts in a row (about 1.5 minutes): a single failed attempt is usually a
+transient timeout that the next attempt repairs, so it is logged but not
+emailed.
 
 Every recipient gets a message of their own, with only their address in it,
 so nobody sees who else was alerted. The messages go out 0.6 seconds apart,
