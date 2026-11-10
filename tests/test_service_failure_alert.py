@@ -199,7 +199,7 @@ def test_installer_and_promotion_manage_the_same_unit_set_with_the_alert_templat
         assert (ROOT / "deploy" / unit).is_file()
 
 
-def test_selector_queues_the_alert_after_a_failed_reconciliation_without_waiting():
+def test_selector_queues_the_alert_after_a_persisting_reconciliation_failure_without_waiting():
     loop = _read("deploy/reconcile_production_ingress.sh")
     selector = _read("deploy/lecturesift-ingress-selector.service")
 
@@ -214,6 +214,85 @@ def test_selector_queues_the_alert_after_a_failed_reconciliation_without_waiting
     )
     assert loop.count("systemctl start") == 1
     assert "Restart=always" in selector
+
+
+def _reconciler_alerts(tmp_path: Path, outcomes: list[str]) -> int:
+    """Run reconcile_once once per outcome ("ok"/"fail") outside the backup
+    window and return how many times the alert unit was queued."""
+    loop = _read("deploy/reconcile_production_ingress.sh")
+    functions = "".join(
+        name + loop.split(name, 1)[1].split("\n}\n", 1)[0] + "\n}\n"
+        for name in ("in_backup_window() {", "reconcile_once() {")
+    )
+    after = re.search(r"^ALERT_AFTER_ATTEMPTS=(\d+)$", loop, re.MULTILINE)
+    assert after, "the reconciler names how many failed attempts precede an email"
+    uptime = tmp_path / "uptime"
+    uptime.write_text("10000.00 5000.00\n", encoding="ascii")
+    queue = tmp_path / "outcomes"
+    queue.write_text("".join(f"{outcome}\n" for outcome in outcomes), encoding="ascii")
+    handoff = tmp_path / "handoff.sh"
+    handoff.write_text(
+        "#!/bin/bash\n"
+        '[[ "$1" == reconcile ]] || exit 9\n'
+        f'outcome="$(head -n 1 {queue})"\n'
+        f'tail -n +2 {queue} > {queue}.next && mv {queue}.next {queue}\n'
+        '[[ "$outcome" == ok ]]\n',
+        encoding="ascii",
+    )
+    starts = tmp_path / "starts"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    systemctl = bin_dir / "systemctl"
+    systemctl.write_text(
+        "#!/bin/bash\n"
+        '[[ "$1 $2 $3 $4" == "show --property=ActiveState --value lecturesift-backup.service" ]] '
+        "&& { echo inactive; exit 0; }\n"
+        '[[ "$1 $2 $3 $4" == "show --property=InactiveEnterTimestampMonotonic --value lecturesift-backup.service" ]] '
+        "&& { echo 1000000; exit 0; }\n"
+        f'[[ "$1 $2" == "start --no-block" ]] && {{ echo "$3" >> {starts}; exit 0; }}\n'
+        "exit 1\n",
+        encoding="ascii",
+    )
+    systemctl.chmod(0o755)
+    script = (
+        "set -Eeuo pipefail\n"
+        f"HANDOFF={handoff}\n"
+        "FAILURE_ALERT_UNIT=lecturesift-failure-alert@lecturesift-ingress-selector.service.service\n"
+        "BACKUP_UNIT=lecturesift-backup.service\n"
+        f"ALERT_AFTER_ATTEMPTS={after.group(1)}\n"
+        "failed_attempts=0\n"
+        + functions.replace("/proc/uptime", str(uptime))
+        + f"for _ in $(seq {len(outcomes)}); do reconcile_once; done\n"
+    )
+    result = subprocess.run(
+        ["bash", "-c", script],
+        env={**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"},
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "in a row" in result.stderr or "fail" not in outcomes
+    queued = starts.read_text(encoding="ascii").splitlines() if starts.exists() else []
+    assert set(queued) <= {"lecturesift-failure-alert@lecturesift-ingress-selector.service.service"}
+    return len(queued)
+
+
+@pytest.mark.parametrize(
+    ("outcomes", "alerts"),
+    [
+        (["fail"], 0),
+        (["fail", "fail"], 0),
+        (["fail", "fail", "fail"], 1),
+        (["fail", "fail", "ok", "fail", "fail"], 0),
+        (["fail", "fail", "fail", "fail", "ok", "fail"], 2),
+        (["ok", "ok"], 0),
+    ],
+)
+def test_selector_emails_only_a_failure_that_persists_for_three_attempts(tmp_path, outcomes, alerts):
+    # One failed attempt is usually a transient timeout the next attempt
+    # repairs (seen 10-31 and 11-10); the email waits for three in a row
+    # (about 1.5 minutes) and a success starts the count over.
+    assert _reconciler_alerts(tmp_path, outcomes) == alerts
 
 
 def _backup_window(tmp_path: Path, state: str, finished_seconds_ago: float | None) -> bool:
@@ -477,7 +556,7 @@ def test_only_a_failing_main_process_is_reported(code, status, shown):
     ("unit", "note"),
     (
         ("lecturesift.service", "this was a failed reload"),
-        ("lecturesift-ingress-selector.service", "one reconciliation attempt failed"),
+        ("lecturesift-ingress-selector.service", "failed on 3 attempts in a row"),
     ),
 )
 def test_a_still_active_core_or_selector_says_what_failed(env_file, tmp_path, unit, note):

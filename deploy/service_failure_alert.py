@@ -86,8 +86,9 @@ STILL_ACTIVE_NOTES = {
         "(systemctl reload lecturesift)."
     ),
     "lecturesift-ingress-selector.service": (
-        "The selector is still active and keeps retrying, so one reconciliation "
-        "attempt failed."
+        "The selector is still active and keeps retrying; reconciliation has "
+        "failed on 3 attempts in a row (about 1.5 minutes), so this is not a "
+        "one-off timeout."
     ),
 }
 
