@@ -494,7 +494,18 @@ def run_scheduled(now: datetime | None = None) -> list[dict]:
             continue
         if kind == "reel" and reel_given_up(row):
             # Three failed steps in a day mean the failure repeats; daily_social covers the slot instead.
-            results.append(_given_up(row, day))
+            # One of them may have been a publish whose outcome Meta never confirmed, so the caption
+            # marker is checked first: a Reel that did go out must not get a legacy twin.
+            try:
+                settled = _already_published(_client(), row, day, "reel")
+            except Exception as exc:  # Instagram unreachable: the slot stays undecided this run
+                results.append({"status": "failed", "kind": "studio_reel", "date": day.isoformat(),
+                                "error": f"{type(exc).__name__}: {exc}"[:300]})
+                continue
+            if settled:
+                results.append({"status": "already_published", "kind": "studio_reel", "date": day.isoformat()})
+            else:
+                results.append(_given_up(row, day))
             continue
         try:
             results.append(publish(day))

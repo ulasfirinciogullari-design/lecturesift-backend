@@ -209,6 +209,8 @@ def test_studio_reel_is_given_up_after_three_failed_runs_in_a_day(monkeypatch):
     monkeypatch.setattr(studio, "publish_carousel", carousel)
     monkeypatch.setattr(studio, "prepare", prepare)
     monkeypatch.setattr(studio, "publish_reel", reel)
+    monkeypatch.setattr(studio, "_client", lambda: object())
+    monkeypatch.setattr(studio, "_find_marked_media", lambda client, marker: None)
     tz, day = ZoneInfo("Europe/Istanbul"), date(2026, 10, 18)
     statuses = [[r["status"] for r in studio.run_scheduled(datetime(2026, 10, 18, 13, minute, tzinfo=tz))]
                 for minute in (5, 20, 35, 50)]
@@ -220,6 +222,30 @@ def test_studio_reel_is_given_up_after_three_failed_runs_in_a_day(monkeypatch):
     assert published == []
     assert studio.status(day) == {"carousel_published": True, "reel_rendered": False, "reel_published": False,
                                   "reel_attempts": 3, "reel_given_up": True, "reel_error": rows[day]["reel_error"]}
+
+
+def test_a_given_up_reel_that_actually_went_out_is_settled_by_its_marker(monkeypatch):
+    """The third failure can be a publish Meta never confirmed; the marker decides before the legacy
+    Reel is allowed to post a twin, and an unreachable Instagram leaves the slot undecided."""
+    rows, day = _rows(monkeypatch), date(2026, 10, 18)
+    monkeypatch.setattr(studio, "INSTAGRAM_DAILY_AUTOMATION_ENABLED", True)
+    monkeypatch.setattr(studio, "INSTAGRAM_REEL_HOUR", 20)
+    monkeypatch.setattr(studio, "INSTAGRAM_CAROUSEL_HOUR", 13)
+    rows[day] = {"carousel_media_id": "2", "rendered": True, "reel_attempts": 3,
+                 "reel_error": "InstagramAPIError: Instagram publish outcome unknown"}
+    monkeypatch.setattr(studio, "publish_reel", lambda day: (_ for _ in ()).throw(AssertionError("not retried")))
+    monkeypatch.setattr(studio, "_client", lambda: object())
+    tz = ZoneInfo("Europe/Istanbul")
+
+    monkeypatch.setattr(studio, "_find_marked_media", lambda client, marker: (_ for _ in ()).throw(InstagramAPIError("down")))
+    undecided = studio.run_scheduled(datetime(2026, 10, 18, 20, 5, tzinfo=tz))
+    assert [r["status"] for r in undecided] == ["failed"] and "down" in undecided[0]["error"]
+
+    monkeypatch.setattr(studio, "_find_marked_media", lambda client, marker: {"id": "77"} if marker.endswith("studio-reel · 2026-10-18") else None)
+    settled = studio.run_scheduled(datetime(2026, 10, 18, 20, 20, tzinfo=tz))
+    assert settled == [{"status": "already_published", "kind": "studio_reel", "date": "2026-10-18"}]
+    assert rows[day]["reel_media_id"] == "77"
+    assert studio.run_scheduled(datetime(2026, 10, 18, 20, 35, tzinfo=tz))[0]["status"] == "nothing_due"
 
 
 def test_a_reel_that_fails_at_its_slot_is_retried_until_the_limit(monkeypatch):
