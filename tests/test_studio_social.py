@@ -156,10 +156,17 @@ def test_narration_is_paid_for_once_even_when_the_render_fails(monkeypatch):
     assert calls == [1]
 
 
-def test_a_failing_reel_does_not_hold_back_the_carousel(monkeypatch):
+def _rows(monkeypatch):
+    """The day's post.json rows, keyed by date, read and written the way the schedule does."""
     rows = {}
-    monkeypatch.setattr(studio, "INSTAGRAM_DAILY_AUTOMATION_ENABLED", True)
     monkeypatch.setattr(studio, "_row", lambda day: rows.get(day))
+    monkeypatch.setattr(studio, "write_json", lambda key, value: rows.__setitem__(date.fromisoformat(key.split("/")[-2]), value))
+    return rows
+
+
+def test_a_failing_reel_does_not_hold_back_the_carousel(monkeypatch):
+    rows = _rows(monkeypatch)
+    monkeypatch.setattr(studio, "INSTAGRAM_DAILY_AUTOMATION_ENABLED", True)
     monkeypatch.setattr(studio, "INSTAGRAM_REEL_HOUR", 13)
     monkeypatch.setattr(studio, "INSTAGRAM_CAROUSEL_HOUR", 13)
 
@@ -175,6 +182,113 @@ def test_a_failing_reel_does_not_hold_back_the_carousel(monkeypatch):
     results = studio.run_scheduled(datetime(2026, 10, 18, 13, 5, tzinfo=ZoneInfo("Europe/Istanbul")))
     assert [r["status"] for r in results] == ["published", "failed"]
     assert results[1]["kind"] == "studio_reel" and "FFmpeg" in results[1]["error"]
+    assert rows[date(2026, 10, 18)]["reel_attempts"] == 1
+    assert rows[date(2026, 10, 18)]["reel_error"] == "StudioError: FFmpeg could not encode the Reel"
+
+
+def test_studio_reel_is_given_up_after_three_failed_runs_in_a_day(monkeypatch):
+    """A failure that repeats (cached narration too long, a broken render, no ElevenLabs credit)
+    must not fail every 15-minute run until midnight: three failed steps end the day's attempts."""
+    rows, prepared, published = _rows(monkeypatch), [], []
+    monkeypatch.setattr(studio, "INSTAGRAM_DAILY_AUTOMATION_ENABLED", True)
+    monkeypatch.setattr(studio, "INSTAGRAM_REEL_HOUR", 20)
+    monkeypatch.setattr(studio, "INSTAGRAM_CAROUSEL_HOUR", 13)
+
+    def carousel(day):
+        rows[day] = {"carousel_media_id": "2", "rendered": False}
+        return {"status": "published", "kind": "studio_carousel"}
+
+    def prepare(day):
+        prepared.append(day)
+        raise studio.reel_studio.StudioError("ElevenLabs request failed with HTTP 402")
+
+    def reel(day):
+        published.append(day)
+        raise studio.reel_studio.StudioError("ElevenLabs request failed with HTTP 402")
+
+    monkeypatch.setattr(studio, "publish_carousel", carousel)
+    monkeypatch.setattr(studio, "prepare", prepare)
+    monkeypatch.setattr(studio, "publish_reel", reel)
+    monkeypatch.setattr(studio, "_client", lambda: object())
+    monkeypatch.setattr(studio, "_find_marked_media", lambda client, marker: None)
+    tz, day = ZoneInfo("Europe/Istanbul"), date(2026, 10, 18)
+    statuses = [[r["status"] for r in studio.run_scheduled(datetime(2026, 10, 18, 13, minute, tzinfo=tz))]
+                for minute in (5, 20, 35, 50)]
+    assert statuses == [["published", "failed"], ["failed"], ["failed"], ["nothing_due"]]
+    assert len(prepared) == 3 and rows[day]["reel_attempts"] == 3 and "402" in rows[day]["reel_error"]
+    evening = studio.run_scheduled(datetime(2026, 10, 18, 20, 5, tzinfo=tz))
+    assert evening == [{"status": "given_up", "kind": "studio_reel", "date": "2026-10-18",
+                        "attempts": 3, "error": "StudioError: ElevenLabs request failed with HTTP 402"}]
+    assert published == []
+    assert studio.status(day) == {"carousel_published": True, "reel_rendered": False, "reel_published": False,
+                                  "reel_attempts": 3, "reel_given_up": True, "reel_error": rows[day]["reel_error"]}
+
+
+def test_a_given_up_reel_that_actually_went_out_is_settled_by_its_marker(monkeypatch):
+    """The third failure can be a publish Meta never confirmed; the marker decides before the legacy
+    Reel is allowed to post a twin, and an unreachable Instagram leaves the slot undecided."""
+    rows, day = _rows(monkeypatch), date(2026, 10, 18)
+    monkeypatch.setattr(studio, "INSTAGRAM_DAILY_AUTOMATION_ENABLED", True)
+    monkeypatch.setattr(studio, "INSTAGRAM_REEL_HOUR", 20)
+    monkeypatch.setattr(studio, "INSTAGRAM_CAROUSEL_HOUR", 13)
+    rows[day] = {"carousel_media_id": "2", "rendered": True, "reel_attempts": 3,
+                 "reel_error": "InstagramAPIError: Instagram publish outcome unknown"}
+    monkeypatch.setattr(studio, "publish_reel", lambda day: (_ for _ in ()).throw(AssertionError("not retried")))
+    monkeypatch.setattr(studio, "_client", lambda: object())
+    tz = ZoneInfo("Europe/Istanbul")
+
+    monkeypatch.setattr(studio, "_find_marked_media", lambda client, marker: (_ for _ in ()).throw(InstagramAPIError("down")))
+    undecided = studio.run_scheduled(datetime(2026, 10, 18, 20, 5, tzinfo=tz))
+    assert [r["status"] for r in undecided] == ["failed"] and "down" in undecided[0]["error"]
+
+    monkeypatch.setattr(studio, "_find_marked_media", lambda client, marker: {"id": "77"} if marker.endswith("studio-reel · 2026-10-18") else None)
+    settled = studio.run_scheduled(datetime(2026, 10, 18, 20, 20, tzinfo=tz))
+    assert settled == [{"status": "already_published", "kind": "studio_reel", "date": "2026-10-18"}]
+    assert rows[day]["reel_media_id"] == "77"
+    assert studio.run_scheduled(datetime(2026, 10, 18, 20, 35, tzinfo=tz))[0]["status"] == "nothing_due"
+
+
+def test_a_reel_that_fails_at_its_slot_is_retried_until_the_limit(monkeypatch):
+    rows, published = _rows(monkeypatch), []
+    monkeypatch.setattr(studio, "INSTAGRAM_DAILY_AUTOMATION_ENABLED", True)
+    monkeypatch.setattr(studio, "INSTAGRAM_REEL_HOUR", 20)
+    monkeypatch.setattr(studio, "INSTAGRAM_CAROUSEL_HOUR", 13)
+    rows[date(2026, 10, 18)] = {"carousel_media_id": "2", "rendered": True}
+
+    def reel(day):
+        published.append(day)
+        if len(published) < 3:
+            raise InstagramAPIError("Instagram media processing timed out")
+        rows[day] = {**rows[day], "reel_media_id": "9"}
+        return {"status": "published", "kind": "studio_reel"}
+
+    monkeypatch.setattr(studio, "publish_reel", reel)
+    tz = ZoneInfo("Europe/Istanbul")
+    statuses = [studio.run_scheduled(datetime(2026, 10, 18, 20, minute, tzinfo=tz))[0]["status"] for minute in (5, 20, 35, 50)]
+    assert statuses == ["failed", "failed", "published", "nothing_due"]
+    assert rows[date(2026, 10, 18)]["reel_attempts"] == 2
+
+
+def test_scheduled_job_covers_the_reel_slot_with_the_legacy_reel_once_the_studio_gives_up(monkeypatch, capsys):
+    from lecturesift import config
+
+    monkeypatch.setattr(config, "INSTAGRAM_STUDIO_ENABLED", True)
+    monkeypatch.setattr(config, "ELEVENLABS_API_KEY", "key")
+    monkeypatch.setattr(config, "ELEVENLABS_VOICE_ID", "voice")
+    monkeypatch.setattr(config, "INSTAGRAM_REPLIES_ENABLED", False)
+    given_up = [{"status": "given_up", "kind": "studio_reel", "date": "2026-10-18", "attempts": 3, "error": "StudioError: x"}]
+    monkeypatch.setattr(studio, "run_scheduled", lambda now=None: given_up)
+    legacy = []
+    monkeypatch.setattr(daily_social, "publish_daily_post", lambda day=None: legacy.append(day) or {"status": "published", "kind": "generated_reel"})
+
+    monkeypatch.setattr(config, "INSTAGRAM_REEL_HOUR", 24)  # the Reel slot has not opened yet today
+    assert daily_social.main() == 0 and legacy == []
+    monkeypatch.setattr(config, "INSTAGRAM_REEL_HOUR", 0)  # the slot is open
+    assert daily_social.main() == 0 and legacy == [None]
+    assert "published" in capsys.readouterr().out
+
+    monkeypatch.setattr(daily_social, "publish_daily_post", lambda day=None: (_ for _ in ()).throw(InstagramAPIError("down")))
+    assert daily_social.main() == 1  # a failing legacy Reel is a real failure and alerts
 
 
 def test_reel_is_rendered_ahead_of_its_slot_after_the_carousel(monkeypatch):

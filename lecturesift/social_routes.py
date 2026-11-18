@@ -67,6 +67,13 @@ def _instagram_snapshot() -> tuple[dict, list[dict]]:
     return account, recent
 
 
+def _studio_status(read_status, day: date) -> dict | None:
+    try:
+        return read_status(day)
+    except (OSError, RuntimeError, ValueError):  # social storage unreachable: the rest still answers
+        return None
+
+
 def install_social_routes(app: FastAPI) -> None:
     @app.get("/instagram/studio/{day}/{name}")
     def instagram_studio_asset(day: str, name: str) -> Response:
@@ -175,6 +182,8 @@ def install_social_routes(app: FastAPI) -> None:
 
     @app.get("/instagram/daily/status")
     def instagram_daily_status(day: str | None = None) -> dict:
+        from .studio_social import status as studio_status
+
         selected_day = _parse_day(day) if day else date.today()
         marker = daily_marker(selected_day)
         generated_marker = f"LectureSift · reel · {selected_day.isoformat()}"
@@ -199,4 +208,6 @@ def install_social_routes(app: FastAPI) -> None:
             "marker_present": marker_present,
             "launch_complete": len(completed) == len(LAUNCH_POSTS),
             "launch_completed_count": len(completed),
+            # The studio row: whether the day's carousel and Reel went out, and why a Reel did not.
+            "studio": _studio_status(studio_status, selected_day),
         }

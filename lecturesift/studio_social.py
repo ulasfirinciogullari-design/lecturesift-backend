@@ -48,6 +48,10 @@ _PREFIX = "social/instagram/studio/"
 _VOICE_PREFIX = "social/instagram/studio-voice/"
 _TZ = ZoneInfo("Europe/Istanbul")
 CAROUSEL_SLIDES = 5
+# Failed studio-Reel steps per day (one per 15-minute run) before the day's Reel is left to the
+# legacy renderer in daily_social. A failure that repeats on cached narration or a broken render
+# would otherwise fail every run until midnight, lose the slot and email an alert each hour.
+STUDIO_REEL_ATTEMPTS = 3
 
 _SUBJECTS = (
     "Biyoloji", "Kimya", "Fizik", "Tarih", "Ekonomi", "Psikoloji", "Anatomi", "İstatistik",
@@ -124,6 +128,43 @@ def _key(day: date, name: str) -> str:
 
 def _row(day: date) -> dict | None:
     return read_json(_key(day, "post.json"))
+
+
+def _note_reel_failure(day: date, exc: Exception) -> None:
+    """Count a failed studio-Reel step on the day's row so the schedule can stop repeating it."""
+    row = _row(day)
+    if not row:  # before the lesson exists there is nothing to count on; the next run starts over
+        return
+    try:
+        write_json(_key(day, "post.json"), {
+            **row,
+            "reel_attempts": int(row.get("reel_attempts") or 0) + 1,
+            "reel_error": f"{type(exc).__name__}: {exc}"[:300],
+        })
+    except (OSError, RuntimeError) as storage_exc:  # the note is best effort; the run already failed
+        print(f"Studio Reel failure could not be recorded: {storage_exc}", file=sys.stderr)
+
+
+def reel_given_up(row: dict | None) -> bool:
+    return int((row or {}).get("reel_attempts") or 0) >= STUDIO_REEL_ATTEMPTS
+
+
+def _given_up(row: dict, day: date) -> dict:
+    return {"status": "given_up", "kind": "studio_reel", "date": day.isoformat(),
+            "attempts": int(row.get("reel_attempts") or 0), "error": row.get("reel_error")}
+
+
+def status(day: date) -> dict:
+    """What the day's studio row records, for the public status endpoint and the daily check."""
+    row = _row(day) or {}
+    return {
+        "carousel_published": bool(row.get("carousel_media_id")),
+        "reel_rendered": bool(row.get("rendered")),
+        "reel_published": bool(row.get("reel_media_id")),
+        "reel_attempts": int(row.get("reel_attempts") or 0),
+        "reel_given_up": reel_given_up(row),
+        "reel_error": row.get("reel_error"),
+    }
 
 
 def marker(day: date, kind: str) -> str:
@@ -448,21 +489,41 @@ def run_scheduled(now: datetime | None = None) -> list[dict]:
     results = []
     # Each slot is attempted on its own, so a Reel that cannot render never holds back the carousel.
     for kind, hour, publish in (("carousel", INSTAGRAM_CAROUSEL_HOUR, publish_carousel), ("reel", INSTAGRAM_REEL_HOUR, publish_reel)):
-        if local.hour < hour or (_row(day) or {}).get(f"{kind}_media_id"):
+        row = _row(day) or {}
+        if local.hour < hour or row.get(f"{kind}_media_id"):
+            continue
+        if kind == "reel" and reel_given_up(row):
+            # Three failed steps in a day mean the failure repeats; daily_social covers the slot instead.
+            # One of them may have been a publish whose outcome Meta never confirmed, so the caption
+            # marker is checked first: a Reel that did go out must not get a legacy twin.
+            try:
+                settled = _already_published(_client(), row, day, "reel")
+            except Exception as exc:  # Instagram unreachable: the slot stays undecided this run
+                results.append({"status": "failed", "kind": "studio_reel", "date": day.isoformat(),
+                                "error": f"{type(exc).__name__}: {exc}"[:300]})
+                continue
+            if settled:
+                results.append({"status": "already_published", "kind": "studio_reel", "date": day.isoformat()})
+            else:
+                results.append(_given_up(row, day))
             continue
         try:
             results.append(publish(day))
         except Exception as exc:  # reported in the job log; the next 15-minute run retries
+            if kind == "reel":
+                _note_reel_failure(day, exc)
             results.append({"status": "failed", "kind": f"studio_{kind}", "date": day.isoformat(),
                             "error": f"{type(exc).__name__}: {exc}"[:300]})
     row = _row(day) or {}
-    if INSTAGRAM_CAROUSEL_HOUR <= local.hour < INSTAGRAM_REEL_HOUR and row and not row.get("rendered"):
+    if INSTAGRAM_CAROUSEL_HOUR <= local.hour < INSTAGRAM_REEL_HOUR and row and not row.get("rendered") \
+            and not reel_given_up(row):
         # Render the evening Reel once the carousel is out: it can be watched at its public URL before
         # it is posted, and a render problem shows up hours before the Reel slot.
         try:
             prepare(day)
             results.append({"status": "reel_ready", "kind": "studio_reel", "date": day.isoformat()})
         except Exception as exc:
+            _note_reel_failure(day, exc)
             results.append({"status": "failed", "kind": "studio_reel_render", "date": day.isoformat(),
                             "error": f"{type(exc).__name__}: {exc}"[:300]})
     return results or [{"status": "nothing_due", "date": day.isoformat()}]

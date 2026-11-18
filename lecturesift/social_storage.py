@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from functools import lru_cache
 
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError
 
 from .instagram import InstagramConfigurationError
 from .storage import ObjectStorage
@@ -29,6 +29,8 @@ def read_bytes(key: str) -> bytes | None:
         if code in {"nosuchkey", "notfound", "404"}:
             return None
         raise RuntimeError("Social content storage is unavailable") from None
+    except BotoCoreError:  # a dropped connection or a read timeout, not an answer from the bucket
+        raise RuntimeError("Social content storage is unavailable") from None
 
 
 def write_bytes(key: str, content: bytes, content_type: str) -> None:
@@ -37,7 +39,7 @@ def write_bytes(key: str, content: bytes, content_type: str) -> None:
         storage._client.put_object(
             Bucket=storage.bucket, Key=key, Body=content, ContentType=content_type,
         )
-    except ClientError:
+    except (BotoCoreError, ClientError):
         raise RuntimeError("Social content storage is unavailable") from None
 
 
@@ -64,6 +66,6 @@ def recent_json(prefix: str, limit: int = 30) -> list[dict]:
             token = page.get("NextContinuationToken")
             if not token:
                 break
-    except ClientError:
+    except (BotoCoreError, ClientError):
         raise RuntimeError("Social content storage is unavailable") from None
     return [row for key in sorted(keys, reverse=True)[:limit] if (row := read_json(key)) is not None]
