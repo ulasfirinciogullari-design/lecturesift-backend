@@ -763,6 +763,7 @@ def main() -> int:
     )
 
     failed = False
+    reel_slot_open = datetime.now(ZoneInfo("Europe/Istanbul")).hour >= INSTAGRAM_REEL_HOUR
     try:
         # Without an ElevenLabs voice the studio cannot narrate, so the legacy Reel keeps the day covered.
         if INSTAGRAM_STUDIO_ENABLED and ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID:
@@ -770,7 +771,11 @@ def main() -> int:
             results = run_scheduled()
             print(json.dumps(results, ensure_ascii=False))
             failed = any(item.get("status") == "failed" for item in results)
-        elif datetime.now(ZoneInfo("Europe/Istanbul")).hour >= INSTAGRAM_REEL_HOUR:
+            if reel_slot_open and any(item.get("status") == "given_up" for item in results):
+                # The studio gave the day's Reel up after repeated failures; the legacy Reel still
+                # covers the slot (idempotent by its own caption marker), so later runs stay green.
+                print(publish_daily_post().get("status", "unknown"))
+        elif reel_slot_open:
             print(publish_daily_post().get("status", "unknown"))
     except (InstagramAPIError, InstagramConfigurationError, RuntimeError, KeyError) as exc:
         print(f"Instagram scheduled post failed: {exc}", file=sys.stderr)

@@ -60,6 +60,13 @@ işaretini arar, gönderi oradaysa normal paylaşım gibi kaydeder; yoksa çalı
   `INSTAGRAM_CAROUSEL_HOUR`, Europe/Istanbul). Soru `gpt-4o-mini` ile yazılır, ikinci bağımsız bir
   çağrı cevabı doğrulamazsa elle kontrol edilmiş yedek derslerden biri kullanılır. ElevenLabs
   anahtarı yoksa eski günlük Reel akışı devam eder.
+- Stüdyo Reel adımı (seslendirme, render ya da paylaşım) bir günde üç kez başarısız olursa
+  (`STUDIO_REEL_ATTEMPTS`; 45 dakika) o günün stüdyo Reel'inden vazgeçilir: sayaç ve son hata
+  günün `post.json` kaydına yazılır, sonraki çalışmalar `given_up` döner ve 20:00'den itibaren eski
+  günlük Reel akışı dilimi doldurur. Böylece önbelleğe alınmış seslendirmede ya da bozuk bir
+  render'da tekrarlayan bir hata gece yarısına kadar her 15 dakikada bir alarm üretmez.
+  `/instagram/daily/status` cevabındaki `studio` alanı günün karusel/Reel durumunu, deneme
+  sayısını ve son hatayı gösterir.
 - `INSTAGRAM_REPLIES_ENABLED=true` iken `lecturesift/instagram_replies.py` son 14 günün
   gönderilerindeki yorumlara ve son 24 saatteki DM'lere yazanın dilinde kısa cevap verir. Spam,
   link, hakaret ve hassas konular atlanır; ödeme ve hesap sorunları iletişim sayfasına yönlendirilir.
